@@ -15,6 +15,7 @@ Active docs and maintenance
 - `TEST_MANUAL_ONBOARDING.md` - manual test and onboarding notes
 - `BUILD_OUTPUTS.md` - generated output directories and cleanup expectations
 - `BACKEND_HOTSPOTS.md` - current backend refactor seams and hotspot map
+- `BACKEND_REFACTOR_PLAN.md` - execution order and target file map for backend decomposition
 - `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration (do not modify)
 
 Local prerequisites
