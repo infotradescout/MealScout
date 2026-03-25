@@ -1,9 +1,14 @@
 node_modules
 dist
+client/dist
 .tmp/
+.tmp-tests/
 .tmp-server/
 .DS_Store
+logs/
 server/public
+tmp_*.txt
+ts-out.txt
 vite.config.ts.*
 *.tar.gz
 .vercel

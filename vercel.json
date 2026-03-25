@@ -1,6 +1,6 @@
 {
   "installCommand": "npm ci",
-  "buildCommand": "npm --prefix client run build",
+  "buildCommand": "npm run build:client",
   "outputDirectory": "client/dist",
   "redirects": [
     {

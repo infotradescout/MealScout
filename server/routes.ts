@@ -57,6 +57,10 @@ import { registerSupplierMarketplaceRoutes } from "./routes/supplierMarketplaceR
 import { registerSupplyScoutRoutes } from "./routes/supplyScoutRoutes";
 import { registerStaffRoutes } from "./staffRoutes";
 import {
+  validateEnvironmentForStartup,
+  validateRequiredEnvOnModuleLoad,
+} from "./startup/envValidation";
+import {
   setupUnifiedAuth,
   isAuthenticated,
   isRestaurantOwner,
@@ -200,7 +204,7 @@ function validateRequiredEnv() {
 }
 
 // Validate environment at module load time
-validateRequiredEnv();
+validateRequiredEnvOnModuleLoad();
 
 import bcrypt from "bcryptjs";
 import auditLogger, { logAudit } from "./auditLogger";
@@ -1313,7 +1317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Validate environment in production - log issues but don't block startup
   if (process.env.NODE_ENV === "production") {
-    const envValid = validateEnvironment();
+    const envValid = validateEnvironmentForStartup();
     if (!envValid) {
       console.log(
         "🚀 Server starting despite environment validation issues to allow health checks",
