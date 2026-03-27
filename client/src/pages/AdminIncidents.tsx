@@ -385,7 +385,7 @@ export default function AdminIncidents() {
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedIncident} onOpenChange={() => setSelectedIncident(null)}>
-        <DialogContent className="admin-dialog max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="admin-dialog w-full max-w-2xl max-h-[80vh] sm:max-w-2xl overflow-y-auto">
           {selectedIncident && (
             <>
               <DialogHeader>

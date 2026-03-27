@@ -2717,7 +2717,7 @@ export default function MapPage() {
         </div>
       )}
 
-      <section className="px-6 pb-4">
+      <section className="px-4 sm:px-6 pb-4">
         <div className="mx-auto rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-base font-semibold text-foreground">
             Explore MealScout Pages

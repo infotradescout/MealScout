@@ -221,7 +221,7 @@ export default function AdminSupportTickets() {
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
-        <DialogContent className="admin-dialog max-w-2xl">
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-2xl">
           {selectedTicket && (
             <>
               <DialogHeader>

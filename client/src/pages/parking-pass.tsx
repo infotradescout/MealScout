@@ -4044,7 +4044,7 @@ export default function ParkingPassPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Days of the week</Label>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {[
                           { label: "Mon", value: 1 },
                           { label: "Tue", value: 2 },

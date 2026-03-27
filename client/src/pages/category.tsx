@@ -258,7 +258,7 @@ export default function CategoryPage() {
         schemaData={schemaData}
       />
 
-      <header className="px-6 py-6 bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean">
+      <header className="px-4 sm:px-6 py-6 bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean">
         <div className="flex items-center mb-6">
           <Link href="/">
             <Button

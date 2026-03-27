@@ -471,7 +471,7 @@ export default function Home() {
               placeholder="Search deals, restaurants..."
             />
 
-            <div className="mb-5 grid grid-cols-3 gap-2">
+            <div className="mb-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
               <Button
                 variant="outline"
                 size="sm"

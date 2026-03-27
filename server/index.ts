@@ -5,6 +5,7 @@ import helmet from "helmet";
 import passport from "passport";
 import * as Sentry from "@sentry/node";
 import { registerRoutes } from "./routes";
+import { registerSchedulers, registerStaticPages, registerOperationalEndpoints } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
   verifyTradeScoutToken,
@@ -1167,6 +1168,12 @@ app.use((req, res, next) => {
   });
 
   const server = await registerRoutes(app);
+
+  // Bootstrap: static/compliance pages, schedulers, and operational endpoints
+  // These are extracted from routes.ts as part of backend refactor Phase 1.
+  registerStaticPages(app);
+  registerOperationalEndpoints(app);
+  await registerSchedulers(app);
 
   // Setup WebSocket server for food truck GPS tracking
   setupWebSocketServer(server);

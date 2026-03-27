@@ -203,7 +203,7 @@ export function ShoppingListsDialog(props: {
       <DialogTrigger asChild>
         <Button variant="outline">{triggerLabel}</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="w-full max-w-[95vw] sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Shopping lists</DialogTitle>
           <DialogDescriptionUI>

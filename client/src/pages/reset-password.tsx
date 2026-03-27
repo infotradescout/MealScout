@@ -271,7 +271,7 @@ export default function ResetPassword() {
               Create New Password
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-8 pb-8">
+          <CardContent className="px-4 sm:px-8 pb-8">
             <p className="text-[color:var(--text-secondary)] text-center mb-6">
               Choose a strong password for your account.
             </p>

@@ -349,7 +349,7 @@ export default function DealDetail() {
         </Card>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
           <Card className="bg-[var(--bg-layered)] border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="text-center p-3">
               <i className="fas fa-clock text-secondary text-lg mb-1"></i>

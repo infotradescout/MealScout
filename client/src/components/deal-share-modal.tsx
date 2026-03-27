@@ -127,7 +127,7 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md mx-auto">
+      <DialogContent className="w-full max-w-[95vw] sm:max-w-md mx-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Share2 className="w-5 h-5" />

@@ -133,7 +133,7 @@ export default function ForgotPassword() {
         className="bg-[var(--bg-surface)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)]/50 shadow-clean"
       />
 
-      <div className="px-6 py-12 max-w-md mx-auto">
+      <div className="px-4 sm:px-6 py-12 max-w-md mx-auto">
         <Card className="bg-[var(--bg-surface)]/95 backdrop-blur-sm shadow-clean-lg border-0">
           <CardHeader className="text-center pb-2">
             <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-[color:var(--accent-text-hover)] rounded-full mx-auto mb-4 flex items-center justify-center">
@@ -143,7 +143,7 @@ export default function ForgotPassword() {
               Forgot Your Password?
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-8 pb-8">
+          <CardContent className="px-4 sm:px-8 pb-8">
             <p className="text-[color:var(--text-muted)] text-center mb-6">
               No worries! Enter your email address below and we'll send you a
               link to reset your password.

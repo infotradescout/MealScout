@@ -584,7 +584,7 @@ function RemoveConfirmModal({ open, onConfirm, onCancel }: RemoveConfirmModalPro
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <DialogContent className="admin-dialog">
+      <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{COPY.confirm.removeTitle}</DialogTitle>
           <DialogDescription>{COPY.confirm.removeDescription}</DialogDescription>
@@ -671,7 +671,7 @@ function PerItemReasonModal({ open, items, onComplete, onCancel }: PerItemReason
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <DialogContent className="admin-dialog max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{COPY.batch.perItemReasonTitle}</DialogTitle>
           <DialogDescription>{COPY.batch.perItemReasonDescription}</DialogDescription>
@@ -759,7 +759,7 @@ interface ExportConfirmModalProps {
 function ExportConfirmModal({ open, videoId, onConfirm, onCancel }: ExportConfirmModalProps) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <DialogContent className="admin-dialog">
+      <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{COPY.export.confirmTitle}</DialogTitle>
           <DialogDescription>{COPY.export.confirmDescription}</DialogDescription>

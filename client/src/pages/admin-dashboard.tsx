@@ -7080,7 +7080,7 @@ export default function AdminDashboard() {
 
       {/* User Details Dialog */}
       <Dialog open={userDetailsOpen} onOpenChange={setUserDetailsOpen}>
-        <DialogContent className="admin-dialog max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Users className="w-5 h-5" />
@@ -8700,7 +8700,7 @@ export default function AdminDashboard() {
 
       {/* Deal Details Dialog */}
       <Dialog open={dealDetailsOpen} onOpenChange={setDealDetailsOpen}>
-        <DialogContent className="admin-dialog max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Package className="w-5 h-5" />
@@ -8800,7 +8800,7 @@ export default function AdminDashboard() {
                     <BarChart3 className="w-4 h-4 mr-2" />
                     PERFORMANCE METRICS
                   </h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Card>
                       <CardContent className="pt-4">
                         <div className="text-2xl font-bold">

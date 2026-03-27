@@ -300,7 +300,7 @@ export default function ProfilePage() {
 
       {/* Affiliate Link (Prominent) */}
       {affiliateTag && (
-        <div className="px-6 pb-2">
+        <div className="px-4 sm:px-6 pb-2">
           <Card className="border border-strong bg-[color:var(--bg-card)] shadow-clean-lg">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-start gap-3">
@@ -349,7 +349,7 @@ export default function ProfilePage() {
       )}
 
       {/* Menu Items */}
-      <div className="px-6 pb-6">
+      <div className="px-4 sm:px-6 pb-6">
         {/* Business Opportunities Section */}
         {showEventCta && (
           <div className="mb-6 space-y-4">

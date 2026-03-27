@@ -58,7 +58,7 @@ export default function AdminControlCenter() {
     <div className="min-h-screen bg-[var(--bg-layered)]">
       {/* Header */}
       <div className="bg-[var(--bg-surface)] border-b border-[var(--border-subtle)]">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold">Admin Control Center</h1>
@@ -84,7 +84,7 @@ export default function AdminControlCenter() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Stats Grid */}
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

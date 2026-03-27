@@ -275,7 +275,7 @@ export default function CityLanding() {
             Live local discovery page with active trucks, restaurant offers, and
             nearby food events.
           </p>
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-3">
                 <div className="text-xs text-muted-foreground">Food Trucks</div>

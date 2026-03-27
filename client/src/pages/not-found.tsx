@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[var(--bg-layered)] px-6 py-12">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[var(--bg-layered)] px-4 sm:px-6 py-12">
       <Card className="w-full max-w-md bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean-lg">
         <CardContent className="pt-6">
           <div className="flex mb-4 gap-3 items-center">

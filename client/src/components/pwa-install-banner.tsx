@@ -169,7 +169,7 @@ export function PwaInstallBanner() {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add MealScout to your Home Screen</DialogTitle>
             <DialogDescription>

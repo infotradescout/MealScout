@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Card,
@@ -26,8 +26,17 @@ import {
   Utensils,
   Navigation as NavigationIcon,
   ChefHat,
+  Video,
+  Eye,
+  ThumbsUp,
+  MessageCircle,
+  Trash2,
+  Loader2,
+  Award,
+  Plus,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
+import { VideoUploadModal } from "@/components/video-upload-modal";
 import type { Deal, Restaurant, DealClaim } from "@shared/schema";
 import { SEOHead } from "@/components/seo-head";
 
@@ -235,13 +244,14 @@ export default function UserDashboard() {
       </div>
 
       {/* Dashboard Content */}
-      <div className="px-6">
+      <div className="px-4 sm:px-6">
         <Tabs defaultValue="recent" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5">
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="nearby">Nearby</TabsTrigger>
             <TabsTrigger value="favorites">Favorites</TabsTrigger>
             <TabsTrigger value="recommended">For You</TabsTrigger>
+            <TabsTrigger value="videos">My Videos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="recent" className="space-y-4">
@@ -568,10 +578,257 @@ export default function UserDashboard() {
               </Card>
             )}
           </TabsContent>
+
+          {/* ── My Videos Tab ── */}
+          <TabsContent value="videos" className="space-y-4">
+            <VideoCreatorSection userId={user?.id} />
+          </TabsContent>
         </Tabs>
       </div>
 
       <Navigation />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VideoCreatorSection — My Videos tab content
+// ---------------------------------------------------------------------------
+
+interface VideoStoryItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  videoUrl: string;
+  thumbnailUrl?: string | null;
+  viewCount?: number | null;
+  likeCount?: number | null;
+  commentCount?: number | null;
+  duration?: number | null;
+  createdAt: string;
+  expiresAt?: string | null;
+  status: string;
+}
+
+interface ReviewerLevel {
+  level: number;
+  totalFavorites: number;
+  totalStories: number;
+  topStoryFavorites: number;
+}
+
+const LEVEL_LABELS: Record<number, string> = {
+  1: "Newcomer",
+  2: "Regular",
+  3: "Foodie",
+  4: "Critic",
+  5: "Influencer",
+  6: "Legend",
+};
+
+function VideoCreatorSection({ userId }: { userId?: string }) {
+  const [stories, setStories] = useState<VideoStoryItem[]>([]);
+  const [reviewerLevel, setReviewerLevel] = useState<ReviewerLevel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const [storiesRes, levelRes] = await Promise.all([
+        fetch(`/api/stories/user/${userId}`, { credentials: "include" }),
+        fetch(`/api/stories/reviewer-level/${userId}`, { credentials: "include" }),
+      ]);
+      if (storiesRes.ok) {
+        const data = await storiesRes.json();
+        setStories(Array.isArray(data.stories) ? data.stories : []);
+      }
+      if (levelRes.ok) {
+        setReviewerLevel(await levelRes.json());
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleDelete = async (storyId: string) => {
+    if (!confirm("Delete this video? This cannot be undone.")) return;
+    setDeletingId(storyId);
+    try {
+      const res = await fetch(`/api/stories/${storyId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setStories((prev) => prev.filter((s) => s.id !== storyId));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Loading your videos...
+      </div>
+    );
+  }
+
+  const totalViews = stories.reduce((sum, s) => sum + (s.viewCount ?? 0), 0);
+  const totalLikes = stories.reduce((sum, s) => sum + (s.likeCount ?? 0), 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Reviewer level card */}
+      {reviewerLevel && (
+        <Card className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-200/30 shadow-clean">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold text-lg shadow">
+                {reviewerLevel.level}
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">
+                  {LEVEL_LABELS[reviewerLevel.level] ?? `Level ${reviewerLevel.level}`}
+                </p>
+                <p className="text-xs text-muted-foreground">Reviewer Level</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 sm:ml-auto text-sm">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Video className="h-4 w-4 text-orange-500" />
+                <span className="font-semibold text-foreground">{reviewerLevel.totalStories}</span> videos
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Eye className="h-4 w-4 text-blue-500" />
+                <span className="font-semibold text-foreground">{totalViews.toLocaleString()}</span> views
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <ThumbsUp className="h-4 w-4 text-pink-500" />
+                <span className="font-semibold text-foreground">{totalLikes.toLocaleString()}</span> likes
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upload button */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">My Videos ({stories.length})</h3>
+        <Button size="sm" onClick={() => setIsUploadOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" />
+          Upload Video
+        </Button>
+      </div>
+
+      {/* Video list */}
+      {stories.length === 0 ? (
+        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <CardContent className="text-center py-12">
+            <Video className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-40" />
+            <h3 className="text-lg font-semibold mb-2">No videos yet</h3>
+            <p className="text-muted-foreground mb-4">
+              Share your food recommendations with the community!
+            </p>
+            <Button onClick={() => setIsUploadOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Upload Your First Video
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {stories.map((story) => (
+            <Card
+              key={story.id}
+              className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden"
+            >
+              <CardContent className="p-0">
+                <div className="flex gap-3 p-3">
+                  {/* Thumbnail */}
+                  <div className="shrink-0 w-20 h-20 rounded-md overflow-hidden bg-muted relative">
+                    {story.thumbnailUrl ? (
+                      <img
+                        src={story.thumbnailUrl}
+                        alt={story.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Video className="h-8 w-8 text-muted-foreground opacity-40" />
+                      </div>
+                    )}
+                    {story.duration && (
+                      <span className="absolute bottom-1 right-1 text-[10px] bg-black/70 text-white px-1 rounded">
+                        {story.duration}s
+                      </span>
+                    )}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-foreground truncate">{story.title}</p>
+                    {story.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        {story.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-3 w-3" />
+                        {(story.viewCount ?? 0).toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ThumbsUp className="h-3 w-3" />
+                        {(story.likeCount ?? 0).toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        {(story.commentCount ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(story.createdAt).toLocaleDateString()}
+                      {story.expiresAt && (
+                        <> · expires {new Date(story.expiresAt).toLocaleDateString()}</>
+                      )}
+                    </p>
+                  </div>
+                  {/* Delete */}
+                  <button
+                    className="shrink-0 self-start p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                    onClick={() => handleDelete(story.id)}
+                    disabled={deletingId === story.id}
+                    title="Delete video"
+                  >
+                    {deletingId === story.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Upload modal */}
+      <VideoUploadModal
+        isOpen={isUploadOpen}
+        onClose={() => {
+          setIsUploadOpen(false);
+          loadData();
+        }}
+      />
     </div>
   );
 }

@@ -44,7 +44,7 @@ export default function InstallPage() {
 
       <BackHeader title="Install" fallbackHref="/" />
 
-      <div className="px-6 py-6 space-y-4">
+      <div className="px-4 sm:px-6 py-6 space-y-4">
         {standalone && (
           <Card className="border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
             <CardContent className="p-4">

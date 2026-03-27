@@ -145,7 +145,7 @@ export default function FeaturedDealsPage() {
       </header>
 
       {/* Content */}
-      <div className="px-6 py-6">
+      <div className="px-4 sm:px-6 py-6">
         {geoAds.length > 0 && (
           <div className="mb-6">
             {geoAds.map((ad) => (
