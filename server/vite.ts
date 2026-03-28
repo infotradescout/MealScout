@@ -27,7 +27,7 @@ export async function setupVite(app: Express, server: Server) {
     hmr: { server },
     allowedHosts: true as const,
   };
-  const configFile = path.resolve(process.cwd(), "vite.config.ts");
+  const configFile = path.resolve(process.cwd(), "client", "vite.config.ts");
 
   const vite = await createViteServer({
     configFile,
