@@ -1,0 +1,547 @@
+import type { Express } from "express";
+import type Stripe from "stripe";
+
+import { emailService } from "../emailService";
+import { storage } from "../storage";
+import { isAuthenticated } from "../unifiedAuth";
+import type { User } from "@shared/schema";
+
+type LockedPriceResult = {
+  locked: boolean;
+  priceId: string;
+  label: string;
+};
+
+type SubscriptionRouteDependencies = {
+  stripe: Stripe | null;
+  ensureTrialForUser: (user: User) => Promise<User | null | undefined>;
+  isTrialActive: (user: User | null | undefined) => boolean;
+  getLockedPriceForUser: (userId: string) => Promise<LockedPriceResult>;
+};
+
+async function userHasVerifiedBusiness(userId: string) {
+  const restaurantsByOwner = await storage.getRestaurantsByOwner(userId);
+  return restaurantsByOwner.some((restaurant) => restaurant.isVerified);
+}
+
+export function registerSubscriptionRoutes(
+  app: Express,
+  {
+    stripe,
+    ensureTrialForUser,
+    isTrialActive,
+    getLockedPriceForUser,
+  }: SubscriptionRouteDependencies,
+) {
+  app.post(
+    "/api/subscriptions/initialize",
+    isAuthenticated,
+    async (req: any, res) => {
+      const user = req.user;
+      const { billingInterval = "month", promoCode = "" } = req.body;
+
+      const testModeEnabled =
+        String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() ===
+          "true" || process.env.NODE_ENV !== "production";
+      const testPromosRequireAdmin =
+        String(process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "").toLowerCase() ===
+        "true";
+      const normalizedPromoCode = String(promoCode || "").trim().toUpperCase();
+      const isTestDollarPromo =
+        normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
+      const isAdminUser = ["admin", "super_admin", "staff"].includes(
+        String(user?.userType || ""),
+      );
+
+      console.log("=== Subscription Initialize Request ===");
+      console.log("User ID:", user?.id);
+      console.log("User Email:", user?.email);
+      console.log("Promo Code:", promoCode);
+      console.log("Billing Interval:", billingInterval);
+
+      if (["restaurant_owner", "food_truck"].includes(user?.userType)) {
+        const hasVerified = await userHasVerifiedBusiness(user.id);
+        if (!hasVerified) {
+          return res.status(403).json({
+            error: {
+              message:
+                "Verification is required before enabling premium features.",
+            },
+          });
+        }
+      }
+
+      const hydratedUser = await ensureTrialForUser(user);
+      if (isTrialActive(hydratedUser)) {
+        return res.send({
+          status: "active",
+          subscriptionId: null,
+          trialAccess: true,
+          message:
+            "Your 30-day premium trial is active. We'll prompt you to pay before it ends.",
+        });
+      }
+
+      if (!stripe) {
+        return res
+          .status(503)
+          .json({ error: { message: "Payment processing is not configured" } });
+      }
+
+      if (isTestDollarPromo) {
+        if (!testModeEnabled || (testPromosRequireAdmin && !isAdminUser)) {
+          return res.status(403).json({ error: { message: "Not authorized" } });
+        }
+        if (!user.email) {
+          return res
+            .status(400)
+            .json({ error: { message: "No user email on file" } });
+        }
+        return res.send({
+          status: "quote",
+          promo: normalizedPromoCode,
+          testPricing: true,
+          label: "$1 test plan",
+          billingInterval: "month",
+        });
+      }
+
+      if (!user.email) {
+        return res
+          .status(400)
+          .json({ error: { message: "No user email on file" } });
+      }
+
+      try {
+        const { locked, priceId, label } = await getLockedPriceForUser(user.id);
+        return res.send({
+          status: "quote",
+          priceId,
+          locked,
+          label,
+          billingInterval: "month",
+        });
+      } catch (error: any) {
+        console.error("Initialize quote error:", error);
+        return res.status(503).json({
+          error: {
+            message: error.message || "Unable to provide pricing quote",
+          },
+        });
+      }
+    },
+  );
+
+  app.post("/api/create-subscription", isAuthenticated, async (req: any, res) => {
+    const user = req.user;
+    const {
+      promoCode,
+      billingInterval = "month",
+      applyCreditsCents,
+    } = req.body;
+
+    const testModeEnabled =
+      String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() === "true" ||
+      process.env.NODE_ENV !== "production";
+    const testPromosRequireAdmin =
+      String(process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "").toLowerCase() ===
+      "true";
+    const normalizedPromoCode = String(promoCode || "").trim().toUpperCase();
+    const isTestDollarPromo =
+      normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
+    const isAdminUser = ["admin", "super_admin", "staff"].includes(
+      String(user?.userType || ""),
+    );
+
+    const hydratedUser = await ensureTrialForUser(user);
+    if (isTrialActive(hydratedUser)) {
+      return res.status(400).json({
+        error: {
+          message:
+            "Your 30-day premium trial is already active. We'll prompt you to pay before it ends.",
+        },
+      });
+    }
+
+    if (["restaurant_owner", "food_truck"].includes(user?.userType)) {
+      const hasVerified = await userHasVerifiedBusiness(user.id);
+      if (!hasVerified) {
+        return res.status(403).json({
+          error: {
+            message:
+              "Verification is required before enabling premium features.",
+          },
+        });
+      }
+    }
+
+    if (isTestDollarPromo) {
+      if (!testModeEnabled || (testPromosRequireAdmin && !isAdminUser)) {
+        return res.status(403).json({
+          error: { message: "Not authorized" },
+        });
+      }
+      if (!stripe) {
+        return res.status(503).json({
+          error: { message: "Payment service temporarily unavailable" },
+        });
+      }
+      if (!user.email) {
+        return res
+          .status(400)
+          .json({ error: { message: "No user email on file" } });
+      }
+
+      try {
+        let customerId = user.stripeCustomerId;
+
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name:
+              user.firstName && user.lastName
+                ? `${user.firstName} ${user.lastName}`
+                : user.email,
+          });
+          customerId = customer.id;
+        }
+
+        const subscription = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [
+            {
+              price_data: {
+                currency: "usd",
+                product: (
+                  await stripe.products.create({ name: "MealScout Test $1" })
+                ).id,
+                unit_amount: 100,
+                recurring: { interval: "month", interval_count: 1 },
+              },
+            },
+          ],
+          payment_behavior: "default_incomplete",
+          expand: ["latest_invoice.payment_intent"],
+        });
+
+        await storage.updateUserStripeInfo(
+          user.id,
+          customerId,
+          subscription.id,
+          `standard-${billingInterval}`,
+        );
+
+        const latestInvoice = subscription.latest_invoice;
+        const paymentIntent =
+          typeof latestInvoice === "object" && latestInvoice
+            ? (latestInvoice as any).payment_intent
+            : null;
+        return res.send({
+          subscriptionId: subscription.id,
+          clientSecret:
+            typeof paymentIntent === "object" && paymentIntent
+              ? paymentIntent.client_secret
+              : null,
+          testPricing: true,
+          message: "Test pricing applied - $1 charge",
+        });
+      } catch (error: any) {
+        console.error("Error creating test subscription:", error);
+        return res.status(400).send({ error: { message: error.message } });
+      }
+    }
+
+    if (!stripe) {
+      return res
+        .status(503)
+        .json({ error: { message: "Payment processing is not configured" } });
+    }
+
+    const validIntervals = ["month"];
+    const interval = validIntervals.includes(billingInterval)
+      ? billingInterval
+      : "month";
+
+    if (user.stripeSubscriptionId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(
+          user.stripeSubscriptionId,
+          {
+            expand: ["latest_invoice.payment_intent"],
+          },
+        );
+
+        if (
+          subscription.status === "incomplete" ||
+          subscription.status === "incomplete_expired"
+        ) {
+          console.log(
+            `Canceling incomplete subscription ${subscription.id} to create new one`,
+          );
+          await stripe.subscriptions.cancel(subscription.id);
+          await storage.updateUser(user.id, { stripeSubscriptionId: null });
+        } else {
+          const latestInvoice = subscription.latest_invoice;
+          const paymentIntent =
+            typeof latestInvoice === "object" && latestInvoice
+              ? (latestInvoice as any).payment_intent
+              : null;
+
+          res.send({
+            subscriptionId: subscription.id,
+            clientSecret:
+              typeof paymentIntent === "object" && paymentIntent
+                ? paymentIntent.client_secret
+                : null,
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Error retrieving subscription:", error);
+      }
+    }
+
+    if (!user.email) {
+      return res
+        .status(400)
+        .json({ error: { message: "No user email on file" } });
+    }
+
+    try {
+      let customerId = user.stripeCustomerId;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name:
+            user.firstName && user.lastName
+              ? `${user.firstName} ${user.lastName}`
+              : user.email,
+        });
+        customerId = customer.id;
+      }
+
+      let creditAppliedCents = 0;
+      const requestedCreditCents = Number(applyCreditsCents || 0);
+      if (requestedCreditCents > 0) {
+        const { getUserCreditBalance, debitCredit } =
+          await import("../creditService");
+        const balance = await getUserCreditBalance(user.id);
+        const availableCents = Math.max(0, Math.floor(balance * 100));
+        creditAppliedCents = Math.min(requestedCreditCents, availableCents);
+
+        if (creditAppliedCents > 0) {
+          const balanceTx = await stripe.customers.createBalanceTransaction(
+            customerId,
+            {
+              amount: -creditAppliedCents,
+              currency: "usd",
+              description: "MealScout credits applied",
+            },
+          );
+          await debitCredit(
+            user.id,
+            creditAppliedCents / 100,
+            "subscription_credit",
+            balanceTx.id,
+            "subscription",
+          );
+        }
+      }
+
+      if (!user.subscriptionSignupDate) {
+        await storage.updateUser(user.id, {
+          subscriptionSignupDate: new Date(),
+        });
+      }
+
+      const { locked, priceId, label } = await getLockedPriceForUser(user.id);
+      const amount = 2500;
+
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        payment_behavior: "default_incomplete",
+        expand: ["latest_invoice.payment_intent"],
+        metadata:
+          creditAppliedCents > 0
+            ? { creditAppliedCents: creditAppliedCents.toString() }
+            : undefined,
+      });
+
+      await storage.updateUserStripeInfo(
+        user.id,
+        customerId,
+        subscription.id,
+        `standard-${interval}`,
+      );
+
+      const planType = `standard-${interval}`;
+      emailService
+        .sendPaymentConfirmation(user, amount, planType, subscription.id)
+        .catch((err) =>
+          console.error("Failed to send payment confirmation email:", err),
+        );
+
+      const latestInvoice = subscription.latest_invoice;
+      const paymentIntent =
+        typeof latestInvoice === "object" && latestInvoice
+          ? (latestInvoice as any).payment_intent
+          : null;
+      res.send({
+        subscriptionId: subscription.id,
+        clientSecret:
+          typeof paymentIntent === "object" && paymentIntent
+            ? paymentIntent.client_secret
+            : null,
+        priceId,
+        locked,
+        label,
+      });
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      return res.status(400).send({ error: { message: error.message } });
+    }
+  });
+
+  app.get("/api/subscription/status", isAuthenticated, async (req: any, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const user = await storage.getUser(req.user.id);
+    if (!user) {
+      return res.status(401).json({ status: "none", hasAccess: false });
+    }
+
+    const hydratedUser = await ensureTrialForUser(user);
+    if (isTrialActive(hydratedUser)) {
+      return res.json({
+        status: "active",
+        hasAccess: true,
+        trialAccess: true,
+        trialEndsAt: hydratedUser.trialEndsAt,
+        message: "30-day premium trial active",
+      });
+    }
+
+    if (!stripe) {
+      return res.status(503).json({ message: "Payment service unavailable" });
+    }
+
+    try {
+      if (!hydratedUser?.stripeSubscriptionId) {
+        return res.json({ status: "none", hasAccess: false });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(
+        hydratedUser.stripeSubscriptionId,
+        {
+          expand: ["latest_invoice.payment_intent"],
+        },
+      );
+
+      if (subscription.status === "incomplete") {
+        const latestInvoice = subscription.latest_invoice;
+        if (latestInvoice && typeof latestInvoice === "object") {
+          const invoice = latestInvoice as any;
+          console.log(
+            `Force paying invoice ${invoice.id} to complete subscription...`,
+          );
+
+          try {
+            const paidInvoice = await stripe.invoices.pay(invoice.id);
+            console.log(
+              `Successfully paid invoice ${invoice.id}, status: ${paidInvoice.status}`,
+            );
+
+            const refreshedSubscription = await stripe.subscriptions.retrieve(
+              hydratedUser.stripeSubscriptionId,
+            );
+            res.json({
+              status: refreshedSubscription.status,
+              currentPeriodEnd: (refreshedSubscription as any)
+                .current_period_end,
+              cancelAtPeriodEnd: (refreshedSubscription as any)
+                .cancel_at_period_end,
+            });
+            return;
+          } catch (payError: any) {
+            console.log(`Error paying invoice: ${payError.message}`);
+          }
+        }
+      }
+
+      res.json({
+        status: subscription.status,
+        currentPeriodEnd: (subscription as any).current_period_end,
+        cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
+      });
+    } catch (error: any) {
+      console.error("Subscription status error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/subscription/pause", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ message: "Payment service unavailable" });
+    }
+
+    try {
+      const user = req.user;
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ message: "No active subscription" });
+      }
+
+      const subscription = await stripe.subscriptions.update(
+        user.stripeSubscriptionId,
+        {
+          pause_collection: {
+            behavior: "keep_as_draft",
+          },
+        },
+      );
+
+      res.json({
+        message: "Subscription paused successfully",
+        status: subscription.status,
+      });
+    } catch (error: any) {
+      console.error("Pause subscription error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/subscription/cancel", isAuthenticated, async (req: any, res) => {
+    if (!stripe) {
+      return res.status(503).json({ message: "Payment service unavailable" });
+    }
+
+    try {
+      const user = req.user;
+      if (!user.stripeSubscriptionId) {
+        return res.status(400).json({ message: "No active subscription" });
+      }
+
+      const subscription = await stripe.subscriptions.cancel(
+        user.stripeSubscriptionId,
+      );
+
+      await storage.updateUser(user.id, {
+        stripeSubscriptionId: null,
+        subscriptionBillingInterval: null,
+      });
+
+      await storage.deactivateUserDeals(user.id);
+
+      res.json({
+        message: "Subscription cancelled immediately.",
+        cancelAt: subscription.cancel_at,
+      });
+    } catch (error: any) {
+      console.error("Cancel subscription error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+}
