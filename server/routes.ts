@@ -65,8 +65,6 @@ import {
 import { emailService, isEmailConfigured } from "./emailService";
 import {
   insertRestaurantSchema,
-  insertDealSchema,
-  insertDealViewSchema,
   insertFoodTruckLocationSchema,
   updateRestaurantMobileSettingsSchema,
   insertFoodTruckSessionSchema,
@@ -214,6 +212,7 @@ import {
 } from "./mapEndpointWatchdog";
 import { registerAuthAccountRoutes } from "./routes/authAccountRoutes";
 import { registerAnalyticsRoutes } from "./routes/analyticsRoutes";
+import { registerDealManagementRoutes } from "./routes/dealManagementRoutes";
 import { registerLocationDemandRoutes } from "./routes/locationDemandRoutes";
 import { registerMediaRoutes } from "./routes/mediaRoutes";
 import { registerDealDiscoveryRoutes } from "./routes/dealDiscoveryRoutes";
@@ -905,6 +904,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerAnalyticsRoutes(app);
 
+  registerDealManagementRoutes(app, {
+    logAudit,
+    validateSubscriptionLimits,
+    notifyNearbyDealSubscribers,
+    toNumeric,
+  });
+
   registerDealDiscoveryRoutes(app, {
     filterDealsByBusinessAccess,
     hasBusinessDistributionAccess,
@@ -1248,144 +1254,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
-
-  // Get claimed deals for user
-  app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.id;
-      const claimedDeals = await storage.getUserDealClaimsWithDetails(userId);
-      res.json(claimedDeals);
-    } catch (error) {
-      console.error("Error fetching claimed deals:", error);
-      res.status(500).json({ message: "Failed to fetch claimed deals" });
-    }
-  });
-
-  // 🔒 SECURITY: Update deal - requires ownership of restaurant
-  app.patch(
-    "/api/deals/:dealId",
-    isAuthenticated,
-    verifyResourceOwnership("deal"),
-    async (req: any, res) => {
-      try {
-        await logAudit(
-          req.user.id,
-          "deal_edit",
-          "deal",
-          req.params.dealId,
-          req.ip,
-          req.headers["user-agent"],
-          req.body,
-        );
-        const { dealId } = req.params;
-        const updates = req.body;
-        const userId = req.user.id;
-
-        // Get current deal (ownership already verified by middleware)
-        const currentDeal = await storage.getDeal(dealId);
-        if (!currentDeal) {
-          return res.status(404).json({ message: "Deal not found" });
-        }
-
-        // If activating a deal, validate subscription limits
-        if (updates.isActive === true && !currentDeal.isActive) {
-          const subscriptionValidation = await validateSubscriptionLimits(
-            userId,
-            dealId,
-          );
-          if (!subscriptionValidation.isValid) {
-            return res.status(402).json({
-              message: subscriptionValidation.error,
-              currentCount: subscriptionValidation.currentCount,
-              maxDeals: subscriptionValidation.maxDeals,
-            });
-          }
-        }
-
-        const updatedDeal = await storage.updateDeal(dealId, updates);
-        res.json(updatedDeal);
-      } catch (error) {
-        console.error("Error updating deal:", error);
-        res.status(500).json({ message: "Failed to update deal" });
-      }
-    },
-  );
-
-  // 🔒 SECURITY: Delete deal - requires ownership of restaurant
-  app.delete(
-    "/api/deals/:dealId",
-    isAuthenticated,
-    verifyResourceOwnership("deal"),
-    async (req: any, res) => {
-      try {
-        await logAudit(
-          req.user.id,
-          "deal_delete",
-          "deal",
-          req.params.dealId,
-          req.ip,
-          req.headers["user-agent"],
-          {},
-        );
-        const { dealId } = req.params;
-        // Ownership verified by middleware - safe to delete
-        await storage.deleteDeal(dealId);
-        res.json({ success: true });
-      } catch (error) {
-        console.error("Error deleting deal:", error);
-        res.status(500).json({ message: "Failed to delete deal" });
-      }
-    },
-  );
-
-  // Event ingestion endpoints
-  // Deal view tracking endpoint with proper per-identity rate limiting
-  app.post("/api/deals/:dealId/view", async (req: any, res) => {
-    try {
-      const { dealId } = req.params;
-      const userId = req.user?.id; // Optional for anonymous views
-      const sessionId = req.sessionID;
-
-      // Skip tracking if the deal does not exist (prevents noisy 500s on stale IDs)
-      const deal = await storage.getDeal(dealId);
-      if (!deal) {
-        console.warn(
-          `[deals:view] deal not found for id ${dealId} - skipping view tracking`,
-        );
-        return res.json({
-          success: true,
-          message: "Deal not found; view skipped",
-        });
-      }
-
-      // Proper per-identity rate limiting: check if this specific user/session has already viewed this deal recently
-      const hasRecentView = await storage.hasRecentDealView(
-        dealId,
-        userId,
-        sessionId,
-        3600000,
-      ); // 1 hour window
-
-      if (hasRecentView) {
-        return res.json({
-          success: true,
-          message: "View already recorded recently",
-        });
-      }
-
-      const viewData = insertDealViewSchema.parse({
-        dealId,
-        userId,
-        sessionId,
-      });
-
-      const view = await storage.recordDealView(viewData);
-      res.json({ success: true, view });
-    } catch (error) {
-      console.error("Error recording deal view:", error);
-      res.status(500).json({ message: "Failed to record view" });
-    }
-  });
 
   // Mark deal claim as used with order amount
   app.patch(
@@ -2977,138 +2845,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({
         message: error.message || "Failed to claim truck listing",
       });
-    }
-  });
-
-  // Deal routes
-  app.post("/api/deals", isAuthenticated, async (req: any, res) => {
-    try {
-      console.log("🟢 POST /api/deals - incoming request", {
-        userId: req.user?.id,
-        ip: req.ip,
-        ua: req.headers["user-agent"],
-      });
-      await logAudit(
-        req.user.id,
-        "deal_create",
-        "deal",
-        undefined,
-        req.ip,
-        req.headers["user-agent"],
-        req.body,
-      );
-      const userId = req.user.id;
-
-      // Normalize incoming payload to expected types to avoid Zod parse hangs
-      const raw = req.body || {};
-      const normalized = {
-        ...raw,
-        // discountValue should remain as string for decimal type
-        discountValue:
-          typeof raw.discountValue === "number"
-            ? raw.discountValue.toString()
-            : raw.discountValue,
-        minOrderAmount:
-          raw.minOrderAmount === "" || raw.minOrderAmount == null
-            ? null
-            : typeof raw.minOrderAmount === "number"
-              ? raw.minOrderAmount.toString()
-              : raw.minOrderAmount,
-        totalUsesLimit:
-          raw.totalUsesLimit === "" || raw.totalUsesLimit == null
-            ? null
-            : typeof raw.totalUsesLimit === "string"
-              ? parseInt(raw.totalUsesLimit)
-              : raw.totalUsesLimit,
-        perCustomerLimit:
-          raw.perCustomerLimit === "" || raw.perCustomerLimit == null
-            ? 1
-            : typeof raw.perCustomerLimit === "string"
-              ? parseInt(raw.perCustomerLimit)
-              : raw.perCustomerLimit,
-        // Convert date strings to Date objects
-        startDate:
-          typeof raw.startDate === "string"
-            ? new Date(raw.startDate)
-            : raw.startDate,
-        endDate:
-          raw.isOngoing || raw.endDate === "" || raw.endDate == null
-            ? null
-            : typeof raw.endDate === "string"
-              ? new Date(raw.endDate)
-              : raw.endDate,
-        // Times nullable if business hours
-        startTime: raw.availableDuringBusinessHours ? null : raw.startTime,
-        endTime: raw.availableDuringBusinessHours ? null : raw.endTime,
-      };
-
-      console.log("🧭 Normalized deal payload", {
-        restaurantId: normalized.restaurantId,
-        title: normalized.title,
-        dealType: normalized.dealType,
-        discountValue: normalized.discountValue,
-        startDate: normalized.startDate,
-        endDate: normalized.endDate,
-      });
-
-      const dealData = insertDealSchema.parse(normalized);
-
-      // Verify restaurant ownership
-      const restaurant = await storage.getRestaurant(dealData.restaurantId);
-      if (!restaurant || restaurant.ownerId !== userId) {
-        console.warn(
-          "🚫 Deal creation rejected - unauthorized restaurant ownership",
-          {
-            userId,
-            restaurantId: dealData.restaurantId,
-            ownerId: restaurant?.ownerId,
-          },
-        );
-        return res.status(403).json({ message: "Unauthorized" });
-      }
-
-      // Validate subscription limits
-      const subscriptionValidation = await validateSubscriptionLimits(userId);
-      console.log("📊 Subscription validation", subscriptionValidation);
-      if (!subscriptionValidation.isValid) {
-        return res.status(402).json({
-          message: subscriptionValidation.error,
-          currentCount: subscriptionValidation.currentCount,
-          maxDeals: subscriptionValidation.maxDeals,
-        });
-      }
-
-      const deal = await storage.createDeal(dealData);
-      console.log("✅ Deal created", {
-        id: deal.id,
-        restaurantId: deal.restaurantId,
-        title: deal.title,
-      });
-
-      const restaurantLat = toNumeric((restaurant as any)?.latitude);
-      const restaurantLng = toNumeric((restaurant as any)?.longitude);
-      if (restaurantLat != null && restaurantLng != null) {
-        void notifyNearbyDealSubscribers({
-          creatorUserId: userId,
-          dealId: deal.id,
-          dealTitle: deal.title,
-          restaurantName: restaurant.name,
-          lat: restaurantLat,
-          lng: restaurantLng,
-        }).catch((err) => {
-          console.error("Failed to send nearby deal notifications:", err);
-        });
-      }
-
-      res.json(deal);
-    } catch (error: any) {
-      console.error("❌ Error creating deal:", error?.message || error);
-      if (error?.stack) {
-        console.error(error.stack);
-      }
-      res
-        .status(400)
-        .json({ message: error?.message || "Failed to create deal" });
     }
   });
 
