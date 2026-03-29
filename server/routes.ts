@@ -167,7 +167,6 @@ import incidentManager, {
   createIncident,
   ANOMALY_RULES,
 } from "./incidentManager";
-import { vacEvaluateRestaurantSignup } from "./vacLite";
 import { reverseGeocode } from "./utils/geocoding";
 import {
   ensurePremiumTrialForUser,
@@ -207,6 +206,7 @@ import { registerPublicDiscoveryRoutes } from "./routes/publicDiscoveryRoutes";
 import { registerPublicMapRoutes } from "./routes/publicMapRoutes";
 import { registerRestaurantCoreRoutes } from "./routes/restaurantCoreRoutes";
 import { registerRestaurantOperationsRoutes } from "./routes/restaurantOperationsRoutes";
+import { registerRestaurantSignupRoutes } from "./routes/restaurantSignupRoutes";
 import { registerPublicSearchRoutes } from "./routes/publicSearchRoutes";
 import { registerSeoRoutes } from "./routes/seoRoutes";
 
@@ -912,6 +912,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasBusinessDistributionAccess,
   });
 
+  registerRestaurantSignupRoutes(app, {
+    ensureTrialForUser,
+    queueSocialPost,
+  });
+
   registerPublicDiscoveryRoutes(app);
 
   registerRestaurantCoreRoutes(app, { validateAnalyticsAccess });
@@ -1199,292 +1204,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res
         .status(500)
         .json({ message: "Failed to fetch subscribed restaurants" });
-    }
-  });
-
-  // Restaurant owner signup endpoint (creates user account + restaurant in one flow)
-  app.post("/api/restaurants/signup", async (req: any, res) => {
-    try {
-      const { userData, restaurantData } = req.body;
-
-      let user: User;
-
-      // Check if user is already authenticated (e.g., via Google OAuth)
-      if (req.isAuthenticated && req.isAuthenticated() && req.user) {
-        // User is already authenticated, use existing user
-        user = req.user as User;
-        console.log("Using authenticated user for restaurant signup:", {
-          userId: user.id,
-          userType: user.userType,
-        });
-
-        if (!user.emailVerified) {
-          return res.status(403).json({
-            message: "Please verify your email before continuing.",
-            code: "email_not_verified",
-          });
-        }
-
-        // If user is currently a customer, upgrade them to restaurant_owner
-        if (user.userType === "customer") {
-          console.log(
-            "Converting customer account to restaurant owner:",
-            user.id,
-          );
-          await storage.updateUserType(user.id, "restaurant_owner");
-          // Update the user object to reflect the change
-          user = (await storage.getUserById(user.id)) || user;
-        }
-      } else {
-        // User is not authenticated, create new account
-        // Validate user data with password required
-        const userValidation = z.object({
-          email: z.string().email(),
-          firstName: z.string().min(1),
-          lastName: z.string().min(1),
-          phone: z.string().min(10),
-          password: z
-            .string()
-            .min(1, PASSWORD_REQUIREMENTS)
-            .refine(isPasswordStrong, PASSWORD_REQUIREMENTS),
-        });
-
-        const validatedUserData = userValidation.parse(userData);
-
-        // Check if user already exists
-        const existingUser = await storage.getUserByEmail(
-          validatedUserData.email,
-        );
-        if (existingUser) {
-          return res
-            .status(400)
-            .json({ message: "User with this email already exists" });
-        }
-
-        // Hash password
-        const passwordHash = await bcrypt.hash(validatedUserData.password, 10);
-
-        // Create restaurant owner user account using email auth
-        user = await storage.upsertUserByAuth(
-          "email",
-          {
-            ...validatedUserData,
-            passwordHash,
-          },
-          "restaurant_owner",
-        );
-
-        // Require email verification before proceeding (no session or restaurant created yet).
-        const token = randomBytes(32).toString("hex");
-        const tokenHash = createHash("sha256").update(token).digest("hex");
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await storage.createEmailVerificationToken({
-          userId: user.id,
-          tokenHash,
-          expiresAt,
-          requestIp: req.ip || req.connection?.remoteAddress || undefined,
-          userAgent: req.get("User-Agent") || undefined,
-        });
-
-        const apiBaseUrl = (
-          process.env.PUBLIC_BASE_URL ||
-          (req.get("host") ? `${req.protocol}://${req.get("host")}` : null) ||
-          "http://localhost:5000"
-        ).replace(/\/+$/, "");
-        const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-          token,
-        )}`;
-        await emailService.sendEmailVerificationEmail(user, verifyUrl);
-
-        return res.status(201).json({
-          message:
-            "Account created. Please verify your email before completing signup.",
-          requiresEmailVerification: true,
-        });
-      }
-
-      // Validate restaurant data
-      const restaurantValidation = insertRestaurantSchema.omit({
-        ownerId: true,
-      });
-      const validatedRestaurantData =
-        restaurantValidation.parse(restaurantData);
-
-      // Create restaurant profile
-      const restaurant = await storage.createRestaurant({
-        ...validatedRestaurantData,
-        ownerId: user.id,
-      });
-
-      // If this is a food truck profile, ensure the user account is a `food_truck` so booking is allowed.
-      if (String((restaurant as any)?.businessType || "") === "food_truck") {
-        const currentType = String((user as any)?.userType || "");
-        const allowedToPromote = ["customer", "restaurant_owner"].includes(
-          currentType,
-        );
-        if (allowedToPromote && currentType !== "food_truck") {
-          await storage.updateUserType(user.id, "food_truck");
-          user = (await storage.getUserById(user.id)) || user;
-        }
-      }
-
-      // If this is a Pensacola food truck, trigger the automated drip (step 1) immediately.
-      if (String((restaurant as any)?.businessType || "") === "food_truck") {
-        try {
-          const { maybeTriggerPensacolaFoodTruckDrip } =
-            await import("./services/pensacolaFoodTruckDrip");
-          await maybeTriggerPensacolaFoodTruckDrip({
-            userId: user.id,
-            restaurant,
-          });
-        } catch (error) {
-          console.warn(
-            "[drip] Unable to trigger Pensacola food truck drip:",
-            error,
-          );
-        }
-      }
-
-      // VAC-lite auto-verify (with fallback to manual verification request)
-      try {
-        const enabled =
-          String(
-            process.env.VAC_AUTO_VERIFY_ENABLED || "true",
-          ).toLowerCase() !== "false";
-        if (enabled) {
-          const vac = await vacEvaluateRestaurantSignup({
-            user,
-            restaurant,
-            req,
-          });
-          console.log("🔍 VAC-lite evaluation:", {
-            restaurantId: restaurant.id,
-            restaurantName: (restaurant as any).name,
-            score: vac.score,
-            threshold: vac.threshold,
-            shouldAutoVerify: vac.shouldAutoVerify,
-            signals: vac.signals,
-          });
-
-          if (vac.shouldAutoVerify) {
-            console.log("✅ Auto-verifying restaurant:", restaurant.id);
-            await storage.setRestaurantVerified(restaurant.id, true);
-            (restaurant as any).isVerified = true;
-            try {
-              user = (await ensureTrialForUser(user)) || user;
-            } catch (e) {
-              console.warn("ensureTrialForUser failed after auto-verify:", e);
-            }
-          } else {
-            console.log(
-              "⚠️  Creating manual verification request for:",
-              restaurant.id,
-            );
-            const hasPending = await storage.hasPendingVerificationRequest(
-              restaurant.id,
-            );
-            if (!hasPending) {
-              await storage.createVerificationRequest({
-                restaurantId: restaurant.id,
-                documents: [],
-              });
-            } else {
-              console.log("ℹ️  Pending verification request already exists");
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("VAC-lite failed", e);
-        // Never block signup due to VAC issues
-      }
-
-      // Auto-post to MealScout Facebook page when a new food truck joins
-      if ((restaurant as any).businessType === "food_truck") {
-        try {
-          const baseUrl = (
-            process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
-          ).replace(/\/+$/, "");
-          const link = `${baseUrl}/restaurant/${restaurant.id}`;
-          const message = `Welcome ${restaurant.name} to MealScout! Catch them on the map and follow their schedule.`;
-          await queueSocialPost({
-            platform: "facebook",
-            target: "mealscout_page",
-            message,
-            link,
-          });
-        } catch (error) {
-          console.error("Failed to queue social post:", error);
-        }
-      }
-
-      // PHASE 2: Attach referral if present in request
-      const referralId =
-        req.body?.referralId ||
-        req.query?.referralId ||
-        req.cookies?.referralRecordId ||
-        req.cookies?.referralId;
-      if (referralId) {
-        try {
-          const { attachReferralToSignup } = await import("./referralService");
-          await attachReferralToSignup(referralId, restaurant.id);
-          console.log("[Phase 2] Referral attached:", {
-            referralId,
-            restaurantId: restaurant.id,
-          });
-        } catch (err) {
-          console.error("[Phase 2] Error attaching referral:", err);
-          // Don't fail signup if referral attachment fails
-        }
-      }
-
-      if (referralId && user?.id) {
-        try {
-          const { resolveAffiliateUserId } =
-            await import("./affiliateTagService");
-          const affiliateUserId = await resolveAffiliateUserId(referralId);
-          if (affiliateUserId && affiliateUserId !== user.id) {
-            const [existingUser] = await db
-              .select({ affiliateCloserUserId: users.affiliateCloserUserId })
-              .from(users)
-              .where(eq(users.id, user.id))
-              .limit(1);
-
-            if (!existingUser?.affiliateCloserUserId) {
-              const [affiliate] = await db
-                .select({ affiliatePercent: users.affiliatePercent })
-                .from(users)
-                .where(eq(users.id, affiliateUserId))
-                .limit(1);
-              const percentSnapshot = Math.max(
-                Number(affiliate?.affiliatePercent ?? 5),
-                0,
-              );
-
-              await db
-                .update(users)
-                .set({
-                  affiliateCloserUserId: affiliateUserId,
-                  affiliateCloserPercent: percentSnapshot,
-                  updatedAt: new Date(),
-                })
-                .where(eq(users.id, user.id));
-            }
-          }
-        } catch (err) {
-          console.error("[Phase 2] Error attaching user referral:", err);
-        }
-      }
-
-      res.json({
-        user,
-        restaurant,
-        message: "Restaurant owner account created successfully",
-      });
-    } catch (error: any) {
-      console.error("Error in restaurant signup:", error);
-      res.status(400).json({
-        message: error.message || "Failed to create restaurant account",
-      });
     }
   });
 
