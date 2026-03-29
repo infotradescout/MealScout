@@ -38,6 +38,7 @@ declare module "express-session" {
 // Session configuration (moved from facebookAuth.ts)
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const isProduction = process.env.NODE_ENV === "production";
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -55,10 +56,53 @@ export function getSession() {
     proxy: true,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
       maxAge: sessionTtl,
     },
+  });
+}
+
+function getSessionCookieOptions() {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: (isProduction ? "none" : "lax") as "none" | "lax",
+    path: "/",
+  };
+}
+
+function establishAuthenticatedSession(req: any, user: User) {
+  return new Promise<void>((resolve, reject) => {
+    const finalizeLogin = () => {
+      req.login(user, (loginErr: unknown) => {
+        if (loginErr) {
+          reject(loginErr);
+          return;
+        }
+        req.session.save((saveErr: unknown) => {
+          if (saveErr) {
+            reject(saveErr);
+            return;
+          }
+          resolve();
+        });
+      });
+    };
+
+    if (!req.session || typeof req.session.regenerate !== "function") {
+      finalizeLogin();
+      return;
+    }
+
+    req.session.regenerate((regenerateErr: unknown) => {
+      if (regenerateErr) {
+        reject(regenerateErr);
+        return;
+      }
+      finalizeLogin();
+    });
   });
 }
 
@@ -1201,19 +1245,8 @@ export async function setupUnifiedAuth(app: Express) {
         });
       }
 
-      req.login(user, (err) => {
-        if (err) {
-          return res.status(500).json({ error: "Failed to log in" });
-        }
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            return res
-              .status(500)
-              .json({ error: "Failed to persist session" });
-          }
-          res.json({ user: sanitizeUser(user), message: "Login successful" });
-        });
-      });
+      await establishAuthenticatedSession(req, user);
+      res.json({ user: sanitizeUser(user), message: "Login successful" });
     } catch (error) {
       console.error("Restaurant login error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1262,21 +1295,8 @@ export async function setupUnifiedAuth(app: Express) {
         });
       }
 
-      // Use req.login to properly establish the session
-      req.login(user, (err) => {
-        if (err) {
-          console.error("❌ Session login error:", err);
-          return res.status(500).json({ error: "Failed to establish session" });
-        }
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            return res
-              .status(500)
-              .json({ error: "Failed to persist session" });
-          }
-          res.json({ user: sanitizeUser(user), message: "Login successful" });
-        });
-      });
+      await establishAuthenticatedSession(req, user);
+      res.json({ user: sanitizeUser(user), message: "Login successful" });
     } catch (error) {
       console.error("❌ Login error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1397,18 +1417,10 @@ export async function setupUnifiedAuth(app: Express) {
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
-      // Establish a standard Passport session using req.login
-      req.login(user, (err) => {
-        if (err) {
-          console.error("TradeScout SSO session error:", err);
-          return res
-            .status(500)
-            .json({ error: "Failed to establish SSO session" });
-        }
-        res.json({
-          user: sanitizeUser(user),
-          message: "TradeScout SSO login successful",
-        });
+      await establishAuthenticatedSession(req, user);
+      res.json({
+        user: sanitizeUser(user),
+        message: "TradeScout SSO login successful",
       });
     } catch (error) {
       console.error("TradeScout SSO error:", error);
@@ -1422,7 +1434,23 @@ export async function setupUnifiedAuth(app: Express) {
       if (err) {
         return res.status(500).json({ error: "Failed to logout" });
       }
-      res.json({ message: "Logout successful" });
+      const finish = () => {
+        res.clearCookie("tradescout.sid", getSessionCookieOptions());
+        res.json({ message: "Logout successful" });
+      };
+
+      if (!req.session || typeof req.session.destroy !== "function") {
+        finish();
+        return;
+      }
+
+      req.session.destroy((destroyErr: unknown) => {
+        if (destroyErr) {
+          console.error("Logout session destroy error:", destroyErr);
+          return res.status(500).json({ error: "Failed to destroy session" });
+        }
+        finish();
+      });
     });
   });
 

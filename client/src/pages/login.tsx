@@ -30,6 +30,8 @@ export default function Login() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -65,6 +67,7 @@ export default function Login() {
     }
 
     setIsLoggingIn(true);
+    setNeedsVerification(false);
     try {
       const response = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
@@ -89,6 +92,9 @@ export default function Login() {
           window.location.href = authUrl;
           return;
         }
+        if (payload?.code === "email_not_verified") {
+          setNeedsVerification(true);
+        }
         throw new Error(payload?.error || "Login failed");
       }
       // Refresh auth state before redirect to prevent showing guest view
@@ -108,6 +114,36 @@ export default function Login() {
       });
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      toast({
+        title: "Email Required",
+        description: "Enter your email first so we know where to send the link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResendingVerification(true);
+    try {
+      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      toast({
+        title: "Verification Sent",
+        description:
+          "If that account exists and still needs verification, a fresh link is on the way.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Unable to Send Link",
+        description:
+          error.message || "We couldn't resend the verification email right now.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResendingVerification(false);
     }
   };
 
@@ -304,6 +340,28 @@ export default function Login() {
                 ) : null}
                 {isLoggingIn ? "Signing In..." : "Sign In"}
               </button>
+
+              {needsVerification ? (
+                <div className="rounded-xl border border-[color:var(--status-warning)]/40 bg-[color:var(--status-warning)]/10 p-4 text-sm">
+                  <p className="font-medium text-[color:var(--text-primary)]">
+                    Verify your email to finish signing in.
+                  </p>
+                  <p className="mt-1 text-[color:var(--text-secondary)]">
+                    Your account exists, but email verification is still pending.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={isResendingVerification}
+                    className="mt-3 text-[color:var(--accent-text)] underline underline-offset-4 hover:text-[color:var(--accent-text-hover)] disabled:opacity-60"
+                    data-testid="button-resend-verification"
+                  >
+                    {isResendingVerification
+                      ? "Sending verification link..."
+                      : "Resend verification email"}
+                  </button>
+                </div>
+              ) : null}
 
               <button
                 type="button"

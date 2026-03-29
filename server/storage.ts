@@ -3345,6 +3345,7 @@ export class DatabaseStorage implements IStorage {
     const [
       activeUsers,
       totalRestaurants,
+      totalRestaurantOwners,
       totalDeals,
       activeDeals,
       totalClaims,
@@ -3361,6 +3362,22 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(restaurants.isActive, true),
+            or(
+              eq(restaurants.isFoodTruck, false),
+              isNull(restaurants.isFoodTruck),
+            ),
+          ),
+        ),
+      db
+        .select({
+          count:
+            sql<number>`cast(count(distinct ${restaurants.ownerId}) as integer)`,
+        })
+        .from(restaurants)
+        .where(
+          and(
+            eq(restaurants.isActive, true),
+            isNotNull(restaurants.ownerId),
             or(
               eq(restaurants.isFoodTruck, false),
               isNull(restaurants.isFoodTruck),
@@ -3472,7 +3489,7 @@ export class DatabaseStorage implements IStorage {
       totalUsers: totalUsersCount,
       totalRestaurants: totalRestaurants[0]?.count || 0,
       totalRestaurantProfiles: totalRestaurants[0]?.count || 0,
-      totalRestaurantOwners: memberCounts.restaurantOwner,
+      totalRestaurantOwners: totalRestaurantOwners[0]?.count || 0,
       memberCountsTotal,
       unclassifiedUsers: Math.max(0, totalUsersCount - memberCountsTotal),
       totalDeals: totalDeals[0]?.count || 0,

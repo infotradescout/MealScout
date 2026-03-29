@@ -144,7 +144,15 @@ export function computeHostProfileQualityFlags(profile: {
 export function isHostProfileMapEligible(
   profile: Parameters<typeof computeHostProfileQualityFlags>[0],
 ) {
-  return computeHostProfileQualityFlags(profile).length === 0;
+  const blockingFlags = new Set<HostProfileQualityFlag>([
+    "missing_business_name",
+    "suspicious_business_name",
+    "missing_address",
+    "suspicious_address",
+  ]);
+  return computeHostProfileQualityFlags(profile).every(
+    (flag) => !blockingFlags.has(flag),
+  );
 }
 
 export function computeParkingPassQualityFlags(listing: {
