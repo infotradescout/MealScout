@@ -207,6 +207,7 @@ import {
 } from "./mapEndpointWatchdog";
 import { registerAuthAccountRoutes } from "./routes/authAccountRoutes";
 import { registerAnalyticsRoutes } from "./routes/analyticsRoutes";
+import { registerClaimRoutes } from "./routes/claimRoutes";
 import { registerDealManagementRoutes } from "./routes/dealManagementRoutes";
 import { registerLocationDemandRoutes } from "./routes/locationDemandRoutes";
 import { registerMediaRoutes } from "./routes/mediaRoutes";
@@ -900,6 +901,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerAnalyticsRoutes(app);
 
+  registerClaimRoutes(app, { sendDealClaimedNotification });
+
   registerDealManagementRoutes(app, {
     logAudit,
     validateSubscriptionLimits,
@@ -1206,55 +1209,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .json({ message: "Failed to fetch subscribed restaurants" });
     }
   });
-
-  // Mark deal claim as used with order amount
-  app.patch(
-    "/api/deal-claims/:claimId/use",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const { claimId } = req.params;
-
-        // Validate optional order amount
-        const amountSchema = z.object({
-          orderAmount: z.number().positive().min(0.01).max(10000).optional(),
-        });
-
-        const { orderAmount } = amountSchema.parse(req.body ?? {});
-
-        // Verify that the user owns the restaurant associated with this claim
-        const isAuthorized = await storage.verifyRestaurantOwnershipByClaim(
-          claimId,
-          req.user.id,
-        );
-        if (!isAuthorized) {
-          return res.status(403).json({
-            message:
-              "Unauthorized: You can only mark claims as used for your own restaurants",
-          });
-        }
-
-        const updatedClaim = await storage.markClaimAsUsed(
-          claimId,
-          orderAmount ?? null,
-        );
-        if (!updatedClaim) {
-          return res
-            .status(400)
-            .json({ message: "Claim not found or already used" });
-        }
-        res.json({ success: true, claim: updatedClaim });
-      } catch (error) {
-        console.error("Error marking claim as used:", error);
-        res.status(400).json({
-          message:
-            error instanceof Error
-              ? error.message
-              : "Failed to mark claim as used",
-        });
-      }
-    },
-  );
 
   // Restaurant owner signup endpoint (creates user account + restaurant in one flow)
   app.post("/api/restaurants/signup", async (req: any, res) => {
@@ -3674,121 +3628,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error: any) {
         console.error("Cancel subscription error:", error);
         res.status(500).json({ message: error.message });
-      }
-    },
-  );
-
-  // Deal claiming route with Facebook integration
-  app.post(
-    "/api/deals/:dealId/claim",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const dealId = req.params.dealId;
-        const userId = req.user.id;
-
-        // Get deal and restaurant info
-        const deal = await storage.getDeal(dealId);
-        if (!deal) {
-          return res.status(404).json({ message: "Deal not found" });
-        }
-
-        const restaurant = await storage.getRestaurant(deal.restaurantId);
-        if (!restaurant) {
-          return res.status(404).json({ message: "Restaurant not found" });
-        }
-
-        // Check if user has already claimed this deal
-        const existingClaims = await storage.getDealClaimsCount(dealId, userId);
-        if (existingClaims >= (deal.perCustomerLimit || 1)) {
-          return res
-            .status(400)
-            .json({ message: "Deal already claimed by user" });
-        }
-
-        // Check if deal is still available
-        if (
-          deal.totalUsesLimit &&
-          (deal.currentUses || 0) >= deal.totalUsesLimit
-        ) {
-          return res
-            .status(400)
-            .json({ message: "Deal is no longer available" });
-        }
-
-        // Create the deal claim and capture the identifier so the client can show/QR it
-        const claim = await storage.claimDeal({
-          dealId,
-          userId,
-        });
-
-        // Increment deal uses after successful claim write
-        await storage.incrementDealUses(dealId);
-
-        // Send notification to restaurant owner (best effort)
-        try {
-          await sendDealClaimedNotification(dealId, userId);
-        } catch (emailError) {
-          console.error(
-            "Failed to send deal claimed notification:",
-            emailError,
-          );
-        }
-
-        // Prepare Facebook post data
-        const facebookMessage = `🍽️ Just claimed an amazing deal at ${
-          restaurant.name
-        }!\n\n${deal.title}\n${deal.discountValue}% OFF (Min order: $${
-          deal.minOrderAmount || "15"
-        })\n\nFound this through MealScout - check it out! #MealScout #FoodDeals`;
-
-        res.json({
-          success: true,
-          claimId: claim.id,
-          dealTitle: deal.title,
-          restaurantName: restaurant.name,
-          restaurantAddress: restaurant.address,
-          facebookPostData: {
-            message: facebookMessage,
-            place: (restaurant as any).facebookPlaceId || undefined,
-          },
-        });
-      } catch (error: any) {
-        console.error("Error claiming deal:", error);
-        res.status(500).json({ message: "Failed to claim deal" });
-      }
-    },
-  );
-
-  // Get claims for restaurant owner's deals
-  app.get(
-    "/api/restaurants/:restaurantId/claims",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const { restaurantId } = req.params;
-        const { status } = req.query; // pending, used, all
-
-        // Verify user owns this restaurant
-        const isAuthorized = await storage.verifyRestaurantOwnership(
-          restaurantId,
-          req.user.id,
-        );
-        if (!isAuthorized) {
-          return res.status(403).json({
-            message:
-              "Unauthorized: You can only access analytics for restaurants you own",
-          });
-        }
-
-        const claims = await storage.getRestaurantDealClaims(
-          restaurantId,
-          status as string,
-        );
-        res.json(claims);
-      } catch (error) {
-        console.error("Error fetching restaurant claims:", error);
-        res.status(500).json({ message: "Failed to fetch restaurant claims" });
       }
     },
   );
