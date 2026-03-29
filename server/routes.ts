@@ -92,7 +92,6 @@ import {
   suppliers,
   truckImportListings,
   truckClaimRequests,
-  awardHistory,
   socialPostQueue,
 } from "@shared/schema";
 import {
@@ -110,15 +109,6 @@ import {
   isPasswordStrong,
   PASSWORD_REQUIREMENTS,
 } from "./utils/passwordPolicy";
-import {
-  calculateUserInfluenceScore,
-  checkGoldenForkEligibility,
-  awardGoldenFork,
-  calculateRestaurantRankingScore,
-  awardGoldenPlatesForArea,
-  getAreaLeaderboard,
-  getUserRecommendationCount,
-} from "./awardCalculations";
 import {
   sendGoldenForkAwardEmail,
   sendGoldenPlateAwardEmail,
@@ -207,6 +197,7 @@ import {
 } from "./mapEndpointWatchdog";
 import { registerAuthAccountRoutes } from "./routes/authAccountRoutes";
 import { registerAnalyticsRoutes } from "./routes/analyticsRoutes";
+import { registerAwardsRoutes } from "./routes/awardsRoutes";
 import { registerClaimRoutes } from "./routes/claimRoutes";
 import { registerDealManagementRoutes } from "./routes/dealManagementRoutes";
 import { registerLocationDemandRoutes } from "./routes/locationDemandRoutes";
@@ -900,6 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMediaRoutes(app);
 
   registerAnalyticsRoutes(app);
+  registerAwardsRoutes(app);
 
   registerClaimRoutes(app, { sendDealClaimedNotification });
 
@@ -3748,212 +3740,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       "https://www.mealscout.us"
     );
   };
-
-  // ==================== GOLDEN FORK AWARD ROUTES ====================
-
-  // Check Golden Fork eligibility
-  app.get(
-    "/api/awards/golden-fork/eligibility",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const eligibility = await checkGoldenForkEligibility(req.user.id);
-        res.json(eligibility);
-      } catch (error) {
-        console.error("Error checking Golden Fork eligibility:", error);
-        res.status(500).json({ message: "Failed to check eligibility" });
-      }
-    },
-  );
-
-  // Claim Golden Fork award
-  app.post(
-    "/api/awards/golden-fork/claim",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const awarded = await awardGoldenFork(req.user.id);
-        if (awarded) {
-          res.json({ message: "Golden Fork awarded!", awarded: true });
-        } else {
-          res
-            .status(400)
-            .json({ message: "Not eligible for Golden Fork", awarded: false });
-        }
-      } catch (error) {
-        console.error("Error claiming Golden Fork:", error);
-        res.status(500).json({ message: "Failed to claim award" });
-      }
-    },
-  );
-
-  // Get all Golden Fork holders
-  app.get("/api/awards/golden-fork/holders", async (req, res) => {
-    try {
-      const holders = await db
-        .select({
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-          influenceScore: users.influenceScore,
-          reviewCount: users.reviewCount,
-          goldenForkEarnedAt: users.goldenForkEarnedAt,
-        })
-        .from(users)
-        .where(eq(users.hasGoldenFork, true));
-      const holdersWithRecommendations = await Promise.all(
-        holders.map(async (holder: (typeof holders)[number]) => {
-          const recommendationCount = await getUserRecommendationCount(
-            holder.id,
-          );
-          return { ...holder, recommendationCount };
-        }),
-      );
-
-      res.json(holdersWithRecommendations);
-    } catch (error) {
-      console.error("Error fetching Golden Fork holders:", error);
-      res.status(500).json({ message: "Failed to fetch holders" });
-    }
-  });
-
-  // Get user influence stats
-  app.get("/api/user/:userId/influence-stats", async (req, res) => {
-    try {
-      const userId = req.params.userId;
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const influenceScore = await calculateUserInfluenceScore(userId);
-      const recommendationCount = await getUserRecommendationCount(userId);
-
-      res.json({
-        userId: user.id,
-        hasGoldenFork: user.hasGoldenFork,
-        goldenForkEarnedAt: user.goldenForkEarnedAt,
-        reviewCount: user.reviewCount || 0,
-        recommendationCount,
-        influenceScore,
-      });
-    } catch (error) {
-      console.error("Error fetching influence stats:", error);
-      res.status(500).json({ message: "Failed to fetch stats" });
-    }
-  });
-
-  // ==================== GOLDEN PLATE AWARD ROUTES ====================
-
-  // Get all Golden Plate winners
-  app.get("/api/awards/golden-plate/winners", async (req, res) => {
-    try {
-      const winners = await db
-        .select()
-        .from(restaurants)
-        .where(eq(restaurants.hasGoldenPlate, true));
-      res.json(winners);
-    } catch (error) {
-      console.error("Error fetching Golden Plate winners:", error);
-      res.status(500).json({ message: "Failed to fetch winners" });
-    }
-  });
-
-  // Get Golden Plate winners by area
-  app.get("/api/awards/golden-plate/winners/:area", async (req, res) => {
-    try {
-      const area = req.params.area;
-      const winners = await db
-        .select()
-        .from(restaurants)
-        .where(
-          and(
-            eq(restaurants.hasGoldenPlate, true),
-            like(restaurants.address, `%${area}%`),
-          ),
-        );
-      res.json(winners);
-    } catch (error) {
-      console.error("Error fetching area Golden Plate winners:", error);
-      res.status(500).json({ message: "Failed to fetch winners" });
-    }
-  });
-
-  // Get leaderboard for an area
-  app.get("/api/awards/golden-plate/leaderboard/:area", async (req, res) => {
-    try {
-      const area = req.params.area;
-      const limit = parseInt(req.query.limit as string) || 50;
-      const leaderboard = await getAreaLeaderboard(area, limit);
-      res.json(leaderboard);
-    } catch (error) {
-      console.error("Error fetching leaderboard:", error);
-      res.status(500).json({ message: "Failed to fetch leaderboard" });
-    }
-  });
-
-  // Get restaurant ranking stats
-  app.get("/api/restaurants/:restaurantId/ranking-stats", async (req, res) => {
-    try {
-      const restaurantId = req.params.restaurantId;
-      const restaurant = await storage.getRestaurant(restaurantId);
-      if (!restaurant) {
-        return res.status(404).json({ message: "Restaurant not found" });
-      }
-
-      const rankingScore = await calculateRestaurantRankingScore(restaurantId);
-
-      res.json({
-        restaurantId: restaurant.id,
-        hasGoldenPlate: restaurant.hasGoldenPlate,
-        goldenPlateCount: restaurant.goldenPlateCount || 0,
-        goldenPlateEarnedAt: restaurant.goldenPlateEarnedAt,
-        rankingScore,
-      });
-    } catch (error) {
-      console.error("Error fetching ranking stats:", error);
-      res.status(500).json({ message: "Failed to fetch stats" });
-    }
-  });
-
-  // Admin: Award Golden Plates for a specific area (manual trigger)
-  app.post(
-    "/api/admin/awards/golden-plate/:area",
-    isAdmin,
-    async (req: any, res) => {
-      try {
-        const area = req.params.area;
-        const awardedCount = await awardGoldenPlatesForArea(area);
-        res.json({
-          message: `Awarded Golden Plates to ${awardedCount} restaurants in ${area}`,
-          awardedCount,
-        });
-      } catch (error) {
-        console.error("Error awarding Golden Plates:", error);
-        res.status(500).json({ message: "Failed to award Golden Plates" });
-      }
-    },
-  );
-
-  // Get award history
-  app.get("/api/awards/history", async (req, res) => {
-    try {
-      const awardType = req.query.awardType as string;
-      const recipientId = req.query.recipientId as string;
-
-      const query = await db
-        .select()
-        .from(awardHistory)
-        .orderBy(desc(awardHistory.awardedAt))
-        .limit(100);
-
-      res.json(query);
-    } catch (error) {
-      console.error("Error fetching award history:", error);
-      res.status(500).json({ message: "Failed to fetch award history" });
-    }
-  });
 
   // Register video stories routes (MVP Phase 1)
   const setupStoriesRoutes = (await import("./storiesRoutes")).default;
