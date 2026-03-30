@@ -113,6 +113,50 @@ const botSignatureLabel = (userAgent?: string | null) => {
   return null;
 };
 
+const isOperationalNoisePath = (path?: string | null) => {
+  const value = String(path || "").trim().toLowerCase();
+  if (!value) return true;
+  return (
+    value === "/api/health" ||
+    value === "/health" ||
+    value === "/favicon.ico" ||
+    value === "/robots.txt" ||
+    value.startsWith("/api/auth/admin/verify") ||
+    value.startsWith("/api/admin/health") ||
+    value.startsWith("/api/admin/stats") ||
+    value.startsWith("/api/debug") ||
+    value.startsWith("/_vercel") ||
+    value.startsWith("/.well-known")
+  );
+};
+
+const isMonitoringAgent = (userAgent?: string | null) => {
+  const ua = String(userAgent || "").toLowerCase();
+  return /uptimerobot|better stack|betterstack|statuscake|pingdom|newrelic|datadog|kuma/i.test(
+    ua,
+  );
+};
+
+const isHighValueObservedPath = (path?: string | null) => {
+  const value = String(path || "").trim().toLowerCase();
+  if (!value) return false;
+  if (value.startsWith("/restaurant/")) return true;
+  if (value.startsWith("/truck/")) return true;
+  if (value.startsWith("/deal/")) return true;
+  if (value.startsWith("/event/")) return true;
+  if (value.startsWith("/p/")) return true;
+  if (value.startsWith("/map")) return true;
+  if (value.startsWith("/search")) return true;
+  if (value.startsWith("/events")) return true;
+  if (value.startsWith("/deals")) return true;
+  if (value.startsWith("/cuisine/")) return true;
+  if (value.startsWith("/category/")) return true;
+  if (value.startsWith("/suppliers")) return true;
+  if (value.startsWith("/api/public/canonical/")) return true;
+  if (value.startsWith("/api/public/evidence/")) return true;
+  return false;
+};
+
 const hoursSince = (value?: string | Date | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -1484,6 +1528,9 @@ export function registerAdminManagementRoutes(app: Express) {
             .map((request: any) => {
               const botLabel = botSignatureLabel(request.userAgent);
               if (!botLabel) return null;
+              if (isMonitoringAgent(request.userAgent)) return null;
+              if (isOperationalNoisePath(request.path)) return null;
+              if (!isHighValueObservedPath(request.path)) return null;
               return {
                 id: `request:${request.id}`,
                 streamType: "external_crawler",

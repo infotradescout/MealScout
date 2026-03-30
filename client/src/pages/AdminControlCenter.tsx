@@ -276,6 +276,34 @@ function summarizeClaimValue(value: Record<string, unknown>) {
     .join(" | ");
 }
 
+function isOperationalNoiseSignal(signal: UnifiedSignalItem) {
+  const path = String(signal.subjectId || signal.payload?.path || "").toLowerCase();
+  return (
+    signal.streamType === "external_crawler" &&
+    (path === "/api/health" ||
+      path === "/health" ||
+      path.startsWith("/api/admin/health") ||
+      path.startsWith("/api/auth/admin/verify"))
+  );
+}
+
+function signalPriorityScore(signal: UnifiedSignalItem) {
+  let score = 0;
+  if (signal.visibility === "off_platform") score += 1;
+  if (signal.family === "commerce") score += 5;
+  if (signal.family === "events") score += 5;
+  if (signal.family === "distribution") score += 4;
+  if (signal.family === "search") score += 4;
+  if (signal.family === "external") score += 3;
+  if (signal.family === "mobility") score += 3;
+  if (signal.streamType === "external_crawler") score += 1;
+  if (signal.streamType === "deal_created") score += 3;
+  if (signal.streamType === "event_created") score += 3;
+  if (signal.streamType === "social_post") score += 2;
+  if (signal.subjectType === "restaurant" || signal.subjectType === "event") score += 2;
+  return score;
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -289,6 +317,7 @@ export default function AdminControlCenter() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [claimTypeFilter, setClaimTypeFilter] = useState("all");
+  const [usefulOnly, setUsefulOnly] = useState(true);
   const [selectedEntity, setSelectedEntity] = useState<CanonicalEntityItem | null>(
     null,
   );
@@ -564,42 +593,51 @@ export default function AdminControlCenter() {
 
   const filteredSignals = useMemo(() => {
     const query = laneQuery.trim().toLowerCase();
-    return signalFeed.filter((signal) => {
-      if (appFilter !== "all" && signal.family !== appFilter) return false;
-      if (sourceFilter !== "all" && signal.source !== sourceFilter) return false;
-      if (subjectFilter !== "all" && signal.subjectType !== subjectFilter)
-        return false;
-      if (claimTypeFilter !== "all" && signal.streamType !== claimTypeFilter)
-        return false;
-      if (
-        selectedEntity &&
-        !(
-          signal.subjectType === selectedEntity.entityType &&
-          signal.subjectId === selectedEntity.entityId
-        ) &&
-        String(signal.payload?.restaurantId || "") !== selectedEntity.entityId &&
-        String(signal.payload?.hostId || "") !== selectedEntity.entityId
-      ) {
-        return false;
-      }
-      if (!query) return true;
+    return signalFeed
+      .filter((signal) => {
+        if (usefulOnly && isOperationalNoiseSignal(signal)) return false;
+        if (appFilter !== "all" && signal.family !== appFilter) return false;
+        if (sourceFilter !== "all" && signal.source !== sourceFilter) return false;
+        if (subjectFilter !== "all" && signal.subjectType !== subjectFilter)
+          return false;
+        if (claimTypeFilter !== "all" && signal.streamType !== claimTypeFilter)
+          return false;
+        if (
+          selectedEntity &&
+          !(
+            signal.subjectType === selectedEntity.entityType &&
+            signal.subjectId === selectedEntity.entityId
+          ) &&
+          String(signal.payload?.restaurantId || "") !== selectedEntity.entityId &&
+          String(signal.payload?.hostId || "") !== selectedEntity.entityId
+        ) {
+          return false;
+        }
+        if (!query) return true;
 
-      const haystack = [
-        signal.lane,
-        signal.family,
-        signal.source,
-        signal.streamType,
-        signal.subjectType,
-        signal.subjectId,
-        signal.title,
-        signal.summary,
-        summarizeClaimValue(signal.payload),
-      ]
-        .join(" ")
-        .toLowerCase();
+        const haystack = [
+          signal.lane,
+          signal.family,
+          signal.source,
+          signal.streamType,
+          signal.subjectType,
+          signal.subjectId,
+          signal.title,
+          signal.summary,
+          summarizeClaimValue(signal.payload),
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      return haystack.includes(query);
-    });
+        return haystack.includes(query);
+      })
+      .sort((a, b) => {
+        const scoreDiff = signalPriorityScore(b) - signalPriorityScore(a);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
   }, [
     signalFeed,
     laneQuery,
@@ -608,7 +646,22 @@ export default function AdminControlCenter() {
     subjectFilter,
     claimTypeFilter,
     selectedEntity,
+    usefulOnly,
   ]);
+
+  const signalHighlights = useMemo(() => {
+    const items = filteredSignals.slice(0, 24);
+    const counts = items.reduce(
+      (acc, signal) => {
+        acc[signal.family] = (acc[signal.family] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4);
+  }, [filteredSignals]);
 
   const knowledgeGapCounts = useMemo(() => {
     const items = canonicalEntities?.items ?? [];
@@ -1680,6 +1733,52 @@ export default function AdminControlCenter() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">What matters now</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {signalHighlights.length === 0 ? (
+                        <span className="text-sm text-[color:var(--text-muted)]">
+                          No meaningful signal clusters yet.
+                        </span>
+                      ) : (
+                        signalHighlights.map(([family, count]) => (
+                          <Badge key={family} variant="outline">
+                            {family}: {count}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                    <div className="mt-3 text-xs text-[color:var(--text-muted)]">
+                      The livestream now prioritizes demand, deals, events,
+                      distribution, and public-entity activity ahead of crawler noise.
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">Signal mode</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={usefulOnly ? "default" : "outline"}
+                        onClick={() => setUsefulOnly(true)}
+                      >
+                        Useful only
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={!usefulOnly ? "default" : "outline"}
+                        onClick={() => setUsefulOnly(false)}
+                      >
+                        Show everything
+                      </Button>
+                    </div>
+                    <div className="mt-3 text-xs text-[color:var(--text-muted)]">
+                      Useful mode suppresses operational noise like uptime checks and
+                      ranks business signals first.
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <Input
                     value={laneQuery}
