@@ -5171,7 +5171,7 @@ export default function AdminDashboard() {
                   traffic, and market intelligence from the admin control center.
                 </p>
               </div>
-              <Link href="/admin/control-center">
+              <Link href="/admin/dashboard">
                 <Button>Open LISA Livestream</Button>
               </Link>
             </CardContent>
