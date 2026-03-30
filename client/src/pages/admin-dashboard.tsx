@@ -5134,7 +5134,7 @@ export default function AdminDashboard() {
             <div>
               <h1 className="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Manage your MealScout platform
+                Manage your MealScout platform and LISA intelligence feeds
               </p>
             </div>
           </div>
@@ -5156,6 +5156,27 @@ export default function AdminDashboard() {
       {/* Stats Overview */}
       <div className="px-4 sm:px-6 py-4 sm:py-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <Card className="col-span-2 md:col-span-4 border-[color:var(--status-success)]/25 bg-[color:var(--status-success)]/5">
+            <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    LISA
+                  </span>
+                </div>
+                <h2 className="text-lg font-semibold">Livestream is in Control Center</h2>
+                <p className="text-sm text-muted-foreground">
+                  Open the live MealScout signal feed, truth registry, bot
+                  traffic, and market intelligence from the admin control center.
+                </p>
+              </div>
+              <Link href="/admin/control-center">
+                <Button>Open LISA Livestream</Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">

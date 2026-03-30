@@ -614,9 +614,12 @@ export default function StaffDashboard() {
             <CardHeader>
               <CardTitle>Admin Quick Links</CardTitle>
             </CardHeader>
-            <CardContent className="flex gap-3">
+            <CardContent className="flex flex-wrap gap-3">
               <Link href="/admin/dashboard">
                 <Button variant="outline">Admin Dashboard</Button>
+              </Link>
+              <Link href="/admin/control-center">
+                <Button variant="outline">LISA Livestream</Button>
               </Link>
             </CardContent>
           </Card>
