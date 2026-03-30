@@ -389,6 +389,70 @@ function buildSignalNextStep(signal: UnifiedSignalItem) {
   return "Next step: decide whether this signal should trigger promotion, cleanup, or closer monitoring.";
 }
 
+function buildSignalClusterKey(signal: UnifiedSignalItem) {
+  if (signal.streamType === "external_crawler") {
+    return `external:${signal.subjectId}`;
+  }
+  if (signal.streamType === "deal_created") {
+    return `deal:${String(signal.payload?.restaurantId || signal.subjectId)}`;
+  }
+  if (signal.streamType === "event_created") {
+    return `event:${String(signal.payload?.hostId || signal.subjectId)}`;
+  }
+  if (signal.family === "distribution") {
+    return `distribution:${signal.source}`;
+  }
+  if (signal.family === "mobility") {
+    return `mobility:${signal.subjectId}`;
+  }
+  return `${signal.family}:${signal.subjectType}:${signal.subjectId}`;
+}
+
+function buildSignalClusterSummary(signals: UnifiedSignalItem[]) {
+  const lead = signals[0];
+  const count = signals.length;
+  if (lead.streamType === "external_crawler") {
+    return {
+      title: `${count} machine checks on ${lead.subjectId}`,
+      why: "Outside systems are repeatedly looking at this page, which usually means it is becoming discovery-relevant.",
+      next: "Make sure the page is fresh, specific, and worth citing.",
+    };
+  }
+  if (lead.streamType === "deal_created") {
+    return {
+      title: `${count} deal signal${count === 1 ? "" : "s"} tied to this restaurant`,
+      why: "Deals are one of the clearest monetizable promotion surfaces in MealScout.",
+      next: "Feature the strongest deal and pair it with demand or ad inventory.",
+    };
+  }
+  if (lead.streamType === "event_created") {
+    return {
+      title: `${count} event signal${count === 1 ? "" : "s"} around this host or event`,
+      why: "Events create timely demand and are strong candidates for promotion packages.",
+      next: "Push visibility while the timing is still relevant.",
+    };
+  }
+  if (lead.family === "distribution") {
+    return {
+      title: `${count} outbound distribution action${count === 1 ? "" : "s"} on ${lead.source}`,
+      why: "MealScout is sending attention outward, so the destination pages need to be strong.",
+      next: "Verify that the linked pages are conversion-ready before more traffic lands.",
+    };
+  }
+  if (lead.family === "mobility") {
+    return {
+      title: `${count} location update${count === 1 ? "" : "s"} for ${lead.subjectId}`,
+      why: "Fresh location data increases trust and helps discovery surfaces stay accurate.",
+      next: "Confirm the public page reflects the latest location details.",
+    };
+  }
+  return {
+    title: `${count} related ${toPlainLabel(lead.family)} signal${count === 1 ? "" : "s"}`,
+    why: "Several related signals appeared together, which usually means this topic deserves attention now.",
+    next: "Review the cluster and decide whether it should trigger promotion, cleanup, or follow-up.",
+  };
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -746,6 +810,26 @@ export default function AdminControlCenter() {
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4);
+  }, [filteredSignals]);
+
+  const groupedSignalSummaries = useMemo(() => {
+    const clusters = new Map<string, UnifiedSignalItem[]>();
+    for (const signal of filteredSignals.slice(0, 40)) {
+      const key = buildSignalClusterKey(signal);
+      const existing = clusters.get(key) ?? [];
+      existing.push(signal);
+      clusters.set(key, existing);
+    }
+
+    return Array.from(clusters.values())
+      .filter((signals) => signals.length > 1)
+      .sort((a, b) => {
+        if (b.length !== a.length) return b.length - a.length;
+        return (
+          new Date(b[0].createdAt).getTime() - new Date(a[0].createdAt).getTime()
+        );
+      })
+      .slice(0, 6);
   }, [filteredSignals]);
 
   const knowledgeGapCounts = useMemo(() => {
@@ -1928,6 +2012,37 @@ export default function AdminControlCenter() {
                 {socketError ? (
                   <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10 px-3 py-2 text-sm text-[color:var(--status-warning)]">
                     {socketError}
+                  </div>
+                ) : null}
+
+                {groupedSignalSummaries.length ? (
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium">Grouped patterns</div>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {groupedSignalSummaries.map((signals, index) => {
+                        const summary = buildSignalClusterSummary(signals);
+                        return (
+                          <div
+                            key={`${buildSignalClusterKey(signals[0])}:${index}`}
+                            className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">{signals.length} related signals</Badge>
+                              <Badge variant="outline">
+                                {toPlainLabel(signals[0].family)}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 font-medium">{summary.title}</div>
+                            <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                              Why it matters: {summary.why}
+                            </div>
+                            <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                              What to do: {summary.next}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null}
 
