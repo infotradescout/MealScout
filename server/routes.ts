@@ -188,7 +188,7 @@ import { registerRestaurantSignupRoutes } from "./routes/restaurantSignupRoutes"
 import { registerPublicSearchRoutes } from "./routes/publicSearchRoutes";
 import { registerSeoRoutes } from "./routes/seoRoutes";
 import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
-import { registerSystemUtilityRoutes } from "./routes/systemUtilityRoutes";
+import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 
@@ -890,89 +890,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Staff management and user creation endpoints
   registerStaffRoutes(app);
 
-  // Handle frequent HEAD /api requests efficiently (likely from monitoring)
-  app.head("/api", (req, res) => {
-    res.status(200).end();
-  });
-
-  const resolveSitemapSiteUrl = () => {
-    const normalizeCandidate = (raw?: string | null): string | null => {
-      const value = String(raw || "").trim();
-      if (!value) return null;
-      try {
-        const withProtocol = /^[a-z]+:\/\//i.test(value)
-          ? value
-          : `https://${value}`;
-        const parsed = new URL(withProtocol);
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-          return null;
-        }
-        const hostname = parsed.hostname.toLowerCase();
-        const bareHost = hostname.replace(/^www\./, "");
-        // Only allow first-party website hosts in sitemap/robots output.
-        if (bareHost !== "mealscout.us") return null;
-        return "https://www.mealscout.us";
-      } catch {
-        return null;
-      }
-    };
-
-    return (
-      normalizeCandidate(process.env.SITEMAP_SITE_URL) ||
-      normalizeCandidate(process.env.CLIENT_ORIGIN) ||
-      normalizeCandidate(process.env.PUBLIC_BASE_URL) ||
-      "https://www.mealscout.us"
-    );
-  };
-
-  // Register video stories routes (MVP Phase 1)
-  const setupStoriesRoutes = (await import("./storiesRoutes")).default;
-  setupStoriesRoutes(app);
-
-  // Register incident management routes (admin-only)
-  const incidentRoutes = (await import("./incidentRoutes")).default;
-  app.use("/api/incidents", incidentRoutes);
-  registerSystemUtilityRoutes(app, { incidentRoutes });
-
-  // Register admin control center routes (admin-only)
-  const adminRoutes = (await import("./adminRoutes")).default;
-  app.use("/api/admin", adminRoutes);
-
-  // Register admin telemetry routes (admin-only)
-  const telemetryRoutes = (await import("./telemetryRoutes")).default;
-  app.use("/api/admin/telemetry", telemetryRoutes);
-
-  // Register evidence export routes (admin-only)
-  const evidenceExportRoutes = (await import("./evidenceExportRoutes")).default;
-  app.use("/api/admin", evidenceExportRoutes);
-
-  // Register affiliate system routes
-  const affiliateRoutes = (await import("./affiliateRoutes")).default;
-  app.use("/api/affiliate", affiliateRoutes);
-
-  // Register payout preferences routes
-  const setupPayoutRoutes = (await import("./payoutRoutes")).default;
-  setupPayoutRoutes(app);
-
-  // Register empty county experience routes (Phase 6)
-  const setupEmptyCountyRoutes = (await import("./emptyCountyRoutes")).default;
-  setupEmptyCountyRoutes(app);
-
-  // Register share link routes (Phase 7)
-  const setupShareRoutes = (await import("./shareRoutes")).default;
-  setupShareRoutes(app);
-
-  // Register user routes (balance, search)
-  const userRoutes = (await import("./userRoutes")).default;
-  app.use("/api/users", userRoutes);
-
-  // Register redemption routes (Phase R1)
-  const redemptionRoutes = (await import("./redemptionRoutes")).default;
-  app.use("/api/restaurants", redemptionRoutes);
-
-  // Add share middleware (Phase 7) - adds shareUrl helpers to all handlers
-  const { shareUrlMiddleware } = await import("./shareMiddleware");
-  app.use(shareUrlMiddleware);
+  await registerRuntimeBootstrapRoutes(app);
 
   const httpServer = createServer(app);
   return httpServer;
