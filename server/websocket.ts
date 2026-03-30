@@ -37,6 +37,23 @@ type ServerToClientEvents = {
   subscribed: (payload: { restaurantId: string; room: string }) => void;
   unsubscribed: (payload: { room: string }) => void;
   pong: (payload: Record<string, never>) => void;
+  lisa_claim: (payload: {
+    type: "lisa_claim";
+    claim: {
+      id?: string;
+      lane: string;
+      app: string;
+      source: string;
+      claimType: string;
+      subjectType: string;
+      subjectId: string;
+      actorType?: string | null;
+      actorId?: string | null;
+      claimValue: Record<string, unknown>;
+      confidence?: string | number | null;
+      createdAt: string;
+    };
+  }) => void;
   location_update: (payload: { type: "location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
   truck_location_update: (payload: { type: "truck_location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
   status_update: (payload: { restaurantId: string; status: { isOnline: boolean; mobileOnline?: boolean } }) => void;
@@ -132,6 +149,10 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
         socket.sessionID = (socket.request as SessionRequest).sessionID;
         socket.user = await storage.getUser(socket.userId);
         console.log(`WebSocket connected: ${socket.id}, userId: ${socket.userId}`);
+
+        if (["staff", "admin", "super_admin"].includes(String(socket.user?.userType || ""))) {
+          socket.join("admin_lisa");
+        }
       } else {
         socket.userId = null;
         socket.sessionID = `anon_${Date.now()}_${Math.random()}`;
@@ -342,6 +363,50 @@ export function broadcastStatusUpdate(restaurantId: string, status: { isOnline: 
     console.log(`Broadcasted status update for restaurant ${restaurantId}:`, status);
   } catch (error) {
     console.error("Error broadcasting status update:", error);
+  }
+}
+
+export function broadcastLisaClaim(claim: {
+  id?: string;
+  app: string;
+  source: string;
+  claimType: string;
+  subjectType: string;
+  subjectId: string;
+  actorType?: string | null;
+  actorId?: string | null;
+  claimValue: Record<string, unknown>;
+  confidence?: string | number | null;
+  createdAt?: string | Date | null;
+}) {
+  if (!io) {
+    console.warn("WebSocket server not initialized");
+    return;
+  }
+
+  try {
+    const lane = [
+      claim.app || "unknown",
+      claim.source || "unknown",
+      claim.claimType || "unknown",
+      claim.subjectType || "unknown",
+    ].join(":");
+
+    io.to("admin_lisa").emit("lisa_claim", {
+      type: "lisa_claim",
+      claim: {
+        ...claim,
+        lane,
+        createdAt:
+          claim.createdAt instanceof Date
+            ? claim.createdAt.toISOString()
+            : claim.createdAt
+              ? String(claim.createdAt)
+              : new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Error broadcasting LISA claim:", error);
   }
 }
 

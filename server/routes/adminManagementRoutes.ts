@@ -25,6 +25,10 @@ import {
   hosts,
   insertHostSchema,
   restaurants,
+  requestLogs,
+  searchQueryEvents,
+  socialPostQueue,
+  telemetryEvents,
   verificationRequests,
   truckImportBatches,
   truckImportListings,
@@ -32,6 +36,7 @@ import {
   users,
   userAddresses,
   locationRequests,
+  videoStories,
   affiliateShareEvents,
   affiliateCommissionLedger,
   affiliateWithdrawals,
@@ -72,6 +77,36 @@ const retryGeocodeAddress = async (rawAddress: string) => {
       return { coords, attempted: candidate };
     }
   }
+  return null;
+};
+
+const buildLisaLane = (claim: {
+  app?: string | null;
+  source?: string | null;
+  claimType?: string | null;
+  subjectType?: string | null;
+}) =>
+  [
+    claim.app || "unknown",
+    claim.source || "unknown",
+    claim.claimType || "unknown",
+    claim.subjectType || "unknown",
+  ].join(":");
+
+const buildSignalLane = (parts: Array<string | null | undefined>) =>
+  parts.map((part) => String(part || "unknown")).join(":");
+
+const botSignatureLabel = (userAgent?: string | null) => {
+  const ua = String(userAgent || "");
+  if (/gptbot/i.test(ua)) return "GPTBot";
+  if (/chatgpt-user/i.test(ua)) return "ChatGPT-User";
+  if (/oai-searchbot/i.test(ua)) return "OAI-SearchBot";
+  if (/claudebot|anthropic/i.test(ua)) return "Claude";
+  if (/perplexity/i.test(ua)) return "Perplexity";
+  if (/googlebot|google-inspectiontool/i.test(ua)) return "Googlebot";
+  if (/bingbot/i.test(ua)) return "Bingbot";
+  if (/bytespider/i.test(ua)) return "Bytespider";
+  if (/bot|crawler|spider|fetcher/i.test(ua)) return "Bot";
   return null;
 };
 
@@ -701,6 +736,536 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching admin stats:", error);
         res.status(500).json({ message: "Failed to fetch stats" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/claims",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 50);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(200, Math.trunc(rawLimit)))
+          : 50;
+
+        const appFilter =
+          req.query.app === "mealscout" || req.query.app === "tradescout"
+            ? req.query.app
+            : undefined;
+
+        const claims = await storage.getClaims({
+          app: appFilter,
+          limit,
+        });
+
+        const items = claims.map((claim) => ({
+          id: claim.id,
+          lane: buildLisaLane(claim),
+          app: claim.app,
+          source: claim.source,
+          claimType: claim.claimType,
+          subjectType: claim.subjectType,
+          subjectId: claim.subjectId,
+          actorType: claim.actorType,
+          actorId: claim.actorId,
+          claimValue: claim.claimValue,
+          confidence: claim.confidence,
+          createdAt: claim.createdAt,
+        }));
+
+        const laneCounts = items.reduce(
+          (acc, item) => {
+            acc[item.lane] = (acc[item.lane] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+
+        res.json({
+          ok: true,
+          total: items.length,
+          generatedAt: new Date().toISOString(),
+          laneCounts,
+          items,
+        });
+      } catch (error) {
+        console.error("Error fetching admin LISA claims:", error);
+        res.status(500).json({ message: "Failed to fetch LISA claims" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/signals",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 80);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(10, Math.min(200, Math.trunc(rawLimit)))
+          : 80;
+        const sinceHoursRaw = Number(req.query.hours ?? 72);
+        const hours = Number.isFinite(sinceHoursRaw)
+          ? Math.max(1, Math.min(24 * 14, Math.trunc(sinceHoursRaw)))
+          : 72;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const [
+          claims,
+          telemetry,
+          queries,
+          stories,
+          locations,
+          posts,
+          requests,
+          recentDeals,
+          recentEvents,
+        ] = await Promise.all([
+          storage.getClaims({ limit: Math.min(limit, 80), startDate: since }),
+          db
+            .select()
+            .from(telemetryEvents)
+            .where(gte(telemetryEvents.createdAt, since))
+            .orderBy(desc(telemetryEvents.createdAt))
+            .limit(Math.min(limit, 60)),
+          db
+            .select()
+            .from(searchQueryEvents)
+            .where(gte(searchQueryEvents.createdAt, since))
+            .orderBy(desc(searchQueryEvents.createdAt))
+            .limit(Math.min(limit, 60)),
+          db
+            .select({
+              id: videoStories.id,
+              title: videoStories.title,
+              status: videoStories.status,
+              restaurantId: videoStories.restaurantId,
+              viewCount: videoStories.viewCount,
+              createdAt: videoStories.createdAt,
+            })
+            .from(videoStories)
+            .where(gte(videoStories.createdAt, since))
+            .orderBy(desc(videoStories.createdAt))
+            .limit(Math.min(limit, 40)),
+          db
+            .select({
+              id: foodTruckLocations.id,
+              restaurantId: foodTruckLocations.restaurantId,
+              source: foodTruckLocations.source,
+              latitude: foodTruckLocations.latitude,
+              longitude: foodTruckLocations.longitude,
+              recordedAt: foodTruckLocations.recordedAt,
+            })
+            .from(foodTruckLocations)
+            .where(gte(foodTruckLocations.recordedAt, since))
+            .orderBy(desc(foodTruckLocations.recordedAt))
+            .limit(Math.min(limit, 40)),
+          db
+            .select()
+            .from(socialPostQueue)
+            .where(gte(socialPostQueue.createdAt, since))
+            .orderBy(desc(socialPostQueue.createdAt))
+            .limit(Math.min(limit, 40)),
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(Math.min(limit, 120)),
+          db
+            .select({
+              id: deals.id,
+              title: deals.title,
+              restaurantId: deals.restaurantId,
+              isActive: deals.isActive,
+              createdAt: deals.createdAt,
+            })
+            .from(deals)
+            .where(gte(deals.createdAt, since))
+            .orderBy(desc(deals.createdAt))
+            .limit(Math.min(limit, 40)),
+          db
+            .select({
+              id: events.id,
+              title: events.name,
+              hostId: events.hostId,
+              status: events.status,
+              createdAt: events.createdAt,
+            })
+            .from(events)
+            .where(gte(events.createdAt, since))
+            .orderBy(desc(events.createdAt))
+            .limit(Math.min(limit, 40)),
+        ]);
+
+        const items = [
+          ...claims.map((claim) => ({
+            id: `claim:${claim.id}`,
+            streamType: "lisa_claim",
+            lane: buildLisaLane(claim),
+            family: "lisa",
+            source: claim.source,
+            subjectType: claim.subjectType,
+            subjectId: claim.subjectId,
+            title: claim.claimType,
+            summary: `${claim.subjectType} ${claim.subjectId}`,
+            payload: claim.claimValue,
+            createdAt: claim.createdAt,
+            visibility: "on_platform",
+          })),
+          ...telemetry.map((event: any) => ({
+            id: `telemetry:${event.id}`,
+            streamType: "telemetry_event",
+            lane: buildSignalLane(["telemetry", event.eventName, "event"]),
+            family: "telemetry",
+            source: "telemetry",
+            subjectType: "event",
+            subjectId: event.userId || event.id,
+            title: event.eventName,
+            summary: `Telemetry event${event.userId ? ` by ${event.userId}` : ""}`,
+            payload: event.properties ?? {},
+            createdAt: event.createdAt,
+            visibility: "on_platform",
+          })),
+          ...queries.map((query: any) => ({
+            id: `search:${query.id}`,
+            streamType: "search_query",
+            lane: buildSignalLane(["search", query.source, "query"]),
+            family: "search",
+            source: query.source,
+            subjectType: "query",
+            subjectId: query.id,
+            title: query.query,
+            summary: `Search demand: ${query.query}`,
+            payload: { query: query.query, userId: query.userId },
+            createdAt: query.createdAt,
+            visibility: "on_platform",
+          })),
+          ...stories.map((story: any) => ({
+            id: `story:${story.id}`,
+            streamType: "video_story",
+            lane: buildSignalLane(["content", "video_story", story.status]),
+            family: "content",
+            source: "video_story",
+            subjectType: "story",
+            subjectId: story.id,
+            title: story.title,
+            summary: `Story for restaurant ${story.restaurantId || "unknown"}`,
+            payload: {
+              restaurantId: story.restaurantId,
+              status: story.status,
+              viewCount: story.viewCount,
+            },
+            createdAt: story.createdAt,
+            visibility: "on_platform",
+          })),
+          ...locations.map((location: any) => ({
+            id: `location:${location.id}`,
+            streamType: "truck_location",
+            lane: buildSignalLane(["mobility", "truck", location.source || "gps"]),
+            family: "mobility",
+            source: location.source || "gps",
+            subjectType: "restaurant",
+            subjectId: location.restaurantId,
+            title: "Truck location ping",
+            summary: `Restaurant ${location.restaurantId} updated location`,
+            payload: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+            },
+            createdAt: location.recordedAt,
+            visibility: "on_platform",
+          })),
+          ...posts.map((post: any) => ({
+            id: `social:${post.id}`,
+            streamType: "social_post",
+            lane: buildSignalLane(["distribution", post.platform, post.status]),
+            family: "distribution",
+            source: post.platform,
+            subjectType: "social_post",
+            subjectId: post.id,
+            title: `${post.platform} ${post.status}`,
+            summary: post.link || post.target || "Outbound social post",
+            payload: {
+              target: post.target,
+              status: post.status,
+              link: post.link,
+              errorMessage: post.errorMessage,
+            },
+            createdAt: post.createdAt,
+            visibility: "off_platform",
+          })),
+          ...requests
+            .map((request: any) => {
+              const botLabel = botSignatureLabel(request.userAgent);
+              if (!botLabel) return null;
+              return {
+                id: `request:${request.id}`,
+                streamType: "external_crawler",
+                lane: buildSignalLane(["external", "crawler", botLabel]),
+                family: "external",
+                source: botLabel,
+                subjectType: "path",
+                subjectId: request.path,
+                title: `${botLabel} requested ${request.path}`,
+                summary: `${request.method} ${request.path} (${request.statusCode})`,
+                payload: {
+                  userAgent: request.userAgent,
+                  ip: request.ip,
+                  durationMs: request.durationMs,
+                  statusCode: request.statusCode,
+                },
+                createdAt: request.createdAt,
+                visibility: "off_platform",
+              };
+            })
+            .filter(Boolean),
+          ...recentDeals.map((deal: any) => ({
+            id: `deal:${deal.id}`,
+            streamType: "deal_created",
+            lane: buildSignalLane(["commerce", "deal", deal.isActive ? "active" : "inactive"]),
+            family: "commerce",
+            source: "deal",
+            subjectType: "deal",
+            subjectId: deal.id,
+            title: deal.title,
+            summary: `Deal created for restaurant ${deal.restaurantId}`,
+            payload: {
+              restaurantId: deal.restaurantId,
+              isActive: deal.isActive,
+            },
+            createdAt: deal.createdAt,
+            visibility: "on_platform",
+          })),
+          ...recentEvents.map((event: any) => ({
+            id: `event:${event.id}`,
+            streamType: "event_created",
+            lane: buildSignalLane(["events", "host_event", event.status || "unknown"]),
+            family: "events",
+            source: "event",
+            subjectType: "event",
+            subjectId: event.id,
+            title: event.title,
+            summary: `Host ${event.hostId || "unknown"} event`,
+            payload: {
+              hostId: event.hostId,
+              status: event.status,
+            },
+            createdAt: event.createdAt,
+            visibility: "on_platform",
+          })),
+        ]
+          .filter((item) => item && item.createdAt)
+          .sort(
+            (a, b) =>
+              new Date(String(b.createdAt)).getTime() -
+              new Date(String(a.createdAt)).getTime(),
+          )
+          .slice(0, limit);
+
+        const familyCounts = items.reduce(
+          (acc, item) => {
+            acc[item.family] = (acc[item.family] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+
+        res.json({
+          ok: true,
+          total: items.length,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          familyCounts,
+          items,
+        });
+      } catch (error) {
+        console.error("Error fetching unified LISA signals:", error);
+        res.status(500).json({ message: "Failed to fetch unified signals" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/entities",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 12);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(50, Math.trunc(rawLimit)))
+          : 12;
+
+        const [restaurantRows, hostRows, dealRows, eventRows] = await Promise.all([
+          db
+            .select({
+              id: restaurants.id,
+              name: restaurants.name,
+              businessType: restaurants.businessType,
+              cuisineType: restaurants.cuisineType,
+              city: restaurants.city,
+              state: restaurants.state,
+              isActive: restaurants.isActive,
+              isVerified: restaurants.isVerified,
+              isFoodTruck: restaurants.isFoodTruck,
+              mobileOnline: restaurants.mobileOnline,
+              rankingScore: restaurants.rankingScore,
+              description: restaurants.description,
+              websiteUrl: restaurants.websiteUrl,
+              createdAt: restaurants.createdAt,
+              updatedAt: restaurants.updatedAt,
+            })
+            .from(restaurants)
+            .orderBy(desc(restaurants.updatedAt))
+            .limit(limit),
+          db
+            .select({
+              id: hosts.id,
+              businessName: hosts.businessName,
+              city: hosts.city,
+              state: hosts.state,
+              isVerified: hosts.isVerified,
+              spotCount: hosts.spotCount,
+              stripeOnboardingCompleted: hosts.stripeOnboardingCompleted,
+              parkingPassDailyPriceCents: hosts.parkingPassDailyPriceCents,
+              createdAt: hosts.createdAt,
+              updatedAt: hosts.updatedAt,
+            })
+            .from(hosts)
+            .orderBy(desc(hosts.updatedAt))
+            .limit(limit),
+          db
+            .select({
+              id: deals.id,
+              title: deals.title,
+              restaurantId: deals.restaurantId,
+              isActive: deals.isActive,
+              startDate: deals.startDate,
+              endDate: deals.endDate,
+              currentUses: deals.currentUses,
+              createdAt: deals.createdAt,
+              updatedAt: deals.updatedAt,
+            })
+            .from(deals)
+            .orderBy(desc(deals.updatedAt))
+            .limit(limit),
+          db
+            .select({
+              id: events.id,
+              name: events.name,
+              hostId: events.hostId,
+              eventType: events.eventType,
+              status: events.status,
+              date: events.date,
+              createdAt: events.createdAt,
+              updatedAt: events.updatedAt,
+            })
+            .from(events)
+            .orderBy(desc(events.updatedAt))
+            .limit(limit),
+        ]);
+
+        const entities = [
+          ...restaurantRows.map((row: any) => ({
+            id: `restaurant:${row.id}`,
+            entityType: "restaurant",
+            entityId: row.id,
+            title: row.name,
+            location: [row.city, row.state].filter(Boolean).join(", "),
+            health:
+              row.isVerified && row.isActive
+                ? "verified"
+                : row.isActive
+                  ? "active"
+                  : "inactive",
+            canonicalFields: {
+              businessType: row.businessType,
+              cuisineType: row.cuisineType,
+              isFoodTruck: row.isFoodTruck,
+              mobileOnline: row.mobileOnline,
+              rankingScore: row.rankingScore,
+              hasDescription: Boolean(row.description),
+              hasWebsite: Boolean(row.websiteUrl),
+            },
+            updatedAt: row.updatedAt || row.createdAt,
+          })),
+          ...hostRows.map((row: any) => ({
+            id: `host:${row.id}`,
+            entityType: "host",
+            entityId: row.id,
+            title: row.businessName,
+            location: [row.city, row.state].filter(Boolean).join(", "),
+            health: row.isVerified
+              ? "verified"
+              : row.stripeOnboardingCompleted
+                ? "operational"
+                : "draft",
+            canonicalFields: {
+              spotCount: row.spotCount,
+              stripeOnboardingCompleted: row.stripeOnboardingCompleted,
+              parkingPassDailyPriceCents: row.parkingPassDailyPriceCents,
+            },
+            updatedAt: row.updatedAt || row.createdAt,
+          })),
+          ...dealRows.map((row: any) => ({
+            id: `deal:${row.id}`,
+            entityType: "deal",
+            entityId: row.id,
+            title: row.title,
+            location: row.restaurantId,
+            health: row.isActive ? "active" : "inactive",
+            canonicalFields: {
+              restaurantId: row.restaurantId,
+              startDate: row.startDate,
+              endDate: row.endDate,
+              currentUses: row.currentUses,
+            },
+            updatedAt: row.updatedAt || row.createdAt,
+          })),
+          ...eventRows.map((row: any) => ({
+            id: `event:${row.id}`,
+            entityType: "event",
+            entityId: row.id,
+            title: row.name || "Unnamed event",
+            location: row.hostId,
+            health: row.status,
+            canonicalFields: {
+              hostId: row.hostId,
+              eventType: row.eventType,
+              date: row.date,
+            },
+            updatedAt: row.updatedAt || row.createdAt,
+          })),
+        ]
+          .sort(
+            (a, b) =>
+              new Date(String(b.updatedAt)).getTime() -
+              new Date(String(a.updatedAt)).getTime(),
+          )
+          .slice(0, limit * 2);
+
+        const counts = entities.reduce(
+          (acc, entity) => {
+            acc[entity.entityType] = (acc[entity.entityType] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>,
+        );
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          counts,
+          items: entities,
+        });
+      } catch (error) {
+        console.error("Error fetching LISA entities:", error);
+        res.status(500).json({ message: "Failed to fetch LISA entities" });
       }
     },
   );

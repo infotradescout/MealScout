@@ -132,6 +132,7 @@ import { forwardGeocode } from "./utils/geocoding";
 import { isParkingPassPublicReady } from "./services/parkingPassQuality";
 import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
+import { broadcastLisaClaim } from "./websocket";
 
 // Interface for storage operations
 export interface IStorage {
@@ -7064,7 +7065,9 @@ export class DatabaseStorage implements IStorage {
     confidence?: number;
   }): Promise<void> {
     try {
-      await db.insert(lisaClaims).values({
+      const inserted = await db
+        .insert(lisaClaims)
+        .values({
         subjectType: claim.subjectType,
         subjectId: claim.subjectId,
         actorType: claim.actorType || null,
@@ -7074,7 +7077,26 @@ export class DatabaseStorage implements IStorage {
         claimValue: claim.claimValue,
         source: claim.source,
         confidence: claim.confidence?.toString() || "1.0",
-      });
+        })
+        .returning();
+
+      const emitted = inserted[0];
+
+      if (emitted) {
+        broadcastLisaClaim({
+          id: emitted.id,
+          app: emitted.app,
+          source: emitted.source,
+          claimType: emitted.claimType,
+          subjectType: emitted.subjectType,
+          subjectId: emitted.subjectId,
+          actorType: emitted.actorType,
+          actorId: emitted.actorId,
+          claimValue: (emitted.claimValue ?? {}) as Record<string, unknown>,
+          confidence: emitted.confidence,
+          createdAt: emitted.createdAt,
+        });
+      }
 
       console.log("âœ… LISA claim emitted:", {
         claimType: claim.claimType,

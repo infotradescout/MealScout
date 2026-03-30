@@ -31,6 +31,149 @@ import { getJobQueueStats } from "./jobs/jobQueue";
 
 const router = Router();
 
+type BotCategory =
+  | "llm_crawler"
+  | "search_crawler"
+  | "automation_script"
+  | "browser_human"
+  | "unknown_bot"
+  | "unknown";
+
+const BOT_SIGNATURES = [
+  { label: "GPTBot", match: /gptbot/i, category: "llm_crawler" as BotCategory },
+  {
+    label: "ChatGPT-User",
+    match: /chatgpt-user/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "OAI-SearchBot",
+    match: /oai-searchbot/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "ClaudeBot",
+    match: /claudebot|claude-web|anthropic-ai/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "Perplexity",
+    match: /perplexitybot|perplexity-user/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "Googlebot",
+    match: /googlebot|google-inspectiontool/i,
+    category: "search_crawler" as BotCategory,
+  },
+  {
+    label: "Google-Extended",
+    match: /google-extended/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "Bingbot",
+    match: /bingbot|adidxbot/i,
+    category: "search_crawler" as BotCategory,
+  },
+  {
+    label: "Applebot",
+    match: /applebot/i,
+    category: "search_crawler" as BotCategory,
+  },
+  {
+    label: "Meta",
+    match: /meta-externalagent|meta-externalfetcher/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "Bytespider",
+    match: /bytespider/i,
+    category: "llm_crawler" as BotCategory,
+  },
+  {
+    label: "CCBot",
+    match: /ccbot/i,
+    category: "search_crawler" as BotCategory,
+  },
+  {
+    label: "Amazonbot",
+    match: /amazonbot/i,
+    category: "search_crawler" as BotCategory,
+  },
+];
+
+const AUTOMATION_SIGNATURE = /curl|python|wget|httpclient|libwww|scrapy|postman|axios|node-fetch|go-http-client/i;
+const BOT_HINT_SIGNATURE = /bot|crawler|crawl|spider|fetcher|preview|scan|slurp|archive/i;
+const BROWSER_SIGNATURE = /mozilla|chrome|safari|firefox|edge|opr\//i;
+
+function classifyTrafficLog(log: {
+  userAgent?: string | null;
+  userId?: string | null;
+}) {
+  const ua = String(log.userAgent || "").trim();
+  const normalized = ua.toLowerCase();
+  const known = BOT_SIGNATURES.find((entry) => entry.match.test(ua));
+
+  if (known) {
+    return {
+      category: known.category,
+      label: known.label,
+      isBot: true,
+      isLLM: known.category === "llm_crawler",
+      isSearchCrawler: known.category === "search_crawler",
+    };
+  }
+
+  if (AUTOMATION_SIGNATURE.test(normalized)) {
+    return {
+      category: "automation_script" as BotCategory,
+      label: "Automation Script",
+      isBot: true,
+      isLLM: false,
+      isSearchCrawler: false,
+    };
+  }
+
+  if (BROWSER_SIGNATURE.test(normalized) && log.userId) {
+    return {
+      category: "browser_human" as BotCategory,
+      label: "Authenticated Browser",
+      isBot: false,
+      isLLM: false,
+      isSearchCrawler: false,
+    };
+  }
+
+  if (BROWSER_SIGNATURE.test(normalized)) {
+    return {
+      category: "browser_human" as BotCategory,
+      label: "Browser",
+      isBot: false,
+      isLLM: false,
+      isSearchCrawler: false,
+    };
+  }
+
+  if (BOT_HINT_SIGNATURE.test(normalized)) {
+    return {
+      category: "unknown_bot" as BotCategory,
+      label: "Unknown Bot",
+      isBot: true,
+      isLLM: false,
+      isSearchCrawler: false,
+    };
+  }
+
+  return {
+    category: "unknown" as BotCategory,
+    label: ua ? "Unknown Client" : "Missing User Agent",
+    isBot: false,
+    isLLM: false,
+    isSearchCrawler: false,
+  };
+}
+
 /**
  * GET /api/admin/stats
  * Dashboard overview with key metrics
@@ -366,6 +509,144 @@ router.get("/request-logs", isStaffOrAdmin, async (req, res) => {
   } catch (error) {
     console.error("Failed to fetch request logs:", error);
     res.status(500).json({ error: "Failed to fetch request logs" });
+  }
+});
+
+router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
+  try {
+    const rawHours = Number(req.query.hours || 48);
+    const hours = Number.isFinite(rawHours)
+      ? Math.max(1, Math.min(24 * 14, Math.trunc(rawHours)))
+      : 48;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const logs = await db
+      .select()
+      .from(requestLogs)
+      .where(gte(requestLogs.createdAt, since))
+      .orderBy(desc(requestLogs.createdAt))
+      .limit(10000);
+
+    const totals = {
+      requests: logs.length,
+      botRequests: 0,
+      llmRequests: 0,
+      searchCrawlerRequests: 0,
+      humanBrowserRequests: 0,
+      automationRequests: 0,
+      uniqueAgents: 0,
+      uniqueIps: 0,
+    };
+
+    const categoryCounts: Record<string, number> = {};
+    const agentMap = new Map<
+      string,
+      {
+        label: string;
+        category: string;
+        hits: number;
+        lastSeen: string | null;
+        sampleUserAgent: string;
+        topPaths: Record<string, number>;
+      }
+    >();
+    const pathMap = new Map<
+      string,
+      {
+        hits: number;
+        llmHits: number;
+        botHits: number;
+        humanHits: number;
+      }
+    >();
+    const uniqueIps = new Set<string>();
+
+    for (const log of logs) {
+      const classified = classifyTrafficLog(log);
+      const agentKey = classified.label;
+      const pathKey = String(log.path || "unknown");
+
+      if (log.ip) uniqueIps.add(String(log.ip));
+
+      categoryCounts[classified.category] =
+        (categoryCounts[classified.category] || 0) + 1;
+
+      if (classified.isBot) totals.botRequests += 1;
+      if (classified.isLLM) totals.llmRequests += 1;
+      if (classified.isSearchCrawler) totals.searchCrawlerRequests += 1;
+      if (classified.category === "browser_human") totals.humanBrowserRequests += 1;
+      if (classified.category === "automation_script") totals.automationRequests += 1;
+
+      const existingAgent = agentMap.get(agentKey) || {
+        label: classified.label,
+        category: classified.category,
+        hits: 0,
+        lastSeen: null,
+        sampleUserAgent: String(log.userAgent || ""),
+        topPaths: {},
+      };
+      existingAgent.hits += 1;
+      existingAgent.lastSeen = log.createdAt
+        ? new Date(log.createdAt).toISOString()
+        : existingAgent.lastSeen;
+      existingAgent.topPaths[pathKey] = (existingAgent.topPaths[pathKey] || 0) + 1;
+      agentMap.set(agentKey, existingAgent);
+
+      const existingPath = pathMap.get(pathKey) || {
+        hits: 0,
+        llmHits: 0,
+        botHits: 0,
+        humanHits: 0,
+      };
+      existingPath.hits += 1;
+      if (classified.isLLM) existingPath.llmHits += 1;
+      if (classified.isBot) existingPath.botHits += 1;
+      if (classified.category === "browser_human") existingPath.humanHits += 1;
+      pathMap.set(pathKey, existingPath);
+    }
+
+    totals.uniqueAgents = agentMap.size;
+    totals.uniqueIps = uniqueIps.size;
+
+    const topAgents = Array.from(agentMap.values())
+      .map((agent) => ({
+        ...agent,
+        topPaths: Object.entries(agent.topPaths)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([path, hits]) => ({ path, hits })),
+      }))
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 20);
+
+    const topPaths = Array.from(pathMap.entries())
+      .map(([path, stats]) => ({ path, ...stats }))
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 20);
+
+    res.json({
+      ok: true,
+      windowHours: hours,
+      generatedAt: new Date().toISOString(),
+      summary: {
+        ...totals,
+        humanShare:
+          totals.requests > 0 ? totals.humanBrowserRequests / totals.requests : 0,
+        llmShare: totals.requests > 0 ? totals.llmRequests / totals.requests : 0,
+        botShare: totals.requests > 0 ? totals.botRequests / totals.requests : 0,
+      },
+      categories: categoryCounts,
+      topAgents,
+      topPaths,
+      notes: [
+        "LLM crawler detection is signature-based from request user agents.",
+        "Browser traffic without authentication may still include bots or shared previews.",
+        "Static assets are excluded from request log capture, so this focuses on page and API demand.",
+      ],
+    });
+  } catch (error) {
+    console.error("Failed to fetch bot traffic:", error);
+    res.status(500).json({ error: "Failed to fetch bot traffic" });
   }
 });
 
