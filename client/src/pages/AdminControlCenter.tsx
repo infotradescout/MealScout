@@ -312,6 +312,36 @@ function toPlainLabel(value: string) {
     .trim();
 }
 
+function buildEntitySummary(entity: CanonicalEntityItem) {
+  const issue = entity.knowledgeGaps?.[0]
+    ? `Main issue: ${toPlainLabel(entity.knowledgeGaps[0])}.`
+    : "";
+  const nextMove = entity.opportunities?.[0]
+    ? `Next move: ${toPlainLabel(entity.opportunities[0])}.`
+    : "";
+  return `This ${entity.entityType} is ${toPlainLabel(entity.quality)}, ${toPlainLabel(
+    entity.freshness,
+  )}, and ${toPlainLabel(entity.machineReadiness)}. ${issue} ${nextMove}`.trim();
+}
+
+function buildPrioritySummary(entity: PriorityEntityItem) {
+  const reason = entity.reasons?.[0]
+    ? `Main issue: ${toPlainLabel(entity.reasons[0])}.`
+    : "";
+  return `Demand is already forming here, but the page is still ${toPlainLabel(
+    entity.quality,
+  )} and ${toPlainLabel(entity.machineReadiness)}. ${reason}`.trim();
+}
+
+function buildAuthoritySummary(entity: AuthorityGapItem) {
+  const gap = entity.knowledgeGaps?.[0]
+    ? `Main gap: ${toPlainLabel(entity.knowledgeGaps[0])}.`
+    : "";
+  return `Outside systems hit this page ${entity.crawlerHits} times while it is still ${toPlainLabel(
+    entity.machineReadiness,
+  )} and ${toPlainLabel(entity.freshness)}. ${gap}`.trim();
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1161,16 +1191,16 @@ export default function AdminControlCenter() {
                         <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
                           {entity.canonicalPath}
                         </div>
-                        <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
-                          {summarizeClaimValue(entity.canonicalFields)}
+                        <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                          {buildEntitySummary(entity)}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {(entity.knowledgeGaps || []).slice(0, 4).map((gap) => (
+                          {(entity.knowledgeGaps || []).slice(0, 2).map((gap) => (
                             <Badge key={gap} variant="outline">
                               missing: {toPlainLabel(gap)}
                             </Badge>
                           ))}
-                          {(entity.opportunities || []).slice(0, 3).map((opportunity) => (
+                          {(entity.opportunities || []).slice(0, 2).map((opportunity) => (
                             <Badge key={opportunity} variant="outline">
                               next: {toPlainLabel(opportunity)}
                             </Badge>
@@ -1484,8 +1514,11 @@ export default function AdminControlCenter() {
                       <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
                         {entity.canonicalPath}
                       </div>
+                      <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                        {buildPrioritySummary(entity)}
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {entity.reasons.map((reason) => (
+                        {entity.reasons.slice(0, 2).map((reason) => (
                           <Badge key={reason} variant="outline">
                             {toPlainLabel(reason)}
                           </Badge>
@@ -1533,6 +1566,9 @@ export default function AdminControlCenter() {
                       <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                         {entity.canonicalPath}
                       </div>
+                      <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                        {buildAuthoritySummary(entity)}
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Badge variant="outline">{entity.crawlerHits} machine hits</Badge>
                         <Badge variant="outline">{entity.humanHits} human hits</Badge>
@@ -1540,7 +1576,7 @@ export default function AdminControlCenter() {
                         <Badge variant="outline">{toPlainLabel(entity.freshness)}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {entity.knowledgeGaps.slice(0, 3).map((gap) => (
+                        {entity.knowledgeGaps.slice(0, 2).map((gap) => (
                           <Badge key={gap} variant="outline">
                             {toPlainLabel(gap)}
                           </Badge>
