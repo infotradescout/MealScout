@@ -794,6 +794,8 @@ async function filterDealsByBusinessAccess<
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await setupUnifiedAuth(app);
+
   registerAuthAccountRoutes(app);
 
   registerLocationDemandRoutes(app);

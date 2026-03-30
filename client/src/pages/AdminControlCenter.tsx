@@ -85,6 +85,12 @@ type CanonicalEntityItem = {
   canonicalFields: Record<string, unknown>;
   knowledgeGaps: string[];
   opportunities: string[];
+  recommendedActions: Array<{
+    id: string;
+    label: string;
+    href: string;
+    kind: "admin" | "public";
+  }>;
   updatedAt: string;
 };
 
@@ -106,6 +112,76 @@ type PriorityEntitiesResponse = {
   generatedAt: string;
   windowHours: number;
   items: PriorityEntityItem[];
+};
+
+type AuthorityGapItem = CanonicalEntityItem & {
+  crawlerHits: number;
+  humanHits: number;
+  authorityDelta: number;
+  pressure: string;
+};
+
+type AuthorityGapResponse = {
+  ok: boolean;
+  generatedAt: string;
+  windowHours: number;
+  items: AuthorityGapItem[];
+};
+
+type MarketIntelResponse = {
+  ok: boolean;
+  generatedAt: string;
+  brief: {
+    headline: string;
+    audienceAngle: string;
+    inventoryAngle: string;
+    acquisitionAngle: string;
+    recommendedPackage: string[];
+  };
+  advertiserSignals: {
+    topQueries: Array<{ query: string; count: number }>;
+    cityDemand: Array<{
+      businessName: string | null;
+      address: string | null;
+      locationType: string | null;
+      requestCount: number;
+      interestCount: number;
+    }>;
+    cuisineDemand: Array<{
+      cuisineType: string | null;
+      restaurantCount: number;
+      avgRankingScore: number;
+    }>;
+    geoAds: {
+      impressions: number;
+      clicks: number;
+      ctr: number;
+    };
+    footTraffic: {
+      totalPings: number;
+      uniqueVisitors: number;
+    };
+  };
+  contentMomentum: Array<{
+    id: string;
+    title: string;
+    restaurantId: string | null;
+    viewCount: number;
+    impressionCount: number;
+    createdAt: string;
+  }>;
+  acquisitionTargets: Array<{
+    id: string;
+    title: string;
+    entityType: string;
+    canonicalPath: string;
+    location: string;
+    machineReadiness: string;
+    quality: string;
+    crawlerHits: number;
+    advertiserScore: number;
+    reasons: string[];
+  }>;
 };
 
 type BotTrafficResponse = {
@@ -262,6 +338,28 @@ export default function AdminControlCenter() {
       queryFn: async () => {
         const res = await fetch("/api/admin/lisa/priorities?limit=12");
         if (!res.ok) throw new Error("Failed to fetch LISA priorities");
+        return res.json();
+      },
+      refetchInterval: 30000,
+    });
+
+  const { data: authorityGap, isLoading: isAuthorityGapLoading } =
+    useQuery<AuthorityGapResponse>({
+      queryKey: ["/api/admin/lisa/authority-gap", 12],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/lisa/authority-gap?limit=12");
+        if (!res.ok) throw new Error("Failed to fetch LISA authority gap");
+        return res.json();
+      },
+      refetchInterval: 30000,
+    });
+
+  const { data: marketIntel, isLoading: isMarketIntelLoading } =
+    useQuery<MarketIntelResponse>({
+      queryKey: ["/api/admin/lisa/market-intel"],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/lisa/market-intel");
+        if (!res.ok) throw new Error("Failed to fetch market intel");
         return res.json();
       },
       refetchInterval: 30000,
@@ -440,6 +538,19 @@ export default function AdminControlCenter() {
       (acc, entity) => {
         for (const gap of entity.knowledgeGaps || []) {
           acc[gap] = (acc[gap] || 0) + 1;
+        }
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  }, [canonicalEntities]);
+
+  const actionPlaybookCounts = useMemo(() => {
+    const items = canonicalEntities?.items ?? [];
+    return items.reduce(
+      (acc, entity) => {
+        for (const action of entity.recommendedActions || []) {
+          acc[action.label] = (acc[action.label] || 0) + 1;
         }
         return acc;
       },
@@ -759,6 +870,25 @@ export default function AdminControlCenter() {
                   </div>
                 </div>
 
+                <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Remediation playbook</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {Object.entries(actionPlaybookCounts)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 8)
+                      .map(([label, count]) => (
+                        <Badge key={label} variant="outline">
+                          {label} ({count})
+                        </Badge>
+                      ))}
+                    {Object.keys(actionPlaybookCounts).length === 0 ? (
+                      <span className="text-sm text-[color:var(--text-muted)]">
+                        No remediation actions available in the current sample.
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {isEntityLoading ? (
                     <p className="text-sm text-[color:var(--text-muted)]">
@@ -809,6 +939,18 @@ export default function AdminControlCenter() {
                             </Badge>
                           ))}
                         </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(entity.recommendedActions || []).slice(0, 3).map((action) => (
+                            <a
+                              key={action.id}
+                              href={action.href}
+                              className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {action.label}
+                            </a>
+                          ))}
+                        </div>
                         <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                           Updated {formatSignalTime(entity.updatedAt)}
                         </div>
@@ -834,6 +976,222 @@ export default function AdminControlCenter() {
                     </Button>
                   </div>
                 ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Market Intelligence</CardTitle>
+                <CardDescription>
+                  Advertiser demand, promotion signals, and strategic acquisition angles
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isMarketIntelLoading ? (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    Loading market intelligence...
+                  </p>
+                ) : marketIntel ? (
+                  <>
+                    <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4">
+                      <div className="text-sm font-medium">Advertiser Brief</div>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <p>{marketIntel.brief.headline}</p>
+                        <p className="text-[color:var(--text-muted)]">
+                          {marketIntel.brief.audienceAngle}
+                        </p>
+                        <p className="text-[color:var(--text-muted)]">
+                          {marketIntel.brief.inventoryAngle}
+                        </p>
+                        <p className="text-[color:var(--text-muted)]">
+                          {marketIntel.brief.acquisitionAngle}
+                        </p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {marketIntel.brief.recommendedPackage.map((item) => (
+                          <Badge key={item} variant="outline">
+                            {item}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          Geo ad impressions
+                        </div>
+                        <div className="mt-2 text-2xl font-bold">
+                          {marketIntel.advertiserSignals.geoAds.impressions}
+                        </div>
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          CTR {(marketIntel.advertiserSignals.geoAds.ctr * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          Foot traffic pings
+                        </div>
+                        <div className="mt-2 text-2xl font-bold">
+                          {marketIntel.advertiserSignals.footTraffic.totalPings}
+                        </div>
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          {marketIntel.advertiserSignals.footTraffic.uniqueVisitors} unique visitors
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          Search demand themes
+                        </div>
+                        <div className="mt-2 text-2xl font-bold">
+                          {marketIntel.advertiserSignals.topQueries.length}
+                        </div>
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          Top advertiser keyword inputs
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          Acquisition targets
+                        </div>
+                        <div className="mt-2 text-2xl font-bold">
+                          {marketIntel.acquisitionTargets.length}
+                        </div>
+                        <div className="text-xs text-[color:var(--text-muted)]">
+                          High-leverage weak assets
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Top search demand</div>
+                        <div className="mt-3 space-y-2">
+                          {marketIntel.advertiserSignals.topQueries.slice(0, 6).map((item) => (
+                            <div
+                              key={item.query}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="break-all">{item.query}</span>
+                              <Badge variant="outline">{item.count}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Location demand</div>
+                        <div className="mt-3 space-y-2">
+                          {marketIntel.advertiserSignals.cityDemand.slice(0, 6).map((item) => (
+                            <div
+                              key={`${item.businessName}-${item.address}`}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="max-w-[70%]">
+                                {item.businessName || item.address || item.locationType || "Unknown"}
+                              </span>
+                              <div className="flex gap-2">
+                                <Badge variant="outline">{item.requestCount} req</Badge>
+                                <Badge variant="outline">{item.interestCount} interest</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Cuisine clusters</div>
+                        <div className="mt-3 space-y-2">
+                          {marketIntel.advertiserSignals.cuisineDemand.slice(0, 6).map((item) => (
+                            <div
+                              key={item.cuisineType || "unknown"}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span>{item.cuisineType || "Unknown"}</span>
+                              <div className="flex gap-2">
+                                <Badge variant="outline">{item.restaurantCount}</Badge>
+                                <Badge variant="outline">
+                                  rank {Math.round(item.avgRankingScore || 0)}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Content momentum</div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.contentMomentum.slice(0, 5).map((item) => (
+                            <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
+                              <div className="font-medium">{item.title}</div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">{item.impressionCount} impressions</Badge>
+                                <Badge variant="outline">{item.viewCount} views</Badge>
+                                {item.restaurantId ? (
+                                  <Badge variant="outline">{item.restaurantId}</Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Strategic acquisition targets</div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.acquisitionTargets.slice(0, 5).map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() =>
+                                setSelectedEntity({
+                                  id: item.id,
+                                  entityType: item.entityType,
+                                  entityId: item.id.split(":")[1] || item.id,
+                                  title: item.title,
+                                  location: item.location,
+                                  canonicalPath: item.canonicalPath,
+                                  health: "target",
+                                  quality: item.quality,
+                                  freshness: "unknown",
+                                  freshnessHours: null,
+                                  machineReadiness: item.machineReadiness,
+                                  canonicalFields: {},
+                                  knowledgeGaps: item.reasons,
+                                  opportunities: [],
+                                  recommendedActions: [],
+                                  updatedAt: new Date().toISOString(),
+                                })
+                              }
+                              className="w-full rounded-lg border border-[var(--border-subtle)] p-3 text-left"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">{item.title}</span>
+                                <Badge variant="outline">{item.entityType}</Badge>
+                                <Badge variant="outline">score {item.advertiserScore}</Badge>
+                              </div>
+                              <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
+                                {item.canonicalPath}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">{item.crawlerHits} crawler hits</Badge>
+                                <Badge variant="outline">{item.machineReadiness}</Badge>
+                                <Badge variant="outline">{item.quality}</Badge>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    Market intelligence is unavailable.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -877,11 +1235,87 @@ export default function AdminControlCenter() {
                           </Badge>
                         ))}
                       </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(entity.recommendedActions || []).slice(0, 3).map((action) => (
+                          <a
+                            key={action.id}
+                            href={action.href}
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {action.label}
+                          </a>
+                        ))}
+                      </div>
                     </button>
                   ))
                 ) : (
                   <p className="text-sm text-[color:var(--text-muted)]">
                     No priority entities detected.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Authority Delta</CardTitle>
+                <CardDescription>
+                  Pages where crawler demand is ahead of machine-readiness
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isAuthorityGapLoading ? (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    Loading authority delta...
+                  </p>
+                ) : authorityGap?.items?.length ? (
+                  authorityGap.items.map((entity) => (
+                    <button
+                      key={`authority-${entity.id}`}
+                      type="button"
+                      onClick={() => setSelectedEntity(entity)}
+                      className="w-full rounded-xl border border-[var(--border-subtle)] p-4 text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{entity.title}</span>
+                        <Badge variant="outline">{entity.entityType}</Badge>
+                        <Badge variant="outline">{entity.pressure}</Badge>
+                        <Badge variant="outline">delta {entity.authorityDelta}</Badge>
+                      </div>
+                      <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                        {entity.canonicalPath}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="outline">{entity.crawlerHits} crawler hits</Badge>
+                        <Badge variant="outline">{entity.humanHits} human hits</Badge>
+                        <Badge variant="outline">{entity.machineReadiness}</Badge>
+                        <Badge variant="outline">{entity.freshness}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {entity.knowledgeGaps.slice(0, 3).map((gap) => (
+                          <Badge key={gap} variant="outline">
+                            {gap}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(entity.recommendedActions || []).slice(0, 3).map((action) => (
+                          <a
+                            key={action.id}
+                            href={action.href}
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {action.label}
+                          </a>
+                        ))}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    No authority delta issues detected.
                   </p>
                 )}
               </CardContent>

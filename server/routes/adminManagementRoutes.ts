@@ -22,6 +22,8 @@ import {
   events,
   foodTruckLocations,
   foodTruckSessions,
+  geoAdEvents,
+  geoLocationPings,
   hosts,
   insertHostSchema,
   restaurants,
@@ -33,6 +35,7 @@ import {
   truckImportBatches,
   truckImportListings,
   truckClaimRequests,
+  truckInterests,
   users,
   userAddresses,
   locationRequests,
@@ -146,6 +149,12 @@ type CanonicalEntitySummary = {
   canonicalFields: Record<string, unknown>;
   knowledgeGaps: string[];
   opportunities: string[];
+  recommendedActions: Array<{
+    id: string;
+    label: string;
+    href: string;
+    kind: "admin" | "public";
+  }>;
   updatedAt: string | Date | null;
 };
 
@@ -168,6 +177,113 @@ const machineReadinessBucket = (score: number) => {
   if (score >= 4) return "ready";
   if (score >= 2) return "developing";
   return "blocked";
+};
+
+const buildRecommendedActions = (entity: {
+  entityType: string;
+  entityId: string;
+  canonicalPath: string;
+  knowledgeGaps: string[];
+  opportunities: string[];
+}) => {
+  const actions = new Map<
+    string,
+    { id: string; label: string; href: string; kind: "admin" | "public" }
+  >();
+
+  const add = (
+    id: string,
+    label: string,
+    href: string,
+    kind: "admin" | "public" = "admin",
+  ) => {
+    if (!actions.has(id)) {
+      actions.set(id, { id, label, href, kind });
+    }
+  };
+
+  add("review_public_page", "Review public page", entity.canonicalPath, "public");
+  add("open_admin", "Open admin workspace", "/admin/dashboard", "admin");
+
+  for (const gap of entity.knowledgeGaps) {
+    switch (gap) {
+      case "missing_description":
+        add("add_description", "Add description", "/admin/dashboard");
+        break;
+      case "missing_website":
+        add("add_website", "Add website link", "/admin/dashboard");
+        break;
+      case "missing_location_context":
+        add("complete_location", "Complete location data", "/admin/dashboard");
+        break;
+      case "missing_cuisine":
+        add("set_cuisine", "Set cuisine/category", "/admin/dashboard");
+        break;
+      case "unverified_profile":
+      case "unverified_host":
+        add("verify_entity", "Verify entity", "/admin/dashboard");
+        break;
+      case "missing_pricing":
+        add("set_pricing", "Set pricing", "/admin/dashboard");
+        break;
+      case "stripe_not_ready":
+        add("complete_stripe", "Complete Stripe setup", "/admin/dashboard");
+        break;
+      case "missing_spot_capacity":
+        add("set_capacity", "Set capacity", "/admin/dashboard");
+        break;
+      case "missing_restaurant_link":
+        add("link_restaurant", "Link restaurant", "/admin/dashboard");
+        break;
+      case "missing_start_date":
+      case "missing_end_date":
+        add("fix_schedule", "Fix schedule/timing", "/admin/dashboard");
+        break;
+      case "no_usage_signals":
+        add("promote_usage", "Promote visibility", entity.canonicalPath, "public");
+        break;
+      case "missing_host_link":
+        add("link_host", "Link host", "/admin/dashboard");
+        break;
+      case "missing_event_type":
+      case "missing_event_date":
+      case "missing_event_name":
+        add("repair_event", "Repair event metadata", "/admin/dashboard");
+        break;
+      default:
+        break;
+    }
+  }
+
+  for (const opportunity of entity.opportunities) {
+    switch (opportunity) {
+      case "activate_live_location":
+        add("go_live", "Activate live location", "/admin/dashboard");
+        break;
+      case "grow_authority_signals":
+        add("grow_authority", "Grow authority signals", entity.canonicalPath, "public");
+        break;
+      case "refresh_profile_data":
+      case "refresh_host_record":
+      case "review_deal_freshness":
+      case "review_event_status":
+        add("refresh_data", "Refresh stale data", "/admin/dashboard");
+        break;
+      case "review_for_publish":
+        add("publish_ready", "Review for publish", "/admin/dashboard");
+        break;
+      case "promote_deal_visibility":
+        add("promote_deal", "Promote deal visibility", entity.canonicalPath, "public");
+        break;
+      case "drive_truck_interest":
+        add("drive_interest", "Drive truck interest", entity.canonicalPath, "public");
+        break;
+      default:
+        break;
+    }
+  }
+
+  return Array.from(actions.values()).slice(0, 4);
 };
 
 async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySummary[]> {
@@ -240,7 +356,7 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
       .limit(limit),
   ]);
 
-  return [
+  const entities: CanonicalEntitySummary[] = [
     ...restaurantRows.map((row: any) => {
       const completenessScore =
         Number(Boolean(row.description)) +
@@ -268,7 +384,7 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         Number(Boolean(row.websiteUrl)) +
         Number(Boolean(row.city && row.state)) +
         Number(Boolean(row.isVerified));
-      return {
+      const entity: CanonicalEntitySummary = {
         id: `restaurant:${row.id}`,
         entityType: "restaurant",
         entityId: row.id,
@@ -296,8 +412,11 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         },
         knowledgeGaps,
         opportunities,
+        recommendedActions: [],
         updatedAt: row.updatedAt || row.createdAt,
       };
+      entity.recommendedActions = buildRecommendedActions(entity);
+      return entity;
     }),
     ...hostRows.map((row: any) => {
       const completenessScore =
@@ -329,7 +448,7 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         Number(Boolean(row.spotCount)) +
         Number(Boolean(row.parkingPassDailyPriceCents)) +
         Number(Boolean(row.isVerified));
-      return {
+      const entity: CanonicalEntitySummary = {
         id: `host:${row.id}`,
         entityType: "host",
         entityId: row.id,
@@ -352,8 +471,11 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         },
         knowledgeGaps,
         opportunities,
+        recommendedActions: [],
         updatedAt: row.updatedAt || row.createdAt,
       };
+      entity.recommendedActions = buildRecommendedActions(entity);
+      return entity;
     }),
     ...dealRows.map((row: any) => {
       const completenessScore =
@@ -380,7 +502,7 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         Number(Boolean(row.startDate)) +
         Number(Boolean(row.endDate)) +
         Number(Boolean(row.isActive));
-      return {
+      const entity: CanonicalEntitySummary = {
         id: `deal:${row.id}`,
         entityType: "deal",
         entityId: row.id,
@@ -400,8 +522,11 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         },
         knowledgeGaps,
         opportunities,
+        recommendedActions: [],
         updatedAt: row.updatedAt || row.createdAt,
       };
+      entity.recommendedActions = buildRecommendedActions(entity);
+      return entity;
     }),
     ...eventRows.map((row: any) => {
       const completenessScore =
@@ -428,7 +553,7 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         Number(Boolean(row.eventType)) +
         Number(Boolean(row.date)) +
         Number(Boolean(row.name));
-      return {
+      const entity: CanonicalEntitySummary = {
         id: `event:${row.id}`,
         entityType: "event",
         entityId: row.id,
@@ -447,10 +572,15 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         },
         knowledgeGaps,
         opportunities,
+        recommendedActions: [],
         updatedAt: row.updatedAt || row.createdAt,
       };
+      entity.recommendedActions = buildRecommendedActions(entity);
+      return entity;
     }),
-  ]
+  ];
+
+  return entities
     .sort(
       (a, b) =>
         new Date(String(b.updatedAt)).getTime() -
@@ -1575,6 +1705,284 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching LISA priorities:", error);
         res.status(500).json({ message: "Failed to fetch LISA priorities" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/authority-gap",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 12);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(50, Math.trunc(rawLimit)))
+          : 12;
+        const hours = 72;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const [entities, recentRequests] = await Promise.all([
+          buildCanonicalEntities(Math.max(limit, 30)),
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(4000),
+        ]);
+
+        const items = entities
+          .map((entity) => {
+            const matchingRequests = recentRequests.filter((request: any) => {
+              const path = String(request.path || "");
+              return (
+                path === entity.canonicalPath ||
+                path.startsWith(`${entity.canonicalPath}?`) ||
+                path.includes(entity.entityId)
+              );
+            });
+
+            const crawlerHits = matchingRequests.filter((request: any) =>
+              Boolean(botSignatureLabel(request.userAgent)),
+            ).length;
+            const humanHits = matchingRequests.filter(
+              (request: any) => !botSignatureLabel(request.userAgent),
+            ).length;
+            const readinessPenalty =
+              entity.machineReadiness === "blocked"
+                ? 6
+                : entity.machineReadiness === "developing"
+                  ? 3
+                  : 0;
+            const gapPenalty = entity.knowledgeGaps.length * 2;
+            const freshnessPenalty =
+              entity.freshness === "stale"
+                ? 3
+                : entity.freshness === "aging"
+                  ? 1
+                  : 0;
+            const authorityDelta = crawlerHits * 2 + gapPenalty + readinessPenalty + freshnessPenalty;
+
+            return {
+              ...entity,
+              crawlerHits,
+              humanHits,
+              authorityDelta,
+              pressure:
+                crawlerHits >= 5
+                  ? "high"
+                  : crawlerHits >= 2
+                    ? "medium"
+                    : "low",
+            };
+          })
+          .filter((entity) => entity.crawlerHits > 0 || entity.machineReadiness !== "ready")
+          .sort((a, b) => b.authorityDelta - a.authorityDelta)
+          .slice(0, limit);
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          items,
+        });
+      } catch (error) {
+        console.error("Error fetching LISA authority gap:", error);
+        res.status(500).json({ message: "Failed to fetch authority gap" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/market-intel",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (_req: any, res) => {
+      try {
+        const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const [
+          topQueriesRows,
+          cityDemandRows,
+          cuisineRows,
+          videoRows,
+          geoAdTotals,
+          geoPingTotals,
+          entities,
+          recentRequests,
+        ] = await Promise.all([
+          db
+            .select({
+              query: searchQueryEvents.query,
+              count: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(searchQueryEvents)
+            .where(gte(searchQueryEvents.createdAt, since30d))
+            .groupBy(searchQueryEvents.query)
+            .orderBy(desc(sql`count(*)`))
+            .limit(10),
+          db
+            .select({
+              businessName: locationRequests.businessName,
+              address: locationRequests.address,
+              locationType: locationRequests.locationType,
+              requestCount: sql<number>`count(*)`.mapWith(Number),
+              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(Number),
+            })
+            .from(locationRequests)
+            .leftJoin(
+              truckInterests,
+              eq(truckInterests.locationRequestId, locationRequests.id),
+            )
+            .where(gte(locationRequests.createdAt, since30d))
+            .groupBy(
+              locationRequests.businessName,
+              locationRequests.address,
+              locationRequests.locationType,
+            )
+            .orderBy(desc(sql`count(*)`), desc(sql`count(${truckInterests.id})`))
+            .limit(10),
+          db
+            .select({
+              cuisineType: restaurants.cuisineType,
+              restaurantCount: sql<number>`count(*)`.mapWith(Number),
+              avgRankingScore: sql<number>`avg(${restaurants.rankingScore})`.mapWith(Number),
+            })
+            .from(restaurants)
+            .where(gte(restaurants.createdAt, new Date("2020-01-01")))
+            .groupBy(restaurants.cuisineType)
+            .orderBy(desc(sql`count(*)`))
+            .limit(10)
+            .catch(async () =>
+              db
+                .select({
+                  cuisineType: restaurants.cuisineType,
+                  restaurantCount: sql<number>`count(*)`.mapWith(Number),
+                  avgRankingScore: sql<number>`avg(${restaurants.rankingScore})`.mapWith(Number),
+                })
+                .from(restaurants)
+                .groupBy(restaurants.cuisineType)
+                .orderBy(desc(sql`count(*)`))
+                .limit(10),
+            ),
+          db
+            .select({
+              id: videoStories.id,
+              title: videoStories.title,
+              restaurantId: videoStories.restaurantId,
+              viewCount: videoStories.viewCount,
+              impressionCount: videoStories.impressionCount,
+              createdAt: videoStories.createdAt,
+            })
+            .from(videoStories)
+            .where(gte(videoStories.createdAt, since30d))
+            .orderBy(desc(videoStories.impressionCount), desc(videoStories.viewCount))
+            .limit(8),
+          db
+            .select({
+              impressions:
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(Number),
+              clicks:
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(Number),
+            })
+            .from(geoAdEvents)
+            .where(gte(geoAdEvents.createdAt, since30d)),
+          db
+            .select({
+              totalPings: sql<number>`count(*)`.mapWith(Number),
+              uniqueVisitors:
+                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(Number),
+            })
+            .from(geoLocationPings)
+            .where(gte(geoLocationPings.createdAt, since7d)),
+          buildCanonicalEntities(30),
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since30d))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(4000),
+        ]);
+
+        const acquisitionTargets = entities
+          .map((entity) => {
+            const crawlerHits = recentRequests.filter((request: any) => {
+              const path = String(request.path || "");
+              return Boolean(botSignatureLabel(request.userAgent)) && path.includes(entity.entityId);
+            }).length;
+
+            const advertiserScore =
+              (entity.entityType === "restaurant" ? 3 : 1) +
+              (entity.machineReadiness === "blocked" ? 3 : entity.machineReadiness === "developing" ? 1 : 0) +
+              (entity.quality === "thin" ? 3 : entity.quality === "growing" ? 1 : 0) +
+              Math.min(5, crawlerHits);
+
+            return {
+              id: entity.id,
+              title: entity.title,
+              entityType: entity.entityType,
+              canonicalPath: entity.canonicalPath,
+              location: entity.location,
+              machineReadiness: entity.machineReadiness,
+              quality: entity.quality,
+              crawlerHits,
+              advertiserScore,
+              reasons: [
+                ...entity.knowledgeGaps.slice(0, 2),
+                ...entity.opportunities.slice(0, 2),
+              ],
+            };
+          })
+          .sort((a, b) => b.advertiserScore - a.advertiserScore)
+          .slice(0, 8);
+
+        const geoAds = geoAdTotals[0] || { impressions: 0, clicks: 0 };
+        const geoPings = geoPingTotals[0] || { totalPings: 0, uniqueVisitors: 0 };
+        const topQuery = topQueriesRows[0]?.query || "local food trucks";
+        const topLocation = cityDemandRows[0]
+          ? cityDemandRows[0].businessName ||
+            cityDemandRows[0].address ||
+            cityDemandRows[0].locationType ||
+            "high-demand location"
+          : "high-demand location";
+        const topCuisine = cuisineRows[0]?.cuisineType || "food truck";
+        const topAcquisition = acquisitionTargets[0]?.title || "priority asset";
+        const brief = {
+          headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} inventory.`,
+          audienceAngle: `Promote around ${topLocation} where location demand and truck interest are forming.`,
+          inventoryAngle: `${videoRows.length} recent recommendation stories and ${geoPings.totalPings} foot-traffic pings create ad packaging potential.`,
+          acquisitionAngle: `${topAcquisition} is a candidate to strengthen before monetization packaging.`,
+          recommendedPackage: [
+            `Sponsor search and discovery around "${topQuery}"`,
+            `Bundle geo ads with ${topCuisine} content momentum`,
+            `Use ${topLocation} as a localized campaign wedge`,
+          ],
+        };
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          brief,
+          advertiserSignals: {
+            topQueries: topQueriesRows,
+            cityDemand: cityDemandRows,
+            cuisineDemand: cuisineRows,
+            geoAds: {
+              impressions: geoAds.impressions,
+              clicks: geoAds.clicks,
+              ctr:
+                geoAds.impressions > 0 ? geoAds.clicks / geoAds.impressions : 0,
+            },
+            footTraffic: geoPings,
+          },
+          contentMomentum: videoRows,
+          acquisitionTargets,
+        });
+      } catch (error) {
+        console.error("Error fetching LISA market intel:", error);
+        res.status(500).json({ message: "Failed to fetch market intel" });
       }
     },
   );
