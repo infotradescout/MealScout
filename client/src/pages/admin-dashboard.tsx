@@ -2246,6 +2246,8 @@ export default function AdminDashboard() {
       next: item.restaurantId
         ? `Promote this restaurant now and attach a deal or event while attention is active.`
         : "Promote this story now while attention is active.",
+      href: item.restaurantId ? `/restaurant/${item.restaurantId}` : "/admin/control-center",
+      actionLabel: item.restaurantId ? "Open restaurant" : "Open stream",
     }));
   }, [lisaMarketIntel]);
 
@@ -2262,6 +2264,8 @@ export default function AdminDashboard() {
         title: item.query || "Unnamed demand theme",
         why: `This search theme appeared ${Number(item.count ?? 0)} times recently.`,
         next: "Build content, deals, or landing pages around this demand before it cools off.",
+        href: "/admin/control-center",
+        actionLabel: "Open stream",
       })),
       ...cityDemand.slice(0, 2).map((item: any, index: number) => ({
         id: `city:${index}:${item.address || item.businessName || "unknown"}`,
@@ -2272,6 +2276,8 @@ export default function AdminDashboard() {
           "Location demand cluster",
         why: `${Number(item.requestCount ?? 0)} requests and ${Number(item.interestCount ?? 0)} interest signals point to local demand.`,
         next: "Sell ads here, recruit inventory here, or create a city page that captures the traffic.",
+        href: "/admin/control-center",
+        actionLabel: "Open stream",
       })),
     ];
     return demandRows.slice(0, 4);
@@ -2288,6 +2294,8 @@ export default function AdminDashboard() {
       next:
         (Array.isArray(item.reasons) && item.reasons[0]) ||
         "Review this asset for acquisition, partnership, or cleanup.",
+      href: item.canonicalPath || "/admin/control-center",
+      actionLabel: "Open target",
     }));
   }, [lisaMarketIntel]);
 
@@ -2302,6 +2310,8 @@ export default function AdminDashboard() {
           ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
           : "Improve the page, data completeness, and freshness.")
           .slice(0, 180),
+      href: "/admin/control-center",
+      actionLabel: "Open stream",
     }));
   }, [lisaPriorities]);
 
@@ -2318,6 +2328,14 @@ export default function AdminDashboard() {
           signal.subjectType === "path"
             ? `Strengthen ${signal.subjectId || "this page"} so outside machines find something worth citing.`
             : "Strengthen the related public entity page and attach fresher information.",
+        href:
+          signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
+            ? String(signal.subjectId)
+            : "/admin/control-center",
+        actionLabel:
+          signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
+            ? "Open page"
+            : "Open stream",
       }));
   }, [lisaSignals]);
 
@@ -6640,6 +6658,15 @@ export default function AdminDashboard() {
                       {topPromotionItem
                         ? buildBriefSentence(topPromotionItem)
                         : "No clear promotion opportunity yet."}
+                      {topPromotionItem ? (
+                        <div className="mt-3">
+                          <Link href={topPromotionItem.href}>
+                            <Button size="sm" variant="outline">
+                              {topPromotionItem.actionLabel}
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                   <Card>
@@ -6650,6 +6677,15 @@ export default function AdminDashboard() {
                       {topDemandItem
                         ? buildBriefSentence(topDemandItem)
                         : "No clear demand spike yet."}
+                      {topDemandItem ? (
+                        <div className="mt-3">
+                          <Link href={topDemandItem.href}>
+                            <Button size="sm" variant="outline">
+                              {topDemandItem.actionLabel}
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                   <Card>
@@ -6660,6 +6696,15 @@ export default function AdminDashboard() {
                       {topAcquisitionItem
                         ? buildBriefSentence(topAcquisitionItem)
                         : "No obvious acquisition target yet."}
+                      {topAcquisitionItem ? (
+                        <div className="mt-3">
+                          <Link href={topAcquisitionItem.href}>
+                            <Button size="sm" variant="outline">
+                              {topAcquisitionItem.actionLabel}
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                   <Card>
@@ -6670,6 +6715,15 @@ export default function AdminDashboard() {
                       {topMachineAttentionItem
                         ? buildBriefSentence(topMachineAttentionItem)
                         : "No meaningful machine-attention opportunity yet."}
+                      {topMachineAttentionItem ? (
+                        <div className="mt-3">
+                          <Link href={topMachineAttentionItem.href}>
+                            <Button size="sm" variant="outline">
+                              {topMachineAttentionItem.actionLabel}
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
                 </div>

@@ -840,15 +840,34 @@ export default function AdminControlCenter() {
       .slice(0, 6);
   }, [filteredSignals]);
 
+  const canonicalEntityMap = useMemo(() => {
+    const map = new Map<string, CanonicalEntityItem>();
+    for (const entity of canonicalEntities?.items ?? []) {
+      map.set(`${entity.entityType}:${entity.entityId}`, entity);
+    }
+    return map;
+  }, [canonicalEntities]);
+
   const dailyPromotionOpportunity = useMemo(() => {
     if (!marketIntel?.contentMomentum?.length) return null;
     const item = marketIntel.contentMomentum[0];
+    const linkedEntity = item.restaurantId
+      ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
+      : null;
     return {
       title: item.title || "Top promotion opportunity",
       why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
       next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
+      actionLabel: linkedEntity ? "Focus restaurant" : "Open livestream",
+      onAction: () => {
+        if (linkedEntity) {
+          focusEntity(linkedEntity, "overview");
+          return;
+        }
+        setActiveTab("livestream");
+      },
     };
-  }, [marketIntel]);
+  }, [canonicalEntityMap, marketIntel]);
 
   const dailyImprovementOpportunity = useMemo(() => {
     if (!priorityEntities?.items?.length) return null;
@@ -860,18 +879,31 @@ export default function AdminControlCenter() {
         item.reasons?.[0]
           ? `Fix ${toPlainLabel(item.reasons[0])} first.`
           : "Improve the page quality and freshness first.",
+      actionLabel: "Focus page",
+      onAction: () => focusEntity(item, "overview"),
     };
   }, [priorityEntities]);
 
   const dailyAcquisitionOpportunity = useMemo(() => {
     if (!marketIntel?.acquisitionTargets?.length) return null;
     const item = marketIntel.acquisitionTargets[0];
+    const entityId = String(item.id || "").split(":")[1] || item.id;
+    const linkedEntity =
+      canonicalEntityMap.get(`${item.entityType}:${entityId}`) ?? null;
     return {
       title: item.title || "Top acquisition target",
       why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
       next: "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
+      actionLabel: linkedEntity ? "Focus target" : "Open page",
+      onAction: () => {
+        if (linkedEntity) {
+          focusEntity(linkedEntity, "overview");
+          return;
+        }
+        window.location.href = item.canonicalPath || "/admin/control-center";
+      },
     };
-  }, [marketIntel]);
+  }, [canonicalEntityMap, marketIntel]);
 
   const dailyMachineAttentionOpportunity = useMemo(() => {
     const item = filteredSignals.find((signal) => signal.visibility === "off_platform");
@@ -880,6 +912,11 @@ export default function AdminControlCenter() {
       title: item.title || "Top machine-attention opportunity",
       why: buildSignalSummary(item),
       next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
+      actionLabel: "Open livestream",
+      onAction: () => {
+        setActiveTab("livestream");
+        setLaneQuery(String(item.subjectId || ""));
+      },
     };
   }, [filteredSignals]);
 
@@ -919,6 +956,12 @@ export default function AdminControlCenter() {
       {} as Record<string, RemediationLogItem>,
     );
   }, [remediationLog]);
+
+  const focusEntity = (entity: CanonicalEntityItem | null, tab: string = "overview") => {
+    if (!entity) return;
+    setSelectedEntity(entity);
+    setActiveTab(tab);
+  };
 
   const renderActionControls = (entity: CanonicalEntityItem) =>
     (entity.recommendedActions || []).slice(0, 3).map((action) => {
@@ -1165,6 +1208,16 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(dailyPromotionOpportunity)
                       : "No clear promotion opportunity yet."}
                   </div>
+                  {dailyPromotionOpportunity ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={dailyPromotionOpportunity.onAction}
+                    >
+                      {dailyPromotionOpportunity.actionLabel}
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Most valuable page to improve</div>
@@ -1173,6 +1226,16 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(dailyImprovementOpportunity)
                       : "No clear page-improvement target yet."}
                   </div>
+                  {dailyImprovementOpportunity ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={dailyImprovementOpportunity.onAction}
+                    >
+                      {dailyImprovementOpportunity.actionLabel}
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Most promising acquisition target</div>
@@ -1181,6 +1244,16 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(dailyAcquisitionOpportunity)
                       : "No obvious acquisition target yet."}
                   </div>
+                  {dailyAcquisitionOpportunity ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={dailyAcquisitionOpportunity.onAction}
+                    >
+                      {dailyAcquisitionOpportunity.actionLabel}
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Biggest machine-attention opportunity</div>
@@ -1189,6 +1262,16 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
                       : "No meaningful outside-machine attention yet."}
                   </div>
+                  {dailyMachineAttentionOpportunity ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={dailyMachineAttentionOpportunity.onAction}
+                    >
+                      {dailyMachineAttentionOpportunity.actionLabel}
+                    </Button>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -2009,6 +2092,16 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(dailyPromotionOpportunity)
                         : "No clear promotion opportunity yet."}
                     </div>
+                    {dailyPromotionOpportunity ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={dailyPromotionOpportunity.onAction}
+                      >
+                        {dailyPromotionOpportunity.actionLabel}
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best page to improve</div>
@@ -2017,6 +2110,16 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(dailyImprovementOpportunity)
                         : "No clear page-improvement target yet."}
                     </div>
+                    {dailyImprovementOpportunity ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={dailyImprovementOpportunity.onAction}
+                      >
+                        {dailyImprovementOpportunity.actionLabel}
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best acquisition target</div>
@@ -2025,6 +2128,16 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(dailyAcquisitionOpportunity)
                         : "No obvious acquisition target yet."}
                     </div>
+                    {dailyAcquisitionOpportunity ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={dailyAcquisitionOpportunity.onAction}
+                      >
+                        {dailyAcquisitionOpportunity.actionLabel}
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best machine-attention play</div>
@@ -2033,6 +2146,16 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
                         : "No meaningful outside-machine attention yet."}
                     </div>
+                    {dailyMachineAttentionOpportunity ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={dailyMachineAttentionOpportunity.onAction}
+                      >
+                        {dailyMachineAttentionOpportunity.actionLabel}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
