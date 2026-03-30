@@ -342,6 +342,53 @@ function buildAuthoritySummary(entity: AuthorityGapItem) {
   )} and ${toPlainLabel(entity.freshness)}. ${gap}`.trim();
 }
 
+function buildSignalSummary(signal: UnifiedSignalItem) {
+  if (signal.streamType === "deal_created") {
+    return "A deal is live or was just created. This is something you can promote or attach to paid visibility right now.";
+  }
+  if (signal.streamType === "event_created") {
+    return "A new event is active. This is useful for promotion, local demand capture, and sponsor packaging.";
+  }
+  if (signal.streamType === "social_post") {
+    return "MealScout pushed something outward. This matters because distribution is happening off-platform.";
+  }
+  if (signal.streamType === "external_crawler") {
+    return `An outside system checked ${signal.subjectId || "a MealScout page"}. This matters because machines are deciding whether this page is worth using or citing.`;
+  }
+  if (signal.family === "search") {
+    return "Search demand is appearing around this topic. This is a signal to publish, promote, or improve coverage here.";
+  }
+  if (signal.family === "mobility") {
+    return "A live location changed. This matters because freshness and place accuracy drive trust and discovery.";
+  }
+  if (signal.family === "distribution") {
+    return "This is an outward distribution signal. It matters because content or offers are reaching beyond the platform.";
+  }
+  return "This is a recent MealScout activity signal. Use it to decide what to promote, improve, or watch next.";
+}
+
+function buildSignalNextStep(signal: UnifiedSignalItem) {
+  if (signal.streamType === "deal_created") {
+    return "Next step: feature the deal, pair it with traffic sources, or sell it into a sponsor package.";
+  }
+  if (signal.streamType === "event_created") {
+    return "Next step: push event visibility and make sure the page has enough detail to convert interest.";
+  }
+  if (signal.streamType === "social_post") {
+    return "Next step: check whether the destination page is strong enough to benefit from that attention.";
+  }
+  if (signal.streamType === "external_crawler") {
+    return "Next step: strengthen the page being hit so outside machines find better facts, freshness, and structure.";
+  }
+  if (signal.family === "search") {
+    return "Next step: build or improve the page that best matches this demand before traffic leaks elsewhere.";
+  }
+  if (signal.family === "mobility") {
+    return "Next step: confirm the location data is accurate and visible on the public page.";
+  }
+  return "Next step: decide whether this signal should trigger promotion, cleanup, or closer monitoring.";
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1900,9 +1947,8 @@ export default function AdminControlCenter() {
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div className="space-y-2 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="outline">{signal.lane}</Badge>
-                              <Badge variant="outline">{signal.streamType}</Badge>
-                              <Badge variant="outline">{signal.visibility}</Badge>
+                              <Badge variant="outline">{toPlainLabel(signal.family)}</Badge>
+                              <Badge variant="outline">{toPlainLabel(signal.visibility)}</Badge>
                               <span className="text-xs text-[color:var(--text-muted)]">
                                 {formatSignalTime(signal.createdAt)}
                               </span>
@@ -1915,17 +1961,20 @@ export default function AdminControlCenter() {
                               </span>
                             </div>
                             <p className="text-sm text-[color:var(--text-muted)] break-all">
-                              {signal.summary}
+                              {buildSignalSummary(signal)}
+                            </p>
+                            <p className="text-sm text-[color:var(--text-muted)] break-all">
+                              {buildSignalNextStep(signal)}
                             </p>
                             <p className="text-xs text-[color:var(--text-muted)] break-all">
-                              {summarizeClaimValue(signal.payload)}
+                              Detail: {signal.summary}
                             </p>
                           </div>
 
                           <div className="text-xs text-[color:var(--text-muted)] md:text-right">
-                            <div>{signal.family}</div>
+                            <div>{toPlainLabel(signal.streamType)}</div>
                             <div>{signal.source}</div>
-                            <div>{signal.subjectType}</div>
+                            <div>{signal.lane}</div>
                           </div>
                         </div>
                       </div>
