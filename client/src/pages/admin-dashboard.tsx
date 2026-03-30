@@ -123,6 +123,9 @@ const toTitleCase = (value: string) =>
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const buildBriefSentence = (item: { title: string; why: string; next: string }) =>
+  `${item.title}. ${item.why} ${item.next}`;
+
 interface DashboardTotalsResponse {
   generatedAt: string;
   totals: DashboardStats;
@@ -2317,6 +2320,11 @@ export default function AdminDashboard() {
             : "Strengthen the related public entity page and attach fresher information.",
       }));
   }, [lisaSignals]);
+
+  const topPromotionItem = promoteNowItems[0] ?? null;
+  const topDemandItem = demandSpikeItems[0] ?? null;
+  const topAcquisitionItem = acquisitionWatchItems[0] ?? null;
+  const topMachineAttentionItem = machineAttentionItems[0] ?? null;
   const retryMapPinGeocode = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -6621,6 +6629,49 @@ export default function AdminDashboard() {
                   <Badge variant="outline">
                     {(acquisitionWatchItems ?? []).length} acquisition targets
                   </Badge>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Best thing to promote</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {topPromotionItem
+                        ? buildBriefSentence(topPromotionItem)
+                        : "No clear promotion opportunity yet."}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Biggest demand spike</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {topDemandItem
+                        ? buildBriefSentence(topDemandItem)
+                        : "No clear demand spike yet."}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Best acquisition target</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {topAcquisitionItem
+                        ? buildBriefSentence(topAcquisitionItem)
+                        : "No obvious acquisition target yet."}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Best machine-attention play</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {topMachineAttentionItem
+                        ? buildBriefSentence(topMachineAttentionItem)
+                        : "No meaningful machine-attention opportunity yet."}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">

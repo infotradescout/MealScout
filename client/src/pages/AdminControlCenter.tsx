@@ -453,6 +453,14 @@ function buildSignalClusterSummary(signals: UnifiedSignalItem[]) {
   };
 }
 
+function buildOpportunityBrief(item: {
+  title: string;
+  why: string;
+  next: string;
+}) {
+  return `${item.title}. ${item.why} ${item.next}`;
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -832,6 +840,49 @@ export default function AdminControlCenter() {
       .slice(0, 6);
   }, [filteredSignals]);
 
+  const dailyPromotionOpportunity = useMemo(() => {
+    if (!marketIntel?.contentMomentum?.length) return null;
+    const item = marketIntel.contentMomentum[0];
+    return {
+      title: item.title || "Top promotion opportunity",
+      why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
+      next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
+    };
+  }, [marketIntel]);
+
+  const dailyImprovementOpportunity = useMemo(() => {
+    if (!priorityEntities?.items?.length) return null;
+    const item = priorityEntities.items[0];
+    return {
+      title: item.title || "Top page to improve",
+      why: `Demand is forming here, but the page is still ${toPlainLabel(item.quality)} and ${toPlainLabel(item.machineReadiness)}.`,
+      next:
+        item.reasons?.[0]
+          ? `Fix ${toPlainLabel(item.reasons[0])} first.`
+          : "Improve the page quality and freshness first.",
+    };
+  }, [priorityEntities]);
+
+  const dailyAcquisitionOpportunity = useMemo(() => {
+    if (!marketIntel?.acquisitionTargets?.length) return null;
+    const item = marketIntel.acquisitionTargets[0];
+    return {
+      title: item.title || "Top acquisition target",
+      why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
+      next: "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
+    };
+  }, [marketIntel]);
+
+  const dailyMachineAttentionOpportunity = useMemo(() => {
+    const item = filteredSignals.find((signal) => signal.visibility === "off_platform");
+    if (!item) return null;
+    return {
+      title: item.title || "Top machine-attention opportunity",
+      why: buildSignalSummary(item),
+      next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
+    };
+  }, [filteredSignals]);
+
   const knowledgeGapCounts = useMemo(() => {
     const items = canonicalEntities?.items ?? [];
     return items.reduce(
@@ -1099,6 +1150,49 @@ export default function AdminControlCenter() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Operating Brief</CardTitle>
+                <CardDescription>
+                  The best promotion, improvement, acquisition, and machine-attention opportunity right now
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Best thing to promote</div>
+                  <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                    {dailyPromotionOpportunity
+                      ? buildOpportunityBrief(dailyPromotionOpportunity)
+                      : "No clear promotion opportunity yet."}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Most valuable page to improve</div>
+                  <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                    {dailyImprovementOpportunity
+                      ? buildOpportunityBrief(dailyImprovementOpportunity)
+                      : "No clear page-improvement target yet."}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Most promising acquisition target</div>
+                  <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                    {dailyAcquisitionOpportunity
+                      ? buildOpportunityBrief(dailyAcquisitionOpportunity)
+                      : "No obvious acquisition target yet."}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Biggest machine-attention opportunity</div>
+                  <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                    {dailyMachineAttentionOpportunity
+                      ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
+                      : "No meaningful outside-machine attention yet."}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-4">
               <Card>
                 <CardHeader>
@@ -1907,6 +2001,41 @@ export default function AdminControlCenter() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">Best thing to promote</div>
+                    <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                      {dailyPromotionOpportunity
+                        ? buildOpportunityBrief(dailyPromotionOpportunity)
+                        : "No clear promotion opportunity yet."}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">Best page to improve</div>
+                    <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                      {dailyImprovementOpportunity
+                        ? buildOpportunityBrief(dailyImprovementOpportunity)
+                        : "No clear page-improvement target yet."}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">Best acquisition target</div>
+                    <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                      {dailyAcquisitionOpportunity
+                        ? buildOpportunityBrief(dailyAcquisitionOpportunity)
+                        : "No obvious acquisition target yet."}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="text-sm font-medium">Best machine-attention play</div>
+                    <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                      {dailyMachineAttentionOpportunity
+                        ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
+                        : "No meaningful outside-machine attention yet."}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">What matters now</div>
