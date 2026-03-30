@@ -115,6 +115,14 @@ interface MapPinAudit {
   };
 }
 
+const toTitleCase = (value: string) =>
+  String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 interface DashboardTotalsResponse {
   generatedAt: string;
   totals: DashboardStats;
@@ -2224,6 +2232,91 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "lisa",
     staleTime: 60 * 1000,
   });
+  const promoteNowItems = useMemo(() => {
+    const momentum = Array.isArray(lisaMarketIntel?.contentMomentum)
+      ? lisaMarketIntel.contentMomentum
+      : [];
+    return momentum.slice(0, 4).map((item: any) => ({
+      id: item.id,
+      title: item.title || "Untitled content",
+      why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions signal current attention.`,
+      next: item.restaurantId
+        ? `Promote this restaurant now and attach a deal or event while attention is active.`
+        : "Promote this story now while attention is active.",
+    }));
+  }, [lisaMarketIntel]);
+
+  const demandSpikeItems = useMemo(() => {
+    const queries = Array.isArray(lisaMarketIntel?.advertiserSignals?.topQueries)
+      ? lisaMarketIntel.advertiserSignals.topQueries
+      : [];
+    const cityDemand = Array.isArray(lisaMarketIntel?.advertiserSignals?.cityDemand)
+      ? lisaMarketIntel.advertiserSignals.cityDemand
+      : [];
+    const demandRows = [
+      ...queries.slice(0, 2).map((item: any, index: number) => ({
+        id: `query:${index}:${item.query}`,
+        title: item.query || "Unnamed demand theme",
+        why: `This search theme appeared ${Number(item.count ?? 0)} times recently.`,
+        next: "Build content, deals, or landing pages around this demand before it cools off.",
+      })),
+      ...cityDemand.slice(0, 2).map((item: any, index: number) => ({
+        id: `city:${index}:${item.address || item.businessName || "unknown"}`,
+        title:
+          item.businessName ||
+          item.address ||
+          item.locationType ||
+          "Location demand cluster",
+        why: `${Number(item.requestCount ?? 0)} requests and ${Number(item.interestCount ?? 0)} interest signals point to local demand.`,
+        next: "Sell ads here, recruit inventory here, or create a city page that captures the traffic.",
+      })),
+    ];
+    return demandRows.slice(0, 4);
+  }, [lisaMarketIntel]);
+
+  const acquisitionWatchItems = useMemo(() => {
+    const targets = Array.isArray(lisaMarketIntel?.acquisitionTargets)
+      ? lisaMarketIntel.acquisitionTargets
+      : [];
+    return targets.slice(0, 4).map((item: any) => ({
+      id: item.id,
+      title: item.title || "Untitled target",
+      why: `${Number(item.crawlerHits ?? 0)} crawler hits with ${item.quality || "unknown"} quality suggests outside interest is ahead of asset quality.`,
+      next:
+        (Array.isArray(item.reasons) && item.reasons[0]) ||
+        "Review this asset for acquisition, partnership, or cleanup.",
+    }));
+  }, [lisaMarketIntel]);
+
+  const authorityGapItems = useMemo(() => {
+    const items = Array.isArray(lisaPriorities?.items) ? lisaPriorities.items : [];
+    return items.slice(0, 4).map((item: any) => ({
+      id: `${item.entityType}:${item.entityId}`,
+      title: item.title || `${item.entityType} ${item.entityId}`,
+      why: `${item.quality || "unknown"} quality and ${item.freshness || "unknown"} freshness are limiting how trustworthy this page feels.`,
+      next:
+        (Array.isArray(item.reasons) && item.reasons.length > 0
+          ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
+          : "Improve the page, data completeness, and freshness.")
+          .slice(0, 180),
+    }));
+  }, [lisaPriorities]);
+
+  const machineAttentionItems = useMemo(() => {
+    const items = Array.isArray(lisaSignals?.items) ? lisaSignals.items : [];
+    return items
+      .filter((signal: any) => signal.visibility === "off_platform")
+      .slice(0, 4)
+      .map((signal: any, index: number) => ({
+        id: `${signal.id || "signal"}:${index}`,
+        title: signal.title || "Observed machine attention",
+        why: signal.summary || "Outside systems are interacting with a MealScout page.",
+        next:
+          signal.subjectType === "path"
+            ? `Strengthen ${signal.subjectId || "this page"} so outside machines find something worth citing.`
+            : "Strengthen the related public entity page and attach fresher information.",
+      }));
+  }, [lisaSignals]);
   const retryMapPinGeocode = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -6512,102 +6605,152 @@ export default function AdminDashboard() {
           <TabsContent value="lisa" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>LISA Intelligence</CardTitle>
+                <CardTitle>LISA Opportunity Console</CardTitle>
                 <CardDescription>
-                  Business-facing demand, acquisition, and live signal context
+                  What to promote, where demand is growing, what to acquire, and what needs improvement
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <Link href="/admin/control-center">
-                    <Button>Open Full Control Center</Button>
+                    <Button>Open Full Stream</Button>
                   </Link>
                   <Badge variant="outline">
-                    {(lisaSignals?.items ?? []).length} recent signals
+                    {(promoteNowItems ?? []).length} promotion ideas
                   </Badge>
                   <Badge variant="outline">
-                    {(lisaPriorities?.items ?? []).length} priority entities
+                    {(acquisitionWatchItems ?? []).length} acquisition targets
                   </Badge>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="grid gap-4 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Advertiser Brief</CardTitle>
+                      <CardTitle className="text-base">Promote Now</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="font-medium">
-                        {lisaMarketIntel?.brief?.headline || "No current brief available."}
-                      </div>
-                      <div className="text-muted-foreground">
-                        {lisaMarketIntel?.brief?.audienceAngle || "No audience angle yet."}
-                      </div>
-                      <div className="text-muted-foreground">
-                        {lisaMarketIntel?.brief?.inventoryAngle || "No inventory angle yet."}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(lisaMarketIntel?.brief?.recommendedPackage ?? []).map(
-                          (item: string) => (
-                            <Badge key={item} variant="outline">
-                              {item}
-                            </Badge>
-                          ),
-                        )}
-                      </div>
+                    <CardContent className="space-y-3">
+                      {promoteNowItems.length ? (
+                        promoteNowItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No immediate promotion opportunities are clear yet.
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Top Priorities</CardTitle>
+                      <CardTitle className="text-base">Demand Spikes</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      {(lisaPriorities?.items ?? []).slice(0, 4).map((item: any) => (
-                        <div
-                          key={`${item.entityType}:${item.entityId}`}
-                          className="rounded-lg border px-3 py-3"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{item.title}</span>
-                            <Badge variant="outline">{item.entityType}</Badge>
-                            <Badge variant="outline">score {item.priorityScore}</Badge>
+                      {demandSpikeItems.length ? (
+                        demandSpikeItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
                           </div>
-                          <div className="mt-2 text-sm text-muted-foreground">
-                            {(item.reasons ?? []).slice(0, 2).join(" • ") || "No reasons yet."}
-                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No clear demand spikes detected yet.
                         </div>
-                      ))}
+                      )}
                     </CardContent>
                   </Card>
                 </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Recent Useful Signals</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {(lisaSignals?.items ?? []).slice(0, 8).map((signal: any) => (
-                      <div
-                        key={`${signal.id}-${signal.createdAt}`}
-                        className="rounded-lg border px-3 py-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{signal.title}</span>
-                          <Badge variant="outline">{signal.family}</Badge>
-                          <Badge variant="outline">{signal.streamType}</Badge>
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Acquisition Targets</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {acquisitionWatchItems.length ? (
+                        acquisitionWatchItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No acquisition targets stand out yet.
                         </div>
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          {signal.summary}
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Pages To Improve</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {authorityGapItems.length ? (
+                        authorityGapItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No obvious authority gaps are showing yet.
                         </div>
-                      </div>
-                    ))}
-                    {(lisaSignals?.items ?? []).length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No useful signals available yet.
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Machine Attention</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {machineAttentionItems.length ? (
+                        machineAttentionItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No meaningful outside machine attention is visible yet.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
