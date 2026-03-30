@@ -304,6 +304,14 @@ function signalPriorityScore(signal: UnifiedSignalItem) {
   return score;
 }
 
+function toPlainLabel(value: string) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function AdminControlCenter() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1034,9 +1042,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                  <CardTitle>Signal Family Index</CardTitle>
+                  <CardTitle>What Is Active Right Now</CardTitle>
                   <CardDescription>
-                    Which kinds of MealScout data are active right now
+                    The main kinds of business activity showing up across MealScout
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1064,9 +1072,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Truth Registry</CardTitle>
+                <CardTitle>Important Pages And Entities</CardTitle>
                 <CardDescription>
-                  Canonical entities MealScout currently knows how to describe
+                  The trucks, hosts, deals, and events MealScout can currently stand behind
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1081,7 +1089,7 @@ export default function AdminControlCenter() {
                 </div>
 
                 <div className="rounded-lg border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Knowledge gaps</div>
+                  <div className="text-sm font-medium">What is missing</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {Object.entries(knowledgeGapCounts)
                       .sort((a, b) => b[1] - a[1])
@@ -1100,7 +1108,7 @@ export default function AdminControlCenter() {
                 </div>
 
                 <div className="rounded-lg border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Remediation playbook</div>
+                  <div className="text-sm font-medium">Most common next moves</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {Object.entries(actionPlaybookCounts)
                       .sort((a, b) => b[1] - a[1])
@@ -1142,10 +1150,10 @@ export default function AdminControlCenter() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{entity.title}</span>
                           <Badge variant="outline">{entity.entityType}</Badge>
-                          <Badge variant="outline">{entity.health}</Badge>
-                          <Badge variant="outline">{entity.quality}</Badge>
-                          <Badge variant="outline">{entity.freshness}</Badge>
-                          <Badge variant="outline">{entity.machineReadiness}</Badge>
+                          <Badge variant="outline">{toPlainLabel(entity.health)}</Badge>
+                          <Badge variant="outline">{toPlainLabel(entity.quality)}</Badge>
+                          <Badge variant="outline">{toPlainLabel(entity.freshness)}</Badge>
+                          <Badge variant="outline">{toPlainLabel(entity.machineReadiness)}</Badge>
                         </div>
                         <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                           {entity.location || entity.entityId}
@@ -1159,12 +1167,12 @@ export default function AdminControlCenter() {
                         <div className="mt-3 flex flex-wrap gap-2">
                           {(entity.knowledgeGaps || []).slice(0, 4).map((gap) => (
                             <Badge key={gap} variant="outline">
-                              gap: {gap}
+                              missing: {toPlainLabel(gap)}
                             </Badge>
                           ))}
                           {(entity.opportunities || []).slice(0, 3).map((opportunity) => (
                             <Badge key={opportunity} variant="outline">
-                              next: {opportunity}
+                              next: {toPlainLabel(opportunity)}
                             </Badge>
                           ))}
                         </div>
@@ -1201,9 +1209,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Market Intelligence</CardTitle>
+                <CardTitle>Promote, Sell, Or Acquire</CardTitle>
                 <CardDescription>
-                  Advertiser demand, promotion signals, and strategic acquisition angles
+                  Demand, momentum, sponsor angles, and assets worth improving or buying
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1215,7 +1223,7 @@ export default function AdminControlCenter() {
                   <>
                     <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="text-sm font-medium">Advertiser Brief</div>
+                        <div className="text-sm font-medium">What matters now</div>
                         <div className="flex flex-wrap gap-2">
                           <a
                             href="/api/admin/lisa/market-intel/export?type=advertiser_brief&format=markdown"
@@ -1445,9 +1453,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Fix First Queue</CardTitle>
+                <CardTitle>Fix These First</CardTitle>
                 <CardDescription>
-                  Ranked entities where weak knowledge overlaps with likely demand
+                  Pages where demand and weak information are colliding
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1466,9 +1474,9 @@ export default function AdminControlCenter() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{entity.title}</span>
                         <Badge variant="outline">{entity.entityType}</Badge>
-                        <Badge variant="outline">score {entity.priorityScore}</Badge>
-                        <Badge variant="outline">{entity.crawlerDemand} crawler hits</Badge>
-                        <Badge variant="outline">{entity.machineReadiness}</Badge>
+                        <Badge variant="outline">priority {entity.priorityScore}</Badge>
+                        <Badge variant="outline">{entity.crawlerDemand} machine hits</Badge>
+                        <Badge variant="outline">{toPlainLabel(entity.machineReadiness)}</Badge>
                       </div>
                       <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                         {entity.location || entity.entityId}
@@ -1479,7 +1487,7 @@ export default function AdminControlCenter() {
                       <div className="mt-3 flex flex-wrap gap-2">
                         {entity.reasons.map((reason) => (
                           <Badge key={reason} variant="outline">
-                            {reason}
+                            {toPlainLabel(reason)}
                           </Badge>
                         ))}
                       </div>
@@ -1498,9 +1506,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Authority Delta</CardTitle>
+                <CardTitle>Outside Attention vs Page Quality</CardTitle>
                 <CardDescription>
-                  Pages where crawler demand is ahead of machine-readiness
+                  Places where outside systems are looking before the page is truly ready
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1519,22 +1527,22 @@ export default function AdminControlCenter() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{entity.title}</span>
                         <Badge variant="outline">{entity.entityType}</Badge>
-                        <Badge variant="outline">{entity.pressure}</Badge>
-                        <Badge variant="outline">delta {entity.authorityDelta}</Badge>
+                        <Badge variant="outline">{toPlainLabel(entity.pressure)}</Badge>
+                        <Badge variant="outline">gap {entity.authorityDelta}</Badge>
                       </div>
                       <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                         {entity.canonicalPath}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant="outline">{entity.crawlerHits} crawler hits</Badge>
+                        <Badge variant="outline">{entity.crawlerHits} machine hits</Badge>
                         <Badge variant="outline">{entity.humanHits} human hits</Badge>
-                        <Badge variant="outline">{entity.machineReadiness}</Badge>
-                        <Badge variant="outline">{entity.freshness}</Badge>
+                        <Badge variant="outline">{toPlainLabel(entity.machineReadiness)}</Badge>
+                        <Badge variant="outline">{toPlainLabel(entity.freshness)}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {entity.knowledgeGaps.slice(0, 3).map((gap) => (
                           <Badge key={gap} variant="outline">
-                            {gap}
+                            {toPlainLabel(gap)}
                           </Badge>
                         ))}
                       </div>
@@ -1553,10 +1561,9 @@ export default function AdminControlCenter() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Bot Traffic Intelligence</CardTitle>
+                <CardTitle>Who Is Discovering MealScout</CardTitle>
                 <CardDescription>
-                  Decoded crawler demand across LLMs, search bots, automation,
-                  and browser traffic
+                  Which outside systems and visitors are checking MealScout, and where they are looking
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
