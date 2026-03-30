@@ -53,6 +53,33 @@ type PublicProfile = {
   };
 };
 
+type PublicCanonical = {
+  machineReadiness: string;
+  freshness: string;
+  freshnessHours: number | null;
+  updatedAt?: string | null;
+  verified?: boolean;
+  knowledgeGaps?: string[];
+  sourceTruthStatements?: string[];
+};
+
+type PublicEvidence = {
+  windowHours: number;
+  externalPressure?: {
+    crawlerHits?: number;
+    humanPageHits?: number;
+    topBots?: Array<{ label: string; count: number }>;
+  };
+  demand?: {
+    matchingSearchQueries?: number;
+    topQueries?: Array<{ query: string; count: number }>;
+  };
+  distribution?: {
+    affiliateShares?: number;
+    outboundSocialPosts?: number;
+  };
+};
+
 const labelByEntity: Record<string, string> = {
   restaurant: "Restaurant Profile",
   host: "Host Profile",
@@ -74,6 +101,40 @@ export default function PublicProfilePage() {
       );
       if (!res.ok) {
         throw new Error("Profile not found");
+      }
+      return res.json();
+    },
+  });
+
+  const { data: canonical } = useQuery<PublicCanonical>({
+    queryKey: ["/api/public/canonical", profileType, profileId],
+    enabled:
+      !!profileType &&
+      !!profileId &&
+      (profileType === "host" || profileType === "restaurant"),
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/public/canonical/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
+      );
+      if (!res.ok) {
+        throw new Error("Canonical record not found");
+      }
+      return res.json();
+    },
+  });
+
+  const { data: evidence } = useQuery<PublicEvidence>({
+    queryKey: ["/api/public/evidence", profileType, profileId],
+    enabled:
+      !!profileType &&
+      !!profileId &&
+      (profileType === "host" || profileType === "restaurant"),
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/public/evidence/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
+      );
+      if (!res.ok) {
+        throw new Error("Evidence not found");
       }
       return res.json();
     },
@@ -306,6 +367,74 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {canonical ? (
+            <div className="rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Source of Truth
+                  </div>
+                  <div className="text-sm font-semibold">Canonical MealScout record</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{canonical.machineReadiness}</Badge>
+                  <Badge variant="secondary">{canonical.freshness}</Badge>
+                  {canonical.verified ? <Badge>verified</Badge> : null}
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>
+                  Updated{" "}
+                  <span className="font-medium text-foreground">
+                    {canonical.updatedAt
+                      ? new Date(canonical.updatedAt).toLocaleString()
+                      : "Unknown"}
+                  </span>
+                </div>
+                <div>
+                  Freshness window{" "}
+                  <span className="font-medium text-foreground">
+                    {canonical.freshnessHours != null
+                      ? `${canonical.freshnessHours}h ago`
+                      : "Unknown"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {evidence ? (
+            <div className="rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    External Evidence
+                  </div>
+                  <div className="text-sm font-semibold">
+                    Discovery and distribution signals
+                  </div>
+                </div>
+                <Badge variant="outline">
+                  {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                </Badge>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                <div>
+                  Crawler hits{" "}
+                  <span className="font-medium text-foreground">
+                    {evidence.externalPressure?.crawlerHits ?? 0}
+                  </span>
+                </div>
+                <div>
+                  Search demand{" "}
+                  <span className="font-medium text-foreground">
+                    {evidence.demand?.matchingSearchQueries ?? 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {data.websiteUrl ? (
             <div className="flex items-center gap-2 text-sm">
               <Globe className="h-4 w-4 text-muted-foreground" />

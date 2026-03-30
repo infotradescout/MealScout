@@ -1988,6 +1988,411 @@ export function registerAdminManagementRoutes(app: Express) {
   );
 
   app.get(
+    "/api/admin/lisa/market-intel/export",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const exportType = String(req.query.type || "advertiser_brief").trim();
+        const format = String(req.query.format || "markdown").trim();
+        const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const [
+          topQueriesRows,
+          cityDemandRows,
+          cuisineRows,
+          videoRows,
+          geoAdTotals,
+          geoPingTotals,
+          entities,
+          recentRequests,
+        ] = await Promise.all([
+          db
+            .select({
+              query: searchQueryEvents.query,
+              count: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(searchQueryEvents)
+            .where(gte(searchQueryEvents.createdAt, since30d))
+            .groupBy(searchQueryEvents.query)
+            .orderBy(desc(sql`count(*)`))
+            .limit(10),
+          db
+            .select({
+              businessName: locationRequests.businessName,
+              address: locationRequests.address,
+              locationType: locationRequests.locationType,
+              requestCount: sql<number>`count(*)`.mapWith(Number),
+              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(Number),
+            })
+            .from(locationRequests)
+            .leftJoin(
+              truckInterests,
+              eq(truckInterests.locationRequestId, locationRequests.id),
+            )
+            .where(gte(locationRequests.createdAt, since30d))
+            .groupBy(
+              locationRequests.businessName,
+              locationRequests.address,
+              locationRequests.locationType,
+            )
+            .orderBy(desc(sql`count(*)`), desc(sql`count(${truckInterests.id})`))
+            .limit(10),
+          db
+            .select({
+              cuisineType: restaurants.cuisineType,
+              restaurantCount: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(restaurants)
+            .groupBy(restaurants.cuisineType)
+            .orderBy(desc(sql`count(*)`))
+            .limit(10),
+          db
+            .select({
+              id: videoStories.id,
+              title: videoStories.title,
+              restaurantId: videoStories.restaurantId,
+              viewCount: videoStories.viewCount,
+              impressionCount: videoStories.impressionCount,
+              createdAt: videoStories.createdAt,
+            })
+            .from(videoStories)
+            .where(gte(videoStories.createdAt, since30d))
+            .orderBy(desc(videoStories.impressionCount), desc(videoStories.viewCount))
+            .limit(8),
+          db
+            .select({
+              impressions:
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(Number),
+              clicks:
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(Number),
+            })
+            .from(geoAdEvents)
+            .where(gte(geoAdEvents.createdAt, since30d)),
+          db
+            .select({
+              totalPings: sql<number>`count(*)`.mapWith(Number),
+              uniqueVisitors:
+                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(Number),
+            })
+            .from(geoLocationPings)
+            .where(gte(geoLocationPings.createdAt, since7d)),
+          buildCanonicalEntities(30),
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since30d))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(4000),
+        ]);
+
+        const acquisitionTargets = entities
+          .map((entity) => {
+            const crawlerHits = recentRequests.filter((request: any) => {
+              const path = String(request.path || "");
+              return (
+                Boolean(botSignatureLabel(request.userAgent)) &&
+                path.includes(entity.entityId)
+              );
+            }).length;
+
+            const advertiserScore =
+              (entity.entityType === "restaurant" ? 3 : 1) +
+              (entity.machineReadiness === "blocked"
+                ? 3
+                : entity.machineReadiness === "developing"
+                  ? 1
+                  : 0) +
+              (entity.quality === "thin" ? 3 : entity.quality === "growing" ? 1 : 0) +
+              Math.min(5, crawlerHits);
+
+            return {
+              id: entity.id,
+              title: entity.title,
+              entityType: entity.entityType,
+              canonicalPath: entity.canonicalPath,
+              location: entity.location,
+              machineReadiness: entity.machineReadiness,
+              quality: entity.quality,
+              crawlerHits,
+              advertiserScore,
+              reasons: [
+                ...entity.knowledgeGaps.slice(0, 2),
+                ...entity.opportunities.slice(0, 2),
+              ],
+            };
+          })
+          .sort((a, b) => b.advertiserScore - a.advertiserScore)
+          .slice(0, 8);
+
+        const geoAds = geoAdTotals[0] || { impressions: 0, clicks: 0 };
+        const geoPings = geoPingTotals[0] || { totalPings: 0, uniqueVisitors: 0 };
+        const topQuery = topQueriesRows[0]?.query || "local food trucks";
+        const topLocation =
+          cityDemandRows[0]?.businessName ||
+          cityDemandRows[0]?.address ||
+          cityDemandRows[0]?.locationType ||
+          "high-demand location";
+        const topCuisine = cuisineRows[0]?.cuisineType || "food truck";
+
+        const exportPayload = {
+          type: exportType,
+          generatedAt: new Date().toISOString(),
+          advertiserBrief: {
+            headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} inventory.`,
+            audienceAngle: `Promote around ${topLocation} where location demand and truck interest are forming.`,
+            inventoryAngle: `${videoRows.length} recent stories, ${geoAds.impressions} geo-ad impressions, and ${geoPings.totalPings} foot-traffic pings create sponsor inventory.`,
+            recommendations: [
+              `Sponsor search and discovery around "${topQuery}"`,
+              `Build a localized package around ${topLocation}`,
+              `Bundle ${topCuisine} content with geo-distribution inventory`,
+            ],
+          },
+          acquisitionWatchlist: acquisitionTargets,
+          sponsorPackage: {
+            geoAds,
+            footTraffic: geoPings,
+            topQueries: topQueriesRows.slice(0, 5),
+            topLocations: cityDemandRows.slice(0, 5),
+            topCuisines: cuisineRows.slice(0, 5),
+            contentMomentum: videoRows.slice(0, 5),
+          },
+        };
+
+        if (format === "json") {
+          return res.json({ ok: true, ...exportPayload });
+        }
+
+        const markdown = [
+          `# MealScout ${exportType.replace(/_/g, " ")}`,
+          ``,
+          `Generated: ${exportPayload.generatedAt}`,
+          ``,
+          `## Advertiser Brief`,
+          exportPayload.advertiserBrief.headline,
+          ``,
+          `- Audience angle: ${exportPayload.advertiserBrief.audienceAngle}`,
+          `- Inventory angle: ${exportPayload.advertiserBrief.inventoryAngle}`,
+          ...exportPayload.advertiserBrief.recommendations.map(
+            (item) => `- ${item}`,
+          ),
+          ``,
+          `## Acquisition Watchlist`,
+          ...exportPayload.acquisitionWatchlist.map(
+            (item) =>
+              `- ${item.title} (${item.entityType}) | score ${item.advertiserScore} | crawler hits ${item.crawlerHits} | ${item.reasons.join(", ")}`,
+          ),
+          ``,
+          `## Sponsor Package`,
+          `- Geo ads: ${geoAds.impressions} impressions / ${geoAds.clicks} clicks`,
+          `- Foot traffic: ${geoPings.totalPings} pings / ${geoPings.uniqueVisitors} unique visitors`,
+          ...topQueriesRows.slice(0, 5).map(
+            (item: any) => `- Query demand: ${item.query} (${item.count})`,
+          ),
+        ].join("\n");
+
+        res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `inline; filename="mealscout-${exportType}.md"`,
+        );
+        res.send(markdown);
+      } catch (error) {
+        console.error("Error exporting market intel package:", error);
+        res.status(500).json({ message: "Failed to export market intel package" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/remediations",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const hoursRaw = Number(req.query.hours ?? 24 * 30);
+        const hours = Number.isFinite(hoursRaw)
+          ? Math.max(24, Math.min(24 * 120, Math.trunc(hoursRaw)))
+          : 24 * 30;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const entityType = String(req.query.entityType || "").trim();
+        const entityId = String(req.query.entityId || "").trim();
+
+        const rows = await db
+          .select({
+            id: telemetryEvents.id,
+            userId: telemetryEvents.userId,
+            createdAt: telemetryEvents.createdAt,
+            properties: telemetryEvents.properties,
+          })
+          .from(telemetryEvents)
+          .where(
+            and(
+              eq(telemetryEvents.eventName, "lisa_remediation_action"),
+              gte(telemetryEvents.createdAt, since),
+            ),
+          )
+          .orderBy(desc(telemetryEvents.createdAt))
+          .limit(1000);
+
+        const items = rows
+          .map((row: any) => {
+            const properties =
+              row.properties && typeof row.properties === "object"
+                ? (row.properties as Record<string, any>)
+                : {};
+            return {
+              id: row.id,
+              userId: row.userId,
+              createdAt: row.createdAt,
+              entityType: String(properties.entityType || ""),
+              entityId: String(properties.entityId || ""),
+              actionId: String(properties.actionId || ""),
+              actionLabel: String(properties.actionLabel || ""),
+              actionHref: String(properties.actionHref || ""),
+              actionKind: String(properties.actionKind || "admin"),
+              status: String(properties.status || "started"),
+              notes: String(properties.notes || ""),
+            };
+          })
+          .filter((item: any) => {
+            if (entityType && item.entityType !== entityType) return false;
+            if (entityId && item.entityId !== entityId) return false;
+            return Boolean(item.entityType && item.entityId && item.actionId);
+          });
+
+        const latestByAction = new Map<string, (typeof items)[number]>();
+        for (const item of items) {
+          const key = `${item.entityType}:${item.entityId}:${item.actionId}`;
+          if (!latestByAction.has(key)) {
+            latestByAction.set(key, item);
+          }
+        }
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          items,
+          latest: Array.from(latestByAction.values()),
+        });
+      } catch (error) {
+        console.error("Error fetching LISA remediations:", error);
+        res.status(500).json({ message: "Failed to fetch remediations" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/lisa/remediations",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const entityType = String(req.body?.entityType || "").trim();
+        const entityId = String(req.body?.entityId || "").trim();
+        const actionId = String(req.body?.actionId || "").trim();
+        const actionLabel = String(req.body?.actionLabel || "").trim();
+        const actionHref = String(req.body?.actionHref || "").trim();
+        const actionKind =
+          String(req.body?.actionKind || "admin").trim() === "public"
+            ? "public"
+            : "admin";
+        const status =
+          String(req.body?.status || "started").trim() === "completed"
+            ? "completed"
+            : "started";
+        const notes = String(req.body?.notes || "").trim().slice(0, 500);
+
+        if (!entityType || !entityId || !actionId || !actionLabel) {
+          return res.status(400).json({ message: "Missing remediation fields" });
+        }
+
+        const [eventRow] = await db
+          .insert(telemetryEvents)
+          .values({
+            eventName: "lisa_remediation_action",
+            userId: req.user?.id || null,
+            properties: {
+              entityType,
+              entityId,
+              actionId,
+              actionLabel,
+              actionHref,
+              actionKind,
+              status,
+              notes: notes || null,
+            },
+          })
+          .returning({
+            id: telemetryEvents.id,
+            createdAt: telemetryEvents.createdAt,
+          });
+
+        logAudit(
+          req.user?.id || "",
+          "lisa_remediation_action",
+          "lisa_entity",
+          `${entityType}:${entityId}`,
+          req.ip || "",
+          String(req.get("user-agent") || ""),
+          {
+            actionId,
+            actionLabel,
+            actionHref,
+            actionKind,
+            status,
+          },
+        ).catch((err) =>
+          console.error("Failed to write LISA remediation audit log:", err),
+        );
+
+        storage
+          .emitClaim({
+            subjectType: entityType,
+            subjectId: entityId,
+            actorType: "user",
+            actorId: req.user?.id || null,
+            app: "mealscout",
+            claimType: "remediation_action_logged",
+            claimValue: {
+              actionId,
+              actionLabel,
+              actionHref,
+              actionKind,
+              status,
+              notes: notes || null,
+            },
+            source: "admin_control_center",
+          })
+          .catch((err) =>
+            console.error("Failed to emit remediation LISA claim:", err),
+          );
+
+        res.json({
+          ok: true,
+          item: {
+            id: eventRow?.id || null,
+            createdAt: eventRow?.createdAt || new Date().toISOString(),
+            entityType,
+            entityId,
+            actionId,
+            actionLabel,
+            actionHref,
+            actionKind,
+            status,
+            notes,
+          },
+        });
+      } catch (error) {
+        console.error("Error logging LISA remediation:", error);
+        res.status(500).json({ message: "Failed to log remediation" });
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/dashboard-totals",
     isAuthenticated,
     isStaffOrAdmin,

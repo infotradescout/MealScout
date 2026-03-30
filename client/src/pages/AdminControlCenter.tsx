@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 import {
   AlertCircle,
@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 type LisaClaimStreamItem = {
   id?: string;
@@ -220,6 +221,28 @@ type BotTrafficResponse = {
   notes: string[];
 };
 
+type RemediationLogItem = {
+  id: string;
+  userId: string | null;
+  createdAt: string;
+  entityType: string;
+  entityId: string;
+  actionId: string;
+  actionLabel: string;
+  actionHref: string;
+  actionKind: string;
+  status: "started" | "completed";
+  notes?: string;
+};
+
+type RemediationLogResponse = {
+  ok: boolean;
+  generatedAt: string;
+  windowHours: number;
+  items: RemediationLogItem[];
+  latest: RemediationLogItem[];
+};
+
 const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS === "true";
 const LISA_FEED_LIMIT = 40;
 
@@ -254,6 +277,8 @@ function summarizeClaimValue(value: Record<string, unknown>) {
 }
 
 export default function AdminControlCenter() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   const [liveClaims, setLiveClaims] = useState<LisaClaimStreamItem[]>([]);
   const [signalFeed, setSignalFeed] = useState<UnifiedSignalItem[]>([]);
@@ -364,6 +389,59 @@ export default function AdminControlCenter() {
       },
       refetchInterval: 30000,
     });
+
+  const { data: remediationLog } = useQuery<RemediationLogResponse>({
+    queryKey: ["/api/admin/lisa/remediations"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/remediations?hours=720");
+      if (!res.ok) throw new Error("Failed to fetch remediations");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const remediationMutation = useMutation({
+    mutationFn: async (payload: {
+      entityType: string;
+      entityId: string;
+      actionId: string;
+      actionLabel: string;
+      actionHref: string;
+      actionKind: "admin" | "public";
+      status: "started" | "completed";
+    }) => {
+      const res = await fetch("/api/admin/lisa/remediations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.message || "Failed to log remediation");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/lisa/remediations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/lisa/signals", 80] });
+      toast({
+        title:
+          variables.status === "completed"
+            ? "Remediation completed"
+            : "Remediation started",
+        description: `${variables.actionLabel} logged for ${variables.entityType}.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Remediation failed",
+        description: error?.message || "Could not log remediation action.",
+        variant: "destructive",
+      });
+    },
+  });
 
   useEffect(() => {
     setLiveClaims(lisaFeed?.items ?? []);
@@ -558,6 +636,76 @@ export default function AdminControlCenter() {
     );
   }, [canonicalEntities]);
 
+  const latestRemediationByAction = useMemo(() => {
+    const items = remediationLog?.latest ?? [];
+    return items.reduce(
+      (acc, item) => {
+        acc[`${item.entityType}:${item.entityId}:${item.actionId}`] = item;
+        return acc;
+      },
+      {} as Record<string, RemediationLogItem>,
+    );
+  }, [remediationLog]);
+
+  const renderActionControls = (entity: CanonicalEntityItem) =>
+    (entity.recommendedActions || []).slice(0, 3).map((action) => {
+      const remediationKey = `${entity.entityType}:${entity.entityId}:${action.id}`;
+      const latestRemediation = latestRemediationByAction[remediationKey];
+      return (
+        <div
+          key={action.id}
+          className="inline-flex items-center gap-2 rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs"
+        >
+          <a
+            href={action.href}
+            className="text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {action.label}
+          </a>
+          <button
+            type="button"
+            className="rounded border border-[var(--border-subtle)] px-2 py-0.5 text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+            onClick={(event) => {
+              event.stopPropagation();
+              remediationMutation.mutate({
+                entityType: entity.entityType,
+                entityId: entity.entityId,
+                actionId: action.id,
+                actionLabel: action.label,
+                actionHref: action.href,
+                actionKind: action.kind,
+                status: "started",
+              });
+            }}
+          >
+            Start
+          </button>
+          <button
+            type="button"
+            className="rounded border border-[var(--border-subtle)] px-2 py-0.5 text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+            onClick={(event) => {
+              event.stopPropagation();
+              remediationMutation.mutate({
+                entityType: entity.entityType,
+                entityId: entity.entityId,
+                actionId: action.id,
+                actionLabel: action.label,
+                actionHref: action.href,
+                actionKind: action.kind,
+                status: "completed",
+              });
+            }}
+          >
+            Done
+          </button>
+          {latestRemediation ? (
+            <Badge variant="outline">{latestRemediation.status}</Badge>
+          ) : null}
+        </div>
+      );
+    });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -698,9 +846,13 @@ export default function AdminControlCenter() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full">
+          <TabsList className="flex w-full flex-nowrap justify-start overflow-x-auto">
             <TabsTrigger value="overview" className="min-w-[108px]">
               Overview
+            </TabsTrigger>
+            <TabsTrigger value="livestream" className="min-w-[120px] gap-2">
+              <Radio className="hidden h-4 w-4 sm:block" />
+              Livestream
             </TabsTrigger>
             <TabsTrigger value="incidents" className="min-w-[120px] gap-2">
               <AlertCircle className="hidden h-4 w-4 sm:block" />
@@ -735,6 +887,30 @@ export default function AdminControlCenter() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 border border-[color:var(--status-success)]/30 bg-[color:var(--status-success)]/5 rounded-lg">
+                      <h3 className="font-medium mb-2 flex items-center gap-2">
+                        <Radio className="w-4 h-4" /> LISA Livestream
+                      </h3>
+                      <p className="text-sm text-[color:var(--text-muted)] mb-3">
+                        Watch the live MealScout signal feed with filters for lanes,
+                        sources, subjects, and stream types.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" onClick={() => setActiveTab("livestream")}>
+                          Open Livestream
+                        </Button>
+                        <Badge
+                          className={
+                            socketConnected
+                              ? "bg-[color:var(--status-success)]/12 text-[color:var(--status-success)]"
+                              : "bg-[color:var(--status-warning)]/12 text-[color:var(--status-warning)]"
+                          }
+                        >
+                          {socketConnected ? "Live stream connected" : "Signal history only"}
+                        </Badge>
+                      </div>
+                    </div>
+
                     <div className="p-4 border border-[var(--border-subtle)] rounded-lg">
                       <h3 className="font-medium mb-2 flex items-center gap-2">
                         <AlertCircle className="w-4 h-4" /> Incidents
@@ -940,16 +1116,7 @@ export default function AdminControlCenter() {
                           ))}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {(entity.recommendedActions || []).slice(0, 3).map((action) => (
-                            <a
-                              key={action.id}
-                              href={action.href}
-                              className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {action.label}
-                            </a>
-                          ))}
+                          {renderActionControls(entity)}
                         </div>
                         <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                           Updated {formatSignalTime(entity.updatedAt)}
@@ -994,7 +1161,35 @@ export default function AdminControlCenter() {
                 ) : marketIntel ? (
                   <>
                     <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4">
-                      <div className="text-sm font-medium">Advertiser Brief</div>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="text-sm font-medium">Advertiser Brief</div>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href="/api/admin/lisa/market-intel/export?type=advertiser_brief&format=markdown"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Export brief
+                          </a>
+                          <a
+                            href="/api/admin/lisa/market-intel/export?type=acquisition_watchlist&format=markdown"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Export watchlist
+                          </a>
+                          <a
+                            href="/api/admin/lisa/market-intel/export?type=sponsor_package&format=json"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Export package JSON
+                          </a>
+                        </div>
+                      </div>
                       <div className="mt-3 space-y-2 text-sm">
                         <p>{marketIntel.brief.headline}</p>
                         <p className="text-[color:var(--text-muted)]">
@@ -1236,16 +1431,7 @@ export default function AdminControlCenter() {
                         ))}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {(entity.recommendedActions || []).slice(0, 3).map((action) => (
-                          <a
-                            key={action.id}
-                            href={action.href}
-                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {action.label}
-                          </a>
-                        ))}
+                        {renderActionControls(entity)}
                       </div>
                     </button>
                   ))
@@ -1300,16 +1486,7 @@ export default function AdminControlCenter() {
                         ))}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {(entity.recommendedActions || []).slice(0, 3).map((action) => (
-                          <a
-                            key={action.id}
-                            href={action.href}
-                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {action.label}
-                          </a>
-                        ))}
+                        {renderActionControls(entity)}
                       </div>
                     </button>
                   ))
@@ -1318,148 +1495,6 @@ export default function AdminControlCenter() {
                     No authority delta issues detected.
                   </p>
                 )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle>MealScout Signal Stream</CardTitle>
-                    <CardDescription>
-                      Unified on-platform and observed off-platform intelligence
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      className={
-                        socketConnected
-                          ? "bg-[color:var(--status-success)]/12 text-[color:var(--status-success)]"
-                          : "bg-[color:var(--status-warning)]/12 text-[color:var(--status-warning)]"
-                      }
-                    >
-                      {socketConnected ? "Streaming now" : "History only"}
-                    </Badge>
-                    <Badge variant="outline">{filteredSignals.length} signals</Badge>
-                    {selectedEntity ? (
-                      <Badge variant="outline">
-                        Focus: {selectedEntity.entityType}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <Input
-                    value={laneQuery}
-                    onChange={(event) => setLaneQuery(event.target.value)}
-                    placeholder="Search signals, pages, bots, payload"
-                  />
-                  <select
-                    value={appFilter}
-                    onChange={(event) => setAppFilter(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="all">All families</option>
-                    {filterOptions.apps.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={sourceFilter}
-                    onChange={(event) => setSourceFilter(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="all">All sources</option>
-                    {filterOptions.sources.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={subjectFilter}
-                    onChange={(event) => setSubjectFilter(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="all">All subjects</option>
-                    {filterOptions.subjects.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={claimTypeFilter}
-                    onChange={(event) => setClaimTypeFilter(event.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="all">All stream types</option>
-                    {filterOptions.claimTypes.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {socketError ? (
-                  <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10 px-3 py-2 text-sm text-[color:var(--status-warning)]">
-                    {socketError}
-                  </div>
-                ) : null}
-
-                <div className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
-                  {filteredSignals.length === 0 ? (
-                    <p className="text-sm text-[color:var(--text-muted)]">
-                      {isSignalLoading
-                        ? "Loading signal stream..."
-                        : "No signals match the current filters."}
-                    </p>
-                  ) : (
-                    filteredSignals.map((signal) => (
-                      <div
-                        key={`${signal.id}-${signal.createdAt}`}
-                        className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"
-                      >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div className="space-y-2 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="outline">{signal.lane}</Badge>
-                              <Badge variant="outline">{signal.streamType}</Badge>
-                              <Badge variant="outline">{signal.visibility}</Badge>
-                              <span className="text-xs text-[color:var(--text-muted)]">
-                                {formatSignalTime(signal.createdAt)}
-                              </span>
-                            </div>
-                            <div className="text-sm">
-                              <span className="font-medium">{signal.title}</span>
-                              <span className="text-[color:var(--text-muted)]">
-                                {" "}
-                                {signal.subjectType}:{signal.subjectId}
-                              </span>
-                            </div>
-                            <p className="text-sm text-[color:var(--text-muted)] break-all">
-                              {signal.summary}
-                            </p>
-                            <p className="text-xs text-[color:var(--text-muted)] break-all">
-                              {summarizeClaimValue(signal.payload)}
-                            </p>
-                          </div>
-
-                          <div className="text-xs text-[color:var(--text-muted)] md:text-right">
-                            <div>{signal.family}</div>
-                            <div>{signal.source}</div>
-                            <div>{signal.subjectType}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
               </CardContent>
             </Card>
 
@@ -1611,6 +1646,150 @@ export default function AdminControlCenter() {
                     Bot traffic data is unavailable.
                   </p>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="livestream" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <CardTitle>LISA Livestream</CardTitle>
+                    <CardDescription>
+                      Unified on-platform and observed off-platform intelligence
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      className={
+                        socketConnected
+                          ? "bg-[color:var(--status-success)]/12 text-[color:var(--status-success)]"
+                          : "bg-[color:var(--status-warning)]/12 text-[color:var(--status-warning)]"
+                      }
+                    >
+                      {socketConnected ? "Streaming now" : "History only"}
+                    </Badge>
+                    <Badge variant="outline">{filteredSignals.length} signals</Badge>
+                    {selectedEntity ? (
+                      <Badge variant="outline">
+                        Focus: {selectedEntity.entityType}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <Input
+                    value={laneQuery}
+                    onChange={(event) => setLaneQuery(event.target.value)}
+                    placeholder="Search signals, pages, bots, payload"
+                  />
+                  <select
+                    value={appFilter}
+                    onChange={(event) => setAppFilter(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">All families</option>
+                    {filterOptions.apps.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={sourceFilter}
+                    onChange={(event) => setSourceFilter(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">All sources</option>
+                    {filterOptions.sources.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={subjectFilter}
+                    onChange={(event) => setSubjectFilter(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">All subjects</option>
+                    {filterOptions.subjects.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={claimTypeFilter}
+                    onChange={(event) => setClaimTypeFilter(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="all">All stream types</option>
+                    {filterOptions.claimTypes.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {socketError ? (
+                  <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10 px-3 py-2 text-sm text-[color:var(--status-warning)]">
+                    {socketError}
+                  </div>
+                ) : null}
+
+                <div className="max-h-[720px] space-y-3 overflow-y-auto pr-1">
+                  {filteredSignals.length === 0 ? (
+                    <p className="text-sm text-[color:var(--text-muted)]">
+                      {isSignalLoading
+                        ? "Loading signal stream..."
+                        : "No signals match the current filters."}
+                    </p>
+                  ) : (
+                    filteredSignals.map((signal) => (
+                      <div
+                        key={`${signal.id}-${signal.createdAt}`}
+                        className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="space-y-2 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">{signal.lane}</Badge>
+                              <Badge variant="outline">{signal.streamType}</Badge>
+                              <Badge variant="outline">{signal.visibility}</Badge>
+                              <span className="text-xs text-[color:var(--text-muted)]">
+                                {formatSignalTime(signal.createdAt)}
+                              </span>
+                            </div>
+                            <div className="text-sm">
+                              <span className="font-medium">{signal.title}</span>
+                              <span className="text-[color:var(--text-muted)]">
+                                {" "}
+                                {signal.subjectType}:{signal.subjectId}
+                              </span>
+                            </div>
+                            <p className="text-sm text-[color:var(--text-muted)] break-all">
+                              {signal.summary}
+                            </p>
+                            <p className="text-xs text-[color:var(--text-muted)] break-all">
+                              {summarizeClaimValue(signal.payload)}
+                            </p>
+                          </div>
+
+                          <div className="text-xs text-[color:var(--text-muted)] md:text-right">
+                            <div>{signal.family}</div>
+                            <div>{signal.source}</div>
+                            <div>{signal.subjectType}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
