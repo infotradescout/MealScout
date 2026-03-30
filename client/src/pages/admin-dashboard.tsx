@@ -2194,6 +2194,36 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "overview",
     staleTime: 60 * 1000,
   });
+  const { data: lisaMarketIntel } = useQuery<any>({
+    queryKey: ["/api/admin/lisa/market-intel", "dashboard-tab"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/market-intel");
+      if (!res.ok) throw new Error("Failed to fetch LISA market intel");
+      return res.json();
+    },
+    enabled: !!adminUser && selectedTab === "lisa",
+    staleTime: 60 * 1000,
+  });
+  const { data: lisaSignals } = useQuery<any>({
+    queryKey: ["/api/admin/lisa/signals", "dashboard-tab"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/signals?limit=16&hours=72");
+      if (!res.ok) throw new Error("Failed to fetch LISA signals");
+      return res.json();
+    },
+    enabled: !!adminUser && selectedTab === "lisa",
+    staleTime: 60 * 1000,
+  });
+  const { data: lisaPriorities } = useQuery<any>({
+    queryKey: ["/api/admin/lisa/priorities", "dashboard-tab"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/priorities?limit=6");
+      if (!res.ok) throw new Error("Failed to fetch LISA priorities");
+      return res.json();
+    },
+    enabled: !!adminUser && selectedTab === "lisa",
+    staleTime: 60 * 1000,
+  });
   const retryMapPinGeocode = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -5556,6 +5586,13 @@ export default function AdminDashboard() {
               Restaurants
             </TabsTrigger>
             <TabsTrigger
+              value="lisa"
+              data-testid="tab-lisa"
+              className="flex-shrink-0"
+            >
+              LISA
+            </TabsTrigger>
+            <TabsTrigger
               value="users"
               data-testid="tab-users"
               className="flex-shrink-0"
@@ -6468,6 +6505,109 @@ export default function AdminDashboard() {
                     No host payout requests yet.
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="lisa" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>LISA Intelligence</CardTitle>
+                <CardDescription>
+                  Business-facing demand, acquisition, and live signal context
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link href="/admin/control-center">
+                    <Button>Open Full Control Center</Button>
+                  </Link>
+                  <Badge variant="outline">
+                    {(lisaSignals?.items ?? []).length} recent signals
+                  </Badge>
+                  <Badge variant="outline">
+                    {(lisaPriorities?.items ?? []).length} priority entities
+                  </Badge>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Advertiser Brief</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      <div className="font-medium">
+                        {lisaMarketIntel?.brief?.headline || "No current brief available."}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {lisaMarketIntel?.brief?.audienceAngle || "No audience angle yet."}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {lisaMarketIntel?.brief?.inventoryAngle || "No inventory angle yet."}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(lisaMarketIntel?.brief?.recommendedPackage ?? []).map(
+                          (item: string) => (
+                            <Badge key={item} variant="outline">
+                              {item}
+                            </Badge>
+                          ),
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Top Priorities</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {(lisaPriorities?.items ?? []).slice(0, 4).map((item: any) => (
+                        <div
+                          key={`${item.entityType}:${item.entityId}`}
+                          className="rounded-lg border px-3 py-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{item.title}</span>
+                            <Badge variant="outline">{item.entityType}</Badge>
+                            <Badge variant="outline">score {item.priorityScore}</Badge>
+                          </div>
+                          <div className="mt-2 text-sm text-muted-foreground">
+                            {(item.reasons ?? []).slice(0, 2).join(" • ") || "No reasons yet."}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Recent Useful Signals</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(lisaSignals?.items ?? []).slice(0, 8).map((signal: any) => (
+                      <div
+                        key={`${signal.id}-${signal.createdAt}`}
+                        className="rounded-lg border px-3 py-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{signal.title}</span>
+                          <Badge variant="outline">{signal.family}</Badge>
+                          <Badge variant="outline">{signal.streamType}</Badge>
+                        </div>
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {signal.summary}
+                        </div>
+                      </div>
+                    ))}
+                    {(lisaSignals?.items ?? []).length === 0 ? (
+                      <div className="text-sm text-muted-foreground">
+                        No useful signals available yet.
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </TabsContent>
