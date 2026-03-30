@@ -616,10 +616,10 @@ export default function StaffDashboard() {
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
               <Link href="/admin/dashboard">
-                <Button variant="outline">LISA Control Center</Button>
+                <Button variant="outline">Admin Dashboard</Button>
               </Link>
-              <Link href="/admin/legacy-dashboard">
-                <Button variant="outline">Legacy Admin</Button>
+              <Link href="/admin/control-center">
+                <Button variant="outline">LISA Control Center</Button>
               </Link>
             </CardContent>
           </Card>

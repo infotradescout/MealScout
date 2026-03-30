@@ -355,16 +355,13 @@ function Router() {
             <Route path="/affiliate/earnings" component={AffiliateEarnings} />
             <Route path="/staff" component={StaffDashboard} />
             <Route path="/admin" component={AdminLogin} />
-            <Route path="/admin/dashboard" component={AdminControlCenter} />
+            <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/incidents" component={AdminIncidents} />
             <Route
               path="/admin/control-center"
               component={AdminControlCenter}
             />
-            <Route
-              path="/admin/legacy-dashboard"
-              component={AdminDashboard}
-            />
+            <Route path="/admin/legacy-dashboard" component={AdminDashboard} />
             <Route path="/admin/tickets" component={AdminSupportTickets} />
             <Route path="/admin/moderation" component={AdminModerationEvents} />
             <Route

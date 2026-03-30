@@ -230,7 +230,7 @@ export default function Navigation() {
   // Admins should see every flow including all business types, host, and event coordinator capabilities
   const adminNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
     { path: "/admin/dashboard", icon: Shield, label: "Admin" },
-    { path: "/admin/legacy-dashboard", icon: LayoutDashboard, label: "Legacy Admin" },
+    { path: "/admin/control-center", icon: LayoutDashboard, label: "Control Center" },
     { path: "/admin/affiliates", icon: Users, label: "Affiliates" },
     { path: "/staff", icon: Users, label: "Staff" },
     { path: "/events", icon: Calendar, label: "Events" },
