@@ -54,10 +54,8 @@ import {
 } from "./startup/envValidation";
 import {
   setupUnifiedAuth,
-  isAuthenticated,
   isRestaurantOwner,
   isRestaurantOwnerOrAdmin,
-  isAdmin,
   isStaffOrAdmin,
   verifyResourceOwnership,
 } from "./unifiedAuth";
@@ -181,10 +179,7 @@ import {
   isNull,
   or,
 } from "drizzle-orm";
-import {
-  getMapEndpointWatchdogSnapshot,
-  runMapEndpointWatchdog,
-} from "./mapEndpointWatchdog";
+import { runMapEndpointWatchdog } from "./mapEndpointWatchdog";
 import { registerAuthAccountRoutes } from "./routes/authAccountRoutes";
 import { registerAnalyticsRoutes } from "./routes/analyticsRoutes";
 import { registerAwardsRoutes } from "./routes/awardsRoutes";
@@ -204,6 +199,7 @@ import { registerRestaurantSignupRoutes } from "./routes/restaurantSignupRoutes"
 import { registerPublicSearchRoutes } from "./routes/publicSearchRoutes";
 import { registerSeoRoutes } from "./routes/seoRoutes";
 import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
+import { registerSystemUtilityRoutes } from "./routes/systemUtilityRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
 
 // Optional Stripe integration
@@ -808,16 +804,6 @@ async function filterDealsByBusinessAccess<
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check endpoint - responds immediately with 200 for deployment health checks
-  app.get("/health", (_req, res) => {
-    res.status(200).json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      service: "MealScout API",
-    });
-  });
-
   registerAuthAccountRoutes(app);
 
   registerLocationDemandRoutes(app);
@@ -2013,81 +1999,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).end();
   });
 
-  // OAuth configuration status check
-  app.get(
-    "/api/admin/oauth/status",
-    isAuthenticated,
-    isAdmin,
-    async (req: any, res) => {
-      try {
-        const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
-
-        const status = {
-          google: {
-            configured: !!(
-              process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-            ),
-            clientIdPresent: !!process.env.GOOGLE_CLIENT_ID,
-            clientSecretPresent: !!process.env.GOOGLE_CLIENT_SECRET,
-            callbackUrls: {
-              customer: `${baseUrl}/api/auth/google/customer/callback`,
-              restaurant: `${baseUrl}/api/auth/google/restaurant/callback`,
-            },
-          },
-          facebook: {
-            configured: !!(
-              process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET
-            ),
-            appIdPresent: !!process.env.FACEBOOK_APP_ID,
-            appSecretPresent: !!process.env.FACEBOOK_APP_SECRET,
-            callbackUrl: `${baseUrl}/api/auth/facebook/callback`,
-          },
-          requiredUrls: {
-            privacyPolicy: `${baseUrl}/privacy-policy`,
-            dataDeletion: `${baseUrl}/data-deletion`,
-            termsOfService: `${baseUrl}/terms-of-service`,
-          },
-          baseUrl,
-          environment: process.env.NODE_ENV || "development",
-        };
-
-        res.json(status);
-      } catch (error) {
-        console.error("Error checking OAuth status:", error);
-        res.status(500).json({ error: "Failed to check OAuth status" });
-      }
-    },
-  );
-
-  // Health check endpoint for monitoring
-  app.get("/api/health", async (req, res) => {
-    try {
-      // Test database connectivity
-      await storage.getUser("health-check");
-      const endpointWatchdog = getMapEndpointWatchdogSnapshot();
-
-      // Avoid a recursive failure mode: the watchdog checks /api/health,
-      // and /api/health previously returned 503 when the watchdog reported "not ok",
-      // which makes the watchdog keep itself in a failed state.
-      const isHealthy = Boolean(endpointWatchdog?.ok ?? true);
-
-      res.status(200).json({
-        status: isHealthy ? "healthy" : "degraded",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || "development",
-        version: "1.0.0",
-        criticalEndpointWatchdog: endpointWatchdog,
-      });
-    } catch (error) {
-      res.status(503).json({
-        status: "unhealthy",
-        error: "Database connection failed",
-        timestamp: new Date().toISOString(),
-      });
-    }
-  });
-
   const resolveSitemapSiteUrl = () => {
     const normalizeCandidate = (raw?: string | null): string | null => {
       const value = String(raw || "").trim();
@@ -2125,6 +2036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register incident management routes (admin-only)
   const incidentRoutes = (await import("./incidentRoutes")).default;
   app.use("/api/incidents", incidentRoutes);
+  registerSystemUtilityRoutes(app, { incidentRoutes });
 
   // Register admin control center routes (admin-only)
   const adminRoutes = (await import("./adminRoutes")).default;
@@ -2165,28 +2077,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add share middleware (Phase 7) - adds shareUrl helpers to all handlers
   const { shareUrlMiddleware } = await import("./shareMiddleware");
   app.use(shareUrlMiddleware);
-
-  // Register cron/scheduler endpoints
-  app.post(
-    "/api/cron/escalations",
-    incidentRoutes.stack.find(
-      (layer: any) => layer.route?.path === "/cron/escalations",
-    )?.handle || ((_req, res) => res.status(404).json({ error: "Not found" })),
-  );
-
-  // Clean affiliate links: /ref/<tag>
-  app.get("/ref/:tag", (req, res) => {
-    const tag = req.params?.tag || "";
-    const safeTag = encodeURIComponent(tag);
-    res.redirect(`/?ref=${safeTag}`);
-  });
-
-  app.post(
-    "/api/cron/auto-close",
-    incidentRoutes.stack.find(
-      (layer: any) => layer.route?.path === "/cron/auto-close",
-    )?.handle || ((_req, res) => res.status(404).json({ error: "Not found" })),
-  );
 
   const httpServer = createServer(app);
   return httpServer;
