@@ -28,7 +28,6 @@ import {
   computeFillRate,
 } from "./services/interestDecision";
 import { registerHostRoutes } from "./routes/hostRoutes";
-import { forwardGeocode } from "./utils/geocoding";
 import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
@@ -160,7 +159,6 @@ import incidentManager, {
   createIncident,
   ANOMALY_RULES,
 } from "./incidentManager";
-import { reverseGeocode } from "./utils/geocoding";
 import {
   ensurePremiumTrialForUser,
   isPremiumTrialActive,
@@ -193,6 +191,7 @@ import { registerAwardsRoutes } from "./routes/awardsRoutes";
 import { registerClaimRoutes } from "./routes/claimRoutes";
 import { registerDealManagementRoutes } from "./routes/dealManagementRoutes";
 import { registerLocationDemandRoutes } from "./routes/locationDemandRoutes";
+import { registerLocationUtilityRoutes } from "./routes/locationUtilityRoutes";
 import { registerMediaRoutes } from "./routes/mediaRoutes";
 import { registerDealDiscoveryRoutes } from "./routes/dealDiscoveryRoutes";
 import { registerHostPayoutAdminRoutes } from "./routes/hostPayoutAdminRoutes";
@@ -818,69 +817,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Public reverse-geocode helper for client-side location labeling.
-  // This keeps third-party geocoding calls on the server side to avoid browser CORS failures.
-  app.get("/api/location/reverse", async (req, res) => {
-    const lat = Number(req.query.lat);
-    const lng = Number(req.query.lng);
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      Math.abs(lat) > 90 ||
-      Math.abs(lng) > 180
-    ) {
-      return res.status(400).json({ message: "Invalid lat/lng" });
-    }
-
-    try {
-      const resolved = await reverseGeocode(lat, lng).catch(() => null);
-      const city = String(resolved?.city || "").trim();
-      const state = String(resolved?.state || "").trim();
-      const label = [city, state].filter(Boolean).join(", ") || "Location";
-      res.setHeader("Cache-Control", "public, max-age=600");
-      return res.json({
-        city: city || null,
-        state: state || null,
-        label,
-      });
-    } catch (error) {
-      console.error("Error reverse geocoding location:", error);
-      return res.json({ city: null, state: null, label: "Location" });
-    }
-  });
-
-  // Public forward-geocode helper for client-side address search/pinning.
-  app.get("/api/location/search", async (req, res) => {
-    const query = String(req.query.q || "").trim();
-    const limitRaw = Number(req.query.limit || 1);
-    const limit = Number.isFinite(limitRaw)
-      ? Math.min(5, Math.max(1, Math.floor(limitRaw)))
-      : 1;
-    if (!query) {
-      return res.json([]);
-    }
-
-    try {
-      const resolved = await forwardGeocode(query).catch(() => null);
-      if (!resolved) return res.json([]);
-      return res.json(
-        [
-          {
-            lat: String(resolved.lat),
-            lon: String(resolved.lng),
-            display_name: query,
-          },
-        ].slice(0, limit),
-      );
-    } catch (error) {
-      console.error("Error forward geocoding location:", error);
-      return res.json([]);
-    }
-  });
-
   registerAuthAccountRoutes(app);
 
   registerLocationDemandRoutes(app);
+  registerLocationUtilityRoutes(app, { hasBusinessDistributionAccess });
 
   registerPublicMapRoutes(app);
 
@@ -1117,98 +1057,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
-
-  // Restaurant routes
-  // Get subscribed restaurants (public endpoint)
-  app.get("/api/restaurants/subscribed/:lat/:lng", async (req: any, res) => {
-    try {
-      const { lat, lng } = req.params;
-      const latitude = parseFloat(lat);
-      const longitude = parseFloat(lng);
-
-      if (
-        isNaN(latitude) ||
-        isNaN(longitude) ||
-        latitude < -90 ||
-        latitude > 90 ||
-        longitude < -180 ||
-        longitude > 180
-      ) {
-        return res.status(400).json({ message: "Invalid coordinates" });
-      }
-
-      // Default radius is 50km, max 100km
-      const radius = req.query.radius
-        ? Math.min(parseFloat(req.query.radius as string), 100)
-        : 50;
-
-      if (isNaN(radius) || radius <= 0) {
-        return res.status(400).json({ message: "Invalid radius" });
-      }
-
-      const nearbyRestaurants = await storage.getNearbyRestaurants(
-        latitude,
-        longitude,
-        radius,
-      );
-      const restaurants = (
-        await Promise.all(
-          nearbyRestaurants.map(async (restaurant) => {
-            const ownerId = String((restaurant as any)?.ownerId || "").trim();
-            if (!ownerId) return null;
-            const hasAccess = await hasBusinessDistributionAccess(ownerId);
-            return hasAccess ? restaurant : null;
-          }),
-        )
-      ).filter(Boolean) as any[];
-
-      // Get all restaurant IDs to fetch deal counts efficiently
-      const restaurantIds = restaurants.map((r) => r.id);
-
-      // Fetch all active deal counts in one query
-      const dealCounts: { [restaurantId: string]: number } = {};
-      if (restaurantIds.length > 0) {
-        const allDeals = await db
-          .select({
-            restaurantId: deals.restaurantId,
-            count: sql<number>`count(*)::integer`,
-          })
-          .from(deals)
-          .where(
-            and(
-              inArray(deals.restaurantId, restaurantIds),
-              eq(deals.isActive, true),
-            ),
-          )
-          .groupBy(deals.restaurantId);
-
-        allDeals.forEach(
-          ({
-            restaurantId,
-            count,
-          }: {
-            restaurantId: string;
-            count: number;
-          }) => {
-            dealCounts[restaurantId] = count;
-          },
-        );
-      }
-
-      // Add active deal count for each restaurant
-      const restaurantsWithDeals = restaurants.map((restaurant) => ({
-        ...restaurant,
-        activeDealsCount: dealCounts[restaurant.id] || 0,
-      }));
-
-      res.json(restaurantsWithDeals);
-    } catch (error) {
-      console.error("Error fetching subscribed restaurants:", error);
-      res
-        .status(500)
-        .json({ message: "Failed to fetch subscribed restaurants" });
-    }
-  });
 
   // Stripe Webhook Handler
   app.post("/api/stripe/webhook", async (req, res) => {
