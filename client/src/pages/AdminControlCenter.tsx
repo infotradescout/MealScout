@@ -76,8 +76,15 @@ type CanonicalEntityItem = {
   entityId: string;
   title: string;
   location: string;
+  canonicalPath: string;
   health: string;
+  quality: string;
+  freshness: string;
+  freshnessHours: number | null;
+  machineReadiness: string;
   canonicalFields: Record<string, unknown>;
+  knowledgeGaps: string[];
+  opportunities: string[];
   updatedAt: string;
 };
 
@@ -86,6 +93,19 @@ type CanonicalEntitiesResponse = {
   generatedAt: string;
   counts: Record<string, number>;
   items: CanonicalEntityItem[];
+};
+
+type PriorityEntityItem = CanonicalEntityItem & {
+  priorityScore: number;
+  crawlerDemand: number;
+  reasons: string[];
+};
+
+type PriorityEntitiesResponse = {
+  ok: boolean;
+  generatedAt: string;
+  windowHours: number;
+  items: PriorityEntityItem[];
 };
 
 type BotTrafficResponse = {
@@ -168,6 +188,9 @@ export default function AdminControlCenter() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [claimTypeFilter, setClaimTypeFilter] = useState("all");
+  const [selectedEntity, setSelectedEntity] = useState<CanonicalEntityItem | null>(
+    null,
+  );
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin-stats"],
@@ -228,6 +251,17 @@ export default function AdminControlCenter() {
       queryFn: async () => {
         const res = await fetch("/api/admin/lisa/entities?limit=12");
         if (!res.ok) throw new Error("Failed to fetch canonical entities");
+        return res.json();
+      },
+      refetchInterval: 30000,
+    });
+
+  const { data: priorityEntities, isLoading: isPriorityLoading } =
+    useQuery<PriorityEntitiesResponse>({
+      queryKey: ["/api/admin/lisa/priorities", 12],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/lisa/priorities?limit=12");
+        if (!res.ok) throw new Error("Failed to fetch LISA priorities");
         return res.json();
       },
       refetchInterval: 30000,
@@ -361,6 +395,17 @@ export default function AdminControlCenter() {
         return false;
       if (claimTypeFilter !== "all" && signal.streamType !== claimTypeFilter)
         return false;
+      if (
+        selectedEntity &&
+        !(
+          signal.subjectType === selectedEntity.entityType &&
+          signal.subjectId === selectedEntity.entityId
+        ) &&
+        String(signal.payload?.restaurantId || "") !== selectedEntity.entityId &&
+        String(signal.payload?.hostId || "") !== selectedEntity.entityId
+      ) {
+        return false;
+      }
       if (!query) return true;
 
       const haystack = [
@@ -386,7 +431,21 @@ export default function AdminControlCenter() {
     sourceFilter,
     subjectFilter,
     claimTypeFilter,
+    selectedEntity,
   ]);
+
+  const knowledgeGapCounts = useMemo(() => {
+    const items = canonicalEntities?.items ?? [];
+    return items.reduce(
+      (acc, entity) => {
+        for (const gap of entity.knowledgeGaps || []) {
+          acc[gap] = (acc[gap] || 0) + 1;
+        }
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  }, [canonicalEntities]);
 
   if (isLoading) {
     return (
@@ -681,6 +740,25 @@ export default function AdminControlCenter() {
                     : null}
                 </div>
 
+                <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                  <div className="text-sm font-medium">Knowledge gaps</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {Object.entries(knowledgeGapCounts)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 8)
+                      .map(([gap, count]) => (
+                        <Badge key={gap} variant="outline">
+                          {gap} ({count})
+                        </Badge>
+                      ))}
+                    {Object.keys(knowledgeGapCounts).length === 0 ? (
+                      <span className="text-sm text-[color:var(--text-muted)]">
+                        No knowledge gaps detected in the current sample.
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {isEntityLoading ? (
                     <p className="text-sm text-[color:var(--text-muted)]">
@@ -688,25 +766,53 @@ export default function AdminControlCenter() {
                     </p>
                   ) : canonicalEntities?.items?.length ? (
                     canonicalEntities.items.slice(0, 8).map((entity) => (
-                      <div
+                      <button
                         key={entity.id}
-                        className="rounded-xl border border-[var(--border-subtle)] p-4"
+                        type="button"
+                        onClick={() =>
+                          setSelectedEntity((current) =>
+                            current?.id === entity.id ? null : entity,
+                          )
+                        }
+                        className={`rounded-xl border p-4 text-left transition-colors ${
+                          selectedEntity?.id === entity.id
+                            ? "border-[color:var(--accent-text)] bg-[color:var(--accent-text)]/8"
+                            : "border-[var(--border-subtle)]"
+                        }`}
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{entity.title}</span>
                           <Badge variant="outline">{entity.entityType}</Badge>
                           <Badge variant="outline">{entity.health}</Badge>
+                          <Badge variant="outline">{entity.quality}</Badge>
+                          <Badge variant="outline">{entity.freshness}</Badge>
+                          <Badge variant="outline">{entity.machineReadiness}</Badge>
                         </div>
                         <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                           {entity.location || entity.entityId}
                         </div>
                         <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
+                          {entity.canonicalPath}
+                        </div>
+                        <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
                           {summarizeClaimValue(entity.canonicalFields)}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(entity.knowledgeGaps || []).slice(0, 4).map((gap) => (
+                            <Badge key={gap} variant="outline">
+                              gap: {gap}
+                            </Badge>
+                          ))}
+                          {(entity.opportunities || []).slice(0, 3).map((opportunity) => (
+                            <Badge key={opportunity} variant="outline">
+                              next: {opportunity}
+                            </Badge>
+                          ))}
                         </div>
                         <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                           Updated {formatSignalTime(entity.updatedAt)}
                         </div>
-                      </div>
+                      </button>
                     ))
                   ) : (
                     <p className="text-sm text-[color:var(--text-muted)]">
@@ -714,6 +820,70 @@ export default function AdminControlCenter() {
                     </p>
                   )}
                 </div>
+                {selectedEntity ? (
+                  <div className="flex items-center justify-between rounded-lg border border-[color:var(--accent-text)]/30 bg-[color:var(--accent-text)]/8 px-3 py-2 text-sm">
+                    <span>
+                      Stream focused on {selectedEntity.entityType}: {selectedEntity.title}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedEntity(null)}
+                    >
+                      Clear focus
+                    </Button>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Fix First Queue</CardTitle>
+                <CardDescription>
+                  Ranked entities where weak knowledge overlaps with likely demand
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isPriorityLoading ? (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    Loading priority queue...
+                  </p>
+                ) : priorityEntities?.items?.length ? (
+                  priorityEntities.items.map((entity) => (
+                    <button
+                      key={`priority-${entity.id}`}
+                      type="button"
+                      onClick={() => setSelectedEntity(entity)}
+                      className="w-full rounded-xl border border-[var(--border-subtle)] p-4 text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{entity.title}</span>
+                        <Badge variant="outline">{entity.entityType}</Badge>
+                        <Badge variant="outline">score {entity.priorityScore}</Badge>
+                        <Badge variant="outline">{entity.crawlerDemand} crawler hits</Badge>
+                        <Badge variant="outline">{entity.machineReadiness}</Badge>
+                      </div>
+                      <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                        {entity.location || entity.entityId}
+                      </div>
+                      <div className="mt-2 text-xs text-[color:var(--text-muted)] break-all">
+                        {entity.canonicalPath}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {entity.reasons.map((reason) => (
+                          <Badge key={reason} variant="outline">
+                            {reason}
+                          </Badge>
+                        ))}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    No priority entities detected.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -736,7 +906,12 @@ export default function AdminControlCenter() {
                     >
                       {socketConnected ? "Streaming now" : "History only"}
                     </Badge>
-                    <Badge variant="outline">{signalFeed.length} signals</Badge>
+                    <Badge variant="outline">{filteredSignals.length} signals</Badge>
+                    {selectedEntity ? (
+                      <Badge variant="outline">
+                        Focus: {selectedEntity.entityType}
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
               </CardHeader>

@@ -110,6 +110,355 @@ const botSignatureLabel = (userAgent?: string | null) => {
   return null;
 };
 
+const hoursSince = (value?: string | Date | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return (Date.now() - date.getTime()) / (1000 * 60 * 60);
+};
+
+const staleBucketFromHours = (hours: number | null) => {
+  if (hours == null) return "unknown";
+  if (hours <= 24) return "fresh";
+  if (hours <= 24 * 7) return "recent";
+  if (hours <= 24 * 30) return "aging";
+  return "stale";
+};
+
+const scoreBucket = (score: number) => {
+  if (score >= 4) return "strong";
+  if (score >= 2) return "growing";
+  return "thin";
+};
+
+type CanonicalEntitySummary = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  title: string;
+  location: string;
+  canonicalPath: string;
+  health: string;
+  quality: string;
+  freshness: string;
+  freshnessHours: number | null;
+  machineReadiness: string;
+  canonicalFields: Record<string, unknown>;
+  knowledgeGaps: string[];
+  opportunities: string[];
+  updatedAt: string | Date | null;
+};
+
+const buildCanonicalPath = (entityType: string, entityId: string) => {
+  switch (entityType) {
+    case "restaurant":
+      return `/restaurant/${entityId}`;
+    case "deal":
+      return `/deal/${entityId}`;
+    case "event":
+      return `/event/${entityId}`;
+    case "host":
+      return `/p/host/${entityId}`;
+    default:
+      return `/admin/control-center`;
+  }
+};
+
+const machineReadinessBucket = (score: number) => {
+  if (score >= 4) return "ready";
+  if (score >= 2) return "developing";
+  return "blocked";
+};
+
+async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySummary[]> {
+  const [restaurantRows, hostRows, dealRows, eventRows] = await Promise.all([
+    db
+      .select({
+        id: restaurants.id,
+        name: restaurants.name,
+        businessType: restaurants.businessType,
+        cuisineType: restaurants.cuisineType,
+        city: restaurants.city,
+        state: restaurants.state,
+        isActive: restaurants.isActive,
+        isVerified: restaurants.isVerified,
+        isFoodTruck: restaurants.isFoodTruck,
+        mobileOnline: restaurants.mobileOnline,
+        rankingScore: restaurants.rankingScore,
+        description: restaurants.description,
+        websiteUrl: restaurants.websiteUrl,
+        createdAt: restaurants.createdAt,
+        updatedAt: restaurants.updatedAt,
+      })
+      .from(restaurants)
+      .orderBy(desc(restaurants.updatedAt))
+      .limit(limit),
+    db
+      .select({
+        id: hosts.id,
+        businessName: hosts.businessName,
+        city: hosts.city,
+        state: hosts.state,
+        isVerified: hosts.isVerified,
+        spotCount: hosts.spotCount,
+        stripeOnboardingCompleted: hosts.stripeOnboardingCompleted,
+        parkingPassDailyPriceCents: hosts.parkingPassDailyPriceCents,
+        createdAt: hosts.createdAt,
+        updatedAt: hosts.updatedAt,
+      })
+      .from(hosts)
+      .orderBy(desc(hosts.updatedAt))
+      .limit(limit),
+    db
+      .select({
+        id: deals.id,
+        title: deals.title,
+        restaurantId: deals.restaurantId,
+        isActive: deals.isActive,
+        startDate: deals.startDate,
+        endDate: deals.endDate,
+        currentUses: deals.currentUses,
+        createdAt: deals.createdAt,
+        updatedAt: deals.updatedAt,
+      })
+      .from(deals)
+      .orderBy(desc(deals.updatedAt))
+      .limit(limit),
+    db
+      .select({
+        id: events.id,
+        name: events.name,
+        hostId: events.hostId,
+        eventType: events.eventType,
+        status: events.status,
+        date: events.date,
+        createdAt: events.createdAt,
+        updatedAt: events.updatedAt,
+      })
+      .from(events)
+      .orderBy(desc(events.updatedAt))
+      .limit(limit),
+  ]);
+
+  return [
+    ...restaurantRows.map((row: any) => {
+      const completenessScore =
+        Number(Boolean(row.description)) +
+        Number(Boolean(row.websiteUrl)) +
+        Number(Boolean(row.city && row.state)) +
+        Number(Boolean(row.cuisineType)) +
+        Number(Boolean(row.isVerified));
+      const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
+      const knowledgeGaps = [
+        !row.description ? "missing_description" : null,
+        !row.websiteUrl ? "missing_website" : null,
+        !(row.city && row.state) ? "missing_location_context" : null,
+        !row.cuisineType ? "missing_cuisine" : null,
+        !row.isVerified ? "unverified_profile" : null,
+      ].filter(Boolean) as string[];
+      const opportunities = [
+        row.isFoodTruck && !row.mobileOnline ? "activate_live_location" : null,
+        row.rankingScore < 50 ? "grow_authority_signals" : null,
+        freshnessHours != null && freshnessHours > 24 * 7
+          ? "refresh_profile_data"
+          : null,
+      ].filter(Boolean) as string[];
+      const readinessScore =
+        Number(Boolean(row.description)) +
+        Number(Boolean(row.websiteUrl)) +
+        Number(Boolean(row.city && row.state)) +
+        Number(Boolean(row.isVerified));
+      return {
+        id: `restaurant:${row.id}`,
+        entityType: "restaurant",
+        entityId: row.id,
+        title: row.name,
+        location: [row.city, row.state].filter(Boolean).join(", "),
+        canonicalPath: buildCanonicalPath("restaurant", row.id),
+        health:
+          row.isVerified && row.isActive
+            ? "verified"
+            : row.isActive
+              ? "active"
+              : "inactive",
+        quality: scoreBucket(completenessScore),
+        freshness: staleBucketFromHours(freshnessHours),
+        freshnessHours,
+        machineReadiness: machineReadinessBucket(readinessScore),
+        canonicalFields: {
+          businessType: row.businessType,
+          cuisineType: row.cuisineType,
+          isFoodTruck: row.isFoodTruck,
+          mobileOnline: row.mobileOnline,
+          rankingScore: row.rankingScore,
+          hasDescription: Boolean(row.description),
+          hasWebsite: Boolean(row.websiteUrl),
+        },
+        knowledgeGaps,
+        opportunities,
+        updatedAt: row.updatedAt || row.createdAt,
+      };
+    }),
+    ...hostRows.map((row: any) => {
+      const completenessScore =
+        Number(Boolean(row.city && row.state)) +
+        Number(Boolean(row.spotCount)) +
+        Number(Boolean(row.parkingPassDailyPriceCents)) +
+        Number(Boolean(row.stripeOnboardingCompleted)) +
+        Number(Boolean(row.isVerified));
+      const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
+      const knowledgeGaps = [
+        !(row.city && row.state) ? "missing_location_context" : null,
+        !row.spotCount ? "missing_spot_capacity" : null,
+        !row.parkingPassDailyPriceCents ? "missing_pricing" : null,
+        !row.stripeOnboardingCompleted ? "stripe_not_ready" : null,
+        !row.isVerified ? "unverified_host" : null,
+      ].filter(Boolean) as string[];
+      const opportunities = [
+        row.parkingPassDailyPriceCents > 0 &&
+        row.stripeOnboardingCompleted &&
+        !row.isVerified
+          ? "review_for_publish"
+          : null,
+        freshnessHours != null && freshnessHours > 24 * 7
+          ? "refresh_host_record"
+          : null,
+      ].filter(Boolean) as string[];
+      const readinessScore =
+        Number(Boolean(row.city && row.state)) +
+        Number(Boolean(row.spotCount)) +
+        Number(Boolean(row.parkingPassDailyPriceCents)) +
+        Number(Boolean(row.isVerified));
+      return {
+        id: `host:${row.id}`,
+        entityType: "host",
+        entityId: row.id,
+        title: row.businessName,
+        location: [row.city, row.state].filter(Boolean).join(", "),
+        canonicalPath: buildCanonicalPath("host", row.id),
+        health: row.isVerified
+          ? "verified"
+          : row.stripeOnboardingCompleted
+            ? "operational"
+            : "draft",
+        quality: scoreBucket(completenessScore),
+        freshness: staleBucketFromHours(freshnessHours),
+        freshnessHours,
+        machineReadiness: machineReadinessBucket(readinessScore),
+        canonicalFields: {
+          spotCount: row.spotCount,
+          stripeOnboardingCompleted: row.stripeOnboardingCompleted,
+          parkingPassDailyPriceCents: row.parkingPassDailyPriceCents,
+        },
+        knowledgeGaps,
+        opportunities,
+        updatedAt: row.updatedAt || row.createdAt,
+      };
+    }),
+    ...dealRows.map((row: any) => {
+      const completenessScore =
+        Number(Boolean(row.restaurantId)) +
+        Number(Boolean(row.startDate)) +
+        Number(Boolean(row.endDate)) +
+        Number(Boolean(row.currentUses && row.currentUses > 0)) +
+        Number(Boolean(row.isActive));
+      const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
+      const knowledgeGaps = [
+        !row.restaurantId ? "missing_restaurant_link" : null,
+        !row.startDate ? "missing_start_date" : null,
+        !row.endDate ? "missing_end_date" : null,
+        !row.currentUses ? "no_usage_signals" : null,
+      ].filter(Boolean) as string[];
+      const opportunities = [
+        row.isActive && !row.currentUses ? "promote_deal_visibility" : null,
+        freshnessHours != null && freshnessHours > 24 * 7
+          ? "review_deal_freshness"
+          : null,
+      ].filter(Boolean) as string[];
+      const readinessScore =
+        Number(Boolean(row.restaurantId)) +
+        Number(Boolean(row.startDate)) +
+        Number(Boolean(row.endDate)) +
+        Number(Boolean(row.isActive));
+      return {
+        id: `deal:${row.id}`,
+        entityType: "deal",
+        entityId: row.id,
+        title: row.title,
+        location: row.restaurantId,
+        canonicalPath: buildCanonicalPath("deal", row.id),
+        health: row.isActive ? "active" : "inactive",
+        quality: scoreBucket(completenessScore),
+        freshness: staleBucketFromHours(freshnessHours),
+        freshnessHours,
+        machineReadiness: machineReadinessBucket(readinessScore),
+        canonicalFields: {
+          restaurantId: row.restaurantId,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          currentUses: row.currentUses,
+        },
+        knowledgeGaps,
+        opportunities,
+        updatedAt: row.updatedAt || row.createdAt,
+      };
+    }),
+    ...eventRows.map((row: any) => {
+      const completenessScore =
+        Number(Boolean(row.hostId)) +
+        Number(Boolean(row.eventType)) +
+        Number(Boolean(row.date)) +
+        Number(Boolean(row.status)) +
+        Number(Boolean(row.name));
+      const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
+      const knowledgeGaps = [
+        !row.hostId ? "missing_host_link" : null,
+        !row.eventType ? "missing_event_type" : null,
+        !row.date ? "missing_event_date" : null,
+        !row.name ? "missing_event_name" : null,
+      ].filter(Boolean) as string[];
+      const opportunities = [
+        row.status === "open" ? "drive_truck_interest" : null,
+        freshnessHours != null && freshnessHours > 24 * 7
+          ? "review_event_status"
+          : null,
+      ].filter(Boolean) as string[];
+      const readinessScore =
+        Number(Boolean(row.hostId)) +
+        Number(Boolean(row.eventType)) +
+        Number(Boolean(row.date)) +
+        Number(Boolean(row.name));
+      return {
+        id: `event:${row.id}`,
+        entityType: "event",
+        entityId: row.id,
+        title: row.name || "Unnamed event",
+        location: row.hostId,
+        canonicalPath: buildCanonicalPath("event", row.id),
+        health: row.status,
+        quality: scoreBucket(completenessScore),
+        freshness: staleBucketFromHours(freshnessHours),
+        freshnessHours,
+        machineReadiness: machineReadinessBucket(readinessScore),
+        canonicalFields: {
+          hostId: row.hostId,
+          eventType: row.eventType,
+          date: row.date,
+        },
+        knowledgeGaps,
+        opportunities,
+        updatedAt: row.updatedAt || row.createdAt,
+      };
+    }),
+  ]
+    .sort(
+      (a, b) =>
+        new Date(String(b.updatedAt)).getTime() -
+        new Date(String(a.updatedAt)).getTime(),
+    )
+    .slice(0, limit * 2);
+}
+
 type HostPricingColumnsCheck = {
   checkedAt: number;
   hasAll: boolean;
@@ -813,6 +1162,8 @@ export function registerAdminManagementRoutes(app: Express) {
           ? Math.max(1, Math.min(24 * 14, Math.trunc(sinceHoursRaw)))
           : 72;
         const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const entityTypeFilter = String(req.query.entityType || "").trim();
+        const entityIdFilter = String(req.query.entityId || "").trim();
 
         const [
           claims,
@@ -1060,6 +1411,18 @@ export function registerAdminManagementRoutes(app: Express) {
           })),
         ]
           .filter((item) => item && item.createdAt)
+          .filter((item) => {
+            if (!entityTypeFilter && !entityIdFilter) return true;
+            const matchesType = entityTypeFilter
+              ? item.subjectType === entityTypeFilter
+              : true;
+            const matchesId = entityIdFilter
+              ? item.subjectId === entityIdFilter ||
+                String(item.payload?.restaurantId || "") === entityIdFilter ||
+                String(item.payload?.hostId || "") === entityIdFilter
+              : true;
+            return matchesType && matchesId;
+          })
           .sort(
             (a, b) =>
               new Date(String(b.createdAt)).getTime() -
@@ -1080,6 +1443,10 @@ export function registerAdminManagementRoutes(app: Express) {
           total: items.length,
           generatedAt: new Date().toISOString(),
           windowHours: hours,
+          filters: {
+            entityType: entityTypeFilter || null,
+            entityId: entityIdFilter || null,
+          },
           familyCounts,
           items,
         });
@@ -1100,154 +1467,7 @@ export function registerAdminManagementRoutes(app: Express) {
         const limit = Number.isFinite(rawLimit)
           ? Math.max(1, Math.min(50, Math.trunc(rawLimit)))
           : 12;
-
-        const [restaurantRows, hostRows, dealRows, eventRows] = await Promise.all([
-          db
-            .select({
-              id: restaurants.id,
-              name: restaurants.name,
-              businessType: restaurants.businessType,
-              cuisineType: restaurants.cuisineType,
-              city: restaurants.city,
-              state: restaurants.state,
-              isActive: restaurants.isActive,
-              isVerified: restaurants.isVerified,
-              isFoodTruck: restaurants.isFoodTruck,
-              mobileOnline: restaurants.mobileOnline,
-              rankingScore: restaurants.rankingScore,
-              description: restaurants.description,
-              websiteUrl: restaurants.websiteUrl,
-              createdAt: restaurants.createdAt,
-              updatedAt: restaurants.updatedAt,
-            })
-            .from(restaurants)
-            .orderBy(desc(restaurants.updatedAt))
-            .limit(limit),
-          db
-            .select({
-              id: hosts.id,
-              businessName: hosts.businessName,
-              city: hosts.city,
-              state: hosts.state,
-              isVerified: hosts.isVerified,
-              spotCount: hosts.spotCount,
-              stripeOnboardingCompleted: hosts.stripeOnboardingCompleted,
-              parkingPassDailyPriceCents: hosts.parkingPassDailyPriceCents,
-              createdAt: hosts.createdAt,
-              updatedAt: hosts.updatedAt,
-            })
-            .from(hosts)
-            .orderBy(desc(hosts.updatedAt))
-            .limit(limit),
-          db
-            .select({
-              id: deals.id,
-              title: deals.title,
-              restaurantId: deals.restaurantId,
-              isActive: deals.isActive,
-              startDate: deals.startDate,
-              endDate: deals.endDate,
-              currentUses: deals.currentUses,
-              createdAt: deals.createdAt,
-              updatedAt: deals.updatedAt,
-            })
-            .from(deals)
-            .orderBy(desc(deals.updatedAt))
-            .limit(limit),
-          db
-            .select({
-              id: events.id,
-              name: events.name,
-              hostId: events.hostId,
-              eventType: events.eventType,
-              status: events.status,
-              date: events.date,
-              createdAt: events.createdAt,
-              updatedAt: events.updatedAt,
-            })
-            .from(events)
-            .orderBy(desc(events.updatedAt))
-            .limit(limit),
-        ]);
-
-        const entities = [
-          ...restaurantRows.map((row: any) => ({
-            id: `restaurant:${row.id}`,
-            entityType: "restaurant",
-            entityId: row.id,
-            title: row.name,
-            location: [row.city, row.state].filter(Boolean).join(", "),
-            health:
-              row.isVerified && row.isActive
-                ? "verified"
-                : row.isActive
-                  ? "active"
-                  : "inactive",
-            canonicalFields: {
-              businessType: row.businessType,
-              cuisineType: row.cuisineType,
-              isFoodTruck: row.isFoodTruck,
-              mobileOnline: row.mobileOnline,
-              rankingScore: row.rankingScore,
-              hasDescription: Boolean(row.description),
-              hasWebsite: Boolean(row.websiteUrl),
-            },
-            updatedAt: row.updatedAt || row.createdAt,
-          })),
-          ...hostRows.map((row: any) => ({
-            id: `host:${row.id}`,
-            entityType: "host",
-            entityId: row.id,
-            title: row.businessName,
-            location: [row.city, row.state].filter(Boolean).join(", "),
-            health: row.isVerified
-              ? "verified"
-              : row.stripeOnboardingCompleted
-                ? "operational"
-                : "draft",
-            canonicalFields: {
-              spotCount: row.spotCount,
-              stripeOnboardingCompleted: row.stripeOnboardingCompleted,
-              parkingPassDailyPriceCents: row.parkingPassDailyPriceCents,
-            },
-            updatedAt: row.updatedAt || row.createdAt,
-          })),
-          ...dealRows.map((row: any) => ({
-            id: `deal:${row.id}`,
-            entityType: "deal",
-            entityId: row.id,
-            title: row.title,
-            location: row.restaurantId,
-            health: row.isActive ? "active" : "inactive",
-            canonicalFields: {
-              restaurantId: row.restaurantId,
-              startDate: row.startDate,
-              endDate: row.endDate,
-              currentUses: row.currentUses,
-            },
-            updatedAt: row.updatedAt || row.createdAt,
-          })),
-          ...eventRows.map((row: any) => ({
-            id: `event:${row.id}`,
-            entityType: "event",
-            entityId: row.id,
-            title: row.name || "Unnamed event",
-            location: row.hostId,
-            health: row.status,
-            canonicalFields: {
-              hostId: row.hostId,
-              eventType: row.eventType,
-              date: row.date,
-            },
-            updatedAt: row.updatedAt || row.createdAt,
-          })),
-        ]
-          .sort(
-            (a, b) =>
-              new Date(String(b.updatedAt)).getTime() -
-              new Date(String(a.updatedAt)).getTime(),
-          )
-          .slice(0, limit * 2);
+        const entities = await buildCanonicalEntities(limit);
 
         const counts = entities.reduce(
           (acc, entity) => {
@@ -1266,6 +1486,95 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching LISA entities:", error);
         res.status(500).json({ message: "Failed to fetch LISA entities" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/priorities",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query.limit ?? 12);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(50, Math.trunc(rawLimit)))
+          : 12;
+        const hours = 72;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const [entities, recentRequests] = await Promise.all([
+          buildCanonicalEntities(Math.max(limit, 24)),
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(4000),
+        ]);
+
+        const items = entities
+          .map((entity) => {
+            const crawlerHits = recentRequests.filter((request: any) => {
+              const botLabel = botSignatureLabel(request.userAgent);
+              if (!botLabel) return false;
+              const path = String(request.path || "");
+              return path.includes(entity.entityId);
+            });
+
+            const crawlerDemand = crawlerHits.length;
+            const gapScore = entity.knowledgeGaps.length * 3;
+            const opportunityScore = entity.opportunities.length;
+            const freshnessPenalty =
+              entity.freshness === "stale"
+                ? 4
+                : entity.freshness === "aging"
+                  ? 2
+                  : 0;
+            const qualityPenalty =
+              entity.quality === "thin"
+                ? 4
+                : entity.quality === "growing"
+                  ? 2
+                  : 0;
+            const readinessPenalty =
+              entity.machineReadiness === "blocked"
+                ? 4
+                : entity.machineReadiness === "developing"
+                  ? 2
+                  : 0;
+            const demandScore = Math.min(10, crawlerDemand * 2);
+            const priorityScore =
+              gapScore +
+              opportunityScore +
+              freshnessPenalty +
+              qualityPenalty +
+              readinessPenalty +
+              demandScore;
+
+            return {
+              ...entity,
+              priorityScore,
+              crawlerDemand,
+              reasons: [
+                crawlerDemand > 0 ? `external_demand:${crawlerDemand}` : null,
+                ...entity.knowledgeGaps.slice(0, 3),
+                ...entity.opportunities.slice(0, 2),
+              ].filter(Boolean),
+            };
+          })
+          .sort((a, b) => b.priorityScore - a.priorityScore)
+          .slice(0, limit);
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          items,
+        });
+      } catch (error) {
+        console.error("Error fetching LISA priorities:", error);
+        res.status(500).json({ message: "Failed to fetch LISA priorities" });
       }
     },
   );
