@@ -2033,6 +2033,19 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTab, setSelectedTab] = useState("overview");
+  const [briefStatus, setBriefStatus] = useState<Record<string, { until: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem("lisa-dashboard-brief-state-v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const now = Date.now();
+      return Object.fromEntries(
+        Object.entries(parsed || {}).filter(([, value]: any) => Number(value?.until || 0) > now),
+      ) as Record<string, { until: number }>;
+    } catch {
+      return {};
+    }
+  });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userDetailsOpen, setUserDetailsOpen] = useState(false);
   const [userSortKey, setUserSortKey] = useState<"name" | "type" | "created">(
@@ -2205,6 +2218,14 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "overview",
     staleTime: 60 * 1000,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "lisa-dashboard-brief-state-v1",
+      JSON.stringify(briefStatus),
+    );
+  }, [briefStatus]);
   const { data: lisaMarketIntel } = useQuery<any>({
     queryKey: ["/api/admin/lisa/market-intel", "dashboard-tab"],
     queryFn: async () => {
@@ -2339,10 +2360,21 @@ export default function AdminDashboard() {
       }));
   }, [lisaSignals]);
 
-  const topPromotionItem = promoteNowItems[0] ?? null;
-  const topDemandItem = demandSpikeItems[0] ?? null;
-  const topAcquisitionItem = acquisitionWatchItems[0] ?? null;
-  const topMachineAttentionItem = machineAttentionItems[0] ?? null;
+  const deferBrief = (briefKey: string, mode: "dismiss" | "snooze" | "done") => {
+    const hours = mode === "done" ? 24 * 7 : mode === "snooze" ? 4 : 16;
+    setBriefStatus((current) => ({
+      ...current,
+      [briefKey]: { until: Date.now() + hours * 60 * 60 * 1000 },
+    }));
+  };
+
+  const pickVisibleBrief = (items: any[], prefix: string) =>
+    items.find((item: any) => (briefStatus[`${prefix}:${item.id}`]?.until ?? 0) <= Date.now()) || null;
+
+  const topPromotionItem = pickVisibleBrief(promoteNowItems, "promote");
+  const topDemandItem = pickVisibleBrief(demandSpikeItems, "demand");
+  const topAcquisitionItem = pickVisibleBrief(acquisitionWatchItems, "acquire");
+  const topMachineAttentionItem = pickVisibleBrief(machineAttentionItems, "machine");
   const retryMapPinGeocode = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -6659,12 +6691,21 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topPromotionItem)
                         : "No clear promotion opportunity yet."}
                       {topPromotionItem ? (
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topPromotionItem.href}>
                             <Button size="sm" variant="outline">
                               {topPromotionItem.actionLabel}
                             </Button>
                           </Link>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "snooze")}>
+                            Snooze
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "done")}>
+                            Done
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "dismiss")}>
+                            Dismiss
+                          </Button>
                         </div>
                       ) : null}
                     </CardContent>
@@ -6678,12 +6719,21 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topDemandItem)
                         : "No clear demand spike yet."}
                       {topDemandItem ? (
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topDemandItem.href}>
                             <Button size="sm" variant="outline">
                               {topDemandItem.actionLabel}
                             </Button>
                           </Link>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "snooze")}>
+                            Snooze
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "done")}>
+                            Done
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "dismiss")}>
+                            Dismiss
+                          </Button>
                         </div>
                       ) : null}
                     </CardContent>
@@ -6697,12 +6747,21 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topAcquisitionItem)
                         : "No obvious acquisition target yet."}
                       {topAcquisitionItem ? (
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topAcquisitionItem.href}>
                             <Button size="sm" variant="outline">
                               {topAcquisitionItem.actionLabel}
                             </Button>
                           </Link>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "snooze")}>
+                            Snooze
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "done")}>
+                            Done
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "dismiss")}>
+                            Dismiss
+                          </Button>
                         </div>
                       ) : null}
                     </CardContent>
@@ -6716,12 +6775,21 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topMachineAttentionItem)
                         : "No meaningful machine-attention opportunity yet."}
                       {topMachineAttentionItem ? (
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topMachineAttentionItem.href}>
                             <Button size="sm" variant="outline">
                               {topMachineAttentionItem.actionLabel}
                             </Button>
                           </Link>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "snooze")}>
+                            Snooze
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "done")}>
+                            Done
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "dismiss")}>
+                            Dismiss
+                          </Button>
                         </div>
                       ) : null}
                     </CardContent>

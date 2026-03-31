@@ -475,9 +475,30 @@ export default function AdminControlCenter() {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [claimTypeFilter, setClaimTypeFilter] = useState("all");
   const [usefulOnly, setUsefulOnly] = useState(true);
+  const [briefStatus, setBriefStatus] = useState<Record<string, { until: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem("lisa-control-brief-state-v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const now = Date.now();
+      return Object.fromEntries(
+        Object.entries(parsed || {}).filter(([, value]: any) => Number(value?.until || 0) > now),
+      ) as Record<string, { until: number }>;
+    } catch {
+      return {};
+    }
+  });
   const [selectedEntity, setSelectedEntity] = useState<CanonicalEntityItem | null>(
     null,
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "lisa-control-brief-state-v1",
+      JSON.stringify(briefStatus),
+    );
+  }, [briefStatus]);
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["admin-stats"],
@@ -855,6 +876,7 @@ export default function AdminControlCenter() {
       ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
       : null;
     return {
+      briefKey: `promote:${item.id}`,
       title: item.title || "Top promotion opportunity",
       why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
       next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
@@ -873,6 +895,7 @@ export default function AdminControlCenter() {
     if (!priorityEntities?.items?.length) return null;
     const item = priorityEntities.items[0];
     return {
+      briefKey: `improve:${item.id}`,
       title: item.title || "Top page to improve",
       why: `Demand is forming here, but the page is still ${toPlainLabel(item.quality)} and ${toPlainLabel(item.machineReadiness)}.`,
       next:
@@ -891,6 +914,7 @@ export default function AdminControlCenter() {
     const linkedEntity =
       canonicalEntityMap.get(`${item.entityType}:${entityId}`) ?? null;
     return {
+      briefKey: `acquire:${item.id}`,
       title: item.title || "Top acquisition target",
       why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
       next: "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
@@ -909,6 +933,7 @@ export default function AdminControlCenter() {
     const item = filteredSignals.find((signal) => signal.visibility === "off_platform");
     if (!item) return null;
     return {
+      briefKey: `machine:${item.id}`,
       title: item.title || "Top machine-attention opportunity",
       why: buildSignalSummary(item),
       next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
@@ -962,6 +987,37 @@ export default function AdminControlCenter() {
     setSelectedEntity(entity);
     setActiveTab(tab);
   };
+
+  const deferBrief = (briefKey: string, mode: "dismiss" | "snooze" | "done") => {
+    const hours = mode === "done" ? 24 * 7 : mode === "snooze" ? 4 : 16;
+    setBriefStatus((current) => ({
+      ...current,
+      [briefKey]: { until: Date.now() + hours * 60 * 60 * 1000 },
+    }));
+  };
+
+  const isBriefVisible = (briefKey?: string) => {
+    if (!briefKey) return false;
+    return (briefStatus[briefKey]?.until ?? 0) <= Date.now();
+  };
+
+  const visibleDailyPromotionOpportunity =
+    dailyPromotionOpportunity && isBriefVisible(dailyPromotionOpportunity.briefKey)
+      ? dailyPromotionOpportunity
+      : null;
+  const visibleDailyImprovementOpportunity =
+    dailyImprovementOpportunity && isBriefVisible(dailyImprovementOpportunity.briefKey)
+      ? dailyImprovementOpportunity
+      : null;
+  const visibleDailyAcquisitionOpportunity =
+    dailyAcquisitionOpportunity && isBriefVisible(dailyAcquisitionOpportunity.briefKey)
+      ? dailyAcquisitionOpportunity
+      : null;
+  const visibleDailyMachineAttentionOpportunity =
+    dailyMachineAttentionOpportunity &&
+    isBriefVisible(dailyMachineAttentionOpportunity.briefKey)
+      ? dailyMachineAttentionOpportunity
+      : null;
 
   const renderActionControls = (entity: CanonicalEntityItem) =>
     (entity.recommendedActions || []).slice(0, 3).map((action) => {
@@ -1204,73 +1260,97 @@ export default function AdminControlCenter() {
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Best thing to promote</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                    {dailyPromotionOpportunity
-                      ? buildOpportunityBrief(dailyPromotionOpportunity)
+                    {visibleDailyPromotionOpportunity
+                      ? buildOpportunityBrief(visibleDailyPromotionOpportunity)
                       : "No clear promotion opportunity yet."}
                   </div>
-                  {dailyPromotionOpportunity ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3"
-                      onClick={dailyPromotionOpportunity.onAction}
-                    >
-                      {dailyPromotionOpportunity.actionLabel}
-                    </Button>
+                  {visibleDailyPromotionOpportunity ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
+                        {visibleDailyPromotionOpportunity.actionLabel}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "snooze")}>
+                        Snooze
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "done")}>
+                        Done
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "dismiss")}>
+                        Dismiss
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Most valuable page to improve</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                    {dailyImprovementOpportunity
-                      ? buildOpportunityBrief(dailyImprovementOpportunity)
+                    {visibleDailyImprovementOpportunity
+                      ? buildOpportunityBrief(visibleDailyImprovementOpportunity)
                       : "No clear page-improvement target yet."}
                   </div>
-                  {dailyImprovementOpportunity ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3"
-                      onClick={dailyImprovementOpportunity.onAction}
-                    >
-                      {dailyImprovementOpportunity.actionLabel}
-                    </Button>
+                  {visibleDailyImprovementOpportunity ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
+                        {visibleDailyImprovementOpportunity.actionLabel}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "snooze")}>
+                        Snooze
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "done")}>
+                        Done
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "dismiss")}>
+                        Dismiss
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Most promising acquisition target</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                    {dailyAcquisitionOpportunity
-                      ? buildOpportunityBrief(dailyAcquisitionOpportunity)
+                    {visibleDailyAcquisitionOpportunity
+                      ? buildOpportunityBrief(visibleDailyAcquisitionOpportunity)
                       : "No obvious acquisition target yet."}
                   </div>
-                  {dailyAcquisitionOpportunity ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3"
-                      onClick={dailyAcquisitionOpportunity.onAction}
-                    >
-                      {dailyAcquisitionOpportunity.actionLabel}
-                    </Button>
+                  {visibleDailyAcquisitionOpportunity ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
+                        {visibleDailyAcquisitionOpportunity.actionLabel}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "snooze")}>
+                        Snooze
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "done")}>
+                        Done
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "dismiss")}>
+                        Dismiss
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
                   <div className="text-sm font-medium">Biggest machine-attention opportunity</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                    {dailyMachineAttentionOpportunity
-                      ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
+                    {visibleDailyMachineAttentionOpportunity
+                      ? buildOpportunityBrief(visibleDailyMachineAttentionOpportunity)
                       : "No meaningful outside-machine attention yet."}
                   </div>
-                  {dailyMachineAttentionOpportunity ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-3"
-                      onClick={dailyMachineAttentionOpportunity.onAction}
-                    >
-                      {dailyMachineAttentionOpportunity.actionLabel}
-                    </Button>
+                  {visibleDailyMachineAttentionOpportunity ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>
+                        {visibleDailyMachineAttentionOpportunity.actionLabel}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "snooze")}>
+                        Snooze
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "done")}>
+                        Done
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "dismiss")}>
+                        Dismiss
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
               </CardContent>
@@ -2088,73 +2168,97 @@ export default function AdminControlCenter() {
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best thing to promote</div>
                     <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                      {dailyPromotionOpportunity
-                        ? buildOpportunityBrief(dailyPromotionOpportunity)
+                      {visibleDailyPromotionOpportunity
+                        ? buildOpportunityBrief(visibleDailyPromotionOpportunity)
                         : "No clear promotion opportunity yet."}
                     </div>
-                    {dailyPromotionOpportunity ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-3"
-                        onClick={dailyPromotionOpportunity.onAction}
-                      >
-                        {dailyPromotionOpportunity.actionLabel}
-                      </Button>
+                    {visibleDailyPromotionOpportunity ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
+                          {visibleDailyPromotionOpportunity.actionLabel}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "snooze")}>
+                          Snooze
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "done")}>
+                          Done
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "dismiss")}>
+                          Dismiss
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best page to improve</div>
                     <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                      {dailyImprovementOpportunity
-                        ? buildOpportunityBrief(dailyImprovementOpportunity)
+                      {visibleDailyImprovementOpportunity
+                        ? buildOpportunityBrief(visibleDailyImprovementOpportunity)
                         : "No clear page-improvement target yet."}
                     </div>
-                    {dailyImprovementOpportunity ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-3"
-                        onClick={dailyImprovementOpportunity.onAction}
-                      >
-                        {dailyImprovementOpportunity.actionLabel}
-                      </Button>
+                    {visibleDailyImprovementOpportunity ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
+                          {visibleDailyImprovementOpportunity.actionLabel}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "snooze")}>
+                          Snooze
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "done")}>
+                          Done
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "dismiss")}>
+                          Dismiss
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best acquisition target</div>
                     <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                      {dailyAcquisitionOpportunity
-                        ? buildOpportunityBrief(dailyAcquisitionOpportunity)
+                      {visibleDailyAcquisitionOpportunity
+                        ? buildOpportunityBrief(visibleDailyAcquisitionOpportunity)
                         : "No obvious acquisition target yet."}
                     </div>
-                    {dailyAcquisitionOpportunity ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-3"
-                        onClick={dailyAcquisitionOpportunity.onAction}
-                      >
-                        {dailyAcquisitionOpportunity.actionLabel}
-                      </Button>
+                    {visibleDailyAcquisitionOpportunity ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
+                          {visibleDailyAcquisitionOpportunity.actionLabel}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "snooze")}>
+                          Snooze
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "done")}>
+                          Done
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "dismiss")}>
+                          Dismiss
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                   <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                     <div className="text-sm font-medium">Best machine-attention play</div>
                     <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                      {dailyMachineAttentionOpportunity
-                        ? buildOpportunityBrief(dailyMachineAttentionOpportunity)
+                      {visibleDailyMachineAttentionOpportunity
+                        ? buildOpportunityBrief(visibleDailyMachineAttentionOpportunity)
                         : "No meaningful outside-machine attention yet."}
                     </div>
-                    {dailyMachineAttentionOpportunity ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="mt-3"
-                        onClick={dailyMachineAttentionOpportunity.onAction}
-                      >
-                        {dailyMachineAttentionOpportunity.actionLabel}
-                      </Button>
+                    {visibleDailyMachineAttentionOpportunity ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>
+                          {visibleDailyMachineAttentionOpportunity.actionLabel}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "snooze")}>
+                          Snooze
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "done")}>
+                          Done
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "dismiss")}>
+                          Dismiss
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
                 </div>
