@@ -139,6 +139,58 @@ type MarketIntelResponse = {
     acquisitionAngle: string;
     recommendedPackage: string[];
   };
+  changeSinceYesterday: {
+    summary: string;
+    items: Array<{
+      id: string;
+      title: string;
+      summary: string;
+      delta: number;
+      next: string;
+    }>;
+  };
+  dailyBriefChanges: {
+    promotion: string;
+    demand: string;
+    acquisition: string;
+    machineAttention: string;
+  };
+  trendWatch: Array<{
+    id: string;
+    label: string;
+    currentCount: number;
+    previousCount: number;
+    delta: number;
+    direction: string;
+    momentum: string;
+    summary: string;
+    next: string;
+  }>;
+  priceScout: {
+    summary: string;
+    bestDeals: Array<{
+      id: string;
+      restaurantId: string;
+      restaurantName: string;
+      cuisineType: string | null;
+      city: string | null;
+      state: string | null;
+      title: string;
+      dealType: string;
+      discountValue: number;
+      minOrderAmount: number;
+      endDate: string | null;
+      isOngoing: boolean | null;
+      valueScore: number;
+      priceSignal: string;
+    }>;
+    cuisineValue: Array<{
+      cuisineType: string;
+      dealCount: number;
+      avgValueScore: number;
+      avgMinOrder: number;
+    }>;
+  };
   advertiserSignals: {
     topQueries: Array<{ query: string; count: number }>;
     cityDemand: Array<{
@@ -932,6 +984,7 @@ export default function AdminControlCenter() {
         title: item.title || "Top promotion opportunity",
         why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
         next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
+        changed: marketIntel?.dailyBriefChanges?.promotion,
         rankReason: `Ranked #1 because it currently has the strongest live attention in MealScout content.`,
         actionLabel: linkedEntity ? "Focus restaurant" : "Open livestream",
         onAction: () => {
@@ -954,11 +1007,12 @@ export default function AdminControlCenter() {
         item.reasons?.[0]
           ? `Fix ${toPlainLabel(item.reasons[0])} first.`
           : "Improve the page quality and freshness first.",
+      changed: marketIntel?.changeSinceYesterday?.summary,
       rankReason: `Ranked #1 because demand and weak page quality are overlapping here more than anywhere else.`,
       actionLabel: "Focus page",
       onAction: () => focusEntity(item, "overview"),
     }));
-  }, [priorityEntities]);
+  }, [marketIntel, priorityEntities]);
 
   const acquisitionBriefCandidates = useMemo(() => {
     return (marketIntel?.acquisitionTargets ?? []).slice(0, 4).map((item) => {
@@ -971,6 +1025,7 @@ export default function AdminControlCenter() {
         why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
         next:
           "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
+        changed: marketIntel?.dailyBriefChanges?.acquisition,
         rankReason: `Ranked #1 because outside interest is high while the asset is still relatively weak.`,
         actionLabel: linkedEntity ? "Focus target" : "Open page",
         onAction: () => {
@@ -993,6 +1048,7 @@ export default function AdminControlCenter() {
         title: item.title || "Top machine-attention opportunity",
         why: buildSignalSummary(item),
         next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
+        changed: marketIntel?.dailyBriefChanges?.machineAttention,
         rankReason: `Ranked #1 because this is the strongest current off-platform attention signal in the stream.`,
         actionLabel: "Open livestream",
         onAction: () => {
@@ -1000,7 +1056,7 @@ export default function AdminControlCenter() {
           setLaneQuery(String(item.subjectId || ""));
         },
       }));
-  }, [filteredSignals]);
+  }, [filteredSignals, marketIntel]);
 
   const knowledgeGapCounts = useMemo(() => {
     const items = canonicalEntities?.items ?? [];
@@ -1350,6 +1406,11 @@ export default function AdminControlCenter() {
                       Why this is #1: {visibleDailyPromotionOpportunity.rankReason}
                     </div>
                   ) : null}
+                  {visibleDailyPromotionOpportunity?.changed ? (
+                    <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      What changed since yesterday: {visibleDailyPromotionOpportunity.changed}
+                    </div>
+                  ) : null}
                   {visibleDailyPromotionOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
@@ -1377,6 +1438,11 @@ export default function AdminControlCenter() {
                   {visibleDailyImprovementOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                       Why this is #1: {visibleDailyImprovementOpportunity.rankReason}
+                    </div>
+                  ) : null}
+                  {visibleDailyImprovementOpportunity?.changed ? (
+                    <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      What changed since yesterday: {visibleDailyImprovementOpportunity.changed}
                     </div>
                   ) : null}
                   {visibleDailyImprovementOpportunity ? (
@@ -1408,6 +1474,11 @@ export default function AdminControlCenter() {
                       Why this is #1: {visibleDailyAcquisitionOpportunity.rankReason}
                     </div>
                   ) : null}
+                  {visibleDailyAcquisitionOpportunity?.changed ? (
+                    <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      What changed since yesterday: {visibleDailyAcquisitionOpportunity.changed}
+                    </div>
+                  ) : null}
                   {visibleDailyAcquisitionOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
@@ -1435,6 +1506,11 @@ export default function AdminControlCenter() {
                   {visibleDailyMachineAttentionOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                       Why this is #1: {visibleDailyMachineAttentionOpportunity.rankReason}
+                    </div>
+                  ) : null}
+                  {visibleDailyMachineAttentionOpportunity?.changed ? (
+                    <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                      What changed since yesterday: {visibleDailyMachineAttentionOpportunity.changed}
                     </div>
                   ) : null}
                   {visibleDailyMachineAttentionOpportunity ? (
@@ -1791,6 +1867,64 @@ export default function AdminControlCenter() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4 xl:col-span-2">
+                        <div className="text-sm font-medium">What changed since yesterday</div>
+                        <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                          {marketIntel.changeSinceYesterday.summary}
+                        </div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.changeSinceYesterday.items.slice(0, 4).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg border border-[var(--border-subtle)] p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="font-medium">{item.title}</div>
+                                <Badge variant="outline">
+                                  {item.delta > 0 ? "+" : ""}
+                                  {item.delta}
+                                </Badge>
+                              </div>
+                              <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                                {item.summary}
+                              </div>
+                              <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                                What to do: {item.next}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Price Scout</div>
+                        <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                          {marketIntel.priceScout.summary}
+                        </div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.priceScout.bestDeals.slice(0, 3).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg border border-[var(--border-subtle)] p-3"
+                            >
+                              <div className="font-medium">{item.restaurantName}</div>
+                              <div className="text-sm text-[color:var(--text-muted)]">
+                                {item.title}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">{item.priceSignal}</Badge>
+                                <Badge variant="outline">value {item.valueScore}</Badge>
+                                {item.cuisineType ? (
+                                  <Badge variant="outline">{item.cuisineType}</Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-xs text-[color:var(--text-muted)]">
@@ -1839,6 +1973,35 @@ export default function AdminControlCenter() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Food trend watch</div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.trendWatch.slice(0, 6).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg border border-[var(--border-subtle)] p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-medium break-all">{item.label}</span>
+                                <div className="flex gap-2">
+                                  <Badge variant="outline">{item.currentCount} now</Badge>
+                                  <Badge variant="outline">
+                                    {item.delta > 0 ? "+" : ""}
+                                    {item.delta}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                                {item.summary}
+                              </div>
+                              <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                                What to do: {item.next}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Top search demand</div>
                         <div className="mt-3 space-y-2">
@@ -1957,6 +2120,62 @@ export default function AdminControlCenter() {
                                 <Badge variant="outline">{item.quality}</Badge>
                               </div>
                             </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Best live value deals</div>
+                        <div className="mt-3 space-y-3">
+                          {marketIntel.priceScout.bestDeals.slice(0, 5).map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg border border-[var(--border-subtle)] p-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">{item.restaurantName}</span>
+                                <Badge variant="outline">value {item.valueScore}</Badge>
+                                {item.cuisineType ? (
+                                  <Badge variant="outline">{item.cuisineType}</Badge>
+                                ) : null}
+                              </div>
+                              <div className="mt-2 text-sm text-[color:var(--text-muted)]">
+                                {item.title}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                <Badge variant="outline">{item.priceSignal}</Badge>
+                                {item.city || item.state ? (
+                                  <Badge variant="outline">
+                                    {[item.city, item.state].filter(Boolean).join(", ")}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+                        <div className="text-sm font-medium">Best value cuisines</div>
+                        <div className="mt-3 space-y-2">
+                          {marketIntel.priceScout.cuisineValue.slice(0, 6).map((item) => (
+                            <div
+                              key={item.cuisineType}
+                              className="flex items-center justify-between gap-2 text-sm"
+                            >
+                              <span>{item.cuisineType}</span>
+                              <div className="flex gap-2">
+                                <Badge variant="outline">{item.dealCount} deals</Badge>
+                                <Badge variant="outline">
+                                  value {item.avgValueScore}
+                                </Badge>
+                                <Badge variant="outline">
+                                  avg min ${Math.round(item.avgMinOrder)}
+                                </Badge>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -2278,6 +2497,11 @@ export default function AdminControlCenter() {
                         Why this is #1: {visibleDailyPromotionOpportunity.rankReason}
                       </div>
                     ) : null}
+                    {visibleDailyPromotionOpportunity?.changed ? (
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                        What changed since yesterday: {visibleDailyPromotionOpportunity.changed}
+                      </div>
+                    ) : null}
                     {visibleDailyPromotionOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
@@ -2305,6 +2529,11 @@ export default function AdminControlCenter() {
                     {visibleDailyImprovementOpportunity ? (
                       <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                         Why this is #1: {visibleDailyImprovementOpportunity.rankReason}
+                      </div>
+                    ) : null}
+                    {visibleDailyImprovementOpportunity?.changed ? (
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                        What changed since yesterday: {visibleDailyImprovementOpportunity.changed}
                       </div>
                     ) : null}
                     {visibleDailyImprovementOpportunity ? (
@@ -2336,6 +2565,11 @@ export default function AdminControlCenter() {
                         Why this is #1: {visibleDailyAcquisitionOpportunity.rankReason}
                       </div>
                     ) : null}
+                    {visibleDailyAcquisitionOpportunity?.changed ? (
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                        What changed since yesterday: {visibleDailyAcquisitionOpportunity.changed}
+                      </div>
+                    ) : null}
                     {visibleDailyAcquisitionOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
@@ -2363,6 +2597,11 @@ export default function AdminControlCenter() {
                     {visibleDailyMachineAttentionOpportunity ? (
                       <div className="mt-2 text-xs text-[color:var(--text-muted)]">
                         Why this is #1: {visibleDailyMachineAttentionOpportunity.rankReason}
+                      </div>
+                    ) : null}
+                    {visibleDailyMachineAttentionOpportunity?.changed ? (
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                        What changed since yesterday: {visibleDailyMachineAttentionOpportunity.changed}
                       </div>
                     ) : null}
                     {visibleDailyMachineAttentionOpportunity ? (

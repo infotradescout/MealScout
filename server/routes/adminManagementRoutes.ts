@@ -99,6 +99,38 @@ const buildLisaLane = (claim: {
 const buildSignalLane = (parts: Array<string | null | undefined>) =>
   parts.map((part) => String(part || "unknown")).join(":");
 
+const toCountDeltaLine = (
+  label: string,
+  currentCount: number,
+  previousCount: number,
+) => {
+  const delta = currentCount - previousCount;
+  if (delta > 0) {
+    return `${label} is up ${delta} since yesterday (${currentCount} vs ${previousCount}).`;
+  }
+  if (delta < 0) {
+    return `${label} is down ${Math.abs(delta)} since yesterday (${currentCount} vs ${previousCount}).`;
+  }
+  return `${label} is flat since yesterday (${currentCount} vs ${previousCount}).`;
+};
+
+const formatDealValueLabel = (
+  dealType?: string | null,
+  discountValue?: string | number | null,
+  minOrderAmount?: string | number | null,
+) => {
+  const discount = Number(discountValue || 0);
+  const minOrder = Number(minOrderAmount || 0);
+  const baseLabel =
+    String(dealType || "").toLowerCase() === "fixed"
+      ? `$${discount.toFixed(0)} off`
+      : `${discount.toFixed(discount % 1 === 0 ? 0 : 2)}% off`;
+  if (minOrder > 0) {
+    return `${baseLabel} on orders from $${minOrder.toFixed(0)}`;
+  }
+  return baseLabel;
+};
+
 const botSignatureLabel = (userAgent?: string | null) => {
   const ua = String(userAgent || "");
   if (/gptbot/i.test(ua)) return "GPTBot";
@@ -1847,8 +1879,11 @@ export function registerAdminManagementRoutes(app: Express) {
     isStaffOrAdmin,
     async (_req: any, res) => {
       try {
+        const now = new Date();
         const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const since48h = new Date(Date.now() - 48 * 24 * 60 * 60 * 1000);
 
         const [
           topQueriesRows,
@@ -1859,6 +1894,15 @@ export function registerAdminManagementRoutes(app: Express) {
           geoPingTotals,
           entities,
           recentRequests,
+          recentQueryRows,
+          previousQueryRows,
+          recentStoryCountRows,
+          previousStoryCountRows,
+          recentLocationCountRows,
+          previousLocationCountRows,
+          recentDealCreateCountRows,
+          previousDealCreateCountRows,
+          activeDealRows,
         ] = await Promise.all([
           db
             .select({
@@ -1951,7 +1995,271 @@ export function registerAdminManagementRoutes(app: Express) {
             .where(gte(requestLogs.createdAt, since30d))
             .orderBy(desc(requestLogs.createdAt))
             .limit(4000),
+          db
+            .select({
+              query: searchQueryEvents.query,
+              count: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(searchQueryEvents)
+            .where(gte(searchQueryEvents.createdAt, since24h))
+            .groupBy(searchQueryEvents.query)
+            .orderBy(desc(sql`count(*)`))
+            .limit(25),
+          db
+            .select({
+              query: searchQueryEvents.query,
+              count: sql<number>`count(*)`.mapWith(Number),
+            })
+            .from(searchQueryEvents)
+            .where(
+              and(
+                gte(searchQueryEvents.createdAt, since48h),
+                lt(searchQueryEvents.createdAt, since24h),
+              ),
+            )
+            .groupBy(searchQueryEvents.query)
+            .orderBy(desc(sql`count(*)`))
+            .limit(25),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(videoStories)
+            .where(gte(videoStories.createdAt, since24h)),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(videoStories)
+            .where(
+              and(
+                gte(videoStories.createdAt, since48h),
+                lt(videoStories.createdAt, since24h),
+              ),
+            ),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(locationRequests)
+            .where(gte(locationRequests.createdAt, since24h)),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(locationRequests)
+            .where(
+              and(
+                gte(locationRequests.createdAt, since48h),
+                lt(locationRequests.createdAt, since24h),
+              ),
+            ),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(deals)
+            .where(gte(deals.createdAt, since24h)),
+          db
+            .select({ count: sql<number>`count(*)`.mapWith(Number) })
+            .from(deals)
+            .where(and(gte(deals.createdAt, since48h), lt(deals.createdAt, since24h))),
+          db
+            .select({
+              dealId: deals.id,
+              restaurantId: restaurants.id,
+              restaurantName: restaurants.name,
+              cuisineType: restaurants.cuisineType,
+              city: restaurants.city,
+              state: restaurants.state,
+              title: deals.title,
+              dealType: deals.dealType,
+              discountValue: deals.discountValue,
+              minOrderAmount: deals.minOrderAmount,
+              endDate: deals.endDate,
+              isOngoing: deals.isOngoing,
+              createdAt: deals.createdAt,
+            })
+            .from(deals)
+            .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+            .where(
+              and(
+                eq(deals.isActive, true),
+                or(
+                  eq(deals.isOngoing, true),
+                  isNull(deals.endDate),
+                  gte(deals.endDate, now),
+                ),
+              ),
+            )
+            .orderBy(desc(deals.createdAt))
+            .limit(80),
         ]);
+
+        const typedRecentQueryRows = recentQueryRows as Array<{
+          query: string | null;
+          count: number;
+        }>;
+        const typedPreviousQueryRows = previousQueryRows as Array<{
+          query: string | null;
+          count: number;
+        }>;
+        const typedActiveDealRows = activeDealRows as Array<{
+          dealId: string;
+          restaurantId: string;
+          restaurantName: string;
+          cuisineType: string | null;
+          city: string | null;
+          state: string | null;
+          title: string;
+          dealType: string;
+          discountValue: string | number;
+          minOrderAmount: string | number | null;
+          endDate: Date | null;
+          isOngoing: boolean | null;
+          createdAt: Date | null;
+        }>;
+
+        const recentQueryMap = new Map(
+          typedRecentQueryRows.map((row) => [
+            String(row.query || "").toLowerCase(),
+            Number(row.count || 0),
+          ]),
+        );
+        const previousQueryMap = new Map(
+          typedPreviousQueryRows.map((row) => [
+            String(row.query || "").toLowerCase(),
+            Number(row.count || 0),
+          ]),
+        );
+
+        const trendWatch = Array.from(
+          new Set([
+            ...typedRecentQueryRows.map((row) =>
+              String(row.query || "").toLowerCase(),
+            ),
+            ...typedPreviousQueryRows.map((row) =>
+              String(row.query || "").toLowerCase(),
+            ),
+          ]),
+        )
+          .map((key: string) => {
+            const recentMatch =
+              typedRecentQueryRows.find(
+                (row) => String(row.query || "").toLowerCase() === key,
+              ) ?? null;
+            const currentCount = Number(recentQueryMap.get(key) ?? 0);
+            const previousCount = Number(previousQueryMap.get(key) ?? 0);
+            const delta = currentCount - previousCount;
+            return {
+              id: `trend:${key}`,
+              label: recentMatch?.query || key || "food trend",
+              currentCount,
+              previousCount,
+              delta,
+              direction: delta > 0 ? "up" : delta < 0 ? "down" : "flat",
+              momentum:
+                delta >= 3
+                  ? "surging"
+                  : delta > 0
+                    ? "rising"
+                    : currentCount > 0 && previousCount === 0
+                      ? "new"
+                      : "steady",
+              summary:
+                delta > 0
+                  ? `"${recentMatch?.query || key}" is climbing with ${currentCount} recent searches, up ${delta} from the previous day.`
+                  : delta < 0
+                    ? `"${recentMatch?.query || key}" cooled slightly to ${currentCount} recent searches, down ${Math.abs(delta)} from the previous day.`
+                    : `"${recentMatch?.query || key}" is holding steady at ${currentCount} recent searches.`,
+              next:
+                delta > 0
+                  ? `Build or refresh pages, deals, and content around "${recentMatch?.query || key}" while interest is rising.`
+                  : `Keep coverage for "${recentMatch?.query || key}" fresh so MealScout can hold the topic if demand rebounds.`,
+            };
+          })
+          .filter((item) => item.currentCount > 0)
+          .sort((a, b) => {
+            if (b.delta !== a.delta) return b.delta - a.delta;
+            return b.currentCount - a.currentCount;
+          })
+          .slice(0, 8);
+
+        const bestValueDeals = typedActiveDealRows
+          .map((item) => {
+            const discountValue = Number(item.discountValue || 0);
+            const minOrderAmount = Number(item.minOrderAmount || 0);
+            const valueScore =
+              String(item.dealType || "").toLowerCase() === "fixed"
+                ? (discountValue / Math.max(minOrderAmount || 25, 25)) * 100
+                : discountValue;
+            return {
+              id: item.dealId,
+              restaurantId: item.restaurantId,
+              restaurantName: item.restaurantName,
+              cuisineType: item.cuisineType,
+              city: item.city,
+              state: item.state,
+              title: item.title,
+              dealType: item.dealType,
+              discountValue,
+              minOrderAmount,
+              endDate: item.endDate,
+              isOngoing: item.isOngoing,
+              valueScore: Number(valueScore.toFixed(1)),
+              priceSignal: formatDealValueLabel(
+                item.dealType,
+                item.discountValue,
+                item.minOrderAmount,
+              ),
+            };
+          })
+          .sort((a, b) => {
+            if (b.valueScore !== a.valueScore) return b.valueScore - a.valueScore;
+            return a.minOrderAmount - b.minOrderAmount;
+          })
+          .slice(0, 8);
+
+        const cuisineValueMap = typedActiveDealRows.reduce<
+          Map<
+            string,
+            {
+              cuisineType: string;
+              dealCount: number;
+              totalValueScore: number;
+              totalMinOrder: number;
+            }
+          >
+        >((acc, item) => {
+            const cuisine = String(item.cuisineType || "Unknown");
+            const discountValue = Number(item.discountValue || 0);
+            const minOrderAmount = Number(item.minOrderAmount || 0);
+            const normalizedDiscount =
+              String(item.dealType || "").toLowerCase() === "fixed"
+                ? (discountValue / Math.max(minOrderAmount || 25, 25)) * 100
+                : discountValue;
+            const current = acc.get(cuisine) || {
+              cuisineType: cuisine,
+              dealCount: 0,
+              totalValueScore: 0,
+              totalMinOrder: 0,
+            };
+            current.dealCount += 1;
+            current.totalValueScore += normalizedDiscount;
+            current.totalMinOrder += minOrderAmount;
+            acc.set(cuisine, current);
+            return acc;
+          }, new Map());
+        const cuisineValue = Array.from(cuisineValueMap.values())
+          .map((value) => ({
+            cuisineType: value.cuisineType,
+            dealCount: value.dealCount,
+            avgValueScore:
+              value.dealCount > 0
+                ? Number((value.totalValueScore / value.dealCount).toFixed(1))
+                : 0,
+            avgMinOrder:
+              value.dealCount > 0
+                ? Number((value.totalMinOrder / value.dealCount).toFixed(1))
+                : 0,
+          }))
+          .sort((a, b) => {
+            if (b.avgValueScore !== a.avgValueScore) {
+              return b.avgValueScore - a.avgValueScore;
+            }
+            return b.dealCount - a.dealCount;
+          })
+          .slice(0, 6);
 
         const acquisitionTargets = entities
           .map((entity) => {
@@ -1985,25 +2293,127 @@ export function registerAdminManagementRoutes(app: Express) {
           .sort((a, b) => b.advertiserScore - a.advertiserScore)
           .slice(0, 8);
 
+        const recentHighValueMachineHits = recentRequests.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          return (
+            createdAt >= since24h.getTime() &&
+            Boolean(botSignatureLabel(request.userAgent)) &&
+            isHighValueObservedPath(request.path) &&
+            !isMonitoringAgent(request.userAgent)
+          );
+        }).length;
+        const previousHighValueMachineHits = recentRequests.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          return (
+            createdAt >= since48h.getTime() &&
+            createdAt < since24h.getTime() &&
+            Boolean(botSignatureLabel(request.userAgent)) &&
+            isHighValueObservedPath(request.path) &&
+            !isMonitoringAgent(request.userAgent)
+          );
+        }).length;
+
+        const recentStoryCount = recentStoryCountRows[0]?.count ?? 0;
+        const previousStoryCount = previousStoryCountRows[0]?.count ?? 0;
+        const recentLocationCount = recentLocationCountRows[0]?.count ?? 0;
+        const previousLocationCount = previousLocationCountRows[0]?.count ?? 0;
+        const recentDealCreateCount = recentDealCreateCountRows[0]?.count ?? 0;
+        const previousDealCreateCount = previousDealCreateCountRows[0]?.count ?? 0;
+        const recentSearchCount = typedRecentQueryRows.reduce(
+          (sum, row) => sum + Number(row.count || 0),
+          0,
+        );
+        const previousSearchCount = typedPreviousQueryRows.reduce(
+          (sum, row) => sum + Number(row.count || 0),
+          0,
+        );
+        const topTrend = trendWatch[0] || null;
+        const changeItems = [
+          {
+            id: "search-demand",
+            title: "Search demand",
+            summary: toCountDeltaLine(
+              "Food and restaurant search demand",
+              recentSearchCount,
+              previousSearchCount,
+            ),
+            delta: recentSearchCount - previousSearchCount,
+            next:
+              topTrend?.label
+                ? `Double down on "${topTrend.label}" while it is drawing the strongest visible food demand.`
+                : "Strengthen the strongest food topics with better landing pages and fresh content.",
+          },
+          {
+            id: "fresh-content",
+            title: "Fresh content",
+            summary: toCountDeltaLine(
+              "New story creation",
+              recentStoryCount,
+              previousStoryCount,
+            ),
+            delta: recentStoryCount - previousStoryCount,
+            next:
+              "Push the strongest new stories into sponsor, search, and discovery surfaces before they go stale.",
+          },
+          {
+            id: "deal-supply",
+            title: "Deal supply",
+            summary: toCountDeltaLine(
+              "New deal creation",
+              recentDealCreateCount,
+              previousDealCreateCount,
+            ),
+            delta: recentDealCreateCount - previousDealCreateCount,
+            next:
+              "Use new deals to feed Price Scout, promotion slots, and machine-readable local value pages.",
+          },
+          {
+            id: "machine-attention",
+            title: "Machine discovery",
+            summary: toCountDeltaLine(
+              "High-value machine discovery",
+              recentHighValueMachineHits,
+              previousHighValueMachineHits,
+            ),
+            delta: recentHighValueMachineHits - previousHighValueMachineHits,
+            next:
+              "Refresh the public pages machines are finding so MealScout becomes the easiest source to cite.",
+          },
+          {
+            id: "location-demand",
+            title: "Location demand",
+            summary: toCountDeltaLine(
+              "Fresh location demand",
+              recentLocationCount,
+              previousLocationCount,
+            ),
+            delta: recentLocationCount - previousLocationCount,
+            next:
+              "Turn active locations into city pages, ad packages, and truck recruitment targets.",
+          },
+        ].sort((a, b) => b.delta - a.delta);
+
         const geoAds = geoAdTotals[0] || { impressions: 0, clicks: 0 };
         const geoPings = geoPingTotals[0] || { totalPings: 0, uniqueVisitors: 0 };
-        const topQuery = topQueriesRows[0]?.query || "local food trucks";
+        const topQuery = topTrend?.label || topQueriesRows[0]?.query || "local food trucks";
         const topLocation = cityDemandRows[0]
           ? cityDemandRows[0].businessName ||
             cityDemandRows[0].address ||
             cityDemandRows[0].locationType ||
             "high-demand location"
           : "high-demand location";
-        const topCuisine = cuisineRows[0]?.cuisineType || "food truck";
+        const topCuisine =
+          cuisineValue[0]?.cuisineType || cuisineRows[0]?.cuisineType || "food truck";
         const topAcquisition = acquisitionTargets[0]?.title || "priority asset";
+        const topPriceDeal = bestValueDeals[0];
         const brief = {
-          headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} inventory.`,
+          headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} value right now.`,
           audienceAngle: `Promote around ${topLocation} where location demand and truck interest are forming.`,
-          inventoryAngle: `${videoRows.length} recent recommendation stories and ${geoPings.totalPings} foot-traffic pings create ad packaging potential.`,
-          acquisitionAngle: `${topAcquisition} is a candidate to strengthen before monetization packaging.`,
+          inventoryAngle: `${videoRows.length} recent recommendation stories, ${geoPings.totalPings} foot-traffic pings, and ${bestValueDeals.length} live value offers create ad packaging potential.`,
+          acquisitionAngle: `${topAcquisition} is still a candidate to strengthen before monetization packaging.`,
           recommendedPackage: [
             `Sponsor search and discovery around "${topQuery}"`,
-            `Bundle geo ads with ${topCuisine} content momentum`,
+            `Bundle geo ads with ${topCuisine} trend momentum`,
             `Use ${topLocation} as a localized campaign wedge`,
           ],
         };
@@ -2012,6 +2422,44 @@ export function registerAdminManagementRoutes(app: Express) {
           ok: true,
           generatedAt: new Date().toISOString(),
           brief,
+          changeSinceYesterday: {
+            summary:
+              changeItems[0]?.summary ||
+              "MealScout does not yet have enough daily movement to call a clear change.",
+            items: changeItems.slice(0, 5),
+          },
+          dailyBriefChanges: {
+            promotion: toCountDeltaLine(
+              "Fresh content momentum",
+              recentStoryCount,
+              previousStoryCount,
+            ),
+            demand:
+              topTrend?.summary ||
+              toCountDeltaLine(
+                "Food search demand",
+                recentSearchCount,
+                previousSearchCount,
+              ),
+            acquisition: toCountDeltaLine(
+              "Machine attention on public MealScout pages",
+              recentHighValueMachineHits,
+              previousHighValueMachineHits,
+            ),
+            machineAttention: toCountDeltaLine(
+              "High-value machine discovery",
+              recentHighValueMachineHits,
+              previousHighValueMachineHits,
+            ),
+          },
+          trendWatch,
+          priceScout: {
+            summary: topPriceDeal
+              ? `${topPriceDeal.restaurantName} currently leads Price Scout with ${topPriceDeal.priceSignal}.`
+              : "Price Scout does not have enough active deals yet.",
+            bestDeals: bestValueDeals,
+            cuisineValue,
+          },
           advertiserSignals: {
             topQueries: topQueriesRows,
             cityDemand: cityDemandRows,

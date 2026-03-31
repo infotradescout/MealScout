@@ -2298,6 +2298,7 @@ export default function AdminDashboard() {
       next: item.restaurantId
         ? `Promote this restaurant now and attach a deal or event while attention is active.`
         : "Promote this story now while attention is active.",
+      changed: lisaMarketIntel?.dailyBriefChanges?.promotion,
       rankReason: "Ranked #1 because it has the strongest live content momentum right now.",
       href: item.restaurantId ? `/restaurant/${item.restaurantId}` : "/admin/control-center",
       actionLabel: item.restaurantId ? "Open restaurant" : "Open stream",
@@ -2305,19 +2306,23 @@ export default function AdminDashboard() {
   }, [lisaMarketIntel]);
 
   const demandSpikeItems = useMemo(() => {
-    const queries = Array.isArray(lisaMarketIntel?.advertiserSignals?.topQueries)
-      ? lisaMarketIntel.advertiserSignals.topQueries
+    const trends = Array.isArray(lisaMarketIntel?.trendWatch)
+      ? lisaMarketIntel.trendWatch
       : [];
     const cityDemand = Array.isArray(lisaMarketIntel?.advertiserSignals?.cityDemand)
       ? lisaMarketIntel.advertiserSignals.cityDemand
       : [];
     const demandRows = [
-      ...queries.slice(0, 2).map((item: any, index: number) => ({
-        id: `query:${index}:${item.query}`,
-        title: item.query || "Unnamed demand theme",
-        why: `This search theme appeared ${Number(item.count ?? 0)} times recently.`,
-        next: "Build content, deals, or landing pages around this demand before it cools off.",
-        rankReason: "Ranked #1 because this search pattern is currently the strongest visible demand signal.",
+      ...trends.slice(0, 2).map((item: any) => ({
+        id: item.id,
+        title: item.label || "Unnamed food trend",
+        why: item.summary || `This food trend is moving right now.`,
+        next:
+          item.next ||
+          "Build content, deals, or landing pages around this demand before it cools off.",
+        changed: lisaMarketIntel?.dailyBriefChanges?.demand,
+        rankReason:
+          "Ranked #1 because this food trend is currently the strongest visible demand signal.",
         href: "/admin/control-center",
         actionLabel: "Open stream",
       })),
@@ -2330,6 +2335,7 @@ export default function AdminDashboard() {
           "Location demand cluster",
         why: `${Number(item.requestCount ?? 0)} requests and ${Number(item.interestCount ?? 0)} interest signals point to local demand.`,
         next: "Sell ads here, recruit inventory here, or create a city page that captures the traffic.",
+        changed: lisaMarketIntel?.changeSinceYesterday?.summary,
         rankReason: "Ranked highly because this location cluster is showing the strongest local demand mix.",
         href: "/admin/control-center",
         actionLabel: "Open stream",
@@ -2349,6 +2355,7 @@ export default function AdminDashboard() {
       next:
         (Array.isArray(item.reasons) && item.reasons[0]) ||
         "Review this asset for acquisition, partnership, or cleanup.",
+      changed: lisaMarketIntel?.dailyBriefChanges?.acquisition,
       rankReason: "Ranked #1 because outside attention is ahead of quality more than the other current targets.",
       href: item.canonicalPath || "/admin/control-center",
       actionLabel: "Open target",
@@ -2366,11 +2373,12 @@ export default function AdminDashboard() {
           ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
           : "Improve the page, data completeness, and freshness.")
           .slice(0, 180),
+      changed: lisaMarketIntel?.changeSinceYesterday?.summary,
       rankReason: "Ranked highly because page weakness is limiting authority on a high-interest entity.",
       href: "/admin/control-center",
       actionLabel: "Open stream",
     }));
-  }, [lisaPriorities]);
+  }, [lisaMarketIntel, lisaPriorities]);
 
   const machineAttentionItems = useMemo(() => {
     const items = Array.isArray(lisaSignals?.items) ? lisaSignals.items : [];
@@ -2385,6 +2393,7 @@ export default function AdminDashboard() {
           signal.subjectType === "path"
             ? `Strengthen ${signal.subjectId || "this page"} so outside machines find something worth citing.`
             : "Strengthen the related public entity page and attach fresher information.",
+        changed: lisaMarketIntel?.dailyBriefChanges?.machineAttention,
         rankReason: "Ranked #1 because it is the strongest current off-platform attention signal.",
         href:
           signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
@@ -2395,7 +2404,28 @@ export default function AdminDashboard() {
             ? "Open page"
             : "Open stream",
       }));
-  }, [lisaSignals]);
+  }, [lisaMarketIntel, lisaSignals]);
+
+  const yesterdayChangeItems = useMemo(
+    () =>
+      Array.isArray(lisaMarketIntel?.changeSinceYesterday?.items)
+        ? lisaMarketIntel.changeSinceYesterday.items
+        : [],
+    [lisaMarketIntel],
+  );
+
+  const foodTrendItems = useMemo(
+    () => (Array.isArray(lisaMarketIntel?.trendWatch) ? lisaMarketIntel.trendWatch : []),
+    [lisaMarketIntel],
+  );
+
+  const priceScoutDeals = useMemo(
+    () =>
+      Array.isArray(lisaMarketIntel?.priceScout?.bestDeals)
+        ? lisaMarketIntel.priceScout.bestDeals
+        : [],
+    [lisaMarketIntel],
+  );
 
   const deferBrief = (briefKey: string, mode: "dismiss" | "snooze" | "done") => {
     const hours = mode === "done" ? 24 * 7 : mode === "snooze" ? 4 : 16;
@@ -6763,6 +6793,11 @@ export default function AdminDashboard() {
                           Why this is #1: {topPromotionItem.rankReason}
                         </div>
                       ) : null}
+                      {topPromotionItem?.changed ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          What changed since yesterday: {topPromotionItem.changed}
+                        </div>
+                      ) : null}
                       {topPromotionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topPromotionItem.href}>
@@ -6794,6 +6829,11 @@ export default function AdminDashboard() {
                       {topDemandItem ? (
                         <div className="mt-2 text-xs text-muted-foreground">
                           Why this is #1: {topDemandItem.rankReason}
+                        </div>
+                      ) : null}
+                      {topDemandItem?.changed ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          What changed since yesterday: {topDemandItem.changed}
                         </div>
                       ) : null}
                       {topDemandItem ? (
@@ -6829,6 +6869,11 @@ export default function AdminDashboard() {
                           Why this is #1: {topAcquisitionItem.rankReason}
                         </div>
                       ) : null}
+                      {topAcquisitionItem?.changed ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          What changed since yesterday: {topAcquisitionItem.changed}
+                        </div>
+                      ) : null}
                       {topAcquisitionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topAcquisitionItem.href}>
@@ -6862,6 +6907,11 @@ export default function AdminDashboard() {
                           Why this is #1: {topMachineAttentionItem.rankReason}
                         </div>
                       ) : null}
+                      {topMachineAttentionItem?.changed ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          What changed since yesterday: {topMachineAttentionItem.changed}
+                        </div>
+                      ) : null}
                       {topMachineAttentionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topMachineAttentionItem.href}>
@@ -6880,6 +6930,69 @@ export default function AdminDashboard() {
                           </Button>
                         </div>
                       ) : null}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">What Changed Since Yesterday</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {yesterdayChangeItems.length ? (
+                        yesterdayChangeItems.slice(0, 4).map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium">{item.title}</div>
+                              <Badge variant="outline">
+                                {item.delta > 0 ? "+" : ""}
+                                {item.delta}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 text-muted-foreground">{item.summary}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Yesterday-to-today movement is still too light to summarize yet.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Food Trend Watch</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {foodTrendItems.length ? (
+                        foodTrendItems.slice(0, 4).map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium">{item.label}</div>
+                              <div className="flex gap-2">
+                                <Badge variant="outline">{item.currentCount} now</Badge>
+                                <Badge variant="outline">
+                                  {item.delta > 0 ? "+" : ""}
+                                  {item.delta}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="mt-2 text-muted-foreground">{item.summary}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No clear food trend movement is visible yet.
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -6936,7 +7049,64 @@ export default function AdminDashboard() {
                   </Card>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Price Scout</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {priceScoutDeals.length ? (
+                        priceScoutDeals.slice(0, 4).map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium">{item.restaurantName}</div>
+                              <Badge variant="outline">value {item.valueScore}</Badge>
+                            </div>
+                            <div className="mt-2 text-muted-foreground">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.priceSignal}
+                              {item.cuisineType ? ` in ${item.cuisineType}.` : "."}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: Promote this offer, fold it into advertiser packages, and use it as proof of local value coverage.
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          Price Scout needs more active deals before it can rank value cleanly.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Machine Attention</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {machineAttentionItems.length ? (
+                        machineAttentionItems.map((item: any) => (
+                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="mt-2 text-muted-foreground">
+                              Why it matters: {item.why}
+                            </div>
+                            <div className="mt-2 text-muted-foreground">
+                              What to do: {item.next}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No meaningful outside machine attention is visible yet.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Acquisition Targets</CardTitle>
@@ -6982,31 +7152,6 @@ export default function AdminDashboard() {
                       ) : (
                         <div className="text-sm text-muted-foreground">
                           No obvious authority gaps are showing yet.
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Machine Attention</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {machineAttentionItems.length ? (
-                        machineAttentionItems.map((item: any) => (
-                          <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
-                            <div className="font-medium">{item.title}</div>
-                            <div className="mt-2 text-muted-foreground">
-                              Why it matters: {item.why}
-                            </div>
-                            <div className="mt-2 text-muted-foreground">
-                              What to do: {item.next}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          No meaningful outside machine attention is visible yet.
                         </div>
                       )}
                     </CardContent>
