@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
-import { apiUrl } from "@/lib/api";
+import { fetchJsonWithRetry } from "@/lib/resilientFetch";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -225,16 +225,49 @@ export default function Home() {
     setShowWelcomeModal(false);
   };
 
+  const fetchFeaturedDealsWithRetry = async (): Promise<Deal[]> => {
+    const { response, data } = await fetchJsonWithRetry<Deal[]>(
+      "/api/deals/featured",
+      { credentials: "include" },
+      {
+        attempts: 2,
+        retryStatuses: [503],
+        baseDelayMs: 700,
+        timeoutMs: 10000,
+        fallbackValue: [],
+      },
+    );
+
+    if (response.status === 503) {
+      return [];
+    }
+
+    if (!response.ok) {
+      throw new Error(`Featured deals request failed (${response.status})`);
+    }
+
+    return Array.isArray(data) ? data : [];
+  };
+
   const {
     data: featuredDeals,
     isLoading: featuredLoading,
     isError: featuredError,
-  } = useQuery({
+    refetch: refetchFeaturedDeals,
+  } = useQuery<Deal[]>({
     queryKey: ["/api/deals/featured"],
-    queryFn: () =>
-      fetch(apiUrl("/api/deals/featured"), { credentials: "include" }).then(
-        (res) => res.json()
-      ),
+    queryFn: fetchFeaturedDealsWithRetry,
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "").toLowerCase();
+      const isTransient =
+        message.includes("network") ||
+        message.includes("failed to fetch") ||
+        message.includes("timeout") ||
+        message.includes("503") ||
+        message.includes("service unavailable");
+      return isTransient && failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
   const sortedFeaturedDeals = useMemo(
@@ -793,7 +826,15 @@ export default function Home() {
             </div>
           ) : featuredError ? (
             <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-              We couldn't load deals right now. Try again in a bit.
+              <p>We couldn't load deals right now. Try again in a bit.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => refetchFeaturedDeals()}
+              >
+                Retry Deals
+              </Button>
             </div>
           ) : sortedFeaturedDeals.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
@@ -1024,7 +1065,15 @@ export default function Home() {
                 </div>
               ) : featuredError ? (
                 <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-                  We couldn't load deals right now. Try again in a bit.
+                  <p>We couldn't load deals right now. Try again in a bit.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
+                    onClick={() => refetchFeaturedDeals()}
+                  >
+                    Retry Deals
+                  </Button>
                 </div>
               ) : sortedFeaturedDeals.length > 0 ? (
                 <div className="space-y-3">

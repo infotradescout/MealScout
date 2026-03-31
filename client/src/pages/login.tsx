@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { apiUrl } from "@/lib/api";
+import { fetchJsonWithRetry } from "@/lib/resilientFetch";
 import { Card, CardContent } from "@/components/ui/card";
 import { BackHeader } from "@/components/back-header";
 import { UserCheck, Eye, EyeOff } from "lucide-react";
@@ -39,6 +39,20 @@ export default function Login() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const redirectPath = getSafeRedirectPath();
 
+  const attemptLoginWithRetry = async () =>
+    fetchJsonWithRetry<Record<string, any>>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    }, {
+      attempts: 2,
+      retryStatuses: [503],
+      baseDelayMs: 800,
+      timeoutMs: 10000,
+      fallbackValue: {},
+    });
+
   useEffect(() => {
     if (email) return;
     try {
@@ -69,13 +83,7 @@ export default function Login() {
     setIsLoggingIn(true);
     setNeedsVerification(false);
     try {
-      const response = await fetch(apiUrl("/api/auth/login"), {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      const payload = await response.json().catch(() => ({}));
+      const { response, data: payload } = await attemptLoginWithRetry();
 
       if (!response.ok) {
         if (payload?.code === "google_auth_required") {
@@ -94,6 +102,11 @@ export default function Login() {
         }
         if (payload?.code === "email_not_verified") {
           setNeedsVerification(true);
+        }
+        if (response.status === 503) {
+          throw new Error(
+            "MealScout is temporarily unavailable. Please retry in a few seconds.",
+          );
         }
         throw new Error(payload?.error || "Login failed");
       }

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { fetchJsonWithRetry } from "@/lib/resilientFetch";
 import {
   Building2,
   Calculator,
@@ -77,6 +78,36 @@ type SupplyPreferences = {
   costPerMinuteCents: number;
   pingSuppliers: boolean;
   allowSubstitutions: boolean;
+};
+
+type PriceWatch = {
+  id: string;
+  buyerRestaurantId?: string | null;
+  itemKey: string;
+  itemName: string;
+  targetPriceCents?: number | null;
+  maxRadiusMiles: number;
+  currentBest?: {
+    unitPriceCents: number;
+    observedAt?: string | null;
+    storeName?: string | null;
+    storeCity?: string | null;
+    storeState?: string | null;
+    distanceMiles?: number | null;
+  } | null;
+  targetMet?: boolean;
+  updatedAt?: string;
+};
+
+type PriceWatchAlert = {
+  id: string;
+  watchId?: string | null;
+  itemName: string;
+  message: string;
+  observedPriceCents?: number | null;
+  baselinePriceCents?: number | null;
+  storeName?: string | null;
+  createdAt?: string | null;
 };
 
 type OrderListOffer = {
@@ -146,11 +177,14 @@ const safeText = (v: string | null | undefined, fallback = "Unknown") => {
 export default function SuppliersPage() {
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
-  const [tab, setTab] = useState<"catalog" | "import">("catalog");
+  const [tab, setTab] = useState<"catalog" | "import" | "watch">("catalog");
   const [q, setQ] = useState("");
   const [orderListFile, setOrderListFile] = useState<File | null>(null);
   const [selectedBuyerRestaurantId, setSelectedBuyerRestaurantId] =
     useState<string>("");
+  const [watchItemName, setWatchItemName] = useState("");
+  const [watchTargetPriceDollars, setWatchTargetPriceDollars] = useState("");
+  const [watchRadiusMiles, setWatchRadiusMiles] = useState("25");
   const [importResult, setImportResult] =
     useState<OrderListImportResult | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -472,6 +506,110 @@ export default function SuppliersPage() {
       toast({
         title: "Import failed",
         description: error?.message || "Unable to import order list",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const {
+    data: priceWatches = [],
+    isLoading: isPriceWatchLoading,
+    refetch: refetchPriceWatches,
+  } = useQuery<PriceWatch[]>({
+    queryKey: ["/api/supply/price-watches"],
+    queryFn: async () => {
+      const { response, data } = await fetchJsonWithRetry<PriceWatch[]>(
+        "/api/supply/price-watches",
+        { credentials: "include" },
+        { attempts: 2, retryStatuses: [503], baseDelayMs: 600, fallbackValue: [] },
+      );
+      if ([401, 403, 404].includes(response.status)) return [];
+      if (!response.ok) throw new Error("Failed to load watches");
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: canUseBuyerTools,
+    staleTime: 20_000,
+  });
+
+  const { data: priceWatchAlerts = [] } = useQuery<PriceWatchAlert[]>({
+    queryKey: ["/api/supply/price-watches/alerts"],
+    queryFn: async () => {
+      const { response, data } = await fetchJsonWithRetry<PriceWatchAlert[]>(
+        "/api/supply/price-watches/alerts",
+        { credentials: "include" },
+        { attempts: 2, retryStatuses: [503], baseDelayMs: 600, fallbackValue: [] },
+      );
+      if ([401, 403, 404].includes(response.status)) return [];
+      if (!response.ok) throw new Error("Failed to load watch alerts");
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: canUseBuyerTools,
+    staleTime: 20_000,
+  });
+
+  const createPriceWatch = useMutation({
+    mutationFn: async () => {
+      if (!watchItemName.trim()) {
+        throw new Error("Enter an ingredient or supply item name.");
+      }
+      const targetPriceCents =
+        watchTargetPriceDollars.trim().length > 0
+          ? Math.max(1, Math.round(Number(watchTargetPriceDollars) * 100))
+          : null;
+      const radiusMiles = Math.max(1, Math.min(250, Number(watchRadiusMiles || 25) || 25));
+
+      const res = await fetch("/api/supply/price-watches", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemName: watchItemName.trim(),
+          targetPriceCents,
+          maxRadiusMiles: radiusMiles,
+          buyerRestaurantId: selectedBuyerRestaurantId || null,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to create price watch");
+      }
+      return data;
+    },
+    onSuccess: async () => {
+      setWatchItemName("");
+      setWatchTargetPriceDollars("");
+      await refetchPriceWatches();
+      toast({ title: "Watch added", description: "We'll track local price movement." });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to add watch",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deletePriceWatch = useMutation({
+    mutationFn: async (watchId: string) => {
+      const res = await fetch(`/api/supply/price-watches/${encodeURIComponent(watchId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to remove watch");
+      }
+      return data;
+    },
+    onSuccess: async () => {
+      await refetchPriceWatches();
+      toast({ title: "Watch removed" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to remove watch",
+        description: error?.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -799,6 +937,13 @@ export default function SuppliersPage() {
               Catalog
             </TabsTrigger>
             <TabsTrigger
+              value="watch"
+              className="flex-1"
+              disabled={!canUseBuyerTools}
+            >
+              Price watch
+            </TabsTrigger>
+            <TabsTrigger
               value="import"
               className="flex-1"
               disabled={!canUseBuyerTools}
@@ -856,6 +1001,135 @@ export default function SuppliersPage() {
                         </option>
                       ))}
                     </select>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="watch">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Localized Price Watch</CardTitle>
+                <CardDescription>
+                  Track ingredient and supply prices by your area and get alerts when targets hit.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1 md:col-span-1">
+                    <Label>Item</Label>
+                    <Input
+                      value={watchItemName}
+                      onChange={(e) => setWatchItemName(e.target.value)}
+                      placeholder="eggs, fryer oil, cups..."
+                      disabled={!canUseBuyerTools}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Target price ($)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={watchTargetPriceDollars}
+                      onChange={(e) => setWatchTargetPriceDollars(e.target.value)}
+                      placeholder="Optional"
+                      disabled={!canUseBuyerTools}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Radius (miles)</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={250}
+                      value={watchRadiusMiles}
+                      onChange={(e) => setWatchRadiusMiles(e.target.value)}
+                      disabled={!canUseBuyerTools}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => createPriceWatch.mutate()}
+                    disabled={!canUseBuyerTools || createPriceWatch.isPending}
+                  >
+                    {createPriceWatch.isPending ? "Adding watch..." : "Add watch"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => refetchPriceWatches()}
+                    disabled={isPriceWatchLoading}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+
+                {isPriceWatchLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading watches...</div>
+                ) : priceWatches.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No watches yet. Add one to start tracking local market movement.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {priceWatches.map((watch) => (
+                      <div
+                        key={watch.id}
+                        className="rounded-md border p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{watch.itemName}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Radius {watch.maxRadiusMiles} mi
+                            {watch.currentBest
+                              ? ` • Best $${(Number(watch.currentBest.unitPriceCents || 0) / 100).toFixed(2)} at ${watch.currentBest.storeName || "store"}`
+                              : " • No local observations yet"}
+                          </div>
+                          {watch.targetPriceCents ? (
+                            <div className="text-xs text-muted-foreground">
+                              Target ${(Number(watch.targetPriceCents || 0) / 100).toFixed(2)}
+                              {watch.targetMet ? " • target hit" : ""}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {watch.targetMet ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white">
+                              Target hit
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">Watching</Badge>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deletePriceWatch.mutate(watch.id)}
+                            disabled={deletePriceWatch.isPending}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-md border p-3">
+                  <div className="text-sm font-medium mb-2">Recent alerts</div>
+                  {priceWatchAlerts.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">No alerts yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {priceWatchAlerts.slice(0, 8).map((alert) => (
+                        <div key={alert.id} className="text-xs text-muted-foreground rounded border p-2">
+                          <div className="text-foreground font-medium">{alert.itemName}</div>
+                          <div>{alert.message}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </CardContent>

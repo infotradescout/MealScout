@@ -756,6 +756,101 @@ export const supplyPrices = pgTable(
   ],
 );
 
+export const supplyPriceWatches = pgTable(
+  "supply_price_watches",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
+      onDelete: "set null",
+    }),
+    itemKey: varchar("item_key").notNull(),
+    itemName: varchar("item_name").notNull(),
+    targetPriceCents: integer("target_price_cents"),
+    maxRadiusMiles: integer("max_radius_miles").notNull().default(25),
+    isActive: boolean("is_active").notNull().default(true),
+    lastTriggeredAt: timestamp("last_triggered_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_supply_price_watches_user").on(table.userId),
+    index("idx_supply_price_watches_item_key").on(table.itemKey),
+    index("idx_supply_price_watches_active").on(table.isActive),
+  ],
+);
+
+export const supplyPriceAlerts = pgTable(
+  "supply_price_alerts",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    watchId: varchar("watch_id").references(() => supplyPriceWatches.id, {
+      onDelete: "set null",
+    }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
+      onDelete: "set null",
+    }),
+    itemKey: varchar("item_key").notNull(),
+    itemName: varchar("item_name").notNull(),
+    alertType: varchar("alert_type").notNull().default("price_target_hit"),
+    message: text("message").notNull(),
+    observedPriceCents: integer("observed_price_cents"),
+    baselinePriceCents: integer("baseline_price_cents"),
+    observedAt: timestamp("observed_at"),
+    storeId: varchar("store_id").references(() => supplyStores.id, {
+      onDelete: "set null",
+    }),
+    storeLocationId: varchar("store_location_id").references(() => supplyStoreLocations.id, {
+      onDelete: "set null",
+    }),
+    storeName: varchar("store_name"),
+    storeCity: varchar("store_city"),
+    storeState: varchar("store_state"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_supply_price_alerts_user_created").on(table.userId, table.createdAt),
+    index("idx_supply_price_alerts_watch").on(table.watchId),
+    index("idx_supply_price_alerts_item_key").on(table.itemKey),
+  ],
+);
+
+export const supplyPriceDailySnapshots = pgTable(
+  "supply_price_daily_snapshots",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    itemKey: varchar("item_key").notNull(),
+    itemName: varchar("item_name").notNull(),
+    areaKey: varchar("area_key").notNull(),
+    snapshotDay: varchar("snapshot_day").notNull(), // YYYY-MM-DD
+    minPriceCents: integer("min_price_cents"),
+    medianPriceCents: integer("median_price_cents"),
+    maxPriceCents: integer("max_price_cents"),
+    sampleCount: integer("sample_count").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    unique("uq_supply_price_daily_snapshots_item_area_day").on(
+      table.itemKey,
+      table.areaKey,
+      table.snapshotDay,
+    ),
+    index("idx_supply_price_daily_snapshots_item_day").on(table.itemKey, table.snapshotDay),
+  ],
+);
+
 export const supplyShoppingLists = pgTable(
   "supply_shopping_lists",
   {

@@ -18,7 +18,17 @@ export function useAuth() {
   } = useQuery<User & { requiresPasswordReset?: boolean }>({
     queryKey: ["/api/auth/user"],
     queryFn: getQueryFn({ on401: "returnNull", timeoutMs: 6000 }),
-    retry: false,
+    retry: (failureCount, error: any) => {
+      const message = String(error?.message || "").toLowerCase();
+      const isTransient =
+        message.includes("service unavailable") ||
+        message.includes("timeout") ||
+        message.includes("network") ||
+        message.includes("failed to fetch") ||
+        message.includes("503");
+      return isTransient && failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     staleTime: 5 * 60_000, // Consider user data fresh for 5 minutes (reduce auth calls)

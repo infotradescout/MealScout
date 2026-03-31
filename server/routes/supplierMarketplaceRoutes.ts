@@ -10,11 +10,19 @@ import {
   supplierProducts,
   supplierRequests,
   supplierRequestItems,
+  supplyItemAliases,
+  supplyItems,
   supplyOrderPreferences,
+  supplyPriceAlerts,
+  supplyPriceDailySnapshots,
+  supplyPrices,
+  supplyPriceWatches,
   supplyDemandNotifications,
   supplyDemands,
   supplyShoppingListItems,
   supplyShoppingLists,
+  supplyStoreLocations,
+  supplyStores,
   suppliers,
 } from "@shared/schema";
 import { and, desc, eq, ilike, inArray, lt, or } from "drizzle-orm";
@@ -512,6 +520,148 @@ async function ensureSupplyOrderPreferences(userId: string) {
   return created;
 }
 
+const toDayKey = (value: Date) => {
+  const yyyy = value.getUTCFullYear();
+  const mm = String(value.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(value.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+async function resolveSupplyItemIds(params: { itemKey?: string | null; itemName?: string | null }) {
+  const rawKey = String(params.itemKey || "").trim();
+  const rawName = String(params.itemName || "").trim();
+  const normalizedKey = normalizeSupplyKey(rawKey || rawName);
+
+  const itemCandidates = await db
+    .select({ id: supplyItems.id, itemKey: supplyItems.itemKey, canonicalName: supplyItems.canonicalName })
+    .from(supplyItems)
+    .where(
+      or(
+        eq(supplyItems.itemKey, normalizedKey),
+        ilike(supplyItems.canonicalName, `%${rawName || rawKey}%`),
+      ),
+    )
+    .limit(30);
+
+  const aliasCandidates = await db
+    .select({ itemId: supplyItemAliases.itemId })
+    .from(supplyItemAliases)
+    .where(
+      or(
+        eq(supplyItemAliases.aliasKey, normalizedKey),
+        ilike(supplyItemAliases.alias, `%${rawName || rawKey}%`),
+      ),
+    )
+    .limit(40);
+
+  const itemIds = Array.from(
+    new Set([
+      ...itemCandidates.map((row: any) => String(row.id || "")).filter(Boolean),
+      ...aliasCandidates.map((row: any) => String(row.itemId || "")).filter(Boolean),
+    ]),
+  );
+
+  return {
+    normalizedKey,
+    itemIds,
+    canonicalName: String(itemCandidates[0]?.canonicalName || rawName || rawKey || normalizedKey),
+  };
+}
+
+async function getLocalizedPriceOffers(params: {
+  itemKey?: string | null;
+  itemName?: string | null;
+  buyerRestaurant?: any | null;
+  maxRadiusMiles?: number | null;
+}) {
+  const { itemIds } = await resolveSupplyItemIds({ itemKey: params.itemKey, itemName: params.itemName });
+  if (itemIds.length === 0) return [] as any[];
+
+  const priceRows = await db
+    .select()
+    .from(supplyPrices)
+    .where(and(inArray(supplyPrices.itemId, itemIds), eq(supplyPrices.currency, "usd")))
+    .orderBy(desc(supplyPrices.observedAt))
+    .limit(2000);
+  if (priceRows.length === 0) return [] as any[];
+
+  const storeIds = Array.from(
+    new Set((priceRows as any[]).map((row) => String(row.storeId || "")).filter(Boolean)),
+  );
+  const locationIds = Array.from(
+    new Set((priceRows as any[]).map((row) => String(row.storeLocationId || "")).filter(Boolean)),
+  );
+
+  const [stores, locations] = await Promise.all([
+    storeIds.length > 0
+      ? db
+          .select()
+          .from(supplyStores)
+          .where(and(inArray(supplyStores.id, storeIds), eq(supplyStores.isActive, true)))
+      : Promise.resolve([] as any[]),
+    locationIds.length > 0
+      ? db
+          .select()
+          .from(supplyStoreLocations)
+          .where(and(inArray(supplyStoreLocations.id, locationIds), eq(supplyStoreLocations.isActive, true)))
+      : Promise.resolve([] as any[]),
+  ]);
+
+  const storeById = new Map((stores as any[]).map((row: any) => [String(row.id), row]));
+  const locationById = new Map((locations as any[]).map((row: any) => [String(row.id), row]));
+
+  const buyerLat = Number(params.buyerRestaurant?.latitude);
+  const buyerLon = Number(params.buyerRestaurant?.longitude);
+  const buyerState = String(params.buyerRestaurant?.state || "").trim();
+  const hasBuyerCoords = Number.isFinite(buyerLat) && Number.isFinite(buyerLon);
+  const maxRadius = Math.max(1, Number(params.maxRadiusMiles || 25) || 25);
+
+  return (priceRows as any[])
+    .map((price: any) => {
+      const store = storeById.get(String(price.storeId || ""));
+      if (!store) return null;
+      const location = price.storeLocationId
+        ? locationById.get(String(price.storeLocationId || "")) || null
+        : null;
+
+      if (buyerState) {
+        const locationState = String(location?.state || "").trim();
+        if (locationState && locationState !== buyerState) {
+          return null;
+        }
+      }
+
+      const lat = Number(location?.latitude);
+      const lon = Number(location?.longitude);
+      const distanceMiles =
+        hasBuyerCoords && Number.isFinite(lat) && Number.isFinite(lon)
+          ? haversineMiles({ lat: buyerLat, lon: buyerLon }, { lat, lon })
+          : null;
+
+      if (distanceMiles !== null && distanceMiles > maxRadius) {
+        return null;
+      }
+
+      return {
+        unitPriceCents: Number(price.unitPriceCents || 0),
+        observedAt: price.observedAt,
+        storeId: String(store.id),
+        storeName: String(store.name || "Unknown store"),
+        storeLocationId: location ? String(location.id) : null,
+        storeCity: location?.city ? String(location.city) : null,
+        storeState: location?.state ? String(location.state) : null,
+        distanceMiles,
+      };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => {
+      if (a.unitPriceCents !== b.unitPriceCents) return a.unitPriceCents - b.unitPriceCents;
+      const aObserved = new Date(a.observedAt || 0).getTime();
+      const bObserved = new Date(b.observedAt || 0).getTime();
+      return bObserved - aObserved;
+    });
+}
+
 export function registerSupplierMarketplaceRoutes(app: Express) {
   // Logged-in users can add a supplier profile to their existing account.
   app.post("/api/supplier/profile/activate", isAuthenticated, async (req: any, res) => {
@@ -676,6 +826,272 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid preferences", errors: error.errors });
       }
       res.status(500).json({ message: error.message || "Failed to update preferences" });
+    }
+  });
+
+  app.get("/api/supply/price-watches", isAuthenticated, async (req: any, res) => {
+    try {
+      const watches = await db
+        .select()
+        .from(supplyPriceWatches)
+        .where(and(eq(supplyPriceWatches.userId, String(req.user.id)), eq(supplyPriceWatches.isActive, true)))
+        .orderBy(desc(supplyPriceWatches.updatedAt))
+        .limit(200);
+
+      const buyerIds = Array.from(
+        new Set(
+          (watches as any[])
+            .map((watch: any) => String(watch.buyerRestaurantId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const buyerRestaurants =
+        buyerIds.length > 0
+          ? await db
+              .select()
+              .from(restaurants)
+              .where(inArray(restaurants.id, buyerIds))
+          : [];
+      const buyerById = new Map(
+        (buyerRestaurants as any[]).map((restaurant: any) => [String(restaurant.id), restaurant]),
+      );
+
+      const now = new Date();
+      const minTriggerGapMs = 12 * 60 * 60 * 1000;
+      const rows = await Promise.all(
+        (watches as any[]).map(async (watch: any) => {
+          const buyerRestaurant = watch.buyerRestaurantId
+            ? buyerById.get(String(watch.buyerRestaurantId)) || null
+            : null;
+          const offers = await getLocalizedPriceOffers({
+            itemKey: String(watch.itemKey || ""),
+            itemName: String(watch.itemName || ""),
+            buyerRestaurant,
+            maxRadiusMiles: Number(watch.maxRadiusMiles || 25),
+          });
+          const best = offers[0] || null;
+          const targetPriceCents =
+            watch.targetPriceCents === null || watch.targetPriceCents === undefined
+              ? null
+              : Number(watch.targetPriceCents);
+          const targetMet =
+            targetPriceCents !== null && best ? Number(best.unitPriceCents) <= targetPriceCents : false;
+
+          if (targetMet) {
+            const lastTriggeredAt = watch.lastTriggeredAt ? new Date(watch.lastTriggeredAt) : null;
+            const stale = !lastTriggeredAt || now.getTime() - lastTriggeredAt.getTime() > minTriggerGapMs;
+            if (stale) {
+              const alertMessage = `${watch.itemName} hit your target at $${(
+                Number(best.unitPriceCents || 0) / 100
+              ).toFixed(2)} (${best.storeName}).`;
+              await db.insert(supplyPriceAlerts).values({
+                watchId: String(watch.id),
+                userId: String(req.user.id),
+                buyerRestaurantId: watch.buyerRestaurantId ? String(watch.buyerRestaurantId) : null,
+                itemKey: String(watch.itemKey || ""),
+                itemName: String(watch.itemName || ""),
+                alertType: "price_target_hit",
+                message: alertMessage,
+                observedPriceCents: Number(best.unitPriceCents || 0),
+                baselinePriceCents: targetPriceCents,
+                observedAt: best.observedAt ? new Date(best.observedAt) : now,
+                storeId: best.storeId,
+                storeLocationId: best.storeLocationId,
+                storeName: best.storeName,
+                storeCity: best.storeCity,
+                storeState: best.storeState,
+                createdAt: now,
+              } as any);
+
+              await db
+                .update(supplyPriceWatches)
+                .set({ lastTriggeredAt: now, updatedAt: now } as any)
+                .where(eq(supplyPriceWatches.id, String(watch.id)));
+            }
+          }
+
+          const areaKey = buyerRestaurant?.state
+            ? `state:${String(buyerRestaurant.state).trim()}`
+            : "global";
+          const offerPrices = offers
+            .map((offer: any) => Number(offer.unitPriceCents || 0))
+            .filter((value: number) => Number.isFinite(value) && value >= 0)
+            .sort((a: number, b: number) => a - b);
+          if (offerPrices.length > 0) {
+            const minPrice = offerPrices[0];
+            const maxPrice = offerPrices[offerPrices.length - 1];
+            const medianPrice =
+              offerPrices.length % 2 === 0
+                ? Math.round((offerPrices[offerPrices.length / 2 - 1] + offerPrices[offerPrices.length / 2]) / 2)
+                : offerPrices[Math.floor(offerPrices.length / 2)];
+            const snapshotDay = toDayKey(now);
+            await db
+              .insert(supplyPriceDailySnapshots)
+              .values({
+                itemKey: String(watch.itemKey || ""),
+                itemName: String(watch.itemName || ""),
+                areaKey,
+                snapshotDay,
+                minPriceCents: minPrice,
+                medianPriceCents: medianPrice,
+                maxPriceCents: maxPrice,
+                sampleCount: offerPrices.length,
+                createdAt: now,
+                updatedAt: now,
+              } as any)
+              .onConflictDoUpdate({
+                target: [
+                  supplyPriceDailySnapshots.itemKey,
+                  supplyPriceDailySnapshots.areaKey,
+                  supplyPriceDailySnapshots.snapshotDay,
+                ],
+                set: {
+                  itemName: String(watch.itemName || ""),
+                  minPriceCents: minPrice,
+                  medianPriceCents: medianPrice,
+                  maxPriceCents: maxPrice,
+                  sampleCount: offerPrices.length,
+                  updatedAt: now,
+                } as any,
+              });
+          }
+
+          return {
+            ...watch,
+            currentBest: best
+              ? {
+                  unitPriceCents: Number(best.unitPriceCents || 0),
+                  observedAt: best.observedAt,
+                  storeName: best.storeName,
+                  storeCity: best.storeCity,
+                  storeState: best.storeState,
+                  distanceMiles: best.distanceMiles,
+                }
+              : null,
+            targetMet,
+          };
+        }),
+      );
+
+      res.json(rows);
+    } catch (error: any) {
+      console.error("Error loading price watches:", error);
+      res.status(500).json({ message: error.message || "Failed to load price watches" });
+    }
+  });
+
+  app.post("/api/supply/price-watches", isAuthenticated, async (req: any, res) => {
+    try {
+      const schema = z.object({
+        buyerRestaurantId: z.string().optional().nullable(),
+        itemName: z.string().trim().min(1).max(160),
+        itemKey: z.string().trim().max(160).optional().nullable(),
+        targetPriceCents: z.coerce.number().int().min(1).max(10_000_000).optional().nullable(),
+        maxRadiusMiles: z.coerce.number().int().min(1).max(250).optional(),
+      });
+      const parsed = schema.parse(req.body || {});
+
+      let buyerRestaurantId: string | null = null;
+      if (parsed.buyerRestaurantId) {
+        const buyerRestaurant = await resolveBuyerRestaurantOrThrow(req, String(parsed.buyerRestaurantId));
+        buyerRestaurantId = String((buyerRestaurant as any).id);
+      }
+
+      const itemKey = normalizeSupplyKey(String(parsed.itemKey || parsed.itemName || ""));
+      const now = new Date();
+      const [created] = await db
+        .insert(supplyPriceWatches)
+        .values({
+          userId: String(req.user.id),
+          buyerRestaurantId,
+          itemKey,
+          itemName: String(parsed.itemName).trim(),
+          targetPriceCents:
+            parsed.targetPriceCents === null || parsed.targetPriceCents === undefined
+              ? null
+              : Number(parsed.targetPriceCents),
+          maxRadiusMiles: Number(parsed.maxRadiusMiles || 25),
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        } as any)
+        .returning();
+
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating price watch:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid watch", errors: error.errors });
+      }
+      if (String(error?.message || "") === "Not authorized") {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      res.status(500).json({ message: error.message || "Failed to create price watch" });
+    }
+  });
+
+  app.delete("/api/supply/price-watches/:watchId", isAuthenticated, async (req: any, res) => {
+    try {
+      const watchId = String(req.params.watchId || "").trim();
+      const [watch] = await db
+        .select()
+        .from(supplyPriceWatches)
+        .where(and(eq(supplyPriceWatches.id, watchId), eq(supplyPriceWatches.userId, String(req.user.id))))
+        .limit(1);
+      if (!watch) return res.status(404).json({ message: "Watch not found" });
+
+      await db
+        .update(supplyPriceWatches)
+        .set({ isActive: false, updatedAt: new Date() } as any)
+        .where(eq(supplyPriceWatches.id, String((watch as any).id)));
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting price watch:", error);
+      res.status(500).json({ message: error.message || "Failed to delete price watch" });
+    }
+  });
+
+  app.get("/api/supply/price-watches/alerts", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db
+        .select()
+        .from(supplyPriceAlerts)
+        .where(eq(supplyPriceAlerts.userId, String(req.user.id)))
+        .orderBy(desc(supplyPriceAlerts.createdAt))
+        .limit(120);
+      res.json(rows);
+    } catch (error: any) {
+      console.error("Error loading price watch alerts:", error);
+      res.status(500).json({ message: error.message || "Failed to load price alerts" });
+    }
+  });
+
+  app.get("/api/supply/price-watches/:watchId/history", isAuthenticated, async (req: any, res) => {
+    try {
+      const watchId = String(req.params.watchId || "").trim();
+      const [watch] = await db
+        .select()
+        .from(supplyPriceWatches)
+        .where(and(eq(supplyPriceWatches.id, watchId), eq(supplyPriceWatches.userId, String(req.user.id))))
+        .limit(1);
+      if (!watch) return res.status(404).json({ message: "Watch not found" });
+
+      const dayLimit = Math.min(Number(req.query?.days || 30) || 30, 90);
+      const snapshots = await db
+        .select()
+        .from(supplyPriceDailySnapshots)
+        .where(eq(supplyPriceDailySnapshots.itemKey, String((watch as any).itemKey || "")))
+        .orderBy(desc(supplyPriceDailySnapshots.snapshotDay))
+        .limit(dayLimit);
+
+      res.json({
+        watch,
+        snapshots: (snapshots as any[]).reverse(),
+      });
+    } catch (error: any) {
+      console.error("Error loading watch history:", error);
+      res.status(500).json({ message: error.message || "Failed to load watch history" });
     }
   });
 
