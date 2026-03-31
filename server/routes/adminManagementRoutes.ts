@@ -47,7 +47,6 @@ import {
   creditLedger,
   apiKeys,
   clientQuotas,
-  rateLimitCounters,
 } from "@shared/schema";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {

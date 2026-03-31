@@ -22,6 +22,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   timestamp,
   varchar,
   text,
@@ -1450,6 +1451,7 @@ export const clientQuotas = pgTable(
     updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
+    unique("uq_client_quotas_user").on(table.userId),
     index("idx_client_quotas_user").on(table.userId),
     index("idx_client_quotas_tier").on(table.tier),
   ],
@@ -1459,11 +1461,16 @@ export const clientQuotas = pgTable(
 export const rateLimitCounters = pgTable(
   "rate_limit_counters",
   {
-    key: varchar("key").primaryKey(), // e.g., 'rl:api_key_id:2024-03-31:14'
+    scope: varchar("scope").notNull(),
+    identityKey: varchar("identity_key").notNull(),
+    windowStart: integer("window_start").notNull(),
     count: integer("count").notNull().default(0),
-    expiresAt: timestamp("expires_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (table) => [index("idx_rl_counters_expiry").on(table.expiresAt)],
+  (table) => [
+    index("idx_rate_limit_counters_updated_at").on(table.updatedAt),
+    primaryKey({ columns: [table.scope, table.identityKey, table.windowStart] }),
+  ],
 );
 
 // Relations
