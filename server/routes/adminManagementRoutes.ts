@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
-import { eq, and, inArray, or, sql, desc, isNull, gte, lt } from "drizzle-orm";
+import { eq, and, inArray, or, sql, desc, isNull, gte, lt, ne } from "drizzle-orm";
 import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { sanitizeUser, sanitizeUsers } from "../utils/sanitize";
@@ -45,6 +45,9 @@ import {
   affiliateCommissionLedger,
   affiliateWithdrawals,
   creditLedger,
+  apiKeys,
+  clientQuotas,
+  rateLimitCounters,
 } from "@shared/schema";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {
@@ -171,10 +174,68 @@ const fingerprintToken = (token: string) =>
     ? crypto.createHash("sha256").update(token).digest("hex").slice(0, 16)
     : "anonymous";
 
+/**
+ * Validates a Bearer token against either environment-based "master" tokens
+ * or tiered API keys in the database. Returns quota and owner info if valid.
+ */
+async function validateFeedAccess(bearerToken: string) {
+  if (!bearerToken) return null;
+
+  // 1. Check persistent environment secrets (Master access)
+  const masterTokens = getConfiguredPriceScoutTokens();
+  if (masterTokens.includes(bearerToken)) {
+    return {
+      type: "master",
+      tier: "unlimited",
+      rateLimitPerHour: 1000,
+      monthlyLimit: 100000,
+      userId: "system",
+      keyId: "env_master",
+    };
+  }
+
+  // 2. Check Database API Keys (Tiered/Paid access)
+  const [keyRecord] = await db
+    .select({
+      id: apiKeys.id,
+      userId: apiKeys.userId,
+      isActive: apiKeys.isActive,
+      expiresAt: apiKeys.expiresAt,
+      // Joined quota info
+      tier: clientQuotas.tier,
+      rateLimitPerHour: clientQuotas.rateLimitPerHour,
+      monthlyLimit: clientQuotas.monthlyRequestLimit,
+      quotaActive: clientQuotas.isActive,
+    })
+    .from(apiKeys)
+    .innerJoin(clientQuotas, eq(clientQuotas.userId, apiKeys.userId))
+    .where(
+      and(
+        eq(apiKeys.keyPrefix, bearerToken.slice(0, 8)),
+        eq(apiKeys.isActive, true),
+        or(isNull(apiKeys.expiresAt), gte(apiKeys.expiresAt, new Date())),
+      ),
+    )
+    .limit(1);
+
+  if (keyRecord && keyRecord.quotaActive !== false) {
+    return {
+      type: "tiered",
+      tier: keyRecord.tier || "bronze",
+      rateLimitPerHour: keyRecord.rateLimitPerHour || 60,
+      monthlyLimit: keyRecord.monthlyLimit || 1000,
+      userId: keyRecord.userId,
+      keyId: keyRecord.id,
+    };
+  }
+
+  return null;
+}
+
 const priceScoutFeedLimiter = distributedRateLimit({
   scope: "api:price-scout-feed",
-  windowMs: 60 * 1000,
-  limit: Math.max(10, Number(process.env.PRICESCOUT_FEED_RATE_LIMIT || 120) || 120),
+  windowMs: 60 * 60 * 1000, // Hourly window for pricing tiers
+  limit: 60, // Default fallback
   key: (req: any) => {
     const token = extractBearerToken(String(req.get?.("authorization") || ""));
     if (token) return `token:${fingerprintToken(token)}`;
@@ -2653,32 +2714,33 @@ export function registerAdminManagementRoutes(app: Express) {
     priceScoutFeedLimiter,
     async (req: any, res) => {
       try {
-        const configuredTokens = getConfiguredPriceScoutTokens();
         const bearerToken = extractBearerToken(req.get("authorization"));
-        const bearerTokenValid = bearerToken
-          ? configuredTokens.includes(bearerToken)
-          : false;
+        const accessInfo = await validateFeedAccess(bearerToken);
+
         const userType = String(req.user?.userType || "").trim();
         const userIsStaff =
-          userType === "staff" || userType === "admin" || userType === "super_admin";
+          userType === "staff" ||
+          userType === "admin" ||
+          userType === "super_admin";
 
-        if (!bearerTokenValid && !userIsStaff) {
+        if (!accessInfo && !userIsStaff) {
           return res.status(401).json({
             message:
-              "Unauthorized. Use staff session auth or Authorization: Bearer <token>.",
+              "Unauthorized. Use staff session auth or valid API token.",
           });
         }
 
-        if (bearerToken && !bearerTokenValid) {
-          return res.status(401).json({ message: "Invalid API token" });
-        }
+        const authMode = accessInfo ? "token" : "session";
+        const tier = accessInfo?.tier || "staff";
+        const tokenFingerprint = bearerToken ? fingerprintToken(bearerToken) : null;
 
-        const authMode = bearerTokenValid ? "token" : "session";
-        const tokenFingerprint = bearerTokenValid
-          ? fingerprintToken(bearerToken)
-          : null;
+        // Custom limits if configured in accessInfo
+        const effectiveRateLimit = accessInfo?.rateLimitPerHour || 120;
 
-        const sinceHours = Math.max(1, Math.min(24 * 14, Number(req.query?.hours || 48) || 48));
+        const sinceHours = Math.max(
+          1,
+          Math.min(24 * 14, Number(req.query?.hours || 48) || 48),
+        );
         const dealLimit = Math.max(5, Math.min(200, Number(req.query?.dealLimit || 40) || 40));
         const laneLimit = Math.max(10, Math.min(5000, Number(req.query?.laneLimit || 1000) || 1000));
         const format = String(req.query?.format || "json").trim().toLowerCase();
@@ -2778,7 +2840,14 @@ export function registerAdminManagementRoutes(app: Express) {
           },
           auth: {
             mode: authMode,
+            tier,
             tokenFingerprint,
+            quota: accessInfo
+              ? {
+                  limit: accessInfo.monthlyLimit,
+                  rateLimit: accessInfo.rateLimitPerHour,
+                }
+              : "unlimited",
           },
           deals: bestDeals,
           supplyLanes: (supplyFeed as any)?.lanes || [],
@@ -2787,6 +2856,7 @@ export function registerAdminManagementRoutes(app: Express) {
         const usageProps = {
           endpoint: "/api/admin/lisa/price-scout-feed",
           authMode,
+          tier,
           tokenFingerprint,
           format,
           sinceHours,
@@ -2796,6 +2866,14 @@ export function registerAdminManagementRoutes(app: Express) {
           supplyRecordsReturned: Number((supplyFeed as any)?.total || 0),
           laneCounts: (supplyFeed as any)?.laneCounts || {},
         };
+
+        // Increment monthly usage if it's a tiered client
+        if (accessInfo?.type === "tiered" && accessInfo.userId !== "system") {
+          db.update(clientQuotas)
+            .set({ currentMonthlyUsage: sql`${clientQuotas.currentMonthlyUsage} + 1` })
+            .where(eq(clientQuotas.userId, accessInfo.userId))
+            .catch((err: any) => console.error("Quota update failed:", err));
+        }
 
         db.insert(telemetryEvents)
           .values({

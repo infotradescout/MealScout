@@ -1430,6 +1430,42 @@ export const apiKeys = pgTable(
   ],
 );
 
+// Quota tiers for API clients (Bronze, Silver, Gold, etc.)
+export const clientQuotas = pgTable(
+  "client_quotas",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tier: varchar("tier", { length: 20 }).notNull().default("bronze"), // 'bronze' | 'silver' | 'gold' | 'custom'
+    rateLimitPerHour: integer("rate_limit_per_hour").notNull().default(60),
+    monthlyRequestLimit: integer("monthly_request_limit").notNull().default(1000),
+    lastBillingCycle: timestamp("last_billing_cycle").defaultNow(),
+    currentMonthlyUsage: integer("current_monthly_usage").default(0),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_client_quotas_user").on(table.userId),
+    index("idx_client_quotas_tier").on(table.tier),
+  ],
+);
+
+// High-performance rate limit counters for distributed environments
+export const rateLimitCounters = pgTable(
+  "rate_limit_counters",
+  {
+    key: varchar("key").primaryKey(), // e.g., 'rl:api_key_id:2024-03-31:14'
+    count: integer("count").notNull().default(0),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (table) => [index("idx_rl_counters_expiry").on(table.expiresAt)],
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   restaurants: many(restaurants),
@@ -1445,11 +1481,19 @@ export const usersRelations = relations(users, ({ many }) => ({
   accountSetupTokens: many(accountSetupTokens),
   emailVerificationTokens: many(emailVerificationTokens),
   apiKeys: many(apiKeys),
+  clientQuotas: many(clientQuotas),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, {
     fields: [apiKeys.userId],
+    references: [users.id],
+  }),
+}));
+
+export const clientQuotasRelations = relations(clientQuotas, ({ one }) => ({
+  user: one(users, {
+    fields: [clientQuotas.userId],
     references: [users.id],
   }),
 }));
