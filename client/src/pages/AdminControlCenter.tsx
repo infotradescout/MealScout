@@ -932,6 +932,7 @@ export default function AdminControlCenter() {
         title: item.title || "Top promotion opportunity",
         why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
         next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
+        rankReason: `Ranked #1 because it currently has the strongest live attention in MealScout content.`,
         actionLabel: linkedEntity ? "Focus restaurant" : "Open livestream",
         onAction: () => {
           if (linkedEntity) {
@@ -953,6 +954,7 @@ export default function AdminControlCenter() {
         item.reasons?.[0]
           ? `Fix ${toPlainLabel(item.reasons[0])} first.`
           : "Improve the page quality and freshness first.",
+      rankReason: `Ranked #1 because demand and weak page quality are overlapping here more than anywhere else.`,
       actionLabel: "Focus page",
       onAction: () => focusEntity(item, "overview"),
     }));
@@ -969,6 +971,7 @@ export default function AdminControlCenter() {
         why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
         next:
           "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
+        rankReason: `Ranked #1 because outside interest is high while the asset is still relatively weak.`,
         actionLabel: linkedEntity ? "Focus target" : "Open page",
         onAction: () => {
           if (linkedEntity) {
@@ -990,6 +993,7 @@ export default function AdminControlCenter() {
         title: item.title || "Top machine-attention opportunity",
         why: buildSignalSummary(item),
         next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
+        rankReason: `Ranked #1 because this is the strongest current off-platform attention signal in the stream.`,
         actionLabel: "Open livestream",
         onAction: () => {
           setActiveTab("livestream");
@@ -1342,6 +1346,11 @@ export default function AdminControlCenter() {
                       : "No clear promotion opportunity yet."}
                   </div>
                   {visibleDailyPromotionOpportunity ? (
+                    <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                      Why this is #1: {visibleDailyPromotionOpportunity.rankReason}
+                    </div>
+                  ) : null}
+                  {visibleDailyPromotionOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
                         {visibleDailyPromotionOpportunity.actionLabel}
@@ -1365,6 +1374,11 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(visibleDailyImprovementOpportunity)
                       : "No clear page-improvement target yet."}
                   </div>
+                  {visibleDailyImprovementOpportunity ? (
+                    <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                      Why this is #1: {visibleDailyImprovementOpportunity.rankReason}
+                    </div>
+                  ) : null}
                   {visibleDailyImprovementOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
@@ -1390,6 +1404,11 @@ export default function AdminControlCenter() {
                       : "No obvious acquisition target yet."}
                   </div>
                   {visibleDailyAcquisitionOpportunity ? (
+                    <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                      Why this is #1: {visibleDailyAcquisitionOpportunity.rankReason}
+                    </div>
+                  ) : null}
+                  {visibleDailyAcquisitionOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
                         {visibleDailyAcquisitionOpportunity.actionLabel}
@@ -1413,6 +1432,11 @@ export default function AdminControlCenter() {
                       ? buildOpportunityBrief(visibleDailyMachineAttentionOpportunity)
                       : "No meaningful outside-machine attention yet."}
                   </div>
+                  {visibleDailyMachineAttentionOpportunity ? (
+                    <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                      Why this is #1: {visibleDailyMachineAttentionOpportunity.rankReason}
+                    </div>
+                  ) : null}
                   {visibleDailyMachineAttentionOpportunity ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>
@@ -2250,6 +2274,11 @@ export default function AdminControlCenter() {
                         : "No clear promotion opportunity yet."}
                     </div>
                     {visibleDailyPromotionOpportunity ? (
+                      <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                        Why this is #1: {visibleDailyPromotionOpportunity.rankReason}
+                      </div>
+                    ) : null}
+                    {visibleDailyPromotionOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
                           {visibleDailyPromotionOpportunity.actionLabel}
@@ -2273,6 +2302,11 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(visibleDailyImprovementOpportunity)
                         : "No clear page-improvement target yet."}
                     </div>
+                    {visibleDailyImprovementOpportunity ? (
+                      <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                        Why this is #1: {visibleDailyImprovementOpportunity.rankReason}
+                      </div>
+                    ) : null}
                     {visibleDailyImprovementOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
@@ -2298,6 +2332,11 @@ export default function AdminControlCenter() {
                         : "No obvious acquisition target yet."}
                     </div>
                     {visibleDailyAcquisitionOpportunity ? (
+                      <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                        Why this is #1: {visibleDailyAcquisitionOpportunity.rankReason}
+                      </div>
+                    ) : null}
+                    {visibleDailyAcquisitionOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
                           {visibleDailyAcquisitionOpportunity.actionLabel}
@@ -2321,6 +2360,11 @@ export default function AdminControlCenter() {
                         ? buildOpportunityBrief(visibleDailyMachineAttentionOpportunity)
                         : "No meaningful outside-machine attention yet."}
                     </div>
+                    {visibleDailyMachineAttentionOpportunity ? (
+                      <div className="mt-2 text-xs text-[color:var(--text-muted)]">
+                        Why this is #1: {visibleDailyMachineAttentionOpportunity.rankReason}
+                      </div>
+                    ) : null}
                     {visibleDailyMachineAttentionOpportunity ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>

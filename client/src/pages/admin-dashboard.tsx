@@ -2298,6 +2298,7 @@ export default function AdminDashboard() {
       next: item.restaurantId
         ? `Promote this restaurant now and attach a deal or event while attention is active.`
         : "Promote this story now while attention is active.",
+      rankReason: "Ranked #1 because it has the strongest live content momentum right now.",
       href: item.restaurantId ? `/restaurant/${item.restaurantId}` : "/admin/control-center",
       actionLabel: item.restaurantId ? "Open restaurant" : "Open stream",
     }));
@@ -2316,6 +2317,7 @@ export default function AdminDashboard() {
         title: item.query || "Unnamed demand theme",
         why: `This search theme appeared ${Number(item.count ?? 0)} times recently.`,
         next: "Build content, deals, or landing pages around this demand before it cools off.",
+        rankReason: "Ranked #1 because this search pattern is currently the strongest visible demand signal.",
         href: "/admin/control-center",
         actionLabel: "Open stream",
       })),
@@ -2328,6 +2330,7 @@ export default function AdminDashboard() {
           "Location demand cluster",
         why: `${Number(item.requestCount ?? 0)} requests and ${Number(item.interestCount ?? 0)} interest signals point to local demand.`,
         next: "Sell ads here, recruit inventory here, or create a city page that captures the traffic.",
+        rankReason: "Ranked highly because this location cluster is showing the strongest local demand mix.",
         href: "/admin/control-center",
         actionLabel: "Open stream",
       })),
@@ -2346,6 +2349,7 @@ export default function AdminDashboard() {
       next:
         (Array.isArray(item.reasons) && item.reasons[0]) ||
         "Review this asset for acquisition, partnership, or cleanup.",
+      rankReason: "Ranked #1 because outside attention is ahead of quality more than the other current targets.",
       href: item.canonicalPath || "/admin/control-center",
       actionLabel: "Open target",
     }));
@@ -2362,6 +2366,7 @@ export default function AdminDashboard() {
           ? item.reasons.map((reason: string) => toTitleCase(reason)).join(" • ")
           : "Improve the page, data completeness, and freshness.")
           .slice(0, 180),
+      rankReason: "Ranked highly because page weakness is limiting authority on a high-interest entity.",
       href: "/admin/control-center",
       actionLabel: "Open stream",
     }));
@@ -2380,6 +2385,7 @@ export default function AdminDashboard() {
           signal.subjectType === "path"
             ? `Strengthen ${signal.subjectId || "this page"} so outside machines find something worth citing.`
             : "Strengthen the related public entity page and attach fresher information.",
+        rankReason: "Ranked #1 because it is the strongest current off-platform attention signal.",
         href:
           signal.subjectType === "path" && String(signal.subjectId || "").startsWith("/")
             ? String(signal.subjectId)
@@ -6753,6 +6759,11 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topPromotionItem)
                         : "No clear promotion opportunity yet."}
                       {topPromotionItem ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Why this is #1: {topPromotionItem.rankReason}
+                        </div>
+                      ) : null}
+                      {topPromotionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topPromotionItem.href}>
                             <Button size="sm" variant="outline">
@@ -6780,6 +6791,11 @@ export default function AdminDashboard() {
                       {topDemandItem
                         ? buildBriefSentence(topDemandItem)
                         : "No clear demand spike yet."}
+                      {topDemandItem ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Why this is #1: {topDemandItem.rankReason}
+                        </div>
+                      ) : null}
                       {topDemandItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topDemandItem.href}>
@@ -6809,6 +6825,11 @@ export default function AdminDashboard() {
                         ? buildBriefSentence(topAcquisitionItem)
                         : "No obvious acquisition target yet."}
                       {topAcquisitionItem ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Why this is #1: {topAcquisitionItem.rankReason}
+                        </div>
+                      ) : null}
+                      {topAcquisitionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topAcquisitionItem.href}>
                             <Button size="sm" variant="outline">
@@ -6836,6 +6857,11 @@ export default function AdminDashboard() {
                       {topMachineAttentionItem
                         ? buildBriefSentence(topMachineAttentionItem)
                         : "No meaningful machine-attention opportunity yet."}
+                      {topMachineAttentionItem ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          Why this is #1: {topMachineAttentionItem.rankReason}
+                        </div>
+                      ) : null}
                       {topMachineAttentionItem ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={topMachineAttentionItem.href}>
