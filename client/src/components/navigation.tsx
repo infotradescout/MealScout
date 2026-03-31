@@ -66,10 +66,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     }
   });
 
-  if (!isGlobalScope && !showLocalNav) {
-    return null;
-  }
-
   const handleBugReport = async () => {
     if (isReporting) return;
     setIsReporting(true);
@@ -151,6 +147,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       cancelled = true;
     };
   }, [user?.id]);
+
+  if (!isGlobalScope && !showLocalNav) {
+    return null;
+  }
 
   // Debug logging (development only)
   if (user && typeof window !== "undefined" && import.meta.env.DEV) {
