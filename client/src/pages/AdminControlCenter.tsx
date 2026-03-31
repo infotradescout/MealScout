@@ -922,32 +922,30 @@ export default function AdminControlCenter() {
     return map;
   }, [canonicalEntities]);
 
-  const dailyPromotionOpportunity = useMemo(() => {
-    if (!marketIntel?.contentMomentum?.length) return null;
-    const item = marketIntel.contentMomentum[0];
-    const linkedEntity = item.restaurantId
-      ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
-      : null;
-    return {
-      briefKey: `promote:${item.id}`,
-      title: item.title || "Top promotion opportunity",
-      why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
-      next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
-      actionLabel: linkedEntity ? "Focus restaurant" : "Open livestream",
-      onAction: () => {
-        if (linkedEntity) {
-          focusEntity(linkedEntity, "overview");
-          return;
-        }
-        setActiveTab("livestream");
-      },
-    };
+  const promotionBriefCandidates = useMemo(() => {
+    return (marketIntel?.contentMomentum ?? []).slice(0, 4).map((item) => {
+      const linkedEntity = item.restaurantId
+        ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
+        : null;
+      return {
+        briefKey: `promote:${item.id}`,
+        title: item.title || "Top promotion opportunity",
+        why: `${Number(item.viewCount ?? 0)} views and ${Number(item.impressionCount ?? 0)} impressions show live attention.`,
+        next: "Promote it now or pair it with a deal, event, or sponsor slot while attention is active.",
+        actionLabel: linkedEntity ? "Focus restaurant" : "Open livestream",
+        onAction: () => {
+          if (linkedEntity) {
+            focusEntity(linkedEntity, "overview");
+            return;
+          }
+          setActiveTab("livestream");
+        },
+      };
+    });
   }, [canonicalEntityMap, marketIntel]);
 
-  const dailyImprovementOpportunity = useMemo(() => {
-    if (!priorityEntities?.items?.length) return null;
-    const item = priorityEntities.items[0];
-    return {
+  const improvementBriefCandidates = useMemo(() => {
+    return (priorityEntities?.items ?? []).slice(0, 4).map((item) => ({
       briefKey: `improve:${item.id}`,
       title: item.title || "Top page to improve",
       why: `Demand is forming here, but the page is still ${toPlainLabel(item.quality)} and ${toPlainLabel(item.machineReadiness)}.`,
@@ -957,45 +955,47 @@ export default function AdminControlCenter() {
           : "Improve the page quality and freshness first.",
       actionLabel: "Focus page",
       onAction: () => focusEntity(item, "overview"),
-    };
+    }));
   }, [priorityEntities]);
 
-  const dailyAcquisitionOpportunity = useMemo(() => {
-    if (!marketIntel?.acquisitionTargets?.length) return null;
-    const item = marketIntel.acquisitionTargets[0];
-    const entityId = String(item.id || "").split(":")[1] || item.id;
-    const linkedEntity =
-      canonicalEntityMap.get(`${item.entityType}:${entityId}`) ?? null;
-    return {
-      briefKey: `acquire:${item.id}`,
-      title: item.title || "Top acquisition target",
-      why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
-      next: "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
-      actionLabel: linkedEntity ? "Focus target" : "Open page",
-      onAction: () => {
-        if (linkedEntity) {
-          focusEntity(linkedEntity, "overview");
-          return;
-        }
-        window.location.href = item.canonicalPath || "/admin/control-center";
-      },
-    };
+  const acquisitionBriefCandidates = useMemo(() => {
+    return (marketIntel?.acquisitionTargets ?? []).slice(0, 4).map((item) => {
+      const entityId = String(item.id || "").split(":")[1] || item.id;
+      const linkedEntity =
+        canonicalEntityMap.get(`${item.entityType}:${entityId}`) ?? null;
+      return {
+        briefKey: `acquire:${item.id}`,
+        title: item.title || "Top acquisition target",
+        why: `${Number(item.crawlerHits ?? 0)} machine hits suggest outside interest is ahead of asset quality.`,
+        next:
+          "Review it for acquisition, partnership, or direct improvement before someone else captures the attention.",
+        actionLabel: linkedEntity ? "Focus target" : "Open page",
+        onAction: () => {
+          if (linkedEntity) {
+            focusEntity(linkedEntity, "overview");
+            return;
+          }
+          window.location.href = item.canonicalPath || "/admin/control-center";
+        },
+      };
+    });
   }, [canonicalEntityMap, marketIntel]);
 
-  const dailyMachineAttentionOpportunity = useMemo(() => {
-    const item = filteredSignals.find((signal) => signal.visibility === "off_platform");
-    if (!item) return null;
-    return {
-      briefKey: `machine:${item.id}`,
-      title: item.title || "Top machine-attention opportunity",
-      why: buildSignalSummary(item),
-      next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
-      actionLabel: "Open livestream",
-      onAction: () => {
-        setActiveTab("livestream");
-        setLaneQuery(String(item.subjectId || ""));
-      },
-    };
+  const machineAttentionBriefCandidates = useMemo(() => {
+    return filteredSignals
+      .filter((signal) => signal.visibility === "off_platform")
+      .slice(0, 4)
+      .map((item) => ({
+        briefKey: `machine:${item.id}`,
+        title: item.title || "Top machine-attention opportunity",
+        why: buildSignalSummary(item),
+        next: buildSignalNextStep(item).replace(/^Next step:\s*/i, ""),
+        actionLabel: "Open livestream",
+        onAction: () => {
+          setActiveTab("livestream");
+          setLaneQuery(String(item.subjectId || ""));
+        },
+      }));
   }, [filteredSignals]);
 
   const knowledgeGapCounts = useMemo(() => {
@@ -1072,14 +1072,18 @@ export default function AdminControlCenter() {
     return Math.max(localUntil, actionUntil) <= Date.now();
   };
 
+  const pickVisibleBrief = (items: any[]) =>
+    items.find((item) => isBriefVisible(item.briefKey)) || null;
+
+  const visibleDailyPromotionOpportunity = pickVisibleBrief(promotionBriefCandidates);
+  const visibleDailyImprovementOpportunity = pickVisibleBrief(improvementBriefCandidates);
+  const visibleDailyAcquisitionOpportunity = pickVisibleBrief(acquisitionBriefCandidates);
+  const visibleDailyMachineAttentionOpportunity = pickVisibleBrief(
+    machineAttentionBriefCandidates,
+  );
+
   const handleBriefAction = (
-    brief:
-      | {
-          briefKey: string;
-          title: string;
-          onAction?: () => void;
-        }
-      | null,
+    brief: any | null,
     action: "done" | "snooze" | "dismiss",
   ) => {
     if (!brief) return;
@@ -1091,24 +1095,6 @@ export default function AdminControlCenter() {
       href: "/admin/control-center",
     });
   };
-
-  const visibleDailyPromotionOpportunity =
-    dailyPromotionOpportunity && isBriefVisible(dailyPromotionOpportunity.briefKey)
-      ? dailyPromotionOpportunity
-      : null;
-  const visibleDailyImprovementOpportunity =
-    dailyImprovementOpportunity && isBriefVisible(dailyImprovementOpportunity.briefKey)
-      ? dailyImprovementOpportunity
-      : null;
-  const visibleDailyAcquisitionOpportunity =
-    dailyAcquisitionOpportunity && isBriefVisible(dailyAcquisitionOpportunity.briefKey)
-      ? dailyAcquisitionOpportunity
-      : null;
-  const visibleDailyMachineAttentionOpportunity =
-    dailyMachineAttentionOpportunity &&
-    isBriefVisible(dailyMachineAttentionOpportunity.briefKey)
-      ? dailyMachineAttentionOpportunity
-      : null;
 
   const renderActionControls = (entity: CanonicalEntityItem) =>
     (entity.recommendedActions || []).slice(0, 3).map((action) => {
