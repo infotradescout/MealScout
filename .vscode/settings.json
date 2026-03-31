@@ -44,5 +44,9 @@
     "files.trimTrailingWhitespace": false
   },
   // Disable MSSQL IntelliSense to avoid false errors on PostgreSQL migrations
-  "mssql.enableIntelliSense": false
+  "mssql.enableIntelliSense": false,
+  "mssql.intelliSense.enableErrorChecking": false,
+  "files.associations": {
+    "migrations/*.sql": "postgresql"
+  }
 }
