@@ -33,27 +33,40 @@ type NavItem = {
   isBug?: boolean;
 };
 
-let navRenderLock = 0;
+type NavigationProps = {
+  scope?: "global" | "local";
+};
 
-export default function Navigation() {
-  const [canRender] = useState(() => {
-    if (navRenderLock > 0) return false;
-    navRenderLock += 1;
-    return true;
-  });
+let hasGlobalNavigation = false;
+
+export default function Navigation({ scope = "local" }: NavigationProps) {
+  const isGlobalScope = scope === "global";
+  const [showLocalNav, setShowLocalNav] = useState(true);
   const [location] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
 
   useEffect(() => {
-    if (!canRender) return;
-    return () => {
-      navRenderLock = Math.max(0, navRenderLock - 1);
-    };
-  }, [canRender]);
+    if (isGlobalScope) {
+      hasGlobalNavigation = true;
+      return () => {
+        hasGlobalNavigation = false;
+      };
+    }
 
-  if (!canRender) {
+    if (hasGlobalNavigation) {
+      setShowLocalNav(false);
+    }
+  }, [isGlobalScope]);
+
+  useEffect(() => {
+    if (!isGlobalScope && hasGlobalNavigation) {
+      setShowLocalNav(false);
+    }
+  });
+
+  if (!isGlobalScope && !showLocalNav) {
     return null;
   }
 
@@ -328,7 +341,7 @@ export default function Navigation() {
 
   return (
     <>
-      <div className="hidden lg:block fixed top-4 right-4 z-50">
+      <div data-nav-root={scope} className="hidden lg:block fixed top-4 right-4 z-50">
         <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
           <div className="flex items-center gap-2">
             {desktopQuickActions.map((item) =>

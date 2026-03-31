@@ -11,6 +11,7 @@ import { emailDeliveryAudit, getEmailConfigSummary } from "../emailService";
 import { db } from "../db";
 import { logAudit } from "../auditLogger";
 import multer from "multer";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { parseTruckImportFile } from "../utils/truckImport";
 import { forwardGeocode } from "../utils/geocoding";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
@@ -131,6 +132,56 @@ const formatDealValueLabel = (
   }
   return baseLabel;
 };
+
+const PRICE_SCOUT_TOKEN_ENV_KEYS = [
+  "PRICESCOUT_FEED_API_TOKENS",
+  "PRICESCOUT_FEED_API_TOKEN",
+  "TRADESCOUT_API_TOKENS",
+  "TRADESCOUT_API_TOKEN",
+] as const;
+
+const getConfiguredPriceScoutTokens = () => {
+  const seen = new Set<string>();
+  const values: string[] = [];
+  for (const key of PRICE_SCOUT_TOKEN_ENV_KEYS) {
+    const raw = String(process.env[key] || "");
+    if (!raw.trim()) continue;
+    raw
+      .split(/[\n,;]+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((token) => {
+        if (seen.has(token)) return;
+        seen.add(token);
+        values.push(token);
+      });
+  }
+  return values;
+};
+
+const extractBearerToken = (authorizationHeader?: string | null) => {
+  const raw = String(authorizationHeader || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^Bearer\s+(.+)$/i);
+  return String(match?.[1] || "").trim();
+};
+
+const fingerprintToken = (token: string) =>
+  token
+    ? crypto.createHash("sha256").update(token).digest("hex").slice(0, 16)
+    : "anonymous";
+
+const priceScoutFeedLimiter = distributedRateLimit({
+  scope: "api:price-scout-feed",
+  windowMs: 60 * 1000,
+  limit: Math.max(10, Number(process.env.PRICESCOUT_FEED_RATE_LIMIT || 120) || 120),
+  key: (req: any) => {
+    const token = extractBearerToken(String(req.get?.("authorization") || ""));
+    if (token) return `token:${fingerprintToken(token)}`;
+    if (req.user?.id) return `user:${String(req.user.id)}`;
+    return `ip:${String(req.ip || "unknown")}`;
+  },
+});
 
 const botSignatureLabel = (userAgent?: string | null) => {
   const ua = String(userAgent || "");
@@ -2199,6 +2250,7 @@ export function registerAdminManagementRoutes(app: Express) {
               minOrderAmount,
               endDate: item.endDate,
               isOngoing: item.isOngoing,
+              createdAt: item.createdAt,
               valueScore: Number(valueScore.toFixed(1)),
               priceSignal: formatDealValueLabel(
                 item.dealType,
@@ -2409,6 +2461,41 @@ export function registerAdminManagementRoutes(app: Express) {
           cuisineValue[0]?.cuisineType || cuisineRows[0]?.cuisineType || "food truck";
         const topAcquisition = acquisitionTargets[0]?.title || "priority asset";
         const topPriceDeal = bestValueDeals[0];
+        const supplyLaneSpotlight = (Array.isArray((supplyMarketLaneFeed as any)?.lanes)
+          ? (supplyMarketLaneFeed as any).lanes
+          : []
+        )
+          .filter((lane: any) => lane && lane.itemKey && lane.signalType)
+          .slice(0, 8)
+          .map((lane: any) => ({
+            lane: String(lane.lane || ""),
+            signalType: String(lane.signalType || ""),
+            itemKey: String(lane.itemKey || ""),
+            itemName: String(lane.itemName || lane.itemKey || "Unknown item"),
+            areaKey: String(lane.areaKey || "global"),
+            valuePrimary:
+              lane.valuePrimary === null || lane.valuePrimary === undefined
+                ? null
+                : Number(lane.valuePrimary),
+            valueSecondary:
+              lane.valueSecondary === null || lane.valueSecondary === undefined
+                ? null
+                : Number(lane.valueSecondary),
+            source: String(lane.source || "market"),
+            createdAt: lane.createdAt,
+          }));
+
+        const supplyLaneCounts =
+          (supplyMarketLaneFeed as any)?.laneCounts || ({} as Record<string, number>);
+        const supplySnapshotCount = Number(
+          supplyLaneCounts["mealscout:supply_market:price_snapshot:item"] || 0,
+        );
+        const supplyAlertCount = Number(
+          supplyLaneCounts["mealscout:supply_market:price_alert:item"] || 0,
+        );
+        const supplyWatchCount = Number(
+          supplyLaneCounts["mealscout:supply_market:price_watch:item"] || 0,
+        );
         const brief = {
           headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} value right now.`,
           audienceAngle: `Promote around ${topLocation} where location demand and truck interest are forming.`,
@@ -2458,10 +2545,18 @@ export function registerAdminManagementRoutes(app: Express) {
           trendWatch,
           priceScout: {
             summary: topPriceDeal
-              ? `${topPriceDeal.restaurantName} currently leads Price Scout with ${topPriceDeal.priceSignal}.`
-              : "Price Scout does not have enough active deals yet.",
+              ? `${topPriceDeal.restaurantName} currently leads Price Scout with ${topPriceDeal.priceSignal}. Supply lanes report ${Number((supplyMarketLaneFeed as any)?.total || 0)} recent records (${supplySnapshotCount} snapshots, ${supplyAlertCount} alerts).`
+              : `Price Scout does not have enough active deals yet, but supply lanes report ${Number((supplyMarketLaneFeed as any)?.total || 0)} recent records (${supplySnapshotCount} snapshots, ${supplyAlertCount} alerts).`,
             bestDeals: bestValueDeals,
             cuisineValue,
+            supplyLaneSummary: {
+              totalRecentRecords: Number((supplyMarketLaneFeed as any)?.total || 0),
+              snapshotCount: supplySnapshotCount,
+              alertCount: supplyAlertCount,
+              watchCount: supplyWatchCount,
+              laneCounts: supplyLaneCounts,
+              spotlight: supplyLaneSpotlight,
+            },
           },
           supplyMarketIntel: {
             summary:
@@ -2549,6 +2644,257 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching supply market data lanes:", error);
         res.status(500).json({ message: "Failed to fetch market data lanes" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/price-scout-feed",
+    priceScoutFeedLimiter,
+    async (req: any, res) => {
+      try {
+        const configuredTokens = getConfiguredPriceScoutTokens();
+        const bearerToken = extractBearerToken(req.get("authorization"));
+        const bearerTokenValid = bearerToken
+          ? configuredTokens.includes(bearerToken)
+          : false;
+        const userType = String(req.user?.userType || "").trim();
+        const userIsStaff =
+          userType === "staff" || userType === "admin" || userType === "super_admin";
+
+        if (!bearerTokenValid && !userIsStaff) {
+          return res.status(401).json({
+            message:
+              "Unauthorized. Use staff session auth or Authorization: Bearer <token>.",
+          });
+        }
+
+        if (bearerToken && !bearerTokenValid) {
+          return res.status(401).json({ message: "Invalid API token" });
+        }
+
+        const authMode = bearerTokenValid ? "token" : "session";
+        const tokenFingerprint = bearerTokenValid
+          ? fingerprintToken(bearerToken)
+          : null;
+
+        const sinceHours = Math.max(1, Math.min(24 * 14, Number(req.query?.hours || 48) || 48));
+        const dealLimit = Math.max(5, Math.min(200, Number(req.query?.dealLimit || 40) || 40));
+        const laneLimit = Math.max(10, Math.min(5000, Number(req.query?.laneLimit || 1000) || 1000));
+        const format = String(req.query?.format || "json").trim().toLowerCase();
+
+        const [activeDealRows, supplyFeed] = await Promise.all([
+          db
+            .select({
+              dealId: deals.id,
+              restaurantId: restaurants.id,
+              restaurantName: restaurants.name,
+              cuisineType: restaurants.cuisineType,
+              city: restaurants.city,
+              state: restaurants.state,
+              title: deals.title,
+              dealType: deals.dealType,
+              discountValue: deals.discountValue,
+              minOrderAmount: deals.minOrderAmount,
+              endDate: deals.endDate,
+              isOngoing: deals.isOngoing,
+              createdAt: deals.createdAt,
+            })
+            .from(deals)
+            .innerJoin(restaurants, eq(restaurants.id, deals.restaurantId))
+            .where(eq(deals.isActive, true))
+            .orderBy(desc(deals.createdAt))
+            .limit(dealLimit * 4),
+          getSupplyMarketDataLanes({ sinceHours, limit: laneLimit }),
+        ]);
+
+        const typedActiveDealRows = activeDealRows as Array<{
+          dealId: string;
+          restaurantId: string;
+          restaurantName: string;
+          cuisineType: string | null;
+          city: string | null;
+          state: string | null;
+          title: string;
+          dealType: string;
+          discountValue: string | number;
+          minOrderAmount: string | number | null;
+          endDate: Date | null;
+          isOngoing: boolean | null;
+          createdAt: Date | null;
+        }>;
+
+        const bestDeals = typedActiveDealRows
+          .map((item) => {
+            const discountValue = Number(item.discountValue || 0);
+            const minOrderAmount = Number(item.minOrderAmount || 0);
+            const valueScore =
+              String(item.dealType || "").toLowerCase() === "fixed"
+                ? (discountValue / Math.max(minOrderAmount || 25, 25)) * 100
+                : discountValue;
+            return {
+              id: item.dealId,
+              restaurantId: item.restaurantId,
+              restaurantName: item.restaurantName,
+              cuisineType: item.cuisineType,
+              city: item.city,
+              state: item.state,
+              title: item.title,
+              dealType: item.dealType,
+              discountValue,
+              minOrderAmount,
+              endDate: item.endDate,
+              isOngoing: item.isOngoing,
+              createdAt: item.createdAt,
+              valueScore: Number(valueScore.toFixed(1)),
+              priceSignal: formatDealValueLabel(
+                item.dealType,
+                item.discountValue,
+                item.minOrderAmount,
+              ),
+              lane: "mealscout:price_scout:deal_value:offer",
+            };
+          })
+          .sort((a, b) => {
+            if (b.valueScore !== a.valueScore) return b.valueScore - a.valueScore;
+            return a.minOrderAmount - b.minOrderAmount;
+          })
+          .slice(0, dealLimit);
+
+        const payload = {
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          sinceHours,
+          lanes: {
+            dealValue: "mealscout:price_scout:deal_value:offer",
+            supplyAlert: "mealscout:supply_market:price_alert:item",
+            supplySnapshot: "mealscout:supply_market:price_snapshot:item",
+            supplyWatch: "mealscout:supply_market:price_watch:item",
+          },
+          summary: {
+            deals: bestDeals.length,
+            supplyRecords: Number((supplyFeed as any)?.total || 0),
+            supplyLaneCounts: (supplyFeed as any)?.laneCounts || {},
+          },
+          auth: {
+            mode: authMode,
+            tokenFingerprint,
+          },
+          deals: bestDeals,
+          supplyLanes: (supplyFeed as any)?.lanes || [],
+        };
+
+        const usageProps = {
+          endpoint: "/api/admin/lisa/price-scout-feed",
+          authMode,
+          tokenFingerprint,
+          format,
+          sinceHours,
+          dealLimit,
+          laneLimit,
+          dealsReturned: bestDeals.length,
+          supplyRecordsReturned: Number((supplyFeed as any)?.total || 0),
+          laneCounts: (supplyFeed as any)?.laneCounts || {},
+        };
+
+        db.insert(telemetryEvents)
+          .values({
+            eventName: "price_scout_feed_accessed",
+            userId: req.user?.id || null,
+            properties: usageProps,
+          })
+          .catch((error: any) => {
+            console.error("Failed to log Price Scout feed telemetry:", error);
+          });
+
+        logAudit(
+          req.user?.id || `token:${tokenFingerprint || "anonymous"}`,
+          "price_scout_feed_accessed",
+          "price_scout_feed",
+          "global",
+          req.ip || "",
+          String(req.get("user-agent") || ""),
+          usageProps,
+        ).catch((error) => {
+          console.error("Failed to write Price Scout feed audit log:", error);
+        });
+
+        res.setHeader("X-PriceScout-Auth-Mode", authMode);
+        if (tokenFingerprint) {
+          res.setHeader("X-PriceScout-Token", tokenFingerprint);
+        }
+
+        if (format === "csv") {
+          const header = [
+            "recordType",
+            "id",
+            "lane",
+            "name",
+            "city",
+            "state",
+            "itemKey",
+            "itemName",
+            "signalType",
+            "valueScore",
+            "valuePrimary",
+            "valueSecondary",
+            "source",
+            "createdAt",
+          ];
+          const dealRows = bestDeals.map((row) =>
+            [
+              "deal",
+              row.id,
+              row.lane,
+              row.restaurantName,
+              row.city || "",
+              row.state || "",
+              "",
+              row.title,
+              "deal_value",
+              row.valueScore,
+              row.discountValue,
+              row.minOrderAmount,
+              "price_scout",
+              row.createdAt ? new Date(row.createdAt).toISOString() : "",
+            ]
+              .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+              .join(","),
+          );
+          const laneRows = ((supplyFeed as any)?.lanes || []).map((row: any) =>
+            [
+              "supply_lane",
+              row.id,
+              row.lane,
+              "",
+              "",
+              "",
+              row.itemKey || "",
+              row.itemName || "",
+              row.signalType || "",
+              "",
+              row.valuePrimary ?? "",
+              row.valueSecondary ?? "",
+              row.source || "",
+              row.createdAt ? new Date(row.createdAt).toISOString() : "",
+            ]
+              .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+              .join(","),
+          );
+
+          const csv = [header.join(","), ...dealRows, ...laneRows].join("\n");
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader(
+            "Content-Disposition",
+            `inline; filename="mealscout-price-scout-feed-${Date.now()}.csv"`,
+          );
+          return res.send(csv);
+        }
+
+        return res.json(payload);
+      } catch (error) {
+        console.error("Error fetching Price Scout feed:", error);
+        return res.status(500).json({ message: "Failed to fetch Price Scout feed" });
       }
     },
   );

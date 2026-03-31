@@ -190,6 +190,24 @@ type MarketIntelResponse = {
       avgValueScore: number;
       avgMinOrder: number;
     }>;
+    supplyLaneSummary?: {
+      totalRecentRecords: number;
+      snapshotCount: number;
+      alertCount: number;
+      watchCount: number;
+      laneCounts: Record<string, number>;
+      spotlight: Array<{
+        lane: string;
+        signalType: string;
+        itemKey: string;
+        itemName: string;
+        areaKey: string;
+        valuePrimary: number | null;
+        valueSecondary: number | null;
+        source: string;
+        createdAt: string;
+      }>;
+    };
   };
   advertiserSignals: {
     topQueries: Array<{ query: string; count: number }>;
@@ -1844,6 +1862,22 @@ export default function AdminControlCenter() {
                           >
                             Export package JSON
                           </a>
+                          <a
+                            href="/api/admin/lisa/market-data-lanes?hours=48&limit=1000&format=json"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Export Price Scout lanes JSON
+                          </a>
+                          <a
+                            href="/api/admin/lisa/market-data-lanes?hours=48&limit=1000&format=csv"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                          >
+                            Export Price Scout lanes CSV
+                          </a>
                         </div>
                       </div>
                       <div className="mt-3 space-y-2 text-sm">
@@ -1898,10 +1932,46 @@ export default function AdminControlCenter() {
                       </div>
 
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
-                        <div className="text-sm font-medium">Price Scout</div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-medium">Price Scout</div>
+                          <div className="flex flex-wrap gap-2">
+                            <a
+                              href="/api/admin/lisa/price-scout-feed?hours=48&dealLimit=40&laneLimit=1000&format=json"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                            >
+                              Export feed JSON
+                            </a>
+                            <a
+                              href="/api/admin/lisa/price-scout-feed?hours=48&dealLimit=40&laneLimit=1000&format=csv"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-[color:var(--text-muted)] hover:text-[color:var(--text-primary)]"
+                            >
+                              Export feed CSV
+                            </a>
+                          </div>
+                        </div>
                         <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                           {marketIntel.priceScout.summary}
                         </div>
+                        {marketIntel.priceScout.supplyLaneSummary ? (
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                            <Badge variant="outline">
+                              {marketIntel.priceScout.supplyLaneSummary.totalRecentRecords} supply records
+                            </Badge>
+                            <Badge variant="outline">
+                              {marketIntel.priceScout.supplyLaneSummary.snapshotCount} snapshots
+                            </Badge>
+                            <Badge variant="outline">
+                              {marketIntel.priceScout.supplyLaneSummary.alertCount} alerts
+                            </Badge>
+                            <Badge variant="outline">
+                              {marketIntel.priceScout.supplyLaneSummary.watchCount} active watches
+                            </Badge>
+                          </div>
+                        ) : null}
                         <div className="mt-3 space-y-3">
                           {marketIntel.priceScout.bestDeals.slice(0, 3).map((item) => (
                             <div
@@ -1922,6 +1992,38 @@ export default function AdminControlCenter() {
                             </div>
                           ))}
                         </div>
+                        {marketIntel.priceScout.supplyLaneSummary?.spotlight?.length ? (
+                          <div className="mt-3 space-y-2">
+                            <div className="text-xs font-medium text-[color:var(--text-muted)]">
+                              Supply lane spotlight
+                            </div>
+                            {marketIntel.priceScout.supplyLaneSummary.spotlight
+                              .slice(0, 3)
+                              .map((signal) => (
+                                <div
+                                  key={`${signal.lane}:${signal.itemKey}:${signal.createdAt}`}
+                                  className="rounded-lg border border-[var(--border-subtle)] p-2"
+                                >
+                                  <div className="text-sm font-medium">{signal.itemName}</div>
+                                  <div className="mt-1 text-xs text-[color:var(--text-muted)]">
+                                    {signal.signalType.replace(/_/g, " ")} in {signal.areaKey}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                    {signal.valuePrimary !== null ? (
+                                      <Badge variant="outline">
+                                        primary {signal.valuePrimary}
+                                      </Badge>
+                                    ) : null}
+                                    {signal.valueSecondary !== null ? (
+                                      <Badge variant="outline">
+                                        secondary {signal.valueSecondary}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 

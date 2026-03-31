@@ -461,7 +461,7 @@ function App() {
           <Toaster />
           <BetaDisclaimer />
           <Router />
-          <Navigation />
+          <Navigation scope="global" />
           {/* Build canary - shows deployment timestamp */}
           {import.meta.env.PROD && (
             <div

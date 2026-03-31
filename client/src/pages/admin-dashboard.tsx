@@ -2427,6 +2427,19 @@ export default function AdminDashboard() {
     [lisaMarketIntel],
   );
 
+  const priceScoutSupplySummary = useMemo(
+    () => lisaMarketIntel?.priceScout?.supplyLaneSummary ?? null,
+    [lisaMarketIntel],
+  );
+
+  const priceScoutSupplySpotlight = useMemo(
+    () =>
+      Array.isArray(lisaMarketIntel?.priceScout?.supplyLaneSummary?.spotlight)
+        ? lisaMarketIntel.priceScout.supplyLaneSummary.spotlight
+        : [],
+    [lisaMarketIntel],
+  );
+
   const deferBrief = (briefKey: string, mode: "dismiss" | "snooze" | "done") => {
     const hours = mode === "done" ? 24 * 7 : mode === "snooze" ? 4 : 16;
     setBriefStatus((current) => ({
@@ -7052,9 +7065,45 @@ export default function AdminDashboard() {
                 <div className="grid gap-4 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Price Scout</CardTitle>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <CardTitle className="text-base">Price Scout</CardTitle>
+                        <div className="flex flex-wrap gap-2">
+                          <a
+                            href="/api/admin/lisa/price-scout-feed?hours=48&dealLimit=40&laneLimit=1000&format=json"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Export JSON
+                          </a>
+                          <a
+                            href="/api/admin/lisa/price-scout-feed?hours=48&dealLimit=40&laneLimit=1000&format=csv"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-md border border-[var(--border-subtle)] px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Export CSV
+                          </a>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
+                      {priceScoutSupplySummary ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <Badge variant="outline">
+                            {priceScoutSupplySummary.totalRecentRecords} supply records
+                          </Badge>
+                          <Badge variant="outline">
+                            {priceScoutSupplySummary.snapshotCount} snapshots
+                          </Badge>
+                          <Badge variant="outline">
+                            {priceScoutSupplySummary.alertCount} alerts
+                          </Badge>
+                          <Badge variant="outline">
+                            {priceScoutSupplySummary.watchCount} watches
+                          </Badge>
+                        </div>
+                      ) : null}
                       {priceScoutDeals.length ? (
                         priceScoutDeals.slice(0, 4).map((item: any) => (
                           <div key={item.id} className="rounded-lg border px-3 py-3 text-sm">
@@ -7077,6 +7126,24 @@ export default function AdminDashboard() {
                           Price Scout needs more active deals before it can rank value cleanly.
                         </div>
                       )}
+                      {priceScoutSupplySpotlight.length ? (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Supply lane spotlight
+                          </div>
+                          {priceScoutSupplySpotlight.slice(0, 2).map((signal: any) => (
+                            <div
+                              key={`${signal.lane}:${signal.itemKey}:${signal.createdAt}`}
+                              className="rounded-lg border px-3 py-2 text-xs"
+                            >
+                              <div className="font-medium">{signal.itemName}</div>
+                              <div className="mt-1 text-muted-foreground">
+                                {String(signal.signalType || "signal").replace(/_/g, " ")} in {signal.areaKey}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </CardContent>
                   </Card>
 
