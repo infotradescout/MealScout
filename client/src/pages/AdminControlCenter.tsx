@@ -243,6 +243,24 @@ type RemediationLogResponse = {
   latest: RemediationLogItem[];
 };
 
+type BriefActionLogItem = {
+  id: string;
+  userId?: string | null;
+  createdAt: string;
+  briefKey: string;
+  action: "done" | "snooze" | "dismiss";
+  title?: string;
+  href?: string;
+};
+
+type BriefActionLogResponse = {
+  ok: boolean;
+  generatedAt: string;
+  windowHours: number;
+  items: BriefActionLogItem[];
+  latest: BriefActionLogItem[];
+};
+
 const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS === "true";
 const LISA_FEED_LIMIT = 40;
 
@@ -607,6 +625,16 @@ export default function AdminControlCenter() {
     refetchInterval: 30000,
   });
 
+  const { data: briefActionLog } = useQuery<BriefActionLogResponse>({
+    queryKey: ["/api/admin/lisa/brief-actions"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/brief-actions?hours=720");
+      if (!res.ok) throw new Error("Failed to fetch brief actions");
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
   const remediationMutation = useMutation({
     mutationFn: async (payload: {
       entityType: string;
@@ -647,6 +675,31 @@ export default function AdminControlCenter() {
         description: error?.message || "Could not log remediation action.",
         variant: "destructive",
       });
+    },
+  });
+
+  const briefActionMutation = useMutation({
+    mutationFn: async (payload: {
+      briefKey: string;
+      action: "done" | "snooze" | "dismiss";
+      title: string;
+      href: string;
+    }) => {
+      const res = await fetch("/api/admin/lisa/brief-actions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.message || "Failed to log brief action");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/lisa/brief-actions"] });
     },
   });
 
@@ -982,6 +1035,14 @@ export default function AdminControlCenter() {
     );
   }, [remediationLog]);
 
+  const latestBriefActionByKey = useMemo(() => {
+    const map = new Map<string, BriefActionLogItem>();
+    for (const item of briefActionLog?.latest ?? []) {
+      map.set(item.briefKey, item);
+    }
+    return map;
+  }, [briefActionLog]);
+
   const focusEntity = (entity: CanonicalEntityItem | null, tab: string = "overview") => {
     if (!entity) return;
     setSelectedEntity(entity);
@@ -998,7 +1059,37 @@ export default function AdminControlCenter() {
 
   const isBriefVisible = (briefKey?: string) => {
     if (!briefKey) return false;
-    return (briefStatus[briefKey]?.until ?? 0) <= Date.now();
+    const localUntil = briefStatus[briefKey]?.until ?? 0;
+    const latestAction = latestBriefActionByKey.get(briefKey);
+    const actionUntil =
+      latestAction?.action === "done"
+        ? new Date(latestAction.createdAt).getTime() + 24 * 7 * 60 * 60 * 1000
+        : latestAction?.action === "snooze"
+          ? new Date(latestAction.createdAt).getTime() + 4 * 60 * 60 * 1000
+          : latestAction?.action === "dismiss"
+            ? new Date(latestAction.createdAt).getTime() + 16 * 60 * 60 * 1000
+            : 0;
+    return Math.max(localUntil, actionUntil) <= Date.now();
+  };
+
+  const handleBriefAction = (
+    brief:
+      | {
+          briefKey: string;
+          title: string;
+          onAction?: () => void;
+        }
+      | null,
+    action: "done" | "snooze" | "dismiss",
+  ) => {
+    if (!brief) return;
+    deferBrief(brief.briefKey, action);
+    briefActionMutation.mutate({
+      briefKey: brief.briefKey,
+      action,
+      title: brief.title,
+      href: "/admin/control-center",
+    });
   };
 
   const visibleDailyPromotionOpportunity =
@@ -1269,13 +1360,13 @@ export default function AdminControlCenter() {
                       <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
                         {visibleDailyPromotionOpportunity.actionLabel}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "snooze")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "snooze")}>
                         Snooze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "done")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "done")}>
                         Done
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "dismiss")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "dismiss")}>
                         Dismiss
                       </Button>
                     </div>
@@ -1293,13 +1384,13 @@ export default function AdminControlCenter() {
                       <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
                         {visibleDailyImprovementOpportunity.actionLabel}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "snooze")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "snooze")}>
                         Snooze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "done")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "done")}>
                         Done
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "dismiss")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "dismiss")}>
                         Dismiss
                       </Button>
                     </div>
@@ -1317,13 +1408,13 @@ export default function AdminControlCenter() {
                       <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
                         {visibleDailyAcquisitionOpportunity.actionLabel}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "snooze")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "snooze")}>
                         Snooze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "done")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "done")}>
                         Done
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "dismiss")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "dismiss")}>
                         Dismiss
                       </Button>
                     </div>
@@ -1341,13 +1432,13 @@ export default function AdminControlCenter() {
                       <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>
                         {visibleDailyMachineAttentionOpportunity.actionLabel}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "snooze")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "snooze")}>
                         Snooze
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "done")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "done")}>
                         Done
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "dismiss")}>
+                      <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "dismiss")}>
                         Dismiss
                       </Button>
                     </div>
@@ -2177,13 +2268,13 @@ export default function AdminControlCenter() {
                         <Button size="sm" variant="outline" onClick={visibleDailyPromotionOpportunity.onAction}>
                           {visibleDailyPromotionOpportunity.actionLabel}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "snooze")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "snooze")}>
                           Snooze
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "done")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "done")}>
                           Done
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyPromotionOpportunity.briefKey, "dismiss")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyPromotionOpportunity, "dismiss")}>
                           Dismiss
                         </Button>
                       </div>
@@ -2201,13 +2292,13 @@ export default function AdminControlCenter() {
                         <Button size="sm" variant="outline" onClick={visibleDailyImprovementOpportunity.onAction}>
                           {visibleDailyImprovementOpportunity.actionLabel}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "snooze")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "snooze")}>
                           Snooze
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "done")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "done")}>
                           Done
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyImprovementOpportunity.briefKey, "dismiss")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyImprovementOpportunity, "dismiss")}>
                           Dismiss
                         </Button>
                       </div>
@@ -2225,13 +2316,13 @@ export default function AdminControlCenter() {
                         <Button size="sm" variant="outline" onClick={visibleDailyAcquisitionOpportunity.onAction}>
                           {visibleDailyAcquisitionOpportunity.actionLabel}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "snooze")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "snooze")}>
                           Snooze
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "done")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "done")}>
                           Done
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyAcquisitionOpportunity.briefKey, "dismiss")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyAcquisitionOpportunity, "dismiss")}>
                           Dismiss
                         </Button>
                       </div>
@@ -2249,13 +2340,13 @@ export default function AdminControlCenter() {
                         <Button size="sm" variant="outline" onClick={visibleDailyMachineAttentionOpportunity.onAction}>
                           {visibleDailyMachineAttentionOpportunity.actionLabel}
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "snooze")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "snooze")}>
                           Snooze
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "done")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "done")}>
                           Done
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => deferBrief(visibleDailyMachineAttentionOpportunity.briefKey, "dismiss")}>
+                        <Button size="sm" variant="ghost" onClick={() => handleBriefAction(visibleDailyMachineAttentionOpportunity, "dismiss")}>
                           Dismiss
                         </Button>
                       </div>

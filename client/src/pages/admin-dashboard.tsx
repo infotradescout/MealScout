@@ -2256,6 +2256,37 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "lisa",
     staleTime: 60 * 1000,
   });
+  const { data: lisaBriefActions } = useQuery<any>({
+    queryKey: ["/api/admin/lisa/brief-actions", "dashboard-tab"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/lisa/brief-actions?hours=720");
+      if (!res.ok) throw new Error("Failed to fetch LISA brief actions");
+      return res.json();
+    },
+    enabled: !!adminUser && selectedTab === "lisa",
+    staleTime: 60 * 1000,
+  });
+  const briefActionMutation = useMutation({
+    mutationFn: async (payload: {
+      briefKey: string;
+      action: "done" | "snooze" | "dismiss";
+      title: string;
+      href: string;
+    }) => {
+      const res = await fetch("/api/admin/lisa/brief-actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to log brief action");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/lisa/brief-actions", "dashboard-tab"],
+      });
+    },
+  });
   const promoteNowItems = useMemo(() => {
     const momentum = Array.isArray(lisaMarketIntel?.contentMomentum)
       ? lisaMarketIntel.contentMomentum
@@ -2368,8 +2399,39 @@ export default function AdminDashboard() {
     }));
   };
 
+  const latestBriefActionByKey = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const item of lisaBriefActions?.latest ?? []) {
+      map.set(String(item.briefKey || ""), item);
+    }
+    return map;
+  }, [lisaBriefActions]);
+
   const pickVisibleBrief = (items: any[], prefix: string) =>
-    items.find((item: any) => (briefStatus[`${prefix}:${item.id}`]?.until ?? 0) <= Date.now()) || null;
+    items.find((item: any) => {
+      const briefKey = `${prefix}:${item.id}`;
+      const localUntil = briefStatus[briefKey]?.until ?? 0;
+      const latestAction = latestBriefActionByKey.get(briefKey);
+      const actionUntil =
+        latestAction?.action === "done"
+          ? new Date(latestAction.createdAt).getTime() + 24 * 7 * 60 * 60 * 1000
+          : latestAction?.action === "snooze"
+            ? new Date(latestAction.createdAt).getTime() + 4 * 60 * 60 * 1000
+            : latestAction?.action === "dismiss"
+              ? new Date(latestAction.createdAt).getTime() + 16 * 60 * 60 * 1000
+              : 0;
+      return Math.max(localUntil, actionUntil) <= Date.now();
+    }) || null;
+
+  const handleBriefAction = (
+    briefKey: string,
+    action: "done" | "snooze" | "dismiss",
+    title: string,
+    href: string,
+  ) => {
+    deferBrief(briefKey, action);
+    briefActionMutation.mutate({ briefKey, action, title, href });
+  };
 
   const topPromotionItem = pickVisibleBrief(promoteNowItems, "promote");
   const topDemandItem = pickVisibleBrief(demandSpikeItems, "demand");
@@ -6697,13 +6759,13 @@ export default function AdminDashboard() {
                               {topPromotionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "snooze")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "snooze", topPromotionItem.title, topPromotionItem.href)}>
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "done")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "done", topPromotionItem.title, topPromotionItem.href)}>
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`promote:${topPromotionItem.id}`, "dismiss")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`promote:${topPromotionItem.id}`, "dismiss", topPromotionItem.title, topPromotionItem.href)}>
                             Dismiss
                           </Button>
                         </div>
@@ -6725,13 +6787,13 @@ export default function AdminDashboard() {
                               {topDemandItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "snooze")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "snooze", topDemandItem.title, topDemandItem.href)}>
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "done")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "done", topDemandItem.title, topDemandItem.href)}>
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`demand:${topDemandItem.id}`, "dismiss")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`demand:${topDemandItem.id}`, "dismiss", topDemandItem.title, topDemandItem.href)}>
                             Dismiss
                           </Button>
                         </div>
@@ -6753,13 +6815,13 @@ export default function AdminDashboard() {
                               {topAcquisitionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "snooze")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "snooze", topAcquisitionItem.title, topAcquisitionItem.href)}>
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "done")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "done", topAcquisitionItem.title, topAcquisitionItem.href)}>
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`acquire:${topAcquisitionItem.id}`, "dismiss")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`acquire:${topAcquisitionItem.id}`, "dismiss", topAcquisitionItem.title, topAcquisitionItem.href)}>
                             Dismiss
                           </Button>
                         </div>
@@ -6781,13 +6843,13 @@ export default function AdminDashboard() {
                               {topMachineAttentionItem.actionLabel}
                             </Button>
                           </Link>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "snooze")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "snooze", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
                             Snooze
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "done")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "done", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
                             Done
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deferBrief(`machine:${topMachineAttentionItem.id}`, "dismiss")}>
+                          <Button size="sm" variant="ghost" onClick={() => handleBriefAction(`machine:${topMachineAttentionItem.id}`, "dismiss", topMachineAttentionItem.title, topMachineAttentionItem.href)}>
                             Dismiss
                           </Button>
                         </div>

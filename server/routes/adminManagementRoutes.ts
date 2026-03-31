@@ -2440,6 +2440,140 @@ export function registerAdminManagementRoutes(app: Express) {
   );
 
   app.get(
+    "/api/admin/lisa/brief-actions",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const hoursRaw = Number(req.query.hours ?? 24 * 30);
+        const hours = Number.isFinite(hoursRaw)
+          ? Math.max(24, Math.min(24 * 120, Math.trunc(hoursRaw)))
+          : 24 * 30;
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const rows = await db
+          .select({
+            id: telemetryEvents.id,
+            userId: telemetryEvents.userId,
+            createdAt: telemetryEvents.createdAt,
+            properties: telemetryEvents.properties,
+          })
+          .from(telemetryEvents)
+          .where(
+            and(
+              eq(telemetryEvents.eventName, "lisa_brief_action"),
+              gte(telemetryEvents.createdAt, since),
+            ),
+          )
+          .orderBy(desc(telemetryEvents.createdAt))
+          .limit(1000);
+
+        const items = rows
+          .map((row: any) => {
+            const properties =
+              row.properties && typeof row.properties === "object"
+                ? (row.properties as Record<string, any>)
+                : {};
+            return {
+              id: row.id,
+              userId: row.userId,
+              createdAt: row.createdAt,
+              briefKey: String(properties.briefKey || ""),
+              action: String(properties.action || ""),
+              title: String(properties.title || ""),
+              href: String(properties.href || ""),
+            };
+          })
+          .filter((item: any) => Boolean(item.briefKey && item.action));
+
+        const latestByBrief = new Map<string, (typeof items)[number]>();
+        for (const item of items) {
+          if (!latestByBrief.has(item.briefKey)) {
+            latestByBrief.set(item.briefKey, item);
+          }
+        }
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          items,
+          latest: Array.from(latestByBrief.values()),
+        });
+      } catch (error) {
+        console.error("Error fetching LISA brief actions:", error);
+        res.status(500).json({ message: "Failed to fetch brief actions" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/lisa/brief-actions",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const briefKey = String(req.body?.briefKey || "").trim();
+        const actionRaw = String(req.body?.action || "").trim().toLowerCase();
+        const title = String(req.body?.title || "").trim();
+        const href = String(req.body?.href || "").trim();
+        const action =
+          actionRaw === "done" || actionRaw === "snooze" || actionRaw === "dismiss"
+            ? actionRaw
+            : "";
+
+        if (!briefKey || !action) {
+          return res.status(400).json({ message: "Missing brief action fields" });
+        }
+
+        const [eventRow] = await db
+          .insert(telemetryEvents)
+          .values({
+            eventName: "lisa_brief_action",
+            userId: req.user?.id || null,
+            properties: {
+              briefKey,
+              action,
+              title: title || null,
+              href: href || null,
+            },
+          })
+          .returning({
+            id: telemetryEvents.id,
+            createdAt: telemetryEvents.createdAt,
+          });
+
+        logAudit(
+          req.user?.id || "",
+          "lisa_brief_action",
+          "lisa_brief",
+          briefKey,
+          req.ip || "",
+          String(req.get("user-agent") || ""),
+          { briefKey, action, title, href },
+        ).catch((err) =>
+          console.error("Failed to write LISA brief audit log:", err),
+        );
+
+        res.json({
+          ok: true,
+          item: {
+            id: eventRow?.id || null,
+            createdAt: eventRow?.createdAt || new Date().toISOString(),
+            briefKey,
+            action,
+            title,
+            href,
+          },
+        });
+      } catch (error) {
+        console.error("Error logging LISA brief action:", error);
+        res.status(500).json({ message: "Failed to log brief action" });
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/dashboard-totals",
     isAuthenticated,
     isStaffOrAdmin,
