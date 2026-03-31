@@ -14,6 +14,7 @@ import { DigestService } from "../digestService";
 import { notifyUnbookedEvents } from "../eventNotificationCron";
 import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
+import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { db } from "../db";
@@ -95,6 +96,25 @@ export async function registerSchedulers(app: Express): Promise<void> {
         }
       } catch (error) {
         console.error("[location-demand-activation] cron failed:", error);
+      }
+    });
+  }
+
+  // Supply market intel refresh — creates localized snapshots + alerts and emits LISA-compatible lane claims.
+  if (
+    String(process.env.SUPPLY_MARKET_INTEL_ENABLED || "true")
+      .trim()
+      .toLowerCase() !== "false"
+  ) {
+    const expression = String(process.env.SUPPLY_MARKET_INTEL_CRON || "*/20 * * * *");
+    cron.schedule(expression, async () => {
+      try {
+        const stats = await runSupplyMarketIntelCron();
+        if (Number((stats as any)?.alertsCreated || 0) > 0) {
+          console.log("[supply-market-intel] alerts generated", stats);
+        }
+      } catch (error) {
+        console.error("[supply-market-intel] cron failed:", error);
       }
     });
   }

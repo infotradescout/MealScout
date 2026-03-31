@@ -53,6 +53,7 @@ import {
 import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../services/parkingPassIntegrity";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
+import { getSupplyMarketDataLanes } from "../services/supplyMarketIntel";
 
 // Optional Stripe integration (mirrors server/routes.ts)
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -1903,6 +1904,7 @@ export function registerAdminManagementRoutes(app: Express) {
           recentDealCreateCountRows,
           previousDealCreateCountRows,
           activeDealRows,
+          supplyMarketLaneFeed,
         ] = await Promise.all([
           db
             .select({
@@ -2084,6 +2086,7 @@ export function registerAdminManagementRoutes(app: Express) {
             )
             .orderBy(desc(deals.createdAt))
             .limit(80),
+          getSupplyMarketDataLanes({ sinceHours: 48, limit: 300 }),
         ]);
 
         const typedRecentQueryRows = recentQueryRows as Array<{
@@ -2460,6 +2463,14 @@ export function registerAdminManagementRoutes(app: Express) {
             bestDeals: bestValueDeals,
             cuisineValue,
           },
+          supplyMarketIntel: {
+            summary:
+              supplyMarketLaneFeed.total > 0
+                ? `Supply market lanes active with ${supplyMarketLaneFeed.total} recent records.`
+                : "Supply market lanes have no recent records yet.",
+            laneCounts: supplyMarketLaneFeed.laneCounts,
+            lanes: supplyMarketLaneFeed.lanes.slice(0, 60),
+          },
           advertiserSignals: {
             topQueries: topQueriesRows,
             cityDemand: cityDemandRows,
@@ -2478,6 +2489,66 @@ export function registerAdminManagementRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching LISA market intel:", error);
         res.status(500).json({ message: "Failed to fetch market intel" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/lisa/market-data-lanes",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const sinceHours = Math.max(1, Math.min(24 * 14, Number(req.query?.hours || 48) || 48));
+        const limit = Math.max(10, Math.min(5000, Number(req.query?.limit || 1000) || 1000));
+        const format = String(req.query?.format || "json").trim().toLowerCase();
+
+        const feed = await getSupplyMarketDataLanes({ sinceHours, limit });
+
+        if (format === "csv") {
+          const header = [
+            "id",
+            "lane",
+            "laneFamily",
+            "signalType",
+            "itemKey",
+            "itemName",
+            "areaKey",
+            "valuePrimary",
+            "valueSecondary",
+            "source",
+            "createdAt",
+          ];
+          const rows = feed.lanes.map((row: any) =>
+            [
+              row.id,
+              row.lane,
+              row.laneFamily,
+              row.signalType,
+              row.itemKey,
+              row.itemName,
+              row.areaKey,
+              row.valuePrimary ?? "",
+              row.valueSecondary ?? "",
+              row.source,
+              row.createdAt,
+            ]
+              .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+              .join(","),
+          );
+          const csv = [header.join(","), ...rows].join("\n");
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader(
+            "Content-Disposition",
+            `inline; filename="mealscout-supply-market-lanes-${Date.now()}.csv"`,
+          );
+          return res.send(csv);
+        }
+
+        res.json({ ok: true, ...feed });
+      } catch (error) {
+        console.error("Error fetching supply market data lanes:", error);
+        res.status(500).json({ message: "Failed to fetch market data lanes" });
       }
     },
   );

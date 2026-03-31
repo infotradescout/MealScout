@@ -95,6 +95,14 @@ type PriceWatch = {
     storeState?: string | null;
     distanceMiles?: number | null;
   } | null;
+  trend?: {
+    sampleDays: number;
+    newestMedian: number | null;
+    median7: number | null;
+    median30: number | null;
+    trend7dPct: number | null;
+    trend30dPct: number | null;
+  } | null;
   targetMet?: boolean;
   updatedAt?: string;
 };
@@ -108,6 +116,19 @@ type PriceWatchAlert = {
   baselinePriceCents?: number | null;
   storeName?: string | null;
   createdAt?: string | null;
+};
+
+type PriceWatchSnapshot = {
+  snapshotDay: string;
+  minPriceCents?: number | null;
+  medianPriceCents?: number | null;
+  maxPriceCents?: number | null;
+  sampleCount?: number;
+};
+
+type PriceWatchHistoryResponse = {
+  watch: PriceWatch;
+  snapshots: PriceWatchSnapshot[];
 };
 
 type OrderListOffer = {
@@ -185,6 +206,8 @@ export default function SuppliersPage() {
   const [watchItemName, setWatchItemName] = useState("");
   const [watchTargetPriceDollars, setWatchTargetPriceDollars] = useState("");
   const [watchRadiusMiles, setWatchRadiusMiles] = useState("25");
+  const [historyWatchId, setHistoryWatchId] = useState<string>("");
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [importResult, setImportResult] =
     useState<OrderListImportResult | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -613,6 +636,23 @@ export default function SuppliersPage() {
         variant: "destructive",
       });
     },
+  });
+
+  const { data: historyData, isLoading: isHistoryLoading } = useQuery<PriceWatchHistoryResponse | null>({
+    queryKey: ["/api/supply/price-watches/history", historyWatchId],
+    queryFn: async () => {
+      if (!historyWatchId) return null;
+      const { response, data } = await fetchJsonWithRetry<PriceWatchHistoryResponse>(
+        `/api/supply/price-watches/${encodeURIComponent(historyWatchId)}/history?days=30`,
+        { credentials: "include" },
+        { attempts: 2, retryStatuses: [503], baseDelayMs: 600, fallbackValue: null as any },
+      );
+      if ([401, 403, 404].includes(response.status)) return null;
+      if (!response.ok) throw new Error("Failed to load watch history");
+      return data || null;
+    },
+    enabled: historyDialogOpen && Boolean(historyWatchId),
+    staleTime: 30_000,
   });
 
   return (
@@ -1088,6 +1128,13 @@ export default function SuppliersPage() {
                               ? ` • Best $${(Number(watch.currentBest.unitPriceCents || 0) / 100).toFixed(2)} at ${watch.currentBest.storeName || "store"}`
                               : " • No local observations yet"}
                           </div>
+                          {watch.trend ? (
+                            <div className="text-xs text-muted-foreground">
+                              7d {watch.trend.trend7dPct === null ? "n/a" : `${watch.trend.trend7dPct > 0 ? "+" : ""}${watch.trend.trend7dPct}%`}
+                              {" • "}
+                              30d {watch.trend.trend30dPct === null ? "n/a" : `${watch.trend.trend30dPct > 0 ? "+" : ""}${watch.trend.trend30dPct}%`}
+                            </div>
+                          ) : null}
                           {watch.targetPriceCents ? (
                             <div className="text-xs text-muted-foreground">
                               Target ${(Number(watch.targetPriceCents || 0) / 100).toFixed(2)}
@@ -1103,6 +1150,16 @@ export default function SuppliersPage() {
                           ) : (
                             <Badge variant="secondary">Watching</Badge>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setHistoryWatchId(watch.id);
+                              setHistoryDialogOpen(true);
+                            }}
+                          >
+                            History
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -1571,6 +1628,57 @@ export default function SuppliersPage() {
                 variant="outline"
                 onClick={() => setImportDialogOpen(false)}
               >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+          <DialogContent className="max-w-sm md:max-w-2xl">
+            <DialogHeaderUI>
+              <DialogTitleUI>Price trend history</DialogTitleUI>
+              <DialogDescriptionUI>
+                30-day snapshot timeline for this watch.
+              </DialogDescriptionUI>
+            </DialogHeaderUI>
+
+            {isHistoryLoading ? (
+              <div className="text-sm text-muted-foreground">Loading history...</div>
+            ) : !historyData || !Array.isArray(historyData.snapshots) || historyData.snapshots.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No snapshot history yet for this watch.</div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm">
+                  <span className="font-medium">{historyData.watch.itemName}</span>
+                </div>
+                <ScrollArea className="h-[320px] pr-3">
+                  <div className="space-y-2">
+                    {historyData.snapshots
+                      .slice()
+                      .reverse()
+                      .map((row) => (
+                        <div
+                          key={row.snapshotDay}
+                          className="rounded-md border p-2 text-xs flex items-center justify-between gap-2"
+                        >
+                          <div className="font-medium">{row.snapshotDay}</div>
+                          <div className="text-muted-foreground">
+                            min ${((Number(row.minPriceCents || 0) || 0) / 100).toFixed(2)}
+                            {" • "}
+                            med ${((Number(row.medianPriceCents || 0) || 0) / 100).toFixed(2)}
+                            {" • "}
+                            max ${((Number(row.maxPriceCents || 0) || 0) / 100).toFixed(2)}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setHistoryDialogOpen(false)}>
                 Close
               </Button>
             </DialogFooter>

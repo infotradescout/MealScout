@@ -662,6 +662,59 @@ async function getLocalizedPriceOffers(params: {
     });
 }
 
+async function getWatchSnapshotTrend(params: {
+  itemKey: string;
+  areaKey: string;
+  limitDays: number;
+}) {
+  const snapshots = await db
+    .select({
+      snapshotDay: supplyPriceDailySnapshots.snapshotDay,
+      medianPriceCents: supplyPriceDailySnapshots.medianPriceCents,
+      minPriceCents: supplyPriceDailySnapshots.minPriceCents,
+      maxPriceCents: supplyPriceDailySnapshots.maxPriceCents,
+      sampleCount: supplyPriceDailySnapshots.sampleCount,
+    })
+    .from(supplyPriceDailySnapshots)
+    .where(
+      and(
+        eq(supplyPriceDailySnapshots.itemKey, params.itemKey),
+        eq(supplyPriceDailySnapshots.areaKey, params.areaKey),
+      ),
+    )
+    .orderBy(desc(supplyPriceDailySnapshots.snapshotDay))
+    .limit(Math.max(2, params.limitDays));
+
+  const newest = snapshots[0] as any;
+  const newestMedian = newest?.medianPriceCents === null || newest?.medianPriceCents === undefined
+    ? null
+    : Number(newest.medianPriceCents);
+
+  const day7 = snapshots[6] as any;
+  const day30 = snapshots[29] as any;
+
+  const median7 = day7?.medianPriceCents === null || day7?.medianPriceCents === undefined
+    ? null
+    : Number(day7.medianPriceCents);
+  const median30 = day30?.medianPriceCents === null || day30?.medianPriceCents === undefined
+    ? null
+    : Number(day30.medianPriceCents);
+
+  const pct = (latest: number | null, baseline: number | null) => {
+    if (latest === null || baseline === null || baseline <= 0) return null;
+    return Number((((latest - baseline) / baseline) * 100).toFixed(1));
+  };
+
+  return {
+    sampleDays: snapshots.length,
+    newestMedian,
+    median7,
+    median30,
+    trend7dPct: pct(newestMedian, median7),
+    trend30dPct: pct(newestMedian, median30),
+  };
+}
+
 export function registerSupplierMarketplaceRoutes(app: Express) {
   // Logged-in users can add a supplier profile to their existing account.
   app.post("/api/supplier/profile/activate", isAuthenticated, async (req: any, res) => {
@@ -858,6 +911,7 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
 
       const now = new Date();
       const minTriggerGapMs = 12 * 60 * 60 * 1000;
+      const trendCache = new Map<string, any>();
       const rows = await Promise.all(
         (watches as any[]).map(async (watch: any) => {
           const buyerRestaurant = watch.buyerRestaurantId
@@ -956,6 +1010,17 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
               });
           }
 
+          const trendKey = `${String(watch.itemKey || "")}:${areaKey}`;
+          let trend = trendCache.get(trendKey);
+          if (!trend) {
+            trend = await getWatchSnapshotTrend({
+              itemKey: String(watch.itemKey || ""),
+              areaKey,
+              limitDays: 30,
+            });
+            trendCache.set(trendKey, trend);
+          }
+
           return {
             ...watch,
             currentBest: best
@@ -968,6 +1033,7 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
                   distanceMiles: best.distanceMiles,
                 }
               : null,
+            trend,
             targetMet,
           };
         }),
