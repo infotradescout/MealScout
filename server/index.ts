@@ -20,6 +20,7 @@ import { db } from "./db";
 import { sql } from "drizzle-orm";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
@@ -374,6 +375,54 @@ if (process.env.NODE_ENV === "production") {
 // Anti-scrape middleware: allow TradeScout crawler, block obvious scrapers
 app.use(antiScrape);
 
+const llmBotPattern =
+  /(gptbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
+const botPattern =
+  /(bot|crawler|spider|slurp|facebookexternalhit|whatsapp|discordbot|telegrambot|linkedinbot)/i;
+
+const deriveActorType = (userAgent: string) => {
+  if (!userAgent) return "human";
+  if (llmBotPattern.test(userAgent)) return "llm_bot";
+  if (botPattern.test(userAgent)) return "bot";
+  return "human";
+};
+
+const deriveSourceType = (actorType: string) => {
+  if (actorType === "llm_bot") return "llm_crawler";
+  if (actorType === "bot") return "crawler";
+  return "human";
+};
+
+const classifyRequestEventType = (pathValue: string) => {
+  const path = String(pathValue || "").toLowerCase();
+  if (/^\/restaurant\/[^/?#]+$/.test(path)) return "profile_view";
+  if (/^\/search/.test(path)) return "search_submit";
+  if (/^\/category\/[^/?#]+/.test(path)) return "category_view";
+  if (/(favorite|save)/.test(path)) return "save";
+  if (/(call|phone)/.test(path)) return "call_click";
+  if (/website/.test(path)) return "website_click";
+  if (/direction/.test(path)) return "directions_click";
+  if (/(book|checkout|order|event-signup|claim|subscribe)/.test(path))
+    return "conversion_intent";
+  return "page_view";
+};
+
+const inferRequestSurface = (pathValue: string) => {
+  const path = String(pathValue || "").toLowerCase();
+  if (path.startsWith("/restaurant/")) return "restaurant_profile";
+  if (path.startsWith("/search")) return "search";
+  if (path.startsWith("/category/")) return "category";
+  if (path.startsWith("/map")) return "map";
+  if (path.startsWith("/events")) return "events";
+  return "web";
+};
+
+const extractRestaurantEntity = (pathValue: string) => {
+  const match = String(pathValue || "").match(/^\/restaurant\/([^/?#]+)/i);
+  if (!match?.[1]) return { entityId: null, entityType: null };
+  return { entityId: String(match[1]), entityType: "restaurant" };
+};
+
 // Request logging for admin reporting (skip static assets)
 app.use((req, res, next) => {
   const start = Date.now();
@@ -390,6 +439,22 @@ app.use((req, res, next) => {
     }
     const durationMs = Date.now() - start;
     const userId = (req as any).user?.id || null;
+    const userAgent = String(req.get("user-agent") || "");
+    const actorType = deriveActorType(userAgent);
+    const sourceType = deriveSourceType(actorType);
+    const eventType = classifyRequestEventType(pathValue);
+    const surface = inferRequestSurface(pathValue);
+    const { entityId, entityType } = extractRestaurantEntity(pathValue);
+    const sessionId =
+      (req as any).sessionID ||
+      (userId ? `user:${String(userId)}` : null);
+    const anonymousActorId = crypto
+      .createHash("sha256")
+      .update(
+        `${String(userId || req.ip || "anonymous")}|${String(userAgent).slice(0, 160)}|${String((req as any).cookies?.visitor_id || "")}`,
+      )
+      .digest("hex")
+      .slice(0, 20);
       void db
         .insert(requestLogs)
         .values({
@@ -398,8 +463,20 @@ app.use((req, res, next) => {
           statusCode: res.statusCode || 0,
           durationMs,
           userId,
+          sessionId,
+          anonymousActorId,
+          actorType,
+          sourceType,
+          eventType,
+          surface,
+          entityId,
+          entityType,
           ip: req.ip,
-          userAgent: req.get("user-agent") || null,
+          userAgent: userAgent || null,
+          metadata: {
+            referrer: req.get("referer") || null,
+            query: req.query || {},
+          },
           createdAt: new Date(),
         })
         .catch((error: unknown) => {

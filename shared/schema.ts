@@ -4724,14 +4724,26 @@ export const requestLogs = pgTable(
     statusCode: integer("status_code").notNull(),
     durationMs: integer("duration_ms").notNull(),
     userId: varchar("user_id"),
+    sessionId: varchar("session_id"),
+    anonymousActorId: varchar("anonymous_actor_id"),
+    actorType: varchar("actor_type"), // human | bot | llm_bot | internal
+    sourceType: varchar("source_type"), // human | crawler | llm_crawler | internal
+    eventType: varchar("event_type"), // profile_view | search_submit | ...
+    surface: varchar("surface"), // restaurant_profile | search | map | ...
+    entityId: varchar("entity_id"),
+    entityType: varchar("entity_type"),
     ip: varchar("ip"),
     userAgent: text("user_agent"),
+    metadata: jsonb("metadata"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
     index("idx_request_logs_created").on(table.createdAt),
     index("idx_request_logs_user").on(table.userId),
     index("idx_request_logs_path").on(table.path),
+    index("idx_request_logs_session").on(table.sessionId),
+    index("idx_request_logs_actor").on(table.actorType, table.sourceType),
+    index("idx_request_logs_event_type").on(table.eventType),
   ],
 );
 

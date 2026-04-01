@@ -2449,10 +2449,15 @@ export function registerAdminManagementRoutes(app: Express) {
 
         const humanRequestRows = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
+          const actorType = String(request.actorType || "").trim().toLowerCase();
+          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const isHumanByType = actorType ? actorType === "human" : !botSignatureLabel(request.userAgent);
+          const isHumanBySource = sourceType ? sourceType === "human" : true;
           return (
             createdAt >= since24h.getTime() &&
             !isMonitoringAgent(request.userAgent) &&
-            !botSignatureLabel(request.userAgent)
+            isHumanByType &&
+            isHumanBySource
           );
         });
 
@@ -2463,9 +2468,14 @@ export function registerAdminManagementRoutes(app: Express) {
           /(call|phone|website|favorite|save|direction|book|checkout|claim|order|event-signup|subscribe)/i;
 
         const buildVisitorKey = (request: any) =>
-          `${String(request.ip || "unknown").trim()}|${String(request.userAgent || "")
-            .toLowerCase()
-            .slice(0, 120)}`;
+          String(
+            request.sessionId ||
+              request.anonymousActorId ||
+              request.userId ||
+              `${String(request.ip || "unknown").trim()}|${String(request.userAgent || "")
+                .toLowerCase()
+                .slice(0, 120)}`,
+          );
 
         const restaurantTitleById = new Map<string, string>();
         for (const entity of entities as any[]) {
@@ -2560,9 +2570,16 @@ export function registerAdminManagementRoutes(app: Express) {
 
         const machineDiscoveryNow = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
+          const actorType = String(request.actorType || "").trim().toLowerCase();
+          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const isMachineByType = actorType ? actorType === "bot" || actorType === "llm_bot" : Boolean(botSignatureLabel(request.userAgent));
+          const isMachineBySource = sourceType
+            ? sourceType === "crawler" || sourceType === "llm_crawler"
+            : true;
           return (
             createdAt >= since24h.getTime() &&
-            Boolean(botSignatureLabel(request.userAgent)) &&
+            isMachineByType &&
+            isMachineBySource &&
             isHighValueObservedPath(request.path)
           );
         }).length;
@@ -2621,9 +2638,11 @@ export function registerAdminManagementRoutes(app: Express) {
           .slice(0, 80)
           .map((request: any) => {
             const pathValue = String(request.path || "");
-            const actorType = botSignatureLabel(request.userAgent) ? "bot" : "human";
+            const actorType = String(request.actorType || "").trim().toLowerCase() ||
+              (botSignatureLabel(request.userAgent) ? "bot" : "human");
             const restaurantMatch = pathValue.match(/^\/restaurant\/([^/?#]+)/i);
-            const eventType = classifyObservedEventType(pathValue);
+            const eventType = String(request.eventType || "").trim() || classifyObservedEventType(pathValue);
+            const surface = String(request.surface || "").trim() || inferObservedSurface(pathValue);
             const identitySeed = String(request.userId || request.ip || "anonymous");
             const deviceSeed = String(request.userAgent || "").slice(0, 160);
             const anonymousActorId = crypto
@@ -2631,26 +2650,29 @@ export function registerAdminManagementRoutes(app: Express) {
               .update(`${identitySeed}|${deviceSeed}`)
               .digest("hex")
               .slice(0, 20);
-            const sessionId = request.userId
-              ? `user:${String(request.userId)}`
-              : `anon:${anonymousActorId}`;
+            const sessionId =
+              String(request.sessionId || "").trim() ||
+              (request.userId ? `user:${String(request.userId)}` : `anon:${anonymousActorId}`);
+            const sourceType =
+              String(request.sourceType || "").trim() ||
+              (actorType === "human" ? "human" : "crawler");
             return {
               eventId: String(request.id || ""),
               occurredAt: new Date(request.createdAt).toISOString(),
               ingestedAt: new Date(request.createdAt).toISOString(),
               sessionId,
-              anonymousActorId,
+              anonymousActorId: String(request.anonymousActorId || anonymousActorId),
               actorType,
               eventType,
-              entityId: restaurantMatch?.[1] ? String(restaurantMatch[1]) : null,
-              entityType: restaurantMatch?.[1] ? "restaurant" : null,
+              entityId: request.entityId || (restaurantMatch?.[1] ? String(restaurantMatch[1]) : null),
+              entityType: request.entityType || (restaurantMatch?.[1] ? "restaurant" : null),
               route: pathValue,
-              surface: inferObservedSurface(pathValue),
+              surface,
               category: null,
               state: null,
               county: null,
               city: null,
-              sourceType: actorType === "human" ? "human" : "crawler",
+              sourceType,
               metadata: {
                 method: String(request.method || ""),
                 statusCode: Number(request.statusCode || 0),
@@ -2686,8 +2708,16 @@ export function registerAdminManagementRoutes(app: Express) {
               const latestMachineHit = recentRequests
                 .filter((request: any) => {
                   const createdAt = new Date(request.createdAt).getTime();
+                  const actorType = String(request.actorType || "").trim().toLowerCase();
+                  const sourceType = String(request.sourceType || "").trim().toLowerCase();
+                  const isMachineByType = actorType
+                    ? actorType === "bot" || actorType === "llm_bot"
+                    : Boolean(botSignatureLabel(request.userAgent));
+                  const isMachineBySource = sourceType
+                    ? sourceType === "crawler" || sourceType === "llm_crawler"
+                    : true;
                   if (createdAt < since24h.getTime()) return false;
-                  if (!Boolean(botSignatureLabel(request.userAgent))) return false;
+                  if (!isMachineByType || !isMachineBySource) return false;
                   if (!isHighValueObservedPath(request.path)) return false;
                   return String(request.path || "").includes(String(item.entityId || ""));
                 })
@@ -2710,19 +2740,37 @@ export function registerAdminManagementRoutes(app: Express) {
 
         const recentHighValueMachineHits = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
+          const actorType = String(request.actorType || "").trim().toLowerCase();
+          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const isMachineByType = actorType
+            ? actorType === "bot" || actorType === "llm_bot"
+            : Boolean(botSignatureLabel(request.userAgent));
+          const isMachineBySource = sourceType
+            ? sourceType === "crawler" || sourceType === "llm_crawler"
+            : true;
           return (
             createdAt >= since24h.getTime() &&
-            Boolean(botSignatureLabel(request.userAgent)) &&
+            isMachineByType &&
+            isMachineBySource &&
             isHighValueObservedPath(request.path) &&
             !isMonitoringAgent(request.userAgent)
           );
         }).length;
         const previousHighValueMachineHits = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
+          const actorType = String(request.actorType || "").trim().toLowerCase();
+          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const isMachineByType = actorType
+            ? actorType === "bot" || actorType === "llm_bot"
+            : Boolean(botSignatureLabel(request.userAgent));
+          const isMachineBySource = sourceType
+            ? sourceType === "crawler" || sourceType === "llm_crawler"
+            : true;
           return (
             createdAt >= since48h.getTime() &&
             createdAt < since24h.getTime() &&
-            Boolean(botSignatureLabel(request.userAgent)) &&
+            isMachineByType &&
+            isMachineBySource &&
             isHighValueObservedPath(request.path) &&
             !isMonitoringAgent(request.userAgent)
           );
@@ -3403,8 +3451,17 @@ export function registerAdminManagementRoutes(app: Express) {
           .map((entity) => {
             const crawlerHits = recentRequests.filter((request: any) => {
               const path = String(request.path || "");
+              const actorType = String(request.actorType || "").trim().toLowerCase();
+              const sourceType = String(request.sourceType || "").trim().toLowerCase();
+              const isMachineByType = actorType
+                ? actorType === "bot" || actorType === "llm_bot"
+                : Boolean(botSignatureLabel(request.userAgent));
+              const isMachineBySource = sourceType
+                ? sourceType === "crawler" || sourceType === "llm_crawler"
+                : true;
               return (
-                Boolean(botSignatureLabel(request.userAgent)) &&
+                isMachineByType &&
+                isMachineBySource &&
                 path.includes(entity.entityId)
               );
             }).length;
@@ -3458,9 +3515,18 @@ export function registerAdminManagementRoutes(app: Express) {
         );
         const machineDiscoveryCount = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
+          const actorType = String(request.actorType || "").trim().toLowerCase();
+          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const isMachineByType = actorType
+            ? actorType === "bot" || actorType === "llm_bot"
+            : Boolean(botSignatureLabel(request.userAgent));
+          const isMachineBySource = sourceType
+            ? sourceType === "crawler" || sourceType === "llm_crawler"
+            : true;
           return (
             createdAt >= since7d.getTime() &&
-            Boolean(botSignatureLabel(request.userAgent)) &&
+            isMachineByType &&
+            isMachineBySource &&
             isHighValueObservedPath(request.path)
           );
         }).length;
