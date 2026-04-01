@@ -2287,7 +2287,9 @@ export default function AdminDashboard() {
       });
     },
   });
+  const isTruthOnlyMode = lisaMarketIntel?.signalContract?.mode === "truth_only";
   const promoteNowItems = useMemo(() => {
+    if (isTruthOnlyMode) return [];
     const momentum = Array.isArray(lisaMarketIntel?.contentMomentum)
       ? lisaMarketIntel.contentMomentum
       : [];
@@ -2303,9 +2305,10 @@ export default function AdminDashboard() {
       href: item.restaurantId ? `/restaurant/${item.restaurantId}` : "/admin/control-center",
       actionLabel: item.restaurantId ? "Open restaurant" : "Open stream",
     }));
-  }, [lisaMarketIntel]);
+  }, [isTruthOnlyMode, lisaMarketIntel]);
 
   const demandSpikeItems = useMemo(() => {
+    if (isTruthOnlyMode) return [];
     const trends = Array.isArray(lisaMarketIntel?.trendWatch)
       ? lisaMarketIntel.trendWatch
       : [];
@@ -2342,9 +2345,10 @@ export default function AdminDashboard() {
       })),
     ];
     return demandRows.slice(0, 4);
-  }, [lisaMarketIntel]);
+  }, [isTruthOnlyMode, lisaMarketIntel]);
 
   const acquisitionWatchItems = useMemo(() => {
+    if (isTruthOnlyMode) return [];
     const targets = Array.isArray(lisaMarketIntel?.acquisitionTargets)
       ? lisaMarketIntel.acquisitionTargets
       : [];
@@ -2360,7 +2364,7 @@ export default function AdminDashboard() {
       href: item.canonicalPath || "/admin/control-center",
       actionLabel: "Open target",
     }));
-  }, [lisaMarketIntel]);
+  }, [isTruthOnlyMode, lisaMarketIntel]);
 
   const authorityGapItems = useMemo(() => {
     const items = Array.isArray(lisaPriorities?.items) ? lisaPriorities.items : [];
@@ -2381,6 +2385,7 @@ export default function AdminDashboard() {
   }, [lisaMarketIntel, lisaPriorities]);
 
   const machineAttentionItems = useMemo(() => {
+    if (isTruthOnlyMode) return [];
     const items = Array.isArray(lisaSignals?.items) ? lisaSignals.items : [];
     return items
       .filter((signal: any) => signal.visibility === "off_platform")
@@ -2404,7 +2409,7 @@ export default function AdminDashboard() {
             ? "Open page"
             : "Open stream",
       }));
-  }, [lisaMarketIntel, lisaSignals]);
+  }, [isTruthOnlyMode, lisaMarketIntel, lisaSignals]);
 
   const yesterdayChangeItems = useMemo(
     () =>
@@ -6776,10 +6781,16 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>LISA Opportunity Console</CardTitle>
                 <CardDescription>
-                  What to promote, where demand is growing, what to acquire, and what needs improvement
+                  First-party truth now, with recommendation cards only when signal density is sufficient
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {isTruthOnlyMode ? (
+                  <div className="text-xs text-muted-foreground">
+                    {lisaMarketIntel?.signalContract?.reason ||
+                      "Not enough recent first-party signal to rank recommendation cards safely."}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-3">
                   <Link href="/admin/control-center">
                     <Button>Open Full Stream</Button>
@@ -6791,16 +6802,38 @@ export default function AdminDashboard() {
                     {(acquisitionWatchItems ?? []).length} acquisition targets
                   </Badge>
                 </div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-lg border p-2">
+                    <div className="text-[11px] text-muted-foreground">Human sessions now</div>
+                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.humanSessionsNow ?? 0)}</div>
+                  </div>
+                  <div className="rounded-lg border p-2">
+                    <div className="text-[11px] text-muted-foreground">Intent actions now</div>
+                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.intentActionsNow ?? 0)}</div>
+                  </div>
+                  <div className="rounded-lg border p-2">
+                    <div className="text-[11px] text-muted-foreground">Repeated interest</div>
+                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.repeatedBusinessInterestNow ?? 0)}</div>
+                  </div>
+                  <div className="rounded-lg border p-2">
+                    <div className="text-[11px] text-muted-foreground">Machine discovery</div>
+                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.machineDiscoveryNow ?? 0)}</div>
+                  </div>
+                  <div className="rounded-lg border p-2">
+                    <div className="text-[11px] text-muted-foreground">Friction cases</div>
+                    <div className="text-lg font-semibold">{Number(lisaMarketIntel?.truthCounters?.frictionCasesNow ?? 0)}</div>
+                  </div>
+                </div>
 
                 <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Best thing to promote</CardTitle>
+                      <CardTitle className="text-base">Top content promotion candidate</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topPromotionItem
                         ? buildBriefSentence(topPromotionItem)
-                        : "No clear promotion opportunity yet."}
+                        : "Not enough recent first-party signal to rank this safely."}
                       {topPromotionItem ? (
                         <div className="mt-2 text-xs text-muted-foreground">
                           Why this is #1: {topPromotionItem.rankReason}
@@ -6871,12 +6904,12 @@ export default function AdminDashboard() {
                   </Card>
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Best acquisition target</CardTitle>
+                      <CardTitle className="text-base">Strongest supply/acquisition watch target</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topAcquisitionItem
                         ? buildBriefSentence(topAcquisitionItem)
-                        : "No obvious acquisition target yet."}
+                        : "Not enough recent first-party signal to rank this safely."}
                       {topAcquisitionItem ? (
                         <div className="mt-2 text-xs text-muted-foreground">
                           Why this is #1: {topAcquisitionItem.rankReason}
@@ -6909,12 +6942,12 @@ export default function AdminDashboard() {
                   </Card>
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Best machine-attention play</CardTitle>
+                      <CardTitle className="text-base">Machine discovery pressure to address</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm text-muted-foreground">
                       {topMachineAttentionItem
                         ? buildBriefSentence(topMachineAttentionItem)
-                        : "No meaningful machine-attention opportunity yet."}
+                        : "Not enough recent first-party signal to rank this safely."}
                       {topMachineAttentionItem ? (
                         <div className="mt-2 text-xs text-muted-foreground">
                           Why this is #1: {topMachineAttentionItem.rankReason}

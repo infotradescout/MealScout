@@ -20,6 +20,9 @@ export async function sendAccountSetupInvite({
   const tokenHash = crypto.createHash("sha256").update(setupToken).digest("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+  // Invalidate prior setup links before issuing a fresh invite.
+  await storage.deleteUserSetupTokens(user.id);
+
   await storage.createAccountSetupToken({
     userId: user.id,
     tokenHash,

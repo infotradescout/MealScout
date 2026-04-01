@@ -5,6 +5,7 @@
  * All endpoints require admin authentication.
  */
 
+import { timingSafeEqual } from 'crypto';
 import { Router, type Request } from 'express';
 import { db } from './db';
 import { incidents, securityAuditLog, type User } from '@shared/schema';
@@ -24,6 +25,73 @@ declare global {
 }
 
 const router = Router();
+
+const CRON_SECRETS = [
+  process.env.INCIDENT_CRON_SECRET,
+  process.env.CRON_SECRET,
+]
+  .filter((value): value is string => Boolean(value && value.trim().length > 0))
+  .map((value) => value.trim());
+
+function constantTimeStringEquals(a: string, b: string): boolean {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  if (aBuffer.length !== bBuffer.length) {
+    return false;
+  }
+  return timingSafeEqual(aBuffer, bBuffer);
+}
+
+function readBearerToken(req: Request): string {
+  const authHeader = String(req.headers.authorization || '').trim();
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return '';
+  }
+  return authHeader.slice(7).trim();
+}
+
+function hasValidCronSecret(req: Request): boolean {
+  if (CRON_SECRETS.length === 0) {
+    return false;
+  }
+
+  const presented = [
+    readBearerToken(req),
+    String(req.headers['x-cron-secret'] || '').trim(),
+  ].filter((value) => value.length > 0);
+
+  if (presented.length === 0) {
+    return false;
+  }
+
+  return presented.some((candidate) =>
+    CRON_SECRETS.some((secret) => constantTimeStringEquals(candidate, secret)),
+  );
+}
+
+function isPrivilegedOpsUser(req: Request): boolean {
+  const userType = String((req as any)?.user?.userType || '').trim();
+  return ['staff', 'admin', 'super_admin'].includes(userType);
+}
+
+function isLocalDevRequest(req: Request): boolean {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+  const ip = String(req.ip || '').toLowerCase();
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip === 'localhost'
+  );
+}
+
+function isAuthorizedCronRequest(req: Request): boolean {
+  return (
+    isPrivilegedOpsUser(req) || hasValidCronSecret(req) || isLocalDevRequest(req)
+  );
+}
 
 /**
  * GET /api/incidents
@@ -235,12 +303,7 @@ router.get('/:id/verify-signature', isAdmin, async (req, res) => {
  */
 router.post('/cron/escalations', async (req, res) => {
   try {
-    // Verify the request is coming from a trusted source (Vercel cron, localhost, or valid auth)
-    const fromVercelCron = req.headers['x-vercel-cron'];
-    const isLocalhost = req.ip === '127.0.0.1' || req.ip === 'localhost';
-    const isAdmin = req.user?.role?.includes('admin');
-
-    if (!fromVercelCron && !isLocalhost && !isAdmin) {
+    if (!isAuthorizedCronRequest(req)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -265,12 +328,7 @@ router.post('/cron/escalations', async (req, res) => {
  */
 router.post('/cron/auto-close', async (req, res) => {
   try {
-    // Same auth checks as escalations
-    const fromVercelCron = req.headers['x-vercel-cron'];
-    const isLocalhost = req.ip === '127.0.0.1' || req.ip === 'localhost';
-    const isAdmin = req.user?.role?.includes('admin');
-
-    if (!fromVercelCron && !isLocalhost && !isAdmin) {
+    if (!isAuthorizedCronRequest(req)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

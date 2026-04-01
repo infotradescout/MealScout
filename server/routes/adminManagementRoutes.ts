@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import Stripe from "stripe";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { eq, and, inArray, or, sql, desc, isNull, gte, lt, ne } from "drizzle-orm";
 import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
@@ -194,10 +195,11 @@ async function validateFeedAccess(bearerToken: string) {
   }
 
   // 2. Check Database API Keys (Tiered/Paid access)
-  const [keyRecord] = await db
+  const keyRecords = await db
     .select({
       id: apiKeys.id,
       userId: apiKeys.userId,
+      keyHash: apiKeys.keyHash,
       isActive: apiKeys.isActive,
       expiresAt: apiKeys.expiresAt,
       // Joined quota info
@@ -214,8 +216,20 @@ async function validateFeedAccess(bearerToken: string) {
         eq(apiKeys.isActive, true),
         or(isNull(apiKeys.expiresAt), gte(apiKeys.expiresAt, new Date())),
       ),
-    )
-    .limit(1);
+    );
+
+  let keyRecord: (typeof keyRecords)[number] | undefined;
+  for (const candidate of keyRecords) {
+    try {
+      const matches = await bcrypt.compare(bearerToken, candidate.keyHash);
+      if (matches) {
+        keyRecord = candidate;
+        break;
+      }
+    } catch {
+      // Ignore malformed candidate hashes and continue.
+    }
+  }
 
   if (keyRecord && keyRecord.quotaActive !== false) {
     return {
@@ -2391,6 +2405,7 @@ export function registerAdminManagementRoutes(app: Express) {
 
             return {
               id: entity.id,
+              entityId: entity.entityId,
               title: entity.title,
               entityType: entity.entityType,
               canonicalPath: entity.canonicalPath,
@@ -2407,6 +2422,214 @@ export function registerAdminManagementRoutes(app: Express) {
           })
           .sort((a, b) => b.advertiserScore - a.advertiserScore)
           .slice(0, 8);
+
+        const humanRequestRows = recentRequests.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          return (
+            createdAt >= since24h.getTime() &&
+            !isMonitoringAgent(request.userAgent) &&
+            !botSignatureLabel(request.userAgent)
+          );
+        });
+
+        const recent15m = new Date(Date.now() - 15 * 60 * 1000);
+        const recent1h = new Date(Date.now() - 60 * 60 * 1000);
+        const profilePathMatcher = /^\/restaurant\/([^/?#]+)/i;
+        const intentPathMatcher =
+          /(call|phone|website|favorite|save|direction|book|checkout|claim|order|event-signup|subscribe)/i;
+
+        const buildVisitorKey = (request: any) =>
+          `${String(request.ip || "unknown").trim()}|${String(request.userAgent || "")
+            .toLowerCase()
+            .slice(0, 120)}`;
+
+        const restaurantTitleById = new Map<string, string>();
+        for (const entity of entities as any[]) {
+          if (String(entity.entityType || "") !== "restaurant") continue;
+          if (!entity.entityId) continue;
+          restaurantTitleById.set(String(entity.entityId), String(entity.title || "Restaurant"));
+        }
+
+        const profileInterestByRestaurant = new Map<
+          string,
+          {
+            views: number;
+            visitors: Set<string>;
+            repeatVisitors: Set<string>;
+            latestSeenAt: string | null;
+          }
+        >();
+        const profileIntentByRestaurant = new Map<string, number>();
+        const visitorProfileCounts = new Map<string, number>();
+
+        for (const request of humanRequestRows) {
+          const createdAt = new Date(request.createdAt).getTime();
+          const pathValue = String(request.path || "");
+          const match = pathValue.match(profilePathMatcher);
+          if (!match?.[1]) continue;
+          const restaurantId = String(match[1]).trim();
+          if (!restaurantId) continue;
+
+          const visitorKey = buildVisitorKey(request);
+          const profileKey = `${restaurantId}|${visitorKey}`;
+          visitorProfileCounts.set(profileKey, (visitorProfileCounts.get(profileKey) || 0) + 1);
+
+          const bucket = profileInterestByRestaurant.get(restaurantId) || {
+            views: 0,
+            visitors: new Set<string>(),
+            repeatVisitors: new Set<string>(),
+            latestSeenAt: null,
+          };
+          bucket.views += 1;
+          bucket.visitors.add(visitorKey);
+          const occurredIso = new Date(createdAt).toISOString();
+          if (!bucket.latestSeenAt || occurredIso > bucket.latestSeenAt) {
+            bucket.latestSeenAt = occurredIso;
+          }
+          profileInterestByRestaurant.set(restaurantId, bucket);
+
+          if (intentPathMatcher.test(pathValue)) {
+            profileIntentByRestaurant.set(
+              restaurantId,
+              (profileIntentByRestaurant.get(restaurantId) || 0) + 1,
+            );
+          }
+
+          if (createdAt >= recent1h.getTime() && visitorProfileCounts.get(profileKey)! >= 2) {
+            bucket.repeatVisitors.add(visitorKey);
+          }
+        }
+
+        const topViewedBusinesses = Array.from(profileInterestByRestaurant.entries())
+          .map(([restaurantId, data]) => ({
+            restaurantId,
+            title:
+              restaurantTitleById.get(restaurantId) || `Restaurant ${restaurantId.slice(0, 8)}`,
+            views: data.views,
+            uniqueVisitors: data.visitors.size,
+            repeatVisitors: data.repeatVisitors.size,
+            intentActions: Number(profileIntentByRestaurant.get(restaurantId) || 0),
+            latestSeenAt: data.latestSeenAt,
+          }))
+          .sort((a, b) => {
+            if (b.views !== a.views) return b.views - a.views;
+            return b.repeatVisitors - a.repeatVisitors;
+          })
+          .slice(0, 8);
+
+        const humanSessionsNow = new Set(
+          humanRequestRows
+            .filter((request: any) => new Date(request.createdAt).getTime() >= recent15m.getTime())
+            .map((request: any) => buildVisitorKey(request)),
+        ).size;
+
+        const intentActionsNow = humanRequestRows.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          if (createdAt < recent15m.getTime()) return false;
+          return intentPathMatcher.test(String(request.path || ""));
+        }).length;
+
+        const repeatedBusinessInterestNow = topViewedBusinesses.reduce(
+          (sum, item) => sum + Number(item.repeatVisitors || 0),
+          0,
+        );
+
+        const machineDiscoveryNow = recentRequests.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          return (
+            createdAt >= since24h.getTime() &&
+            Boolean(botSignatureLabel(request.userAgent)) &&
+            isHighValueObservedPath(request.path)
+          );
+        }).length;
+
+        const frictionCases = topViewedBusinesses
+          .filter((item) => item.views >= 3 && item.intentActions === 0)
+          .map((item) => ({
+            id: `friction:${item.restaurantId}`,
+            restaurantId: item.restaurantId,
+            title: item.title,
+            views: item.views,
+            uniqueVisitors: item.uniqueVisitors,
+            intentActions: item.intentActions,
+            latestSeenAt: item.latestSeenAt,
+          }))
+          .slice(0, 8);
+        const frictionCasesNow = frictionCases.length;
+
+        const truthSignalScore =
+          humanSessionsNow + intentActionsNow + repeatedBusinessInterestNow + machineDiscoveryNow;
+        const hasRecommendationDensity =
+          truthSignalScore >= 16 &&
+          topViewedBusinesses.length >= 3 &&
+          (intentActionsNow >= 2 || repeatedBusinessInterestNow >= 2);
+
+        const signalContract = {
+          mode: hasRecommendationDensity ? "recommendations" : "truth_only",
+          reason: hasRecommendationDensity
+            ? "First-party signal density is high enough for ranked recommendations."
+            : "Not enough recent first-party signal to rank recommendation cards safely.",
+          thresholds: {
+            minTruthSignalScore: 16,
+            minTopViewedBusinesses: 3,
+            minIntentOrRepeat: 2,
+          },
+          observed: {
+            truthSignalScore,
+            topViewedBusinesses: topViewedBusinesses.length,
+            intentActionsNow,
+            repeatedBusinessInterestNow,
+          },
+        } as const;
+
+        const recentTruthFeed = [
+          ...topViewedBusinesses.slice(0, 3).map((item) => ({
+            id: `truth:profile:${item.restaurantId}`,
+            family: "page_demand",
+            summary: `${item.title} drew ${item.views} profile views (${item.uniqueVisitors} visitors) in the last 24h.`,
+            evidence: `${item.repeatVisitors} repeat visitors; ${item.intentActions} intent actions.`,
+            actionHint:
+              item.intentActions === 0
+                ? "Improve profile clarity and call-to-action blocks."
+                : "Sustain with fresh offers and keep profile details current.",
+            occurredAt: item.latestSeenAt || now.toISOString(),
+          })),
+          ...frictionCases.slice(0, 2).map((item) => ({
+            id: `truth:friction:${item.restaurantId}`,
+            family: "conversion_friction",
+            summary: `${item.title} has ${item.views} views with no intent actions.`,
+            evidence: `${item.uniqueVisitors} unique visitors in the current window.`,
+            actionHint: "Tighten value proposition, menu details, and outbound click paths.",
+            occurredAt: item.latestSeenAt || now.toISOString(),
+          })),
+          ...acquisitionTargets
+            .filter((item) => Number(item.crawlerHits || 0) > 0)
+            .slice(0, 2)
+            .map((item) => {
+              const latestMachineHit = recentRequests
+                .filter((request: any) => {
+                  const createdAt = new Date(request.createdAt).getTime();
+                  if (createdAt < since24h.getTime()) return false;
+                  if (!Boolean(botSignatureLabel(request.userAgent))) return false;
+                  if (!isHighValueObservedPath(request.path)) return false;
+                  return String(request.path || "").includes(String(item.entityId || ""));
+                })
+                .sort(
+                  (a: any, b: any) =>
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                )[0];
+              return {
+                id: `truth:machine:${item.id}`,
+                family: "machine_discovery",
+                summary: `${item.title} received ${item.crawlerHits} machine discovery hits in the last 24h.`,
+                evidence: `Quality=${item.quality}; readiness=${item.machineReadiness}.`,
+                actionHint: "Upgrade public page quality before pushing broader distribution.",
+                occurredAt: latestMachineHit
+                  ? new Date(latestMachineHit.createdAt).toISOString()
+                  : now.toISOString(),
+              };
+            }),
+        ].slice(0, 8);
 
         const recentHighValueMachineHits = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
@@ -2568,10 +2791,32 @@ export function registerAdminManagementRoutes(app: Express) {
           ],
         };
 
+        const safeBrief = hasRecommendationDensity
+          ? brief
+          : {
+              headline: "Recommendation layer is paused while first-party signal density is still low.",
+              audienceAngle:
+                "Track truth counters and repeated business interest before ranking promotion opportunities.",
+              inventoryAngle: `Observed truth score ${truthSignalScore} (needs ${signalContract.thresholds.minTruthSignalScore}) across ${topViewedBusinesses.length} top-viewed businesses.`,
+              acquisitionAngle: signalContract.reason,
+              recommendedPackage: [] as string[],
+            };
+
         res.json({
           ok: true,
           generatedAt: new Date().toISOString(),
-          brief,
+          signalContract,
+          truthCounters: {
+            humanSessionsNow,
+            intentActionsNow,
+            repeatedBusinessInterestNow,
+            machineDiscoveryNow,
+            frictionCasesNow,
+          },
+          recentTruthFeed,
+          topViewedBusinesses,
+          frictionCases,
+          brief: safeBrief,
           changeSinceYesterday: {
             summary:
               changeItems[0]?.summary ||
@@ -2638,8 +2883,8 @@ export function registerAdminManagementRoutes(app: Express) {
             },
             footTraffic: geoPings,
           },
-          contentMomentum: videoRows,
-          acquisitionTargets,
+          contentMomentum: hasRecommendationDensity ? videoRows : [],
+          acquisitionTargets: hasRecommendationDensity ? acquisitionTargets : [],
         });
       } catch (error) {
         console.error("Error fetching LISA market intel:", error);
@@ -3125,20 +3370,66 @@ export function registerAdminManagementRoutes(app: Express) {
           "high-demand location";
         const topCuisine = cuisineRows[0]?.cuisineType || "food truck";
 
+        const searchDemandCount = topQueriesRows.reduce(
+          (sum: number, row: any) => sum + Number(row.count || 0),
+          0,
+        );
+        const locationDemandCount = cityDemandRows.reduce(
+          (sum: number, row: any) => sum + Number(row.requestCount || 0),
+          0,
+        );
+        const machineDiscoveryCount = recentRequests.filter((request: any) => {
+          const createdAt = new Date(request.createdAt).getTime();
+          return (
+            createdAt >= since7d.getTime() &&
+            Boolean(botSignatureLabel(request.userAgent)) &&
+            isHighValueObservedPath(request.path)
+          );
+        }).length;
+        const exportTruthSignalScore =
+          Math.min(searchDemandCount, 10) +
+          Math.min(locationDemandCount, 10) +
+          Math.min(videoRows.length, 5) +
+          Math.min(machineDiscoveryCount, 5);
+        const hasExportRecommendationDensity =
+          exportTruthSignalScore >= 12 &&
+          (locationDemandCount >= 3 || searchDemandCount >= 5);
+
         const exportPayload = {
           type: exportType,
           generatedAt: new Date().toISOString(),
-          advertiserBrief: {
-            headline: `MealScout demand is clustering around ${topQuery} and ${topCuisine} inventory.`,
-            audienceAngle: `Promote around ${topLocation} where location demand and truck interest are forming.`,
-            inventoryAngle: `${videoRows.length} recent stories, ${geoAds.impressions} geo-ad impressions, and ${geoPings.totalPings} foot-traffic pings create sponsor inventory.`,
-            recommendations: [
-              `Sponsor search and discovery around "${topQuery}"`,
-              `Build a localized package around ${topLocation}`,
-              `Bundle ${topCuisine} content with geo-distribution inventory`,
-            ],
+          signalContract: {
+            mode: hasExportRecommendationDensity ? "recommendations" : "truth_only",
+            reason: hasExportRecommendationDensity
+              ? "First-party signal density is high enough for export recommendations."
+              : "Not enough recent first-party signal to export recommendation packages safely.",
+            observed: {
+              exportTruthSignalScore,
+              searchDemandCount,
+              locationDemandCount,
+              machineDiscoveryCount,
+              contentMomentumCount: videoRows.length,
+            },
           },
-          acquisitionWatchlist: acquisitionTargets,
+          advertiserBrief: {
+            headline: hasExportRecommendationDensity
+              ? `MealScout demand is clustering around ${topQuery} and ${topCuisine} inventory.`
+              : "Recommendation exports paused while first-party signal density is low.",
+            audienceAngle: hasExportRecommendationDensity
+              ? `Promote around ${topLocation} where location demand and truck interest are forming.`
+              : "Use truth counters and recent event evidence until enough density is present.",
+            inventoryAngle: hasExportRecommendationDensity
+              ? `${videoRows.length} recent stories, ${geoAds.impressions} geo-ad impressions, and ${geoPings.totalPings} foot-traffic pings create sponsor inventory.`
+              : `Observed score ${exportTruthSignalScore} in the latest export window; keep collecting demand and intent events.`,
+            recommendations: hasExportRecommendationDensity
+              ? [
+                  `Sponsor search and discovery around "${topQuery}"`,
+                  `Build a localized package around ${topLocation}`,
+                  `Bundle ${topCuisine} content with geo-distribution inventory`,
+                ]
+              : [],
+          },
+          acquisitionWatchlist: hasExportRecommendationDensity ? acquisitionTargets : [],
           sponsorPackage: {
             geoAds,
             footTraffic: geoPings,

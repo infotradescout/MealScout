@@ -132,6 +132,52 @@ type AuthorityGapResponse = {
 type MarketIntelResponse = {
   ok: boolean;
   generatedAt: string;
+  signalContract?: {
+    mode: "truth_only" | "recommendations";
+    reason: string;
+    thresholds: {
+      minTruthSignalScore: number;
+      minTopViewedBusinesses: number;
+      minIntentOrRepeat: number;
+    };
+    observed: {
+      truthSignalScore: number;
+      topViewedBusinesses: number;
+      intentActionsNow: number;
+      repeatedBusinessInterestNow: number;
+    };
+  };
+  truthCounters?: {
+    humanSessionsNow: number;
+    intentActionsNow: number;
+    repeatedBusinessInterestNow: number;
+    machineDiscoveryNow: number;
+    frictionCasesNow: number;
+  };
+  recentTruthFeed?: Array<{
+    id: string;
+    family: string;
+    summary: string;
+    evidence: string;
+    actionHint: string;
+    occurredAt: string;
+  }>;
+  topViewedBusinesses?: Array<{
+    restaurantId: string;
+    title: string;
+    views: number;
+    uniqueVisitors: number;
+    repeatVisitors: number;
+    intentActions: number;
+  }>;
+  frictionCases?: Array<{
+    id: string;
+    restaurantId: string;
+    title: string;
+    views: number;
+    uniqueVisitors: number;
+    intentActions: number;
+  }>;
   brief: {
     headline: string;
     audienceAngle: string;
@@ -993,6 +1039,7 @@ export default function AdminControlCenter() {
   }, [canonicalEntities]);
 
   const promotionBriefCandidates = useMemo(() => {
+    if (marketIntel?.signalContract?.mode === "truth_only") return [];
     return (marketIntel?.contentMomentum ?? []).slice(0, 4).map((item) => {
       const linkedEntity = item.restaurantId
         ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
@@ -1017,6 +1064,7 @@ export default function AdminControlCenter() {
   }, [canonicalEntityMap, marketIntel]);
 
   const improvementBriefCandidates = useMemo(() => {
+    if (marketIntel?.signalContract?.mode === "truth_only") return [];
     return (priorityEntities?.items ?? []).slice(0, 4).map((item) => ({
       briefKey: `improve:${item.id}`,
       title: item.title || "Top page to improve",
@@ -1033,6 +1081,7 @@ export default function AdminControlCenter() {
   }, [marketIntel, priorityEntities]);
 
   const acquisitionBriefCandidates = useMemo(() => {
+    if (marketIntel?.signalContract?.mode === "truth_only") return [];
     return (marketIntel?.acquisitionTargets ?? []).slice(0, 4).map((item) => {
       const entityId = String(item.id || "").split(":")[1] || item.id;
       const linkedEntity =
@@ -1058,6 +1107,7 @@ export default function AdminControlCenter() {
   }, [canonicalEntityMap, marketIntel]);
 
   const machineAttentionBriefCandidates = useMemo(() => {
+    if (marketIntel?.signalContract?.mode === "truth_only") return [];
     return filteredSignals
       .filter((signal) => signal.visibility === "off_platform")
       .slice(0, 4)
@@ -1408,16 +1458,21 @@ export default function AdminControlCenter() {
               <CardHeader>
                 <CardTitle>Daily Operating Brief</CardTitle>
                 <CardDescription>
-                  The best promotion, improvement, acquisition, and machine-attention opportunity right now
+                  First-party truth now, with recommendations only when signal density is sufficient
                 </CardDescription>
               </CardHeader>
+              {marketIntel?.signalContract?.mode === "truth_only" ? (
+                <div className="px-6 pb-2 text-xs text-[color:var(--text-muted)]">
+                  {marketIntel.signalContract.reason}
+                </div>
+              ) : null}
               <CardContent className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Best thing to promote</div>
+                  <div className="text-sm font-medium">Top content promotion candidate</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                     {visibleDailyPromotionOpportunity
                       ? buildOpportunityBrief(visibleDailyPromotionOpportunity)
-                      : "No clear promotion opportunity yet."}
+                      : "Not enough recent first-party signal to rank this safely."}
                   </div>
                   {visibleDailyPromotionOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
@@ -1447,11 +1502,11 @@ export default function AdminControlCenter() {
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Most valuable page to improve</div>
+                  <div className="text-sm font-medium">Most-viewed page with weak conversion</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                     {visibleDailyImprovementOpportunity
                       ? buildOpportunityBrief(visibleDailyImprovementOpportunity)
-                      : "No clear page-improvement target yet."}
+                      : "Not enough recent first-party signal to rank this safely."}
                   </div>
                   {visibleDailyImprovementOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
@@ -1481,11 +1536,11 @@ export default function AdminControlCenter() {
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Most promising acquisition target</div>
+                  <div className="text-sm font-medium">Strongest supply/acquisition watch target</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                     {visibleDailyAcquisitionOpportunity
                       ? buildOpportunityBrief(visibleDailyAcquisitionOpportunity)
-                      : "No obvious acquisition target yet."}
+                      : "Not enough recent first-party signal to rank this safely."}
                   </div>
                   {visibleDailyAcquisitionOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
@@ -1515,11 +1570,11 @@ export default function AdminControlCenter() {
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4">
-                  <div className="text-sm font-medium">Biggest machine-attention opportunity</div>
+                  <div className="text-sm font-medium">Machine discovery pressure to address</div>
                   <div className="mt-2 text-sm text-[color:var(--text-muted)]">
                     {visibleDailyMachineAttentionOpportunity
                       ? buildOpportunityBrief(visibleDailyMachineAttentionOpportunity)
-                      : "No meaningful outside-machine attention yet."}
+                      : "Not enough recent first-party signal to rank this safely."}
                   </div>
                   {visibleDailyMachineAttentionOpportunity ? (
                     <div className="mt-2 text-xs text-[color:var(--text-muted)]">
@@ -1548,6 +1603,57 @@ export default function AdminControlCenter() {
                     </div>
                   ) : null}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Truth Counters</CardTitle>
+                <CardDescription>What happened in first-party signals before any recommendation layer</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)]">Human sessions now</div>
+                  <div className="text-xl font-semibold">{marketIntel?.truthCounters?.humanSessionsNow ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)]">Intent actions now</div>
+                  <div className="text-xl font-semibold">{marketIntel?.truthCounters?.intentActionsNow ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)]">Repeated business interest</div>
+                  <div className="text-xl font-semibold">{marketIntel?.truthCounters?.repeatedBusinessInterestNow ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)]">Machine discovery</div>
+                  <div className="text-xl font-semibold">{marketIntel?.truthCounters?.machineDiscoveryNow ?? 0}</div>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+                  <div className="text-xs text-[color:var(--text-muted)]">Friction cases</div>
+                  <div className="text-xl font-semibold">{marketIntel?.truthCounters?.frictionCasesNow ?? 0}</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Truth Feed</CardTitle>
+                <CardDescription>Recent, evidence-backed events with direct operator next steps</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(marketIntel?.recentTruthFeed ?? []).length ? (
+                  (marketIntel?.recentTruthFeed ?? []).map((item) => (
+                    <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
+                      <div className="text-sm">{item.summary}</div>
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">{item.evidence}</div>
+                      <div className="mt-1 text-xs text-[color:var(--text-muted)]">Next: {item.actionHint}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-[color:var(--text-muted)]">
+                    No recent first-party truth events are available yet.
+                  </div>
+                )}
               </CardContent>
             </Card>
 

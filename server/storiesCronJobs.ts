@@ -4,6 +4,7 @@ import { eq, lte, sql, and, isNull, isNotNull } from 'drizzle-orm';
 import { deleteFromCloudinary } from './imageUpload';
 import auditLogger from './auditLogger';
 import { detectReviewerLevelDrift } from './reviewerLevelDriftDetector';
+import { timingSafeEqual } from 'crypto';
 
 /**
  * Cleanup expired video stories
@@ -217,19 +218,62 @@ export async function recalculateReviewerLevels(): Promise<{
  * Register cron jobs with the server
  */
 export function registerStoryCronJobs(app: any) {
+  const configuredSecret = String(process.env.CRON_SECRET || '').trim();
+
+  const readBearerToken = (authorizationHeader?: string | null) => {
+    const raw = String(authorizationHeader || '').trim();
+    if (!raw.toLowerCase().startsWith('bearer ')) return '';
+    return raw.slice(7).trim();
+  };
+
+  const constantTimeEquals = (a: string, b: string) => {
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return timingSafeEqual(aBuf, bBuf);
+  };
+
+  const isLocalDevRequest = (req: any) => {
+    if (process.env.NODE_ENV === 'production') return false;
+    const ip = String(req?.ip || '').toLowerCase();
+    return (
+      ip === '127.0.0.1' ||
+      ip === '::1' ||
+      ip === '::ffff:127.0.0.1' ||
+      ip === 'localhost'
+    );
+  };
+
+  const authorizeCronRequest = (req: any, res: any): boolean => {
+    if (!configuredSecret) {
+      if (isLocalDevRequest(req)) return true;
+      res.status(503).json({ error: 'Cron secret not configured' });
+      return false;
+    }
+
+    const presented = [
+      String(req.headers?.['x-cron-secret'] || '').trim(),
+      readBearerToken(String(req.headers?.authorization || '')),
+    ].filter((value) => value.length > 0);
+
+    const isAuthorized = presented.some((token) =>
+      constantTimeEquals(token, configuredSecret),
+    );
+
+    if (!isAuthorized) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return false;
+    }
+    return true;
+  };
+
   // Run daily at 2 AM UTC
   // For production, use a proper cron service (e.g., node-cron, cron, agenda)
   
   // POST endpoint for external cron service
   app.post('/api/cron/cleanup-stories', async (req: any, res: any) => {
     try {
-      // Verify request is from trusted source (check header, IP, secret)
-      const cronSecret = process.env.CRON_SECRET;
-      const authHeader = req.headers['x-cron-secret'];
-
-      if (cronSecret && authHeader !== cronSecret) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+      if (!authorizeCronRequest(req, res)) return;
 
       const stats = await cleanupExpiredStories();
       res.json({
@@ -249,12 +293,7 @@ export function registerStoryCronJobs(app: any) {
   // POST endpoint for recalculation
   app.post('/api/cron/recalculate-levels', async (req: any, res: any) => {
     try {
-      const cronSecret = process.env.CRON_SECRET;
-      const authHeader = req.headers['x-cron-secret'];
-
-      if (cronSecret && authHeader !== cronSecret) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
+      if (!authorizeCronRequest(req, res)) return;
 
       const stats = await recalculateReviewerLevels();
 

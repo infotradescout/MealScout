@@ -1,5 +1,6 @@
 import { eq, and, isNull, lt, gte } from "drizzle-orm";
 import { db } from "./db";
+import { timingSafeEqual } from "crypto";
 import { 
   videoStories, 
   featuredVideoSlots, 
@@ -257,12 +258,50 @@ async function cleanupOldFeaturedSlots() {
 }
 
 export async function registerFeaturedVideoCronJobs(app: any) {
+  const configuredSecret = String(process.env.CRON_SECRET || "").trim();
+
+  const readBearerToken = (authorizationHeader?: string | null) => {
+    const raw = String(authorizationHeader || "").trim();
+    if (!raw.toLowerCase().startsWith("bearer ")) return "";
+    return raw.slice(7).trim();
+  };
+
+  const constantTimeEquals = (a: string, b: string) => {
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    if (aBuf.length !== bBuf.length) return false;
+    return timingSafeEqual(aBuf, bBuf);
+  };
+
+  const isLocalDevRequest = (req: any) => {
+    if (process.env.NODE_ENV === "production") return false;
+    const ip = String(req?.ip || "").toLowerCase();
+    return (
+      ip === "127.0.0.1" ||
+      ip === "::1" ||
+      ip === "::ffff:127.0.0.1" ||
+      ip === "localhost"
+    );
+  };
+
   // Run cycling daily at midnight UTC
   app.post("/api/cron/cycle-featured-videos", async (req: any, res: any) => {
-    // Verify cron secret
-    const cronSecret = req.headers["x-cron-secret"];
-    if (cronSecret !== process.env.CRON_SECRET) {
-      return res.status(401).json({ error: "Unauthorized" });
+    if (!configuredSecret) {
+      if (!isLocalDevRequest(req)) {
+        return res.status(503).json({ error: "Cron secret not configured" });
+      }
+    } else {
+      const presented = [
+        String(req.headers?.["x-cron-secret"] || "").trim(),
+        readBearerToken(String(req.headers?.authorization || "")),
+      ].filter((value) => value.length > 0);
+
+      const isAuthorized = presented.some((token) =>
+        constantTimeEquals(token, configuredSecret),
+      );
+      if (!isAuthorized) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
     }
 
     try {

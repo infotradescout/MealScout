@@ -6675,19 +6675,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUserResetTokens(userId: string): Promise<void> {
-    // Only delete expired or already used tokens to preserve valid ones
-    const now = new Date();
+    // Security-first behavior: invalidate all prior reset links when issuing a new one.
     await db
       .delete(passwordResetTokens)
-      .where(
-        and(
-          eq(passwordResetTokens.userId, userId),
-          or(
-            lte(passwordResetTokens.expiresAt, now),
-            isNotNull(passwordResetTokens.usedAt),
-          ),
-        ),
-      );
+      .where(eq(passwordResetTokens.userId, userId));
   }
 
   async deleteExpiredResetTokens(): Promise<number> {
@@ -6798,19 +6789,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUserSetupTokens(userId: string): Promise<void> {
-    // Only delete expired or already used tokens to preserve valid ones
-    const now = new Date();
+    // Security-first behavior: keep at most one valid invite/setup token per user.
     await db
       .delete(accountSetupTokens)
-      .where(
-        and(
-          eq(accountSetupTokens.userId, userId),
-          or(
-            lte(accountSetupTokens.expiresAt, now),
-            isNotNull(accountSetupTokens.usedAt),
-          ),
-        ),
-      );
+      .where(eq(accountSetupTokens.userId, userId));
   }
 
   async deleteExpiredSetupTokens(): Promise<number> {
