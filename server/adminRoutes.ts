@@ -31,6 +31,18 @@ import { getJobQueueStats } from "./jobs/jobQueue";
 
 const router = Router();
 
+const requestLogLegacySelect = {
+  id: requestLogs.id,
+  method: requestLogs.method,
+  path: requestLogs.path,
+  statusCode: requestLogs.statusCode,
+  durationMs: requestLogs.durationMs,
+  userId: requestLogs.userId,
+  ip: requestLogs.ip,
+  userAgent: requestLogs.userAgent,
+  createdAt: requestLogs.createdAt,
+};
+
 type BotCategory =
   | "llm_crawler"
   | "search_crawler"
@@ -487,7 +499,7 @@ router.get("/request-logs", isStaffOrAdmin, async (req, res) => {
       : new Date();
 
     const logs = await db
-      .select()
+      .select(requestLogLegacySelect)
       .from(requestLogs)
       .where(
         and(
@@ -521,7 +533,7 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
     const logs = await db
-      .select()
+      .select(requestLogLegacySelect)
       .from(requestLogs)
       .where(gte(requestLogs.createdAt, since))
       .orderBy(desc(requestLogs.createdAt))

@@ -160,6 +160,18 @@ const inferObservedSurface = (pathValue: string): string => {
   return "web";
 };
 
+const requestLogLegacySelect = {
+  id: requestLogs.id,
+  method: requestLogs.method,
+  path: requestLogs.path,
+  statusCode: requestLogs.statusCode,
+  durationMs: requestLogs.durationMs,
+  userId: requestLogs.userId,
+  ip: requestLogs.ip,
+  userAgent: requestLogs.userAgent,
+  createdAt: requestLogs.createdAt,
+};
+
 const PRICE_SCOUT_TOKEN_ENV_KEYS = [
   "PRICESCOUT_FEED_API_TOKENS",
   "PRICESCOUT_FEED_API_TOKEN",
@@ -1578,7 +1590,7 @@ export function registerAdminManagementRoutes(app: Express) {
             .orderBy(desc(socialPostQueue.createdAt))
             .limit(Math.min(limit, 40)),
           db
-            .select()
+            .select(requestLogLegacySelect)
             .from(requestLogs)
             .where(gte(requestLogs.createdAt, since))
             .orderBy(desc(requestLogs.createdAt))
@@ -1865,7 +1877,7 @@ export function registerAdminManagementRoutes(app: Express) {
         const [entities, recentRequests] = await Promise.all([
           buildCanonicalEntities(Math.max(limit, 24)),
           db
-            .select()
+            .select(requestLogLegacySelect)
             .from(requestLogs)
             .where(gte(requestLogs.createdAt, since))
             .orderBy(desc(requestLogs.createdAt))
@@ -1954,7 +1966,7 @@ export function registerAdminManagementRoutes(app: Express) {
         const [entities, recentRequests] = await Promise.all([
           buildCanonicalEntities(Math.max(limit, 30)),
           db
-            .select()
+            .select(requestLogLegacySelect)
             .from(requestLogs)
             .where(gte(requestLogs.createdAt, since))
             .orderBy(desc(requestLogs.createdAt))
@@ -2141,7 +2153,7 @@ export function registerAdminManagementRoutes(app: Express) {
             .where(gte(geoLocationPings.createdAt, since7d)),
           buildCanonicalEntities(30),
           db
-            .select()
+            .select(requestLogLegacySelect)
             .from(requestLogs)
             .where(gte(requestLogs.createdAt, since30d))
             .orderBy(desc(requestLogs.createdAt))
@@ -3042,56 +3054,51 @@ export function registerAdminManagementRoutes(app: Express) {
         const surfaces = parseCsvFilter(req.query?.surface);
         const entityId = String(req.query?.entityId || "").trim();
 
-        const whereClauses: any[] = [gte(requestLogs.createdAt, since)];
-        if (actorTypes.length === 1) {
-          whereClauses.push(eq(requestLogs.actorType, actorTypes[0]));
-        } else if (actorTypes.length > 1) {
-          whereClauses.push(inArray(requestLogs.actorType, actorTypes));
-        }
-        if (sourceTypes.length === 1) {
-          whereClauses.push(eq(requestLogs.sourceType, sourceTypes[0]));
-        } else if (sourceTypes.length > 1) {
-          whereClauses.push(inArray(requestLogs.sourceType, sourceTypes));
-        }
-        if (eventTypes.length === 1) {
-          whereClauses.push(eq(requestLogs.eventType, eventTypes[0]));
-        } else if (eventTypes.length > 1) {
-          whereClauses.push(inArray(requestLogs.eventType, eventTypes));
-        }
-        if (surfaces.length === 1) {
-          whereClauses.push(eq(requestLogs.surface, surfaces[0]));
-        } else if (surfaces.length > 1) {
-          whereClauses.push(inArray(requestLogs.surface, surfaces));
-        }
-        if (entityId) {
-          whereClauses.push(eq(requestLogs.entityId, entityId));
-        }
-
         const rows = await db
           .select({
-            id: requestLogs.id,
-            occurredAt: requestLogs.createdAt,
-            method: requestLogs.method,
-            path: requestLogs.path,
-            statusCode: requestLogs.statusCode,
-            durationMs: requestLogs.durationMs,
-            userId: requestLogs.userId,
-            sessionId: requestLogs.sessionId,
-            anonymousActorId: requestLogs.anonymousActorId,
-            actorType: requestLogs.actorType,
-            sourceType: requestLogs.sourceType,
-            eventType: requestLogs.eventType,
-            surface: requestLogs.surface,
-            entityId: requestLogs.entityId,
-            entityType: requestLogs.entityType,
-            metadata: requestLogs.metadata,
+            ...requestLogLegacySelect,
           })
           .from(requestLogs)
-          .where(and(...whereClauses))
+          .where(gte(requestLogs.createdAt, since))
           .orderBy(desc(requestLogs.createdAt))
-          .limit(limit);
+          .limit(Math.max(limit * 5, 400));
 
-        const summary = rows.reduce(
+        const shapedRows = rows
+          .map((row: any) => {
+            const path = String(row.path || "");
+            const actorType = botSignatureLabel(row.userAgent) ? "bot" : "human";
+            const sourceType = actorType === "bot" ? "crawler" : "human";
+            const eventType = classifyObservedEventType(path);
+            const surface = inferObservedSurface(path);
+            const restaurantMatch = path.match(/^\/restaurant\/([^/?#]+)/i);
+            const resolvedEntityId = restaurantMatch?.[1] ? String(restaurantMatch[1]) : null;
+            const resolvedEntityType = resolvedEntityId ? "restaurant" : null;
+            return {
+              ...row,
+              actorType,
+              sourceType,
+              eventType,
+              surface,
+              entityId: resolvedEntityId,
+              entityType: resolvedEntityType,
+              sessionId: row.userId ? `user:${String(row.userId)}` : null,
+              anonymousActorId: crypto
+                .createHash("sha256")
+                .update(
+                  `${String(row.userId || row.ip || "anonymous")}|${String(row.userAgent || "").slice(0, 160)}`,
+                )
+                .digest("hex")
+                .slice(0, 20),
+            };
+          })
+          .filter((row: any) => (actorTypes.length ? actorTypes.includes(String(row.actorType)) : true))
+          .filter((row: any) => (sourceTypes.length ? sourceTypes.includes(String(row.sourceType)) : true))
+          .filter((row: any) => (eventTypes.length ? eventTypes.includes(String(row.eventType)) : true))
+          .filter((row: any) => (surfaces.length ? surfaces.includes(String(row.surface)) : true))
+          .filter((row: any) => (entityId ? String(row.entityId || "") === entityId : true))
+          .slice(0, limit);
+
+        const summary = shapedRows.reduce(
           (
             acc: {
               total: number;
@@ -3099,7 +3106,7 @@ export function registerAdminManagementRoutes(app: Express) {
               bySourceType: Record<string, number>;
               byEventType: Record<string, number>;
             },
-            row: (typeof rows)[number],
+            row: (typeof shapedRows)[number],
           ) => {
             const actorType = String(row.actorType || "unknown");
             const sourceType = String(row.sourceType || "unknown");
@@ -3110,7 +3117,7 @@ export function registerAdminManagementRoutes(app: Express) {
             return acc;
           },
           {
-            total: rows.length,
+            total: shapedRows.length,
             byActorType: {} as Record<string, number>,
             bySourceType: {} as Record<string, number>,
             byEventType: {} as Record<string, number>,
@@ -3130,9 +3137,9 @@ export function registerAdminManagementRoutes(app: Express) {
             limit,
           },
           summary,
-          events: rows.map((row: (typeof rows)[number]) => ({
+          events: shapedRows.map((row: (typeof shapedRows)[number]) => ({
             eventId: row.id,
-            occurredAt: row.occurredAt ? new Date(row.occurredAt).toISOString() : null,
+            occurredAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
             sessionId: row.sessionId,
             anonymousActorId: row.anonymousActorId,
             actorType: row.actorType || "unknown",
@@ -3147,7 +3154,6 @@ export function registerAdminManagementRoutes(app: Express) {
               statusCode: row.statusCode,
               durationMs: row.durationMs,
               userId: row.userId,
-              ...(row.metadata || {}),
             },
           })),
         });
@@ -3579,7 +3585,7 @@ export function registerAdminManagementRoutes(app: Express) {
             .where(gte(geoLocationPings.createdAt, since7d)),
           buildCanonicalEntities(30),
           db
-            .select()
+            .select(requestLogLegacySelect)
             .from(requestLogs)
             .where(gte(requestLogs.createdAt, since30d))
             .orderBy(desc(requestLogs.createdAt))
