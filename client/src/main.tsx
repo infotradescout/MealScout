@@ -3,6 +3,41 @@ import App from "./App";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
+function installPerformanceCompatShim() {
+  if (typeof window === "undefined") return;
+  const perf = window.performance as Performance | undefined;
+  if (!perf) return;
+  const perfAny = perf as any;
+
+  if (typeof perf.mark !== "function") {
+    perfAny.mark = () => {
+      // no-op compatibility fallback
+      return undefined;
+    };
+  }
+
+  if (typeof perf.measure !== "function") {
+    perfAny.measure = () => {
+      // no-op compatibility fallback
+      return undefined;
+    };
+  }
+
+  if (typeof perf.clearMarks !== "function") {
+    perfAny.clearMarks = () => {
+      // no-op compatibility fallback
+    };
+  }
+
+  if (typeof perf.clearMeasures !== "function") {
+    perfAny.clearMeasures = () => {
+      // no-op compatibility fallback
+    };
+  }
+}
+
+installPerformanceCompatShim();
+
 function shouldEnablePwaRuntime() {
   if (typeof window === "undefined") return false;
   const host = window.location.hostname.toLowerCase();
