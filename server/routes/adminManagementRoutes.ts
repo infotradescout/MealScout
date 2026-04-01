@@ -3020,6 +3020,145 @@ export function registerAdminManagementRoutes(app: Express) {
   );
 
   app.get(
+    "/api/admin/lisa/observed-events",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const hours = Math.max(1, Math.min(24 * 30, Number(req.query?.hours || 24) || 24));
+        const limit = Math.max(20, Math.min(1000, Number(req.query?.limit || 200) || 200));
+        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const parseCsvFilter = (value: unknown) =>
+          String(value || "")
+            .split(",")
+            .map((item) => item.trim().toLowerCase())
+            .filter(Boolean)
+            .slice(0, 20);
+
+        const actorTypes = parseCsvFilter(req.query?.actorType);
+        const sourceTypes = parseCsvFilter(req.query?.sourceType);
+        const eventTypes = parseCsvFilter(req.query?.eventType);
+        const surfaces = parseCsvFilter(req.query?.surface);
+        const entityId = String(req.query?.entityId || "").trim();
+
+        const whereClauses: any[] = [gte(requestLogs.createdAt, since)];
+        if (actorTypes.length === 1) {
+          whereClauses.push(eq(requestLogs.actorType, actorTypes[0]));
+        } else if (actorTypes.length > 1) {
+          whereClauses.push(inArray(requestLogs.actorType, actorTypes));
+        }
+        if (sourceTypes.length === 1) {
+          whereClauses.push(eq(requestLogs.sourceType, sourceTypes[0]));
+        } else if (sourceTypes.length > 1) {
+          whereClauses.push(inArray(requestLogs.sourceType, sourceTypes));
+        }
+        if (eventTypes.length === 1) {
+          whereClauses.push(eq(requestLogs.eventType, eventTypes[0]));
+        } else if (eventTypes.length > 1) {
+          whereClauses.push(inArray(requestLogs.eventType, eventTypes));
+        }
+        if (surfaces.length === 1) {
+          whereClauses.push(eq(requestLogs.surface, surfaces[0]));
+        } else if (surfaces.length > 1) {
+          whereClauses.push(inArray(requestLogs.surface, surfaces));
+        }
+        if (entityId) {
+          whereClauses.push(eq(requestLogs.entityId, entityId));
+        }
+
+        const rows = await db
+          .select({
+            id: requestLogs.id,
+            occurredAt: requestLogs.createdAt,
+            method: requestLogs.method,
+            path: requestLogs.path,
+            statusCode: requestLogs.statusCode,
+            durationMs: requestLogs.durationMs,
+            userId: requestLogs.userId,
+            sessionId: requestLogs.sessionId,
+            anonymousActorId: requestLogs.anonymousActorId,
+            actorType: requestLogs.actorType,
+            sourceType: requestLogs.sourceType,
+            eventType: requestLogs.eventType,
+            surface: requestLogs.surface,
+            entityId: requestLogs.entityId,
+            entityType: requestLogs.entityType,
+            metadata: requestLogs.metadata,
+          })
+          .from(requestLogs)
+          .where(and(...whereClauses))
+          .orderBy(desc(requestLogs.createdAt))
+          .limit(limit);
+
+        const summary = rows.reduce(
+          (
+            acc: {
+              total: number;
+              byActorType: Record<string, number>;
+              bySourceType: Record<string, number>;
+              byEventType: Record<string, number>;
+            },
+            row: (typeof rows)[number],
+          ) => {
+            const actorType = String(row.actorType || "unknown");
+            const sourceType = String(row.sourceType || "unknown");
+            const eventType = String(row.eventType || "unknown");
+            acc.byActorType[actorType] = (acc.byActorType[actorType] || 0) + 1;
+            acc.bySourceType[sourceType] = (acc.bySourceType[sourceType] || 0) + 1;
+            acc.byEventType[eventType] = (acc.byEventType[eventType] || 0) + 1;
+            return acc;
+          },
+          {
+            total: rows.length,
+            byActorType: {} as Record<string, number>,
+            bySourceType: {} as Record<string, number>,
+            byEventType: {} as Record<string, number>,
+          },
+        );
+
+        res.json({
+          ok: true,
+          generatedAt: new Date().toISOString(),
+          windowHours: hours,
+          filters: {
+            actorTypes,
+            sourceTypes,
+            eventTypes,
+            surfaces,
+            entityId: entityId || null,
+            limit,
+          },
+          summary,
+          events: rows.map((row: (typeof rows)[number]) => ({
+            eventId: row.id,
+            occurredAt: row.occurredAt ? new Date(row.occurredAt).toISOString() : null,
+            sessionId: row.sessionId,
+            anonymousActorId: row.anonymousActorId,
+            actorType: row.actorType || "unknown",
+            sourceType: row.sourceType || "unknown",
+            eventType: row.eventType || classifyObservedEventType(row.path || ""),
+            entityId: row.entityId,
+            entityType: row.entityType,
+            route: row.path,
+            surface: row.surface || inferObservedSurface(row.path || ""),
+            metadata: {
+              method: row.method,
+              statusCode: row.statusCode,
+              durationMs: row.durationMs,
+              userId: row.userId,
+              ...(row.metadata || {}),
+            },
+          })),
+        });
+      } catch (error) {
+        console.error("Error fetching observed events:", error);
+        res.status(500).json({ message: "Failed to fetch observed events" });
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/lisa/market-data-lanes",
     isAuthenticated,
     isStaffOrAdmin,
