@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navigation as NavigationIcon } from "lucide-react";
-import type { MapAdapterMarker, MapBoundsLike } from "./map-adapter.types";
+import type {
+  MapAdapterMarker,
+  MapBoundsLike,
+  MapTrafficCell,
+} from "./map-adapter.types";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 type GeoPoint = { lat: number; lng: number };
@@ -11,6 +15,8 @@ type GoogleMapSurfaceProps = {
   center: GeoPoint;
   zoom: number;
   markers: MapAdapterMarker[];
+  trafficCells?: MapTrafficCell[];
+  showRoadTrafficLayer?: boolean;
   userLocation: GeoPoint | null;
   isNightTheme: boolean;
   onBoundsChanged: (bounds: MapBoundsLike) => void;
@@ -80,6 +86,9 @@ const markerColor = (kind: MapAdapterMarker["kind"]) => {
   }
 };
 
+const trafficCellColor = (source: MapTrafficCell["source"]) =>
+  source === "google_places" ? "#60A5FA" : "#F97316";
+
 const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   if (marker.kind === "parking") {
     return {
@@ -145,6 +154,8 @@ export function GoogleMapSurface({
   center,
   zoom,
   markers,
+  trafficCells = [],
+  showRoadTrafficLayer = false,
   userLocation,
   isNightTheme,
   onBoundsChanged,
@@ -155,6 +166,8 @@ export function GoogleMapSurface({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
+  const trafficCircleRefs = useRef<Map<string, any>>(new Map());
+  const roadTrafficLayerRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
@@ -308,6 +321,73 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
     });
   }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
+
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+
+    const usedIds = new Set<string>();
+    trafficCells.forEach((cell) => {
+      usedIds.add(cell.id);
+      const existing = trafficCircleRefs.current.get(cell.id);
+      const radius = Math.max(80, Math.min(550, (cell.weight || 1) * 7));
+      const style = {
+        strokeColor: trafficCellColor(cell.source),
+        strokeOpacity: 0.45,
+        strokeWeight: 1,
+        fillColor: trafficCellColor(cell.source),
+        fillOpacity: cell.source === "google_places" ? 0.14 : 0.24,
+      };
+      if (existing) {
+        existing.setCenter({ lat: cell.lat, lng: cell.lng });
+        existing.setRadius(radius);
+        existing.setOptions(style);
+        return;
+      }
+      const circle = new googleMaps.Circle({
+        map: mapRef.current,
+        center: { lat: cell.lat, lng: cell.lng },
+        radius,
+        ...style,
+      });
+      trafficCircleRefs.current.set(cell.id, circle);
+    });
+
+    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
+      if (usedIds.has(id)) return;
+      instance.setMap(null);
+      trafficCircleRefs.current.delete(id);
+    });
+  }, [trafficCells, mapReadyVersion]);
+
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+    if (!showRoadTrafficLayer) {
+      if (roadTrafficLayerRef.current) {
+        roadTrafficLayerRef.current.setMap(null);
+        roadTrafficLayerRef.current = null;
+      }
+      return;
+    }
+    if (!roadTrafficLayerRef.current) {
+      roadTrafficLayerRef.current = new googleMaps.TrafficLayer();
+    }
+    roadTrafficLayerRef.current.setMap(mapRef.current);
+  }, [showRoadTrafficLayer, mapReadyVersion]);
+
+  useEffect(() => {
+    return () => {
+      Array.from(trafficCircleRefs.current.values()).forEach((instance) => {
+        instance.setMap(null);
+      });
+      trafficCircleRefs.current.clear();
+      if (roadTrafficLayerRef.current) {
+        roadTrafficLayerRef.current.setMap(null);
+        roadTrafficLayerRef.current = null;
+      }
+    };
+  }, []);
 
   const controlClassName = isNightTheme
     ? "w-11 h-11 p-0 rounded-full bg-[var(--bg-card)]/90 border border-white/20 shadow-clean-lg backdrop-blur text-[color:var(--text-primary)]"

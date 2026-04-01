@@ -26,3 +26,13 @@ export interface MapBoundsLike {
   contains(point: [number, number]): boolean;
 }
 
+export interface MapTrafficCell {
+  id: string;
+  lat: number;
+  lng: number;
+  weight: number;
+  source: "first_party" | "google_places";
+  count?: number;
+  uniqueActors?: number;
+  freshnessMinutes?: number;
+}

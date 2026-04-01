@@ -6,6 +6,7 @@ import {
   TileLayer,
   Marker,
   Popup,
+  CircleMarker,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -18,6 +19,7 @@ import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
+  MapTrafficCell,
 } from "@/components/maps/map-adapter.types";
 import {
   GOOGLE_MAPS_WEB_API_KEY,
@@ -321,6 +323,23 @@ type MapLocationsResponse = {
   eventLocations: EventLocation[];
 };
 
+type MapFootTrafficResponse = {
+  generatedAt: string;
+  windowMinutes: number;
+  cells: MapTrafficCell[];
+  firstParty?: {
+    totalPings?: number;
+    totalUniqueActors?: number;
+    cells?: MapTrafficCell[];
+  };
+  googlePlaces?: {
+    enabled?: boolean;
+    used?: boolean;
+    error?: string | null;
+    cells?: MapTrafficCell[];
+  };
+};
+
 type GeoPoint = { lat: number; lng: number };
 type GeocodeCacheEntry = { lat: number; lng: number; ts: number };
 type GeocodeFailureEntry = { ts: number };
@@ -380,6 +399,9 @@ const areBoundsEqual = (a: MapBoundsLike | null, b: MapBoundsLike | null) => {
 
 const overlapKey = (coords: GeoPoint) =>
   `${coords.lat.toFixed(6)}:${coords.lng.toFixed(6)}`;
+
+const trafficCellColor = (source: MapTrafficCell["source"]) =>
+  source === "google_places" ? "#60A5FA" : "#F97316";
 
 const offsetOverlappingCoords = (
   coords: GeoPoint,
@@ -852,6 +874,10 @@ export default function MapPage() {
   const [googleMapsRuntimeError, setGoogleMapsRuntimeError] = useState<
     string | null
   >(null);
+  const [showFootTraffic, setShowFootTraffic] = useState(true);
+  const [showGoogleTrafficData, setShowGoogleTrafficData] = useState(true);
+  const [showGoogleRoadTrafficLayer, setShowGoogleRoadTrafficLayer] =
+    useState(true);
   const [hostCoords, setHostCoords] = useState<Record<string, GeoPoint>>({});
   const [eventCoords, setEventCoords] = useState<Record<string, GeoPoint>>({});
   const geocodeInFlight = useRef(false);
@@ -1107,6 +1133,53 @@ export default function MapPage() {
       return appliedMapBounds.contains([lat, lng]);
     });
   }, [liveTrucks, appliedMapBounds]);
+
+  const trafficBounds = appliedMapBounds ?? mapBounds;
+  const trafficQueryKey = trafficBounds
+    ? [
+        "/api/map/foot-traffic",
+        Number(trafficBounds.north.toFixed(4)),
+        Number(trafficBounds.south.toFixed(4)),
+        Number(trafficBounds.east.toFixed(4)),
+        Number(trafficBounds.west.toFixed(4)),
+        showGoogleTrafficData ? "google" : "first_party",
+      ]
+    : ["/api/map/foot-traffic", "none"];
+
+  const { data: footTrafficData } = useQuery<MapFootTrafficResponse>({
+    queryKey: trafficQueryKey,
+    enabled: Boolean(showFootTraffic && trafficBounds),
+    queryFn: async () => {
+      if (!trafficBounds) {
+        return {
+          generatedAt: new Date().toISOString(),
+          windowMinutes: 180,
+          cells: [],
+        };
+      }
+      const params = new URLSearchParams({
+        north: String(trafficBounds.north),
+        south: String(trafficBounds.south),
+        east: String(trafficBounds.east),
+        west: String(trafficBounds.west),
+        windowMinutes: "180",
+        includeGoogle: showGoogleTrafficData ? "true" : "false",
+      });
+      const res = await fetch(apiUrl(`/api/map/foot-traffic?${params}`));
+      if (!res.ok) throw new Error("Failed to load map foot traffic");
+      return res.json();
+    },
+    staleTime: 45_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const visibleTrafficCells = useMemo(() => {
+    if (!showFootTraffic) return [];
+    const cells = Array.isArray(footTrafficData?.cells) ? footTrafficData.cells : [];
+    if (!appliedMapBounds) return cells;
+    return cells.filter((cell) => appliedMapBounds.contains([cell.lat, cell.lng]));
+  }, [showFootTraffic, footTrafficData, appliedMapBounds]);
 
   const hostedRadiusKm = 0.12;
 
@@ -2200,6 +2273,50 @@ export default function MapPage() {
               </Button>
             )}
         </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <Button
+            variant={showFootTraffic ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowFootTraffic((prev) => !prev)}
+            data-testid="button-toggle-foot-traffic"
+          >
+            {showFootTraffic ? "Foot traffic on" : "Foot traffic off"}
+          </Button>
+          <Button
+            variant={showGoogleTrafficData ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowGoogleTrafficData((prev) => !prev)}
+            data-testid="button-toggle-google-traffic-data"
+          >
+            {showGoogleTrafficData ? "Google Places on" : "Google Places off"}
+          </Button>
+          {isUsingGoogleMap && (
+            <Button
+              variant={showGoogleRoadTrafficLayer ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowGoogleRoadTrafficLayer((prev) => !prev)}
+              data-testid="button-toggle-google-road-traffic"
+            >
+              {showGoogleRoadTrafficLayer
+                ? "Road traffic layer on"
+                : "Road traffic layer off"}
+            </Button>
+          )}
+          {showFootTraffic && (
+            <span className="text-muted-foreground">
+              {visibleTrafficCells.length} traffic cells in view
+            </span>
+          )}
+        </div>
+        {showFootTraffic &&
+          showGoogleTrafficData &&
+          footTrafficData?.googlePlaces?.enabled &&
+          footTrafficData?.googlePlaces?.error && (
+            <div className="mt-2 text-xs text-[color:var(--status-warning)]">
+              Google Places enrichment unavailable right now (
+              {footTrafficData.googlePlaces.error}).
+            </div>
+          )}
       </header>
 
       {/* Map Container */}
@@ -2224,6 +2341,8 @@ export default function MapPage() {
                 center={mapCenter}
                 zoom={zoomLevel}
                 markers={adapterMarkers}
+                trafficCells={visibleTrafficCells}
+                showRoadTrafficLayer={showFootTraffic && showGoogleRoadTrafficLayer}
                 userLocation={userLocation}
                 isNightTheme={isNightTheme}
                 onBoundsChanged={setMapBounds}
@@ -2245,6 +2364,56 @@ export default function MapPage() {
                   attribution={userMapAttribution}
                   url={userMapTileUrl}
                 />
+
+                {showFootTraffic &&
+                  visibleTrafficCells.map((cell) => {
+                    const radius = Math.max(
+                      6,
+                      Math.min(26, Math.round((cell.weight || 1) / 2.8)),
+                    );
+                    return (
+                      <CircleMarker
+                        key={cell.id}
+                        center={[cell.lat, cell.lng]}
+                        radius={radius}
+                        pathOptions={{
+                          color: trafficCellColor(cell.source),
+                          fillColor: trafficCellColor(cell.source),
+                          fillOpacity: cell.source === "google_places" ? 0.2 : 0.3,
+                          weight: 1,
+                          opacity: 0.65,
+                        }}
+                      >
+                        <Popup>
+                          <div className="min-w-52 rounded-xl bg-[var(--bg-card)] text-[color:var(--text-primary)] p-3 shadow-clean-lg space-y-1">
+                            <div className="font-semibold text-sm">
+                              {cell.source === "google_places"
+                                ? "Google demand proxy"
+                                : "Fresh local foot traffic"}
+                            </div>
+                            <div className="text-xs text-[color:var(--text-muted)]">
+                              Signal weight: {cell.weight}
+                            </div>
+                            {typeof cell.count === "number" && (
+                              <div className="text-xs text-[color:var(--text-muted)]">
+                                Events: {cell.count}
+                              </div>
+                            )}
+                            {typeof cell.uniqueActors === "number" && (
+                              <div className="text-xs text-[color:var(--text-muted)]">
+                                Unique visitors: {cell.uniqueActors}
+                              </div>
+                            )}
+                            {typeof cell.freshnessMinutes === "number" && (
+                              <div className="text-xs text-[color:var(--text-muted)]">
+                                Last seen: {cell.freshnessMinutes}m ago
+                              </div>
+                            )}
+                          </div>
+                        </Popup>
+                      </CircleMarker>
+                    );
+                  })}
 
                 {/* User Location Marker */}
                 {userLocation && (

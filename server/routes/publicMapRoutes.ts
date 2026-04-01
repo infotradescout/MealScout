@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -9,7 +9,7 @@ import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
-import { locationRequests, users } from "@shared/schema";
+import { geoLocationPings, locationRequests, users } from "@shared/schema";
 
 let mapLocationsCache: {
   expiresAt: number;
@@ -19,6 +19,84 @@ let mapLocationsCache: {
 let mapLocationsLastGood: {
   payload: { hostLocations: any[]; eventLocations: any[] };
 } | null = null;
+
+type BoundsLike = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+type TrafficCell = {
+  id: string;
+  lat: number;
+  lng: number;
+  weight: number;
+  source: "first_party" | "google_places";
+  count?: number;
+  uniqueActors?: number;
+  freshnessMinutes?: number;
+};
+
+const toFiniteNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseBounds = (raw: Record<string, unknown>): BoundsLike | null => {
+  const north = toFiniteNumber(raw.north);
+  const south = toFiniteNumber(raw.south);
+  const east = toFiniteNumber(raw.east);
+  const west = toFiniteNumber(raw.west);
+  if (
+    north === null ||
+    south === null ||
+    east === null ||
+    west === null ||
+    north < south
+  ) {
+    return null;
+  }
+  return { north, south, east, west };
+};
+
+const pointInBounds = (bounds: BoundsLike, lat: number, lng: number) => {
+  if (lat > bounds.north || lat < bounds.south) return false;
+  if (bounds.west <= bounds.east) {
+    return lng >= bounds.west && lng <= bounds.east;
+  }
+  return lng >= bounds.west || lng <= bounds.east;
+};
+
+const estimateRadiusMetersFromBounds = (bounds: BoundsLike) => {
+  const centerLat = (bounds.north + bounds.south) / 2;
+  const centerLng = (bounds.east + bounds.west) / 2;
+  const latDelta = Math.abs(bounds.north - bounds.south) / 2;
+  let lngDelta = Math.abs(bounds.east - bounds.west) / 2;
+  if (bounds.west > bounds.east) {
+    lngDelta = (360 - Math.abs(bounds.west - bounds.east)) / 2;
+  }
+  const metersPerLat = 111_320;
+  const metersPerLng = Math.max(
+    111_320 * Math.cos((centerLat * Math.PI) / 180),
+    1,
+  );
+  const latMeters = latDelta * metersPerLat;
+  const lngMeters = lngDelta * metersPerLng;
+  return Math.max(100, Math.round(Math.sqrt(latMeters * latMeters + lngMeters * lngMeters)));
+};
+
+const cellId = (source: "first_party" | "google_places", lat: number, lng: number) =>
+  `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
+
+const roundCell = (value: number) => Math.round(value * 1000) / 1000;
+
+const isMissingRelationError = (error: unknown, relationName?: string) => {
+  const err = error as { code?: string; message?: string } | null;
+  if (!err || err.code !== "42P01") return false;
+  if (!relationName) return true;
+  return err.message?.includes(`"${relationName}"`) ?? false;
+};
 
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/locations", async (_req, res) => {
@@ -525,6 +603,237 @@ export function registerPublicMapRoutes(app: Express) {
       }
       res.status(200).json({ hostLocations: [], eventLocations: [] });
     }
+  });
+
+  app.get("/api/map/foot-traffic", async (req, res) => {
+    const bounds = parseBounds(req.query as Record<string, unknown>);
+    if (!bounds) {
+      return res.status(400).json({ message: "Invalid map bounds" });
+    }
+
+    const windowMinutesRaw = toFiniteNumber(req.query.windowMinutes);
+    const windowMinutes = Math.min(
+      24 * 60,
+      Math.max(10, Math.round(windowMinutesRaw ?? 180)),
+    );
+    const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+    const googlePlacesRequested =
+      String(req.query.includeGoogle || "")
+        .trim()
+        .toLowerCase() === "true";
+
+    const minLat = bounds.south;
+    const maxLat = bounds.north;
+    const minLng = Math.min(bounds.west, bounds.east);
+    const maxLng = Math.max(bounds.west, bounds.east);
+    const crossingDateLine = bounds.west > bounds.east;
+
+    const firstPartyBuckets = new Map<
+      string,
+      {
+        lat: number;
+        lng: number;
+        count: number;
+        uniqueActors: Set<string>;
+        lastSeenMs: number;
+      }
+    >();
+
+    let totalPings = 0;
+    let totalUniqueActors = 0;
+    try {
+      const whereBase = [
+        gte(geoLocationPings.createdAt, since),
+        gte(geoLocationPings.lat, minLat.toFixed(8)),
+        lte(geoLocationPings.lat, maxLat.toFixed(8)),
+      ];
+      const lngFilter = crossingDateLine
+        ? or(
+            gte(geoLocationPings.lng, bounds.west.toFixed(8)),
+            lte(geoLocationPings.lng, bounds.east.toFixed(8)),
+          )
+        : and(
+            gte(geoLocationPings.lng, minLng.toFixed(8)),
+            lte(geoLocationPings.lng, maxLng.toFixed(8)),
+          );
+
+      const rows = await db
+        .select({
+          lat: geoLocationPings.lat,
+          lng: geoLocationPings.lng,
+          userId: geoLocationPings.userId,
+          visitorId: geoLocationPings.visitorId,
+          createdAt: geoLocationPings.createdAt,
+        })
+        .from(geoLocationPings)
+        .where(and(...whereBase, lngFilter));
+
+      const globalActorSet = new Set<string>();
+      for (const row of rows) {
+        const lat = Number(row.lat);
+        const lng = Number(row.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        if (!pointInBounds(bounds, lat, lng)) continue;
+        totalPings += 1;
+
+        const bucketLat = roundCell(lat);
+        const bucketLng = roundCell(lng);
+        const key = `${bucketLat}:${bucketLng}`;
+        const actorKey =
+          String(row.userId || "").trim() ||
+          String(row.visitorId || "").trim() ||
+          `${bucketLat}:${bucketLng}`;
+        const seenMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+
+        const bucket = firstPartyBuckets.get(key) || {
+          lat: bucketLat,
+          lng: bucketLng,
+          count: 0,
+          uniqueActors: new Set<string>(),
+          lastSeenMs: 0,
+        };
+        bucket.count += 1;
+        bucket.uniqueActors.add(actorKey);
+        bucket.lastSeenMs = Math.max(bucket.lastSeenMs, seenMs || 0);
+        firstPartyBuckets.set(key, bucket);
+        globalActorSet.add(actorKey);
+      }
+      totalUniqueActors = globalActorSet.size;
+    } catch (error) {
+      if (!isMissingRelationError(error, "geo_location_pings")) {
+        console.error("Error loading map foot-traffic pings:", error);
+      }
+    }
+
+    const firstPartyCells: TrafficCell[] = Array.from(
+      firstPartyBuckets.values(),
+    ).map((bucket) => {
+      const freshnessMinutes = bucket.lastSeenMs
+        ? Math.max(0, Math.round((Date.now() - bucket.lastSeenMs) / 60_000))
+        : undefined;
+      const weightRaw = bucket.uniqueActors.size * 2 + bucket.count;
+      const weight = Math.max(1, Math.min(100, weightRaw));
+      return {
+        id: cellId("first_party", bucket.lat, bucket.lng),
+        lat: bucket.lat,
+        lng: bucket.lng,
+        weight,
+        source: "first_party" as const,
+        count: bucket.count,
+        uniqueActors: bucket.uniqueActors.size,
+        freshnessMinutes,
+      };
+    });
+
+    let googlePlaces = {
+      enabled: false,
+      used: false,
+      error: null as string | null,
+      cells: [] as TrafficCell[],
+    };
+
+    const googleApiKey = String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
+    if (googlePlacesRequested) {
+      googlePlaces.enabled = true;
+      if (!googleApiKey) {
+        googlePlaces.error = "google_api_key_missing";
+      } else {
+        try {
+          const centerLat = (bounds.north + bounds.south) / 2;
+          const centerLng = (bounds.east + bounds.west) / 2;
+          const radius = Math.min(
+            50_000,
+            estimateRadiusMetersFromBounds(bounds),
+          );
+          const nearbyUrl =
+            "https://maps.googleapis.com/maps/api/place/nearbysearch/json";
+          const params = new URLSearchParams({
+            key: googleApiKey,
+            location: `${centerLat},${centerLng}`,
+            radius: String(radius),
+            type: "restaurant",
+          });
+          const response = await fetch(`${nearbyUrl}?${params.toString()}`);
+          const payload = (await response.json().catch(() => null)) as
+            | {
+                status?: string;
+                error_message?: string;
+                results?: Array<{
+                  geometry?: { location?: { lat?: number; lng?: number } };
+                  user_ratings_total?: number;
+                }>;
+              }
+            | null;
+
+          if (!response.ok || !payload || payload.status === "REQUEST_DENIED") {
+            googlePlaces.error =
+              payload?.error_message ||
+              payload?.status ||
+              `http_${response.status}`;
+          } else {
+            const buckets = new Map<
+              string,
+              { lat: number; lng: number; weight: number; count: number }
+            >();
+            const results = Array.isArray(payload?.results)
+              ? payload.results
+              : [];
+            for (const place of results) {
+              const lat = toFiniteNumber(place.geometry?.location?.lat);
+              const lng = toFiniteNumber(place.geometry?.location?.lng);
+              if (lat === null || lng === null) continue;
+              if (!pointInBounds(bounds, lat, lng)) continue;
+              const bucketLat = roundCell(lat);
+              const bucketLng = roundCell(lng);
+              const key = `${bucketLat}:${bucketLng}`;
+              const ratingWeight = Math.max(
+                1,
+                Math.min(30, Number(place.user_ratings_total || 1)),
+              );
+              const existing = buckets.get(key) || {
+                lat: bucketLat,
+                lng: bucketLng,
+                weight: 0,
+                count: 0,
+              };
+              existing.weight += ratingWeight;
+              existing.count += 1;
+              buckets.set(key, existing);
+            }
+            googlePlaces.cells = Array.from(buckets.values()).map((bucket) => ({
+              id: cellId("google_places", bucket.lat, bucket.lng),
+              lat: bucket.lat,
+              lng: bucket.lng,
+              weight: Math.max(1, Math.min(100, bucket.weight)),
+              source: "google_places" as const,
+              count: bucket.count,
+            }));
+            googlePlaces.used = true;
+          }
+        } catch (error: any) {
+          googlePlaces.error = error?.message || "google_places_failed";
+        }
+      }
+    }
+
+    const combinedCells = [...firstPartyCells, ...googlePlaces.cells].sort(
+      (a, b) => (b.weight || 0) - (a.weight || 0),
+    );
+
+    res.setHeader("Cache-Control", "public, max-age=45");
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      windowMinutes,
+      bounds,
+      firstParty: {
+        totalPings,
+        totalUniqueActors,
+        cells: firstPartyCells,
+      },
+      googlePlaces,
+      cells: combinedCells,
+    });
   });
 
   app.post(
