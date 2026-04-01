@@ -136,6 +136,30 @@ const formatDealValueLabel = (
   return baseLabel;
 };
 
+const classifyObservedEventType = (pathValue: string): string => {
+  const path = String(pathValue || "").toLowerCase();
+  if (/^\/restaurant\/[^/?#]+$/.test(path)) return "profile_view";
+  if (/\/search/.test(path)) return "search_submit";
+  if (/^\/category\/[^/?#]+/.test(path)) return "category_view";
+  if (/(favorite|save)/.test(path)) return "save";
+  if (/(call|phone)/.test(path)) return "call_click";
+  if (/website/.test(path)) return "website_click";
+  if (/direction/.test(path)) return "directions_click";
+  if (/(book|checkout|order|event-signup|claim|subscribe)/.test(path))
+    return "conversion_intent";
+  return "page_view";
+};
+
+const inferObservedSurface = (pathValue: string): string => {
+  const path = String(pathValue || "").toLowerCase();
+  if (path.startsWith("/restaurant/")) return "restaurant_profile";
+  if (path.startsWith("/search")) return "search";
+  if (path.startsWith("/category/")) return "category";
+  if (path.startsWith("/map")) return "map";
+  if (path.startsWith("/events")) return "events";
+  return "web";
+};
+
 const PRICE_SCOUT_TOKEN_ENV_KEYS = [
   "PRICESCOUT_FEED_API_TOKENS",
   "PRICESCOUT_FEED_API_TOKEN",
@@ -2557,30 +2581,83 @@ export function registerAdminManagementRoutes(app: Express) {
           .slice(0, 8);
         const frictionCasesNow = frictionCases.length;
 
-        const truthSignalScore =
-          humanSessionsNow + intentActionsNow + repeatedBusinessInterestNow + machineDiscoveryNow;
+        const humanTruthSignalScore =
+          humanSessionsNow + intentActionsNow + repeatedBusinessInterestNow + frictionCasesNow;
+        const machineSupportScore = machineDiscoveryNow;
         const hasRecommendationDensity =
-          truthSignalScore >= 16 &&
-          topViewedBusinesses.length >= 3 &&
+          humanTruthSignalScore >= 10 &&
+          topViewedBusinesses.length >= 2 &&
+          humanSessionsNow >= 2 &&
           (intentActionsNow >= 2 || repeatedBusinessInterestNow >= 2);
 
         const signalContract = {
           mode: hasRecommendationDensity ? "recommendations" : "truth_only",
           reason: hasRecommendationDensity
-            ? "First-party signal density is high enough for ranked recommendations."
-            : "Not enough recent first-party signal to rank recommendation cards safely.",
+            ? "Human first-party signal density is high enough for ranked recommendations."
+            : "Not enough recent human first-party signal to rank recommendation cards safely.",
           thresholds: {
-            minTruthSignalScore: 16,
-            minTopViewedBusinesses: 3,
+            minHumanTruthSignalScore: 10,
+            minTopViewedBusinesses: 2,
+            minHumanSessionsNow: 2,
             minIntentOrRepeat: 2,
           },
           observed: {
-            truthSignalScore,
+            humanTruthSignalScore,
+            machineSupportScore,
             topViewedBusinesses: topViewedBusinesses.length,
+            humanSessionsNow,
             intentActionsNow,
             repeatedBusinessInterestNow,
+            frictionCasesNow,
           },
         } as const;
+
+        const recentObservedEvents = recentRequests
+          .slice()
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )
+          .slice(0, 80)
+          .map((request: any) => {
+            const pathValue = String(request.path || "");
+            const actorType = botSignatureLabel(request.userAgent) ? "bot" : "human";
+            const restaurantMatch = pathValue.match(/^\/restaurant\/([^/?#]+)/i);
+            const eventType = classifyObservedEventType(pathValue);
+            const identitySeed = String(request.userId || request.ip || "anonymous");
+            const deviceSeed = String(request.userAgent || "").slice(0, 160);
+            const anonymousActorId = crypto
+              .createHash("sha256")
+              .update(`${identitySeed}|${deviceSeed}`)
+              .digest("hex")
+              .slice(0, 20);
+            const sessionId = request.userId
+              ? `user:${String(request.userId)}`
+              : `anon:${anonymousActorId}`;
+            return {
+              eventId: String(request.id || ""),
+              occurredAt: new Date(request.createdAt).toISOString(),
+              ingestedAt: new Date(request.createdAt).toISOString(),
+              sessionId,
+              anonymousActorId,
+              actorType,
+              eventType,
+              entityId: restaurantMatch?.[1] ? String(restaurantMatch[1]) : null,
+              entityType: restaurantMatch?.[1] ? "restaurant" : null,
+              route: pathValue,
+              surface: inferObservedSurface(pathValue),
+              category: null,
+              state: null,
+              county: null,
+              city: null,
+              sourceType: actorType === "human" ? "human" : "crawler",
+              metadata: {
+                method: String(request.method || ""),
+                statusCode: Number(request.statusCode || 0),
+                durationMs: Number(request.durationMs || 0),
+              },
+            };
+          });
 
         const recentTruthFeed = [
           ...topViewedBusinesses.slice(0, 3).map((item) => ({
@@ -2797,7 +2874,7 @@ export function registerAdminManagementRoutes(app: Express) {
               headline: "Recommendation layer is paused while first-party signal density is still low.",
               audienceAngle:
                 "Track truth counters and repeated business interest before ranking promotion opportunities.",
-              inventoryAngle: `Observed truth score ${truthSignalScore} (needs ${signalContract.thresholds.minTruthSignalScore}) across ${topViewedBusinesses.length} top-viewed businesses.`,
+              inventoryAngle: `Observed human truth score ${humanTruthSignalScore} (needs ${signalContract.thresholds.minHumanTruthSignalScore}) across ${topViewedBusinesses.length} top-viewed businesses; machine support score is ${machineSupportScore}.`,
               acquisitionAngle: signalContract.reason,
               recommendedPackage: [] as string[],
             };
@@ -2806,6 +2883,7 @@ export function registerAdminManagementRoutes(app: Express) {
           ok: true,
           generatedAt: new Date().toISOString(),
           signalContract,
+          recentObservedEvents,
           truthCounters: {
             humanSessionsNow,
             intentActionsNow,
@@ -3386,13 +3464,13 @@ export function registerAdminManagementRoutes(app: Express) {
             isHighValueObservedPath(request.path)
           );
         }).length;
-        const exportTruthSignalScore =
+        const exportHumanTruthSignalScore =
           Math.min(searchDemandCount, 10) +
           Math.min(locationDemandCount, 10) +
-          Math.min(videoRows.length, 5) +
-          Math.min(machineDiscoveryCount, 5);
+          Math.min(videoRows.length, 5);
+        const exportMachineSupportScore = Math.min(machineDiscoveryCount, 5);
         const hasExportRecommendationDensity =
-          exportTruthSignalScore >= 12 &&
+          exportHumanTruthSignalScore >= 10 &&
           (locationDemandCount >= 3 || searchDemandCount >= 5);
 
         const exportPayload = {
@@ -3404,7 +3482,8 @@ export function registerAdminManagementRoutes(app: Express) {
               ? "First-party signal density is high enough for export recommendations."
               : "Not enough recent first-party signal to export recommendation packages safely.",
             observed: {
-              exportTruthSignalScore,
+              exportHumanTruthSignalScore,
+              exportMachineSupportScore,
               searchDemandCount,
               locationDemandCount,
               machineDiscoveryCount,
@@ -3420,7 +3499,7 @@ export function registerAdminManagementRoutes(app: Express) {
               : "Use truth counters and recent event evidence until enough density is present.",
             inventoryAngle: hasExportRecommendationDensity
               ? `${videoRows.length} recent stories, ${geoAds.impressions} geo-ad impressions, and ${geoPings.totalPings} foot-traffic pings create sponsor inventory.`
-              : `Observed score ${exportTruthSignalScore} in the latest export window; keep collecting demand and intent events.`,
+              : `Observed human truth score ${exportHumanTruthSignalScore} in the latest export window; machine support score ${exportMachineSupportScore}.`,
             recommendations: hasExportRecommendationDensity
               ? [
                   `Sponsor search and discovery around "${topQuery}"`,
