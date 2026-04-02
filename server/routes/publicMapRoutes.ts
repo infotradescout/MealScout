@@ -611,12 +611,13 @@ export function registerPublicMapRoutes(app: Express) {
       return res.status(400).json({ message: "Invalid map bounds" });
     }
 
-    const windowMinutesRaw = toFiniteNumber(req.query.windowMinutes);
-    const windowMinutes = Math.min(
+    const requestedWindowRaw = toFiniteNumber(req.query.windowMinutes);
+    const requestedWindowMinutes = Math.min(
       24 * 60,
-      Math.max(10, Math.round(windowMinutesRaw ?? 180)),
+      Math.max(10, Math.round(requestedWindowRaw ?? 180)),
     );
-    const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+    const maxWindowMinutes = 24 * 60;
+    const since = new Date(Date.now() - maxWindowMinutes * 60 * 1000);
 
     const googlePlacesRequested =
       String(req.query.includeGoogle || "")
@@ -629,19 +630,13 @@ export function registerPublicMapRoutes(app: Express) {
     const maxLng = Math.max(bounds.west, bounds.east);
     const crossingDateLine = bounds.west > bounds.east;
 
-    const firstPartyBuckets = new Map<
-      string,
-      {
-        lat: number;
-        lng: number;
-        count: number;
-        uniqueActors: Set<string>;
-        lastSeenMs: number;
-      }
-    >();
-
-    let totalPings = 0;
-    let totalUniqueActors = 0;
+    const inBoundsRows: Array<{
+      lat: number;
+      lng: number;
+      actorKey: string;
+      seenMs: number;
+      ageMinutes: number;
+    }> = [];
     try {
       const whereBase = [
         gte(geoLocationPings.createdAt, since),
@@ -669,24 +664,45 @@ export function registerPublicMapRoutes(app: Express) {
         .from(geoLocationPings)
         .where(and(...whereBase, lngFilter));
 
-      const globalActorSet = new Set<string>();
       for (const row of rows) {
         const lat = Number(row.lat);
         const lng = Number(row.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
         if (!pointInBounds(bounds, lat, lng)) continue;
-        totalPings += 1;
-
-        const bucketLat = roundCell(lat);
-        const bucketLng = roundCell(lng);
-        const key = `${bucketLat}:${bucketLng}`;
         const actorKey =
           String(row.userId || "").trim() ||
           String(row.visitorId || "").trim() ||
-          `${bucketLat}:${bucketLng}`;
+          `${roundCell(lat)}:${roundCell(lng)}`;
         const seenMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+        const ageMinutes = seenMs
+          ? Math.max(0, (Date.now() - seenMs) / 60_000)
+          : maxWindowMinutes;
+        inBoundsRows.push({ lat, lng, actorKey, seenMs, ageMinutes });
+      }
+    } catch (error) {
+      if (!isMissingRelationError(error, "geo_location_pings")) {
+        console.error("Error loading map foot-traffic pings:", error);
+      }
+    }
 
-        const bucket = firstPartyBuckets.get(key) || {
+    const summarizeForWindow = (windowMinutes: number) => {
+      const rows = inBoundsRows.filter((row) => row.ageMinutes <= windowMinutes);
+      const buckets = new Map<
+        string,
+        {
+          lat: number;
+          lng: number;
+          count: number;
+          uniqueActors: Set<string>;
+          lastSeenMs: number;
+        }
+      >();
+      const actorSet = new Set<string>();
+      for (const row of rows) {
+        const bucketLat = roundCell(row.lat);
+        const bucketLng = roundCell(row.lng);
+        const key = `${bucketLat}:${bucketLng}`;
+        const bucket = buckets.get(key) || {
           lat: bucketLat,
           lng: bucketLng,
           count: 0,
@@ -694,37 +710,91 @@ export function registerPublicMapRoutes(app: Express) {
           lastSeenMs: 0,
         };
         bucket.count += 1;
-        bucket.uniqueActors.add(actorKey);
-        bucket.lastSeenMs = Math.max(bucket.lastSeenMs, seenMs || 0);
-        firstPartyBuckets.set(key, bucket);
-        globalActorSet.add(actorKey);
+        bucket.uniqueActors.add(row.actorKey);
+        bucket.lastSeenMs = Math.max(bucket.lastSeenMs, row.seenMs || 0);
+        buckets.set(key, bucket);
+        actorSet.add(row.actorKey);
       }
-      totalUniqueActors = globalActorSet.size;
-    } catch (error) {
-      if (!isMissingRelationError(error, "geo_location_pings")) {
-        console.error("Error loading map foot-traffic pings:", error);
-      }
+
+      const preCells = Array.from(buckets.values()).filter(
+        (bucket) => bucket.count >= 2 || bucket.uniqueActors.size >= 2,
+      );
+      const weightDenominator = Math.max(
+        1,
+        ...preCells.map((bucket) => {
+          const freshnessMinutes = bucket.lastSeenMs
+            ? Math.max(0, (Date.now() - bucket.lastSeenMs) / 60_000)
+            : windowMinutes;
+          const freshnessFactor = Math.max(
+            0.35,
+            1 - freshnessMinutes / Math.max(15, windowMinutes),
+          );
+          return (
+            (bucket.uniqueActors.size * 2.4 + bucket.count * 0.7) *
+            freshnessFactor
+          );
+        }),
+      );
+
+      const cells: TrafficCell[] = preCells
+        .map((bucket) => {
+          const freshnessMinutes = bucket.lastSeenMs
+            ? Math.max(0, Math.round((Date.now() - bucket.lastSeenMs) / 60_000))
+            : undefined;
+          const freshnessFactor = Math.max(
+            0.35,
+            1 - (freshnessMinutes ?? windowMinutes) / Math.max(15, windowMinutes),
+          );
+          const weightRaw =
+            (bucket.uniqueActors.size * 2.4 + bucket.count * 0.7) *
+            freshnessFactor;
+          const normalized = Math.round((weightRaw / weightDenominator) * 100);
+          const weight = Math.max(8, Math.min(100, normalized));
+          return {
+            id: cellId("first_party", bucket.lat, bucket.lng),
+            lat: bucket.lat,
+            lng: bucket.lng,
+            weight,
+            source: "first_party" as const,
+            count: bucket.count,
+            uniqueActors: bucket.uniqueActors.size,
+            freshnessMinutes,
+          };
+        })
+        .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+        .slice(0, 120);
+
+      return {
+        windowMinutes,
+        totalPings: rows.length,
+        totalUniqueActors: actorSet.size,
+        cells,
+      };
+    };
+
+    const candidateWindows = Array.from(
+      new Set([requestedWindowMinutes, 360, 720, 1440]),
+    ).sort((a, b) => a - b);
+    let firstPartySummary = summarizeForWindow(candidateWindows[0] || 180);
+    for (const candidate of candidateWindows) {
+      const summary = summarizeForWindow(candidate);
+      firstPartySummary = summary;
+      const enoughDensity =
+        summary.totalUniqueActors >= 8 ||
+        (summary.totalPings >= 20 && summary.cells.length >= 4);
+      if (enoughDensity) break;
     }
 
-    const firstPartyCells: TrafficCell[] = Array.from(
-      firstPartyBuckets.values(),
-    ).map((bucket) => {
-      const freshnessMinutes = bucket.lastSeenMs
-        ? Math.max(0, Math.round((Date.now() - bucket.lastSeenMs) / 60_000))
-        : undefined;
-      const weightRaw = bucket.uniqueActors.size * 2 + bucket.count;
-      const weight = Math.max(1, Math.min(100, weightRaw));
-      return {
-        id: cellId("first_party", bucket.lat, bucket.lng),
-        lat: bucket.lat,
-        lng: bucket.lng,
-        weight,
-        source: "first_party" as const,
-        count: bucket.count,
-        uniqueActors: bucket.uniqueActors.size,
-        freshnessMinutes,
-      };
-    });
+    const firstPartyCells = firstPartySummary.cells;
+    const totalPings = firstPartySummary.totalPings;
+    const totalUniqueActors = firstPartySummary.totalUniqueActors;
+    const effectiveWindowMinutes = firstPartySummary.windowMinutes;
+    const signalTier =
+      totalUniqueActors >= 18
+        ? "solid"
+        : totalUniqueActors >= 8
+          ? "emerging"
+          : "sparse";
 
     let googlePlaces = {
       enabled: false,
@@ -789,7 +859,7 @@ export function registerPublicMapRoutes(app: Express) {
               const key = `${bucketLat}:${bucketLng}`;
               const ratingWeight = Math.max(
                 1,
-                Math.min(30, Number(place.user_ratings_total || 1)),
+                Math.min(24, Number(place.user_ratings_total || 1)),
               );
               const existing = buckets.get(key) || {
                 lat: bucketLat,
@@ -805,7 +875,7 @@ export function registerPublicMapRoutes(app: Express) {
               id: cellId("google_places", bucket.lat, bucket.lng),
               lat: bucket.lat,
               lng: bucket.lng,
-              weight: Math.max(1, Math.min(100, bucket.weight)),
+              weight: Math.max(6, Math.min(70, Math.round(bucket.weight * 0.75))),
               source: "google_places" as const,
               count: bucket.count,
             }));
@@ -824,8 +894,13 @@ export function registerPublicMapRoutes(app: Express) {
     res.setHeader("Cache-Control", "public, max-age=45");
     return res.json({
       generatedAt: new Date().toISOString(),
-      windowMinutes,
+      windowMinutes: effectiveWindowMinutes,
+      requestedWindowMinutes,
       bounds,
+      signalQuality: {
+        tier: signalTier,
+        isLowDensity: signalTier === "sparse",
+      },
       firstParty: {
         totalPings,
         totalUniqueActors,

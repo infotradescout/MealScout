@@ -326,7 +326,12 @@ type MapLocationsResponse = {
 type MapFootTrafficResponse = {
   generatedAt: string;
   windowMinutes: number;
+  requestedWindowMinutes?: number;
   cells: MapTrafficCell[];
+  signalQuality?: {
+    tier?: "sparse" | "emerging" | "solid";
+    isLowDensity?: boolean;
+  };
   firstParty?: {
     totalPings?: number;
     totalUniqueActors?: number;
@@ -1142,6 +1147,7 @@ export default function MapPage() {
         Number(trafficBounds.south.toFixed(4)),
         Number(trafficBounds.east.toFixed(4)),
         Number(trafficBounds.west.toFixed(4)),
+        zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360,
         showGoogleTrafficData ? "google" : "first_party",
       ]
     : ["/api/map/foot-traffic", "none"];
@@ -1162,7 +1168,7 @@ export default function MapPage() {
         south: String(trafficBounds.south),
         east: String(trafficBounds.east),
         west: String(trafficBounds.west),
-        windowMinutes: "180",
+        windowMinutes: String(zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360),
         includeGoogle: showGoogleTrafficData ? "true" : "false",
       });
       const res = await fetch(apiUrl(`/api/map/foot-traffic?${params}`));
@@ -2305,6 +2311,14 @@ export default function MapPage() {
           {showFootTraffic && (
             <span className="text-muted-foreground">
               {visibleTrafficCells.length} traffic cells in view
+            </span>
+          )}
+          {showFootTraffic && footTrafficData?.signalQuality?.tier && (
+            <span className="text-muted-foreground">
+              signal: {footTrafficData.signalQuality.tier}
+              {typeof footTrafficData.windowMinutes === "number"
+                ? ` | window ${footTrafficData.windowMinutes}m`
+                : ""}
             </span>
           )}
         </div>
