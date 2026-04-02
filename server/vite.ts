@@ -108,7 +108,30 @@ export function serveStatic(app: Express) {
     }),
   );
 
-  // fall through to index.html if the file doesn't exist
+  // Never serve index.html for missing static assets/chunks.
+  // If a hashed JS/CSS chunk is missing, returning HTML causes a MIME error
+  // and leaves the app in a blank-screen state.
+  app.use((req, res, next) => {
+    const pathValue = String(req.path || "");
+    const looksLikeStaticAsset =
+      pathValue.startsWith("/assets/") ||
+      pathValue.startsWith("/static/") ||
+      /\.(js|mjs|css|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|webmanifest)$/i.test(
+        pathValue,
+      );
+    if (!looksLikeStaticAsset) {
+      return next();
+    }
+    return res
+      .status(404)
+      .set({
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+      })
+      .send("Asset not found");
+  });
+
+  // Fall through to index.html for SPA routes only.
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
