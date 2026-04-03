@@ -2208,13 +2208,7 @@ export default function MapPage() {
             className="mb-4 rounded border border-[color:var(--status-warning)]/40 bg-[color:var(--status-warning)]/10 p-2 text-xs text-[color:var(--text-primary)]"
             role="status"
           >
-            <div>
-              Using legacy map because Google Maps is blocked for this domain.
-            </div>
-            <div className="text-[color:var(--text-muted)]">
-              Authorize your key referrers for `https://www.mealscout.us/*` and
-              `https://mealscout.us/*`.
-            </div>
+            <div>Using backup map mode while enhanced map services recover.</div>
           </div>
         )}
         {(usingCachedBookableHosts || usingCachedHostStatus) && (
@@ -2327,8 +2321,7 @@ export default function MapPage() {
           footTrafficData?.googlePlaces?.enabled &&
           footTrafficData?.googlePlaces?.error && (
             <div className="mt-2 text-xs text-[color:var(--status-warning)]">
-              Google Places enrichment unavailable right now (
-              {footTrafficData.googlePlaces.error}).
+              Enhanced traffic enrichment is temporarily unavailable.
             </div>
           )}
       </header>
