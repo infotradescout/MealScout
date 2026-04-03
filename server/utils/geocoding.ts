@@ -37,6 +37,13 @@ const sleep = (ms: number) =>
 const shouldRetryStatus = (status: number) =>
   status === 408 || status === 429 || status >= 500;
 
+const getGoogleMapsApiKey = () =>
+  String(
+    process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
+      "",
+  ).trim();
+
 async function fetchWithBackoff(
   url: string,
   init?: RequestInit,
@@ -115,7 +122,7 @@ async function reverseWithGoogle(
   lat: number,
   lng: number,
 ): Promise<ReverseGeocodeResult | null> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = getGoogleMapsApiKey();
   if (!apiKey) return null;
   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
   const res = await fetchWithBackoff(url);
@@ -175,7 +182,7 @@ async function forwardWithCensus(
 async function forwardWithGoogle(
   address: string,
 ): Promise<ForwardGeocodeResult | null> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const apiKey = getGoogleMapsApiKey();
   if (!apiKey) return null;
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
     address,

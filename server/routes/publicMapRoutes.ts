@@ -98,6 +98,13 @@ const isMissingRelationError = (error: unknown, relationName?: string) => {
   return err.message?.includes(`"${relationName}"`) ?? false;
 };
 
+const getGoogleMapsApiKey = () =>
+  String(
+    process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
+      "",
+  ).trim();
+
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/locations", async (_req, res) => {
     try {
@@ -803,7 +810,7 @@ export function registerPublicMapRoutes(app: Express) {
       cells: [] as TrafficCell[],
     };
 
-    const googleApiKey = String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
+    const googleApiKey = getGoogleMapsApiKey();
     if (googlePlacesRequested) {
       googlePlaces.enabled = true;
       if (!googleApiKey) {
