@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
@@ -7,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generateEventSchema } from "@/lib/schema-helpers";
+import { useAuth } from "@/hooks/useAuth";
+import { EventBookingModal } from "@/components/event-booking-modal";
 
 type PublicEvent = {
   id: string;
@@ -16,6 +19,8 @@ type PublicEvent = {
   startTime?: string | null;
   endTime?: string | null;
   status?: string | null;
+  requiresPayment?: boolean;
+  hostPriceCents?: number | null;
   host: {
     id: string;
     name?: string | null;
@@ -40,6 +45,33 @@ export default function EventDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const eventParam = params.slug || params.id || "";
   const eventId = extractUuidFromSlug(eventParam) || eventParam;
+  const { user, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [truckId, setTruckId] = useState<string | null>(null);
+
+  // Load the truck for the logged-in food truck user
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setTruckId(null);
+      return;
+    }
+    if (
+      user?.userType !== "food_truck" &&
+      user?.userType !== "restaurant_owner"
+    ) {
+      return;
+    }
+    fetch("/api/restaurants/my-restaurants")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((trucks) => {
+        if (Array.isArray(trucks) && trucks.length > 0) {
+          const ft = trucks.find((t: any) => t.isFoodTruck) || trucks[0];
+          setTruckId(ft.id);
+        }
+      })
+      .catch(() => {});
+  }, [isAuthenticated, user?.userType]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["public-event", eventId],
@@ -94,6 +126,13 @@ export default function EventDetailPage() {
   const dateText = data?.date ? new Date(data.date).toLocaleDateString() : null;
   const timeText =
     data?.startTime && data?.endTime ? `${data.startTime}–${data.endTime}` : null;
+
+  const canBook =
+    isAuthenticated &&
+    Boolean(truckId) &&
+    data?.requiresPayment === true &&
+    data?.status === "open" &&
+    !data?.ended;
 
   return (
     <div className="min-h-screen bg-background">
@@ -350,7 +389,12 @@ export default function EventDetailPage() {
               )}
 
               <div className="flex gap-2 flex-wrap">
-                <Button asChild>
+                {canBook && truckId ? (
+                  <Button onClick={() => setBookingOpen(true)}>
+                    Book This Spot — ${(((data?.hostPriceCents ?? 0) + 1000) / 100).toFixed(2)}
+                  </Button>
+                ) : null}
+                <Button asChild variant={canBook ? "outline" : "default"}>
                   <a href="/events/public">Browse events</a>
                 </Button>
                 {data?.host?.path ? (
@@ -364,6 +408,28 @@ export default function EventDetailPage() {
                   </Button>
                 ) : null}
               </div>
+
+              {data && truckId && bookingOpen ? (
+                <EventBookingModal
+                  open={bookingOpen}
+                  onOpenChange={setBookingOpen}
+                  eventId={data.id}
+                  truckId={truckId}
+                  eventDetails={{
+                    name: data.title,
+                    date: dateText || "",
+                    startTime: data.startTime || "",
+                    endTime: data.endTime || "",
+                    hostName: data.host?.name || "Host location",
+                    hostPriceCents: data.hostPriceCents ?? 0,
+                  }}
+                  onSuccess={() => {
+                    void queryClient.invalidateQueries({
+                      queryKey: ["public-event", eventId],
+                    });
+                  }}
+                />
+              ) : null}
             </CardContent>
           </Card>
         </div>

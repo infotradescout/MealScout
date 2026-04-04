@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
+import Stripe from "stripe";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { db } from "../db";
@@ -19,7 +20,11 @@ import {
   CLAIM_STATUS,
   CLAIM_TYPES,
 } from "@shared/schema";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
 import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
@@ -378,16 +383,21 @@ export function registerEventRoutes(app: Express) {
   // Truck Discovery (authenticated)
   app.get("/api/events", isAuthenticated, async (req: any, res) => {
     try {
-      // Optional: Filter by location (lat/lng/radius) in the future
+      const hostIdFilter = String(req.query?.hostId || "").trim();
       const upcomingEvents = await storage.getAllUpcomingEvents();
-      res.json(
-        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
+      let filtered = Array.isArray(upcomingEvents) ? upcomingEvents : [];
+      if (hostIdFilter) {
+        filtered = filtered.filter(
+          (event: any) => String(event?.hostId || "") === hostIdFilter,
+        );
+      } else {
+        filtered = filtered.filter(
           (event: any) => !Boolean(event?.requiresPayment),
-        ),
-      );
+        );
+      }
+      res.json(filtered);
     } catch (error: any) {
       console.error("Error fetching all events:", error);
-      // Keep authenticated discovery usable even if event feed query is temporarily broken.
       res.json([]);
     }
   });
@@ -555,6 +565,8 @@ export function registerEventRoutes(app: Express) {
           updatedAt: events.updatedAt,
           maxTrucks: events.maxTrucks,
           bookedRestaurantId: events.bookedRestaurantId,
+          requiresPayment: events.requiresPayment,
+          hostPriceCents: events.hostPriceCents,
           hostName: hosts.businessName,
           hostAddress: hosts.address,
           hostCity: hosts.city,
@@ -640,6 +652,8 @@ export function registerEventRoutes(app: Express) {
         noIndex: ended || !gateOk,
         status: row.status,
         maxTrucks: row.maxTrucks,
+        requiresPayment: row.requiresPayment ?? false,
+        hostPriceCents: row.hostPriceCents ?? null,
         host: {
           id: row.hostId,
           name: row.hostName,
@@ -1631,4 +1645,504 @@ export function registerEventRoutes(app: Express) {
       res.status(500).json({ message: "Failed to submit request" });
     }
   });
+
+  // ─── Event Booking & Payment Routes ─────────────────────────────────────────
+
+  /**
+   * POST /api/events/:eventId/book
+   * Truck creates a pending booking + Stripe PaymentIntent.
+   * Returns { bookingId, clientSecret, totalCents, breakdown }
+   */
+  app.post(
+    "/api/events/:eventId/book",
+    isRestaurantOwner,
+    async (req: any, res) => {
+      try {
+        const { eventId } = req.params;
+        const { truckId } = req.body;
+
+        if (!truckId) {
+          return res.status(400).json({ message: "truckId is required" });
+        }
+
+        const ownsT = await storage.verifyRestaurantOwnership(
+          truckId,
+          req.user.id,
+        );
+        if (!ownsT) {
+          return res
+            .status(403)
+            .json({ message: "You do not own that truck" });
+        }
+
+        const [event] = await db
+          .select()
+          .from(events)
+          .where(eq(events.id, eventId))
+          .limit(1);
+        if (!event) {
+          return res.status(404).json({ message: "Event not found" });
+        }
+        if (!event.requiresPayment) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "This event does not require payment — use the interest flow instead",
+            });
+        }
+        if (event.status !== "open") {
+          return res
+            .status(409)
+            .json({ message: "Event is not available for booking" });
+        }
+        if (new Date(event.date) < new Date()) {
+          return res
+            .status(400)
+            .json({ message: "Event has already passed" });
+        }
+
+        const hostPriceCents = event.hostPriceCents ?? 0;
+        const PLATFORM_FEE = 1000; // always $10
+        const totalCents = hostPriceCents + PLATFORM_FEE;
+
+        const [host] = await db
+          .select()
+          .from(hosts)
+          .where(eq(hosts.id, event.hostId))
+          .limit(1);
+        if (!host) {
+          return res.status(500).json({ message: "Host not found" });
+        }
+        if (!host.stripeConnectAccountId || !host.stripeChargesEnabled) {
+          return res
+            .status(422)
+            .json({ message: "Host has not completed payment setup" });
+        }
+        if (!stripe) {
+          return res
+            .status(503)
+            .json({ message: "Payments not configured on server" });
+        }
+
+        // Idempotency: check for existing booking
+        const [existing] = await db
+          .select({ id: eventBookings.id, status: eventBookings.status })
+          .from(eventBookings)
+          .where(
+            and(
+              eq(eventBookings.eventId, eventId),
+              eq(eventBookings.truckId, truckId),
+            ),
+          )
+          .limit(1);
+
+        if (existing?.status === "confirmed") {
+          return res
+            .status(409)
+            .json({ message: "This spot is already booked" });
+        }
+        if (existing?.status === "pending") {
+          return res
+            .status(409)
+            .json({ message: "A pending booking already exists" });
+        }
+
+        // Capacity check
+        const [countRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(eventBookings)
+          .where(
+            and(
+              eq(eventBookings.eventId, eventId),
+              inArray(eventBookings.status, ["confirmed"]),
+            ),
+          );
+        const confirmedCount = Number(countRow?.count ?? 0);
+        if (confirmedCount >= event.maxTrucks) {
+          return res
+            .status(409)
+            .json({ message: "Event is fully booked" });
+        }
+
+        // Insert pending booking record first (so we have the ID for metadata)
+        const [booking] = await db
+          .insert(eventBookings)
+          .values({
+            eventId,
+            truckId,
+            hostId: event.hostId,
+            hostPriceCents,
+            platformFeeCents: PLATFORM_FEE,
+            totalCents,
+            status: "pending",
+            stripeApplicationFeeAmount: PLATFORM_FEE,
+            stripeTransferDestination: host.stripeConnectAccountId,
+          })
+          .returning();
+
+        // Create Stripe PaymentIntent (direct charge on host's Connect account)
+        let paymentIntent: Stripe.PaymentIntent;
+        try {
+          paymentIntent = await stripe.paymentIntents.create(
+            {
+              amount: totalCents,
+              currency: "usd",
+              application_fee_amount: PLATFORM_FEE,
+              metadata: {
+                bookingId: booking.id,
+                eventId,
+                truckId,
+                userId: req.user.id,
+                hostPriceCents: hostPriceCents.toString(),
+                platformFeeCents: PLATFORM_FEE.toString(),
+                totalCents: totalCents.toString(),
+              },
+            },
+            { stripeAccount: host.stripeConnectAccountId },
+          );
+        } catch (stripeError: any) {
+          // Roll back the pending booking if Stripe fails
+          await db
+            .update(eventBookings)
+            .set({
+              status: "cancelled",
+              cancelledAt: new Date(),
+              cancellationReason: "Payment setup failed",
+              updatedAt: new Date(),
+            })
+            .where(eq(eventBookings.id, booking.id));
+          console.error("Stripe PaymentIntent creation failed:", stripeError);
+          return res
+            .status(502)
+            .json({ message: "Payment setup failed, please try again" });
+        }
+
+        // Attach the PaymentIntent ID to the booking record
+        await db
+          .update(eventBookings)
+          .set({ stripePaymentIntentId: paymentIntent.id, updatedAt: new Date() })
+          .where(eq(eventBookings.id, booking.id));
+
+        res.json({
+          bookingId: booking.id,
+          clientSecret: paymentIntent.client_secret,
+          totalCents,
+          breakdown: {
+            hostPrice: hostPriceCents,
+            platformFee: PLATFORM_FEE,
+          },
+        });
+      } catch (error: any) {
+        console.error("Error creating event booking:", error);
+        res.status(500).json({ message: "Failed to create booking" });
+      }
+    },
+  );
+
+  /**
+   * POST /api/bookings/:bookingId/confirm
+   * Called after Stripe payment succeeds (idempotent).
+   * The webhook also handles this; this is for immediate client feedback.
+   */
+  app.post(
+    "/api/bookings/:bookingId/confirm",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { bookingId } = req.params;
+
+        const [booking] = await db
+          .select()
+          .from(eventBookings)
+          .where(eq(eventBookings.id, bookingId))
+          .limit(1);
+        if (!booking) {
+          return res.status(404).json({ message: "Booking not found" });
+        }
+
+        // Verify caller owns the truck
+        const ownsT = await storage.verifyRestaurantOwnership(
+          booking.truckId,
+          req.user.id,
+        );
+        if (!ownsT) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        if (booking.status === "confirmed") {
+          return res.json({ message: "Already confirmed", bookingId });
+        }
+        if (booking.status === "cancelled" || booking.status === "refunded") {
+          return res
+            .status(400)
+            .json({ message: `Booking is ${booking.status}` });
+        }
+
+        // Verify payment via Stripe if we have a PaymentIntent
+        if (booking.stripePaymentIntentId && stripe) {
+          const hostStripeAccountId = booking.stripeTransferDestination;
+          let intent: Stripe.PaymentIntent;
+          try {
+            intent = await stripe.paymentIntents.retrieve(
+              booking.stripePaymentIntentId,
+              hostStripeAccountId
+                ? { stripeAccount: hostStripeAccountId }
+                : undefined,
+            );
+          } catch (e: any) {
+            console.error("Error retrieving PaymentIntent:", e);
+            return res
+              .status(502)
+              .json({ message: "Could not verify payment" });
+          }
+
+          if (intent.status !== "succeeded") {
+            return res
+              .status(402)
+              .json({ message: "Payment has not succeeded yet" });
+          }
+        }
+
+        const now = new Date();
+        await db
+          .update(eventBookings)
+          .set({
+            status: "confirmed",
+            stripePaymentStatus: "succeeded",
+            paidAt: now,
+            bookingConfirmedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(eventBookings.id, bookingId));
+
+        // Update event status if now full
+        const [countRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(eventBookings)
+          .where(
+            and(
+              eq(eventBookings.eventId, booking.eventId),
+              eq(eventBookings.status, "confirmed"),
+            ),
+          );
+        const confirmedCount = Number(countRow?.count ?? 0);
+
+        const [eventRow] = await db
+          .select({ maxTrucks: events.maxTrucks })
+          .from(events)
+          .where(eq(events.id, booking.eventId))
+          .limit(1);
+
+        if (eventRow) {
+          const newStatus =
+            confirmedCount >= (eventRow.maxTrucks ?? 1) ? "filled" : "open";
+          await db
+            .update(events)
+            .set({ status: newStatus, updatedAt: new Date() })
+            .where(eq(events.id, booking.eventId));
+        }
+
+        res.json({ message: "Booking confirmed", bookingId });
+      } catch (error: any) {
+        console.error("Error confirming booking:", error);
+        res.status(500).json({ message: "Failed to confirm booking" });
+      }
+    },
+  );
+
+  /**
+   * POST /api/bookings/:bookingId/cancel
+   * Host or truck owner may cancel. No refunds are allowed.
+   */
+  app.post(
+    "/api/bookings/:bookingId/cancel",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { bookingId } = req.params;
+        const { reason, refundType } = req.body;
+
+        // Booking policy: no refunds allowed.
+        if (refundType && String(refundType).toLowerCase() !== "none") {
+          return res.status(400).json({
+            message: "Refunds are not allowed for bookings",
+          });
+        }
+
+        const [booking] = await db
+          .select()
+          .from(eventBookings)
+          .where(eq(eventBookings.id, bookingId))
+          .limit(1);
+        if (!booking) {
+          return res.status(404).json({ message: "Booking not found" });
+        }
+
+        // Authorization: truck owner, host, or staff/admin
+        const isAdmin =
+          req.user?.role === "admin" || req.user?.role === "staff";
+        const ownsTruck = await storage.verifyRestaurantOwnership(
+          booking.truckId,
+          req.user.id,
+        );
+        const [host] = await db
+          .select({ userId: hosts.userId })
+          .from(hosts)
+          .where(eq(hosts.id, booking.hostId))
+          .limit(1);
+        const isHost = host?.userId === req.user.id;
+
+        if (!ownsTruck && !isHost && !isAdmin) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        if (
+          booking.status === "cancelled" ||
+          booking.status === "refunded"
+        ) {
+          return res
+            .status(400)
+            .json({ message: `Booking already ${booking.status}` });
+        }
+
+        const now = new Date();
+
+        await db
+          .update(eventBookings)
+          .set({
+            status: "cancelled",
+            cancelledAt: now,
+            cancellationReason: reason || null,
+            refundStatus: "none",
+            refundAmountCents: null,
+            refundedAt: null,
+            updatedAt: now,
+          })
+          .where(eq(eventBookings.id, bookingId));
+
+        // Reopen the event if it was filled
+        const [eventRow] = await db
+          .select({ status: events.status, maxTrucks: events.maxTrucks })
+          .from(events)
+          .where(eq(events.id, booking.eventId))
+          .limit(1);
+        if (eventRow?.status === "filled") {
+          await db
+            .update(events)
+            .set({ status: "open", updatedAt: new Date() })
+            .where(eq(events.id, booking.eventId));
+        }
+
+        res.json({
+          message: "Booking cancelled",
+          bookingId,
+          refunded: false,
+        });
+      } catch (error: any) {
+        console.error("Error cancelling booking:", error);
+        res.status(500).json({ message: "Failed to cancel booking" });
+      }
+    },
+  );
+
+  /**
+   * GET /api/events/:eventId/bookings
+   * Returns all bookings for this event (host view).
+   */
+  app.get(
+    "/api/events/:eventId/bookings",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { eventId } = req.params;
+
+        const [event] = await db
+          .select({ hostId: events.hostId })
+          .from(events)
+          .where(eq(events.id, eventId))
+          .limit(1);
+        if (!event) {
+          return res.status(404).json({ message: "Event not found" });
+        }
+
+        // Check caller is the host owner or staff/admin
+        const isAdmin =
+          req.user?.role === "admin" || req.user?.role === "staff";
+        const [host] = await db
+          .select({ userId: hosts.userId })
+          .from(hosts)
+          .where(eq(hosts.id, event.hostId))
+          .limit(1);
+        if (!isAdmin && host?.userId !== req.user.id) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const rows = await db
+          .select({
+            booking: eventBookings,
+            truckName: restaurants.name,
+            truckOwnerId: restaurants.ownerId,
+          })
+          .from(eventBookings)
+          .leftJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
+          .where(eq(eventBookings.eventId, eventId))
+          .orderBy(desc(eventBookings.createdAt));
+
+        res.json({ bookings: rows });
+      } catch (error: any) {
+        console.error("Error fetching event bookings:", error);
+        res.status(500).json({ message: "Failed to fetch bookings" });
+      }
+    },
+  );
+
+  /**
+   * GET /api/my/bookings?truckId=…
+   * Returns all bookings for the authenticated truck owner.
+   */
+  app.get(
+    "/api/my/bookings",
+    isRestaurantOwner,
+    async (req: any, res) => {
+      try {
+        const { truckId } = req.query;
+        if (!truckId) {
+          return res.status(400).json({ message: "truckId query param required" });
+        }
+
+        const ownsT = await storage.verifyRestaurantOwnership(
+          String(truckId),
+          req.user.id,
+        );
+        if (!ownsT) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const rows = await db
+          .select({
+            booking: eventBookings,
+            eventName: events.name,
+            eventDate: events.date,
+            eventStartTime: events.startTime,
+            eventEndTime: events.endTime,
+            hostId: events.hostId,
+            hostName: hosts.businessName,
+            hostAddress: hosts.address,
+            hostCity: hosts.city,
+            hostState: hosts.state,
+          })
+          .from(eventBookings)
+          .leftJoin(events, eq(eventBookings.eventId, events.id))
+          .leftJoin(hosts, eq(eventBookings.hostId, hosts.id))
+          .where(eq(eventBookings.truckId, String(truckId)))
+          .orderBy(desc(eventBookings.createdAt));
+
+        res.json({ bookings: rows });
+      } catch (error: any) {
+        console.error("Error fetching truck bookings:", error);
+        res.status(500).json({ message: "Failed to fetch bookings" });
+      }
+    },
+  );
 }

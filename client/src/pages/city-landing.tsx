@@ -10,9 +10,12 @@ import {
   Truck,
   CalendarDays,
   ChevronRight,
+  Tag,
+  Share2,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 type CityPayload = {
   city: { name: string; slug: string; state?: string | null };
@@ -45,6 +48,25 @@ type SearchTrend = {
   lastSeen?: string | null;
 };
 
+type CityDeal = {
+  id: string;
+  title: string;
+  description?: string | null;
+  discountValue?: string | null;
+  dealType?: string | null;
+  dealPath: string;
+  restaurant: {
+    id: string;
+    name: string;
+    cuisineType?: string | null;
+  };
+};
+
+type AffiliateTag = {
+  tag: string;
+  sharePath: string;
+};
+
 const normalize = (value?: string | null) =>
   String(value || "")
     .toLowerCase()
@@ -72,6 +94,7 @@ export default function CityLanding() {
   const citySlug = String(params.citySlug || params.city || "").trim();
   const cuisineSlug = String(params.cuisineSlug || "").trim();
   const cuisineNeedle = deslug(cuisineSlug);
+  const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["city", citySlug],
@@ -110,6 +133,28 @@ export default function CityLanding() {
       return res.json();
     },
     staleTime: 60_000,
+  });
+
+  const { data: cityDealsPayload } = useQuery<{ deals: CityDeal[]; totalDeals: number }>({
+    queryKey: ["/api/public/deals/city", citySlug],
+    queryFn: async () => {
+      const res = await fetch(apiUrl(`/api/public/deals/city/${encodeURIComponent(citySlug)}`));
+      if (!res.ok) return { deals: [], totalDeals: 0 };
+      return res.json();
+    },
+    enabled: Boolean(citySlug),
+    staleTime: 120_000,
+  });
+
+  const { data: affiliateTagData } = useQuery<AffiliateTag>({
+    queryKey: ["/api/affiliate/tag", "city-landing"],
+    queryFn: async () => {
+      const res = await fetch(apiUrl("/api/affiliate/tag"), { credentials: "include" });
+      if (!res.ok) throw new Error("Not available");
+      return res.json();
+    },
+    enabled: isAuthenticated,
+    staleTime: 300_000,
   });
 
   const filtered = useMemo(() => {
@@ -166,6 +211,35 @@ export default function CityLanding() {
     ? `https://www.mealscout.us/food-trucks/${data.city.slug}/${slugify(cuisineLabel)}`
     : `https://www.mealscout.us/food-trucks/${data.city.slug}`;
 
+  const cityDeals = (cityDealsPayload?.deals ?? []).slice(0, 6);
+
+  const faqEntries = [
+    {
+      q: `Are there food trucks in ${data.city.name}?`,
+      a: filtered.trucks.length > 0
+        ? `Yes! MealScout currently tracks ${filtered.trucks.length} food truck${filtered.trucks.length > 1 ? "s" : ""} in ${cityLabel}. Browse their profiles and deals above.`
+        : `MealScout is actively tracking food trucks in ${cityLabel}. Check back soon or explore restaurants and deals nearby.`,
+    },
+    {
+      q: `What cuisines can I find in ${data.city.name}?`,
+      a: data.cuisines.length > 0
+        ? `In ${cityLabel} you can find ${data.cuisines.slice(0, 5).map((c) => c.name).join(", ")} and more on MealScout.`
+        : `MealScout is building out cuisine coverage for ${cityLabel}. Explore restaurants above or browse deals.`,
+    },
+    {
+      q: `Are there restaurant deals in ${data.city.name}?`,
+      a: cityDeals.length > 0
+        ? `Yes! There are currently ${cityDealsPayload?.totalDeals ?? cityDeals.length} active deal${(cityDealsPayload?.totalDeals ?? cityDeals.length) > 1 ? "s" : ""} in ${cityLabel}. Claim them free with a MealScout account.`
+        : `Restaurants in ${cityLabel} are joining MealScout. Sign up free to get notified when deals go live near you.`,
+    },
+    {
+      q: `What events are happening in ${data.city.name}?`,
+      a: data.stats.events > 0
+        ? `MealScout shows ${data.stats.events} upcoming food event${data.stats.events > 1 ? "s" : ""} in ${cityLabel}. See dates and times in the events section above.`
+        : `There are no events listed in ${cityLabel} right now. Check back or explore nearby city pages.`,
+    },
+  ];
+
   const schemaData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -186,6 +260,14 @@ export default function CityLanding() {
           position: index + 1,
           name: truck.name,
           url: `https://www.mealscout.us/restaurant/${truck.id}`,
+        })),
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: faqEntries.map(({ q, a }) => ({
+          "@type": "Question",
+          name: q,
+          acceptedAnswer: { "@type": "Answer", text: a },
         })),
       },
     ],
@@ -359,6 +441,40 @@ export default function CityLanding() {
           )}
         </section>
 
+        {cityDeals.length > 0 && (
+          <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Tag className="w-4 h-4" />
+              Active Deals in {data.city.name}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {cityDealsPayload?.totalDeals ?? cityDeals.length} active deal{(cityDealsPayload?.totalDeals ?? cityDeals.length) !== 1 ? "s" : ""} available right now — claim them free with a MealScout account.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {cityDeals.map((deal) => (
+                <Link key={deal.id} href={deal.dealPath}>
+                  <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-medium text-foreground text-sm leading-snug">{deal.title}</div>
+                        {deal.discountValue && (
+                          <span className="shrink-0 rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-xs font-semibold text-[color:var(--status-success)]">
+                            {deal.discountValue}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {deal.restaurant.name}
+                        {deal.restaurant.cuisineType ? ` · ${deal.restaurant.cuisineType}` : ""}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {data.events.length > 0 && (
           <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -412,6 +528,21 @@ export default function CityLanding() {
             </div>
           </section>
         )}
+
+        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+          <h2 className="text-lg font-semibold text-foreground">
+            Frequently Asked Questions
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">Common questions about food trucks and deals in {cityLabel}.</p>
+          <div className="mt-4 space-y-4">
+            {faqEntries.map(({ q, a }) => (
+              <div key={q} className="border-b border-[color:var(--border-subtle)] pb-3 last:border-b-0 last:pb-0">
+                <h3 className="font-semibold text-sm text-foreground">{q}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{a}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-lg font-semibold text-foreground">
@@ -486,6 +617,45 @@ export default function CityLanding() {
                 </Button>
               </Link>
             ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Share2 className="w-4 h-4" />
+            Share {data.city.name} with Friends
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Know someone who loves food in {cityLabel}? Share this page and earn credits when they join.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {affiliateTagData?.sharePath ? (
+              <Button
+                size="sm"
+                className="food-gradient-primary border-0"
+                onClick={() => {
+                  const url = `${window.location.origin}/food-trucks/${data.city.slug}?ref=${affiliateTagData.tag}`;
+                  if (navigator.share) {
+                    navigator.share({ title: `Food Trucks in ${cityLabel}`, url });
+                  } else {
+                    navigator.clipboard.writeText(url).then(() => alert("Link copied!"));
+                  }
+                }}
+              >
+                Share & Earn Credits
+              </Button>
+            ) : (
+              <Link href={`/food-trucks/${data.city.slug}?q=${encodeURIComponent(cityLabel + " food trucks")}`}>
+                <Button size="sm" variant="outline" className="border-[color:var(--border-subtle)]">
+                  Share this page
+                </Button>
+              </Link>
+            )}
+            <Link href="/search">
+              <Button size="sm" variant="outline" className="border-[color:var(--border-subtle)]">
+                Explore more cities
+              </Button>
+            </Link>
           </div>
         </section>
 

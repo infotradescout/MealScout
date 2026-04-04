@@ -991,7 +991,178 @@ function HostDashboard() {
           )}
         </div>
       </section>
+
+      {/* ── Bookings section ────────────────────────────────────── */}
+      {host && <HostBookingsSection hostId={host.id} />}
     </div>
+  );
+}
+
+function HostBookingsSection({ hostId }: { hostId: string }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setLoadingEvents(true);
+    fetch(`/api/events?hostId=${encodeURIComponent(hostId)}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => {
+        setEvents(
+          Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [],
+        );
+      })
+      .catch(() => {})
+      .finally(() => setLoadingEvents(false));
+  }, [hostId]);
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      setBookings([]);
+      return;
+    }
+    setLoadingBookings(true);
+    fetch(`/api/events/${encodeURIComponent(selectedEventId)}/bookings`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) => setBookings(data?.bookings ?? []))
+      .catch(() => setBookings([]))
+      .finally(() => setLoadingBookings(false));
+  }, [selectedEventId]);
+
+  const handleCancel = async (bookingId: string) => {
+    if (!confirm("Cancel this booking? No refund will be issued.")) return;
+    const res = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ reason: "Host cancelled" }),
+    });
+    if (res.ok) {
+      toast({ title: "Booking cancelled", description: "No refund issued." });
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.booking?.id === bookingId
+            ? { ...b, booking: { ...b.booking, status: "cancelled" } }
+            : b,
+        ),
+      );
+    } else {
+      toast({ title: "Error", description: "Could not cancel booking.", variant: "destructive" });
+    }
+  };
+
+  const fmtCents = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+  return (
+    <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[color:var(--bg-surface)] p-6 space-y-4">
+      <h2 className="text-xl font-semibold text-[color:var(--text-primary)]">
+        Event Bookings
+      </h2>
+      <p className="text-sm text-[color:var(--text-secondary)]">
+        Select an event to see which trucks have booked a spot.
+      </p>
+
+      {loadingEvents ? (
+        <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading events…
+        </div>
+      ) : (
+        <select
+          className="w-full rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-surface)] px-3 py-2 text-sm"
+          value={selectedEventId}
+          onChange={(e) => setSelectedEventId(e.target.value)}
+        >
+          <option value="">Select an event…</option>
+          {events.map((ev: any) => (
+            <option key={ev.id} value={ev.id}>
+              {ev.name || ev.id} — {ev.date ? new Date(ev.date).toLocaleDateString() : ""}
+              {ev.requiresPayment ? " (paid)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {selectedEventId && (
+        <>
+          {loadingBookings ? (
+            <div className="flex items-center gap-2 text-sm text-[color:var(--text-muted)]">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading bookings…
+            </div>
+          ) : bookings.length === 0 ? (
+            <p className="text-sm text-[color:var(--text-muted)]">
+              No bookings for this event yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-[color:var(--border-subtle)] text-xs text-[color:var(--text-muted)] uppercase">
+                    <th className="py-2 pr-4 text-left font-medium">Truck</th>
+                    <th className="py-2 pr-4 text-left font-medium">Status</th>
+                    <th className="py-2 pr-4 text-left font-medium">Total</th>
+                    <th className="py-2 pr-4 text-left font-medium">Paid At</th>
+                    <th className="py-2 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bookings.map((row: any) => {
+                    const b = row.booking ?? row;
+                    const truckName = row.truckName ?? "Unknown truck";
+                    return (
+                      <tr
+                        key={b.id}
+                        className="border-b border-[color:var(--border-subtle)] last:border-0"
+                      >
+                        <td className="py-2 pr-4">{truckName}</td>
+                        <td className="py-2 pr-4">
+                          <span
+                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              b.status === "confirmed"
+                                ? "bg-green-100 text-green-800"
+                                : b.status === "pending"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4">
+                          {fmtCents(b.totalCents ?? 0)}
+                        </td>
+                        <td className="py-2 pr-4 text-[color:var(--text-muted)]">
+                          {b.paidAt
+                            ? new Date(b.paidAt).toLocaleDateString()
+                            : "—"}
+                        </td>
+                        <td className="py-2 text-right">
+                          {b.status === "confirmed" ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleCancel(b.id)}
+                            >
+                              Cancel Booking
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

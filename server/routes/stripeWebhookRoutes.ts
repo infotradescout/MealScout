@@ -169,6 +169,141 @@ export function registerStripeWebhookRoutes(
                 break;
               }
 
+              // ── Single-event booking payment (bookingId metadata) ──────────
+              const bookingId = String(metadata.bookingId || "").trim();
+              if (bookingId && !metadata.passId) {
+                try {
+                  const [booking] = await db
+                    .select()
+                    .from(eventBookings)
+                    .where(eq(eventBookings.id, bookingId))
+                    .limit(1);
+
+                  if (!booking) {
+                    console.warn(`[WEBHOOK] Booking ${bookingId} not found`);
+                    break;
+                  }
+
+                  // Idempotent
+                  if (booking.status === "confirmed") {
+                    console.log(`[WEBHOOK] Booking ${bookingId} already confirmed`);
+                    break;
+                  }
+
+                  const now = new Date();
+                  await db
+                    .update(eventBookings)
+                    .set({
+                      status: "confirmed",
+                      stripePaymentStatus: "succeeded",
+                      paidAt: now,
+                      bookingConfirmedAt: now,
+                      updatedAt: now,
+                    })
+                    .where(eq(eventBookings.id, bookingId));
+
+                  // Update event fill status
+                  const [countRow] = await db
+                    .select({ count: sql<number>`count(*)` })
+                    .from(eventBookings)
+                    .where(
+                      and(
+                        eq(eventBookings.eventId, booking.eventId),
+                        eq(eventBookings.status, "confirmed"),
+                      ),
+                    );
+                  const confirmedCount = Number(countRow?.count ?? 0);
+
+                  const [eventRow] = await db
+                    .select()
+                    .from(events)
+                    .where(eq(events.id, booking.eventId))
+                    .limit(1);
+
+                  if (eventRow) {
+                    const newStatus =
+                      confirmedCount >= (eventRow.maxTrucks ?? 1)
+                        ? "filled"
+                        : "open";
+                    await db
+                      .update(events)
+                      .set({ status: newStatus, updatedAt: now })
+                      .where(eq(events.id, booking.eventId));
+
+                    // Capacity warning notification
+                    try {
+                      if (
+                        confirmedCount >= (eventRow.maxTrucks ?? 1) ||
+                        confirmedCount / (eventRow.maxTrucks ?? 1) >= 0.8
+                      ) {
+                        await notifyHostCapacityWarning({
+                          hostId: eventRow.hostId,
+                          eventId: booking.eventId,
+                          eventStartDate: eventRow.date ?? null,
+                          confirmedCount,
+                          maxTrucks: eventRow.maxTrucks ?? 1,
+                        });
+                      }
+                    } catch (notifyErr) {
+                      console.error("[WEBHOOK] Capacity notify error:", notifyErr);
+                    }
+                  }
+
+                  // Record host earnings
+                  try {
+                    const { recordHostBookingEarnings } =
+                      await import("../hostEarningsService");
+                    if (Number(booking.hostPriceCents || 0) > 0) {
+                      await recordHostBookingEarnings([
+                        {
+                          hostId: booking.hostId,
+                          bookingId: booking.id,
+                          amountCents: Number(booking.hostPriceCents),
+                          stripePaymentIntentId: paymentIntent.id,
+                        },
+                      ]);
+                    }
+                  } catch (ledgerErr) {
+                    console.error("[WEBHOOK] Host earnings error:", ledgerErr);
+                  }
+
+                  // Send confirmation email to truck owner
+                  try {
+                    const [truck] = await db
+                      .select({ ownerId: restaurants.ownerId })
+                      .from(restaurants)
+                      .where(eq(restaurants.id, booking.truckId));
+                    const owner = truck
+                      ? await storage.getUser(truck.ownerId)
+                      : null;
+                    const [hostRow] = await db
+                      .select({ businessName: hosts.businessName })
+                      .from(hosts)
+                      .where(eq(hosts.id, booking.hostId))
+                      .limit(1);
+                    if (owner?.email && eventRow) {
+                      const dateKey = eventRow.date
+                        ? new Date(eventRow.date).toISOString().slice(0, 10)
+                        : "";
+                      await emailService.sendBookingConfirmationEmail({
+                        to: owner.email,
+                        hostName: hostRow?.businessName || "Host location",
+                        startDate: dateKey,
+                        endDate: dateKey,
+                        slotSummary: eventRow.name || "Event",
+                        totalCents: booking.totalCents,
+                      });
+                    }
+                  } catch (emailErr) {
+                    console.error("[WEBHOOK] Booking confirmation email error:", emailErr);
+                  }
+                } catch (bookingError) {
+                  console.error("[WEBHOOK] Error confirming event booking:", bookingError);
+                }
+                break;
+              }
+              // ─────────────────────────────────────────────────────────────
+
               const passId = metadata.passId;
               const truckId = metadata.truckId;
 

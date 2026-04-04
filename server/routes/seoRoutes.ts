@@ -299,6 +299,43 @@ export function registerSeoRoutes(app: Express) {
         );
       });
 
+      // Deal-city pages: /deals/:citySlug for cities with at least one active deal
+      try {
+        const now = new Date();
+        const activeDealRows = await db
+          .select({
+            cityName: restaurants.city,
+            updatedAt: deals.updatedAt,
+          })
+          .from(deals)
+          .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+          .where(
+            and(
+              eq(deals.isActive, true),
+              or(isNull(deals.endDate), gte(deals.endDate, now)),
+              isNotNull(restaurants.city),
+            ),
+          );
+
+        const dealCityLastmod = new Map<string, string | null>();
+        for (const row of activeDealRows) {
+          const cityName = String(row.cityName || "").trim().toLowerCase();
+          const slug = citySlugByName.get(cityName);
+          if (!slug) continue;
+          const next = toIsoDateOrNull(row.updatedAt);
+          const existing = dealCityLastmod.get(slug) || null;
+          if (!existing || (next && new Date(next).getTime() > new Date(existing).getTime())) {
+            dealCityLastmod.set(slug, next);
+          }
+        }
+
+        dealCityLastmod.forEach((lastmod, slug) => {
+          mergeUrl(`${baseUrl}/deals/${encodeURIComponent(slug)}`, lastmod || undefined);
+        });
+      } catch (dealCityErr) {
+        console.error("[sitemap] deal-city section failed:", dealCityErr);
+      }
+
       sendUrlsetXml(res, {
         entries: Array.from(lastmodByLoc.entries()).map(([loc, lastmod]) => ({
           loc,

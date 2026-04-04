@@ -179,6 +179,7 @@ import { registerLocationUtilityRoutes } from "./routes/locationUtilityRoutes";
 import { registerMediaRoutes } from "./routes/mediaRoutes";
 import { registerDealDiscoveryRoutes } from "./routes/dealDiscoveryRoutes";
 import { registerHostPayoutAdminRoutes } from "./routes/hostPayoutAdminRoutes";
+import { registerGrowthRoutes } from "./routes/growthRoutes";
 import { registerHostInterestRoutes } from "./routes/hostInterestRoutes";
 import { registerPublicDiscoveryRoutes } from "./routes/publicDiscoveryRoutes";
 import { registerPublicMapRoutes } from "./routes/publicMapRoutes";
@@ -888,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAdminManagementRoutes(app);
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
-
+  registerGrowthRoutes(app);
   // Staff management and user creation endpoints
   registerStaffRoutes(app);
 

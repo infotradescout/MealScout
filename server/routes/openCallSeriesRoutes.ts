@@ -10,6 +10,7 @@ import { assertMaxSpan180Days, generateOccurrences, filterFutureOccurrences } fr
 import { dateKeyInZone } from "../services/dateKeys";
 import { eq } from "drizzle-orm";
 import { isParkingPassPublicReady } from "../services/parkingPassQuality";
+import { notifyNearbyTrucksOfNewSeries } from "../truckEventMatchService";
 
 const isEmailChannelEnabled = (accountSettings: unknown) => {
   const settings =
@@ -184,6 +185,27 @@ export function registerOpenCallSeriesRoutes(app: Express) {
           occurrencesGenerated: occurrences.length,
         }
       });
+
+      // Notify nearby trucks about the new series (fire-and-forget, only for event/open_call types)
+      if (series.seriesType !== "parking_pass" && host) {
+        void notifyNearbyTrucksOfNewSeries(
+          {
+            id: publishedSeries.id,
+            name: series.name,
+            description: series.description,
+            startDate: new Date(series.startDate),
+            endDate: new Date(series.endDate),
+            defaultStartTime: series.defaultStartTime,
+            defaultEndTime: series.defaultEndTime,
+          },
+          {
+            businessName: host.businessName,
+            city: (host as any).city ?? null,
+            state: (host as any).state ?? null,
+            address: host.address,
+          },
+        );
+      }
 
       res.json({
         series: publishedSeries,

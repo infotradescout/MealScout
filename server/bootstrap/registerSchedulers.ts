@@ -11,6 +11,9 @@
 import type { Express } from "express";
 import cron from "node-cron";
 import { DigestService } from "../digestService";
+import { DinerDigestService } from "../dinerDigestService";
+import { OnboardingDripService } from "../onboardingDripService";
+import { RestaurantActivationService } from "../restaurantActivationService";
 import { notifyUnbookedEvents } from "../eventNotificationCron";
 import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
@@ -55,6 +58,41 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.log("✅ Weekly Digest Cron Job Completed");
     } catch (error) {
       console.error("❌ Weekly Digest Cron Job Failed:", error);
+    }
+  });
+
+  // Diner Deals Digest — Wednesday 9:00 AM
+  cron.schedule("0 9 * * 3", async () => {
+    console.log("⏰ Triggering Diner Deals Digest");
+    try {
+      const stats = await DinerDigestService.getInstance().sendDinerDigests();
+      console.log("✅ Diner Deals Digest Completed:", stats);
+    } catch (error) {
+      console.error("❌ Diner Deals Digest Failed:", error);
+    }
+  });
+
+  // Post-signup onboarding drip — daily 3:00 AM (Day 3 referral + Day 7 discovery)
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      const stats = await OnboardingDripService.getInstance().run();
+      if (stats.day3Sent + stats.day7Sent > 0) {
+        console.log("[onboarding-drip] sent:", stats);
+      }
+    } catch (error) {
+      console.error("❌ Onboarding Drip Failed:", error);
+    }
+  });
+
+  // Restaurant deal-creation nudge — daily 3:30 AM (Day 7 + Day 14 prompts)
+  cron.schedule("30 3 * * *", async () => {
+    try {
+      const stats = await RestaurantActivationService.getInstance().run();
+      if (stats.nudge7Sent + stats.nudge14Sent > 0) {
+        console.log("[restaurant-activation] sent:", stats);
+      }
+    } catch (error) {
+      console.error("❌ Restaurant Activation Nudge Failed:", error);
     }
   });
 

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import DealClaimModal from "@/components/deal-claim-modal";
 import DealShareModal from "@/components/deal-share-modal";
 import { BackHeader } from "@/components/back-header";
-import { Tag, ArrowLeft } from "lucide-react";
+import { Tag, ArrowLeft, Share2 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 
@@ -99,6 +99,17 @@ export default function DealDetail() {
       }
       return res.json();
     },
+  });
+
+  const { data: affiliateTagData } = useQuery<{ tag: string; sharePath: string }>({
+    queryKey: ["/api/affiliate/tag", "deal-detail"],
+    queryFn: async () => {
+      const res = await fetch("/api/affiliate/tag", { credentials: "include" });
+      if (!res.ok) throw new Error("Not available");
+      return res.json();
+    },
+    enabled: isAuthenticated,
+    staleTime: 300_000,
   });
 
   // Track deal view when deal is loaded
@@ -563,6 +574,48 @@ export default function DealDetail() {
           </div>
         )}
       </div>
+
+      {/* Share & Earn Credits */}
+      {isAuthenticated && (
+        <div className="mb-6">
+          <Card className="bg-[var(--bg-layered)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="shrink-0 rounded-full bg-[color:var(--status-success)]/15 p-2">
+                  <Share2 className="h-4 w-4 text-[color:var(--status-success)]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-foreground">Share this deal, earn credits</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Invite friends — when they join, you earn referral credits.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  className="w-full food-gradient-primary border-0 text-sm"
+                  onClick={() => {
+                    const dealSlug = encodeURIComponent(`${(deal as Deal)?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || (deal as Deal)?.id}--${(deal as Deal)?.id}`);
+                    const ref = affiliateTagData?.tag ? `?ref=${affiliateTagData.tag}` : "";
+                    const url = `${window.location.origin}/deal/${dealSlug}${ref}`;
+                    if (navigator.share) {
+                      navigator.share({ title: (deal as Deal)?.title, url });
+                    } else {
+                      navigator.clipboard.writeText(url).then(() =>
+                        toast({ title: "Link copied!", description: "Share it with friends to earn credits." })
+                      );
+                    }
+                  }}
+                >
+                  <Share2 className="h-3.5 w-3.5 mr-1.5" />
+                  Share & Earn
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Bottom Action Bar */}
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-[hsl(var(--background))/0.94] border-t border-[color:var(--border-subtle)] px-4 py-4 shadow-clean">
