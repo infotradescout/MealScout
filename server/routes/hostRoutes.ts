@@ -2131,74 +2131,138 @@ export function registerHostRoutes(app: Express) {
   // STRIPE CONNECT & PAYMENT ENDPOINTS
   // =====================================================================
 
+  const startHostStripeOnboarding = async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe not configured" });
+      }
+
+      const host = await getOwnedHostForRequest(req);
+      if (!host) {
+        return res.status(404).json({ message: "Host profile not found" });
+      }
+
+      let accountId = host.stripeConnectAccountId;
+
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "US",
+          email: req.user.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "individual",
+          metadata: {
+            hostId: host.id,
+            businessName: host.businessName,
+          },
+        });
+
+        accountId = account.id;
+
+        await db
+          .update(hosts)
+          .set({
+            stripeConnectAccountId: accountId,
+            stripeConnectStatus: "pending",
+            stripeOnboardingCompleted: false,
+            stripeChargesEnabled: false,
+            stripePayoutsEnabled: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(hosts.id, host.id));
+      }
+
+      const baseUrl =
+        process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+      const normalizedBaseUrl = String(baseUrl || "").replace(/\/+$/, "");
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${normalizedBaseUrl}/host/dashboard?setup=refresh&hostId=${encodeURIComponent(String(host.id))}`,
+        return_url: `${normalizedBaseUrl}/host/dashboard?setup=complete&hostId=${encodeURIComponent(String(host.id))}`,
+        type: "account_onboarding",
+      });
+
+      res.json({ onboardingUrl: accountLink.url });
+    } catch (error: any) {
+      console.error("Error creating Stripe Connect account:", error);
+      res
+        .status(500)
+        .json({ message: "Failed to initiate Stripe onboarding" });
+    }
+  };
+
+  const checkHostStripeStatus = async (req: any, res: any) => {
+    try {
+      if (!stripe) {
+        return res.status(500).json({ message: "Stripe not configured" });
+      }
+
+      const host = await getOwnedHostForRequest(req);
+      if (!host) {
+        return res.status(404).json({ message: "Host profile not found" });
+      }
+
+      if (!host.stripeConnectAccountId) {
+        return res.json({
+          connected: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          onboardingCompleted: false,
+          connectStatus: "not_connected",
+        });
+      }
+
+      const account = await stripe.accounts.retrieve(host.stripeConnectAccountId);
+
+      await db
+        .update(hosts)
+        .set({
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeOnboardingCompleted: account.details_submitted,
+          stripeConnectStatus:
+            account.charges_enabled && account.payouts_enabled
+              ? "active"
+              : "pending",
+          updatedAt: new Date(),
+        })
+        .where(eq(hosts.id, host.id));
+
+      res.json({
+        connected: true,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        onboardingCompleted: account.details_submitted,
+        connectStatus:
+          account.charges_enabled && account.payouts_enabled
+            ? "active"
+            : "pending",
+        accountId: host.stripeConnectAccountId,
+      });
+    } catch (error: any) {
+      console.error("Error checking Stripe status:", error);
+      res.status(500).json({ message: "Failed to check Stripe status" });
+    }
+  };
+
   // Stripe Connect Onboarding: Host enables payments
   app.post(
     "/api/hosts/stripe/onboard",
     isAuthenticated,
+    startHostStripeOnboarding,
+  );
+  app.post(
+    "/api/hosts/:hostId/stripe/onboard",
+    isAuthenticated,
     async (req: any, res) => {
-      try {
-        if (!stripe) {
-          return res.status(500).json({ message: "Stripe not configured" });
-        }
-
-        const host = await getOwnedHostForRequest(req);
-        if (!host) {
-          return res.status(404).json({ message: "Host profile not found" });
-        }
-
-        let accountId = host.stripeConnectAccountId;
-
-        // Create Stripe Connect account if not exists
-        if (!accountId) {
-          const account = await stripe.accounts.create({
-            type: "express",
-            country: "US",
-            email: req.user.email,
-            capabilities: {
-              card_payments: { requested: true },
-              transfers: { requested: true },
-            },
-            business_type: "individual",
-            metadata: {
-              hostId: host.id,
-              businessName: host.businessName,
-            },
-          });
-
-          accountId = account.id;
-
-          // Save to database
-          await db
-            .update(hosts)
-            .set({
-              stripeConnectAccountId: accountId,
-              stripeConnectStatus: "pending",
-              stripeOnboardingCompleted: false,
-              stripeChargesEnabled: false,
-              stripePayoutsEnabled: false,
-              updatedAt: new Date(),
-            })
-            .where(eq(hosts.id, host.id));
-        }
-
-        // Create onboarding link
-        const baseUrl =
-          process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
-        const normalizedBaseUrl = String(baseUrl || "").replace(/\/+$/, "");
-        const accountLink = await stripe.accountLinks.create({
-          account: accountId,
-          refresh_url: `${normalizedBaseUrl}/host/dashboard?setup=refresh&hostId=${encodeURIComponent(String(host.id))}`,
-          return_url: `${normalizedBaseUrl}/host/dashboard?setup=complete&hostId=${encodeURIComponent(String(host.id))}`,
-          type: "account_onboarding",
-        });
-
-        res.json({ onboardingUrl: accountLink.url });
-      } catch (error: any) {
-        console.error("Error creating Stripe Connect account:", error);
-        res
-          .status(500)
-          .json({ message: "Failed to initiate Stripe onboarding" });
-      }
+      req.body = {
+        ...(req.body || {}),
+        hostId: String(req.params.hostId || "").trim(),
+      };
+      return startHostStripeOnboarding(req, res);
     },
   );
 
@@ -2206,61 +2270,17 @@ export function registerHostRoutes(app: Express) {
   app.get(
     "/api/hosts/stripe/status",
     isAuthenticated,
+    checkHostStripeStatus,
+  );
+  app.get(
+    "/api/hosts/:hostId/stripe/status",
+    isAuthenticated,
     async (req: any, res) => {
-      try {
-        if (!stripe) {
-          return res.status(500).json({ message: "Stripe not configured" });
-        }
-
-        const host = await getOwnedHostForRequest(req);
-        if (!host) {
-          return res.status(404).json({ message: "Host profile not found" });
-        }
-
-        if (!host.stripeConnectAccountId) {
-          return res.json({
-            connected: false,
-            chargesEnabled: false,
-            payoutsEnabled: false,
-            onboardingCompleted: false,
-            connectStatus: "not_connected",
-          });
-        }
-
-        const account = await stripe.accounts.retrieve(
-          host.stripeConnectAccountId,
-        );
-
-        // Update database with current status
-        await db
-          .update(hosts)
-          .set({
-            stripeChargesEnabled: account.charges_enabled,
-            stripePayoutsEnabled: account.payouts_enabled,
-            stripeOnboardingCompleted: account.details_submitted,
-            stripeConnectStatus:
-              account.charges_enabled && account.payouts_enabled
-                ? "active"
-                : "pending",
-            updatedAt: new Date(),
-          })
-          .where(eq(hosts.id, host.id));
-
-        res.json({
-          connected: true,
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          onboardingCompleted: account.details_submitted,
-          connectStatus:
-            account.charges_enabled && account.payouts_enabled
-              ? "active"
-              : "pending",
-          accountId: host.stripeConnectAccountId,
-        });
-      } catch (error: any) {
-        console.error("Error checking Stripe status:", error);
-        res.status(500).json({ message: "Failed to check Stripe status" });
-      }
+      req.query = {
+        ...(req.query || {}),
+        hostId: String(req.params.hostId || "").trim(),
+      };
+      return checkHostStripeStatus(req, res);
     },
   );
 

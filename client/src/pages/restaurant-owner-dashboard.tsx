@@ -110,6 +110,31 @@ interface RecommendationsAnalytics {
   clicks: number;
 }
 
+interface TruckBookingItem {
+  id: string;
+  eventId: string;
+  truckId: string;
+  status: string;
+  totalCents: number;
+  hostPriceCents: number;
+  platformFeeCents: number;
+  bookingConfirmedAt?: string | null;
+  cancelledAt?: string | null;
+  createdAt?: string | null;
+  event?: {
+    id: string;
+    date?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    status?: string | null;
+    host?: {
+      businessName?: string | null;
+      address?: string | null;
+      locationType?: string | null;
+    };
+  } | null;
+}
+
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -224,6 +249,13 @@ export default function RestaurantOwnerDashboard() {
   const { data: deals = [], isLoading: loadingDeals } = useQuery<Deal[]>({
     queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
     enabled: !!selectedRestaurant,
+  });
+
+  const { data: truckBookings = [], isLoading: loadingTruckBookings } = useQuery<
+    TruckBookingItem[]
+  >({
+    queryKey: ["/api/bookings/my-truck"],
+    enabled: !!user && (isRestaurantOwner || isFoodTruck || isAdmin || isStaff),
   });
 
   // Fetch dashboard stats
@@ -391,6 +423,9 @@ export default function RestaurantOwnerDashboard() {
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
+  );
+  const visibleTruckBookings = truckBookings.filter(
+    (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
   );
   const liveShareUrl = selectedRestaurant
     ? `/restaurant/${selectedRestaurant}?live=1`
@@ -1050,6 +1085,38 @@ export default function RestaurantOwnerDashboard() {
     }
   };
 
+  const bookingCancelMutation = useMutation({
+    mutationFn: async (bookingId: string) => {
+      const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: "Cancelled by truck owner" }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || "Failed to cancel booking");
+      }
+
+      return response.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/bookings/my-truck"] });
+      toast({
+        title: "Booking cancelled",
+        description: "Your booking was cancelled. No refund was issued.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to cancel booking",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (loadingRestaurants) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--bg-layered)]">
@@ -1204,6 +1271,7 @@ export default function RestaurantOwnerDashboard() {
             <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
             MealScout Credits
           </TabsTrigger>
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
           <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
             <Truck className="mr-1 hidden h-4 w-4 sm:block" />
             Food Truck
@@ -2071,6 +2139,134 @@ export default function RestaurantOwnerDashboard() {
               }}
             />
           )}
+        </TabsContent>
+
+        <TabsContent value="bookings" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Event Bookings
+              </CardTitle>
+              <CardDescription>
+                Track upcoming paid event bookings for your selected truck and cancel when needed. Confirmed cancellations do not issue refunds.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Total bookings</p>
+                  <p className="mt-1 text-2xl font-semibold">{visibleTruckBookings.length}</p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Confirmed</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {visibleTruckBookings.filter((booking) => booking.status === "confirmed").length}
+                  </p>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">Upcoming spend</p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    ${
+                      (
+                        visibleTruckBookings
+                          .filter((booking) => booking.status === "confirmed" || booking.status === "pending")
+                          .reduce((sum, booking) => sum + Number(booking.totalCents || 0), 0) / 100
+                      ).toFixed(2)
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {loadingTruckBookings ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                  Loading bookings...
+                </div>
+              ) : visibleTruckBookings.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  No event bookings yet for this truck.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {visibleTruckBookings.map((booking) => {
+                    const canCancel =
+                      booking.status === "pending" || booking.status === "confirmed";
+                    const eventDate = booking.event?.date
+                      ? new Date(booking.event.date)
+                      : null;
+
+                    return (
+                      <div key={booking.id} className="rounded-lg border p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold">
+                                {booking.event?.host?.businessName || "Host venue"}
+                              </p>
+                              <Badge
+                                variant={
+                                  booking.status === "confirmed"
+                                    ? "default"
+                                    : booking.status === "pending"
+                                      ? "secondary"
+                                      : "outline"
+                                }
+                              >
+                                {booking.status}
+                              </Badge>
+                            </div>
+                            {booking.event?.host?.address ? (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <MapPin className="h-4 w-4" />
+                                <span>{booking.event.host.address}</span>
+                              </div>
+                            ) : null}
+                            {eventDate ? (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span>
+                                  {format(eventDate, "EEE, MMM d")}
+                                  {booking.event?.startTime ? ` at ${booking.event.startTime}` : ""}
+                                  {booking.event?.endTime ? ` - ${booking.event.endTime}` : ""}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-2 text-sm lg:text-right">
+                            <p className="font-semibold">
+                              ${(Number(booking.totalCents || 0) / 100).toFixed(2)} total
+                            </p>
+                            <p className="text-muted-foreground">
+                              Host fee ${(Number(booking.hostPriceCents || 0) / 100).toFixed(2)} + platform fee ${(Number(booking.platformFeeCents || 0) / 100).toFixed(2)}
+                            </p>
+                            {canCancel ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={bookingCancelMutation.isPending}
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      "Cancel this booking? No refund will be issued.",
+                                    )
+                                  ) {
+                                    bookingCancelMutation.mutate(booking.id);
+                                  }
+                                }}
+                              >
+                                Cancel Booking
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="foodtruck" className="space-y-6">

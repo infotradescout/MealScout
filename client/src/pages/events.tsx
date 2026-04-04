@@ -382,6 +382,17 @@ export default function EventsPage() {
                     </div>
                   )}
 
+                  {event.requiresPayment && event.hostPriceCents ? (
+                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[color:var(--accent-text)]/10 text-[10px] font-bold text-[color:var(--accent-text)]">
+                        $
+                      </span>
+                      <span>
+                        ${(Number(event.hostPriceCents) / 100).toFixed(2)} host fee + $10 platform fee
+                      </span>
+                    </div>
+                  ) : null}
+
                   {/* Description */}
                   {event.description && (
                     <p className="text-sm text-[color:var(--text-muted)] line-clamp-3">

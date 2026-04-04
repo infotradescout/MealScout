@@ -1683,6 +1683,12 @@ export function registerEventRoutes(app: Express) {
         if (!event) {
           return res.status(404).json({ message: "Event not found" });
         }
+        if (event.eventType !== "parking_pass") {
+          return res.status(400).json({
+            message:
+              "Paid checkout is only available for Parking Pass bookings",
+          });
+        }
         if (!event.requiresPayment) {
           return res
             .status(400)

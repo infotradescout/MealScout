@@ -524,6 +524,13 @@ function HostDashboard() {
     host.stripePayoutsEnabled &&
     host.stripeOnboardingCompleted,
   );
+  const stripeConnectionState = !host.stripeConnectAccountId
+    ? "Not connected"
+    : hostStripePayoutReady
+      ? "Payouts enabled"
+      : host.stripeOnboardingCompleted
+        ? "Waiting on Stripe checks"
+        : "Onboarding in progress";
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 bg-[var(--bg-layered)] min-h-screen">
@@ -557,6 +564,71 @@ function HostDashboard() {
           </AlertDescription>
         </Alert>
       )}
+
+      <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
+              Stripe Payout Setup
+            </h2>
+            <p className="text-sm text-[color:var(--text-secondary)]">
+              Track onboarding progress for paid bookings and host payouts.
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              hostStripePayoutReady
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-amber-100 text-amber-900"
+            }`}
+          >
+            {stripeConnectionState}
+          </span>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+            <p className="text-xs text-[color:var(--text-muted)]">Account</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+              {host.stripeConnectAccountId ? "Connected" : "Not started"}
+            </p>
+          </div>
+          <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+            <p className="text-xs text-[color:var(--text-muted)]">Onboarding</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+              {host.stripeOnboardingCompleted ? "Submitted" : "Incomplete"}
+            </p>
+          </div>
+          <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+            <p className="text-xs text-[color:var(--text-muted)]">Charges</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+              {host.stripeChargesEnabled ? "Enabled" : "Pending"}
+            </p>
+          </div>
+          <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+            <p className="text-xs text-[color:var(--text-muted)]">Payouts</p>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+              {host.stripePayoutsEnabled ? "Enabled" : "Pending"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            onClick={handleEnablePayments}
+            className="bg-[color:var(--accent-text)] hover:bg-[color:var(--action-hover)]"
+          >
+            {host.stripeConnectAccountId ? "Resume Stripe Setup" : "Start Stripe Setup"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={refreshStripeStatus}
+            disabled={isCheckingStripe}
+          >
+            {isCheckingStripe ? "Checking..." : "Refresh Stripe Status"}
+          </Button>
+        </div>
+      </div>
 
       <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
