@@ -426,19 +426,19 @@ const SubscriptionManagement = () => {
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Create unlimited meal deals
+                    Post and distribute specials
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Reach customers within 10km radius
+                    Off-platform schedule management
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Analytics and insights dashboard
+                    One-click live location updates
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Priority customer support
+                    Social auto-post controls and premium analytics
                   </li>
                 </ul>
               </div>

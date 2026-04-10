@@ -1865,8 +1865,8 @@ export default function RestaurantOwnerDashboard() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground max-w-md">
-                      Upgrade to see how many customers have favorited your
-                      restaurant and track recommendation performance
+                      Upgrade for premium analytics on special performance and
+                      growth trends.
                     </p>
                     <Link href="/subscribe">
                       <Button

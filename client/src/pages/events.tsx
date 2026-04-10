@@ -363,8 +363,8 @@ export default function EventsPage() {
               <CardContent className="p-6 space-y-3">
                 <h2 className="text-lg font-semibold">Premium Required</h2>
                 <p className="text-sm text-[color:var(--text-secondary)]">
-                  Event coordinator access is a paid feature. Upgrade to post
-                  and manage events.
+                  Upgrade to post events, manage truck interest, and run event
+                  workflows.
                 </p>
                 <Button
                   onClick={() => (window.location.href = "/subscription")}

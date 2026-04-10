@@ -4762,9 +4762,9 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-4">
                 {!hasPremiumTruckTools && (
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                    Off-platform schedule, one-tap live location, and social
-                    auto-post are premium tools. Host-location bookings still
-                    appear in your calendar.
+                    Premium unlocks off-platform schedule, one-tap live
+                    location, and social auto-post controls. Host-location
+                    bookings still appear in your calendar on free.
                   </div>
                 )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
