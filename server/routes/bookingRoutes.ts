@@ -7,6 +7,7 @@ import {
   events,
   hosts,
   restaurants,
+  telemetryEvents,
 } from "@shared/schema";
 import { eq, and, or, desc, gte, inArray } from "drizzle-orm";
 import { isAuthenticated } from "../unifiedAuth";
@@ -637,6 +638,23 @@ export function registerBookingRoutes(
           notes: parsed.notes || null,
           isPublic: parsed.isPublic ?? true,
         });
+
+        try {
+          await db.insert(telemetryEvents).values({
+            eventName: "premium_manual_schedule_used",
+            userId: req.user.id,
+            properties: {
+              truckId,
+              scheduleId: created.id,
+              date: parsed.date,
+            },
+          });
+        } catch (trackingError) {
+          console.warn(
+            "Failed to track manual schedule usage:",
+            trackingError,
+          );
+        }
 
         res.json(created);
       } catch (error) {

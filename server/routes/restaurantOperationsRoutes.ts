@@ -1,8 +1,9 @@
 import type { Express } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
+import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { checkRateLimit } from "../documentValidation";
 import { isAuthenticated } from "../unifiedAuth";
@@ -11,6 +12,9 @@ import { broadcastLocationUpdate, broadcastStatusUpdate } from "../websocket";
 import {
   insertFoodTruckLocationSchema,
   restaurants,
+  telemetryEvents,
+  truckManualSchedules,
+  truckParkingReports,
   updateRestaurantLocationSchema,
   updateRestaurantMobileSettingsSchema,
   updateRestaurantOperatingHoursSchema,
@@ -34,6 +38,104 @@ export function registerRestaurantOperationsRoutes(
     hasBusinessDistributionAccess,
   }: RestaurantOperationsRouteDependencies,
 ) {
+  const buildPremiumWeeklySummary = async (userId: string) => {
+    const now = new Date();
+    const windowStart = new Date(now);
+    windowStart.setHours(0, 0, 0, 0);
+    windowStart.setDate(windowStart.getDate() - 6);
+
+    const ownedRestaurants = await db
+      .select({ id: restaurants.id })
+      .from(restaurants)
+      .where(eq(restaurants.ownerId, userId));
+
+    const restaurantIds = ownedRestaurants.map((restaurant) => restaurant.id);
+
+    if (restaurantIds.length === 0) {
+      return {
+        hasAccess: true,
+        weekStart: windowStart.toISOString(),
+        weekEnd: now.toISOString(),
+        restaurantCount: 0,
+        stopsCovered: 0,
+        liveLocationActivations: 0,
+        manualScheduleUsage: 0,
+        parkingReportsCompleted: 0,
+      };
+    }
+
+    const [manualSchedules, parkingReports, liveLocationEvents] =
+      await Promise.all([
+        db
+          .select({
+            id: truckManualSchedules.id,
+            date: truckManualSchedules.date,
+            address: truckManualSchedules.address,
+          })
+          .from(truckManualSchedules)
+          .where(
+            and(
+              inArray(truckManualSchedules.truckId, restaurantIds),
+              gte(truckManualSchedules.createdAt, windowStart),
+            ),
+          ),
+        db
+          .select({
+            id: truckParkingReports.id,
+            date: truckParkingReports.date,
+            address: truckParkingReports.address,
+            locationName: truckParkingReports.locationName,
+          })
+          .from(truckParkingReports)
+          .where(
+            and(
+              inArray(truckParkingReports.truckId, restaurantIds),
+              gte(truckParkingReports.createdAt, windowStart),
+            ),
+          ),
+        db
+          .select({ id: telemetryEvents.id })
+          .from(telemetryEvents)
+          .where(
+            and(
+              eq(telemetryEvents.eventName, "premium_live_location_used"),
+              eq(telemetryEvents.userId, userId),
+              gte(telemetryEvents.createdAt, windowStart),
+            ),
+          ),
+      ]);
+
+    const stopKeys = new Set<string>();
+    for (const schedule of manualSchedules) {
+      const dateKey = schedule.date
+        ? schedule.date.toISOString().split("T")[0]
+        : "unknown-date";
+      const addressKey = String(schedule.address || "unknown-address").trim();
+      stopKeys.add(`${dateKey}:${addressKey}`);
+    }
+
+    for (const report of parkingReports) {
+      const dateKey = report.date
+        ? report.date.toISOString().split("T")[0]
+        : "unknown-date";
+      const place = String(
+        report.address || report.locationName || report.id || "unknown-place",
+      ).trim();
+      stopKeys.add(`${dateKey}:${place}`);
+    }
+
+    return {
+      hasAccess: true,
+      weekStart: windowStart.toISOString(),
+      weekEnd: now.toISOString(),
+      restaurantCount: restaurantIds.length,
+      stopsCovered: stopKeys.size,
+      liveLocationActivations: liveLocationEvents.length,
+      manualScheduleUsage: manualSchedules.length,
+      parkingReportsCompleted: parkingReports.length,
+    };
+  };
+
   app.get(
     "/api/restaurants/my-restaurants",
     isAuthenticated,
@@ -46,6 +148,100 @@ export function registerRestaurantOperationsRoutes(
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/business/premium-weekly-summary",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required for weekly summary.",
+            hasAccess: false,
+          });
+        }
+
+        const summary = await buildPremiumWeeklySummary(req.user.id);
+
+        await db.insert(telemetryEvents).values({
+          eventName: "premium_summary_viewed",
+          userId: req.user.id,
+          properties: {
+            weekStart: summary.weekStart,
+            weekEnd: summary.weekEnd,
+            restaurantCount: summary.restaurantCount,
+          },
+        });
+
+        res.json(summary);
+      } catch (error) {
+        console.error("Error fetching premium weekly summary:", error);
+        res.status(500).json({ message: "Failed to fetch weekly summary" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/business/premium-weekly-summary/email",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required to email weekly summary.",
+          });
+        }
+
+        const user = await storage.getUser(req.user.id);
+        const recipientEmail = String(user?.email || "").trim();
+        if (!recipientEmail) {
+          return res
+            .status(400)
+            .json({ message: "No account email found for this user." });
+        }
+
+        const summary = await buildPremiumWeeklySummary(req.user.id);
+        const recipientName =
+          String(user?.firstName || "").trim() || "MealScout operator";
+
+        const sent = await emailService.sendPremiumWeeklySummaryEmail(
+          recipientEmail,
+          recipientName,
+          {
+            weekStart: summary.weekStart,
+            weekEnd: summary.weekEnd,
+            stopsCovered: summary.stopsCovered,
+            liveLocationActivations: summary.liveLocationActivations,
+            manualScheduleUsage: summary.manualScheduleUsage,
+            parkingReportsCompleted: summary.parkingReportsCompleted,
+          },
+        );
+
+        if (!sent) {
+          return res.status(500).json({
+            message: "Failed to send weekly summary email.",
+          });
+        }
+
+        await db.insert(telemetryEvents).values({
+          eventName: "premium_summary_emailed",
+          userId: req.user.id,
+          properties: {
+            recipientEmail,
+            weekStart: summary.weekStart,
+            weekEnd: summary.weekEnd,
+          },
+        });
+
+        res.json({ ok: true });
+      } catch (error) {
+        console.error("Error emailing premium weekly summary:", error);
+        res.status(500).json({ message: "Failed to send weekly summary" });
       }
     },
   );
@@ -417,6 +613,21 @@ export function registerRestaurantOperationsRoutes(
         );
 
         broadcastLocationUpdate(restaurantId, location);
+
+        try {
+          await db.insert(telemetryEvents).values({
+            eventName: "premium_live_location_used",
+            userId: req.user.id,
+            properties: {
+              restaurantId,
+              latitude: location.latitude,
+              longitude: location.longitude,
+            },
+          });
+        } catch (trackingError) {
+          console.warn("Failed to track live location usage:", trackingError);
+        }
+
         res.json({ success: true, location });
       } catch (error) {
         console.error("Error updating location:", error);

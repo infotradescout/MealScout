@@ -29,6 +29,15 @@ class EmailDeliveryAudit {
   private attempts: EmailAttempt[] = [];
   private maxItems = 200;
 
+
+interface PremiumWeeklySummaryEmailData {
+  weekStart: string;
+  weekEnd: string;
+  stopsCovered: number;
+  liveLocationActivations: number;
+  manualScheduleUsage: number;
+  parkingReportsCompleted: number;
+}
   add(attempt: EmailAttempt) {
     this.attempts.unshift(attempt);
     if (this.attempts.length > this.maxItems) {
@@ -1704,6 +1713,79 @@ export class EmailService {
 
     return await this.sendEmail({
       to: hostEmail,
+      subject: title,
+      html,
+      text,
+    });
+  }
+
+  async sendPremiumWeeklySummaryEmail(
+    to: string,
+    operatorName: string,
+    data: PremiumWeeklySummaryEmailData,
+  ): Promise<boolean> {
+    if (!this.isConfigured) {
+      console.warn(
+        "Email service not configured. Skipping premium weekly summary email.",
+      );
+      return false;
+    }
+
+    const start = new Date(data.weekStart);
+    const end = new Date(data.weekEnd);
+    const weekStartLabel = Number.isNaN(start.getTime())
+      ? data.weekStart
+      : start.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+    const weekEndLabel = Number.isNaN(end.getTime())
+      ? data.weekEnd
+      : end.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+
+    const title = `Your Premium Ops Weekly Summary (${weekStartLabel} - ${weekEndLabel})`;
+    const content = `
+      <p>Hi ${operatorName},</p>
+      <p>Here is your Premium Ops summary for <strong>${weekStartLabel}</strong> to <strong>${weekEndLabel}</strong>.</p>
+
+      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0;">
+        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <div style="font-size: 12px; color: #64748b;">Stops Covered</div>
+          <div style="font-size: 20px; font-weight: 700; color: #0f172a;">${data.stopsCovered}</div>
+        </div>
+        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <div style="font-size: 12px; color: #64748b;">Live Location Activations</div>
+          <div style="font-size: 20px; font-weight: 700; color: #0f172a;">${data.liveLocationActivations}</div>
+        </div>
+        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <div style="font-size: 12px; color: #64748b;">Manual Schedule Usage</div>
+          <div style="font-size: 20px; font-weight: 700; color: #0f172a;">${data.manualScheduleUsage}</div>
+        </div>
+        <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;">
+          <div style="font-size: 12px; color: #64748b;">Parking Reports Completed</div>
+          <div style="font-size: 20px; font-weight: 700; color: #0f172a;">${data.parkingReportsCompleted}</div>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin: 26px 0;">
+        <a href="https://mealscout.io/subscription/manage" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 700;">Open Premium Dashboard</a>
+      </div>
+
+      <p style="font-size: 12px; color: #64748b; margin-top: 24px;">
+        This summary highlights operator activity only and does not guarantee revenue outcomes.
+      </p>
+    `;
+
+    const html = EmailTemplates.getBaseTemplate(title, content);
+    const text = `Hi ${operatorName}, weekly premium summary (${weekStartLabel} - ${weekEndLabel}): stops covered ${data.stopsCovered}, live location activations ${data.liveLocationActivations}, manual schedule usage ${data.manualScheduleUsage}, parking reports completed ${data.parkingReportsCompleted}. Open: https://mealscout.io/subscription/manage`;
+
+    return await this.sendEmail({
+      to,
       subject: title,
       html,
       text,

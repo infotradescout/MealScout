@@ -76,6 +76,17 @@ interface ApiSubscriptionStatus {
   cancelAtPeriodEnd?: boolean;
 }
 
+interface PremiumWeeklySummary {
+  hasAccess: boolean;
+  weekStart: string;
+  weekEnd: string;
+  restaurantCount: number;
+  stopsCovered: number;
+  liveLocationActivations: number;
+  manualScheduleUsage: number;
+  parkingReportsCompleted: number;
+}
+
 const PaymentForm = ({
   clientSecret,
   intentType = "payment",
@@ -307,7 +318,41 @@ const SubscriptionManagement = () => {
     refetchOnWindowFocus: false,
   });
 
+  const {
+    data: weeklySummary,
+    isLoading: isWeeklySummaryLoading,
+    isError: isWeeklySummaryError,
+  } = useQuery<PremiumWeeklySummary>({
+    queryKey: ["/api/business/premium-weekly-summary"],
+    enabled: !!user && subscriptionStatus?.status === "active",
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  const emailSummaryMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest(
+        "POST",
+        "/api/business/premium-weekly-summary/email",
+      );
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Summary Sent",
+        description: "Your weekly premium summary was emailed successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Email Failed",
+        description: error.message || "Failed to send weekly summary email",
+        variant: "destructive",
+      });
+    },
+  });
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
@@ -364,6 +409,16 @@ const SubscriptionManagement = () => {
     return new Date(timestamp * 1000).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatSummaryDate = (value?: string) => {
+    if (!value) return "N/A";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "N/A";
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
       day: "numeric",
     });
   };
@@ -491,6 +546,83 @@ const SubscriptionManagement = () => {
             )}
         </CardContent>
       </Card>
+
+      {subscriptionStatus?.status === "active" && (
+        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <CardHeader>
+            <CardTitle>Premium Weekly Summary</CardTitle>
+            <CardDescription>
+              Activity snapshot from {formatSummaryDate(weeklySummary?.weekStart)}
+              {" "}to {formatSummaryDate(weeklySummary?.weekEnd)}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isWeeklySummaryLoading ? (
+              <div className="text-sm text-muted-foreground">
+                Loading weekly summary...
+              </div>
+            ) : isWeeklySummaryError || !weeklySummary ? (
+              <div className="text-sm text-muted-foreground">
+                Weekly summary is temporarily unavailable.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">
+                      Stops Covered
+                    </div>
+                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
+                      {weeklySummary.stopsCovered}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">
+                      Live Location Activations
+                    </div>
+                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
+                      {weeklySummary.liveLocationActivations}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">
+                      Manual Schedule Usage
+                    </div>
+                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
+                      {weeklySummary.manualScheduleUsage}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[color:var(--border-subtle)] p-3">
+                    <div className="text-xs text-[color:var(--text-muted)]">
+                      Parking Reports Completed
+                    </div>
+                    <div className="text-xl font-semibold text-[color:var(--text-primary)]">
+                      {weeklySummary.parkingReportsCompleted}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-[color:var(--text-secondary)]">
+                  Tracking across {weeklySummary.restaurantCount} linked business
+                  {weeklySummary.restaurantCount === 1 ? "" : "es"}.
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => emailSummaryMutation.mutate()}
+                  disabled={emailSummaryMutation.isPending}
+                  data-testid="button-email-weekly-summary"
+                >
+                  {emailSummaryMutation.isPending
+                    ? "Sending..."
+                    : "Email Me This Summary"}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
         <CardHeader>
