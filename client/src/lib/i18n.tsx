@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type SupportedLocale = "en" | "es";
 
@@ -117,7 +124,8 @@ const detectInitialLocale = (): SupportedLocale => {
 };
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<SupportedLocale>(detectInitialLocale);
+  const [locale, setLocaleState] =
+    useState<SupportedLocale>(detectInitialLocale);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -133,7 +141,8 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     () => ({
       locale,
       setLocale: setLocaleState,
-      toggleLocale: () => setLocaleState((current) => (current === "en" ? "es" : "en")),
+      toggleLocale: () =>
+        setLocaleState((current) => (current === "en" ? "es" : "en")),
       t: (key, fallback) => translations[locale][key] ?? fallback ?? key,
     }),
     [locale],
