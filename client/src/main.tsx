@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
+import { LocaleProvider } from "@/lib/i18n";
 
 function installPerformanceCompatShim() {
   if (typeof window === "undefined") return;
@@ -121,5 +122,9 @@ if (import.meta.env.PROD && shouldEnablePwaRuntime() && "serviceWorker" in navig
   });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <LocaleProvider>
+    <App />
+  </LocaleProvider>,
+);
 

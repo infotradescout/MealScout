@@ -20,17 +20,43 @@ import {
   LayoutDashboard,
   ParkingSquare,
   Truck,
+  Languages,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useI18n } from "@/lib/i18n";
 
 type NavItem = {
   path?: string;
   icon: ComponentType<{ className?: string }>;
-  label: string;
+  labelKey?:
+    | "nav.food"
+    | "nav.map"
+    | "nav.parkingPass"
+    | "nav.video"
+    | "nav.profile"
+    | "nav.dashboard"
+    | "nav.favorites"
+    | "nav.createAccount"
+    | "nav.claimTruck"
+    | "nav.events"
+    | "nav.host"
+    | "nav.forRestaurants"
+    | "nav.forBars"
+    | "nav.staff"
+    | "nav.createSpecial"
+    | "nav.subscription"
+    | "nav.supplies"
+    | "nav.report"
+    | "nav.admin"
+    | "nav.controlCenter"
+    | "nav.affiliates"
+    | "nav.featuredSpecials";
+  fallbackLabel: string;
   onClick?: () => void;
   isBug?: boolean;
+  testId?: string;
 };
 
 type NavigationProps = {
@@ -46,6 +72,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
+  const { t, locale, toggleLocale } = useI18n();
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -91,14 +118,20 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       });
 
       toast({
-        title: "Bug report sent!",
-        description: "Thank you for helping us improve MealScout.",
+        title: t("toast.bugSentTitle", "Bug report sent!"),
+        description: t(
+          "toast.bugSentDescription",
+          "Thank you for helping us improve MealScout.",
+        ),
       });
     } catch (error) {
       console.error("Failed to submit bug report:", error);
       toast({
-        title: "Failed to send report",
-        description: "Please try again or contact support.",
+        title: t("toast.bugFailedTitle", "Failed to send report"),
+        description: t(
+          "toast.bugFailedDescription",
+          "Please try again or contact support.",
+        ),
         variant: "destructive",
       });
     } finally {
@@ -166,64 +199,136 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   }
   // Shared core nav: Food (home), Map, Video, Profile (only when logged in)
   const sharedNavItems: NavItem[] = [
-    { path: "/", icon: UtensilsCrossed, label: "Food" },
-    { path: "/map", icon: MapPin, label: "Map" },
+    { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+    { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
     ...(user && canSeeParkingPassNav
-      ? [{ path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" }]
+      ? [
+          {
+            path: "/parking-pass",
+            icon: ParkingSquare,
+            labelKey: "nav.parkingPass",
+            fallbackLabel: "Parking Pass",
+          },
+        ]
       : []),
-    { path: "/video", icon: Clapperboard, label: "Video" },
-    ...(user ? [{ path: "/profile", icon: User, label: "Profile" }] : []),
+    { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+    ...(user
+      ? [{ path: "/profile", icon: User, labelKey: "nav.profile", fallbackLabel: "Profile" }]
+      : []),
   ];
 
   const customerExtras: NavItem[] = [
-    { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/favorites", icon: Heart, label: "Favorites" },
+    {
+      path: "/dashboard",
+      icon: LayoutDashboard,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
+    { path: "/favorites", icon: Heart, labelKey: "nav.favorites", fallbackLabel: "Favorites" },
   ];
 
   const unauthenticatedExtras: NavItem[] = [
-    { path: "/customer-signup", icon: UserPlus, label: "Create Account" },
+    {
+      path: "/customer-signup",
+      icon: UserPlus,
+      labelKey: "nav.createAccount",
+      fallbackLabel: "Create Account",
+    },
     {
       path: "/restaurant-signup?businessType=food_truck&claim=1",
       icon: Truck,
-      label: "Claim Truck",
+      labelKey: "nav.claimTruck",
+      fallbackLabel: "Claim Truck",
     },
   ];
 
   // Host-specific flows: dashboard + host marketing and discovery
   const hostExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, label: "Events" },
-    { path: "/host/dashboard", icon: Users, label: "Host" },
-    { path: "/for-restaurants", icon: Store, label: "For Restaurants" },
-    { path: "/for-bars", icon: Store, label: "For Bars" },
+    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
+    {
+      path: "/for-restaurants",
+      icon: Store,
+      labelKey: "nav.forRestaurants",
+      fallbackLabel: "For Restaurants",
+    },
+    { path: "/for-bars", icon: Store, labelKey: "nav.forBars", fallbackLabel: "For Bars" },
   ];
 
   // Staff should be able to jump into every major website flow
   // Including all business types (restaurant, food truck, bar), host, and event coordinator capabilities
   const staffExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, label: "Events" },
-    { path: "/staff", icon: Users, label: "Staff" },
-    { path: "/host/dashboard", icon: Users, label: "Host" },
-    { path: "/restaurant-owner-dashboard", icon: Store, label: "Dashboard" },
-    { path: "/deal-creation", icon: Plus, label: "Create Special" },
-    { path: "/subscription", icon: BarChart3, label: "Subscription" },
-    { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
-    { path: "/for-restaurants", icon: Store, label: "For Restaurants" },
-    { path: "/for-bars", icon: Store, label: "For Bars" },
-    { path: "/deals/featured", icon: Receipt, label: "Featured Specials" },
+    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+    { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
+    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
+    {
+      path: "/restaurant-owner-dashboard",
+      icon: Store,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
+    {
+      path: "/deal-creation",
+      icon: Plus,
+      labelKey: "nav.createSpecial",
+      fallbackLabel: "Create Special",
+    },
+    {
+      path: "/subscription",
+      icon: BarChart3,
+      labelKey: "nav.subscription",
+      fallbackLabel: "Subscription",
+    },
+    {
+      path: "/parking-pass",
+      icon: ParkingSquare,
+      labelKey: "nav.parkingPass",
+      fallbackLabel: "Parking Pass",
+    },
+    {
+      path: "/for-restaurants",
+      icon: Store,
+      labelKey: "nav.forRestaurants",
+      fallbackLabel: "For Restaurants",
+    },
+    { path: "/for-bars", icon: Store, labelKey: "nav.forBars", fallbackLabel: "For Bars" },
+    {
+      path: "/deals/featured",
+      icon: Receipt,
+      labelKey: "nav.featuredSpecials",
+      fallbackLabel: "Featured Specials",
+    },
   ];
 
   const restaurantOwnerExtras: NavItem[] = [
-    { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { path: "/deal-creation", icon: Plus, label: "Create Special" },
-    { path: "/subscription", icon: BarChart3, label: "Subscription" },
-    { path: "/suppliers", icon: Store, label: "Supplies" },
+    {
+      path: "/dashboard",
+      icon: LayoutDashboard,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
+    {
+      path: "/deal-creation",
+      icon: Plus,
+      labelKey: "nav.createSpecial",
+      fallbackLabel: "Create Special",
+    },
+    {
+      path: "/subscription",
+      icon: BarChart3,
+      labelKey: "nav.subscription",
+      fallbackLabel: "Subscription",
+    },
+    { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
   ];
 
   const bugNavItem: NavItem = {
-    label: "Report",
+    labelKey: "nav.report",
+    fallbackLabel: "Report",
     icon: Bug,
     onClick: handleBugReport,
     isBug: true,
+    testId: "report",
   };
 
   const mergeNavItems = (...groups: NavItem[][]): NavItem[] => {
@@ -231,7 +336,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     const result: NavItem[] = [];
     for (const group of groups) {
       for (const item of group) {
-        const key = item.path ? `path:${item.path}` : `label:${item.label}`;
+        const key = item.path ? `path:${item.path}` : `label:${item.fallbackLabel}`;
         if (seen.has(key)) continue;
         seen.add(key);
         result.push(item);
@@ -242,14 +347,29 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   // Admins should see every flow including all business types, host, and event coordinator capabilities
   const adminNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
-    { path: "/admin/dashboard", icon: Shield, label: "Admin" },
-    { path: "/admin/control-center", icon: LayoutDashboard, label: "Control Center" },
-    { path: "/admin/affiliates", icon: Users, label: "Affiliates" },
-    { path: "/staff", icon: Users, label: "Staff" },
-    { path: "/events", icon: Calendar, label: "Events" },
-    { path: "/host/dashboard", icon: Users, label: "Host" },
+    { path: "/admin/dashboard", icon: Shield, labelKey: "nav.admin", fallbackLabel: "Admin" },
+    {
+      path: "/admin/control-center",
+      icon: LayoutDashboard,
+      labelKey: "nav.controlCenter",
+      fallbackLabel: "Control Center",
+    },
+    {
+      path: "/admin/affiliates",
+      icon: Users,
+      labelKey: "nav.affiliates",
+      fallbackLabel: "Affiliates",
+    },
+    { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
+    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
     ...restaurantOwnerExtras,
-    { path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" },
+    {
+      path: "/parking-pass",
+      icon: ParkingSquare,
+      labelKey: "nav.parkingPass",
+      fallbackLabel: "Parking Pass",
+    },
     ...customerExtras,
   ]);
 
@@ -275,13 +395,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     customerExtras,
     hostExtras,
     canSeeParkingPassNav
-      ? [{ path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" }]
+      ? [
+          {
+            path: "/parking-pass",
+            icon: ParkingSquare,
+            labelKey: "nav.parkingPass",
+            fallbackLabel: "Parking Pass",
+          },
+        ]
       : [],
   );
 
   const eventCoordinatorExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, label: "Events" },
-    { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+    {
+      path: "/dashboard",
+      icon: LayoutDashboard,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
   ];
 
   const eventCoordinatorNavItems: NavItem[] = mergeNavItems(
@@ -293,16 +425,28 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     sharedNavItems,
     customerExtras,
     [
-      { path: "/events", icon: Calendar, label: "Events" },
-      { path: "/suppliers", icon: Store, label: "Supplies" },
+      { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+      { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
       ...(canSeeParkingPassNav
-        ? [{ path: "/parking-pass", icon: ParkingSquare, label: "Parking Pass" }]
+        ? [
+            {
+              path: "/parking-pass",
+              icon: ParkingSquare,
+              labelKey: "nav.parkingPass",
+              fallbackLabel: "Parking Pass",
+            },
+          ]
         : []),
     ],
   );
 
   const supplierExtras: NavItem[] = [
-    { path: "/supplier/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    {
+      path: "/supplier/dashboard",
+      icon: LayoutDashboard,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
   ];
   const supplierNavItems: NavItem[] = mergeNavItems(sharedNavItems, supplierExtras);
 
@@ -344,6 +488,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <div data-nav-root={scope} className="hidden lg:block fixed top-4 right-4 z-50">
         <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleLocale}
+              className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)] transition-colors"
+              aria-label={
+                locale === "en"
+                  ? t("language.switchToSpanish", "Switch language to Spanish")
+                  : t("language.switchToEnglish", "Switch language to English")
+              }
+            >
+              <Languages className="h-4 w-4" />
+              <span>{locale === "en" ? "ES" : "EN"}</span>
+            </button>
             {desktopQuickActions.map((item) =>
               item.path ? (
                 <Link
@@ -354,10 +511,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                       ? "bg-[color:var(--accent-text)] text-white"
                       : "bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)]"
                   }`}
-                  aria-label={item.label}
+                  aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 >
                   <item.icon className="h-4 w-4" />
-                  <span className="hidden lg:inline">{item.label}</span>
+                  <span className="hidden lg:inline">
+                    {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                  </span>
                 </Link>
               ) : null,
             )}
@@ -376,25 +535,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
                   location === item.path ? "nav-link--active" : "nav-link--inactive"
                 }`}
-                data-testid={`nav-${item.label.toLowerCase()}`}
-                aria-label={item.label}
+                data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
+                aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 aria-current={location === item.path ? "page" : undefined}
               >
                 <item.icon className="w-5 h-5" />
                 <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                  {item.label}
+                  {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 </span>
               </Link>
             ) : (
               <button
-                key={item.label}
+                key={item.fallbackLabel}
                 onClick={item.onClick}
                 disabled={isReporting}
                 className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
                   item.isBug ? "nav-bug" : "nav-link--inactive"
                 } ${isReporting ? "opacity-80 cursor-not-allowed" : ""}`}
-                data-testid={`nav-${item.label.toLowerCase()}`}
-                aria-label={item.label}
+                data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
+                aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
               >
                 {isReporting ? (
                   <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -402,11 +561,27 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   <item.icon className="w-5 h-5" />
                 )}
                 <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                  {item.label}
+                  {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 </span>
               </button>
             ),
           )}
+          <button
+            type="button"
+            onClick={toggleLocale}
+            className="nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 nav-link--inactive"
+            data-testid="nav-language"
+            aria-label={
+              locale === "en"
+                ? t("language.switchToSpanish", "Switch language to Spanish")
+                : t("language.switchToEnglish", "Switch language to English")
+            }
+          >
+            <Languages className="w-5 h-5" />
+            <span className="text-[11px] leading-tight font-semibold tracking-normal">
+              {locale === "en" ? "ES" : "EN"}
+            </span>
+          </button>
         </div>
       </div>
     </nav>
