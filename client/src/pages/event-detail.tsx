@@ -77,12 +77,17 @@ export default function EventDetailPage() {
     queryKey: ["public-event", eventId],
     enabled: Boolean(eventId),
     queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/public/events/${encodeURIComponent(String(eventId))}`), {
-        credentials: "include",
-      });
+      const res = await fetch(
+        apiUrl(`/api/public/events/${encodeURIComponent(String(eventId))}`),
+        {
+          credentials: "include",
+        },
+      );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        throw new Error(payload?.message || `Failed to load event (status=${res.status})`);
+        throw new Error(
+          payload?.message || `Failed to load event (status=${res.status})`,
+        );
       }
       return (await res.json()) as PublicEvent;
     },
@@ -94,12 +99,17 @@ export default function EventDetailPage() {
     enabled: Boolean(eventId),
     queryFn: async () => {
       const res = await fetch(
-        apiUrl(`/api/public/canonical/event/${encodeURIComponent(String(eventId))}`),
+        apiUrl(
+          `/api/public/canonical/event/${encodeURIComponent(String(eventId))}`,
+        ),
         { credentials: "include" },
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        throw new Error(payload?.message || `Failed to load canonical event data (status=${res.status})`);
+        throw new Error(
+          payload?.message ||
+            `Failed to load canonical event data (status=${res.status})`,
+        );
       }
       return res.json();
     },
@@ -111,12 +121,17 @@ export default function EventDetailPage() {
     enabled: Boolean(eventId),
     queryFn: async () => {
       const res = await fetch(
-        apiUrl(`/api/public/evidence/event/${encodeURIComponent(String(eventId))}`),
+        apiUrl(
+          `/api/public/evidence/event/${encodeURIComponent(String(eventId))}`,
+        ),
         { credentials: "include" },
       );
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        throw new Error(payload?.message || `Failed to load event evidence (status=${res.status})`);
+        throw new Error(
+          payload?.message ||
+            `Failed to load event evidence (status=${res.status})`,
+        );
       }
       return res.json();
     },
@@ -125,7 +140,9 @@ export default function EventDetailPage() {
 
   const dateText = data?.date ? new Date(data.date).toLocaleDateString() : null;
   const timeText =
-    data?.startTime && data?.endTime ? `${data.startTime}–${data.endTime}` : null;
+    data?.startTime && data?.endTime
+      ? `${data.startTime}–${data.endTime}`
+      : null;
 
   const canBook =
     isAuthenticated &&
@@ -138,7 +155,9 @@ export default function EventDetailPage() {
     <div className="min-h-screen bg-background">
       <SEOHead
         title={data?.title || "Event"}
-        description={data?.description || "Food truck event details on MealScout."}
+        description={
+          data?.description || "Food truck event details on MealScout."
+        }
         canonicalUrl={data?.canonicalUrl || undefined}
         noIndex={Boolean(data?.noIndex)}
         schemaData={
@@ -157,7 +176,9 @@ export default function EventDetailPage() {
                         address: data.host.address || undefined,
                         city: data.host.city || undefined,
                         state: data.host.state || undefined,
-                        url: data.host.path ? `https://www.mealscout.us${data.host.path}` : undefined,
+                        url: data.host.path
+                          ? `https://www.mealscout.us${data.host.path}`
+                          : undefined,
                       }
                     : undefined,
                 }),
@@ -166,7 +187,10 @@ export default function EventDetailPage() {
                   "@type": "WebPage",
                   name: `${data.title || "Event"} source of truth`,
                   url: data.canonicalUrl || undefined,
-                  dateModified: canonical?.updatedAt || data?.lastConfirmedAtUtc || undefined,
+                  dateModified:
+                    canonical?.updatedAt ||
+                    data?.lastConfirmedAtUtc ||
+                    undefined,
                   about: {
                     "@type": "Event",
                     name: data.title,
@@ -184,7 +208,9 @@ export default function EventDetailPage() {
       />
 
       <div className="max-w-3xl mx-auto px-4 py-10">
-        <h1 className="text-3xl font-bold">{isLoading ? "Loading..." : data?.title || "Event"}</h1>
+        <h1 className="text-3xl font-bold">
+          {isLoading ? "Loading..." : data?.title || "Event"}
+        </h1>
         {error ? (
           <div className="text-sm text-destructive mt-3">
             {(error as any)?.message || "Failed to load event."}
@@ -209,7 +235,9 @@ export default function EventDetailPage() {
                       </h2>
                     </div>
                     <div className="flex flex-wrap gap-2 justify-end">
-                      <Badge variant="outline">{canonical.machineReadiness}</Badge>
+                      <Badge variant="outline">
+                        {canonical.machineReadiness}
+                      </Badge>
                       <Badge variant="secondary">{canonical.freshness}</Badge>
                     </div>
                   </div>
@@ -240,7 +268,9 @@ export default function EventDetailPage() {
                     <div>
                       Truck booked{" "}
                       <span className="font-medium text-foreground">
-                        {canonical.evidenceSummary?.hasBookedTruck ? "Yes" : "No"}
+                        {canonical.evidenceSummary?.hasBookedTruck
+                          ? "Yes"
+                          : "No"}
                       </span>
                     </div>
                   </div>
@@ -248,22 +278,30 @@ export default function EventDetailPage() {
                   {Array.isArray(canonical.sourceTruthStatements) &&
                   canonical.sourceTruthStatements.length > 0 ? (
                     <div className="space-y-1">
-                      {canonical.sourceTruthStatements.slice(0, 4).map((item: string) => (
-                        <p key={item} className="text-sm text-foreground">
-                          {item}
-                        </p>
-                      ))}
+                      {canonical.sourceTruthStatements
+                        .slice(0, 4)
+                        .map((item: string) => (
+                          <p key={item} className="text-sm text-foreground">
+                            {item}
+                          </p>
+                        ))}
                     </div>
                   ) : null}
 
                   {Array.isArray(canonical.knowledgeGaps) &&
                   canonical.knowledgeGaps.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {canonical.knowledgeGaps.slice(0, 4).map((gap: string) => (
-                        <Badge key={gap} variant="outline" className="text-[11px]">
-                          gap: {gap.replace(/_/g, " ")}
-                        </Badge>
-                      ))}
+                      {canonical.knowledgeGaps
+                        .slice(0, 4)
+                        .map((gap: string) => (
+                          <Badge
+                            key={gap}
+                            variant="outline"
+                            className="text-[11px]"
+                          >
+                            gap: {gap.replace(/_/g, " ")}
+                          </Badge>
+                        ))}
                     </div>
                   ) : null}
                 </div>
@@ -281,7 +319,9 @@ export default function EventDetailPage() {
                       </h2>
                     </div>
                     <Badge variant="outline">
-                      {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                      {evidence.windowHours
+                        ? `${Math.round(evidence.windowHours / 24)}d window`
+                        : "window"}
                     </Badge>
                   </div>
 
@@ -316,7 +356,11 @@ export default function EventDetailPage() {
                   evidence.externalPressure.topBots.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {evidence.externalPressure.topBots.map((bot: any) => (
-                        <Badge key={bot.label} variant="secondary" className="text-[11px]">
+                        <Badge
+                          key={bot.label}
+                          variant="secondary"
+                          className="text-[11px]"
+                        >
                           {bot.label}: {bot.count}
                         </Badge>
                       ))}
@@ -326,11 +370,16 @@ export default function EventDetailPage() {
                   {Array.isArray(evidence.demand?.topQueries) &&
                   evidence.demand.topQueries.length > 0 ? (
                     <div className="space-y-1">
-                      {evidence.demand.topQueries.slice(0, 3).map((query: any) => (
-                        <p key={query.query} className="text-sm text-foreground">
-                          demand: {query.query} ({query.count})
-                        </p>
-                      ))}
+                      {evidence.demand.topQueries
+                        .slice(0, 3)
+                        .map((query: any) => (
+                          <p
+                            key={query.query}
+                            className="text-sm text-foreground"
+                          >
+                            demand: {query.query} ({query.count})
+                          </p>
+                        ))}
                     </div>
                   ) : null}
                 </div>
@@ -344,7 +393,8 @@ export default function EventDetailPage() {
               ) : null}
               {data?.lastConfirmedAtUtc ? (
                 <div className="text-xs text-muted-foreground">
-                  Last confirmed: {new Date(data.lastConfirmedAtUtc).toLocaleString()}
+                  Last confirmed:{" "}
+                  {new Date(data.lastConfirmedAtUtc).toLocaleString()}
                 </div>
               ) : null}
               {data?.ended ? (
@@ -381,17 +431,22 @@ export default function EventDetailPage() {
                     ) : (
                       <span>{data.truck.name || "Food truck"}</span>
                     )}
-                    {data.truck.cuisineType ? ` · ${data.truck.cuisineType}` : ""}
+                    {data.truck.cuisineType
+                      ? ` · ${data.truck.cuisineType}`
+                      : ""}
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">No truck booked yet.</div>
+                <div className="text-sm text-muted-foreground">
+                  No truck booked yet.
+                </div>
               )}
 
               <div className="flex gap-2 flex-wrap">
                 {canBook && truckId ? (
                   <Button onClick={() => setBookingOpen(true)}>
-                    Book This Spot — ${(((data?.hostPriceCents ?? 0) + 1000) / 100).toFixed(2)}
+                    Book This Spot — $
+                    {(((data?.hostPriceCents ?? 0) + 1000) / 100).toFixed(2)}
                   </Button>
                 ) : null}
                 <Button asChild variant={canBook ? "outline" : "default"}>

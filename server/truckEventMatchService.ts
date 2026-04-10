@@ -102,7 +102,13 @@ export async function notifyNearbyTrucksOfNewSeries(
       if (!isNotifEnabled(owner.accountSettings)) continue;
 
       try {
-        await sendMatchEmail(owner.email, owner.firstName, truck.name, series, host);
+        await sendMatchEmail(
+          owner.email,
+          owner.firstName,
+          truck.name,
+          series,
+          host,
+        );
 
         await db.insert(telemetryEvents).values({
           eventName: "truck_series_match_sent",
@@ -116,7 +122,10 @@ export async function notifyNearbyTrucksOfNewSeries(
 
         notified++;
       } catch (err) {
-        console.error(`[TruckEventMatch] Failed to notify truck owner ${truck.ownerId}:`, err);
+        console.error(
+          `[TruckEventMatch] Failed to notify truck owner ${truck.ownerId}:`,
+          err,
+        );
         errors++;
       }
     }
@@ -125,7 +134,9 @@ export async function notifyNearbyTrucksOfNewSeries(
     errors++;
   }
 
-  console.log(`[TruckEventMatch] Series ${series.id}: notified=${notified} errors=${errors}`);
+  console.log(
+    `[TruckEventMatch] Series ${series.id}: notified=${notified} errors=${errors}`,
+  );
   return { notified, errors };
 }
 
@@ -137,12 +148,17 @@ async function sendMatchEmail(
   host: HostInfo,
 ): Promise<boolean> {
   const name = firstName || truckName || "Food Truck Owner";
-  const location = host.state ? `${host.city}, ${host.state}` : (host.city ?? "your area");
-  const startDateLabel = new Date(series.startDate).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const location = host.state
+    ? `${host.city}, ${host.state}`
+    : (host.city ?? "your area");
+  const startDateLabel = new Date(series.startDate).toLocaleDateString(
+    "en-US",
+    {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    },
+  );
   const endDateLabel = new Date(series.endDate).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
@@ -183,5 +199,10 @@ async function sendMatchEmail(
 </html>`;
 
   const text = `Hey ${name}! ${host.businessName} posted a new event in ${location}: "${series.name}" (${startDateLabel} – ${endDateLabel}, ${series.defaultStartTime}–${series.defaultEndTime}). View it: https://www.mealscout.us/truck/discovery`;
-  return emailService.sendBasicEmail(to, `🚚 New event opportunity for your truck in ${location}`, html, text);
+  return emailService.sendBasicEmail(
+    to,
+    `🚚 New event opportunity for your truck in ${location}`,
+    html,
+    text,
+  );
 }

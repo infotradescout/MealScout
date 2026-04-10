@@ -7,6 +7,7 @@ Goal: make $25/mo feel obvious for restaurants and food trucks without relying o
 ## 1) Positioning
 
 Premium is not "more audience" first. Premium is:
+
 - Faster day-to-day operations
 - Less manual work
 - Better consistency
@@ -24,9 +25,11 @@ Premium is not "more audience" first. Premium is:
 ## 3) Phase 1 packaging (no major backend rewrite)
 
 ### Package name
+
 MealScout Premium Ops
 
 ### Core value bullets for checkout and sales
+
 - Run your schedule in one place
 - Go live in one tap
 - Keep social updates in sync automatically
@@ -36,11 +39,13 @@ MealScout Premium Ops
 ## 4) 30-day quick-win rollout
 
 ### Week 1: Packaging and copy (already started)
+
 - Update subscription feature list to operator-first wording
 - Align premium upsell messages across dashboard pages
 - Keep free-vs-paid boundaries clear in UI text
 
 ### Week 2: Weekly summary (lightweight)
+
 - Add a weekly summary email/dashboard card using data already collected:
   - Stops/locations covered
   - Live location activations
@@ -49,6 +54,7 @@ MealScout Premium Ops
 - Keep metric definitions simple and operational
 
 ### Week 3: Better premium onboarding
+
 - Add a short post-upgrade checklist:
   - Add first manual stop
   - Connect social links
@@ -57,6 +63,7 @@ MealScout Premium Ops
 - Show completion progress so users feel immediate value
 
 ### Week 4: Retention hooks
+
 - Add in-app reminders when premium features are unused
 - Add "You saved time this week" summary copy
 - Add one-click links to the three highest-value actions

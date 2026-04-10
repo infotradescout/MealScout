@@ -14,7 +14,9 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
 
 function isEmailEnabled(user: { accountSettings?: unknown }): boolean {
-  const s = user.accountSettings as { notifications?: { channels?: { email?: boolean } } } | undefined;
+  const s = user.accountSettings as
+    | { notifications?: { channels?: { email?: boolean } } }
+    | undefined;
   if (!s || typeof s !== "object") return true;
   return s.notifications?.channels?.email !== false;
 }
@@ -62,7 +64,11 @@ export class RestaurantActivationService {
     return RestaurantActivationService.instance;
   }
 
-  async run(): Promise<{ nudge7Sent: number; nudge14Sent: number; errors: number }> {
+  async run(): Promise<{
+    nudge7Sent: number;
+    nudge14Sent: number;
+    errors: number;
+  }> {
     console.log("[RestaurantActivation] Running deal creation nudge...");
     const now = new Date();
     let nudge7Sent = 0;
@@ -115,7 +121,10 @@ export class RestaurantActivationService {
             });
             nudge7Sent++;
           } catch (err) {
-            console.error(`[RestaurantActivation] day7 failed for ${email}:`, err);
+            console.error(
+              `[RestaurantActivation] day7 failed for ${email}:`,
+              err,
+            );
             errors++;
           }
         }
@@ -132,18 +141,27 @@ export class RestaurantActivationService {
             });
             nudge14Sent++;
           } catch (err) {
-            console.error(`[RestaurantActivation] day14 failed for ${email}:`, err);
+            console.error(
+              `[RestaurantActivation] day14 failed for ${email}:`,
+              err,
+            );
             errors++;
           }
         }
       }
     }
 
-    console.log(`[RestaurantActivation] Done. Day7=${nudge7Sent} Day14=${nudge14Sent} Errors=${errors}`);
+    console.log(
+      `[RestaurantActivation] Done. Day7=${nudge7Sent} Day14=${nudge14Sent} Errors=${errors}`,
+    );
     return { nudge7Sent, nudge14Sent, errors };
   }
 
-  private async sendDealNudge(to: string, firstName: string | null, step: "day7" | "day14"): Promise<boolean> {
+  private async sendDealNudge(
+    to: string,
+    firstName: string | null,
+    step: "day7" | "day14",
+  ): Promise<boolean> {
     const name = firstName || "Restaurant Owner";
     const isFollowUp = step === "day14";
     const subject = isFollowUp
@@ -162,10 +180,11 @@ export class RestaurantActivationService {
     <div style="padding:40px;">
       <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">${isFollowUp ? "You're this close 🎯" : "One step left 🚀"}</h2>
       <p>Hey ${name}!</p>
-      ${isFollowUp
-        ? `<p>We noticed you haven't added a deal to your MealScout profile yet. Restaurants with active deals get <strong>3-5x more profile views</strong> than those without.</p>
+      ${
+        isFollowUp
+          ? `<p>We noticed you haven't added a deal to your MealScout profile yet. Restaurants with active deals get <strong>3-5x more profile views</strong> than those without.</p>
            <p>It takes less than 2 minutes — just set a title, discount amount, and expiry date. That's it.</p>`
-        : `<p>Your MealScout business profile is live! The only thing standing between you and new customers is your first deal.</p>
+          : `<p>Your MealScout business profile is live! The only thing standing between you and new customers is your first deal.</p>
            <p>Deals get discovered through our search, map, and weekly customer emails. <strong>Adding one deal is the single highest-leverage thing you can do right now.</strong></p>`
       }
       <div style="background:#fff8f5;border-left:4px solid #ff6b35;padding:20px;margin:20px 0;border-radius:4px;">
@@ -192,4 +211,5 @@ export class RestaurantActivationService {
   }
 }
 
-export const restaurantActivationService = RestaurantActivationService.getInstance();
+export const restaurantActivationService =
+  RestaurantActivationService.getInstance();

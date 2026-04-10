@@ -132,7 +132,10 @@ const sendUrlsetXml = (
 export function registerSeoRoutes(app: Express) {
   app.get("/sitemap.xml", async (_req, res) => {
     try {
-      const cityRows = await db.select().from(cities).orderBy(desc(cities.createdAt));
+      const cityRows = await db
+        .select()
+        .from(cities)
+        .orderBy(desc(cities.createdAt));
       const restaurantRows = await db
         .select({
           id: restaurants.id,
@@ -212,7 +215,9 @@ export function registerSeoRoutes(app: Express) {
 
       const latestCityBySlug = new Map<string, any>();
       for (const city of cityRows as any[]) {
-        const slug = String(city?.slug || "").trim().toLowerCase();
+        const slug = String(city?.slug || "")
+          .trim()
+          .toLowerCase();
         if (!slug) continue;
         const existing = latestCityBySlug.get(slug);
         if (!existing) {
@@ -222,7 +227,9 @@ export function registerSeoRoutes(app: Express) {
         const existingTs = new Date(
           existing.updatedAt || existing.createdAt || 0,
         ).getTime();
-        const nextTs = new Date(city.updatedAt || city.createdAt || 0).getTime();
+        const nextTs = new Date(
+          city.updatedAt || city.createdAt || 0,
+        ).getTime();
         if (nextTs >= existingTs) {
           latestCityBySlug.set(slug, city);
         }
@@ -265,7 +272,9 @@ export function registerSeoRoutes(app: Express) {
 
       const citySlugByName = new Map<string, string>();
       uniqueCityRows.forEach((city: any) => {
-        const key = String(city?.name || "").trim().toLowerCase();
+        const key = String(city?.name || "")
+          .trim()
+          .toLowerCase();
         const slug = String(city?.slug || "").trim();
         if (!key || !slug || citySlugByName.has(key)) return;
         citySlugByName.set(key, slug);
@@ -273,7 +282,9 @@ export function registerSeoRoutes(app: Express) {
 
       const cuisineLastmodByCity = new Map<string, string | null>();
       for (const row of restaurantRows as any[]) {
-        const cityName = String(row.city || "").trim().toLowerCase();
+        const cityName = String(row.city || "")
+          .trim()
+          .toLowerCase();
         const citySlug = citySlugByName.get(cityName);
         const cuisineSlug = toSlug(row.cuisineType || "");
         if (!citySlug || !cuisineSlug) continue;
@@ -319,18 +330,26 @@ export function registerSeoRoutes(app: Express) {
 
         const dealCityLastmod = new Map<string, string | null>();
         for (const row of activeDealRows) {
-          const cityName = String(row.cityName || "").trim().toLowerCase();
+          const cityName = String(row.cityName || "")
+            .trim()
+            .toLowerCase();
           const slug = citySlugByName.get(cityName);
           if (!slug) continue;
           const next = toIsoDateOrNull(row.updatedAt);
           const existing = dealCityLastmod.get(slug) || null;
-          if (!existing || (next && new Date(next).getTime() > new Date(existing).getTime())) {
+          if (
+            !existing ||
+            (next && new Date(next).getTime() > new Date(existing).getTime())
+          ) {
             dealCityLastmod.set(slug, next);
           }
         }
 
         dealCityLastmod.forEach((lastmod, slug) => {
-          mergeUrl(`${baseUrl}/deals/${encodeURIComponent(slug)}`, lastmod || undefined);
+          mergeUrl(
+            `${baseUrl}/deals/${encodeURIComponent(slug)}`,
+            lastmod || undefined,
+          );
         });
       } catch (dealCityErr) {
         console.error("[sitemap] deal-city section failed:", dealCityErr);
@@ -366,7 +385,8 @@ export function registerSeoRoutes(app: Express) {
 
       const entries = rows
         .filter(
-          (row: any) => Boolean(row.isFoodTruck) || row.businessType === "food_truck",
+          (row: any) =>
+            Boolean(row.isFoodTruck) || row.businessType === "food_truck",
         )
         .map((row: any) => ({
           loc: `${baseUrl}/truck/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
@@ -474,7 +494,10 @@ export function registerSeoRoutes(app: Express) {
   app.get("/sitemap-cities.xml", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const rows = await db.select().from(cities).orderBy(desc(cities.createdAt));
+      const rows = await db
+        .select()
+        .from(cities)
+        .orderBy(desc(cities.createdAt));
       const ttlHoursRaw = Number(process.env.PUBLIC_SLOT_TTL_HOURS ?? 72);
       const lookaheadHoursRaw = Number(
         process.env.PUBLIC_SLOT_LOOKAHEAD_HOURS ?? 24 * 7,
@@ -550,7 +573,11 @@ export function registerSeoRoutes(app: Express) {
           )
           .limit(1);
 
-        if (hasTruck.length === 0 && hasEvent.length === 0 && hasManual.length === 0) {
+        if (
+          hasTruck.length === 0 &&
+          hasEvent.length === 0 &&
+          hasManual.length === 0
+        ) {
           continue;
         }
 
@@ -597,10 +624,12 @@ export function registerSeoRoutes(app: Express) {
       }
 
       sendUrlsetXml(res, {
-        entries: Array.from(lastmodByCuisine.entries()).map(([slug, lastmod]) => ({
-          loc: `${baseUrl}/cuisine/${encodeURIComponent(slug)}`,
-          lastmod,
-        })),
+        entries: Array.from(lastmodByCuisine.entries()).map(
+          ([slug, lastmod]) => ({
+            loc: `${baseUrl}/cuisine/${encodeURIComponent(slug)}`,
+            lastmod,
+          }),
+        ),
       });
     } catch (e) {
       console.error("sitemap-cuisines failed", e);
@@ -611,7 +640,10 @@ export function registerSeoRoutes(app: Express) {
   app.get("/sitemap-time-pages.xml", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const rows = await db.select().from(cities).orderBy(desc(cities.createdAt));
+      const rows = await db
+        .select()
+        .from(cities)
+        .orderBy(desc(cities.createdAt));
       const modes = [
         "food-trucks-now",
         "food-trucks-breakfast",
@@ -754,7 +786,11 @@ export function registerSeoRoutes(app: Express) {
       const baseUrl = resolveSitemapSiteUrl();
       const now = new Date();
       const rows = await db
-        .select({ id: deals.id, title: deals.title, updatedAt: deals.updatedAt })
+        .select({
+          id: deals.id,
+          title: deals.title,
+          updatedAt: deals.updatedAt,
+        })
         .from(deals)
         .where(
           and(

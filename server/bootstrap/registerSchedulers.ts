@@ -30,7 +30,10 @@ import { and, gte, lt, desc, sql } from "drizzle-orm";
 
 function isMissingColumnError(err: unknown, column: string): boolean {
   const msg = String((err as any)?.message || "");
-  return msg.includes(column) && (msg.includes("does not exist") || msg.includes("Unknown column"));
+  return (
+    msg.includes(column) &&
+    (msg.includes("does not exist") || msg.includes("Unknown column"))
+  );
 }
 
 const getParkingPassHoldTtlMs = () => {
@@ -104,9 +107,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
   ) {
     cron.schedule("*/30 * * * *", async () => {
       try {
-        const { runPensacolaFoodTruckDripCron } = await import(
-          "../services/pensacolaFoodTruckDrip"
-        );
+        const { runPensacolaFoodTruckDripCron } =
+          await import("../services/pensacolaFoodTruckDrip");
         const result = await runPensacolaFoodTruckDripCron();
         if ((result as any)?.sent) {
           console.log("[drip] Pensacola food truck sequence sent:", result);
@@ -144,7 +146,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
       .trim()
       .toLowerCase() !== "false"
   ) {
-    const expression = String(process.env.SUPPLY_MARKET_INTEL_CRON || "*/20 * * * *");
+    const expression = String(
+      process.env.SUPPLY_MARKET_INTEL_CRON || "*/20 * * * *",
+    );
     cron.schedule(expression, async () => {
       try {
         const stats = await runSupplyMarketIntelCron();
@@ -165,9 +169,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
   ) {
     cron.schedule("*/30 * * * *", async () => {
       try {
-        const { runPensacolaReportLeadDripCron } = await import(
-          "../services/pensacolaReportDrip"
-        );
+        const { runPensacolaReportLeadDripCron } =
+          await import("../services/pensacolaReportDrip");
         const result = await runPensacolaReportLeadDripCron();
         if ((result as any)?.sent) {
           console.log("[drip] Pensacola report lead sequence sent:", result);
@@ -215,7 +218,12 @@ export async function registerSchedulers(app: Express): Promise<void> {
           avgDurationMs: sql<number>`avg(${requestLogs.durationMs})`,
         })
         .from(requestLogs)
-        .where(and(gte(requestLogs.createdAt, start), lt(requestLogs.createdAt, end)));
+        .where(
+          and(
+            gte(requestLogs.createdAt, start),
+            lt(requestLogs.createdAt, end),
+          ),
+        );
 
       const statusBuckets: Array<{ statusCode: number; count: number }> =
         await db
@@ -224,11 +232,20 @@ export async function registerSchedulers(app: Express): Promise<void> {
             count: sql<number>`count(*)`,
           })
           .from(requestLogs)
-          .where(and(gte(requestLogs.createdAt, start), lt(requestLogs.createdAt, end)))
+          .where(
+            and(
+              gte(requestLogs.createdAt, start),
+              lt(requestLogs.createdAt, end),
+            ),
+          )
           .groupBy(requestLogs.statusCode)
           .orderBy(desc(sql`count(*)`));
 
-      let topPaths: Array<{ path: string; count: number; avgDurationMs: number }> = [];
+      let topPaths: Array<{
+        path: string;
+        count: number;
+        avgDurationMs: number;
+      }> = [];
       try {
         topPaths = await db
           .select({
@@ -237,7 +254,12 @@ export async function registerSchedulers(app: Express): Promise<void> {
             avgDurationMs: sql<number>`avg(${requestLogs.durationMs})`,
           })
           .from(requestLogs)
-          .where(and(gte(requestLogs.createdAt, start), lt(requestLogs.createdAt, end)))
+          .where(
+            and(
+              gte(requestLogs.createdAt, start),
+              lt(requestLogs.createdAt, end),
+            ),
+          )
           .groupBy(requestLogs.path)
           .orderBy(desc(sql`count(*)`))
           .limit(25);
@@ -246,7 +268,12 @@ export async function registerSchedulers(app: Express): Promise<void> {
           const rows = await db
             .select({ path: requestLogs.path, count: sql<number>`count(*)` })
             .from(requestLogs)
-            .where(and(gte(requestLogs.createdAt, start), lt(requestLogs.createdAt, end)))
+            .where(
+              and(
+                gte(requestLogs.createdAt, start),
+                lt(requestLogs.createdAt, end),
+              ),
+            )
             .groupBy(requestLogs.path)
             .orderBy(desc(sql`count(*)`))
             .limit(25);
@@ -260,24 +287,27 @@ export async function registerSchedulers(app: Express): Promise<void> {
         }
       }
 
-      const topErrors: Array<{ path: string; statusCode: number; count: number }> =
-        await db
-          .select({
-            path: requestLogs.path,
-            statusCode: requestLogs.statusCode,
-            count: sql<number>`count(*)`,
-          })
-          .from(requestLogs)
-          .where(
-            and(
-              gte(requestLogs.createdAt, start),
-              lt(requestLogs.createdAt, end),
-              gte(requestLogs.statusCode, 400),
-            ),
-          )
-          .groupBy(requestLogs.path, requestLogs.statusCode)
-          .orderBy(desc(sql`count(*)`))
-          .limit(25);
+      const topErrors: Array<{
+        path: string;
+        statusCode: number;
+        count: number;
+      }> = await db
+        .select({
+          path: requestLogs.path,
+          statusCode: requestLogs.statusCode,
+          count: sql<number>`count(*)`,
+        })
+        .from(requestLogs)
+        .where(
+          and(
+            gte(requestLogs.createdAt, start),
+            lt(requestLogs.createdAt, end),
+            gte(requestLogs.statusCode, 400),
+          ),
+        )
+        .groupBy(requestLogs.path, requestLogs.statusCode)
+        .orderBy(desc(sql`count(*)`))
+        .limit(25);
 
       await db.insert(adminDailyReports).values({
         reportDate: start,
@@ -345,7 +375,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
           if (row.paymentIntentId) {
             try {
               const stripe = (await import("stripe")).default;
-              const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY || "");
+              const stripeClient = new stripe(
+                process.env.STRIPE_SECRET_KEY || "",
+              );
               await stripeClient.paymentIntents.cancel(row.paymentIntentId);
             } catch {
               // Best-effort — don't block cleanup on Stripe errors

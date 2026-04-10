@@ -101,7 +101,10 @@ export default function DealDetail() {
     },
   });
 
-  const { data: affiliateTagData } = useQuery<{ tag: string; sharePath: string }>({
+  const { data: affiliateTagData } = useQuery<{
+    tag: string;
+    sharePath: string;
+  }>({
     queryKey: ["/api/affiliate/tag", "deal-detail"],
     queryFn: async () => {
       const res = await fetch("/api/affiliate/tag", { credentials: "include" });
@@ -335,9 +338,9 @@ export default function DealDetail() {
                   typeof (rating as any).rating === "number"
                     ? (rating as any).rating.toFixed(1)
                     : (rating as any)?.rating &&
-                      !isNaN(Number((rating as any).rating))
-                    ? Number((rating as any).rating).toFixed(1)
-                    : "New"}
+                        !isNaN(Number((rating as any).rating))
+                      ? Number((rating as any).rating).toFixed(1)
+                      : "New"}
                   {Array.isArray(reviews) && ` (${reviews.length} reviews)`}
                 </span>
               </div>
@@ -418,11 +421,13 @@ export default function DealDetail() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {(canonical.knowledgeGaps || []).slice(0, 4).map((gap: string) => (
-                  <Badge key={gap} variant="outline" className="text-[11px]">
-                    gap: {gap.replace(/_/g, " ")}
-                  </Badge>
-                ))}
+                {(canonical.knowledgeGaps || [])
+                  .slice(0, 4)
+                  .map((gap: string) => (
+                    <Badge key={gap} variant="outline" className="text-[11px]">
+                      gap: {gap.replace(/_/g, " ")}
+                    </Badge>
+                  ))}
               </div>
             </CardContent>
           </Card>
@@ -441,7 +446,9 @@ export default function DealDetail() {
                   </h2>
                 </div>
                 <Badge variant="outline">
-                  {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                  {evidence.windowHours
+                    ? `${Math.round(evidence.windowHours / 24)}d window`
+                    : "window"}
                 </Badge>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -526,7 +533,10 @@ export default function DealDetail() {
               {(reviews as any[])
                 .slice(0, 2)
                 .map((review: any, index: number) => (
-                  <Card key={review.id} className="bg-[var(--bg-layered)] border-[color:var(--border-subtle)] shadow-clean">
+                  <Card
+                    key={review.id}
+                    className="bg-[var(--bg-layered)] border-[color:var(--border-subtle)] shadow-clean"
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center space-x-3 mb-2">
                         <div className="w-8 h-8 rounded-full bg-[var(--bg-surface-muted)] flex items-center justify-center">
@@ -585,7 +595,9 @@ export default function DealDetail() {
                   <Share2 className="h-4 w-4 text-[color:var(--status-success)]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-foreground">Share this deal, earn credits</p>
+                  <p className="font-semibold text-sm text-foreground">
+                    Share this deal, earn credits
+                  </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Invite friends — when they join, you earn referral credits.
                   </p>
@@ -596,15 +608,25 @@ export default function DealDetail() {
                   size="sm"
                   className="w-full food-gradient-primary border-0 text-sm"
                   onClick={() => {
-                    const dealSlug = encodeURIComponent(`${(deal as Deal)?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || (deal as Deal)?.id}--${(deal as Deal)?.id}`);
-                    const ref = affiliateTagData?.tag ? `?ref=${affiliateTagData.tag}` : "";
+                    const dealSlug = encodeURIComponent(
+                      `${(deal as Deal)?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || (deal as Deal)?.id}--${(deal as Deal)?.id}`,
+                    );
+                    const ref = affiliateTagData?.tag
+                      ? `?ref=${affiliateTagData.tag}`
+                      : "";
                     const url = `${window.location.origin}/deal/${dealSlug}${ref}`;
                     if (navigator.share) {
                       navigator.share({ title: (deal as Deal)?.title, url });
                     } else {
-                      navigator.clipboard.writeText(url).then(() =>
-                        toast({ title: "Link copied!", description: "Share it with friends to earn credits." })
-                      );
+                      navigator.clipboard
+                        .writeText(url)
+                        .then(() =>
+                          toast({
+                            title: "Link copied!",
+                            description:
+                              "Share it with friends to earn credits.",
+                          }),
+                        );
                     }
                   }}
                 >
@@ -646,7 +668,7 @@ export default function DealDetail() {
           {Math.ceil(
             (new Date((deal as Deal)?.endDate || Date.now()).getTime() -
               Date.now()) /
-              (1000 * 60 * 60 * 24)
+              (1000 * 60 * 60 * 24),
           )}{" "}
           days
         </p>
@@ -678,12 +700,3 @@ export default function DealDetail() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

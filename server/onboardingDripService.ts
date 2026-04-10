@@ -104,7 +104,11 @@ export class OnboardingDripService {
       if (createdAt >= day3Start.getTime() && createdAt < day3End.getTime()) {
         if (!(await alreadySent(user.id, "day3_referral"))) {
           try {
-            await this.sendDay3ReferralEmail(email, user.firstName, user.affiliateTag);
+            await this.sendDay3ReferralEmail(
+              email,
+              user.firstName,
+              user.affiliateTag,
+            );
             await markSent(user.id, "day3_referral");
             day3Sent++;
           } catch (err) {
@@ -129,7 +133,9 @@ export class OnboardingDripService {
       }
     }
 
-    console.log(`[OnboardingDrip] Done. Day3=${day3Sent} Day7=${day7Sent} Errors=${errors}`);
+    console.log(
+      `[OnboardingDrip] Done. Day3=${day3Sent} Day7=${day7Sent} Errors=${errors}`,
+    );
     return { day3Sent, day7Sent, errors };
   }
 
@@ -171,7 +177,12 @@ export class OnboardingDripService {
 </body>
 </html>`;
     const text = `Hey ${name}! Share MealScout with friends and earn referral credits. Your link: ${shareUrl}`;
-    return emailService.sendBasicEmail(to, "🍽️ Share MealScout with friends & earn credits", html, text);
+    return emailService.sendBasicEmail(
+      to,
+      "🍽️ Share MealScout with friends & earn credits",
+      html,
+      text,
+    );
   }
 
   private async sendDay7DiscoveryEmail(
@@ -187,12 +198,19 @@ export class OnboardingDripService {
       const [addr] = await db
         .select({ city: userAddresses.city, state: userAddresses.state })
         .from(userAddresses)
-        .where(and(eq(userAddresses.userId, userId), eq(userAddresses.isDefault, true)))
+        .where(
+          and(
+            eq(userAddresses.userId, userId),
+            eq(userAddresses.isDefault, true),
+          ),
+        )
         .limit(1);
       if (addr?.city) {
         cityLabel = addr.state ? `${addr.city}, ${addr.state}` : addr.city;
       }
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
 
     const searchUrl = `https://www.mealscout.us/search?q=${encodeURIComponent(cityLabel + " food trucks deals")}`;
     const html = `<!DOCTYPE html>
@@ -221,7 +239,12 @@ export class OnboardingDripService {
 </body>
 </html>`;
     const text = `Hey ${name}! New deals in ${cityLabel} this week. Find them: ${searchUrl} — or open the live map: https://www.mealscout.us/map`;
-    return emailService.sendBasicEmail(to, `🔥 New deals in ${cityLabel} this week`, html, text);
+    return emailService.sendBasicEmail(
+      to,
+      `🔥 New deals in ${cityLabel} this week`,
+      html,
+      text,
+    );
   }
 }
 

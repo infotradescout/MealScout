@@ -135,10 +135,15 @@ export default function CityLanding() {
     staleTime: 60_000,
   });
 
-  const { data: cityDealsPayload } = useQuery<{ deals: CityDeal[]; totalDeals: number }>({
+  const { data: cityDealsPayload } = useQuery<{
+    deals: CityDeal[];
+    totalDeals: number;
+  }>({
     queryKey: ["/api/public/deals/city", citySlug],
     queryFn: async () => {
-      const res = await fetch(apiUrl(`/api/public/deals/city/${encodeURIComponent(citySlug)}`));
+      const res = await fetch(
+        apiUrl(`/api/public/deals/city/${encodeURIComponent(citySlug)}`),
+      );
       if (!res.ok) return { deals: [], totalDeals: 0 };
       return res.json();
     },
@@ -149,7 +154,9 @@ export default function CityLanding() {
   const { data: affiliateTagData } = useQuery<AffiliateTag>({
     queryKey: ["/api/affiliate/tag", "city-landing"],
     queryFn: async () => {
-      const res = await fetch(apiUrl("/api/affiliate/tag"), { credentials: "include" });
+      const res = await fetch(apiUrl("/api/affiliate/tag"), {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Not available");
       return res.json();
     },
@@ -216,27 +223,34 @@ export default function CityLanding() {
   const faqEntries = [
     {
       q: `Are there food trucks in ${data.city.name}?`,
-      a: filtered.trucks.length > 0
-        ? `Yes! MealScout currently tracks ${filtered.trucks.length} food truck${filtered.trucks.length > 1 ? "s" : ""} in ${cityLabel}. Browse their profiles and deals above.`
-        : `MealScout is actively tracking food trucks in ${cityLabel}. Check back soon or explore restaurants and deals nearby.`,
+      a:
+        filtered.trucks.length > 0
+          ? `Yes! MealScout currently tracks ${filtered.trucks.length} food truck${filtered.trucks.length > 1 ? "s" : ""} in ${cityLabel}. Browse their profiles and deals above.`
+          : `MealScout is actively tracking food trucks in ${cityLabel}. Check back soon or explore restaurants and deals nearby.`,
     },
     {
       q: `What cuisines can I find in ${data.city.name}?`,
-      a: data.cuisines.length > 0
-        ? `In ${cityLabel} you can find ${data.cuisines.slice(0, 5).map((c) => c.name).join(", ")} and more on MealScout.`
-        : `MealScout is building out cuisine coverage for ${cityLabel}. Explore restaurants above or browse deals.`,
+      a:
+        data.cuisines.length > 0
+          ? `In ${cityLabel} you can find ${data.cuisines
+              .slice(0, 5)
+              .map((c) => c.name)
+              .join(", ")} and more on MealScout.`
+          : `MealScout is building out cuisine coverage for ${cityLabel}. Explore restaurants above or browse deals.`,
     },
     {
       q: `Are there restaurant deals in ${data.city.name}?`,
-      a: cityDeals.length > 0
-        ? `Yes! There are currently ${cityDealsPayload?.totalDeals ?? cityDeals.length} active deal${(cityDealsPayload?.totalDeals ?? cityDeals.length) > 1 ? "s" : ""} in ${cityLabel}. Claim them free with a MealScout account.`
-        : `Restaurants in ${cityLabel} are joining MealScout. Sign up free to get notified when deals go live near you.`,
+      a:
+        cityDeals.length > 0
+          ? `Yes! There are currently ${cityDealsPayload?.totalDeals ?? cityDeals.length} active deal${(cityDealsPayload?.totalDeals ?? cityDeals.length) > 1 ? "s" : ""} in ${cityLabel}. Claim them free with a MealScout account.`
+          : `Restaurants in ${cityLabel} are joining MealScout. Sign up free to get notified when deals go live near you.`,
     },
     {
       q: `What events are happening in ${data.city.name}?`,
-      a: data.stats.events > 0
-        ? `MealScout shows ${data.stats.events} upcoming food event${data.stats.events > 1 ? "s" : ""} in ${cityLabel}. See dates and times in the events section above.`
-        : `There are no events listed in ${cityLabel} right now. Check back or explore nearby city pages.`,
+      a:
+        data.stats.events > 0
+          ? `MealScout shows ${data.stats.events} upcoming food event${data.stats.events > 1 ? "s" : ""} in ${cityLabel}. See dates and times in the events section above.`
+          : `There are no events listed in ${cityLabel} right now. Check back or explore nearby city pages.`,
     },
   ];
 
@@ -448,7 +462,11 @@ export default function CityLanding() {
               Active Deals in {data.city.name}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {cityDealsPayload?.totalDeals ?? cityDeals.length} active deal{(cityDealsPayload?.totalDeals ?? cityDeals.length) !== 1 ? "s" : ""} available right now — claim them free with a MealScout account.
+              {cityDealsPayload?.totalDeals ?? cityDeals.length} active deal
+              {(cityDealsPayload?.totalDeals ?? cityDeals.length) !== 1
+                ? "s"
+                : ""}{" "}
+              available right now — claim them free with a MealScout account.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {cityDeals.map((deal) => (
@@ -456,7 +474,9 @@ export default function CityLanding() {
                   <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean hover:shadow-clean-lg transition-shadow">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="font-medium text-foreground text-sm leading-snug">{deal.title}</div>
+                        <div className="font-medium text-foreground text-sm leading-snug">
+                          {deal.title}
+                        </div>
                         {deal.discountValue && (
                           <span className="shrink-0 rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-xs font-semibold text-[color:var(--status-success)]">
                             {deal.discountValue}
@@ -465,7 +485,9 @@ export default function CityLanding() {
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {deal.restaurant.name}
-                        {deal.restaurant.cuisineType ? ` · ${deal.restaurant.cuisineType}` : ""}
+                        {deal.restaurant.cuisineType
+                          ? ` · ${deal.restaurant.cuisineType}`
+                          : ""}
                       </div>
                     </CardContent>
                   </Card>
@@ -533,10 +555,15 @@ export default function CityLanding() {
           <h2 className="text-lg font-semibold text-foreground">
             Frequently Asked Questions
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Common questions about food trucks and deals in {cityLabel}.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Common questions about food trucks and deals in {cityLabel}.
+          </p>
           <div className="mt-4 space-y-4">
             {faqEntries.map(({ q, a }) => (
-              <div key={q} className="border-b border-[color:var(--border-subtle)] pb-3 last:border-b-0 last:pb-0">
+              <div
+                key={q}
+                className="border-b border-[color:var(--border-subtle)] pb-3 last:border-b-0 last:pb-0"
+              >
                 <h3 className="font-semibold text-sm text-foreground">{q}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">{a}</p>
               </div>
@@ -626,7 +653,8 @@ export default function CityLanding() {
             Share {data.city.name} with Friends
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Know someone who loves food in {cityLabel}? Share this page and earn credits when they join.
+            Know someone who loves food in {cityLabel}? Share this page and earn
+            credits when they join.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             {affiliateTagData?.sharePath ? (
@@ -636,23 +664,38 @@ export default function CityLanding() {
                 onClick={() => {
                   const url = `${window.location.origin}/food-trucks/${data.city.slug}?ref=${affiliateTagData.tag}`;
                   if (navigator.share) {
-                    navigator.share({ title: `Food Trucks in ${cityLabel}`, url });
+                    navigator.share({
+                      title: `Food Trucks in ${cityLabel}`,
+                      url,
+                    });
                   } else {
-                    navigator.clipboard.writeText(url).then(() => alert("Link copied!"));
+                    navigator.clipboard
+                      .writeText(url)
+                      .then(() => alert("Link copied!"));
                   }
                 }}
               >
                 Share & Earn Credits
               </Button>
             ) : (
-              <Link href={`/food-trucks/${data.city.slug}?q=${encodeURIComponent(cityLabel + " food trucks")}`}>
-                <Button size="sm" variant="outline" className="border-[color:var(--border-subtle)]">
+              <Link
+                href={`/food-trucks/${data.city.slug}?q=${encodeURIComponent(cityLabel + " food trucks")}`}
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-[color:var(--border-subtle)]"
+                >
                   Share this page
                 </Button>
               </Link>
             )}
             <Link href="/search">
-              <Button size="sm" variant="outline" className="border-[color:var(--border-subtle)]">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-[color:var(--border-subtle)]"
+              >
                 Explore more cities
               </Button>
             </Link>

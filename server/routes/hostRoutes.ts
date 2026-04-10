@@ -2188,9 +2188,7 @@ export function registerHostRoutes(app: Express) {
       res.json({ onboardingUrl: accountLink.url });
     } catch (error: any) {
       console.error("Error creating Stripe Connect account:", error);
-      res
-        .status(500)
-        .json({ message: "Failed to initiate Stripe onboarding" });
+      res.status(500).json({ message: "Failed to initiate Stripe onboarding" });
     }
   };
 
@@ -2215,7 +2213,9 @@ export function registerHostRoutes(app: Express) {
         });
       }
 
-      const account = await stripe.accounts.retrieve(host.stripeConnectAccountId);
+      const account = await stripe.accounts.retrieve(
+        host.stripeConnectAccountId,
+      );
 
       await db
         .update(hosts)
@@ -2267,11 +2267,7 @@ export function registerHostRoutes(app: Express) {
   );
 
   // Check Stripe Connect account status
-  app.get(
-    "/api/hosts/stripe/status",
-    isAuthenticated,
-    checkHostStripeStatus,
-  );
+  app.get("/api/hosts/stripe/status", isAuthenticated, checkHostStripeStatus);
   app.get(
     "/api/hosts/:hostId/stripe/status",
     isAuthenticated,
@@ -2403,14 +2399,15 @@ export function registerHostRoutes(app: Express) {
           String(process.env.MEALSCOUT_TEST_MODE || "").toLowerCase() ===
             "true" || process.env.NODE_ENV !== "production";
         const testPromosRequireAdmin =
-          String(process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "").toLowerCase() ===
-          "true";
+          String(
+            process.env.MEALSCOUT_TEST_PROMOS_REQUIRE_ADMIN || "",
+          ).toLowerCase() === "true";
         const isAdminUser = ["admin", "super_admin", "staff"].includes(
           String(req.user?.userType || ""),
         );
         const bookingFeePromoEnabled =
-          String(process.env.BOOKFEE10_ENABLED || "").toLowerCase() === "true" ||
-          process.env.NODE_ENV !== "production";
+          String(process.env.BOOKFEE10_ENABLED || "").toLowerCase() ===
+            "true" || process.env.NODE_ENV !== "production";
         const bypassStripe =
           String(process.env.MEALSCOUT_BYPASS_STRIPE || "").toLowerCase() ===
             "true" ||
@@ -2435,11 +2432,16 @@ export function registerHostRoutes(app: Express) {
           return res.status(400).json({ message: "Truck ID required" });
         }
 
-        const normalizedPromoCode = String(promoCode || "").trim().toUpperCase();
+        const normalizedPromoCode = String(promoCode || "")
+          .trim()
+          .toUpperCase();
         const isTestDollarPromo =
           normalizedPromoCode === "TEST1" || normalizedPromoCode === "FREE100";
         const bookingPromoCodes = new Set(["TEST1", "FREE100", "BOOKFEE10"]);
-        if (normalizedPromoCode && !bookingPromoCodes.has(normalizedPromoCode)) {
+        if (
+          normalizedPromoCode &&
+          !bookingPromoCodes.has(normalizedPromoCode)
+        ) {
           return res.status(400).json({ message: "Invalid promo code" });
         }
         if (
@@ -2449,7 +2451,9 @@ export function registerHostRoutes(app: Express) {
           return res.status(403).json({ message: "Not authorized" });
         }
         if (normalizedPromoCode === "BOOKFEE10" && !bookingFeePromoEnabled) {
-          return res.status(400).json({ message: "Promo code is not available" });
+          return res
+            .status(400)
+            .json({ message: "Promo code is not available" });
         }
         const allowedSlotTypes = new Set<string>(
           PARKING_PASS_SLOT_TYPES as readonly string[],
@@ -2701,7 +2705,8 @@ export function registerHostRoutes(app: Express) {
             });
           }
 
-          const isSameDayBooking = rowDayStart.getTime() === todayStart.getTime();
+          const isSameDayBooking =
+            rowDayStart.getTime() === todayStart.getTime();
 
           if (row.status !== "open") {
             return res.status(400).json({
@@ -2887,14 +2892,17 @@ export function registerHostRoutes(app: Express) {
             return res.status(400).json({ message: "Promo code already used" });
           }
           if (bookingPromoState?.pendingPaymentIntentId) {
-            return res.status(400).json({ message: "Promo code already pending" });
+            return res
+              .status(400)
+              .json({ message: "Promo code already pending" });
           }
           promoDiscountCents = Math.min(1000, platformFeeCents);
         }
 
         let creditAppliedCents = 0;
-        const requestedCreditCents =
-          isTestDollarPromo ? 0 : Number(applyCreditsCents || 0);
+        const requestedCreditCents = isTestDollarPromo
+          ? 0
+          : Number(applyCreditsCents || 0);
         if (requestedCreditCents > 0) {
           const { getUserCreditBalance } = await import("../creditService");
           const creditBalance = await getUserCreditBalance(userId);
@@ -3034,7 +3042,8 @@ export function registerHostRoutes(app: Express) {
           if (normalizedPromoCode === "BOOKFEE10") {
             try {
               const userRecord = await storage.getUser(userId);
-              const existingSettings = (userRecord?.accountSettings as any) || {};
+              const existingSettings =
+                (userRecord?.accountSettings as any) || {};
               const promos = existingSettings.promos || {};
               promos.bookingFee10 = {
                 ...(promos.bookingFee10 || {}),

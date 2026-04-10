@@ -9,7 +9,13 @@
  */
 
 import { db } from "./db";
-import { users, userAddresses, deals, restaurants, telemetryEvents } from "@shared/schema";
+import {
+  users,
+  userAddresses,
+  deals,
+  restaurants,
+  telemetryEvents,
+} from "@shared/schema";
 import { and, eq, gte, isNull, lte, or, ilike, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
 
@@ -46,7 +52,10 @@ function getWeekNumber(d: Date): number {
 }
 
 function toSlug(name: string): string {
-  return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 export class DinerDigestService {
@@ -61,7 +70,11 @@ export class DinerDigestService {
     return DinerDigestService.instance;
   }
 
-  async sendDinerDigests(): Promise<{ sent: number; skipped: number; errors: number }> {
+  async sendDinerDigests(): Promise<{
+    sent: number;
+    skipped: number;
+    errors: number;
+  }> {
     console.log("[DinerDigest] Starting diner digest generation...");
 
     const now = new Date();
@@ -88,13 +101,19 @@ export class DinerDigestService {
         .from(users)
         .innerJoin(
           userAddresses,
-          and(eq(userAddresses.userId, users.id), eq(userAddresses.isDefault, true)),
+          and(
+            eq(userAddresses.userId, users.id),
+            eq(userAddresses.isDefault, true),
+          ),
         )
         .where(eq(users.userType, "customer"));
 
       for (const row of rows) {
         const email = String(row.email || "").trim();
-        if (!email) { skipped++; continue; }
+        if (!email) {
+          skipped++;
+          continue;
+        }
 
         if (!isDigestEnabledForUser({ accountSettings: row.accountSettings })) {
           skipped++;
@@ -109,19 +128,30 @@ export class DinerDigestService {
             sql`properties->>'week' = ${idempotencyKey}`,
           ),
         });
-        if (alreadySent) { skipped++; continue; }
+        if (alreadySent) {
+          skipped++;
+          continue;
+        }
 
         // Find active deals in user's city
         const cityLike = `%${String(row.city || "").trim()}%`;
-        const nearbyDeals: DealRow[] = await this.getDealsForCity(cityLike, row.city);
+        const nearbyDeals: DealRow[] = await this.getDealsForCity(
+          cityLike,
+          row.city,
+        );
 
         // Skip if no deals to report — don't spam empty emails
-        if (nearbyDeals.length === 0) { skipped++; continue; }
+        if (nearbyDeals.length === 0) {
+          skipped++;
+          continue;
+        }
 
         try {
           await this.sendDinerDigestEmail(email, {
             firstName: row.firstName,
-            cityLabel: row.state ? `${row.city}, ${row.state}` : (row.city ?? "your area"),
+            cityLabel: row.state
+              ? `${row.city}, ${row.state}`
+              : (row.city ?? "your area"),
             deals: nearbyDeals,
           });
 
@@ -145,11 +175,16 @@ export class DinerDigestService {
       console.error("[DinerDigest] Fatal error:", err);
     }
 
-    console.log(`[DinerDigest] Done. Sent=${sent} Skipped=${skipped} Errors=${errors}`);
+    console.log(
+      `[DinerDigest] Done. Sent=${sent} Skipped=${skipped} Errors=${errors}`,
+    );
     return { sent, skipped, errors };
   }
 
-  private async getDealsForCity(cityLike: string, city: string | null): Promise<DealRow[]> {
+  private async getDealsForCity(
+    cityLike: string,
+    city: string | null,
+  ): Promise<DealRow[]> {
     if (!city?.trim()) return [];
     const now = new Date();
     try {
@@ -259,7 +294,12 @@ export class DinerDigestService {
 </html>`;
     const text = `Hey ${name}! Here are this week's deals in ${cityLabel}:\n\n${dealList.map((d) => `• ${d.title} at ${d.restaurantName}${d.discountValue ? ` (${d.discountValue})` : ""} — https://www.mealscout.us${d.dealPath}`).join("\n")}\n\nSee all deals: https://www.mealscout.us/search?q=${encodeURIComponent(cityLabel + " food truck deals")}`;
 
-    return emailService.sendBasicEmail(to, `🍽️ This Week's Deals Near You in ${cityLabel}`, html, text);
+    return emailService.sendBasicEmail(
+      to,
+      `🍽️ This Week's Deals Near You in ${cityLabel}`,
+      html,
+      text,
+    );
   }
 }
 

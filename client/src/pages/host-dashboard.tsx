@@ -618,7 +618,9 @@ function HostDashboard() {
             onClick={handleEnablePayments}
             className="bg-[color:var(--accent-text)] hover:bg-[color:var(--action-hover)]"
           >
-            {host.stripeConnectAccountId ? "Resume Stripe Setup" : "Start Stripe Setup"}
+            {host.stripeConnectAccountId
+              ? "Resume Stripe Setup"
+              : "Start Stripe Setup"}
           </Button>
           <Button
             variant="outline"
@@ -666,7 +668,9 @@ function HostDashboard() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-[color:var(--text-muted)]">Pending Payouts</p>
+            <p className="text-xs text-[color:var(--text-muted)]">
+              Pending Payouts
+            </p>
             <p className="text-base font-semibold text-[color:var(--text-primary)]">
               {isLoadingEarnings
                 ? "..."
@@ -693,7 +697,12 @@ function HostDashboard() {
             <span className="text-xs text-[color:var(--text-muted)]">
               {demandThresholdMet.length} threshold met
             </span>
-            <Button variant="outline" size="sm" onClick={loadDemandQueue} disabled={isLoadingDemand}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadDemandQueue}
+              disabled={isLoadingDemand}
+            >
               {isLoadingDemand ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
@@ -701,7 +710,8 @@ function HostDashboard() {
 
         {demandQueue.length === 0 ? (
           <p className="text-sm text-[color:var(--text-muted)]">
-            No demand requests yet. As trucks show interest, qualified locations appear here.
+            No demand requests yet. As trucks show interest, qualified locations
+            appear here.
           </p>
         ) : (
           <div className="space-y-2">
@@ -721,7 +731,8 @@ function HostDashboard() {
                       {item.address}
                     </p>
                     <p className="text-xs text-[color:var(--text-muted)]">
-                      {item.interestCount}/{item.minInterestedTrucks} interested trucks
+                      {item.interestCount}/{item.minInterestedTrucks} interested
+                      trucks
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -743,7 +754,9 @@ function HostDashboard() {
                     {thresholdMet ? (
                       <Button
                         size="sm"
-                        onClick={() => setLocation("/parking-pass#parking-pass-settings")}
+                        onClick={() =>
+                          setLocation("/parking-pass#parking-pass-settings")
+                        }
                       >
                         Publish Slots
                       </Button>
@@ -1086,7 +1099,11 @@ function HostBookingsSection({ hostId }: { hostId: string }) {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
         setEvents(
-          Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [],
+          Array.isArray(data?.events)
+            ? data.events
+            : Array.isArray(data)
+              ? data
+              : [],
         );
       })
       .catch(() => {})
@@ -1110,12 +1127,15 @@ function HostBookingsSection({ hostId }: { hostId: string }) {
 
   const handleCancel = async (bookingId: string) => {
     if (!confirm("Cancel this booking? No refund will be issued.")) return;
-    const res = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/cancel`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ reason: "Host cancelled" }),
-    });
+    const res = await fetch(
+      `/api/bookings/${encodeURIComponent(bookingId)}/cancel`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: "Host cancelled" }),
+      },
+    );
     if (res.ok) {
       toast({ title: "Booking cancelled", description: "No refund issued." });
       setBookings((prev) =>
@@ -1126,7 +1146,11 @@ function HostBookingsSection({ hostId }: { hostId: string }) {
         ),
       );
     } else {
-      toast({ title: "Error", description: "Could not cancel booking.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Could not cancel booking.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1154,7 +1178,8 @@ function HostBookingsSection({ hostId }: { hostId: string }) {
           <option value="">Select an event…</option>
           {events.map((ev: any) => (
             <option key={ev.id} value={ev.id}>
-              {ev.name || ev.id} — {ev.date ? new Date(ev.date).toLocaleDateString() : ""}
+              {ev.name || ev.id} —{" "}
+              {ev.date ? new Date(ev.date).toLocaleDateString() : ""}
               {ev.requiresPayment ? " (paid)" : ""}
             </option>
           ))}

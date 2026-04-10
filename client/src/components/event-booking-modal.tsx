@@ -145,7 +145,11 @@ function PaymentForm({
         >
           Cancel
         </Button>
-        <Button type="submit" className="flex-1" disabled={!stripe || isProcessing}>
+        <Button
+          type="submit"
+          className="flex-1"
+          disabled={!stripe || isProcessing}
+        >
           {isProcessing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -158,7 +162,8 @@ function PaymentForm({
       </div>
 
       <p className="text-xs text-[color:var(--text-muted)] text-center">
-        By confirming payment you agree that bookings are non-refundable once confirmed.
+        By confirming payment you agree that bookings are non-refundable once
+        confirmed.
       </p>
     </form>
   );
@@ -194,11 +199,14 @@ export function EventBookingModal({
     }
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/book`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ truckId }),
-      });
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(eventId)}/book`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ truckId }),
+        },
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.message || "Failed to initiate booking");
@@ -206,11 +214,15 @@ export function EventBookingModal({
       const data = await res.json();
       setClientSecret(data.clientSecret);
       setBookingId(data.bookingId);
-      setBookingData({ totalCents: data.totalCents, breakdown: data.breakdown });
+      setBookingData({
+        totalCents: data.totalCents,
+        breakdown: data.breakdown,
+      });
     } catch (err: any) {
       toast({
         title: "Booking Failed",
-        description: err.message || "Could not initiate booking. Please try again.",
+        description:
+          err.message || "Could not initiate booking. Please try again.",
         variant: "destructive",
       });
       onOpenChange(false);
@@ -276,7 +288,8 @@ export function EventBookingModal({
                 </p>
                 <p className="text-xs text-[color:var(--text-muted)]">
                   {eventDetails.name && `${eventDetails.name} · `}
-                  {eventDetails.date} · {eventDetails.startTime}–{eventDetails.endTime}
+                  {eventDetails.date} · {eventDetails.startTime}–
+                  {eventDetails.endTime}
                 </p>
                 <p className="mt-1 text-xs text-[color:var(--text-muted)]">
                   Host fee: ${(eventDetails.hostPriceCents / 100).toFixed(2)} +
@@ -321,7 +334,10 @@ export function EventBookingModal({
               stripe={stripePromise}
               options={{
                 clientSecret,
-                appearance: { theme: "stripe", variables: { colorPrimary: "#ea580c" } },
+                appearance: {
+                  theme: "stripe",
+                  variables: { colorPrimary: "#ea580c" },
+                },
               }}
             >
               <PaymentForm

@@ -142,8 +142,8 @@ const PaymentForm = ({
               ? result.setupIntent?.id
               : undefined
             : "paymentIntent" in result
-            ? result.paymentIntent?.id
-            : undefined;
+              ? result.paymentIntent?.id
+              : undefined;
         if (paymentIntentId) {
           onSuccess(paymentIntentId);
         }
@@ -541,7 +541,9 @@ export default function Subscribe() {
     // Stripe redirect (3DS/etc) lands back here with `redirect_status`.
     try {
       const params = new URLSearchParams(window.location.search);
-      const redirectStatus = (params.get("redirect_status") || "").toLowerCase();
+      const redirectStatus = (
+        params.get("redirect_status") || ""
+      ).toLowerCase();
       if (redirectStatus === "succeeded") {
         toast({
           title: "Payment Successful!",
@@ -553,8 +555,7 @@ export default function Subscribe() {
   }, [nextPath, setLocation, toast]);
 
   // Plan selection state
-  const [billingInterval, setBillingInterval] =
-    useState<"month">("month");
+  const [billingInterval, setBillingInterval] = useState<"month">("month");
   const [promoCode, setPromoCode] = useState("");
   const [creditsToApply, setCreditsToApply] = useState("");
 
@@ -562,7 +563,7 @@ export default function Subscribe() {
   const [subscriptionState, setSubscriptionState] = useState<SubscriptionState>(
     {
       status: "selecting",
-    }
+    },
   );
 
   // Debug: Log auth status
@@ -596,7 +597,7 @@ export default function Subscribe() {
           hasMultipleDeals: false, // Always false now - single tier pricing
           billingInterval,
           promoCode: promoCode || undefined,
-        }
+        },
       );
 
       const data = await response.json();
@@ -629,7 +630,7 @@ export default function Subscribe() {
       } else if (data && data.status === "quote") {
         // Read-only initialize: now create the actual subscription
         console.log(
-          "Received quote; creating subscription with server-selected Price ID"
+          "Received quote; creating subscription with server-selected Price ID",
         );
         const createResp = await apiRequest(
           "POST",
@@ -641,7 +642,7 @@ export default function Subscribe() {
               0,
               Math.floor(Number(creditsToApply || 0) * 100),
             ),
-          }
+          },
         );
         const createData = await createResp.json();
         if (
@@ -763,7 +764,10 @@ export default function Subscribe() {
               <p className="text-muted-foreground mb-4">
                 Stripe payment processing is not yet configured.
               </p>
-              <Button className="w-full mb-2" onClick={() => setLocation(nextPath)}>
+              <Button
+                className="w-full mb-2"
+                onClick={() => setLocation(nextPath)}
+              >
                 Continue (No Premium)
               </Button>
               <Link href="/">
@@ -801,7 +805,9 @@ export default function Subscribe() {
                   Premium is optional
                 </div>
                 <div className="text-xs text-[color:var(--text-secondary)]">
-                  Premium unlocks deal creation + analytics (trial/subscription). Parking Pass is separate and always available for food trucks.
+                  Premium unlocks deal creation + analytics
+                  (trial/subscription). Parking Pass is separate and always
+                  available for food trucks.
                 </div>
               </div>
               <Button
@@ -837,14 +843,13 @@ export default function Subscribe() {
               (currentSubscription as any)?.trialEndsAt && (
                 <div className="text-xs text-[color:var(--status-success)]">
                   Trial active until{" "}
-                  {new Date((currentSubscription as any).trialEndsAt).toLocaleDateString(
-                    "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    },
-                  )}
+                  {new Date(
+                    (currentSubscription as any).trialEndsAt,
+                  ).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
                   .
                 </div>
               )}
@@ -866,7 +871,8 @@ export default function Subscribe() {
                   Change your billing frequency or apply a promo code
                 </p>
                 <p className="text-xs text-[color:var(--accent-text)] font-medium mb-4">
-                  Tip: If you received a promo code from MealScout, enter it below.
+                  Tip: If you received a promo code from MealScout, enter it
+                  below.
                 </p>
                 <Button
                   onClick={showNewSubscription}
@@ -908,7 +914,8 @@ export default function Subscribe() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-[color:var(--text-secondary)]">
-                  Available: ${Number(creditBalanceData?.balance || 0).toFixed(2)}
+                  Available: $
+                  {Number(creditBalanceData?.balance || 0).toFixed(2)}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="credit-apply">Credits to apply</Label>
@@ -1031,7 +1038,3 @@ export default function Subscribe() {
     </div>
   );
 }
-
-
-
-
