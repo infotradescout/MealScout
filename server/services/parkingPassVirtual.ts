@@ -51,6 +51,22 @@ const normalizeDaysOfWeek = (value: unknown): number[] => {
     .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
 };
 
+const firstDefined = <T>(...values: Array<T | null | undefined>) => {
+  for (const value of values) {
+    if (value !== null && value !== undefined) return value;
+  }
+  return null;
+};
+
+const firstFiniteNumber = (...values: Array<number | string | null | undefined>) => {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const parsed = typeof value === "string" ? Number(value) : value;
+    if (Number.isFinite(parsed)) return Number(parsed);
+  }
+  return null;
+};
+
 const ensureValidWindow = (startTime: string, endTime: string) => {
   const start = timeToMinutes(startTime);
   const end = timeToMinutes(endTime);
@@ -252,7 +268,12 @@ export async function listParkingPassOccurrences(options?: {
 
     const daysOfWeek = normalizeDaysOfWeek(series.parkingPassDaysOfWeek as unknown);
     const includeAllDays = daysOfWeek.length === 0;
-    const window = ensureValidWindow(series.defaultStartTime, series.defaultEndTime);
+    const window = ensureValidWindow(
+      firstDefined(series.defaultStartTime, host.parkingPassStartTime) ??
+        PARKING_PASS_MEAL_WINDOWS.breakfast.start,
+      firstDefined(series.defaultEndTime, host.parkingPassEndTime) ??
+        PARKING_PASS_MEAL_WINDOWS.dinner.end,
+    );
 
     const seriesTimeZone = String(series.timezone || "America/Chicago").trim();
     const startDateKey = dateKeyInZone(start, seriesTimeZone);
@@ -274,20 +295,50 @@ export async function listParkingPassOccurrences(options?: {
       const id = override?.id ?? buildParkingPassVirtualId(series.id, dateKey);
       const effectiveDate = override?.date ?? utcDateFromDateKey(dateKey);
 
-      const maxTrucks = override?.maxTrucks ?? series.defaultMaxTrucks ?? 1;
+      const maxTrucks =
+        firstFiniteNumber(override?.maxTrucks, series.defaultMaxTrucks, host.spotCount) ?? 1;
       const hardCapEnabled = override?.hardCapEnabled ?? series.defaultHardCapEnabled ?? false;
       const status = override?.status ?? "open";
 
       const breakfastPriceCents =
-        override?.breakfastPriceCents ?? series.defaultBreakfastPriceCents ?? 0;
+        firstFiniteNumber(
+          override?.breakfastPriceCents,
+          series.defaultBreakfastPriceCents,
+          host.parkingPassBreakfastPriceCents,
+        ) ?? 0;
       const lunchPriceCents =
-        override?.lunchPriceCents ?? series.defaultLunchPriceCents ?? 0;
+        firstFiniteNumber(
+          override?.lunchPriceCents,
+          series.defaultLunchPriceCents,
+          host.parkingPassLunchPriceCents,
+        ) ?? 0;
       const dinnerPriceCents =
-        override?.dinnerPriceCents ?? series.defaultDinnerPriceCents ?? 0;
-      const dailyPriceCents = override?.dailyPriceCents ?? series.defaultDailyPriceCents ?? 0;
-      const weeklyPriceCents = override?.weeklyPriceCents ?? series.defaultWeeklyPriceCents ?? 0;
-      const monthlyPriceCents = override?.monthlyPriceCents ?? series.defaultMonthlyPriceCents ?? 0;
-      const hostPriceCents = override?.hostPriceCents ?? series.defaultHostPriceCents ?? 0;
+        firstFiniteNumber(
+          override?.dinnerPriceCents,
+          series.defaultDinnerPriceCents,
+          host.parkingPassDinnerPriceCents,
+        ) ?? 0;
+      const dailyPriceCents =
+        firstFiniteNumber(
+          override?.dailyPriceCents,
+          series.defaultDailyPriceCents,
+          host.parkingPassDailyPriceCents,
+        ) ?? 0;
+      const weeklyPriceCents =
+        firstFiniteNumber(
+          override?.weeklyPriceCents,
+          series.defaultWeeklyPriceCents,
+          host.parkingPassWeeklyPriceCents,
+        ) ?? 0;
+      const monthlyPriceCents =
+        firstFiniteNumber(
+          override?.monthlyPriceCents,
+          series.defaultMonthlyPriceCents,
+          host.parkingPassMonthlyPriceCents,
+        ) ?? 0;
+      const hostPriceCents =
+        firstFiniteNumber(override?.hostPriceCents, series.defaultHostPriceCents, dailyPriceCents) ??
+        0;
 
       occurrences.push({
         id,
@@ -394,7 +445,12 @@ export async function ensureParkingPassEventRow(args: {
     return null;
   }
 
-  const window = ensureValidWindow(seriesRow.series.defaultStartTime, seriesRow.series.defaultEndTime);
+  const window = ensureValidWindow(
+    firstDefined(seriesRow.series.defaultStartTime, seriesRow.host.parkingPassStartTime) ??
+      PARKING_PASS_MEAL_WINDOWS.breakfast.start,
+    firstDefined(seriesRow.series.defaultEndTime, seriesRow.host.parkingPassEndTime) ??
+      PARKING_PASS_MEAL_WINDOWS.dinner.end,
+  );
 
   // Upsert-like behavior: if already exists, return it.
   const existing = await db
@@ -416,17 +472,46 @@ export async function ensureParkingPassEventRow(args: {
     date: targetDate,
     startTime: window.startTime,
     endTime: window.endTime,
-    maxTrucks: seriesRow.series.defaultMaxTrucks ?? 1,
+    maxTrucks:
+      firstFiniteNumber(seriesRow.series.defaultMaxTrucks, seriesRow.host.spotCount) ?? 1,
     status: "open",
     bookedRestaurantId: null,
     hardCapEnabled: seriesRow.series.defaultHardCapEnabled ?? false,
-    hostPriceCents: seriesRow.series.defaultHostPriceCents ?? 0,
-    breakfastPriceCents: seriesRow.series.defaultBreakfastPriceCents ?? 0,
-    lunchPriceCents: seriesRow.series.defaultLunchPriceCents ?? 0,
-    dinnerPriceCents: seriesRow.series.defaultDinnerPriceCents ?? 0,
-    dailyPriceCents: seriesRow.series.defaultDailyPriceCents ?? 0,
-    weeklyPriceCents: seriesRow.series.defaultWeeklyPriceCents ?? 0,
-    monthlyPriceCents: seriesRow.series.defaultMonthlyPriceCents ?? 0,
+    hostPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultHostPriceCents,
+        seriesRow.host.parkingPassDailyPriceCents,
+      ) ?? 0,
+    breakfastPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultBreakfastPriceCents,
+        seriesRow.host.parkingPassBreakfastPriceCents,
+      ) ?? 0,
+    lunchPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultLunchPriceCents,
+        seriesRow.host.parkingPassLunchPriceCents,
+      ) ?? 0,
+    dinnerPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultDinnerPriceCents,
+        seriesRow.host.parkingPassDinnerPriceCents,
+      ) ?? 0,
+    dailyPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultDailyPriceCents,
+        seriesRow.host.parkingPassDailyPriceCents,
+      ) ?? 0,
+    weeklyPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultWeeklyPriceCents,
+        seriesRow.host.parkingPassWeeklyPriceCents,
+      ) ?? 0,
+    monthlyPriceCents:
+      firstFiniteNumber(
+        seriesRow.series.defaultMonthlyPriceCents,
+        seriesRow.host.parkingPassMonthlyPriceCents,
+      ) ?? 0,
     requiresPayment: true,
     createdAt: new Date(),
     updatedAt: new Date(),

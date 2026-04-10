@@ -46,7 +46,14 @@ import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
 
-export function registerEventRoutes(app: Express) {
+type EventRouteDependencies = {
+  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+};
+
+export function registerEventRoutes(
+  app: Express,
+  { hasBusinessDistributionAccess }: EventRouteDependencies,
+) {
   const parkingPassFeedLimiter = distributedRateLimit({
     scope: "parking-pass-feed",
     limit: 120,
@@ -383,6 +390,13 @@ export function registerEventRoutes(app: Express) {
   // Truck Discovery (authenticated)
   app.get("/api/events", isAuthenticated, async (req: any, res) => {
     try {
+      const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+      if (!hasAccess) {
+        return res.status(402).json({
+          message: "Premium subscription required for event access.",
+        });
+      }
+
       const hostIdFilter = String(req.query?.hostId || "").trim();
       const upcomingEvents = await storage.getAllUpcomingEvents();
       let filtered = Array.isArray(upcomingEvents) ? upcomingEvents : [];
@@ -1454,6 +1468,13 @@ export function registerEventRoutes(app: Express) {
     isRestaurantOwner,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required for event access.",
+          });
+        }
+
         const { eventId } = req.params;
         const { restaurantId, message } = req.body;
 
@@ -1658,6 +1679,13 @@ export function registerEventRoutes(app: Express) {
     isRestaurantOwner,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message: "Premium subscription required for event access.",
+          });
+        }
+
         const { eventId } = req.params;
         const { truckId } = req.body;
 

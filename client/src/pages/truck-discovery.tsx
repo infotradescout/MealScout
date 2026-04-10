@@ -464,6 +464,16 @@ function TruckDiscovery() {
     return roles.has("food_truck") || roles.has("restaurant_owner");
   }, [user]);
 
+  const { data: subscription } = useQuery<{
+    status: string;
+    hasAccess: boolean;
+  }>({
+    queryKey: ["/api/subscription/status"],
+    enabled: isAuthenticated && isTruckOwner,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   // Fetch truck owner's restaurant id (only when logged in as truck)
   useEffect(() => {
     if (!isTruckOwner) return;
@@ -544,6 +554,16 @@ function TruckDiscovery() {
   // Express interest
   const handleInterest = useCallback(
     async (eventId: string) => {
+      if (!subscription?.hasAccess) {
+        toast({
+          title: "Premium required",
+          description: "Upgrade to express interest in events.",
+          variant: "destructive",
+        });
+        setLocation("/subscription");
+        return;
+      }
+
       if (!myRestaurantId) {
         toast({
           title: "Truck Profile Required",
@@ -581,7 +601,7 @@ function TruckDiscovery() {
         setSubmittingId(null);
       }
     },
-    [myRestaurantId, setLocation, toast],
+    [myRestaurantId, setLocation, subscription?.hasAccess, toast],
   );
 
   const handleJoin = useCallback(
@@ -625,6 +645,14 @@ function TruckDiscovery() {
                 Register your truck
               </button>{" "}
               to express interest in events.
+            </span>
+          </div>
+        )}
+        {isTruckOwner && !subscription?.hasAccess && (
+          <div className="mt-4 flex items-start gap-2 text-sm text-[color:var(--text-secondary)] bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] rounded-lg px-4 py-3">
+            <Info className="h-4 w-4 shrink-0 mt-0.5 text-[color:var(--accent-text)]" />
+            <span>
+              Event participation is a premium feature. <button className="text-[color:var(--accent-text)] hover:underline font-medium" onClick={() => setLocation("/subscription")}>Upgrade your plan</button> to send interest to organizers.
             </span>
           </div>
         )}

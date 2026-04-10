@@ -16,6 +16,10 @@ import {
   buildCapacityFullError,
 } from "../services/interestDecision";
 
+type EventCoordinatorRouteDependencies = {
+  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+};
+
 const allowedRoles = new Set([
   "event_coordinator",
   "admin",
@@ -35,13 +39,36 @@ const isEventCoordinator = (req: any, res: any, next: any) => {
   next();
 };
 
-export function registerEventCoordinatorRoutes(app: Express) {
+export function registerEventCoordinatorRoutes(
+  app: Express,
+  { hasBusinessDistributionAccess }: EventCoordinatorRouteDependencies,
+) {
+  const ensurePaidEventAccess = async (req: any, res: any) => {
+    if (["admin", "super_admin", "staff"].includes(req.user?.userType)) {
+      return true;
+    }
+
+    const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+    if (!hasAccess) {
+      res.status(402).json({
+        message: "Premium subscription required for event access.",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   // ── GET /api/event-coordinator/events ──────────────────────────────────
   app.get(
     "/api/event-coordinator/events",
     isEventCoordinator,
     async (req: any, res) => {
       try {
+        if (!(await ensurePaidEventAccess(req, res))) {
+          return;
+        }
+
         const host = await storage.getHostByUserId(req.user.id);
         if (!host) {
           return res.json([]);
@@ -117,6 +144,10 @@ export function registerEventCoordinatorRoutes(app: Express) {
     isEventCoordinator,
     async (req: any, res) => {
       try {
+        if (!(await ensurePaidEventAccess(req, res))) {
+          return;
+        }
+
         const { eventId } = req.params;
         const event = await storage.getEvent(eventId);
         if (!event) {
@@ -193,6 +224,10 @@ export function registerEventCoordinatorRoutes(app: Express) {
     isEventCoordinator,
     async (req: any, res) => {
       try {
+        if (!(await ensurePaidEventAccess(req, res))) {
+          return;
+        }
+
         const { interestId } = req.params;
         const { status } = req.body;
         if (!["accepted", "declined"].includes(status)) {
@@ -253,6 +288,10 @@ export function registerEventCoordinatorRoutes(app: Express) {
       return res.status(401).json({ error: "Authentication required" });
     }
     try {
+      if (!(await ensurePaidEventAccess(req, res))) {
+        return;
+      }
+
       const myRestaurants = await storage.getRestaurantsByOwner(req.user.id);
       if (!myRestaurants || myRestaurants.length === 0) {
         return res.json([]);
@@ -300,6 +339,10 @@ export function registerEventCoordinatorRoutes(app: Express) {
     isEventCoordinator,
     async (req: any, res) => {
       try {
+        if (!(await ensurePaidEventAccess(req, res))) {
+          return;
+        }
+
         const schema = z.object({
           businessName: z.string().min(1),
           address: z.string().min(1),

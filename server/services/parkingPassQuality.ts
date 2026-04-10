@@ -99,6 +99,14 @@ const toNumberOrNull = (value: any): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const firstFiniteNumber = (...values: Array<number | string | null | undefined>) => {
+  for (const value of values) {
+    const parsed = toNumberOrNull(value);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+};
+
 const SUSPICIOUS_TEST_TOKEN =
   /\b(test|asdf|qwer|dummy|sample|temp|fake|placeholder)\b/i;
 const LONG_GIBBERISH_TOKEN = /^[a-z0-9]{16,}$/i;
@@ -164,6 +172,15 @@ export function computeParkingPassQualityFlags(listing: {
     longitude?: string | number | null;
     stripeConnectAccountId?: string | null;
     stripeChargesEnabled?: boolean | null;
+    spotCount?: number | null;
+    parkingPassStartTime?: string | null;
+    parkingPassEndTime?: string | null;
+    parkingPassBreakfastPriceCents?: number | null;
+    parkingPassLunchPriceCents?: number | null;
+    parkingPassDinnerPriceCents?: number | null;
+    parkingPassDailyPriceCents?: number | null;
+    parkingPassWeeklyPriceCents?: number | null;
+    parkingPassMonthlyPriceCents?: number | null;
   } | null;
   address?: string | null;
   city?: string | null;
@@ -205,8 +222,8 @@ export function computeParkingPassQualityFlags(listing: {
     flags.push("invalid_coords");
   }
 
-  const startTime = normalize(listing.startTime);
-  const endTime = normalize(listing.endTime);
+  const startTime = normalize(listing.startTime ?? host?.parkingPassStartTime);
+  const endTime = normalize(listing.endTime ?? host?.parkingPassEndTime);
   if (!startTime || !endTime) {
     flags.push("invalid_time_window");
   } else {
@@ -223,19 +240,31 @@ export function computeParkingPassQualityFlags(listing: {
     }
   }
 
-  const maxTrucks = listing.maxTrucks ?? null;
+  const maxTrucks = firstFiniteNumber(listing.maxTrucks, host?.spotCount);
   if (maxTrucks === null || maxTrucks === undefined) {
     flags.push("missing_spots");
   } else if (!Number.isFinite(maxTrucks) || maxTrucks < 1) {
     flags.push("invalid_spots");
   }
 
-  const breakfast = Number(listing.breakfastPriceCents ?? 0);
-  const lunch = Number(listing.lunchPriceCents ?? 0);
-  const dinner = Number(listing.dinnerPriceCents ?? 0);
-  const daily = Number(listing.dailyPriceCents ?? 0);
-  const weekly = Number(listing.weeklyPriceCents ?? 0);
-  const monthly = Number(listing.monthlyPriceCents ?? 0);
+  const breakfast = Number(
+    firstFiniteNumber(listing.breakfastPriceCents, host?.parkingPassBreakfastPriceCents) ?? 0,
+  );
+  const lunch = Number(
+    firstFiniteNumber(listing.lunchPriceCents, host?.parkingPassLunchPriceCents) ?? 0,
+  );
+  const dinner = Number(
+    firstFiniteNumber(listing.dinnerPriceCents, host?.parkingPassDinnerPriceCents) ?? 0,
+  );
+  const daily = Number(
+    firstFiniteNumber(listing.dailyPriceCents, host?.parkingPassDailyPriceCents) ?? 0,
+  );
+  const weekly = Number(
+    firstFiniteNumber(listing.weeklyPriceCents, host?.parkingPassWeeklyPriceCents) ?? 0,
+  );
+  const monthly = Number(
+    firstFiniteNumber(listing.monthlyPriceCents, host?.parkingPassMonthlyPriceCents) ?? 0,
+  );
   const hasPricing = [breakfast, lunch, dinner, daily, weekly, monthly].some(
     (value) => Number.isFinite(value) && value > 0,
   );

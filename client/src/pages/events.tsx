@@ -16,6 +16,16 @@ export default function EventsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEventCoordinator = isAuthenticated && user?.userType === "event_coordinator";
+  const { data: subscription } = useQuery<{
+    status: string;
+    hasAccess: boolean;
+  }>({
+    queryKey: ["/api/subscription/status"],
+    enabled: isEventCoordinator,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const canUsePaidEvents = !isEventCoordinator || Boolean(subscription?.hasAccess);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     organizationName: "",
@@ -136,7 +146,7 @@ export default function EventsPage() {
             </p>
           </div>
 
-          {isEventCoordinator && (
+          {isEventCoordinator && canUsePaidEvents && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3">
@@ -312,6 +322,18 @@ export default function EventsPage() {
                   </form>
                 </CardContent>
               )}
+            </Card>
+          )}
+
+          {isEventCoordinator && !canUsePaidEvents && (
+            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+              <CardContent className="p-6 space-y-3">
+                <h2 className="text-lg font-semibold">Premium Required</h2>
+                <p className="text-sm text-[color:var(--text-secondary)]">
+                  Event coordinator access is a paid feature. Upgrade to post and manage events.
+                </p>
+                <Button onClick={() => (window.location.href = "/subscription")}>View subscription</Button>
+              </CardContent>
             </Card>
           )}
         </div>

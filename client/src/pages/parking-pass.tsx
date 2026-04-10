@@ -502,6 +502,21 @@ export default function ParkingPassPage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { data: subscription } = useQuery<{
+    status: string;
+    hasAccess: boolean;
+    trialAccess?: boolean;
+  }>({
+    queryKey: ["/api/subscription/status"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
+    user?.userType || "",
+  );
+  const hasPremiumTruckTools =
+    isAdminOrStaff || Boolean(subscription?.hasAccess);
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -1277,7 +1292,7 @@ export default function ParkingPassPage() {
   const newLocationMapZoom = newLocationPinPosition ? 15 : 4;
 
   useEffect(() => {
-    if (!truckId) {
+    if (!truckId || !hasPremiumTruckTools) {
       setManualSchedules([]);
       return;
     }
@@ -1310,7 +1325,7 @@ export default function ParkingPassPage() {
     return () => {
       cancelled = true;
     };
-  }, [truckId, toast]);
+  }, [hasPremiumTruckTools, toast, truckId]);
 
   useEffect(() => {
     if (!truckId) {
@@ -1402,6 +1417,16 @@ export default function ParkingPassPage() {
   };
 
   const handleCreateSchedule = async () => {
+    if (!hasPremiumTruckTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to add off-platform schedule stops.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!truckId) {
       toast({
         title: "Missing truck",
@@ -1499,6 +1524,16 @@ export default function ParkingPassPage() {
   };
 
   const handleDeleteSchedule = async (scheduleId: string) => {
+    if (!hasPremiumTruckTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to manage off-platform schedule stops.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!truckId) return;
     try {
       const res = await fetch(
@@ -2481,6 +2516,7 @@ export default function ParkingPassPage() {
     trigger: keyof SocialAutopostSettings["triggers"],
     options: { title: string; message: string; link: string },
   ) => {
+    if (!hasPremiumTruckTools) return;
     if (!socialSettings.triggers[trigger]) return;
     const selectedPlatforms = { ...socialSettings.platforms };
     if (
@@ -2507,6 +2543,16 @@ export default function ParkingPassPage() {
   };
 
   const handleSaveSocialSettings = async () => {
+    if (!hasPremiumTruckTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to use social auto-post settings.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!truckId) return;
     setIsSavingSocialSettings(true);
     try {
@@ -2597,6 +2643,16 @@ export default function ParkingPassPage() {
   };
 
   const handleShareLocation = async () => {
+    if (!hasPremiumTruckTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to use one-click live location sharing.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!truckId) {
       toast({
         title: "Missing truck",
@@ -2680,9 +2736,6 @@ export default function ParkingPassPage() {
     }
   };
 
-  const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
-    user?.userType || "",
-  );
   const isTruckViewUser = user?.userType === "food_truck" || isAdminOrStaff;
   const showHostParkingPass =
     isAuthenticated && (hasHostProfile || isAdminOrStaff);
@@ -4506,6 +4559,11 @@ export default function ParkingPassPage() {
         {topTab === "schedule" && isTruckViewUser && (
           <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
             <CardContent className="p-5 space-y-4">
+              {!hasPremiumTruckTools && (
+                <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
+                  Off-platform schedule, one-tap live location, and social auto-post are premium tools. Host-location bookings still appear in your calendar.
+                </div>
+              )}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
@@ -4519,7 +4577,7 @@ export default function ParkingPassPage() {
                   size="sm"
                   className="w-full sm:w-auto"
                   onClick={handleShareLocation}
-                  disabled={isSharingLocation || !truckId}
+                  disabled={isSharingLocation || !truckId || !hasPremiumTruckTools}
                 >
                   <Share2 className="h-4 w-4 mr-1" />
                   {isSharingLocation
@@ -4585,6 +4643,7 @@ export default function ParkingPassPage() {
                     className="pp-field"
                     placeholder="https://facebook.com/yourpage"
                     value={socialLinks.facebookPageUrl}
+                    disabled={!hasPremiumTruckTools}
                     onChange={(event) =>
                       setSocialLinks((current) => ({
                         ...current,
@@ -4600,6 +4659,7 @@ export default function ParkingPassPage() {
                     className="pp-field"
                     placeholder="https://instagram.com/yourtruck"
                     value={socialLinks.instagramUrl}
+                    disabled={!hasPremiumTruckTools}
                     onChange={(event) =>
                       setSocialLinks((current) => ({
                         ...current,
@@ -4615,6 +4675,7 @@ export default function ParkingPassPage() {
                     className="pp-field"
                     placeholder="https://x.com/yourtruck"
                     value={socialLinks.xUrl}
+                    disabled={!hasPremiumTruckTools}
                     onChange={(event) =>
                       setSocialLinks((current) => ({
                         ...current,
@@ -4643,6 +4704,7 @@ export default function ParkingPassPage() {
                       <span>{platform.label}</span>
                       <Switch
                         checked={socialSettings.platforms[platform.key]}
+                        disabled={!hasPremiumTruckTools}
                         onCheckedChange={(checked) =>
                           setSocialSettings((current) => ({
                             ...current,
@@ -4675,6 +4737,7 @@ export default function ParkingPassPage() {
                       <span>{trigger.label}</span>
                       <Switch
                         checked={socialSettings.triggers[trigger.key]}
+                        disabled={!hasPremiumTruckTools}
                         onCheckedChange={(checked) =>
                           setSocialSettings((current) => ({
                             ...current,
@@ -4693,6 +4756,7 @@ export default function ParkingPassPage() {
                 <div className="flex items-center gap-2 text-xs text-slate-700">
                   <Switch
                     checked={socialSettings.promptBeforePost}
+                    disabled={!hasPremiumTruckTools}
                     onCheckedChange={(checked) =>
                       setSocialSettings((current) => ({
                         ...current,
@@ -4705,7 +4769,7 @@ export default function ParkingPassPage() {
                 <Button
                   size="sm"
                   onClick={handleSaveSocialSettings}
-                  disabled={isSavingSocialSettings}
+                  disabled={isSavingSocialSettings || !hasPremiumTruckTools}
                 >
                   {isSavingSocialSettings ? "Saving..." : "Save settings"}
                 </Button>
@@ -4719,7 +4783,7 @@ export default function ParkingPassPage() {
             <CardContent className="p-5 space-y-6">
               <ParkingScheduleCalendar
                 items={parkingScheduleItems}
-                allowManualEdits
+                allowManualEdits={hasPremiumTruckTools}
                 onDeleteManual={handleDeleteSchedule}
                 onCancelBooking={handleCancelBooking}
                 cancelingBookingId={cancelingBookingId}
@@ -4747,6 +4811,7 @@ export default function ParkingPassPage() {
                       id="schedule-date"
                       type="date"
                       value={scheduleForm.date}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("date", event.target.value)
                       }
@@ -4758,6 +4823,7 @@ export default function ParkingPassPage() {
                       id="schedule-location"
                       placeholder="Downtown plaza"
                       value={scheduleForm.locationName}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange(
                           "locationName",
@@ -4772,6 +4838,7 @@ export default function ParkingPassPage() {
                       id="schedule-start"
                       type="time"
                       value={scheduleForm.startTime}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("startTime", event.target.value)
                       }
@@ -4783,6 +4850,7 @@ export default function ParkingPassPage() {
                       id="schedule-end"
                       type="time"
                       value={scheduleForm.endTime}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("endTime", event.target.value)
                       }
@@ -4795,6 +4863,7 @@ export default function ParkingPassPage() {
                     id="schedule-address"
                     placeholder="123 Main St, City"
                     value={scheduleForm.address}
+                    disabled={!hasPremiumTruckTools}
                     onChange={(event) =>
                       handleScheduleFieldChange("address", event.target.value)
                     }
@@ -4807,6 +4876,7 @@ export default function ParkingPassPage() {
                       id="schedule-city"
                       placeholder="City"
                       value={scheduleForm.city}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("city", event.target.value)
                       }
@@ -4818,6 +4888,7 @@ export default function ParkingPassPage() {
                       id="schedule-state"
                       placeholder="State"
                       value={scheduleForm.state}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("state", event.target.value)
                       }
@@ -4830,6 +4901,7 @@ export default function ParkingPassPage() {
                     id="schedule-notes"
                     placeholder="Optional notes for this stop."
                     value={scheduleForm.notes}
+                    disabled={!hasPremiumTruckTools}
                     onChange={(event) =>
                       handleScheduleFieldChange("notes", event.target.value)
                     }
@@ -4840,6 +4912,7 @@ export default function ParkingPassPage() {
                     <input
                       type="checkbox"
                       checked={scheduleForm.isPublic}
+                      disabled={!hasPremiumTruckTools}
                       onChange={(event) =>
                         handleScheduleFieldChange("isPublic", event.target.checked)
                       }
@@ -4849,7 +4922,7 @@ export default function ParkingPassPage() {
                   <Button
                     size="sm"
                     onClick={handleCreateSchedule}
-                    disabled={isSavingSchedule}
+                    disabled={isSavingSchedule || !hasPremiumTruckTools}
                   >
                     {isSavingSchedule ? "Saving..." : "Add stop"}
                   </Button>

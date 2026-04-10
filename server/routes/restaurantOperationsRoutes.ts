@@ -222,6 +222,14 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message:
+              "Premium subscription required to use social auto-posting.",
+          });
+        }
+
         const { restaurantId } = req.params;
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
@@ -365,6 +373,14 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message:
+              "Premium subscription required for one-click live location updates.",
+          });
+        }
+
         const { restaurantId } = req.params;
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,

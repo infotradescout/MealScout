@@ -224,6 +224,8 @@ export default function RestaurantOwnerDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const hasPremiumLocationTools =
+    isAdmin || isStaff || Boolean(subscription?.hasAccess);
 
   // Fetch favorites analytics for paid users
   const { data: favoritesAnalytics, isLoading: loadingFavorites } =
@@ -769,6 +771,16 @@ export default function RestaurantOwnerDashboard() {
 
   // Start broadcasting handler
   const handleStartBroadcasting = () => {
+    if (!hasPremiumLocationTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to use live location broadcasting.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!navigator.geolocation) {
       toast({
         title: "GPS Not Available",
@@ -820,6 +832,16 @@ export default function RestaurantOwnerDashboard() {
 
   // Handle restaurant location update
   const handleUpdateRestaurantLocation = () => {
+    if (!hasPremiumLocationTools) {
+      toast({
+        title: "Premium required",
+        description: "Upgrade to use one-click live location updates.",
+        variant: "destructive",
+      });
+      setLocation("/subscription");
+      return;
+    }
+
     if (!navigator.geolocation) {
       toast({
         title: "GPS Not Available",
@@ -2349,7 +2371,10 @@ export default function RestaurantOwnerDashboard() {
                         {!isBroadcasting ? (
                           <Button
                             onClick={handleStartBroadcasting}
-                            disabled={startFoodTruckSessionMutation.isPending}
+                            disabled={
+                              startFoodTruckSessionMutation.isPending ||
+                              !hasPremiumLocationTools
+                            }
                             className="bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)]"
                             data-testid="button-start-broadcasting"
                           >
@@ -2579,7 +2604,8 @@ export default function RestaurantOwnerDashboard() {
                       onClick={handleUpdateRestaurantLocation}
                       disabled={
                         isUpdatingLocation ||
-                        updateRestaurantLocationMutation.isPending
+                        updateRestaurantLocationMutation.isPending ||
+                        !hasPremiumLocationTools
                       }
                       variant="outline"
                       data-testid="button-update-location"

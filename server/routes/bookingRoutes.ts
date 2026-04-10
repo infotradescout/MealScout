@@ -22,13 +22,20 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+type BookingRouteDependencies = {
+  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+};
+
 /**
  * Booking Management Routes
  * - GET /api/bookings/my-truck - Get all bookings for user's food truck
  * - GET /api/bookings/my-host - Get all bookings for user's host locations
  * - POST /api/bookings/:bookingId/cancel - Cancel a booking (non-refundable)
  */
-export function registerBookingRoutes(app: Express) {
+export function registerBookingRoutes(
+  app: Express,
+  { hasBusinessDistributionAccess }: BookingRouteDependencies,
+) {
   const toDateKey = (value: unknown, timeZone?: string): string | null => {
     if (value instanceof Date) {
       const key = dateKeyInZone(value, timeZone || "America/Chicago");
@@ -539,13 +546,17 @@ export function registerBookingRoutes(app: Express) {
       try {
         const { truckId } = req.params;
         const [truck] = await db
-          .select({ id: restaurants.id })
+          .select({ id: restaurants.id, ownerId: restaurants.ownerId })
           .from(restaurants)
           .where(eq(restaurants.id, truckId));
 
         if (!truck) {
           return res.status(404).json({ message: "Truck not found" });
         }
+
+        const ownerHasPremiumAccess = truck.ownerId
+          ? await hasBusinessDistributionAccess(String(truck.ownerId))
+          : false;
 
         let includePrivate = false;
         if (req.isAuthenticated?.()) {
@@ -556,7 +567,9 @@ export function registerBookingRoutes(app: Express) {
         }
 
         const entries = await storage.getTruckManualSchedules(truckId);
-        const filtered = includePrivate
+        const filtered = !ownerHasPremiumAccess
+          ? []
+          : includePrivate
           ? entries
           : entries.filter((entry) => entry.isPublic);
 
@@ -574,6 +587,14 @@ export function registerBookingRoutes(app: Express) {
     isAuthenticated,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message:
+              "Premium subscription required to manage off-platform schedule.",
+          });
+        }
+
         const { truckId } = req.params;
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
@@ -631,6 +652,14 @@ export function registerBookingRoutes(app: Express) {
     isAuthenticated,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message:
+              "Premium subscription required to manage off-platform schedule.",
+          });
+        }
+
         const { truckId, scheduleId } = req.params;
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
@@ -793,7 +822,11 @@ export function registerBookingRoutes(app: Express) {
         const { truckId } = req.params;
 
         const [truck] = await db
-          .select({ id: restaurants.id, name: restaurants.name })
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            ownerId: restaurants.ownerId,
+          })
           .from(restaurants)
           .where(eq(restaurants.id, truckId));
 
@@ -808,10 +841,15 @@ export function registerBookingRoutes(app: Express) {
           req.user?.userType || "",
         );
         let includePending = false;
+        const ownerHasPremiumAccess = truck.ownerId
+          ? await hasBusinessDistributionAccess(String(truck.ownerId))
+          : false;
         if (req.isAuthenticated?.() && req.user?.id) {
-          includePending =
-            isAdmin ||
-            (await storage.verifyRestaurantOwnership(truckId, req.user.id));
+          const isOwner = await storage.verifyRestaurantOwnership(
+            truckId,
+            req.user.id,
+          );
+          includePending = isAdmin || (isOwner && ownerHasPremiumAccess);
         }
 
         const bookingStatuses = includePending
@@ -1036,6 +1074,7 @@ export function registerBookingRoutes(app: Express) {
         };
 
         const manualSchedule = manualEntries
+          .filter(() => ownerHasPremiumAccess)
           .filter((entry) => entry.isPublic)
           .filter((entry) => entry.date >= today)
           .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))

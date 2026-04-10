@@ -871,12 +871,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ====================================================================
 
   // Truck Discovery
-  registerEventRoutes(app);
+  registerEventRoutes(app, { hasBusinessDistributionAccess });
   registerDiscoveryRoutes(app);
-  registerEventCoordinatorRoutes(app);
+  registerEventCoordinatorRoutes(app, { hasBusinessDistributionAccess });
 
   // Booking Management
-  registerBookingRoutes(app);
+  registerBookingRoutes(app, { hasBusinessDistributionAccess });
 
   // Supplier marketplace (suppliers + food truck pickup orders)
   registerSupplierMarketplaceRoutes(app);
