@@ -116,7 +116,13 @@ export async function setupRestaurantAuth(app: Express) {
 
       // Find user by email
       const user = await storage.getUserByEmail(email);
-      if (!user || user.userType !== 'restaurant_owner') {
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      // Allow shared business accounts (host + restaurant/bar/truck) to use this login flow.
+      const blockedUserTypes = new Set(["admin", "super_admin", "staff"]);
+      if (blockedUserTypes.has(String(user.userType || ""))) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 

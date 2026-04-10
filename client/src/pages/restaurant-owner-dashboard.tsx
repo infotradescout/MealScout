@@ -168,6 +168,7 @@ export default function RestaurantOwnerDashboard() {
 
   const isRestaurantOwner = user?.userType === "restaurant_owner";
   const isFoodTruck = user?.userType === "food_truck";
+  const isHost = user?.userType === "host";
   const isAdmin =
     user?.userType === "admin" || user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
@@ -176,10 +177,10 @@ export default function RestaurantOwnerDashboard() {
     if (!user) return;
 
     // Restaurant owners and food trucks share this dashboard, plus staff/admin access.
-    if (!isRestaurantOwner && !isFoodTruck && !isAdmin && !isStaff) {
+    if (!isRestaurantOwner && !isFoodTruck && !isHost && !isAdmin && !isStaff) {
       setLocation("/");
     }
-  }, [user, isRestaurantOwner, isFoodTruck, isAdmin, isStaff, setLocation]);
+  }, [user, isRestaurantOwner, isFoodTruck, isHost, isAdmin, isStaff, setLocation]);
 
   // Location update state
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);

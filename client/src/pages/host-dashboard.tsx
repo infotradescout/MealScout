@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +80,7 @@ function HostDashboard() {
   );
   const [demandQueue, setDemandQueue] = useState<LocationDemandItem[]>([]);
   const [isLoadingDemand, setIsLoadingDemand] = useState(false);
+  const [ownedRestaurants, setOwnedRestaurants] = useState<any[]>([]);
 
   const [seriesForm, setSeriesForm] = useState({
     name: "",
@@ -247,6 +248,32 @@ function HostDashboard() {
     void loadHostEarnings();
     void loadDemandQueue();
   }, [host?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setOwnedRestaurants([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetch("/api/restaurants/my-restaurants", { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) return [];
+        return res.json().catch(() => []);
+      })
+      .then((rows) => {
+        if (cancelled) return;
+        setOwnedRestaurants(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOwnedRestaurants([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.id]);
 
   const handleEnablePayments = async () => {
     try {
@@ -775,6 +802,18 @@ function HostDashboard() {
             {host.businessName}
           </h1>
           <p className="text-[color:var(--text-secondary)]">{host.address}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/restaurant-signup?businessType=bar">
+              <Button size="sm" variant="outline">
+                Add Bar/Restaurant Profile
+              </Button>
+            </Link>
+            {ownedRestaurants.length > 0 && (
+              <Link href="/restaurant-owner-dashboard">
+                <Button size="sm">Manage Bar/Restaurant</Button>
+              </Link>
+            )}
+          </div>
         </div>
         {hosts.length > 1 && (
           <div className="flex items-center gap-2">
