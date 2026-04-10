@@ -14,6 +14,7 @@ import Navigation from "@/components/navigation";
 import NotificationSettings from "@/components/notification-settings";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n, type SupportedLocale } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ const PREVIEW_THEME_BG: Record<string, string> = {
 export default function SettingsPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
+  const { locale, setLocale } = useI18n();
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
@@ -151,12 +153,18 @@ export default function SettingsPage() {
   });
 
   const hydratedRef = useRef(false);
+
+  const languageSettingFromLocale = (value: SupportedLocale) =>
+    value === "es" ? "spanish" : "english";
+  const localeFromLanguageSetting = (value: string): SupportedLocale =>
+    value === "spanish" ? "es" : "en";
+
   useEffect(() => {
     if (!data || hydratedRef.current) return;
     const a = data.accountSettings || {};
     const p = data.publicProfileSettings || {};
     setGeneral({
-      language: a.language || "english",
+      language: a.language || languageSettingFromLocale(locale),
       currency: a.currency || "usd",
       locationServices: a.locationServices ?? true,
       analytics: a.analytics ?? true,
@@ -187,8 +195,11 @@ export default function SettingsPage() {
       showHours: p.showHours ?? true,
       hideProfileBadge: p.hideProfileBadge ?? false,
     });
+    if (a.language) {
+      setLocale(localeFromLanguageSetting(a.language));
+    }
     hydratedRef.current = true;
-  }, [data]);
+  }, [data, locale, setLocale]);
 
   if (!isAuthenticated || !user) {
     return (
@@ -1107,9 +1118,10 @@ export default function SettingsPage() {
                   <Label>Language</Label>
                   <Select
                     value={general.language}
-                    onValueChange={(value) =>
-                      setGeneral((prev) => ({ ...prev, language: value }))
-                    }
+                    onValueChange={(value) => {
+                      setGeneral((prev) => ({ ...prev, language: value }));
+                      setLocale(localeFromLanguageSetting(value));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1117,7 +1129,6 @@ export default function SettingsPage() {
                     <SelectContent>
                       <SelectItem value="english">English</SelectItem>
                       <SelectItem value="spanish">Spanish</SelectItem>
-                      <SelectItem value="french">French</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

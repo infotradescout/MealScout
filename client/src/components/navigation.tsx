@@ -20,7 +20,6 @@ import {
   LayoutDashboard,
   ParkingSquare,
   Truck,
-  Languages,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +71,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
-  const { t, locale, toggleLocale } = useI18n();
+  const { t } = useI18n();
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -488,19 +487,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <div data-nav-root={scope} className="hidden lg:block fixed top-4 right-4 z-50">
         <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleLocale}
-              className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)] transition-colors"
-              aria-label={
-                locale === "en"
-                  ? t("language.switchToSpanish", "Switch language to Spanish")
-                  : t("language.switchToEnglish", "Switch language to English")
-              }
-            >
-              <Languages className="h-4 w-4" />
-              <span>{locale === "en" ? "ES" : "EN"}</span>
-            </button>
             {desktopQuickActions.map((item) =>
               item.path ? (
                 <Link
@@ -566,22 +552,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               </button>
             ),
           )}
-          <button
-            type="button"
-            onClick={toggleLocale}
-            className="nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 nav-link--inactive"
-            data-testid="nav-language"
-            aria-label={
-              locale === "en"
-                ? t("language.switchToSpanish", "Switch language to Spanish")
-                : t("language.switchToEnglish", "Switch language to English")
-            }
-          >
-            <Languages className="w-5 h-5" />
-            <span className="text-[11px] leading-tight font-semibold tracking-normal">
-              {locale === "en" ? "ES" : "EN"}
-            </span>
-          </button>
         </div>
       </div>
     </nav>
