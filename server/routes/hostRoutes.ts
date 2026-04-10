@@ -979,9 +979,9 @@ export function registerHostRoutes(app: Express) {
         maxTrucks: spotCount,
         startTime: startTimeRaw || defaultStartTime,
         endTime: endTimeRaw || defaultEndTime,
-        breakfastPriceCents: breakfastPriceCents || null,
-        lunchPriceCents: lunchPriceCents || null,
-        dinnerPriceCents: dinnerPriceCents || null,
+        breakfastPriceCents,
+        lunchPriceCents,
+        dinnerPriceCents,
         dailyPriceCents,
         weeklyPriceCents,
         monthlyPriceCents,
@@ -1364,7 +1364,8 @@ export function registerHostRoutes(app: Express) {
           throw new Error(`${label} must be a valid non-negative number`);
         }
         const cents = Math.round(parsed);
-        return { provided: true, cents: cents > 0 ? cents : null };
+        // Keep explicit zero so hosts can intentionally set free pricing.
+        return { provided: true, cents };
       };
 
       const parseOverrideField = (
@@ -1470,15 +1471,13 @@ export function registerHostRoutes(app: Express) {
         (hasPricingUpdates || anyMealPriceProvided)
       ) {
         if (parsedBreakfast?.provided) {
-          updates.breakfastPriceCents =
-            nextBreakfastCents > 0 ? nextBreakfastCents : null;
+          updates.breakfastPriceCents = nextBreakfastCents;
         }
         if (parsedLunch?.provided) {
-          updates.lunchPriceCents = nextLunchCents > 0 ? nextLunchCents : null;
+          updates.lunchPriceCents = nextLunchCents;
         }
         if (parsedDinner?.provided) {
-          updates.dinnerPriceCents =
-            nextDinnerCents > 0 ? nextDinnerCents : null;
+          updates.dinnerPriceCents = nextDinnerCents;
         }
 
         const effectiveDaily =

@@ -250,44 +250,44 @@ export function computeParkingPassQualityFlags(listing: {
     flags.push("invalid_spots");
   }
 
-  const breakfast = Number(
-    firstFiniteNumber(
-      listing.breakfastPriceCents,
-      host?.parkingPassBreakfastPriceCents,
-    ) ?? 0,
+  const resolvedBreakfast = firstFiniteNumber(
+    listing.breakfastPriceCents,
+    host?.parkingPassBreakfastPriceCents,
   );
-  const lunch = Number(
-    firstFiniteNumber(
-      listing.lunchPriceCents,
-      host?.parkingPassLunchPriceCents,
-    ) ?? 0,
+  const resolvedLunch = firstFiniteNumber(
+    listing.lunchPriceCents,
+    host?.parkingPassLunchPriceCents,
   );
-  const dinner = Number(
-    firstFiniteNumber(
-      listing.dinnerPriceCents,
-      host?.parkingPassDinnerPriceCents,
-    ) ?? 0,
+  const resolvedDinner = firstFiniteNumber(
+    listing.dinnerPriceCents,
+    host?.parkingPassDinnerPriceCents,
   );
-  const daily = Number(
-    firstFiniteNumber(
-      listing.dailyPriceCents,
-      host?.parkingPassDailyPriceCents,
-    ) ?? 0,
+  const resolvedDaily = firstFiniteNumber(
+    listing.dailyPriceCents,
+    host?.parkingPassDailyPriceCents,
   );
-  const weekly = Number(
-    firstFiniteNumber(
-      listing.weeklyPriceCents,
-      host?.parkingPassWeeklyPriceCents,
-    ) ?? 0,
+  const resolvedWeekly = firstFiniteNumber(
+    listing.weeklyPriceCents,
+    host?.parkingPassWeeklyPriceCents,
   );
-  const monthly = Number(
-    firstFiniteNumber(
-      listing.monthlyPriceCents,
-      host?.parkingPassMonthlyPriceCents,
-    ) ?? 0,
+  const resolvedMonthly = firstFiniteNumber(
+    listing.monthlyPriceCents,
+    host?.parkingPassMonthlyPriceCents,
   );
-  const hasPricing = [breakfast, lunch, dinner, daily, weekly, monthly].some(
-    (value) => Number.isFinite(value) && value > 0,
+
+  const hasPricing = [
+    resolvedBreakfast,
+    resolvedLunch,
+    resolvedDinner,
+    resolvedDaily,
+    resolvedWeekly,
+    resolvedMonthly,
+  ].some(
+    (value) =>
+      value !== null &&
+      value !== undefined &&
+      Number.isFinite(Number(value)) &&
+      Number(value) >= 0,
   );
   if (!hasPricing) flags.push("missing_price");
 

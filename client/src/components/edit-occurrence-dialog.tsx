@@ -127,10 +127,6 @@ export function EditOccurrenceDialog({
       const lunchCents = dollarsToCents(lunchPrice);
       const dinnerCents = dollarsToCents(dinnerPrice);
 
-      if (breakfastCents + lunchCents + dinnerCents <= 0) {
-        throw new Error("At least one slot price is required.");
-      }
-
       const res = await fetch(`/api/hosts/parking-pass/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
