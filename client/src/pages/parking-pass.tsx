@@ -2421,8 +2421,13 @@ export default function ParkingPassPage() {
     }
   };
 
-  const formatCents = (value?: number | null) =>
-    value && value > 0 ? `$${(value / 100).toFixed(2)}` : "—";
+  const formatCents = (value?: number | null) => {
+    if (value === null || value === undefined) return "—";
+    const cents = Number(value);
+    if (!Number.isFinite(cents)) return "—";
+    if (cents === 0) return "Free";
+    return cents > 0 ? `$${(cents / 100).toFixed(2)}` : "—";
+  };
 
   const breakfastValue = normalizeDollar(breakfastPrice);
   const lunchValue = normalizeDollar(lunchPrice);
