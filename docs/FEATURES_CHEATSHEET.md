@@ -59,7 +59,8 @@ MealScout helps food trucks get booked, hosts fill spots, and local diners disco
 
 ## 6) Restaurants/Bars talk track
 
-- "MealScout gives you a profile and local discovery presence."
+- "For brick-and-mortar restaurants, the mission is simple: drive more people into your restaurant."
+- "MealScout gives you a profile and local discovery presence that helps convert nearby intent into foot traffic."
 - "Premium unlocks promo and analytics workflows used for ongoing customer growth."
 
 ## 7) Events talk track
@@ -95,6 +96,10 @@ Host onboarding/listing flows are not positioned as a required subscription feat
 ### "How fast can we go live?"
 
 Usually same day once profile and required payment/payout setup are complete.
+
+### "Do you offer mobile ordering?"
+
+Not as a live feature right now. The team has already designed a model that is operationally practical and cost-conscious, and implementation is currently in progress.
 
 ### "Who handles permits/insurance/taxes?"
 
