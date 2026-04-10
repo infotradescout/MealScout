@@ -15,7 +15,8 @@ export default function EventsPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEventCoordinator = isAuthenticated && user?.userType === "event_coordinator";
+  const isEventCoordinator =
+    isAuthenticated && user?.userType === "event_coordinator";
   const { data: subscription } = useQuery<{
     status: string;
     hasAccess: boolean;
@@ -25,7 +26,8 @@ export default function EventsPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const canUsePaidEvents = !isEventCoordinator || Boolean(subscription?.hasAccess);
+  const canUsePaidEvents =
+    !isEventCoordinator || Boolean(subscription?.hasAccess);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     organizationName: "",
@@ -72,7 +74,9 @@ export default function EventsPage() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/events/upcoming"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/events/upcoming"],
+      });
       setShowCreateForm(false);
       setFormData({
         organizationName: "",
@@ -165,7 +169,9 @@ export default function EventsPage() {
                   <form onSubmit={handleCreateEvent} className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="organizationName">Organization Name</Label>
+                        <Label htmlFor="organizationName">
+                          Organization Name
+                        </Label>
                         <Input
                           id="organizationName"
                           required
@@ -202,7 +208,10 @@ export default function EventsPage() {
                           required
                           value={formData.address}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, address: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              address: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -213,7 +222,10 @@ export default function EventsPage() {
                           required
                           value={formData.city}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, city: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              city: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -224,7 +236,10 @@ export default function EventsPage() {
                           required
                           value={formData.state}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, state: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              state: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -238,7 +253,10 @@ export default function EventsPage() {
                           required
                           value={formData.eventName}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, eventName: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              eventName: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -254,7 +272,10 @@ export default function EventsPage() {
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
-                              maxTrucks: Math.max(1, Number(e.target.value || 1)),
+                              maxTrucks: Math.max(
+                                1,
+                                Number(e.target.value || 1),
+                              ),
                             }))
                           }
                         />
@@ -270,7 +291,10 @@ export default function EventsPage() {
                           required
                           value={formData.date}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, date: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -282,7 +306,10 @@ export default function EventsPage() {
                           required
                           value={formData.startTime}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, startTime: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              startTime: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -294,7 +321,10 @@ export default function EventsPage() {
                           required
                           value={formData.endTime}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, endTime: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              endTime: e.target.value,
+                            }))
                           }
                         />
                       </div>
@@ -307,7 +337,10 @@ export default function EventsPage() {
                         rows={3}
                         value={formData.description}
                         onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, description: e.target.value }))
+                          setFormData((prev) => ({
+                            ...prev,
+                            description: e.target.value,
+                          }))
                         }
                       />
                     </div>
@@ -330,9 +363,14 @@ export default function EventsPage() {
               <CardContent className="p-6 space-y-3">
                 <h2 className="text-lg font-semibold">Premium Required</h2>
                 <p className="text-sm text-[color:var(--text-secondary)]">
-                  Event coordinator access is a paid feature. Upgrade to post and manage events.
+                  Event coordinator access is a paid feature. Upgrade to post
+                  and manage events.
                 </p>
-                <Button onClick={() => (window.location.href = "/subscription")}>View subscription</Button>
+                <Button
+                  onClick={() => (window.location.href = "/subscription")}
+                >
+                  View subscription
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -410,7 +448,8 @@ export default function EventsPage() {
                         $
                       </span>
                       <span>
-                        ${(Number(event.hostPriceCents) / 100).toFixed(2)} host fee + $10 platform fee
+                        ${(Number(event.hostPriceCents) / 100).toFixed(2)} host
+                        fee + $10 platform fee
                       </span>
                     </div>
                   ) : null}
@@ -437,7 +476,3 @@ export default function EventsPage() {
     </div>
   );
 }
-
-
-
-

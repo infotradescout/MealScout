@@ -253,12 +253,12 @@ export default function RestaurantOwnerDashboard() {
     enabled: !!selectedRestaurant,
   });
 
-  const { data: truckBookings = [], isLoading: loadingTruckBookings } = useQuery<
-    TruckBookingItem[]
-  >({
-    queryKey: ["/api/bookings/my-truck"],
-    enabled: !!user && (isRestaurantOwner || isFoodTruck || isAdmin || isStaff),
-  });
+  const { data: truckBookings = [], isLoading: loadingTruckBookings } =
+    useQuery<TruckBookingItem[]>({
+      queryKey: ["/api/bookings/my-truck"],
+      enabled:
+        !!user && (isRestaurantOwner || isFoodTruck || isAdmin || isStaff),
+    });
 
   // Fetch dashboard stats
   const { data: stats } = useQuery<DashboardStats>({
@@ -435,8 +435,7 @@ export default function RestaurantOwnerDashboard() {
   const liveShareTitle = currentRestaurant?.name
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
-  const liveShareDescription =
-    "Find us live right now on the MealScout map.";
+  const liveShareDescription = "Find us live right now on the MealScout map.";
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
@@ -1124,7 +1123,9 @@ export default function RestaurantOwnerDashboard() {
       return response.json();
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/bookings/my-truck"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/bookings/my-truck"],
+      });
       toast({
         title: "Booking cancelled",
         description: "Your booking was cancelled. No refund was issued.",
@@ -1185,14 +1186,21 @@ export default function RestaurantOwnerDashboard() {
             {(subscription as any)?.status === "active" ||
             (subscription as any)?.hasAccess === true ? (
               <Link href="/deal-creation">
-                <Button data-testid="button-create-deal" className="w-full sm:w-auto">
+                <Button
+                  data-testid="button-create-deal"
+                  className="w-full sm:w-auto"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Create New Special
                 </Button>
               </Link>
             ) : (
               <Link href="/subscribe?next=/deal-creation&reason=create_deals">
-                <Button variant="default" data-testid="button-subscribe" className="w-full sm:w-auto">
+                <Button
+                  variant="default"
+                  data-testid="button-subscribe"
+                  className="w-full sm:w-auto"
+                >
                   <CreditCard className="mr-2 h-4 w-4" />
                   Subscribe to Create Specials
                 </Button>
@@ -2171,31 +2179,50 @@ export default function RestaurantOwnerDashboard() {
                 Event Bookings
               </CardTitle>
               <CardDescription>
-                Track upcoming paid event bookings for your selected truck and cancel when needed. Confirmed cancellations do not issue refunds.
+                Track upcoming paid event bookings for your selected truck and
+                cancel when needed. Confirmed cancellations do not issue
+                refunds.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg border p-4">
-                  <p className="text-sm text-muted-foreground">Total bookings</p>
-                  <p className="mt-1 text-2xl font-semibold">{visibleTruckBookings.length}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Total bookings
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {visibleTruckBookings.length}
+                  </p>
                 </div>
                 <div className="rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">Confirmed</p>
                   <p className="mt-1 text-2xl font-semibold">
-                    {visibleTruckBookings.filter((booking) => booking.status === "confirmed").length}
+                    {
+                      visibleTruckBookings.filter(
+                        (booking) => booking.status === "confirmed",
+                      ).length
+                    }
                   </p>
                 </div>
                 <div className="rounded-lg border p-4">
-                  <p className="text-sm text-muted-foreground">Upcoming spend</p>
+                  <p className="text-sm text-muted-foreground">
+                    Upcoming spend
+                  </p>
                   <p className="mt-1 text-2xl font-semibold">
-                    ${
-                      (
-                        visibleTruckBookings
-                          .filter((booking) => booking.status === "confirmed" || booking.status === "pending")
-                          .reduce((sum, booking) => sum + Number(booking.totalCents || 0), 0) / 100
-                      ).toFixed(2)
-                    }
+                    $
+                    {(
+                      visibleTruckBookings
+                        .filter(
+                          (booking) =>
+                            booking.status === "confirmed" ||
+                            booking.status === "pending",
+                        )
+                        .reduce(
+                          (sum, booking) =>
+                            sum + Number(booking.totalCents || 0),
+                          0,
+                        ) / 100
+                    ).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -2212,7 +2239,8 @@ export default function RestaurantOwnerDashboard() {
                 <div className="space-y-3">
                   {visibleTruckBookings.map((booking) => {
                     const canCancel =
-                      booking.status === "pending" || booking.status === "confirmed";
+                      booking.status === "pending" ||
+                      booking.status === "confirmed";
                     const eventDate = booking.event?.date
                       ? new Date(booking.event.date)
                       : null;
@@ -2223,7 +2251,8 @@ export default function RestaurantOwnerDashboard() {
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-semibold">
-                                {booking.event?.host?.businessName || "Host venue"}
+                                {booking.event?.host?.businessName ||
+                                  "Host venue"}
                               </p>
                               <Badge
                                 variant={
@@ -2248,8 +2277,12 @@ export default function RestaurantOwnerDashboard() {
                                 <Clock className="h-4 w-4" />
                                 <span>
                                   {format(eventDate, "EEE, MMM d")}
-                                  {booking.event?.startTime ? ` at ${booking.event.startTime}` : ""}
-                                  {booking.event?.endTime ? ` - ${booking.event.endTime}` : ""}
+                                  {booking.event?.startTime
+                                    ? ` at ${booking.event.startTime}`
+                                    : ""}
+                                  {booking.event?.endTime
+                                    ? ` - ${booking.event.endTime}`
+                                    : ""}
                                 </span>
                               </div>
                             ) : null}
@@ -2257,10 +2290,21 @@ export default function RestaurantOwnerDashboard() {
 
                           <div className="space-y-2 text-sm lg:text-right">
                             <p className="font-semibold">
-                              ${(Number(booking.totalCents || 0) / 100).toFixed(2)} total
+                              $
+                              {(Number(booking.totalCents || 0) / 100).toFixed(
+                                2,
+                              )}{" "}
+                              total
                             </p>
                             <p className="text-muted-foreground">
-                              Host fee ${(Number(booking.hostPriceCents || 0) / 100).toFixed(2)} + platform fee ${(Number(booking.platformFeeCents || 0) / 100).toFixed(2)}
+                              Host fee $
+                              {(
+                                Number(booking.hostPriceCents || 0) / 100
+                              ).toFixed(2)}{" "}
+                              + platform fee $
+                              {(
+                                Number(booking.platformFeeCents || 0) / 100
+                              ).toFixed(2)}
                             </p>
                             {canCancel ? (
                               <Button
@@ -2835,10 +2879,3 @@ export default function RestaurantOwnerDashboard() {
     </div>
   );
 }
-
-
-
-
-
-
-

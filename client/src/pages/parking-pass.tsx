@@ -359,11 +359,7 @@ const buildLocationKey = (
     normalizeLocationValue(state),
   ].join("|");
 
-const buildAddressLabel = (
-  address?: string,
-  city?: string,
-  state?: string,
-) =>
+const buildAddressLabel = (address?: string, city?: string, state?: string) =>
   [address, city, state, "USA"]
     .map((value) => (value ?? "").trim())
     .filter(Boolean)
@@ -487,11 +483,7 @@ const MapCenterer = ({
   return null;
 };
 
-const MapPinPicker = ({
-  onPick,
-}: {
-  onPick: (point: GeoPoint) => void;
-}) => {
+const MapPinPicker = ({ onPick }: { onPick: (point: GeoPoint) => void }) => {
   useMapEvents({
     click: (event) => onPick({ lat: event.latlng.lat, lng: event.latlng.lng }),
   });
@@ -584,7 +576,8 @@ export default function ParkingPassPage() {
   const [editHostListingOpen, setEditHostListingOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
-  const defaultHostStartTime: string = PARKING_PASS_MEAL_WINDOWS.breakfast.start;
+  const defaultHostStartTime: string =
+    PARKING_PASS_MEAL_WINDOWS.breakfast.start;
   const defaultHostEndTime: string = PARKING_PASS_MEAL_WINDOWS.dinner.end;
   const [startTime, setStartTime] = useState<string>(defaultHostStartTime);
   const [endTime, setEndTime] = useState<string>(defaultHostEndTime);
@@ -656,18 +649,22 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
-  const [activeLocationKey, setActiveLocationKey] = useState<string | null>(null);
+  const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
+    null,
+  );
   const [pendingPassId, setPendingPassId] = useState<string | null>(null);
   const [requestedHostId, setRequestedHostId] = useState<string | null>(null);
-  const [bookingReturnIntentId, setBookingReturnIntentId] = useState<string | null>(null);
+  const [bookingReturnIntentId, setBookingReturnIntentId] = useState<
+    string | null
+  >(null);
   const [bookingReturnHandled, setBookingReturnHandled] = useState(false);
   // While any popup is open, lock map interactions so users can read/select slots
   // without accidental pan/zoom changes behind the popup.
   const [mapPopupOpen, setMapPopupOpen] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [parkingCoords, setParkingCoords] = useState<
-    Record<string, GeoPoint>
-  >({});
+  const [parkingCoords, setParkingCoords] = useState<Record<string, GeoPoint>>(
+    {},
+  );
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -734,19 +731,19 @@ export default function ParkingPassPage() {
 
   // Keep Parking Pass maps in sync with the main map: only show paid/priced host locations.
   const BOOKABLE_HOST_CACHE_KEY = "mealscout:parking-pass:bookableHostIds:v1";
-  const [cachedBookableHostIds, setCachedBookableHostIds] = useState<Set<string>>(
-    () => {
-      try {
-        const raw = localStorage.getItem(BOOKABLE_HOST_CACHE_KEY);
-        if (!raw) return new Set<string>();
-        const parsed = JSON.parse(raw);
-        const hostIds = Array.isArray(parsed?.hostIds) ? parsed.hostIds : [];
-        return new Set(hostIds.map((id: any) => String(id)));
-      } catch {
-        return new Set<string>();
-      }
-    },
-  );
+  const [cachedBookableHostIds, setCachedBookableHostIds] = useState<
+    Set<string>
+  >(() => {
+    try {
+      const raw = localStorage.getItem(BOOKABLE_HOST_CACHE_KEY);
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw);
+      const hostIds = Array.isArray(parsed?.hostIds) ? parsed.hostIds : [];
+      return new Set(hostIds.map((id: any) => String(id)));
+    } catch {
+      return new Set<string>();
+    }
+  });
   const { data: bookableHostIdPayload } = useQuery<
     { generatedAt: string; hostIds: string[] } | undefined
   >({
@@ -803,9 +800,9 @@ export default function ParkingPassPage() {
     );
     return { ...baseMapLocations, hostLocations };
   }, [baseMapLocations, bookableHostIds, passListings]);
-  const [geocodeCache, setGeocodeCache] = useState<
-    Record<string, GeoPoint>
-  >({});
+  const [geocodeCache, setGeocodeCache] = useState<Record<string, GeoPoint>>(
+    {},
+  );
   const geocodeInFlight = useRef(false);
   const [scheduleForm, setScheduleForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
@@ -864,8 +861,7 @@ export default function ParkingPassPage() {
       if (!options?.silent) {
         toast({
           title: "Error",
-          description:
-            error.message || "Failed to load parking pass listings.",
+          description: error.message || "Failed to load parking pass listings.",
           variant: "destructive",
         });
       }
@@ -878,7 +874,9 @@ export default function ParkingPassPage() {
   ) => {
     if (!selectedTruckId) return;
     try {
-      const res = await fetch(`/api/bookings/truck/${selectedTruckId}/schedule`);
+      const res = await fetch(
+        `/api/bookings/truck/${selectedTruckId}/schedule`,
+      );
       if (!res.ok) {
         throw new Error("Failed to load booked schedule");
       }
@@ -904,7 +902,6 @@ export default function ParkingPassPage() {
       }
     }
   };
-
 
   const handleCancelBooking = async (bookingId: string) => {
     if (!bookingId || !truckId) return;
@@ -1055,8 +1052,8 @@ export default function ParkingPassPage() {
       instagramUrl: truck.instagramUrl || "",
       xUrl: truck.xUrl || "",
     });
-    const existing =
-      (truck.socialAutopostSettings || {}) as Partial<SocialAutopostSettings>;
+    const existing = (truck.socialAutopostSettings ||
+      {}) as Partial<SocialAutopostSettings>;
     setSocialSettings({
       ...defaultSocialAutopostSettings,
       ...existing,
@@ -1149,7 +1146,9 @@ export default function ParkingPassPage() {
         window.history.replaceState(
           {},
           "",
-          nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname,
+          nextQuery
+            ? `${window.location.pathname}?${nextQuery}`
+            : window.location.pathname,
         );
       }
     };
@@ -1203,9 +1202,7 @@ export default function ParkingPassPage() {
     }
     const fetchBlackouts = async () => {
       try {
-        const res = await fetch(
-          `/api/hosts/${selectedHostId}/blackout-dates`,
-        );
+        const res = await fetch(`/api/hosts/${selectedHostId}/blackout-dates`);
         if (res.status === 404) {
           setBlackoutDates([]);
           setHasActiveParkingPass(false);
@@ -1215,9 +1212,10 @@ export default function ParkingPassPage() {
           const data = await res.json();
           if (Array.isArray(data)) {
             const dates = data
-              .map((row) =>
-                String((row as any)?.dateKey || "").trim() ||
-                getListingDateKey((row as any)?.date),
+              .map(
+                (row) =>
+                  String((row as any)?.dateKey || "").trim() ||
+                  getListingDateKey((row as any)?.date),
               )
               .filter(Boolean)
               .sort();
@@ -1248,7 +1246,7 @@ export default function ParkingPassPage() {
   }, [host?.id, host?.latitude, host?.longitude]);
 
   const savedHost = host
-    ? hosts.find((item) => item.id === host.id) ?? null
+    ? (hosts.find((item) => item.id === host.id) ?? null)
     : null;
   const savedLat = parseCoord(savedHost?.latitude);
   const savedLng = parseCoord(savedHost?.longitude);
@@ -1278,16 +1276,18 @@ export default function ParkingPassPage() {
 
   useEffect(() => {
     setNewLocationPinPosition((current) => (current ? null : current));
-  }, [
-    newLocationForm.address,
-    newLocationForm.city,
-    newLocationForm.state,
-  ]);
+  }, [newLocationForm.address, newLocationForm.city, newLocationForm.state]);
 
-  const settingsMapCenter = pinPosition
-    ?? (addressNeedsPin ? defaultMapCenter : savedPoint ?? defaultMapCenter);
-  const settingsMapZoom =
-    pinPosition ? 15 : addressNeedsPin ? 4 : savedPoint ? 12 : 4;
+  const settingsMapCenter =
+    pinPosition ??
+    (addressNeedsPin ? defaultMapCenter : (savedPoint ?? defaultMapCenter));
+  const settingsMapZoom = pinPosition
+    ? 15
+    : addressNeedsPin
+      ? 4
+      : savedPoint
+        ? 12
+        : 4;
   const newLocationMapCenter = newLocationPinPosition ?? defaultMapCenter;
   const newLocationMapZoom = newLocationPinPosition ? 15 : 4;
 
@@ -1435,7 +1435,11 @@ export default function ParkingPassPage() {
       });
       return;
     }
-    if (!scheduleForm.date || !scheduleForm.startTime || !scheduleForm.endTime) {
+    if (
+      !scheduleForm.date ||
+      !scheduleForm.startTime ||
+      !scheduleForm.endTime
+    ) {
       toast({
         title: "Missing time",
         description: "Date, start time, and end time are required.",
@@ -1585,9 +1589,7 @@ export default function ParkingPassPage() {
     const bookingItems = bookedSchedule
       .map((entry) => {
         if (!entry.event) return null;
-        const reportKey = entry.bookingId
-          ? `booking:${entry.bookingId}`
-          : null;
+        const reportKey = entry.bookingId ? `booking:${entry.bookingId}` : null;
         return {
           id: `booking-${entry.event.id}-${entry.slotType || "slot"}`,
           date: entry.event.date,
@@ -1765,17 +1767,15 @@ export default function ParkingPassPage() {
     setPostPrompt((current) => (current ? { ...current, message } : current));
   };
 
-  const handlePostPromptShare = async (
-    payload?: {
-      message: string;
-      link: string;
-      selectedPlatforms: {
-        facebook: boolean;
-        instagram: boolean;
-        x: boolean;
-      };
-    },
-  ) => {
+  const handlePostPromptShare = async (payload?: {
+    message: string;
+    link: string;
+    selectedPlatforms: {
+      facebook: boolean;
+      instagram: boolean;
+      x: boolean;
+    };
+  }) => {
     const activePrompt = payload ?? postPrompt;
     if (!activePrompt) return;
     setIsPostingSocial(true);
@@ -1853,9 +1853,7 @@ export default function ParkingPassPage() {
   const geocodeAddress = async (address: string): Promise<GeoPoint | null> => {
     if (!address) return null;
     const res = await fetch(
-      `/api/location/search?q=${encodeURIComponent(
-        address,
-      )}&limit=1`,
+      `/api/location/search?q=${encodeURIComponent(address)}&limit=1`,
     );
     if (!res.ok) return null;
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
@@ -2260,9 +2258,7 @@ export default function ParkingPassPage() {
         const data = await res.json();
         throw new Error(data.message || "Failed to remove blackout date");
       }
-      setBlackoutDates((current) =>
-        current.filter((item) => item !== dateKey),
-      );
+      setBlackoutDates((current) => current.filter((item) => item !== dateKey));
       toast({
         title: "Blackout removed",
       });
@@ -2442,7 +2438,9 @@ export default function ParkingPassPage() {
   const weeklyFinal =
     weeklyOverrideValue !== null ? weeklyOverrideValue + 70 : weeklyEstimate;
   const monthlyFinal =
-    monthlyOverrideValue !== null ? monthlyOverrideValue + 300 : monthlyEstimate;
+    monthlyOverrideValue !== null
+      ? monthlyOverrideValue + 300
+      : monthlyEstimate;
 
   const getLocationCoords = (host?: Host | null) => {
     if (!host) return null;
@@ -2482,11 +2480,12 @@ export default function ParkingPassPage() {
   };
 
   const handleBookSelected = (listing: ParkingPassListing) => {
-    const slotTypes = (selectedSlotsByListing[listing.id] || []).filter((slot) =>
-      isSlotBookableByTime(
-        listing,
-        slot as (typeof PARKING_PASS_SLOT_TYPES)[number],
-      ),
+    const slotTypes = (selectedSlotsByListing[listing.id] || []).filter(
+      (slot) =>
+        isSlotBookableByTime(
+          listing,
+          slot as (typeof PARKING_PASS_SLOT_TYPES)[number],
+        ),
     );
     if (slotTypes.length === 0) return;
 
@@ -2497,7 +2496,9 @@ export default function ParkingPassPage() {
   };
 
   const removeCartItem = (listingId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.listing.id !== listingId));
+    setCartItems((prev) =>
+      prev.filter((item) => item.listing.id !== listingId),
+    );
   };
 
   const startCheckout = () => {
@@ -2679,12 +2680,14 @@ export default function ParkingPassPage() {
         throw new Error("Location services are not available.");
       }
 
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-        });
-      });
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        },
+      );
 
       await fetch(`/api/restaurants/${truckId}/mobile-settings`, {
         method: "PATCH",
@@ -2743,14 +2746,19 @@ export default function ParkingPassPage() {
   const canHostTab = Boolean(showHostParkingPass);
   const availableTabs = useMemo(
     () =>
-      (["book", canScheduleTab ? "schedule" : null, canHostTab ? "host" : null]
-        .filter(Boolean) as Array<"book" | "schedule" | "host">),
+      [
+        "book",
+        canScheduleTab ? "schedule" : null,
+        canHostTab ? "host" : null,
+      ].filter(Boolean) as Array<"book" | "schedule" | "host">,
     [canHostTab, canScheduleTab],
   );
 
   useEffect(() => {
     const preferred: "book" | "schedule" | "host" = canHostTab
-      ? (isTruckViewUser ? "book" : "host")
+      ? isTruckViewUser
+        ? "book"
+        : "host"
       : "book";
     if (!availableTabs.includes(topTab)) {
       setTopTab(preferred);
@@ -2892,7 +2900,11 @@ export default function ParkingPassPage() {
       const entry = {
         ...loc,
         coords: { lat, lng },
-        addressLabel: buildAddressLabel(loc.address ?? "", loc.city ?? "", loc.state ?? ""),
+        addressLabel: buildAddressLabel(
+          loc.address ?? "",
+          loc.city ?? "",
+          loc.state ?? "",
+        ),
       };
       const existing = map.get(loc.hostId);
       if (existing) {
@@ -2943,8 +2955,7 @@ export default function ParkingPassPage() {
             group: ParkingPassLocationGroup;
             coords: GeoPoint;
             addressLabel: string;
-          } =>
-            item !== null,
+          } => item !== null,
         ),
     [filteredLocations, hostLocationsByHostId, parkingCoords],
   );
@@ -2960,12 +2971,7 @@ export default function ParkingPassPage() {
           if (!hostId) return null;
 
           if (normalizedCityQuery) {
-            const searchable = [
-              loc.name,
-              loc.address,
-              loc.city,
-              loc.state,
-            ]
+            const searchable = [loc.name, loc.address, loc.city, loc.state]
               .filter(Boolean)
               .join(" ")
               .toLowerCase();
@@ -3005,7 +3011,9 @@ export default function ParkingPassPage() {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
       : null;
-    return requestedPin?.coords || fallbackHostPins[0]?.coords || defaultMapCenter;
+    return (
+      requestedPin?.coords || fallbackHostPins[0]?.coords || defaultMapCenter
+    );
   }, [fallbackHostPins, requestedHostId]);
   const mapCenter = useMemo(() => {
     const activeHostLocations = activeLocation
@@ -3029,7 +3037,9 @@ export default function ParkingPassPage() {
       .filter((group) => {
         const hasMappedCoords = hostLocationsByHostId.has(group.host.id);
         if (hasMappedCoords) return false;
-        return !parkingCoords[group.key] && Boolean(buildHostAddress(group.host));
+        return (
+          !parkingCoords[group.key] && Boolean(buildHostAddress(group.host))
+        );
       })
       .slice(0, 20);
 
@@ -3080,11 +3090,16 @@ export default function ParkingPassPage() {
   ) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
-        <h1 className="text-2xl font-bold mb-2">Parking Pass is for food trucks only</h1>
+        <h1 className="text-2xl font-bold mb-2">
+          Parking Pass is for food trucks only
+        </h1>
         <p className="text-[color:var(--text-muted)] mb-4 max-w-md">
-          Restaurant and bar accounts can’t book parking pass slots. Switch to a food truck profile to access Parking Pass.
+          Restaurant and bar accounts can’t book parking pass slots. Switch to a
+          food truck profile to access Parking Pass.
         </p>
-        <Button onClick={() => setLocation("/dashboard")}>Back to Dashboard</Button>
+        <Button onClick={() => setLocation("/dashboard")}>
+          Back to Dashboard
+        </Button>
       </div>
     );
   }
@@ -3212,7 +3227,9 @@ export default function ParkingPassPage() {
     <div className="min-h-screen bg-transparent parking-pass-page">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">Parking Pass</h1>
+          <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
+            Parking Pass
+          </h1>
           <p className="text-xs text-[color:var(--text-muted)]">
             Book available parking spots by day and time.
           </p>
@@ -3237,2102 +3254,2639 @@ export default function ParkingPassPage() {
         </Tabs>
 
         <div className="flex flex-col gap-6">
-        {topTab === "host" && showHostParkingPass && !host && (
-          <div className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-orange-50/70 p-4 text-sm text-[color:var(--status-warning)]">
-            Loading your host tools...
-          </div>
-        )}
-
-        {topTab === "host" && showHostParkingPass && (
-          <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-base font-semibold text-slate-900 font-display">
-                  Host tools
-                </p>
-                <p className="text-xs text-slate-500">
-                  Listings, location details, and payout status.
-                </p>
-              </div>
-              {host ? (
-                <span
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                    host.stripeConnectAccountId && host.stripePayoutsEnabled
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-amber-200 bg-amber-50 text-amber-800"
-                  }`}
-                >
-                  {host.stripeConnectAccountId && host.stripePayoutsEnabled
-                    ? "Payouts enabled"
-                    : "Payouts not enabled"}
-                </span>
-              ) : null}
+          {topTab === "host" && showHostParkingPass && !host && (
+            <div className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-orange-50/70 p-4 text-sm text-[color:var(--status-warning)]">
+              Loading your host tools...
             </div>
+          )}
 
-            {host ? (() => {
-              const uniqueFlags = new Set<string>();
-              hostPassListings.forEach((item: any) => {
-                const flags = Array.isArray(item?.qualityFlags) ? item.qualityFlags : [];
-                flags.forEach((flag: any) => uniqueFlags.add(String(flag)));
-              });
-              const flags = Array.from(uniqueFlags.values());
-              const payoutsEnabled = Boolean(host.stripeConnectAccountId && host.stripePayoutsEnabled);
-              const hasSpotPhoto = Boolean(host.spotImageUrl);
-              const hasAddress =
-                Boolean(host.address && String(host.address).trim().length > 0);
-
-              // Non-blocking flags should not prevent map visibility.
-              const NON_BLOCKING_FLAGS = new Set([
-                "payments_disabled",
-                "missing_coords",
-                "invalid_coords",
-              ]);
-              const blockingFlags = flags.filter((flag) => !NON_BLOCKING_FLAGS.has(flag));
-              const publicReady = hasAddress && blockingFlags.length === 0;
-
-              const checklist = [
-                { ok: platformPaymentsReady, label: "Platform payments enabled" },
-                { ok: hasAddress, label: "Address set (street)" },
-                { ok: !blockingFlags.includes("missing_price"), label: "Pricing added (at least one slot)" },
-                { ok: !blockingFlags.includes("missing_spots") && !blockingFlags.includes("invalid_spots"), label: "Spot count set" },
-                { ok: !blockingFlags.includes("invalid_time_window"), label: "Hours set (start/end time)" },
-                { ok: hasSpotPhoto, label: "Spot photo uploaded" },
-                { ok: payoutsEnabled, label: "Host payouts enabled (optional)" },
-              ];
-              const total = checklist.length;
-              const done = checklist.filter((item) => item.ok).length;
-              const pct = Math.round((done / Math.max(1, total)) * 100);
-
-              return (
-                <div className="rounded-xl border border-slate-200 bg-white/70 p-4 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-900">
-                      Setup checklist
-                    </div>
-                    <span
-                      className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                        publicReady
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                          : "border-amber-200 bg-amber-50 text-amber-800"
-                      }`}
-                    >
-                      {publicReady ? "Visible on map" : "Not visible on map"}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className={`h-full ${
-                        publicReady ? "bg-emerald-500" : "bg-amber-500"
-                      }`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    {done}/{total} complete
-                    {flags.length > 0 && !publicReady ? (
-                      <span> - Fix the missing items below to go live.</span>
-                    ) : null}
-                  </div>
-                  {flags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {flags.slice(0, 10).map((flag) => (
-                        <span
-                          key={flag}
-                          className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
-                        >
-                          {flag}
-                        </span>
-                      ))}
-                      {flags.length > 10 ? (
-                        <span className="text-[11px] text-amber-900">
-                          +{flags.length - 10} more
-                        </span>
-                      ) : null}
-                    </div>
-                  )}
-                  <div className="grid gap-1 sm:grid-cols-2">
-                    {checklist.map((item) => (
-                      <div key={item.label} className="flex items-center gap-2 text-xs">
-                        <span
-                          className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold ${
-                            item.ok
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-amber-200 bg-amber-50 text-amber-800"
-                          }`}
-                        >
-                          {item.ok ? "OK" : "!"}
-                        </span>
-                        <span className={item.ok ? "text-slate-700" : "text-amber-900"}>
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+          {topTab === "host" && showHostParkingPass && (
+            <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-semibold text-slate-900 font-display">
+                    Host tools
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Listings, location details, and payout status.
+                  </p>
                 </div>
-              );
-            })() : null}
-
-            <Tabs
-              value={hostToolsTab}
-              onValueChange={(value) => setHostToolsTab(value as any)}
-            >
-              <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
-                <TabsTrigger value="listings" className="text-sm">
-                  Listings
-                </TabsTrigger>
-                <TabsTrigger value="location" className="text-sm">
-                  Location
-                </TabsTrigger>
-                <TabsTrigger value="payments" className="text-sm">
-                  Payments
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        )}
-
-        {topTab === "host" && hostToolsTab === "payments" && showHostParkingPass && (
-          <div className="rounded-2xl pp-glass p-5 shadow-clean space-y-3">
-            <div>
-              <p className="text-base font-semibold text-slate-900 font-display">
-                Payments
-              </p>
-              <p className="text-xs text-slate-500">
-                Stripe payouts are optional. Trucks can still book your Parking Pass listings; if payouts are disabled, your earnings are held as credit until you enable payouts.
-              </p>
-            </div>
-
-            {!host ? (
-              <div className="rounded-xl pp-glass-muted p-4 text-sm text-slate-700">
-                Loading payment status...
+                {host ? (
+                  <span
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                      host.stripeConnectAccountId && host.stripePayoutsEnabled
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    {host.stripeConnectAccountId && host.stripePayoutsEnabled
+                      ? "Payouts enabled"
+                      : "Payouts not enabled"}
+                  </span>
+                ) : null}
               </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                <div
-                  className={`rounded-xl border p-4 text-sm ${
-                    platformPaymentsReady
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                      : "border-amber-200 bg-amber-50 text-amber-900"
-                  }`}
-                >
-                  <p className="font-semibold">Platform payments</p>
-                  <p className="text-xs opacity-90">
-                    {platformPaymentsReady
-                      ? "Enabled. Paid bookings can be processed."
-                      : "Not enabled. Paid bookings may fail even if your listing is visible."}
+
+              {host
+                ? (() => {
+                    const uniqueFlags = new Set<string>();
+                    hostPassListings.forEach((item: any) => {
+                      const flags = Array.isArray(item?.qualityFlags)
+                        ? item.qualityFlags
+                        : [];
+                      flags.forEach((flag: any) =>
+                        uniqueFlags.add(String(flag)),
+                      );
+                    });
+                    const flags = Array.from(uniqueFlags.values());
+                    const payoutsEnabled = Boolean(
+                      host.stripeConnectAccountId && host.stripePayoutsEnabled,
+                    );
+                    const hasSpotPhoto = Boolean(host.spotImageUrl);
+                    const hasAddress = Boolean(
+                      host.address && String(host.address).trim().length > 0,
+                    );
+
+                    // Non-blocking flags should not prevent map visibility.
+                    const NON_BLOCKING_FLAGS = new Set([
+                      "payments_disabled",
+                      "missing_coords",
+                      "invalid_coords",
+                    ]);
+                    const blockingFlags = flags.filter(
+                      (flag) => !NON_BLOCKING_FLAGS.has(flag),
+                    );
+                    const publicReady =
+                      hasAddress && blockingFlags.length === 0;
+
+                    const checklist = [
+                      {
+                        ok: platformPaymentsReady,
+                        label: "Platform payments enabled",
+                      },
+                      { ok: hasAddress, label: "Address set (street)" },
+                      {
+                        ok: !blockingFlags.includes("missing_price"),
+                        label: "Pricing added (at least one slot)",
+                      },
+                      {
+                        ok:
+                          !blockingFlags.includes("missing_spots") &&
+                          !blockingFlags.includes("invalid_spots"),
+                        label: "Spot count set",
+                      },
+                      {
+                        ok: !blockingFlags.includes("invalid_time_window"),
+                        label: "Hours set (start/end time)",
+                      },
+                      { ok: hasSpotPhoto, label: "Spot photo uploaded" },
+                      {
+                        ok: payoutsEnabled,
+                        label: "Host payouts enabled (optional)",
+                      },
+                    ];
+                    const total = checklist.length;
+                    const done = checklist.filter((item) => item.ok).length;
+                    const pct = Math.round((done / Math.max(1, total)) * 100);
+
+                    return (
+                      <div className="rounded-xl border border-slate-200 bg-white/70 p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-900">
+                            Setup checklist
+                          </div>
+                          <span
+                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                              publicReady
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : "border-amber-200 bg-amber-50 text-amber-800"
+                            }`}
+                          >
+                            {publicReady
+                              ? "Visible on map"
+                              : "Not visible on map"}
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full ${
+                              publicReady ? "bg-emerald-500" : "bg-amber-500"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          {done}/{total} complete
+                          {flags.length > 0 && !publicReady ? (
+                            <span>
+                              {" "}
+                              - Fix the missing items below to go live.
+                            </span>
+                          ) : null}
+                        </div>
+                        {flags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {flags.slice(0, 10).map((flag) => (
+                              <span
+                                key={flag}
+                                className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900"
+                              >
+                                {flag}
+                              </span>
+                            ))}
+                            {flags.length > 10 ? (
+                              <span className="text-[11px] text-amber-900">
+                                +{flags.length - 10} more
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
+                        <div className="grid gap-1 sm:grid-cols-2">
+                          {checklist.map((item) => (
+                            <div
+                              key={item.label}
+                              className="flex items-center gap-2 text-xs"
+                            >
+                              <span
+                                className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold ${
+                                  item.ok
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-amber-200 bg-amber-50 text-amber-800"
+                                }`}
+                              >
+                                {item.ok ? "OK" : "!"}
+                              </span>
+                              <span
+                                className={
+                                  item.ok ? "text-slate-700" : "text-amber-900"
+                                }
+                              >
+                                {item.label}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()
+                : null}
+
+              <Tabs
+                value={hostToolsTab}
+                onValueChange={(value) => setHostToolsTab(value as any)}
+              >
+                <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
+                  <TabsTrigger value="listings" className="text-sm">
+                    Listings
+                  </TabsTrigger>
+                  <TabsTrigger value="location" className="text-sm">
+                    Location
+                  </TabsTrigger>
+                  <TabsTrigger value="payments" className="text-sm">
+                    Payments
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+
+          {topTab === "host" &&
+            hostToolsTab === "payments" &&
+            showHostParkingPass && (
+              <div className="rounded-2xl pp-glass p-5 shadow-clean space-y-3">
+                <div>
+                  <p className="text-base font-semibold text-slate-900 font-display">
+                    Payments
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Stripe payouts are optional. Trucks can still book your
+                    Parking Pass listings; if payouts are disabled, your
+                    earnings are held as credit until you enable payouts.
                   </p>
                 </div>
 
-                {host.stripeConnectAccountId && host.stripePayoutsEnabled ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                    <p className="font-semibold">Host payouts</p>
-                    <p className="text-xs opacity-90">
-                      Enabled. You can cash out automatically.
-                    </p>
+                {!host ? (
+                  <div className="rounded-xl pp-glass-muted p-4 text-sm text-slate-700">
+                    Loading payment status...
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900">
-                      Host payouts are not enabled yet.
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div
+                      className={`rounded-xl border p-4 text-sm ${
+                        platformPaymentsReady
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                          : "border-amber-200 bg-amber-50 text-amber-900"
+                      }`}
+                    >
+                      <p className="font-semibold">Platform payments</p>
+                      <p className="text-xs opacity-90">
+                        {platformPaymentsReady
+                          ? "Enabled. Paid bookings can be processed."
+                          : "Not enabled. Paid bookings may fail even if your listing is visible."}
+                      </p>
+                    </div>
+
+                    {host.stripeConnectAccountId &&
+                    host.stripePayoutsEnabled ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                        <p className="font-semibold">Host payouts</p>
+                        <p className="text-xs opacity-90">
+                          Enabled. You can cash out automatically.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                        <p className="text-sm font-semibold text-amber-900">
+                          Host payouts are not enabled yet.
+                        </p>
+                        <p className="text-xs text-amber-800">
+                          Finish Stripe onboarding to enable cashout. This does
+                          not block listing visibility or bookings.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => setLocation("/host/dashboard")}
+                          >
+                            Enable payouts
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setLocation("/host/dashboard?setup=refresh")
+                            }
+                          >
+                            Check status
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          {topTab === "host" &&
+            hostToolsTab === "location" &&
+            showHostParkingPass &&
+            host && (
+              <div
+                id="parking-pass-settings"
+                className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-orange-50/70 p-4"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-orange-900">
+                      Parking Pass settings
                     </p>
-                    <p className="text-xs text-amber-800">
-                      Finish Stripe onboarding to enable cashout. This does not block listing visibility or bookings.
+                    <p className="text-xs text-orange-700">
+                      Manage location details, pins, and amenities for your
+                      listings.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => setLocation("/host/dashboard")}>
-                        Enable payouts
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setLocation("/host/dashboard?setup=refresh")}
-                      >
-                        Check status
-                      </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {hosts.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <Label
+                          htmlFor="hostSelect"
+                          className="text-xs text-orange-900"
+                        >
+                          Location
+                        </Label>
+                        <select
+                          id="hostSelect"
+                          value={selectedHostId}
+                          onChange={(event) =>
+                            setSelectedHostId(event.target.value)
+                          }
+                          className="h-9 rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-2 text-xs"
+                        >
+                          {hosts.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.businessName} · {item.address}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => setIsCreating(!isCreating)}
+                    >
+                      {isCreating ? (
+                        "Cancel"
+                      ) : (
+                        <>
+                          <Plus className="mr-2 h-4 w-4" /> New Parking Pass
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                {!host ? (
+                  <div className="mt-4 rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)]/60 p-4 text-xs text-[color:var(--status-warning)]">
+                    Loading your parking pass locations...
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-900">
+                            Blackout dates
+                          </p>
+                          <p className="text-xs text-orange-700">
+                            Block specific days when trucks cannot park.
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <Input
+                            type="date"
+                            value={blackoutDateInput}
+                            onChange={(event) =>
+                              setBlackoutDateInput(event.target.value)
+                            }
+                            min={format(new Date(), "yyyy-MM-dd")}
+                            disabled={!hasActiveParkingPass}
+                          />
+                          <Button
+                            type="button"
+                            onClick={handleAddBlackout}
+                            disabled={
+                              !hasActiveParkingPass ||
+                              !blackoutDateInput ||
+                              isSavingBlackout
+                            }
+                            size="sm"
+                          >
+                            {isSavingBlackout
+                              ? "Saving..."
+                              : "Add blackout date"}
+                          </Button>
+                        </div>
+                        {!hasActiveParkingPass && (
+                          <p className="text-xs text-orange-700">
+                            Create a parking pass to manage blackout dates for
+                            that pass.
+                          </p>
+                        )}
+                        {blackoutDates.length === 0 ? (
+                          <p className="text-xs text-orange-700">
+                            No blackout dates set.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {blackoutDates.map((dateKey) => (
+                              <button
+                                key={dateKey}
+                                type="button"
+                                onClick={() => handleRemoveBlackout(dateKey)}
+                                className="rounded-full border border-[color:var(--status-warning)]/30 bg-orange-50 px-3 py-1 text-xs text-orange-900 hover:bg-orange-100"
+                                disabled={
+                                  isSavingBlackout ||
+                                  dateKey <= format(new Date(), "yyyy-MM-dd")
+                                }
+                              >
+                                {format(new Date(dateKey), "MMM d, yyyy")}{" "}
+                                (remove)
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="text-base font-semibold text-orange-900">
+                              Location details
+                            </h3>
+                            <p className="text-xs text-orange-700">
+                              Keep each parking address accurate for trucks.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              onClick={handleUpdateLocation}
+                              disabled={isUpdatingLocation || !pinPosition}
+                              size="sm"
+                            >
+                              {isUpdatingLocation
+                                ? "Saving..."
+                                : "Save location"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={handleDeleteLocation}
+                              disabled={isDeletingLocation}
+                              size="sm"
+                            >
+                              {isDeletingLocation
+                                ? "Deleting..."
+                                : "Delete location"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="hostBusinessName">
+                              Location name
+                            </Label>
+                            <Input
+                              id="hostBusinessName"
+                              value={host.businessName}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        businessName: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="hostContactPhone">
+                              Contact phone
+                            </Label>
+                            <Input
+                              id="hostContactPhone"
+                              value={host.contactPhone || ""}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        contactPhone: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="hostAddress">Address</Label>
+                            <Input
+                              id="hostAddress"
+                              value={host.address}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        address: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="hostCity">City</Label>
+                            <Input
+                              id="hostCity"
+                              value={host.city || ""}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? { ...current, city: event.target.value }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="hostState">State</Label>
+                            <Input
+                              id="hostState"
+                              value={host.state || ""}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? { ...current, state: event.target.value }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="hostSpotPhoto">Spot photo</Label>
+                            {host.spotImageUrl && (
+                              <img
+                                src={host.spotImageUrl}
+                                alt={`${host.businessName} parking spot`}
+                                className="h-40 w-full rounded-xl border border-border/60 object-cover"
+                                loading="lazy"
+                              />
+                            )}
+                            <input
+                              id="hostSpotPhoto"
+                              type="file"
+                              accept="image/*"
+                              className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-orange-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-orange-900 hover:file:bg-orange-200"
+                              onChange={(event) =>
+                                setSpotImageFile(
+                                  event.target.files?.[0] ?? null,
+                                )
+                              }
+                            />
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleUploadSpotImage}
+                                disabled={
+                                  !spotImageFile || isUploadingSpotImage
+                                }
+                              >
+                                {isUploadingSpotImage
+                                  ? "Uploading..."
+                                  : "Upload photo"}
+                              </Button>
+                              <p className="text-[11px] text-orange-700">
+                                Shows when trucks click your spot on the map.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="hostType">Location type</Label>
+                            <select
+                              id="hostType"
+                              value={host.locationType || "other"}
+                              onChange={(event) =>
+                                setHost((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        locationType: event.target.value,
+                                      }
+                                    : current,
+                                )
+                              }
+                              className="w-full rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-3 py-2 text-sm"
+                            >
+                              <option value="office">Office</option>
+                              <option value="bar">Bar</option>
+                              <option value="brewery">Brewery</option>
+                              <option value="restaurant">Restaurant</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-orange-900">
+                                Pin location
+                              </p>
+                              <p className="text-xs text-orange-700">
+                                Drag the pin or click the map to adjust the
+                                exact spot.
+                              </p>
+                            </div>
+                            {addressNeedsPin && (
+                              <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
+                                Address changed - reset the pin
+                              </span>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleGeocodePin}
+                                disabled={isGeocodingPin}
+                              >
+                                {isGeocodingPin
+                                  ? "Setting pin..."
+                                  : "Use address"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={handleSavePin}
+                                disabled={!pinPosition || isSavingPin}
+                              >
+                                {isSavingPin ? "Saving pin..." : "Save pin"}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="relative h-64 w-full overflow-hidden rounded-xl border border-[color:var(--status-warning)]/30 bg-orange-100/20">
+                            <MapContainer
+                              center={[
+                                settingsMapCenter.lat,
+                                settingsMapCenter.lng,
+                              ]}
+                              zoom={settingsMapZoom}
+                              zoomControl={false}
+                              scrollWheelZoom
+                              className="h-full w-full"
+                            >
+                              <TileLayer
+                                attribution={parkingMapAttribution}
+                                url={parkingMapTileUrl}
+                              />
+                              <MapCenterer
+                                center={settingsMapCenter}
+                                zoom={settingsMapZoom}
+                              />
+                              <MapPinPicker
+                                onPick={(point) => setPinPosition(point)}
+                              />
+                              {pinPosition && (
+                                <Marker
+                                  position={[pinPosition.lat, pinPosition.lng]}
+                                  icon={parkingPassPinIcon}
+                                  draggable
+                                  eventHandlers={{
+                                    dragend: (event) => {
+                                      const marker = event.target as L.Marker;
+                                      const next = marker.getLatLng();
+                                      setPinPosition({
+                                        lat: next.lat,
+                                        lng: next.lng,
+                                      });
+                                    },
+                                  }}
+                                />
+                              )}
+                            </MapContainer>
+                            {!pinPosition && (
+                              <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
+                                {addressNeedsPin
+                                  ? "Address updated. Click the map or use the address button."
+                                  : "No pin yet. Click the map or use the address button."}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                            <span>
+                              Lat:{" "}
+                              {pinPosition ? pinPosition.lat.toFixed(6) : "--"}
+                            </span>
+                            <span>
+                              Lng:{" "}
+                              {pinPosition ? pinPosition.lng.toFixed(6) : "--"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-[color:var(--status-warning)]/30 pp-glass-muted p-4 space-y-3">
+                        <p className="text-sm font-semibold text-orange-900">
+                          Add another parking location
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="newHostName">Location name</Label>
+                            <Input
+                              id="newHostName"
+                              value={newLocationForm.businessName}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  businessName: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="newHostPhone">Contact phone</Label>
+                            <Input
+                              id="newHostPhone"
+                              value={newLocationForm.contactPhone}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  contactPhone: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="newHostAddress">Address</Label>
+                            <Input
+                              id="newHostAddress"
+                              value={newLocationForm.address}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  address: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="newHostCity">City</Label>
+                            <Input
+                              id="newHostCity"
+                              value={newLocationForm.city}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  city: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="newHostState">State</Label>
+                            <Input
+                              id="newHostState"
+                              value={newLocationForm.state}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  state: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="newHostType">Location type</Label>
+                            <select
+                              id="newHostType"
+                              value={newLocationForm.locationType}
+                              onChange={(event) =>
+                                setNewLocationForm((current) => ({
+                                  ...current,
+                                  locationType: event.target.value,
+                                }))
+                              }
+                              className="w-full rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-3 py-2 text-sm"
+                            >
+                              <option value="office">Office</option>
+                              <option value="bar">Bar</option>
+                              <option value="brewery">Brewery</option>
+                              <option value="restaurant">Restaurant</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div className="flex items-end">
+                            <Button
+                              variant="outline"
+                              onClick={handleCreateLocation}
+                              disabled={
+                                isSavingLocation || !newLocationPinPosition
+                              }
+                              size="sm"
+                            >
+                              {isSavingLocation ? "Saving..." : "Add location"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-4 rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-3 space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold text-orange-900">
+                                Pin preview
+                              </p>
+                              <p className="text-[11px] text-orange-700">
+                                Pin required before adding a new location.
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleGeocodeNewLocationPin}
+                              disabled={isGeocodingNewPin}
+                            >
+                              {isGeocodingNewPin
+                                ? "Setting pin..."
+                                : "Use address"}
+                            </Button>
+                          </div>
+                          <div className="relative h-56 w-full overflow-hidden rounded-lg border border-[color:var(--status-warning)]/30 bg-orange-100/20">
+                            <MapContainer
+                              center={[
+                                newLocationMapCenter.lat,
+                                newLocationMapCenter.lng,
+                              ]}
+                              zoom={newLocationMapZoom}
+                              zoomControl={false}
+                              scrollWheelZoom
+                              className="h-full w-full"
+                            >
+                              <TileLayer
+                                attribution={parkingMapAttribution}
+                                url={parkingMapTileUrl}
+                              />
+                              <MapCenterer
+                                center={newLocationMapCenter}
+                                zoom={newLocationMapZoom}
+                              />
+                              <MapPinPicker
+                                onPick={(point) =>
+                                  setNewLocationPinPosition(point)
+                                }
+                              />
+                              {newLocationPinPosition && (
+                                <Marker
+                                  position={[
+                                    newLocationPinPosition.lat,
+                                    newLocationPinPosition.lng,
+                                  ]}
+                                  icon={parkingPassPinIcon}
+                                  draggable
+                                  eventHandlers={{
+                                    dragend: (event) => {
+                                      const marker = event.target as L.Marker;
+                                      const next = marker.getLatLng();
+                                      setNewLocationPinPosition({
+                                        lat: next.lat,
+                                        lng: next.lng,
+                                      });
+                                    },
+                                  }}
+                                />
+                              )}
+                            </MapContainer>
+                            {!newLocationPinPosition && (
+                              <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
+                                Click the map or use the address to set a pin.
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                            <span>
+                              Lat:{" "}
+                              {newLocationPinPosition
+                                ? newLocationPinPosition.lat.toFixed(6)
+                                : "--"}
+                            </span>
+                            <span>
+                              Lng:{" "}
+                              {newLocationPinPosition
+                                ? newLocationPinPosition.lng.toFixed(6)
+                                : "--"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-base font-semibold text-orange-900">
+                            On-site amenities
+                          </h3>
+                          <p className="text-xs text-orange-700">
+                            Share what trucks can expect at your location.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAmenitiesSave}
+                          disabled={isSavingAmenities}
+                        >
+                          {isSavingAmenities ? "Saving..." : "Save amenities"}
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          { key: "water", label: "Water" },
+                          { key: "electric", label: "Electric" },
+                          { key: "bathrooms", label: "Bathrooms" },
+                          { key: "wifi", label: "Wi-Fi" },
+                          { key: "seating", label: "Seating" },
+                        ].map((amenity) => (
+                          <label
+                            key={amenity.key}
+                            className="flex items-center gap-2 text-sm text-orange-900"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={amenities[amenity.key] ?? false}
+                              onChange={(event) =>
+                                setAmenities((prev) => ({
+                                  ...prev,
+                                  [amenity.key]: event.target.checked,
+                                }))
+                              }
+                            />
+                            {amenity.label}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             )}
-          </div>
-        )}
-        {topTab === "host" && hostToolsTab === "location" && showHostParkingPass && host && (
-          <div
-            id="parking-pass-settings"
-            className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-orange-50/70 p-4"
-          >
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-orange-900">
-                  Parking Pass settings
-                </p>
-                <p className="text-xs text-orange-700">
-                  Manage location details, pins, and amenities for your listings.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {hosts.length > 1 && (
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="hostSelect" className="text-xs text-orange-900">
-                      Location
-                    </Label>
-                    <select
-                      id="hostSelect"
-                      value={selectedHostId}
-                      onChange={(event) => setSelectedHostId(event.target.value)}
-                      className="h-9 rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-2 text-xs"
-                    >
-                      {hosts.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.businessName} · {item.address}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <Button size="sm" onClick={() => setIsCreating(!isCreating)}>
-                  {isCreating ? (
-                    "Cancel"
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" /> New Parking Pass
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-            {!host ? (
-              <div className="mt-4 rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)]/60 p-4 text-xs text-[color:var(--status-warning)]">
-                Loading your parking pass locations...
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-                <div className="space-y-4">
-                    <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-orange-900">
-                        Blackout dates
-                      </p>
-                      <p className="text-xs text-orange-700">
-                        Block specific days when trucks cannot park.
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <Input
-                        type="date"
-                        value={blackoutDateInput}
-                        onChange={(event) => setBlackoutDateInput(event.target.value)}
-                        min={format(new Date(), "yyyy-MM-dd")}
-                        disabled={!hasActiveParkingPass}
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleAddBlackout}
-                        disabled={
-                          !hasActiveParkingPass ||
-                          !blackoutDateInput ||
-                          isSavingBlackout
-                        }
-                        size="sm"
-                      >
-                        {isSavingBlackout ? "Saving..." : "Add blackout date"}
-                      </Button>
-                    </div>
-                    {!hasActiveParkingPass && (
-                      <p className="text-xs text-orange-700">
-                        Create a parking pass to manage blackout dates for that pass.
-                      </p>
-                    )}
-                    {blackoutDates.length === 0 ? (
-                      <p className="text-xs text-orange-700">No blackout dates set.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {blackoutDates.map((dateKey) => (
-                          <button
-                            key={dateKey}
-                            type="button"
-                            onClick={() => handleRemoveBlackout(dateKey)}
-                            className="rounded-full border border-[color:var(--status-warning)]/30 bg-orange-50 px-3 py-1 text-xs text-orange-900 hover:bg-orange-100"
-                            disabled={
-                              isSavingBlackout ||
-                              dateKey <= format(new Date(), "yyyy-MM-dd")
-                            }
-                          >
-                            {format(new Date(dateKey), "MMM d, yyyy")} (remove)
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
 
-                <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-4">
-                    <div className="flex items-center justify-between gap-4">
+          {topTab === "host" &&
+            hostToolsTab === "listings" &&
+            showHostParkingPass &&
+            host && (
+              <>
+                {isCreating && (
+                  <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[color:var(--status-warning)]/30 shadow-clean">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <h3 className="text-base font-semibold text-orange-900">
-                          Location details
-                        </h3>
-                        <p className="text-xs text-orange-700">
-                          Keep each parking address accurate for trucks.
+                        <h2 className="text-2xl font-semibold text-slate-900">
+                          Post a Parking Pass
+                        </h2>
+                        <p className="text-sm text-slate-500">
+                          Set parking hours and what each slot costs.
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          onClick={handleUpdateLocation}
-                          disabled={isUpdatingLocation || !pinPosition}
-                          size="sm"
-                        >
-                          {isUpdatingLocation ? "Saving..." : "Save location"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={handleDeleteLocation}
-                          disabled={isDeletingLocation}
-                          size="sm"
-                        >
-                          {isDeletingLocation ? "Deleting..." : "Delete location"}
-                        </Button>
+                      <div className="rounded-full border border-[var(--border-subtle)] px-3 py-1 text-xs text-[color:var(--text-muted)]">
+                        {host.businessName}
                       </div>
                     </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="hostBusinessName">Location name</Label>
-                        <Input
-                          id="hostBusinessName"
-                          value={host.businessName}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, businessName: event.target.value }
-                                : current,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hostContactPhone">Contact phone</Label>
-                        <Input
-                          id="hostContactPhone"
-                          value={host.contactPhone || ""}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, contactPhone: event.target.value }
-                                : current,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="hostAddress">Address</Label>
-                        <Input
-                          id="hostAddress"
-                          value={host.address}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, address: event.target.value }
-                                : current,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hostCity">City</Label>
-                        <Input
-                          id="hostCity"
-                          value={host.city || ""}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, city: event.target.value }
-                                : current,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hostState">State</Label>
-                        <Input
-                          id="hostState"
-                          value={host.state || ""}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, state: event.target.value }
-                                : current,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="hostSpotPhoto">Spot photo</Label>
-                        {host.spotImageUrl && (
-                          <img
-                            src={host.spotImageUrl}
-                            alt={`${host.businessName} parking spot`}
-                            className="h-40 w-full rounded-xl border border-border/60 object-cover"
-                            loading="lazy"
-                          />
-                        )}
-                        <input
-                          id="hostSpotPhoto"
-                          type="file"
-                          accept="image/*"
-                          className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-orange-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-orange-900 hover:file:bg-orange-200"
-                          onChange={(event) =>
-                            setSpotImageFile(event.target.files?.[0] ?? null)
-                          }
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleUploadSpotImage}
-                            disabled={!spotImageFile || isUploadingSpotImage}
-                          >
-                            {isUploadingSpotImage ? "Uploading..." : "Upload photo"}
-                          </Button>
-                          <p className="text-[11px] text-orange-700">
-                            Shows when trucks click your spot on the map.
-                          </p>
+                    <form
+                      onSubmit={handleCreatePass}
+                      className="mt-6 space-y-6"
+                    >
+                      {createError && (
+                        <div className="p-3 bg-rose-50 text-rose-700 rounded-md text-sm">
+                          {createError}
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hostType">Location type</Label>
-                        <select
-                          id="hostType"
-                          value={host.locationType || "other"}
-                          onChange={(event) =>
-                            setHost((current) =>
-                              current
-                                ? { ...current, locationType: event.target.value }
-                                : current,
-                            )
-                          }
-                          className="w-full rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-3 py-2 text-sm"
-                        >
-                          <option value="office">Office</option>
-                          <option value="bar">Bar</option>
-                          <option value="brewery">Brewery</option>
-                          <option value="restaurant">Restaurant</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-orange-900">
-                            Pin location
-                          </p>
-                          <p className="text-xs text-orange-700">
-                            Drag the pin or click the map to adjust the exact spot.
-                          </p>
+                      )}
+                      {hasActiveHostPass && (
+                        <div className="p-3 bg-amber-50 text-amber-700 rounded-md text-sm">
+                          You already have a parking pass for this address. Edit
+                          the existing listing instead of creating a new one.
                         </div>
-                        {addressNeedsPin && (
-                          <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
-                            Address changed - reset the pin
-                          </span>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleGeocodePin}
-                            disabled={isGeocodingPin}
-                          >
-                            {isGeocodingPin ? "Setting pin..." : "Use address"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={handleSavePin}
-                            disabled={!pinPosition || isSavingPin}
-                          >
-                            {isSavingPin ? "Saving pin..." : "Save pin"}
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="relative h-64 w-full overflow-hidden rounded-xl border border-[color:var(--status-warning)]/30 bg-orange-100/20">
-                        <MapContainer
-                          center={[settingsMapCenter.lat, settingsMapCenter.lng]}
-                          zoom={settingsMapZoom}
-                          zoomControl={false}
-                          scrollWheelZoom
-                          className="h-full w-full"
-                        >
-                          <TileLayer
-                            attribution={parkingMapAttribution}
-                            url={parkingMapTileUrl}
-                          />
-                          <MapCenterer
-                            center={settingsMapCenter}
-                            zoom={settingsMapZoom}
-                          />
-                          <MapPinPicker onPick={(point) => setPinPosition(point)} />
-                          {pinPosition && (
-                            <Marker
-                              position={[pinPosition.lat, pinPosition.lng]}
-                              icon={parkingPassPinIcon}
-                              draggable
-                              eventHandlers={{
-                                dragend: (event) => {
-                                  const marker = event.target as L.Marker;
-                                  const next = marker.getLatLng();
-                                  setPinPosition({ lat: next.lat, lng: next.lng });
-                                },
-                              }}
-                            />
-                          )}
-                        </MapContainer>
-                        {!pinPosition && (
-                          <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
-                            {addressNeedsPin
-                              ? "Address updated. Click the map or use the address button."
-                              : "No pin yet. Click the map or use the address button."}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-orange-700">
-                        <span>
-                          Lat: {pinPosition ? pinPosition.lat.toFixed(6) : "--"}
-                        </span>
-                        <span>
-                          Lng: {pinPosition ? pinPosition.lng.toFixed(6) : "--"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                      )}
 
-                  <div className="rounded-2xl border border-[color:var(--status-warning)]/30 pp-glass-muted p-4 space-y-3">
-                    <p className="text-sm font-semibold text-orange-900">
-                      Add another parking location
-                    </p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="newHostName">Location name</Label>
-                        <Input
-                          id="newHostName"
-                          value={newLocationForm.businessName}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              businessName: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="newHostPhone">Contact phone</Label>
-                        <Input
-                          id="newHostPhone"
-                          value={newLocationForm.contactPhone}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              contactPhone: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="newHostAddress">Address</Label>
-                        <Input
-                          id="newHostAddress"
-                          value={newLocationForm.address}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              address: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="newHostCity">City</Label>
-                        <Input
-                          id="newHostCity"
-                          value={newLocationForm.city}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              city: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="newHostState">State</Label>
-                        <Input
-                          id="newHostState"
-                          value={newLocationForm.state}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              state: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="newHostType">Location type</Label>
-                        <select
-                          id="newHostType"
-                          value={newLocationForm.locationType}
-                          onChange={(event) =>
-                            setNewLocationForm((current) => ({
-                              ...current,
-                              locationType: event.target.value,
-                            }))
-                          }
-                          className="w-full rounded-md border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] px-3 py-2 text-sm"
-                        >
-                          <option value="office">Office</option>
-                          <option value="bar">Bar</option>
-                          <option value="brewery">Brewery</option>
-                          <option value="restaurant">Restaurant</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                      <div className="flex items-end">
-                        <Button
-                          variant="outline"
-                          onClick={handleCreateLocation}
-                          disabled={isSavingLocation || !newLocationPinPosition}
-                          size="sm"
-                        >
-                          {isSavingLocation ? "Saving..." : "Add location"}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-3 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-orange-900">
-                            Pin preview
+                      <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+                        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/70 p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h3 className="text-base font-semibold text-slate-900">
+                                When trucks can park
+                              </h3>
+                              <p className="text-xs text-slate-500">
+                                Pick the days and parking hours (or choose Any
+                                time).
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                id="anyTime"
+                                checked={anyTime}
+                                onCheckedChange={setAnyTime}
+                              />
+                              <Label
+                                htmlFor="anyTime"
+                                className="text-xs text-[color:var(--text-muted)]"
+                              >
+                                Any time
+                              </Label>
+                            </div>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label>Days of the week</Label>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                  { label: "Mon", value: 1 },
+                                  { label: "Tue", value: 2 },
+                                  { label: "Wed", value: 3 },
+                                  { label: "Thu", value: 4 },
+                                  { label: "Fri", value: 5 },
+                                  { label: "Sat", value: 6 },
+                                  { label: "Sun", value: 0 },
+                                ].map((day) => {
+                                  const selected = daysOfWeek.includes(
+                                    day.value,
+                                  );
+                                  return (
+                                    <button
+                                      key={day.value}
+                                      type="button"
+                                      className={`rounded-md border px-3 py-2 text-xs font-medium transition ${
+                                        selected
+                                          ? "border-orange-300 bg-orange-100 text-orange-900"
+                                          : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-muted)] hover:bg-[var(--bg-surface)]"
+                                      }`}
+                                      onClick={() =>
+                                        setDaysOfWeek((current) =>
+                                          current.includes(day.value)
+                                            ? current.filter(
+                                                (item) => item !== day.value,
+                                              )
+                                            : [...current, day.value],
+                                        )
+                                      }
+                                    >
+                                      {day.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="maxTrucks">Number of spots</Label>
+                              <Input
+                                id="maxTrucks"
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={maxTrucks}
+                                onChange={(event) =>
+                                  setMaxTrucks(Number(event.target.value))
+                                }
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="startTime">Start</Label>
+                              <Input
+                                id="startTime"
+                                type="time"
+                                value={startTime}
+                                onChange={(event) =>
+                                  setStartTime(event.target.value)
+                                }
+                                disabled={anyTime}
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="endTime">End</Label>
+                              <Input
+                                id="endTime"
+                                type="time"
+                                value={endTime}
+                                onChange={(event) =>
+                                  setEndTime(event.target.value)
+                                }
+                                disabled={anyTime}
+                                required
+                              />
+                            </div>
+                          </div>
+                          {anyTime && (
+                            <p className="mt-3 text-xs text-slate-500">
+                              Any time means trucks can park 24/7.
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-orange-50/60 p-4">
+                          <h3 className="text-base font-semibold text-orange-900">
+                            Price preview
+                          </h3>
+                          <p className="text-xs text-orange-700 mb-4">
+                            Daily = slot total + $10. Weekly = (slot total x 7)
+                            + $70. Monthly = (slot total x 30) + $300.
                           </p>
-                          <p className="text-[11px] text-orange-700">
-                            Pin required before adding a new location.
+                          <div className="space-y-2 text-sm text-orange-900">
+                            <div className="flex items-center justify-between">
+                              <span>Slot total</span>
+                              <span className="font-semibold">
+                                {slotSum ? `$${slotSum.toFixed(2)}` : "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Daily</span>
+                              <span className="font-semibold">
+                                {dailyEstimate
+                                  ? `$${dailyEstimate.toFixed(2)}`
+                                  : "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>
+                                Weekly{" "}
+                                {weeklyOverrideValue !== null
+                                  ? "(custom)"
+                                  : "(auto)"}
+                              </span>
+                              <span className="font-semibold">
+                                {weeklyFinal
+                                  ? `$${weeklyFinal.toFixed(2)}`
+                                  : "-"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>
+                                Monthly{" "}
+                                {monthlyOverrideValue !== null
+                                  ? "(custom)"
+                                  : "(auto)"}
+                              </span>
+                              <span className="font-semibold">
+                                {monthlyFinal
+                                  ? `$${monthlyFinal.toFixed(2)}`
+                                  : "-"}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="mt-4 text-xs text-[color:var(--status-warning)]">
+                            Trucks see your price plus the MealScout fee.
                           </p>
                         </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <h3 className="text-base font-semibold text-slate-900 mb-2">
+                          Set slot pricing
+                        </h3>
+                        <p className="text-xs text-slate-500 mb-4">
+                          Set any slot to $0 if you don't want to offer it.
+                        </p>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+                            <Label htmlFor="breakfastPrice">Breakfast</Label>
+                            <Input
+                              id="breakfastPrice"
+                              type="number"
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              value={breakfastPrice}
+                              onChange={(event) =>
+                                setBreakfastPrice(event.target.value)
+                              }
+                              placeholder="0"
+                            />
+                            <p className="text-xs text-slate-500">
+                              Early shift pricing.
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+                            <Label htmlFor="lunchPrice">Lunch</Label>
+                            <Input
+                              id="lunchPrice"
+                              type="number"
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              value={lunchPrice}
+                              onChange={(event) =>
+                                setLunchPrice(event.target.value)
+                              }
+                              placeholder="0"
+                            />
+                            <p className="text-xs text-slate-500">
+                              Peak traffic slot.
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+                            <Label htmlFor="dinnerPrice">Dinner</Label>
+                            <Input
+                              id="dinnerPrice"
+                              type="number"
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              value={dinnerPrice}
+                              onChange={(event) =>
+                                setDinnerPrice(event.target.value)
+                              }
+                              placeholder="0"
+                            />
+                            <p className="text-xs text-slate-500">
+                              Evening coverage.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <h3 className="text-base font-semibold text-slate-900 mb-2">
+                          Weekly & monthly rates (optional)
+                        </h3>
+                        <p className="text-xs text-slate-500 mb-4">
+                          Leave blank to use the auto-calculated weekly and
+                          monthly totals.
+                        </p>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+                            <Label htmlFor="weeklyOverride">Weekly rate</Label>
+                            <Input
+                              id="weeklyOverride"
+                              type="number"
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              value={weeklyOverride}
+                              onChange={(event) =>
+                                setWeeklyOverride(event.target.value)
+                              }
+                              placeholder={
+                                weeklyHostEstimate
+                                  ? `$${weeklyHostEstimate.toFixed(0)}`
+                                  : "Auto"
+                              }
+                            />
+                            <p className="text-xs text-slate-500">
+                              Auto weekly:{" "}
+                              {weeklyHostEstimate
+                                ? `$${weeklyHostEstimate.toFixed(0)}`
+                                : "—"}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
+                            <Label htmlFor="monthlyOverride">
+                              Monthly rate
+                            </Label>
+                            <Input
+                              id="monthlyOverride"
+                              type="number"
+                              min="0"
+                              step="1"
+                              inputMode="numeric"
+                              value={monthlyOverride}
+                              onChange={(event) =>
+                                setMonthlyOverride(event.target.value)
+                              }
+                              placeholder={
+                                monthlyHostEstimate
+                                  ? `$${monthlyHostEstimate.toFixed(0)}`
+                                  : "Auto"
+                              }
+                            />
+                            <p className="text-xs text-slate-500">
+                              Auto monthly:{" "}
+                              {monthlyHostEstimate
+                                ? `$${monthlyHostEstimate.toFixed(0)}`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-4 border p-4 rounded-xl border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                        <Switch
+                          id="hard-cap"
+                          checked={hardCapEnabled}
+                          onCheckedChange={setHardCapEnabled}
+                        />
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="hard-cap" className="font-semibold">
+                              Capacity Guard v2.2
+                            </Label>
+                            <Badge variant="secondary" className="text-xs">
+                              New
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-slate-500">
+                            Strictly enforces the max trucks limit. Once you
+                            accept enough trucks to hit the limit, no further
+                            approvals will be allowed.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-slate-500">
+                          You can edit times later if plans change.
+                        </p>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleGeocodeNewLocationPin}
-                          disabled={isGeocodingNewPin}
+                          type="submit"
+                          className="w-full px-6 sm:w-auto"
+                          disabled={hasActiveHostPass}
                         >
-                          {isGeocodingNewPin ? "Setting pin..." : "Use address"}
+                          Publish Parking Pass
                         </Button>
                       </div>
-                      <div className="relative h-56 w-full overflow-hidden rounded-lg border border-[color:var(--status-warning)]/30 bg-orange-100/20">
-                        <MapContainer
-                          center={[
-                            newLocationMapCenter.lat,
-                            newLocationMapCenter.lng,
-                          ]}
-                          zoom={newLocationMapZoom}
-                          zoomControl={false}
-                          scrollWheelZoom
-                          className="h-full w-full"
-                        >
-                          <TileLayer
-                            attribution={parkingMapAttribution}
-                            url={parkingMapTileUrl}
-                          />
-                          <MapCenterer
-                            center={newLocationMapCenter}
-                            zoom={newLocationMapZoom}
-                          />
-                          <MapPinPicker
-                            onPick={(point) => setNewLocationPinPosition(point)}
-                          />
-                          {newLocationPinPosition && (
-                            <Marker
-                              position={[
-                                newLocationPinPosition.lat,
-                                newLocationPinPosition.lng,
-                              ]}
-                              icon={parkingPassPinIcon}
-                              draggable
-                              eventHandlers={{
-                                dragend: (event) => {
-                                  const marker = event.target as L.Marker;
-                                  const next = marker.getLatLng();
-                                  setNewLocationPinPosition({
-                                    lat: next.lat,
-                                    lng: next.lng,
-                                  });
-                                },
-                              }}
-                            />
-                          )}
-                        </MapContainer>
-                        {!newLocationPinPosition && (
-                          <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
-                            Click the map or use the address to set a pin.
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-xs text-orange-700">
-                        <span>
-                          Lat:{" "}
-                          {newLocationPinPosition
-                            ? newLocationPinPosition.lat.toFixed(6)
-                            : "--"}
-                        </span>
-                        <span>
-                          Lng:{" "}
-                          {newLocationPinPosition
-                            ? newLocationPinPosition.lng.toFixed(6)
-                            : "--"}
-                        </span>
-                      </div>
-                    </div>
+                    </form>
                   </div>
+                )}
+
+                <div className="space-y-6">
+                  <Tabs defaultValue="upcoming" className="w-full">
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        Your Parking Pass Listings
+                      </h2>
+                      <TabsList className="w-full sm:w-auto">
+                        <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+                        <TabsTrigger value="past">Past</TabsTrigger>
+                      </TabsList>
+                    </div>
+
+                    <TabsContent value="upcoming" className="space-y-4">
+                      {upcomingListings.length === 0 ? (
+                        <div className="text-center py-12 bg-[var(--bg-surface)] rounded-xl border border-dashed border-slate-300">
+                          <Calendar className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                          <h3 className="text-lg font-medium text-slate-900">
+                            No upcoming parking pass listings
+                          </h3>
+                          <p className="text-slate-500 mb-4">
+                            Create a parking pass listing for trucks.
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsCreating(true)}
+                          >
+                            Create Parking Pass Listing
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="grid gap-4">
+                          {upcomingListings.map((listing) => (
+                            <div
+                              key={listing.id}
+                              className="bg-[var(--bg-surface)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-clean flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="flex items-start gap-4 sm:items-center sm:gap-6">
+                                <div className="flex flex-col items-center justify-center w-16 h-16 bg-rose-50 rounded-lg text-rose-700">
+                                  <span className="text-xs font-bold uppercase">
+                                    {format(new Date(listing.date), "MMM")}
+                                  </span>
+                                  <span className="text-2xl font-bold">
+                                    {format(new Date(listing.date), "d")}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <div className="mb-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-[color:var(--text-muted)]">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-4 w-4" />
+                                      {listing.startTime === "00:00" &&
+                                      listing.endTime === "23:59"
+                                        ? "Any time"
+                                        : `${listing.startTime} - ${listing.endTime}`}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Truck className="h-4 w-4" />
+                                      {listing.maxTrucks} Spot
+                                      {listing.maxTrucks !== 1 ? "s" : ""}
+                                    </span>
+                                    {listing.requiresPayment && (
+                                      <span className="text-xs text-orange-700 bg-orange-50 border border-[color:var(--status-warning)]/30 rounded-full px-2 py-0.5">
+                                        Daily{" "}
+                                        {formatCents(listing.dailyPriceCents)} /
+                                        Weekly{" "}
+                                        {formatCents(listing.weeklyPriceCents)}{" "}
+                                        / Monthly{" "}
+                                        {formatCents(listing.monthlyPriceCents)}
+                                      </span>
+                                    )}
+                                    {listing.hardCapEnabled && (
+                                      <span
+                                        title="Capacity Guard v2.2 Enabled"
+                                        className="flex items-center gap-1 text-xs bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
+                                      >
+                                        <AlertCircle className="h-3 w-3 text-emerald-600" />
+                                        <span className="text-emerald-700 font-medium">
+                                          Strict Cap
+                                        </span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <span
+                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        listing.status === "open"
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : listing.status === "filled"
+                                            ? "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]"
+                                            : "bg-slate-100 text-slate-800"
+                                      }`}
+                                    >
+                                      {listing.status.charAt(0).toUpperCase() +
+                                        listing.status.slice(1)}
+                                    </span>
+                                  </div>
+                                  {Array.isArray(listing.qualityFlags) &&
+                                    listing.qualityFlags.length > 0 && (
+                                      <div className="mt-2 text-xs text-amber-800">
+                                        Needs fixes:{" "}
+                                        {listing.qualityFlags.join(", ")}
+                                      </div>
+                                    )}
+                                </div>
+                              </div>
+
+                              <div className="flex w-full items-center gap-2 sm:w-auto">
+                                <Badge variant="secondary">Listing</Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="ml-auto sm:ml-0"
+                                  onClick={() => {
+                                    setEditHostListing(listing);
+                                    setEditHostListingOpen(true);
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="past" className="space-y-4">
+                      {pastListings.length === 0 ? (
+                        <div className="text-center py-12 bg-[var(--bg-surface)] rounded-xl border border-dashed border-slate-300">
+                          <Clock className="mx-auto h-12 w-12 text-slate-300 mb-3" />
+                          <h3 className="text-lg font-medium text-slate-900">
+                            No past parking pass listings
+                          </h3>
+                          <p className="text-slate-500">
+                            Your parking pass history will appear here.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 opacity-75">
+                          {pastListings.map((listing) => (
+                            <div
+                              key={listing.id}
+                              className="bg-[var(--bg-surface)] p-6 rounded-xl border border-[var(--border-subtle)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="flex items-start gap-4 sm:items-center sm:gap-6">
+                                <div className="flex flex-col items-center justify-center w-16 h-16 bg-slate-200 rounded-lg text-[color:var(--text-muted)]">
+                                  <span className="text-xs font-bold uppercase">
+                                    {format(new Date(listing.date), "MMM")}
+                                  </span>
+                                  <span className="text-2xl font-bold">
+                                    {format(new Date(listing.date), "d")}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <div className="mb-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="h-4 w-4" />
+                                      {listing.startTime} - {listing.endTime}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-[color:var(--text-muted)]">
+                                      Completed
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full sm:w-auto"
+                                disabled
+                              >
+                                Archived
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
-                <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-[var(--bg-surface)] p-4 space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-base font-semibold text-orange-900">
-                        On-site amenities
-                      </h3>
-                      <p className="text-xs text-orange-700">
-                        Share what trucks can expect at your location.
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAmenitiesSave}
-                      disabled={isSavingAmenities}
-                    >
-                      {isSavingAmenities ? "Saving..." : "Save amenities"}
-                    </Button>
+                <EditOccurrenceDialog
+                  event={editHostListing}
+                  seriesName={
+                    host ? `Parking Pass - ${host.businessName}` : undefined
+                  }
+                  open={editHostListingOpen}
+                  onOpenChange={(open) => {
+                    setEditHostListingOpen(open);
+                    if (!open) {
+                      setEditHostListing(null);
+                    }
+                  }}
+                  onEventUpdated={() => {
+                    if (selectedHostId) {
+                      void reloadHostPassListings(selectedHostId);
+                    }
+                  }}
+                />
+              </>
+            )}
+
+          {topTab === "schedule" && isTruckViewUser && (
+            <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+              <CardContent className="p-5 space-y-4">
+                {!hasPremiumTruckTools && (
+                  <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
+                    Off-platform schedule, one-tap live location, and social
+                    auto-post are premium tools. Host-location bookings still
+                    appear in your calendar.
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      { key: "water", label: "Water" },
-                      { key: "electric", label: "Electric" },
-                      { key: "bathrooms", label: "Bathrooms" },
-                      { key: "wifi", label: "Wi-Fi" },
-                      { key: "seating", label: "Seating" },
-                    ].map((amenity) => (
-                      <label
-                        key={amenity.key}
-                        className="flex items-center gap-2 text-sm text-orange-900"
+                )}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Live share
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Share your live location in one tap.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={handleShareLocation}
+                    disabled={
+                      isSharingLocation || !truckId || !hasPremiumTruckTools
+                    }
+                  >
+                    <Share2 className="h-4 w-4 mr-1" />
+                    {isSharingLocation
+                      ? "Working..."
+                      : isLive
+                        ? "Go offline"
+                        : "Go live + share"}
+                  </Button>
+                </div>
+                {(truck?.instagramUrl ||
+                  truck?.facebookPageUrl ||
+                  truck?.xUrl) && (
+                  <div className="flex flex-wrap gap-2">
+                    {truck?.instagramUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(truck.instagramUrl, "_blank")
+                        }
                       >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={amenities[amenity.key] ?? false}
-                          onChange={(event) =>
-                            setAmenities((prev) => ({
-                              ...prev,
-                              [amenity.key]: event.target.checked,
+                        Open Instagram
+                      </Button>
+                    )}
+                    {truck?.facebookPageUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(truck.facebookPageUrl, "_blank")
+                        }
+                      >
+                        Open Facebook
+                      </Button>
+                    )}
+                    {truck?.xUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(truck.xUrl, "_blank")}
+                      >
+                        Open X
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {topTab === "schedule" && isTruckViewUser && (
+            <Card className="rounded-2xl pp-glass shadow-clean">
+              <CardContent className="p-5 space-y-6">
+                <div>
+                  <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                    Social autopost
+                  </p>
+                  <p className="text-xs text-[color:var(--text-muted)]">
+                    Link your socials and choose which updates should prompt a
+                    post.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="social-facebook">Facebook URL</Label>
+                    <Input
+                      id="social-facebook"
+                      className="pp-field"
+                      placeholder="https://facebook.com/yourpage"
+                      value={socialLinks.facebookPageUrl}
+                      disabled={!hasPremiumTruckTools}
+                      onChange={(event) =>
+                        setSocialLinks((current) => ({
+                          ...current,
+                          facebookPageUrl: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="social-instagram">Instagram URL</Label>
+                    <Input
+                      id="social-instagram"
+                      className="pp-field"
+                      placeholder="https://instagram.com/yourtruck"
+                      value={socialLinks.instagramUrl}
+                      disabled={!hasPremiumTruckTools}
+                      onChange={(event) =>
+                        setSocialLinks((current) => ({
+                          ...current,
+                          instagramUrl: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="social-x">X URL</Label>
+                    <Input
+                      id="social-x"
+                      className="pp-field"
+                      placeholder="https://x.com/yourtruck"
+                      value={socialLinks.xUrl}
+                      disabled={!hasPremiumTruckTools}
+                      onChange={(event) =>
+                        setSocialLinks((current) => ({
+                          ...current,
+                          xUrl: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl pp-glass-muted p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-700">
+                      Platforms
+                    </p>
+                    {(
+                      [
+                        { key: "facebook", label: "Facebook" },
+                        { key: "instagram", label: "Instagram" },
+                        { key: "x", label: "X" },
+                      ] as const
+                    ).map((platform) => (
+                      <div
+                        key={platform.key}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span>{platform.label}</span>
+                        <Switch
+                          checked={socialSettings.platforms[platform.key]}
+                          disabled={!hasPremiumTruckTools}
+                          onCheckedChange={(checked) =>
+                            setSocialSettings((current) => ({
+                              ...current,
+                              platforms: {
+                                ...current.platforms,
+                                [platform.key]: checked,
+                              },
                             }))
                           }
                         />
-                        {amenity.label}
-                      </label>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="rounded-xl pp-glass-muted p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-700">
+                      Post prompts
+                    </p>
+                    {(
+                      [
+                        { key: "schedule", label: "Schedule updates" },
+                        { key: "booking", label: "Parking pass bookings" },
+                        { key: "live", label: "Go live" },
+                        { key: "deal", label: "New deals" },
+                      ] as const
+                    ).map((trigger) => (
+                      <div
+                        key={trigger.key}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span>{trigger.label}</span>
+                        <Switch
+                          checked={socialSettings.triggers[trigger.key]}
+                          disabled={!hasPremiumTruckTools}
+                          onCheckedChange={(checked) =>
+                            setSocialSettings((current) => ({
+                              ...current,
+                              triggers: {
+                                ...current.triggers,
+                                [trigger.key]: checked,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-slate-700">
+                    <Switch
+                      checked={socialSettings.promptBeforePost}
+                      disabled={!hasPremiumTruckTools}
+                      onCheckedChange={(checked) =>
+                        setSocialSettings((current) => ({
+                          ...current,
+                          promptBeforePost: checked,
+                        }))
+                      }
+                    />
+                    <span>Always prompt before posting</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveSocialSettings}
+                    disabled={isSavingSocialSettings || !hasPremiumTruckTools}
+                  >
+                    {isSavingSocialSettings ? "Saving..." : "Save settings"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-        {topTab === "host" && hostToolsTab === "listings" && showHostParkingPass && host && (
-          <>
-        {isCreating && (
-          <div className="bg-[var(--bg-surface)] p-6 rounded-2xl border border-[color:var(--status-warning)]/30 shadow-clean">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-900">
-                  Post a Parking Pass
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Set parking hours and what each slot costs.
+          {topTab === "schedule" && isTruckViewUser && (
+            <Card className="order-[-9998] rounded-2xl pp-glass border border-[color:var(--border-subtle)]">
+              <CardContent className="p-5 space-y-6">
+                <ParkingScheduleCalendar
+                  items={parkingScheduleItems}
+                  allowManualEdits={hasPremiumTruckTools}
+                  onDeleteManual={handleDeleteSchedule}
+                  onCancelBooking={handleCancelBooking}
+                  cancelingBookingId={cancelingBookingId}
+                  reportLookup={reportLookup}
+                  onAddReport={handleOpenReport}
+                />
+                <p className="text-xs text-[color:var(--text-muted)]">
+                  Every booking includes a 30-minute cleanup window after the
+                  end time.
                 </p>
-              </div>
-              <div className="rounded-full border border-[var(--border-subtle)] px-3 py-1 text-xs text-[color:var(--text-muted)]">
-                {host.businessName}
-              </div>
-            </div>
-            <form onSubmit={handleCreatePass} className="mt-6 space-y-6">
-              {createError && (
-                <div className="p-3 bg-rose-50 text-rose-700 rounded-md text-sm">
-                  {createError}
-                </div>
-              )}
-              {hasActiveHostPass && (
-                <div className="p-3 bg-amber-50 text-amber-700 rounded-md text-sm">
-                  You already have a parking pass for this address. Edit the
-                  existing listing instead of creating a new one.
-                </div>
-              )}
 
-              <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
-                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/70 p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-base font-semibold text-slate-900">
-                        When trucks can park
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Pick the days and parking hours (or choose Any time).
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="anyTime"
-                        checked={anyTime}
-                        onCheckedChange={setAnyTime}
+                <div className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass-muted p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                      Add manual stop
+                    </p>
+                    <p className="text-xs text-[color:var(--text-muted)]">
+                      Share where you will be parked even if it isn’t a Parking
+                      Pass location.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-date">Date</Label>
+                      <Input
+                        id="schedule-date"
+                        type="date"
+                        value={scheduleForm.date}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange("date", event.target.value)
+                        }
                       />
-                      <Label htmlFor="anyTime" className="text-xs text-[color:var(--text-muted)]">
-                        Any time
-                      </Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-location">Location name</Label>
+                      <Input
+                        id="schedule-location"
+                        placeholder="Downtown plaza"
+                        value={scheduleForm.locationName}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange(
+                            "locationName",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-start">Start time</Label>
+                      <Input
+                        id="schedule-start"
+                        type="time"
+                        value={scheduleForm.startTime}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange(
+                            "startTime",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-end">End time</Label>
+                      <Input
+                        id="schedule-end"
+                        type="time"
+                        value={scheduleForm.endTime}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange(
+                            "endTime",
+                            event.target.value,
+                          )
+                        }
+                      />
                     </div>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="schedule-address">Address</Label>
+                    <Input
+                      id="schedule-address"
+                      placeholder="123 Main St, City"
+                      value={scheduleForm.address}
+                      disabled={!hasPremiumTruckTools}
+                      onChange={(event) =>
+                        handleScheduleFieldChange("address", event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label>Days of the week</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {[
-                          { label: "Mon", value: 1 },
-                          { label: "Tue", value: 2 },
-                          { label: "Wed", value: 3 },
-                          { label: "Thu", value: 4 },
-                          { label: "Fri", value: 5 },
-                          { label: "Sat", value: 6 },
-                          { label: "Sun", value: 0 },
-                        ].map((day) => {
-                          const selected = daysOfWeek.includes(day.value);
-                          return (
-                            <button
-                              key={day.value}
-                              type="button"
-                              className={`rounded-md border px-3 py-2 text-xs font-medium transition ${
-                                selected
-                                  ? "border-orange-300 bg-orange-100 text-orange-900"
-                                  : "border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-muted)] hover:bg-[var(--bg-surface)]"
-                              }`}
-                              onClick={() =>
-                                setDaysOfWeek((current) =>
-                                  current.includes(day.value)
-                                    ? current.filter((item) => item !== day.value)
-                                    : [...current, day.value],
+                      <Label htmlFor="schedule-city">City</Label>
+                      <Input
+                        id="schedule-city"
+                        placeholder="City"
+                        value={scheduleForm.city}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange("city", event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-state">State</Label>
+                      <Input
+                        id="schedule-state"
+                        placeholder="State"
+                        value={scheduleForm.state}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange("state", event.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="schedule-notes">Notes</Label>
+                    <Textarea
+                      id="schedule-notes"
+                      placeholder="Optional notes for this stop."
+                      value={scheduleForm.notes}
+                      disabled={!hasPremiumTruckTools}
+                      onChange={(event) =>
+                        handleScheduleFieldChange("notes", event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs text-[color:var(--text-muted)]">
+                      <input
+                        type="checkbox"
+                        checked={scheduleForm.isPublic}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange(
+                            "isPublic",
+                            event.target.checked,
+                          )
+                        }
+                      />
+                      Show on public profile
+                    </label>
+                    <Button
+                      size="sm"
+                      onClick={handleCreateSchedule}
+                      disabled={isSavingSchedule || !hasPremiumTruckTools}
+                    >
+                      {isSavingSchedule ? "Saving..." : "Add stop"}
+                    </Button>
+                  </div>
+                </div>
+                <Dialog
+                  open={!!reportDraft}
+                  onOpenChange={(open) => {
+                    if (!open) setReportDraft(null);
+                  }}
+                >
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Day report</DialogTitle>
+                      <DialogDescription>
+                        Optional but powerful. This helps us keep locations
+                        clean, reward great hosts, and back you up if issues
+                        happen.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {reportDraft && (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs text-[color:var(--text-muted)]">
+                          <p className="font-semibold text-[color:var(--text-primary)]">
+                            {reportDraft.locationName || "Parking stop"}
+                          </p>
+                          <p className="text-[color:var(--text-muted)]">
+                            {[
+                              reportDraft.address,
+                              reportDraft.city,
+                              reportDraft.state,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </p>
+                          <p className="text-[color:var(--text-muted)]">
+                            {reportDraft.date}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label>Overall rating (1-5)</Label>
+                            <select
+                              className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
+                              value={reportDraft.rating || ""}
+                              onChange={(event) =>
+                                handleReportFieldChange(
+                                  "rating",
+                                  event.target.value,
                                 )
                               }
                             >
-                              {day.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="maxTrucks">Number of spots</Label>
-                      <Input
-                        id="maxTrucks"
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={maxTrucks}
-                        onChange={(event) =>
-                          setMaxTrucks(Number(event.target.value))
-                        }
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="startTime">Start</Label>
-                      <Input
-                        id="startTime"
-                        type="time"
-                        value={startTime}
-                        onChange={(event) => setStartTime(event.target.value)}
-                        disabled={anyTime}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="endTime">End</Label>
-                      <Input
-                        id="endTime"
-                        type="time"
-                        value={endTime}
-                        onChange={(event) => setEndTime(event.target.value)}
-                        disabled={anyTime}
-                        required
-                      />
-                    </div>
-                  </div>
-                  {anyTime && (
-                    <p className="mt-3 text-xs text-slate-500">
-                      Any time means trucks can park 24/7.
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-orange-50/60 p-4">
-                  <h3 className="text-base font-semibold text-orange-900">
-                    Price preview
-                  </h3>
-                  <p className="text-xs text-orange-700 mb-4">
-                    Daily = slot total + $10. Weekly = (slot total x 7) + $70.
-                    Monthly = (slot total x 30) + $300.
-                  </p>
-                  <div className="space-y-2 text-sm text-orange-900">
-                    <div className="flex items-center justify-between">
-                      <span>Slot total</span>
-                      <span className="font-semibold">
-                        {slotSum ? `$${slotSum.toFixed(2)}` : "-"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Daily</span>
-                      <span className="font-semibold">
-                        {dailyEstimate ? `$${dailyEstimate.toFixed(2)}` : "-"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>
-                        Weekly {weeklyOverrideValue !== null ? "(custom)" : "(auto)"}
-                      </span>
-                      <span className="font-semibold">
-                        {weeklyFinal ? `$${weeklyFinal.toFixed(2)}` : "-"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>
-                        Monthly {monthlyOverrideValue !== null ? "(custom)" : "(auto)"}
-                      </span>
-                      <span className="font-semibold">
-                        {monthlyFinal ? `$${monthlyFinal.toFixed(2)}` : "-"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-4 text-xs text-[color:var(--status-warning)]">
-                    Trucks see your price plus the MealScout fee.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Set slot pricing
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  Set any slot to $0 if you don't want to offer it.
-                </p>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
-                    <Label htmlFor="breakfastPrice">Breakfast</Label>
-                    <Input
-                      id="breakfastPrice"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      value={breakfastPrice}
-                      onChange={(event) => setBreakfastPrice(event.target.value)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-slate-500">Early shift pricing.</p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
-                    <Label htmlFor="lunchPrice">Lunch</Label>
-                    <Input
-                      id="lunchPrice"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      value={lunchPrice}
-                      onChange={(event) => setLunchPrice(event.target.value)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-slate-500">Peak traffic slot.</p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
-                    <Label htmlFor="dinnerPrice">Dinner</Label>
-                    <Input
-                      id="dinnerPrice"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      value={dinnerPrice}
-                      onChange={(event) => setDinnerPrice(event.target.value)}
-                      placeholder="0"
-                    />
-                    <p className="text-xs text-slate-500">Evening coverage.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                <h3 className="text-base font-semibold text-slate-900 mb-2">
-                  Weekly & monthly rates (optional)
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  Leave blank to use the auto-calculated weekly and monthly
-                  totals.
-                </p>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
-                    <Label htmlFor="weeklyOverride">Weekly rate</Label>
-                    <Input
-                      id="weeklyOverride"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      value={weeklyOverride}
-                      onChange={(event) => setWeeklyOverride(event.target.value)}
-                      placeholder={
-                        weeklyHostEstimate
-                          ? `$${weeklyHostEstimate.toFixed(0)}`
-                          : "Auto"
-                      }
-                    />
-                    <p className="text-xs text-slate-500">
-                      Auto weekly:{" "}
-                      {weeklyHostEstimate
-                        ? `$${weeklyHostEstimate.toFixed(0)}`
-                        : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 space-y-2">
-                    <Label htmlFor="monthlyOverride">Monthly rate</Label>
-                    <Input
-                      id="monthlyOverride"
-                      type="number"
-                      min="0"
-                      step="1"
-                      inputMode="numeric"
-                      value={monthlyOverride}
-                      onChange={(event) => setMonthlyOverride(event.target.value)}
-                      placeholder={
-                        monthlyHostEstimate
-                          ? `$${monthlyHostEstimate.toFixed(0)}`
-                          : "Auto"
-                      }
-                    />
-                    <p className="text-xs text-slate-500">
-                      Auto monthly:{" "}
-                      {monthlyHostEstimate
-                        ? `$${monthlyHostEstimate.toFixed(0)}`
-                        : "—"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-4 border p-4 rounded-xl border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-                <Switch
-                  id="hard-cap"
-                  checked={hardCapEnabled}
-                  onCheckedChange={setHardCapEnabled}
-                />
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="hard-cap" className="font-semibold">
-                      Capacity Guard v2.2
-                    </Label>
-                    <Badge variant="secondary" className="text-xs">
-                      New
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-slate-500">
-                    Strictly enforces the max trucks limit. Once you accept enough
-                    trucks to hit the limit, no further approvals will be allowed.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-slate-500">
-                  You can edit times later if plans change.
-                </p>
-                <Button type="submit" className="w-full px-6 sm:w-auto" disabled={hasActiveHostPass}>
-                  Publish Parking Pass
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          <Tabs defaultValue="upcoming" className="w-full">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-xl font-semibold text-slate-900">
-                Your Parking Pass Listings
-              </h2>
-              <TabsList className="w-full sm:w-auto">
-                <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-                <TabsTrigger value="past">Past</TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="upcoming" className="space-y-4">
-              {upcomingListings.length === 0 ? (
-                <div className="text-center py-12 bg-[var(--bg-surface)] rounded-xl border border-dashed border-slate-300">
-                  <Calendar className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                  <h3 className="text-lg font-medium text-slate-900">
-                    No upcoming parking pass listings
-                  </h3>
-                  <p className="text-slate-500 mb-4">
-                    Create a parking pass listing for trucks.
-                  </p>
-                  <Button variant="outline" onClick={() => setIsCreating(true)}>
-                    Create Parking Pass Listing
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {upcomingListings.map((listing) => (
-                    <div
-                      key={listing.id}
-                      className="bg-[var(--bg-surface)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-clean flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-start gap-4 sm:items-center sm:gap-6">
-                        <div className="flex flex-col items-center justify-center w-16 h-16 bg-rose-50 rounded-lg text-rose-700">
-                          <span className="text-xs font-bold uppercase">
-                            {format(new Date(listing.date), "MMM")}
-                          </span>
-                          <span className="text-2xl font-bold">
-                            {format(new Date(listing.date), "d")}
-                          </span>
-                        </div>
-
-                        <div>
-                          <div className="mb-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-[color:var(--text-muted)]">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {listing.startTime === "00:00" &&
-                              listing.endTime === "23:59"
-                                ? "Any time"
-                                : `${listing.startTime} - ${listing.endTime}`}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Truck className="h-4 w-4" />
-                              {listing.maxTrucks} Spot
-                              {listing.maxTrucks !== 1 ? "s" : ""}
-                            </span>
-                            {listing.requiresPayment && (
-                              <span className="text-xs text-orange-700 bg-orange-50 border border-[color:var(--status-warning)]/30 rounded-full px-2 py-0.5">
-                                Daily {formatCents(listing.dailyPriceCents)} / Weekly{" "}
-                                {formatCents(listing.weeklyPriceCents)} / Monthly{" "}
-                                {formatCents(listing.monthlyPriceCents)}
-                              </span>
-                            )}
-                            {listing.hardCapEnabled && (
-                              <span
-                                title="Capacity Guard v2.2 Enabled"
-                                className="flex items-center gap-1 text-xs bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                              >
-                                <AlertCircle className="h-3 w-3 text-emerald-600" />
-                                <span className="text-emerald-700 font-medium">
-                                  Strict Cap
-                                </span>
-                              </span>
-                            )}
+                              <option value="">Optional</option>
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <option key={value} value={value}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                listing.status === "open"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : listing.status === "filled"
-                                    ? "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]"
-                                    : "bg-slate-100 text-slate-800"
-                              }`}
+                          <div className="space-y-2">
+                            <Label>Spot cleanliness on arrival</Label>
+                            <select
+                              className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
+                              value={reportDraft.arrivalCleanliness || ""}
+                              onChange={(event) =>
+                                handleReportFieldChange(
+                                  "arrivalCleanliness",
+                                  event.target.value,
+                                )
+                              }
                             >
-                              {listing.status.charAt(0).toUpperCase() +
-                                listing.status.slice(1)}
-                            </span>
+                              <option value="">Optional</option>
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <option key={value} value={value}>
+                                  {value}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                          {Array.isArray(listing.qualityFlags) &&
-                            listing.qualityFlags.length > 0 && (
-                              <div className="mt-2 text-xs text-amber-800">
-                                Needs fixes: {listing.qualityFlags.join(", ")}
-                              </div>
-                            )}
+                          <div className="space-y-2">
+                            <Label>Customers served</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={reportDraft.customersServed || ""}
+                              onChange={(event) =>
+                                handleReportFieldChange(
+                                  "customersServed",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Sales total ($)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={reportDraft.salesDollars || ""}
+                              onChange={(event) =>
+                                handleReportFieldChange(
+                                  "salesDollars",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Notes</Label>
+                          <Textarea
+                            value={reportDraft.notes || ""}
+                            onChange={(event) =>
+                              handleReportFieldChange(
+                                "notes",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Optional notes about the day, host, or issues."
+                          />
                         </div>
                       </div>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setReportDraft(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSaveReport}
+                        disabled={isSavingReport}
+                      >
+                        {isSavingReport ? "Saving..." : "Save report"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Dialog
+                  open={!!postPrompt}
+                  onOpenChange={(open) => {
+                    if (!open) setPostPrompt(null);
+                  }}
+                >
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {postPrompt?.title || "Share update"}
+                      </DialogTitle>
+                      <DialogDescription>
+                        Choose where to post this update. You can edit the
+                        message before sharing.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {postPrompt && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Message</Label>
+                          <Textarea
+                            value={postPrompt.message}
+                            onChange={(event) =>
+                              handlePostPromptMessage(event.target.value)
+                            }
+                          />
+                          <p className="text-xs text-[color:var(--text-muted)]">
+                            Link: {postPrompt.link}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Post to</Label>
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            {(
+                              [
+                                { key: "facebook", label: "Facebook" },
+                                { key: "instagram", label: "Instagram" },
+                                { key: "x", label: "X" },
+                              ] as const
+                            ).map((platform) => (
+                              <label
+                                key={platform.key}
+                                className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-xs"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    postPrompt.selectedPlatforms[platform.key]
+                                  }
+                                  onChange={() =>
+                                    handlePostPromptToggle(platform.key)
+                                  }
+                                />
+                                {platform.label}
+                              </label>
+                            ))}
+                          </div>
+                          <p className="text-xs text-[color:var(--text-muted)]">
+                            Instagram will open with the caption copied to your
+                            clipboard.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPostPrompt(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => void handlePostPromptShare()}
+                        disabled={isPostingSocial}
+                      >
+                        {isPostingSocial ? "Sharing..." : "Post update"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+          )}
 
-                      <div className="flex w-full items-center gap-2 sm:w-auto">
-                        <Badge variant="secondary">Listing</Badge>
+          {topTab === "book" && (
+            <div
+              className={`space-y-4 pb-24${isTruckViewUser ? " order-first" : ""}`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                    Find parking pass spots
+                  </p>
+                  <p className="text-xs text-[color:var(--text-muted)]">
+                    Search by city or address. Pick a spot first, then choose
+                    from its open dates.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
+                <div className="space-y-4 order-1 lg:order-none">
+                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800">
+                          Search + availability
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Choose a spot, then pick an open date and time slot.
+                        </p>
+                      </div>
+                      <div className="hidden sm:flex items-center gap-2">
                         <Button
-                          variant="outline"
                           size="sm"
-                          className="ml-auto sm:ml-0"
-                          onClick={() => {
-                            setEditHostListing(listing);
-                            setEditHostListingOpen(true);
-                          }}
+                          variant={viewMode === "map" ? "default" : "outline"}
+                          onClick={() => setViewMode("map")}
                         >
-                          Edit
+                          Map
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={viewMode === "list" ? "default" : "outline"}
+                          onClick={() => setViewMode("list")}
+                        >
+                          List
                         </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="past" className="space-y-4">
-              {pastListings.length === 0 ? (
-                <div className="text-center py-12 bg-[var(--bg-surface)] rounded-xl border border-dashed border-slate-300">
-                  <Clock className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-                  <h3 className="text-lg font-medium text-slate-900">
-                    No past parking pass listings
-                  </h3>
-                  <p className="text-slate-500">
-                    Your parking pass history will appear here.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-4 opacity-75">
-                  {pastListings.map((listing) => (
-                    <div
-                      key={listing.id}
-                      className="bg-[var(--bg-surface)] p-6 rounded-xl border border-[var(--border-subtle)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-start gap-4 sm:items-center sm:gap-6">
-                        <div className="flex flex-col items-center justify-center w-16 h-16 bg-slate-200 rounded-lg text-[color:var(--text-muted)]">
-                          <span className="text-xs font-bold uppercase">
-                            {format(new Date(listing.date), "MMM")}
-                          </span>
-                          <span className="text-2xl font-bold">
-                            {format(new Date(listing.date), "d")}
-                          </span>
-                        </div>
-
-                        <div>
-                          <div className="mb-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-slate-500">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {listing.startTime} - {listing.endTime}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-[color:var(--text-muted)]">
-                              Completed
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Button variant="ghost" size="sm" className="w-full sm:w-auto" disabled>
-                        Archived
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
+                        City or address
+                      </p>
+                      <Input
+                        type="text"
+                        className="pp-field"
+                        placeholder="Austin, TX or 123 Main St"
+                        value={cityQuery}
+                        onChange={(event) => setCityQuery(event.target.value)}
+                      />
+                    </div>
+                    <div className="flex sm:hidden items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        variant={viewMode === "map" ? "default" : "outline"}
+                        onClick={() => setViewMode("map")}
+                      >
+                        Map view
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        variant={viewMode === "list" ? "default" : "outline"}
+                        onClick={() => setViewMode("list")}
+                      >
+                        List view
                       </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </div>
+                  </div>
 
-        <EditOccurrenceDialog
-          event={editHostListing}
-          seriesName={host ? `Parking Pass - ${host.businessName}` : undefined}
-          open={editHostListingOpen}
-          onOpenChange={(open) => {
-            setEditHostListingOpen(open);
-            if (!open) {
-              setEditHostListing(null);
-            }
-          }}
-          onEventUpdated={() => {
-            if (selectedHostId) {
-              void reloadHostPassListings(selectedHostId);
-            }
-          }}
-        />
-          </>
-        )}
-
-        {topTab === "schedule" && isTruckViewUser && (
-          <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-            <CardContent className="p-5 space-y-4">
-              {!hasPremiumTruckTools && (
-                <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                  Off-platform schedule, one-tap live location, and social auto-post are premium tools. Host-location bookings still appear in your calendar.
-                </div>
-              )}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Live share
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Share your live location in one tap.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={handleShareLocation}
-                  disabled={isSharingLocation || !truckId || !hasPremiumTruckTools}
-                >
-                  <Share2 className="h-4 w-4 mr-1" />
-                  {isSharingLocation
-                    ? "Working..."
-                    : isLive
-                      ? "Go offline"
-                      : "Go live + share"}
-                </Button>
-              </div>
-              {(truck?.instagramUrl || truck?.facebookPageUrl || truck?.xUrl) && (
-                <div className="flex flex-wrap gap-2">
-                  {truck?.instagramUrl && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(truck.instagramUrl, "_blank")}
-                    >
-                      Open Instagram
-                    </Button>
-                  )}
-                  {truck?.facebookPageUrl && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        window.open(truck.facebookPageUrl, "_blank")
-                      }
-                    >
-                      Open Facebook
-                    </Button>
-                  )}
-                  {truck?.xUrl && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => window.open(truck.xUrl, "_blank")}
-                    >
-                      Open X
-                    </Button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {topTab === "schedule" && isTruckViewUser && (
-          <Card className="rounded-2xl pp-glass shadow-clean">
-            <CardContent className="p-5 space-y-6">
-              <div>
-                <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  Social autopost
-                </p>
-                <p className="text-xs text-[color:var(--text-muted)]">
-                  Link your socials and choose which updates should prompt a post.
-                </p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="social-facebook">Facebook URL</Label>
-                  <Input
-                    id="social-facebook"
-                    className="pp-field"
-                    placeholder="https://facebook.com/yourpage"
-                    value={socialLinks.facebookPageUrl}
-                    disabled={!hasPremiumTruckTools}
-                    onChange={(event) =>
-                      setSocialLinks((current) => ({
-                        ...current,
-                        facebookPageUrl: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="social-instagram">Instagram URL</Label>
-                  <Input
-                    id="social-instagram"
-                    className="pp-field"
-                    placeholder="https://instagram.com/yourtruck"
-                    value={socialLinks.instagramUrl}
-                    disabled={!hasPremiumTruckTools}
-                    onChange={(event) =>
-                      setSocialLinks((current) => ({
-                        ...current,
-                        instagramUrl: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="social-x">X URL</Label>
-                  <Input
-                    id="social-x"
-                    className="pp-field"
-                    placeholder="https://x.com/yourtruck"
-                    value={socialLinks.xUrl}
-                    disabled={!hasPremiumTruckTools}
-                    onChange={(event) =>
-                      setSocialLinks((current) => ({
-                        ...current,
-                        xUrl: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl pp-glass-muted p-4 space-y-3">
-                  <p className="text-xs font-semibold text-slate-700">
-                    Platforms
-                  </p>
-                  {(
-                    [
-                      { key: "facebook", label: "Facebook" },
-                      { key: "instagram", label: "Instagram" },
-                      { key: "x", label: "X" },
-                    ] as const
-                  ).map((platform) => (
-                    <div
-                      key={platform.key}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span>{platform.label}</span>
-                      <Switch
-                        checked={socialSettings.platforms[platform.key]}
-                        disabled={!hasPremiumTruckTools}
-                        onCheckedChange={(checked) =>
-                          setSocialSettings((current) => ({
-                            ...current,
-                            platforms: {
-                              ...current.platforms,
-                              [platform.key]: checked,
-                            },
-                          }))
-                        }
-                      />
+                  {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+                      <p className="text-sm text-slate-700">
+                        Loading parking pass spots...
+                      </p>
                     </div>
-                  ))}
-                </div>
-                <div className="rounded-xl pp-glass-muted p-4 space-y-3">
-                  <p className="text-xs font-semibold text-slate-700">
-                    Post prompts
-                  </p>
-                  {(
-                    [
-                      { key: "schedule", label: "Schedule updates" },
-                      { key: "booking", label: "Parking pass bookings" },
-                      { key: "live", label: "Go live" },
-                      { key: "deal", label: "New deals" },
-                    ] as const
-                  ).map((trigger) => (
-                    <div
-                      key={trigger.key}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span>{trigger.label}</span>
-                      <Switch
-                        checked={socialSettings.triggers[trigger.key]}
-                        disabled={!hasPremiumTruckTools}
-                        onCheckedChange={(checked) =>
-                          setSocialSettings((current) => ({
-                            ...current,
-                            triggers: {
-                              ...current.triggers,
-                              [trigger.key]: checked,
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs text-slate-700">
-                  <Switch
-                    checked={socialSettings.promptBeforePost}
-                    disabled={!hasPremiumTruckTools}
-                    onCheckedChange={(checked) =>
-                      setSocialSettings((current) => ({
-                        ...current,
-                        promptBeforePost: checked,
-                      }))
-                    }
-                  />
-                  <span>Always prompt before posting</span>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={handleSaveSocialSettings}
-                  disabled={isSavingSocialSettings || !hasPremiumTruckTools}
-                >
-                  {isSavingSocialSettings ? "Saving..." : "Save settings"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {topTab === "schedule" && isTruckViewUser && (
-          <Card className="order-[-9998] rounded-2xl pp-glass border border-[color:var(--border-subtle)]">
-            <CardContent className="p-5 space-y-6">
-              <ParkingScheduleCalendar
-                items={parkingScheduleItems}
-                allowManualEdits={hasPremiumTruckTools}
-                onDeleteManual={handleDeleteSchedule}
-                onCancelBooking={handleCancelBooking}
-                cancelingBookingId={cancelingBookingId}
-                reportLookup={reportLookup}
-                onAddReport={handleOpenReport}
-              />
-              <p className="text-xs text-[color:var(--text-muted)]">
-                Every booking includes a 30-minute cleanup window after the end time.
-              </p>
-
-              <div className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass-muted p-4 space-y-4">
-                <div>
-                  <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                    Add manual stop
-                  </p>
-                  <p className="text-xs text-[color:var(--text-muted)]">
-                    Share where you will be parked even if it isn’t a Parking Pass
-                    location.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-date">Date</Label>
-                    <Input
-                      id="schedule-date"
-                      type="date"
-                      value={scheduleForm.date}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("date", event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-location">Location name</Label>
-                    <Input
-                      id="schedule-location"
-                      placeholder="Downtown plaza"
-                      value={scheduleForm.locationName}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange(
-                          "locationName",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-start">Start time</Label>
-                    <Input
-                      id="schedule-start"
-                      type="time"
-                      value={scheduleForm.startTime}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("startTime", event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-end">End time</Label>
-                    <Input
-                      id="schedule-end"
-                      type="time"
-                      value={scheduleForm.endTime}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("endTime", event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="schedule-address">Address</Label>
-                  <Input
-                    id="schedule-address"
-                    placeholder="123 Main St, City"
-                    value={scheduleForm.address}
-                    disabled={!hasPremiumTruckTools}
-                    onChange={(event) =>
-                      handleScheduleFieldChange("address", event.target.value)
-                    }
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-city">City</Label>
-                    <Input
-                      id="schedule-city"
-                      placeholder="City"
-                      value={scheduleForm.city}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("city", event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="schedule-state">State</Label>
-                    <Input
-                      id="schedule-state"
-                      placeholder="State"
-                      value={scheduleForm.state}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("state", event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="schedule-notes">Notes</Label>
-                  <Textarea
-                    id="schedule-notes"
-                    placeholder="Optional notes for this stop."
-                    value={scheduleForm.notes}
-                    disabled={!hasPremiumTruckTools}
-                    onChange={(event) =>
-                      handleScheduleFieldChange("notes", event.target.value)
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs text-[color:var(--text-muted)]">
-                    <input
-                      type="checkbox"
-                      checked={scheduleForm.isPublic}
-                      disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("isPublic", event.target.checked)
-                      }
-                    />
-                    Show on public profile
-                  </label>
-                  <Button
-                    size="sm"
-                    onClick={handleCreateSchedule}
-                    disabled={isSavingSchedule || !hasPremiumTruckTools}
-                  >
-                    {isSavingSchedule ? "Saving..." : "Add stop"}
-                  </Button>
-                </div>
-              </div>
-              <Dialog
-                open={!!reportDraft}
-                onOpenChange={(open) => {
-                  if (!open) setReportDraft(null);
-                }}
-              >
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Day report</DialogTitle>
-                    <DialogDescription>
-                      Optional but powerful. This helps us keep locations clean,
-                      reward great hosts, and back you up if issues happen.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {reportDraft && (
-                    <div className="space-y-4">
-                      <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-xs text-[color:var(--text-muted)]">
-                        <p className="font-semibold text-[color:var(--text-primary)]">
-                          {reportDraft.locationName || "Parking stop"}
-                        </p>
-                        <p className="text-[color:var(--text-muted)]">
-                          {[reportDraft.address, reportDraft.city, reportDraft.state]
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                        <p className="text-[color:var(--text-muted)]">{reportDraft.date}</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label>Overall rating (1-5)</Label>
-                          <select
-                            className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
-                            value={reportDraft.rating || ""}
-                            onChange={(event) =>
-                              handleReportFieldChange("rating", event.target.value)
-                            }
-                          >
-                            <option value="">Optional</option>
-                            {[1, 2, 3, 4, 5].map((value) => (
-                              <option key={value} value={value}>
-                                {value}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Spot cleanliness on arrival</Label>
-                          <select
-                            className="h-9 w-full rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 text-sm"
-                            value={reportDraft.arrivalCleanliness || ""}
-                            onChange={(event) =>
-                              handleReportFieldChange(
-                                "arrivalCleanliness",
-                                event.target.value,
-                              )
-                            }
-                          >
-                            <option value="">Optional</option>
-                            {[1, 2, 3, 4, 5].map((value) => (
-                              <option key={value} value={value}>
-                                {value}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Customers served</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={reportDraft.customersServed || ""}
-                            onChange={(event) =>
-                              handleReportFieldChange(
-                                "customersServed",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Optional"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Sales total ($)</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={reportDraft.salesDollars || ""}
-                            onChange={(event) =>
-                              handleReportFieldChange(
-                                "salesDollars",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="Optional"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Notes</Label>
-                        <Textarea
-                          value={reportDraft.notes || ""}
-                          onChange={(event) =>
-                            handleReportFieldChange("notes", event.target.value)
-                          }
-                          placeholder="Optional notes about the day, host, or issues."
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setReportDraft(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleSaveReport}
-                      disabled={isSavingReport}
-                    >
-                      {isSavingReport ? "Saving..." : "Save report"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Dialog
-                open={!!postPrompt}
-                onOpenChange={(open) => {
-                  if (!open) setPostPrompt(null);
-                }}
-              >
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>{postPrompt?.title || "Share update"}</DialogTitle>
-                    <DialogDescription>
-                      Choose where to post this update. You can edit the message
-                      before sharing.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {postPrompt && (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Message</Label>
-                        <Textarea
-                          value={postPrompt.message}
-                          onChange={(event) =>
-                            handlePostPromptMessage(event.target.value)
-                          }
-                        />
-                        <p className="text-xs text-[color:var(--text-muted)]">
-                          Link: {postPrompt.link}
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Post to</Label>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          {(
-                            [
-                              { key: "facebook", label: "Facebook" },
-                              { key: "instagram", label: "Instagram" },
-                              { key: "x", label: "X" },
-                            ] as const
-                          ).map((platform) => (
-                            <label
-                              key={platform.key}
-                              className="flex items-center gap-2 rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-xs"
+                  ) : passListings.length === 0 ? (
+                    viewMode === "map" && fallbackHostPins.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
+                          <div className="relative h-72 w-full bg-slate-100/60">
+                            <MapContainer
+                              center={[
+                                fallbackMapCenter.lat,
+                                fallbackMapCenter.lng,
+                              ]}
+                              zoom={13}
+                              zoomControl={false}
+                              scrollWheelZoom={mapInteractionsEnabled}
+                              dragging={mapInteractionsEnabled}
+                              touchZoom={mapInteractionsEnabled}
+                              doubleClickZoom={mapInteractionsEnabled}
+                              boxZoom={mapInteractionsEnabled}
+                              keyboard={mapInteractionsEnabled}
+                              className={`h-full w-full ${
+                                mapInteractionsEnabled
+                                  ? "touch-none"
+                                  : "touch-pan-y"
+                              }`}
                             >
-                              <input
-                                type="checkbox"
-                                checked={postPrompt.selectedPlatforms[platform.key]}
-                                onChange={() => handlePostPromptToggle(platform.key)}
+                              <MapCenterer center={fallbackMapCenter} />
+                              <TileLayer
+                                attribution={parkingMapAttribution}
+                                url={parkingMapTileUrl}
                               />
-                              {platform.label}
-                            </label>
-                          ))}
+                              {fallbackHostPins.map(
+                                ({
+                                  key,
+                                  hostId,
+                                  name,
+                                  coords,
+                                  addressLabel,
+                                  spotImageUrl,
+                                }) => (
+                                  <Marker
+                                    key={key}
+                                    position={[coords.lat, coords.lng]}
+                                    icon={parkingPassPinIcon}
+                                    eventHandlers={{
+                                      click: () => setRequestedHostId(hostId),
+                                      popupopen: () => setMapPopupOpen(true),
+                                      popupclose: () => setMapPopupOpen(false),
+                                    }}
+                                  >
+                                    <Popup
+                                      maxWidth={320}
+                                      minWidth={240}
+                                      maxHeight={260}
+                                      keepInView
+                                      autoPan
+                                      autoPanPadding={[16, 16]}
+                                    >
+                                      <div className="space-y-2 text-xs">
+                                        <p className="font-semibold text-orange-600">
+                                          {name}
+                                        </p>
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {addressLabel}
+                                        </p>
+                                        {spotImageUrl && (
+                                          <img
+                                            src={spotImageUrl}
+                                            alt={`${name} parking spot`}
+                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                                          No active parking pass listing is open
+                                          here right now.
+                                        </p>
+                                      </div>
+                                    </Popup>
+                                  </Marker>
+                                ),
+                              )}
+                            </MapContainer>
+                          </div>
+                          <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
+                            {requestedHostId
+                              ? "This host is visible on the map, but has no active parking pass listing yet."
+                              : "Host locations are visible, but no active parking pass listings are open right now."}
+                          </div>
                         </div>
-                        <p className="text-xs text-[color:var(--text-muted)]">
-                          Instagram will open with the caption copied to your
-                          clipboard.
-                        </p>
                       </div>
-                    </div>
-                  )}
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setPostPrompt(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => void handlePostPromptShare()}
-                      disabled={isPostingSocial}
-                    >
-                      {isPostingSocial ? "Sharing..." : "Post update"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardContent>
-          </Card>
-        )}
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
+                          No bookable parking pass spots are available right
+                          now.
+                        </div>
+                      </div>
+                    )
+                  ) : viewMode === "map" ? (
+                    <div className="space-y-3">
+                      <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
+                        <div className="relative h-72 w-full bg-slate-100/60">
+                          <MapContainer
+                            center={[mapCenter.lat, mapCenter.lng]}
+                            zoom={13}
+                            zoomControl={false}
+                            scrollWheelZoom={mapInteractionsEnabled}
+                            dragging={mapInteractionsEnabled}
+                            touchZoom={mapInteractionsEnabled}
+                            doubleClickZoom={mapInteractionsEnabled}
+                            boxZoom={mapInteractionsEnabled}
+                            keyboard={mapInteractionsEnabled}
+                            className={`h-full w-full ${
+                              mapInteractionsEnabled
+                                ? "touch-none"
+                                : "touch-pan-y"
+                            }`}
+                          >
+                            <MapCenterer center={mapCenter} />
+                            <TileLayer
+                              attribution={parkingMapAttribution}
+                              url={parkingMapTileUrl}
+                            />
+                            {mapPins.map(
+                              ({ key, group, coords, addressLabel }) => {
+                                const effectiveDateKey =
+                                  group.key === activeLocationKey
+                                    ? selectedDate
+                                    : nextBookableDateByGroup.get(group.key);
+                                const listingForDate = effectiveDateKey
+                                  ? group.listings.find(
+                                      (listing) =>
+                                        getListingDateKey(listing.date) ===
+                                        effectiveDateKey,
+                                    )
+                                  : null;
+                                const fallbackDateKey =
+                                  effectiveDateKey || todayDateKey;
+                                const displayListing =
+                                  listingForDate ||
+                                  group.listings.find(
+                                    (listing) =>
+                                      getListingDateKey(listing.date) >=
+                                      fallbackDateKey,
+                                  ) ||
+                                  group.listings[0] ||
+                                  null;
+                                const bookingListing =
+                                  listingForDate || displayListing;
+                                const paymentsReady = Boolean(
+                                  platformPaymentsReady,
+                                );
+                                const bookings = Array.isArray(
+                                  bookingListing?.bookings,
+                                )
+                                  ? (bookingListing?.bookings ?? [])
+                                  : [];
+                                const slotOptions = listingForDate
+                                  ? buildSlotOptions(listingForDate)
+                                  : [];
+                                const selectedSlots = listingForDate
+                                  ? selectedSlotsByListing[listingForDate.id] ||
+                                    []
+                                  : [];
+                                const selectedTotalCents = selectedSlots.reduce(
+                                  (sum, slot) => {
+                                    const price =
+                                      slotOptions.find(
+                                        (item) => item.type === slot,
+                                      )?.priceCents || 0;
+                                    return sum + price;
+                                  },
+                                  0,
+                                );
+                                const selectedFeeCents =
+                                  getFeeCentsForSlots(selectedSlots);
+                                const selectedTotalWithFee =
+                                  selectedTotalCents > 0
+                                    ? selectedTotalCents + selectedFeeCents
+                                    : 0;
+                                const availability = listingForDate
+                                  ? listingForDate.availableSpotNumbers
+                                    ? listingForDate.availableSpotNumbers
+                                        .length > 0
+                                      ? `Open spots: ${listingForDate.availableSpotNumbers.join(
+                                          ", ",
+                                        )}`
+                                      : "Fully booked"
+                                    : listingForDate.status === "open"
+                                      ? "Open"
+                                      : "Closed"
+                                  : "Choose this spot to see available dates";
+                                const hasAvailability = Boolean(
+                                  listingForDate &&
+                                  listingHasAvailability(listingForDate),
+                                );
+                                const canBook = Boolean(
+                                  paymentsReady && hasAvailability,
+                                );
 
-        {topTab === "book" && (
-        <div
-          className={`space-y-4 pb-24${isTruckViewUser ? " order-first" : ""}`}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                Find parking pass spots
-              </p>
-              <p className="text-xs text-[color:var(--text-muted)]">
-                Search by city or address. Pick a spot first, then choose from its open dates.
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
-            <div className="space-y-4 order-1 lg:order-none">
-                  <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800">
-                      Search + availability
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Choose a spot, then pick an open date and time slot.
-                    </p>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={viewMode === "map" ? "default" : "outline"}
-                      onClick={() => setViewMode("map")}
-                    >
-                      Map
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={viewMode === "list" ? "default" : "outline"}
-                      onClick={() => setViewMode("list")}
-                    >
-                      List
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
-                    City or address
-                  </p>
-                  <Input
-                    type="text"
-                    className="pp-field"
-                    placeholder="Austin, TX or 123 Main St"
-                    value={cityQuery}
-                    onChange={(event) => setCityQuery(event.target.value)}
-                  />
-                </div>
-                <div className="flex sm:hidden items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    variant={viewMode === "map" ? "default" : "outline"}
-                    onClick={() => setViewMode("map")}
-                  >
-                    Map view
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    variant={viewMode === "list" ? "default" : "outline"}
-                    onClick={() => setViewMode("list")}
-                  >
-                    List view
-                  </Button>
-                </div>
-              </div>
-
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-8 space-y-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
-                  <p className="text-sm text-slate-700">
-                    Loading parking pass spots...
-                  </p>
-                </div>
-              ) : passListings.length === 0 ? (
-                viewMode === "map" && fallbackHostPins.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                      <div className="relative h-72 w-full bg-slate-100/60">
-                        <MapContainer
-                          center={[fallbackMapCenter.lat, fallbackMapCenter.lng]}
-                          zoom={13}
-                          zoomControl={false}
-                          scrollWheelZoom={mapInteractionsEnabled}
-                          dragging={mapInteractionsEnabled}
-                          touchZoom={mapInteractionsEnabled}
-                          doubleClickZoom={mapInteractionsEnabled}
-                          boxZoom={mapInteractionsEnabled}
-                          keyboard={mapInteractionsEnabled}
-                          className={`h-full w-full ${
-                            mapInteractionsEnabled ? "touch-none" : "touch-pan-y"
-                          }`}
-                        >
-                          <MapCenterer center={fallbackMapCenter} />
-                          <TileLayer
-                            attribution={parkingMapAttribution}
-                            url={parkingMapTileUrl}
-                          />
-                          {fallbackHostPins.map(
-                            ({
-                              key,
-                              hostId,
-                              name,
-                              coords,
-                              addressLabel,
-                              spotImageUrl,
-                            }) => (
-                              <Marker
-                                key={key}
-                                position={[coords.lat, coords.lng]}
-                                icon={parkingPassPinIcon}
-                                eventHandlers={{
-                                  click: () => setRequestedHostId(hostId),
-                                  popupopen: () => setMapPopupOpen(true),
-                                  popupclose: () => setMapPopupOpen(false),
-                                }}
-                              >
-                                <Popup
-                                  maxWidth={320}
-                                  minWidth={240}
-                                  maxHeight={260}
-                                  keepInView
-                                  autoPan
-                                  autoPanPadding={[16, 16]}
-                                >
-                                  <div className="space-y-2 text-xs">
-                                    <p className="font-semibold text-orange-600">{name}</p>
-                                    <p className="text-[color:var(--text-muted)]">
-                                      {addressLabel}
-                                    </p>
-                                    {spotImageUrl && (
-                                      <img
-                                        src={spotImageUrl}
-                                        alt={`${name} parking spot`}
-                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    <p className="text-[11px] text-[color:var(--text-muted)]">
-                                      No active parking pass listing is open here right now.
-                                    </p>
-                                  </div>
-                                </Popup>
-                              </Marker>
-                            ),
+                                return (
+                                  <Marker
+                                    key={key}
+                                    position={[coords.lat, coords.lng]}
+                                    icon={
+                                      bookings.length > 0
+                                        ? parkingPassPinIconOccupied
+                                        : parkingPassPinIcon
+                                    }
+                                    eventHandlers={{
+                                      click: () =>
+                                        setActiveLocationKey(group.key),
+                                      popupopen: () => setMapPopupOpen(true),
+                                      popupclose: () => setMapPopupOpen(false),
+                                    }}
+                                  >
+                                    <Popup
+                                      maxWidth={320}
+                                      minWidth={240}
+                                      maxHeight={260}
+                                      keepInView
+                                      autoPan
+                                      autoPanPadding={[16, 16]}
+                                    >
+                                      <div className="space-y-2 text-xs">
+                                        <p className="font-semibold text-orange-600">
+                                          {group.host.businessName}
+                                        </p>
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {addressLabel}
+                                        </p>
+                                        {group.host.spotImageUrl && (
+                                          <img
+                                            src={group.host.spotImageUrl}
+                                            alt={`${group.host.businessName} parking spot`}
+                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        {displayListing && (
+                                          <p className="text-[color:var(--text-muted)]">
+                                            {format(
+                                              new Date(displayListing.date),
+                                              "EEE, MMM d",
+                                            )}{" "}
+                                            -{" "}
+                                            {displayListing.startTime ===
+                                              "00:00" &&
+                                            displayListing.endTime === "23:59"
+                                              ? "Any time"
+                                              : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                          </p>
+                                        )}
+                                        {!listingForDate && (
+                                          <p className="text-[11px] text-amber-700">
+                                            {group.key === activeLocationKey
+                                              ? `No slots on ${format(
+                                                  new Date(
+                                                    `${selectedDate}T00:00:00`,
+                                                  ),
+                                                  "EEE, MMM d",
+                                                )}.`
+                                              : "No open dates right now."}
+                                          </p>
+                                        )}
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {availability}
+                                        </p>
+                                        {(() => {
+                                          const lastConfirmedAt =
+                                            listingForDate?.lastConfirmedAt ??
+                                            displayListing?.lastConfirmedAt ??
+                                            null;
+                                          const relative = lastConfirmedAt
+                                            ? formatRelativeTime(
+                                                lastConfirmedAt,
+                                              )
+                                            : null;
+                                          if (!relative) return null;
+                                          return (
+                                            <p className="text-[11px] text-[color:var(--text-muted)]">
+                                              Last confirmed: {relative}
+                                            </p>
+                                          );
+                                        })()}
+                                        {listingForDate &&
+                                        slotOptions.length > 0 ? (
+                                          <div className="space-y-2">
+                                            <div className="grid grid-cols-2 gap-2">
+                                              {slotOptions.map((slot) => {
+                                                const feeCents =
+                                                  getFeeCentsForSlots([
+                                                    slot.type,
+                                                  ]);
+                                                const totalPrice =
+                                                  ((slot.priceCents || 0) +
+                                                    feeCents) /
+                                                  100;
+                                                const isSelected =
+                                                  selectedSlots.includes(
+                                                    slot.type,
+                                                  );
+                                                return (
+                                                  <Button
+                                                    key={slot.type}
+                                                    variant={
+                                                      isSelected
+                                                        ? "default"
+                                                        : "outline"
+                                                    }
+                                                    size="sm"
+                                                    className="justify-between text-[11px]"
+                                                    disabled={!canBook}
+                                                    onClick={() =>
+                                                      handleSelect(
+                                                        listingForDate,
+                                                        slot.type,
+                                                      )
+                                                    }
+                                                  >
+                                                    <span>{slot.label}</span>
+                                                    <span>
+                                                      ${totalPrice.toFixed(2)}
+                                                    </span>
+                                                  </Button>
+                                                );
+                                              })}
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-[11px] text-[color:var(--text-muted)]">
+                                                Includes a $10/day MealScout
+                                                fee. Cleanup time is 30 minutes
+                                                after the end time.
+                                              </span>
+                                              <Button
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleBookSelected(
+                                                    listingForDate,
+                                                  )
+                                                }
+                                                disabled={
+                                                  !paymentsReady ||
+                                                  selectedSlots.length === 0
+                                                }
+                                              >
+                                                Book spot
+                                                {selectedTotalWithFee > 0 && (
+                                                  <span className="ml-2 text-[11px]">
+                                                    $
+                                                    {(
+                                                      (selectedTotalWithFee ||
+                                                        0) / 100
+                                                    ).toFixed(2)}
+                                                  </span>
+                                                )}
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                                            Choose a day with availability.
+                                          </p>
+                                        )}
+                                        {!platformPaymentsReady && (
+                                          <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
+                                            Payments are temporarily
+                                            unavailable.
+                                          </p>
+                                        )}
+                                        {bookings.length > 0 ? (
+                                          <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
+                                            {bookings
+                                              .slice(0, 3)
+                                              .map((booking) => (
+                                                <div
+                                                  key={`${booking.truckId}-${booking.slotType || "slot"}`}
+                                                >
+                                                  {booking.truckName}
+                                                  {booking.slotType
+                                                    ? ` - ${formatSlotLabel(
+                                                        booking.slotType,
+                                                      )}`
+                                                    : ""}
+                                                </div>
+                                              ))}
+                                            {bookings.length > 3 && (
+                                              <div>
+                                                +{bookings.length - 3} more
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
+                                            No bookings yet
+                                          </p>
+                                        )}
+                                      </div>
+                                    </Popup>
+                                  </Marker>
+                                );
+                              },
+                            )}
+                          </MapContainer>
+                          {mapPins.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
+                              No mappable locations yet.
+                            </div>
                           )}
-                        </MapContainer>
+                        </div>
+                        <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
+                          Tap a location below to update the map.
+                        </div>
                       </div>
-                      <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                        {requestedHostId
-                          ? "This host is visible on the map, but has no active parking pass listing yet."
-                          : "Host locations are visible, but no active parking pass listings are open right now."}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                      No bookable parking pass spots are available right now.
-                    </div>
-                  </div>
-                )
-              ) : viewMode === "map" ? (
-                <div className="space-y-3">
-                  <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
-                    <div className="relative h-72 w-full bg-slate-100/60">
-                      <MapContainer
-                        center={[mapCenter.lat, mapCenter.lng]}
-                        zoom={13}
-                        zoomControl={false}
-                        scrollWheelZoom={mapInteractionsEnabled}
-                        dragging={mapInteractionsEnabled}
-                        touchZoom={mapInteractionsEnabled}
-                        doubleClickZoom={mapInteractionsEnabled}
-                        boxZoom={mapInteractionsEnabled}
-                        keyboard={mapInteractionsEnabled}
-                        className={`h-full w-full ${
-                          mapInteractionsEnabled ? "touch-none" : "touch-pan-y"
-                        }`}
-                      >
-                        <MapCenterer center={mapCenter} />
-                        <TileLayer
-                          attribution={parkingMapAttribution}
-                          url={parkingMapTileUrl}
-                        />
-                        {mapPins.map(({ key, group, coords, addressLabel }) => {
+                      <div className="space-y-2">
+                        {filteredLocations.map((group) => {
                           const effectiveDateKey =
                             group.key === activeLocationKey
                               ? selectedDate
                               : nextBookableDateByGroup.get(group.key);
+                          const groupDateKeys = Array.from(
+                            new Set(
+                              group.listings.map((listing) =>
+                                getListingDateKey(listing.date),
+                              ),
+                            ),
+                          ).sort();
+                          const selectedGroupDateKey =
+                            effectiveDateKey ||
+                            groupDateKeys[0] ||
+                            selectedDate;
                           const listingForDate = effectiveDateKey
                             ? group.listings.find(
                                 (listing) =>
@@ -5340,20 +5894,20 @@ export default function ParkingPassPage() {
                                   effectiveDateKey,
                               )
                             : null;
-                          const fallbackDateKey = effectiveDateKey || todayDateKey;
+                          const fallbackDateKey =
+                            effectiveDateKey || todayDateKey;
                           const displayListing =
                             listingForDate ||
                             group.listings.find(
                               (listing) =>
-                                getListingDateKey(listing.date) >= fallbackDateKey,
+                                getListingDateKey(listing.date) >=
+                                fallbackDateKey,
                             ) ||
                             group.listings[0] ||
                             null;
-                          const bookingListing = listingForDate || displayListing;
+                          const bookingListing =
+                            listingForDate || displayListing;
                           const paymentsReady = Boolean(platformPaymentsReady);
-                          const bookings = Array.isArray(bookingListing?.bookings)
-                            ? bookingListing?.bookings ?? []
-                            : [];
                           const slotOptions = listingForDate
                             ? buildSlotOptions(listingForDate)
                             : [];
@@ -5369,755 +5923,885 @@ export default function ParkingPassPage() {
                             },
                             0,
                           );
-                          const selectedFeeCents = getFeeCentsForSlots(
-                            selectedSlots,
-                          );
+                          const selectedFeeCents =
+                            getFeeCentsForSlots(selectedSlots);
                           const selectedTotalWithFee =
                             selectedTotalCents > 0
                               ? selectedTotalCents + selectedFeeCents
                               : 0;
-                          const availability = listingForDate
-                              ? listingForDate.availableSpotNumbers
-                                ? listingForDate.availableSpotNumbers.length > 0
-                                  ? `Open spots: ${listingForDate.availableSpotNumbers.join(
-                                      ", ",
-                                    )}`
-                                  : "Fully booked"
-                                : listingForDate.status === "open"
-                                  ? "Open"
-                                  : "Closed"
-                              : "Choose this spot to see available dates";
                           const hasAvailability = Boolean(
-                            listingForDate && listingHasAvailability(listingForDate),
+                            listingForDate &&
+                            listingHasAvailability(listingForDate),
                           );
-                                  const canBook = Boolean(paymentsReady && hasAvailability);
+                          const canBook = Boolean(
+                            paymentsReady && hasAvailability,
+                          );
+                          const bookings = Array.isArray(
+                            bookingListing?.bookings,
+                          )
+                            ? (bookingListing?.bookings ?? [])
+                            : [];
+                          const isActive = activeLocation?.key === group.key;
+                          const shareDate = displayListing
+                            ? getListingDateKey(displayListing.date)
+                            : selectedDate;
+                          const shareListingId = displayListing?.id || "";
 
                           return (
-                            <Marker
-                              key={key}
-                              position={[coords.lat, coords.lng]}
-                              icon={
-                                bookings.length > 0
-                                  ? parkingPassPinIconOccupied
-                                  : parkingPassPinIcon
-                              }
-                              eventHandlers={{
-                                click: () => setActiveLocationKey(group.key),
-                                popupopen: () => setMapPopupOpen(true),
-                                popupclose: () => setMapPopupOpen(false),
+                            <div
+                              key={group.key}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isActive}
+                              onClick={() => focusLocation(group.key, true)}
+                              onKeyDown={(keyboardEvent) => {
+                                if (
+                                  keyboardEvent.key === "Enter" ||
+                                  keyboardEvent.key === " "
+                                ) {
+                                  keyboardEvent.preventDefault();
+                                  setActiveLocationKey(group.key);
+                                }
                               }}
+                              className={`w-full rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
+                                isActive
+                                  ? "border-orange-300 pp-glass ring-2 ring-orange-200"
+                                  : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
+                              }`}
                             >
-                              <Popup
-                                maxWidth={320}
-                                minWidth={240}
-                                maxHeight={260}
-                                keepInView
-                                autoPan
-                                autoPanPadding={[16, 16]}
-                              >
-                                <div className="space-y-2 text-xs">
-                                  <p className="font-semibold text-orange-600">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="text-[15px] font-semibold text-orange-500 font-display">
                                     {group.host.businessName}
+                                  </span>
+                                  <div className="text-xs text-[color:var(--text-muted)]">
+                                    {displayListing
+                                      ? format(
+                                          new Date(displayListing.date),
+                                          "EEE, MMM d",
+                                        )
+                                      : "No dates listed"}
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    focusLocation(group.key, true);
+                                  }}
+                                >
+                                  View
+                                </Button>
+                              </div>
+                              {groupDateKeys.length > 1 && (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] text-[color:var(--text-muted)]">
+                                    Date
+                                  </span>
+                                  <select
+                                    className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
+                                    value={selectedGroupDateKey}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) => {
+                                      event.stopPropagation();
+                                      setSelectedDate(event.target.value);
+                                      focusLocation(group.key, true);
+                                    }}
+                                  >
+                                    {groupDateKeys.slice(0, 14).map((key) => (
+                                      <option key={key} value={key}>
+                                        {format(
+                                          new Date(`${key}T00:00:00`),
+                                          "EEE, MMM d",
+                                        )}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                              <div className="text-xs text-slate-700 space-y-1">
+                                <p>{group.host.address}</p>
+                                {displayListing && (
+                                  <p>
+                                    {displayListing.startTime === "00:00" &&
+                                    displayListing.endTime === "23:59"
+                                      ? "Any time"
+                                      : `${displayListing.startTime} - ${displayListing.endTime}`}
                                   </p>
-                                  <p className="text-[color:var(--text-muted)]">
-                                    {addressLabel}
+                                )}
+                                {!listingForDate && (
+                                  <p className="text-[11px] text-amber-700">
+                                    {effectiveDateKey
+                                      ? `No slots on ${format(
+                                          new Date(
+                                            `${effectiveDateKey}T00:00:00`,
+                                          ),
+                                          "EEE, MMM d",
+                                        )}.`
+                                      : "No open dates right now."}
                                   </p>
-                                  {group.host.spotImageUrl && (
-                                    <img
-                                      src={group.host.spotImageUrl}
-                                      alt={`${group.host.businessName} parking spot`}
-                                      className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                      loading="lazy"
-                                    />
-                                  )}
-                                  {displayListing && (
-                                    <p className="text-[color:var(--text-muted)]">
-                                      {format(
-                                        new Date(displayListing.date),
-                                        "EEE, MMM d",
-                                      )}{" "}
-                                      -{" "}
-                                      {displayListing.startTime === "00:00" &&
-                                      displayListing.endTime === "23:59"
-                                        ? "Any time"
-                                        : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                    </p>
-                                  )}
-                                  {!listingForDate && (
-                                    <p className="text-[11px] text-amber-700">
-                                      {group.key === activeLocationKey
-                                        ? `No slots on ${format(
-                                            new Date(`${selectedDate}T00:00:00`),
-                                            "EEE, MMM d",
-                                          )}.`
-                                        : "No open dates right now."}
-                                    </p>
-                                  )}
-                                  <p className="text-[color:var(--text-muted)]">
-                                    {availability}
+                                )}
+                                {listingForDate?.availableSpotNumbers && (
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    {listingForDate.availableSpotNumbers
+                                      .length > 0
+                                      ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
+                                      : "Fully booked"}
                                   </p>
-                                  {(() => {
-                                    const lastConfirmedAt =
-                                      listingForDate?.lastConfirmedAt ??
-                                      displayListing?.lastConfirmedAt ??
-                                      null;
-                                    const relative =
-                                      lastConfirmedAt
-                                        ? formatRelativeTime(lastConfirmedAt)
-                                        : null;
-                                    if (!relative) return null;
-                                    return (
-                                      <p className="text-[11px] text-[color:var(--text-muted)]">
-                                        Last confirmed: {relative}
-                                      </p>
-                                    );
-                                  })()}
-                                  {listingForDate && slotOptions.length > 0 ? (
-                                    <div className="space-y-2">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {slotOptions.map((slot) => {
-                                          const feeCents = getFeeCentsForSlots(
-                                            [slot.type],
-                                          );
-                                          const totalPrice =
-                                            ((slot.priceCents || 0) + feeCents) /
-                                            100;
-                                          const isSelected =
-                                            selectedSlots.includes(slot.type);
-                                          return (
-                                            <Button
-                                              key={slot.type}
-                                              variant={
-                                                isSelected ? "default" : "outline"
-                                              }
-                                              size="sm"
-                                              className="justify-between text-[11px]"
-                                              disabled={!canBook}
-                                              onClick={() =>
-                                                handleSelect(listingForDate, slot.type)
-                                              }
-                                            >
-                                              <span>{slot.label}</span>
-                                              <span>
-                                                ${totalPrice.toFixed(2)}
-                                              </span>
-                                            </Button>
-                                          );
-                                        })}
-                                      </div>
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[11px] text-[color:var(--text-muted)]">
-                                          Includes a $10/day MealScout fee. Cleanup
-                                          time is 30 minutes after the end time.
-                                        </span>
+                                )}
+                                {bookings.length > 0 ? (
+                                  <div className="text-[11px] text-[color:var(--text-muted)]">
+                                    Booked trucks:{" "}
+                                    {bookings
+                                      .slice(0, 2)
+                                      .map((booking) => booking.truckName)
+                                      .join(", ")}
+                                    {bookings.length > 2
+                                      ? ` +${bookings.length - 2} more`
+                                      : ""}
+                                  </div>
+                                ) : (
+                                  <div className="text-[11px] text-[color:var(--text-muted)]">
+                                    No bookings yet
+                                  </div>
+                                )}
+                              </div>
+                              {shareListingId && (
+                                <div>
+                                  <ShareButton
+                                    url={`/parking-pass?date=${encodeURIComponent(
+                                      shareDate,
+                                    )}&pass=${shareListingId}`}
+                                    title={`Parking Pass at ${group.host.businessName}`}
+                                    description={`${group.host.address}${
+                                      group.host.city
+                                        ? `, ${group.host.city}`
+                                        : ""
+                                    }${group.host.state ? `, ${group.host.state}` : ""}`}
+                                    size="sm"
+                                    variant="outline"
+                                  />
+                                </div>
+                              )}
+                              {isActive &&
+                                listingForDate &&
+                                slotOptions.length > 0 && (
+                                  <div className="grid grid-cols-2 gap-2 pt-1">
+                                    {slotOptions.map((slot) => {
+                                      const feeCents = getFeeCentsForSlots([
+                                        slot.type,
+                                      ]);
+                                      const totalPrice =
+                                        ((slot.priceCents || 0) + feeCents) /
+                                        100;
+                                      const isSelected = selectedSlots.includes(
+                                        slot.type,
+                                      );
+                                      return (
                                         <Button
-                                          size="sm"
-                                          onClick={() =>
-                                            handleBookSelected(listingForDate)
+                                          key={slot.type}
+                                          variant={
+                                            isSelected ? "default" : "outline"
                                           }
-                                          disabled={!paymentsReady || selectedSlots.length === 0}
+                                          size="sm"
+                                          className="justify-between"
+                                          disabled={!canBook}
+                                          onClick={() =>
+                                            handleSelect(
+                                              listingForDate,
+                                              slot.type,
+                                            )
+                                          }
                                         >
-                                          Book spot
-                                          {selectedTotalWithFee > 0 && (
-                                            <span className="ml-2 text-[11px]">
-                                              ${(
-                                                (selectedTotalWithFee || 0) /
-                                                100
-                                              ).toFixed(2)}
-                                            </span>
-                                          )}
+                                          <span>{slot.label}</span>
+                                          <span>${totalPrice.toFixed(2)}</span>
                                         </Button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-[11px] text-[color:var(--text-muted)]">
-                                      Choose a day with availability.
-                                    </p>
-                                  )}
-                                  {!platformPaymentsReady && (
-                                    <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
-                                      Payments are temporarily unavailable.
-                                    </p>
-                                  )}
-                                  {bookings.length > 0 ? (
-                                    <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
-                                      {bookings
-                                        .slice(0, 3)
-                                        .map((booking) => (
-                                          <div
-                                            key={`${booking.truckId}-${booking.slotType || "slot"}`}
-                                          >
-                                            {booking.truckName}
-                                            {booking.slotType
-                                              ? ` - ${formatSlotLabel(
-                                                  booking.slotType,
-                                                )}`
-                                              : ""}
-                                          </div>
-                                        ))}
-                                      {bookings.length > 3 && (
-                                        <div>+{bookings.length - 3} more</div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              {hasAvailability ? (
+                                <div className="flex items-center justify-between gap-3 pt-2">
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    Includes a $10/day MealScout fee per host.
+                                    Cleanup time is 30 minutes after the end
+                                    time.
+                                  </p>
+                                  {isActive && listingForDate && (
+                                    <Button
+                                      size="sm"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleBookSelected(listingForDate);
+                                      }}
+                                      disabled={selectedSlots.length === 0}
+                                    >
+                                      Add to cart
+                                      {selectedTotalWithFee > 0 && (
+                                        <span className="ml-2 text-xs">
+                                          $
+                                          {(
+                                            (selectedTotalWithFee || 0) / 100
+                                          ).toFixed(2)}
+                                        </span>
                                       )}
-                                    </div>
-                                  ) : (
-                                    <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
-                                      No bookings yet
-                                    </p>
+                                    </Button>
                                   )}
                                 </div>
-                              </Popup>
-                            </Marker>
+                              ) : (
+                                <p className="text-[11px] text-[color:var(--text-muted)]">
+                                  {listingForDate
+                                    ? "Fully booked."
+                                    : "No open dates right now."}
+                                </p>
+                              )}
+                            </div>
                           );
                         })}
-                      </MapContainer>
-                      {mapPins.length === 0 && (
-                        <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
-                          No mappable locations yet.
-                        </div>
-                      )}
+                        {filteredLocations.length === 0 && (
+                          <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
+                            No locations match that search.
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                      Tap a location below to update the map.
-                    </div>
-                  </div>
-                    <div className="space-y-2">
+                  ) : (
+                    <div className="space-y-3">
                       {filteredLocations.map((group) => {
-                      const effectiveDateKey =
-                        group.key === activeLocationKey
-                          ? selectedDate
-                          : nextBookableDateByGroup.get(group.key);
-                      const groupDateKeys = Array.from(
-                        new Set(
-                          group.listings.map((listing) =>
-                            getListingDateKey(listing.date),
+                        const effectiveDateKey =
+                          group.key === activeLocationKey
+                            ? selectedDate
+                            : nextBookableDateByGroup.get(group.key);
+                        const groupDateKeys = Array.from(
+                          new Set(
+                            group.listings.map((listing) =>
+                              getListingDateKey(listing.date),
+                            ),
                           ),
-                        ),
-                      ).sort();
-                      const selectedGroupDateKey =
-                        effectiveDateKey || groupDateKeys[0] || selectedDate;
-                      const listingForDate = effectiveDateKey
-                        ? group.listings.find(
+                        ).sort();
+                        const selectedGroupDateKey =
+                          effectiveDateKey || groupDateKeys[0] || selectedDate;
+                        const listingForDate = effectiveDateKey
+                          ? group.listings.find(
+                              (listing) =>
+                                getListingDateKey(listing.date) ===
+                                effectiveDateKey,
+                            )
+                          : null;
+                        const fallbackDateKey =
+                          effectiveDateKey || todayDateKey;
+                        const displayListing =
+                          listingForDate ||
+                          group.listings.find(
                             (listing) =>
-                              getListingDateKey(listing.date) ===
-                              effectiveDateKey,
-                          )
-                        : null;
-                      const fallbackDateKey = effectiveDateKey || todayDateKey;
-                      const displayListing =
-                        listingForDate ||
-                        group.listings.find(
-                          (listing) =>
-                            getListingDateKey(listing.date) >= fallbackDateKey,
-                        ) ||
-                        group.listings[0] ||
-                        null;
-                      const bookingListing = listingForDate || displayListing;
-                    const paymentsReady = Boolean(platformPaymentsReady);
-                      const slotOptions = listingForDate
-                        ? buildSlotOptions(listingForDate)
-                        : [];
-                      const selectedSlots = listingForDate
-                        ? selectedSlotsByListing[listingForDate.id] || []
-                        : [];
-                      const selectedTotalCents = selectedSlots.reduce(
-                        (sum, slot) => {
-                          const price =
-                            slotOptions.find((item) => item.type === slot)
-                              ?.priceCents || 0;
-                          return sum + price;
-                        },
-                        0,
-                      );
-                      const selectedFeeCents = getFeeCentsForSlots(
-                        selectedSlots,
-                      );
-                      const selectedTotalWithFee =
-                        selectedTotalCents > 0
-                          ? selectedTotalCents + selectedFeeCents
-                          : 0;
-                      const hasAvailability = Boolean(
-                        listingForDate && listingHasAvailability(listingForDate),
-                      );
-                      const canBook = Boolean(paymentsReady && hasAvailability);
-                      const bookings = Array.isArray(bookingListing?.bookings)
-                        ? bookingListing?.bookings ?? []
-                        : [];
-                      const isActive = activeLocation?.key === group.key;
-                      const shareDate = displayListing
-                        ? getListingDateKey(displayListing.date)
-                        : selectedDate;
-                      const shareListingId = displayListing?.id || "";
+                              getListingDateKey(listing.date) >=
+                              fallbackDateKey,
+                          ) ||
+                          group.listings[0] ||
+                          null;
+                        const bookingListing = listingForDate || displayListing;
+                        const paymentsReady = Boolean(platformPaymentsReady);
+                        const slotOptions = listingForDate
+                          ? buildSlotOptions(listingForDate)
+                          : [];
+                        const selectedSlots = listingForDate
+                          ? selectedSlotsByListing[listingForDate.id] || []
+                          : [];
+                        const selectedTotalCents = selectedSlots.reduce(
+                          (sum, slot) => {
+                            const price =
+                              slotOptions.find((item) => item.type === slot)
+                                ?.priceCents || 0;
+                            return sum + price;
+                          },
+                          0,
+                        );
+                        const selectedFeeCents =
+                          getFeeCentsForSlots(selectedSlots);
+                        const selectedTotalWithFee =
+                          selectedTotalCents > 0
+                            ? selectedTotalCents + selectedFeeCents
+                            : 0;
 
-                      return (
-                        <div
-                          key={group.key}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isActive}
-                          onClick={() => focusLocation(group.key, true)}
-                          onKeyDown={(keyboardEvent) => {
-                            if (
-                              keyboardEvent.key === "Enter" ||
-                              keyboardEvent.key === " "
-                            ) {
-                              keyboardEvent.preventDefault();
-                              setActiveLocationKey(group.key);
-                            }
-                          }}
-                          className={`w-full rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
-                            isActive
-                              ? "border-orange-300 pp-glass ring-2 ring-orange-200"
-                              : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
+                        const hasAvailability = Boolean(
+                          listingForDate &&
+                          listingHasAvailability(listingForDate),
+                        );
+                        const canBook = Boolean(
+                          paymentsReady && hasAvailability,
+                        );
+                        const bookings = Array.isArray(bookingListing?.bookings)
+                          ? (bookingListing?.bookings ?? [])
+                          : [];
+                        const isActive = activeLocation?.key === group.key;
+                        const shareDate = displayListing
+                          ? getListingDateKey(displayListing.date)
+                          : selectedDate;
+                        const shareListingId = displayListing?.id || "";
+
+                        return (
+                          <div
+                            key={group.key}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={isActive}
+                            onClick={() => focusLocation(group.key, true)}
+                            onKeyDown={(keyboardEvent) => {
+                              if (
+                                keyboardEvent.key === "Enter" ||
+                                keyboardEvent.key === " "
+                              ) {
+                                keyboardEvent.preventDefault();
+                                focusLocation(group.key, true);
+                              }
+                            }}
+                            className={`w-full text-left rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
+                              isActive
+                                ? "border-orange-300 pp-glass ring-2 ring-orange-200"
+                                : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
                               <span className="text-[15px] font-semibold text-orange-500 font-display">
                                 {group.host.businessName}
                               </span>
-                              <div className="text-xs text-[color:var(--text-muted)]">
+                              <span className="text-xs text-[color:var(--text-muted)]">
                                 {displayListing
                                   ? format(
                                       new Date(displayListing.date),
                                       "EEE, MMM d",
                                     )
                                   : "No dates listed"}
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                focusLocation(group.key, true);
-                              }}
-                            >
-                              View
-                            </Button>
-                          </div>
-                          {groupDateKeys.length > 1 && (
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] text-[color:var(--text-muted)]">
-                                Date
                               </span>
-                              <select
-                                className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
-                                value={selectedGroupDateKey}
-                                onClick={(event) => event.stopPropagation()}
-                                onChange={(event) => {
-                                  event.stopPropagation();
-                                  setSelectedDate(event.target.value);
-                                  focusLocation(group.key, true);
-                                }}
-                              >
-                                {groupDateKeys.slice(0, 14).map((key) => (
-                                  <option key={key} value={key}>
-                                    {format(new Date(`${key}T00:00:00`), "EEE, MMM d")}
-                                  </option>
-                                ))}
-                              </select>
                             </div>
-                          )}
-                          <div className="text-xs text-slate-700 space-y-1">
-                            <p>{group.host.address}</p>
-                            {displayListing && (
-                              <p>
-                                {displayListing.startTime === "00:00" &&
-                                displayListing.endTime === "23:59"
-                                  ? "Any time"
-                                  : `${displayListing.startTime} - ${displayListing.endTime}`}
-                              </p>
+                            {groupDateKeys.length > 1 && (
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <span className="text-[11px] text-[color:var(--text-muted)]">
+                                  Date
+                                </span>
+                                <select
+                                  className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
+                                  value={selectedGroupDateKey}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedDate(event.target.value);
+                                    focusLocation(group.key, true);
+                                  }}
+                                >
+                                  {groupDateKeys.slice(0, 14).map((key) => (
+                                    <option key={key} value={key}>
+                                      {format(
+                                        new Date(`${key}T00:00:00`),
+                                        "EEE, MMM d",
+                                      )}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             )}
-                            {!listingForDate && (
-                              <p className="text-[11px] text-amber-700">
-                                {effectiveDateKey
-                                  ? `No slots on ${format(
-                                      new Date(`${effectiveDateKey}T00:00:00`),
+                            <div className="text-xs text-slate-700">
+                              <p>{group.host.address}</p>
+                              {(group.host.city || group.host.state) && (
+                                <p>
+                                  {[group.host.city, group.host.state]
+                                    .filter(Boolean)
+                                    .join(", ")}
+                                </p>
+                              )}
+                              {displayListing && (
+                                <p>
+                                  {displayListing.startTime === "00:00" &&
+                                  displayListing.endTime === "23:59"
+                                    ? "Any time"
+                                    : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                </p>
+                              )}
+                              {!listingForDate && (
+                                <p className="text-[11px] text-amber-700">
+                                  {effectiveDateKey
+                                    ? `No slots on ${format(
+                                        new Date(
+                                          `${effectiveDateKey}T00:00:00`,
+                                        ),
+                                        "EEE, MMM d",
+                                      )}.`
+                                    : "No open dates right now."}
+                                </p>
+                              )}
+                              {!isActive &&
+                                nextBookableDateByGroup.get(group.key) && (
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    Next open:{" "}
+                                    {format(
+                                      new Date(
+                                        `${nextBookableDateByGroup.get(group.key)}T00:00:00`,
+                                      ),
                                       "EEE, MMM d",
-                                    )}.`
+                                    )}
+                                  </p>
+                                )}
+                              {listingForDate?.availableSpotNumbers && (
+                                <p className="text-[11px] text-[color:var(--text-muted)]">
+                                  {listingForDate.availableSpotNumbers.length >
+                                  0
+                                    ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
+                                    : "Fully booked"}
+                                </p>
+                              )}
+                            </div>
+                            {shareListingId && (
+                              <div>
+                                <ShareButton
+                                  url={`/parking-pass?date=${encodeURIComponent(
+                                    shareDate,
+                                  )}&pass=${shareListingId}`}
+                                  title={`Parking Pass at ${group.host.businessName}`}
+                                  description={`${group.host.address}${
+                                    group.host.city
+                                      ? `, ${group.host.city}`
+                                      : ""
+                                  }${group.host.state ? `, ${group.host.state}` : ""}`}
+                                  size="sm"
+                                  variant="outline"
+                                />
+                              </div>
+                            )}
+                            {isActive &&
+                              listingForDate &&
+                              slotOptions.length > 0 && (
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  {slotOptions.map((slot) => {
+                                    const feeCents = getFeeCentsForSlots([
+                                      slot.type,
+                                    ]);
+                                    const totalPrice =
+                                      ((slot.priceCents || 0) + feeCents) / 100;
+                                    const isSelected = selectedSlots.includes(
+                                      slot.type,
+                                    );
+                                    return (
+                                      <Button
+                                        key={slot.type}
+                                        variant={
+                                          isSelected ? "default" : "outline"
+                                        }
+                                        size="sm"
+                                        className="justify-between"
+                                        disabled={!canBook}
+                                        onClick={() =>
+                                          handleSelect(
+                                            listingForDate,
+                                            slot.type,
+                                          )
+                                        }
+                                      >
+                                        <span>{slot.label}</span>
+                                        <span>${totalPrice.toFixed(2)}</span>
+                                      </Button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            {hasAvailability ? (
+                              <div className="flex items-center justify-between gap-3 pt-2">
+                                <p className="text-[11px] text-[color:var(--text-muted)]">
+                                  Includes a $10/day MealScout fee per host.
+                                  Cleanup time is 30 minutes after the end time.
+                                </p>
+                                {isActive && listingForDate && (
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      handleBookSelected(listingForDate);
+                                    }}
+                                    disabled={
+                                      !canBook || selectedSlots.length === 0
+                                    }
+                                  >
+                                    Add to cart
+                                    {selectedTotalWithFee > 0 && (
+                                      <span className="ml-2 text-xs">
+                                        $
+                                        {(
+                                          (selectedTotalWithFee || 0) / 100
+                                        ).toFixed(2)}
+                                      </span>
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-[color:var(--text-muted)]">
+                                {listingForDate
+                                  ? "Fully booked."
                                   : "No open dates right now."}
                               </p>
                             )}
-                            {listingForDate?.availableSpotNumbers && (
-                              <p className="text-[11px] text-[color:var(--text-muted)]">
-                                {listingForDate.availableSpotNumbers.length > 0
-                                  ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                  : "Fully booked"}
-                              </p>
-                            )}
-                            {bookings.length > 0 ? (
-                              <div className="text-[11px] text-[color:var(--text-muted)]">
-                                Booked trucks:{" "}
-                                {bookings
-                                  .slice(0, 2)
-                                  .map((booking) => booking.truckName)
-                                  .join(", ")}
-                                {bookings.length > 2
-                                  ? ` +${bookings.length - 2} more`
-                                  : ""}
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-[color:var(--text-muted)]">
-                                No bookings yet
-                              </div>
-                            )}
                           </div>
-                          {shareListingId && (
-                            <div>
-                              <ShareButton
-                                url={`/parking-pass?date=${encodeURIComponent(
-                                  shareDate,
-                                )}&pass=${shareListingId}`}
-                                title={`Parking Pass at ${group.host.businessName}`}
-                                description={`${group.host.address}${
-                                  group.host.city ? `, ${group.host.city}` : ""
-                                }${group.host.state ? `, ${group.host.state}` : ""}`}
-                                size="sm"
-                                variant="outline"
-                              />
-                            </div>
-                          )}
-                          {isActive && listingForDate && slotOptions.length > 0 && (
-                            <div className="grid grid-cols-2 gap-2 pt-1">
-                              {slotOptions.map((slot) => {
-                                const feeCents = getFeeCentsForSlots(
-                                  [slot.type],
-                                );
-                                const totalPrice =
-                                  ((slot.priceCents || 0) + feeCents) / 100;
-                                const isSelected = selectedSlots.includes(
-                                  slot.type,
-                                );
-                                return (
-                                  <Button
-                                    key={slot.type}
-                                    variant={isSelected ? "default" : "outline"}
-                                    size="sm"
-                                    className="justify-between"
-                                    disabled={!canBook}
-                                    onClick={() =>
-                                      handleSelect(listingForDate, slot.type)
-                                    }
-                                  >
-                                    <span>{slot.label}</span>
-                                    <span>${totalPrice.toFixed(2)}</span>
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {hasAvailability ? (
-                            <div className="flex items-center justify-between gap-3 pt-2">
-                              <p className="text-[11px] text-[color:var(--text-muted)]">
-                                Includes a $10/day MealScout fee per host. Cleanup
-                                time is 30 minutes after the end time.
-                              </p>
-                              {isActive && listingForDate && (
-                                <Button
-                                  size="sm"
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    handleBookSelected(listingForDate);
-                                  }}
-                                  disabled={selectedSlots.length === 0}
-                                >
-                                  Add to cart
-                                  {selectedTotalWithFee > 0 && (
-                                    <span className="ml-2 text-xs">
-                                      ${(
-                                        (selectedTotalWithFee || 0) / 100
-                                      ).toFixed(2)}
-                                    </span>
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-[11px] text-[color:var(--text-muted)]">
-                              {listingForDate ? "Fully booked." : "No open dates right now."}
-                            </p>
-                          )}
+                        );
+                      })}
+                      {filteredLocations.length === 0 && (
+                        <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
+                          No locations match that search.
                         </div>
-                      );
-                    })}
-                    {filteredLocations.length === 0 && (
-                      <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                        No locations match that search.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredLocations.map((group) => {
-                    const effectiveDateKey =
-                      group.key === activeLocationKey
-                        ? selectedDate
-                        : nextBookableDateByGroup.get(group.key);
-                    const groupDateKeys = Array.from(
-                      new Set(
-                        group.listings.map((listing) =>
-                          getListingDateKey(listing.date),
-                        ),
-                      ),
-                    ).sort();
-                    const selectedGroupDateKey =
-                      effectiveDateKey || groupDateKeys[0] || selectedDate;
-                    const listingForDate = effectiveDateKey
-                      ? group.listings.find(
-                          (listing) =>
-                            getListingDateKey(listing.date) === effectiveDateKey,
-                        )
-                      : null;
-                    const fallbackDateKey = effectiveDateKey || todayDateKey;
-                    const displayListing =
-                      listingForDate ||
-                      group.listings.find(
-                        (listing) =>
-                          getListingDateKey(listing.date) >= fallbackDateKey,
-                      ) ||
-                      group.listings[0] ||
-                      null;
-                    const bookingListing = listingForDate || displayListing;
-                    const paymentsReady = Boolean(platformPaymentsReady);
-                    const slotOptions = listingForDate
-                      ? buildSlotOptions(listingForDate)
-                      : [];
-                    const selectedSlots = listingForDate
-                      ? selectedSlotsByListing[listingForDate.id] || []
-                      : [];
-                    const selectedTotalCents = selectedSlots.reduce(
-                      (sum, slot) => {
-                        const price =
-                          slotOptions.find((item) => item.type === slot)
-                            ?.priceCents || 0;
-                        return sum + price;
-                      },
-                      0,
-                    );
-                    const selectedFeeCents = getFeeCentsForSlots(
-                      selectedSlots,
-                    );
-                    const selectedTotalWithFee =
-                      selectedTotalCents > 0
-                        ? selectedTotalCents + selectedFeeCents
-                        : 0;
-
-                    const hasAvailability = Boolean(
-                      listingForDate && listingHasAvailability(listingForDate),
-                    );
-                    const canBook = Boolean(paymentsReady && hasAvailability);
-                    const bookings = Array.isArray(bookingListing?.bookings)
-                      ? bookingListing?.bookings ?? []
-                      : [];
-                    const isActive = activeLocation?.key === group.key;
-                    const shareDate = displayListing
-                      ? getListingDateKey(displayListing.date)
-                      : selectedDate;
-                    const shareListingId = displayListing?.id || "";
-
-                    return (
-                      <div
-                        key={group.key}
-                        role="button"
-                        tabIndex={0}
-                        aria-pressed={isActive}
-                        onClick={() => focusLocation(group.key, true)}
-                        onKeyDown={(keyboardEvent) => {
-                          if (
-                            keyboardEvent.key === "Enter" ||
-                            keyboardEvent.key === " "
-                          ) {
-                            keyboardEvent.preventDefault();
-                            focusLocation(group.key, true);
-                          }
-                        }}
-                        className={`w-full text-left rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
-                          isActive
-                            ? "border-orange-300 pp-glass ring-2 ring-orange-200"
-                            : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                           <span className="text-[15px] font-semibold text-orange-500 font-display">
-                             {group.host.businessName}
-                           </span>
-                          <span className="text-xs text-[color:var(--text-muted)]">
-                            {displayListing
-                              ? format(new Date(displayListing.date), "EEE, MMM d")
-                              : "No dates listed"}
-                          </span>
-                        </div>
-                        {groupDateKeys.length > 1 && (
-                          <div className="flex items-center justify-between gap-2 pt-1">
-                            <span className="text-[11px] text-[color:var(--text-muted)]">
-                              Date
-                            </span>
-                            <select
-                              className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
-                              value={selectedGroupDateKey}
-                              onClick={(event) => event.stopPropagation()}
-                              onChange={(event) => {
-                                event.stopPropagation();
-                                setSelectedDate(event.target.value);
-                                focusLocation(group.key, true);
-                              }}
-                            >
-                              {groupDateKeys.slice(0, 14).map((key) => (
-                                <option key={key} value={key}>
-                                  {format(new Date(`${key}T00:00:00`), "EEE, MMM d")}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        <div className="text-xs text-slate-700">
-                          <p>{group.host.address}</p>
-                          {(group.host.city || group.host.state) && (
-                            <p>
-                              {[group.host.city, group.host.state]
-                                .filter(Boolean)
-                                .join(", ")}
-                            </p>
-                          )}
-                          {displayListing && (
-                            <p>
-                              {displayListing.startTime === "00:00" &&
-                              displayListing.endTime === "23:59"
-                                ? "Any time"
-                                : `${displayListing.startTime} - ${displayListing.endTime}`}
-                            </p>
-                          )}
-                          {!listingForDate && (
-                            <p className="text-[11px] text-amber-700">
-                              {effectiveDateKey
-                                ? `No slots on ${format(
-                                    new Date(`${effectiveDateKey}T00:00:00`),
-                                    "EEE, MMM d",
-                                  )}.`
-                                : "No open dates right now."}
-                            </p>
-                          )}
-                          {!isActive && nextBookableDateByGroup.get(group.key) && (
-                            <p className="text-[11px] text-[color:var(--text-muted)]">
-                              Next open:{" "}
-                              {format(
-                                new Date(
-                                  `${nextBookableDateByGroup.get(group.key)}T00:00:00`,
-                                ),
-                                "EEE, MMM d",
-                              )}
-                            </p>
-                          )}
-                          {listingForDate?.availableSpotNumbers && (
-                            <p className="text-[11px] text-[color:var(--text-muted)]">
-                              {listingForDate.availableSpotNumbers.length > 0
-                                ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                : "Fully booked"}
-                            </p>
-                          )}
-                        </div>
-                        {shareListingId && (
-                          <div>
-                            <ShareButton
-                              url={`/parking-pass?date=${encodeURIComponent(
-                                shareDate,
-                              )}&pass=${shareListingId}`}
-                              title={`Parking Pass at ${group.host.businessName}`}
-                              description={`${group.host.address}${
-                                group.host.city ? `, ${group.host.city}` : ""
-                              }${group.host.state ? `, ${group.host.state}` : ""}`}
-                              size="sm"
-                              variant="outline"
-                            />
-                          </div>
-                        )}
-                        {isActive && listingForDate && slotOptions.length > 0 && (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            {slotOptions.map((slot) => {
-                              const feeCents = getFeeCentsForSlots(
-                                [slot.type],
-                              );
-                              const totalPrice =
-                                ((slot.priceCents || 0) + feeCents) / 100;
-                              const isSelected = selectedSlots.includes(
-                                slot.type,
-                              );
-                              return (
-                                <Button
-                                  key={slot.type}
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  className="justify-between"
-                                  disabled={!canBook}
-                                  onClick={() =>
-                                    handleSelect(listingForDate, slot.type)
-                                  }
-                                >
-                                  <span>{slot.label}</span>
-                                  <span>${totalPrice.toFixed(2)}</span>
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {hasAvailability ? (
-                          <div className="flex items-center justify-between gap-3 pt-2">
-                            <p className="text-[11px] text-[color:var(--text-muted)]">
-                              Includes a $10/day MealScout fee per host. Cleanup
-                              time is 30 minutes after the end time.
-                            </p>
-                            {isActive && listingForDate && (
-                              <Button
-                                size="sm"
-                                type="button"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  handleBookSelected(listingForDate);
-                                }}
-                                disabled={!canBook || selectedSlots.length === 0}
-                              >
-                                Add to cart
-                                {selectedTotalWithFee > 0 && (
-                                  <span className="ml-2 text-xs">
-                                    ${(
-                                      (selectedTotalWithFee || 0) / 100
-                                    ).toFixed(2)}
-                                  </span>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-[color:var(--text-muted)]">
-                            {listingForDate ? "Fully booked." : "No open dates right now."}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {filteredLocations.length === 0 && (
-                    <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                      No locations match that search.
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div className="space-y-4 order-2 lg:order-none">
-              {cartItems.length > 0 && (
-                <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                        Booking cart
+                <div className="space-y-4 order-2 lg:order-none">
+                  {cartItems.length > 0 && (
+                    <div className="rounded-2xl pp-glass p-4 shadow-clean space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                            Booking cart
+                          </p>
+                          <p className="text-xs text-[color:var(--text-muted)]">
+                            Separate charges per host.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            startCheckout();
+                          }}
+                        >
+                          Checkout {cartItems.length}
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {cartItems.map((item) => (
+                          <div
+                            key={item.listing.id}
+                            className="rounded-xl pp-glass-muted px-3 py-2 text-xs text-slate-700"
+                          >
+                            <div className="flex items-center justify-between text-sm text-[color:var(--text-primary)]">
+                              <span className="text-orange-500">
+                                {item.listing.host.businessName}
+                              </span>
+                              <button
+                                type="button"
+                                className="text-xs text-[color:var(--text-muted)] underline"
+                                onClick={() => removeCartItem(item.listing.id)}
+                              >
+                                remove
+                              </button>
+                            </div>
+                            <p>
+                              {format(
+                                new Date(item.listing.date),
+                                "EEE, MMM d",
+                              )}{" "}
+                              - {item.slotTypes.join(", ")}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      {cartTotals.totalCents > 0 && (
+                        <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700">
+                          <div className="flex items-center justify-between">
+                            <span>Host total</span>
+                            <span>
+                              ${(cartTotals.hostCents / 100).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>MealScout fee</span>
+                            <span>
+                              ${(cartTotals.feeCents / 100).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between font-semibold text-[color:var(--text-primary)]">
+                            <span>Total</span>
+                            <span>
+                              ${(cartTotals.totalCents / 100).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Card
+                    id="parking-pass-details"
+                    className="rounded-2xl pp-glass shadow-clean"
+                  >
+                    <CardContent className="p-5 space-y-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-900 font-display">
+                          {activeLocation?.host.businessName ||
+                            "Select a location"}
+                        </p>
+                        <p className="text-xs text-[color:var(--text-muted)]">
+                          {activeLocation?.host.address ||
+                            "Choose a spot to see details."}
+                        </p>
+                      </div>
+                      {activeListing && (
+                        <>
+                          <div className="flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
+                            <span className="rounded-full pp-chip px-2 py-1">
+                              {activeListing.host.locationType || "Location"}
+                            </span>
+                            <span className="rounded-full pp-chip px-2 py-1">
+                              Foot traffic:{" "}
+                              {activeListing.host.expectedFootTraffic ||
+                                "Not shared"}
+                            </span>
+                            <span className="rounded-full pp-chip px-2 py-1">
+                              {activeListing.startTime === "00:00" &&
+                              activeListing.endTime === "23:59"
+                                ? "Any time"
+                                : `${activeListing.startTime} - ${activeListing.endTime}`}
+                            </span>
+                          </div>
+                          <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
+                            <p className="text-[11px] font-semibold text-slate-700">
+                              Schedule
+                            </p>
+                            {!selectedDateAvailable && (
+                              <p className="text-[11px] text-amber-700">
+                                No listing on {selectedDateLabel}. Showing the
+                                next scheduled day.
+                              </p>
+                            )}
+                            {selectedDateAvailable &&
+                              !selectedDateHasOpenSpots && (
+                                <p className="text-[11px] text-amber-700">
+                                  Fully booked on {selectedDateLabel}. Select
+                                  another date to see other days.
+                                </p>
+                              )}
+                            <div className="flex items-center justify-between">
+                              <span>Date</span>
+                              {activeListingDateKeys.length > 0 ? (
+                                <Popover
+                                  open={datePickerOpen}
+                                  onOpenChange={setDatePickerOpen}
+                                >
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 px-2 text-[11px]"
+                                    >
+                                      {format(
+                                        new Date(`${selectedDate}T00:00:00`),
+                                        "EEE, MMM d",
+                                      )}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    align="end"
+                                    className="w-auto p-0"
+                                  >
+                                    <DatePickerCalendar
+                                      mode="single"
+                                      selected={
+                                        new Date(`${selectedDate}T00:00:00`)
+                                      }
+                                      onSelect={(value) => {
+                                        if (!value) return;
+                                        const next = format(
+                                          value,
+                                          "yyyy-MM-dd",
+                                        );
+                                        if (!activeListingDateKeySet.has(next))
+                                          return;
+                                        setSelectedDate(next);
+                                        setDatePickerOpen(false);
+                                      }}
+                                      disabled={(date) => {
+                                        const key = format(date, "yyyy-MM-dd");
+                                        return !activeListingDateKeySet.has(
+                                          key,
+                                        );
+                                      }}
+                                      modifiers={{ full: fullListingDates }}
+                                      modifiersClassNames={{
+                                        full: "opacity-60",
+                                      }}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <span>
+                                  {format(
+                                    new Date(`${selectedDate}T00:00:00`),
+                                    "EEE, MMM d",
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Time</span>
+                              <span>
+                                {activeListing.startTime === "00:00" &&
+                                activeListing.endTime === "23:59"
+                                  ? "Any time"
+                                  : `${activeListing.startTime} - ${activeListing.endTime}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span>Status</span>
+                              <span className="capitalize">
+                                {activeListing.status}
+                              </span>
+                            </div>
+                            {activeListingAvailability && (
+                              <div className="flex items-center justify-between">
+                                <span>Availability</span>
+                                <span>{activeListingAvailability}</span>
+                              </div>
+                            )}
+                          </div>
+                          {activeListingBookings.length > 0 ? (
+                            <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
+                              <p className="text-[11px] font-semibold text-slate-700">
+                                Booked trucks
+                              </p>
+                              <div className="space-y-1">
+                                {activeListingBookings
+                                  .slice(0, 5)
+                                  .map((booking) => (
+                                    <div
+                                      key={`${booking.truckId}-${booking.slotType || "slot"}`}
+                                      className="flex items-center justify-between"
+                                    >
+                                      <span>{booking.truckName}</span>
+                                      <span className="text-[11px] text-[color:var(--text-muted)]">
+                                        {booking.slotType
+                                          ? formatSlotLabel(booking.slotType)
+                                          : "Booked"}
+                                        {booking.spotNumber
+                                          ? ` - Spot ${booking.spotNumber}`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                  ))}
+                                {activeListingBookings.length > 5 && (
+                                  <div className="text-[11px] text-[color:var(--text-muted)]">
+                                    +{activeListingBookings.length - 5} more
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[color:var(--text-muted)]">
+                              No bookings yet.
+                            </p>
+                          )}
+                          {selectedDateAvailable && activeListingForDate ? (
+                            <>
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                                  Slot pricing
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {buildSlotOptions(activeListingForDate).map(
+                                    (slot) => {
+                                      const feeCents = getFeeCentsForSlots([
+                                        slot.type,
+                                      ]);
+                                      const totalPrice =
+                                        ((slot.priceCents || 0) + feeCents) /
+                                        100;
+                                      const selectedSlots =
+                                        selectedSlotsByListing[
+                                          activeListingForDate.id
+                                        ] || [];
+                                      const isSelected = selectedSlots.includes(
+                                        slot.type,
+                                      );
+                                      return (
+                                        <Button
+                                          key={slot.type}
+                                          variant={
+                                            isSelected ? "default" : "outline"
+                                          }
+                                          size="sm"
+                                          className="justify-between"
+                                          disabled={
+                                            activeListingForDate.status !==
+                                            "open"
+                                          }
+                                          onClick={() =>
+                                            handleSelect(
+                                              activeListingForDate,
+                                              slot.type,
+                                            )
+                                          }
+                                        >
+                                          <span>{slot.label}</span>
+                                          <span>${totalPrice.toFixed(2)}</span>
+                                        </Button>
+                                      );
+                                    },
+                                  )}
+                                </div>
+                              </div>
+                              {activeListingForDate.status === "open" && (
+                                <div className="flex items-center justify-between gap-3 pt-2">
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    Includes a $10/day MealScout fee per host.
+                                    Cleanup time is 30 minutes after the end
+                                    time.
+                                  </p>
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      handleBookSelected(activeListingForDate);
+                                    }}
+                                    disabled={
+                                      (
+                                        selectedSlotsByListing[
+                                          activeListingForDate.id
+                                        ] || []
+                                      ).length === 0
+                                    }
+                                  >
+                                    Add to cart
+                                  </Button>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-[color:var(--text-muted)]">
+                              Pick a day with availability to view slot pricing.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {hasCartTotal && (
+                <div className="fixed left-0 right-0 z-[1200] px-4 lg:hidden pointer-events-none bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
+                  <div className="mx-auto max-w-md rounded-2xl pp-glass shadow-clean-lg p-3 flex items-center justify-between gap-3 pointer-events-auto">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                        Cart ({cartItems.length})
                       </p>
-                      <p className="text-xs text-[color:var(--text-muted)]">
-                        Separate charges per host.
+                      <p className="text-base font-semibold text-slate-900">
+                        ${(cartTotals.totalCents / 100).toFixed(2)}
                       </p>
                     </div>
                     <Button
@@ -6129,326 +6813,38 @@ export default function ParkingPassPage() {
                         startCheckout();
                       }}
                     >
-                      Checkout {cartItems.length}
+                      Checkout
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    {cartItems.map((item) => (
-                      <div
-                        key={item.listing.id}
-                        className="rounded-xl pp-glass-muted px-3 py-2 text-xs text-slate-700"
-                      >
-                        <div className="flex items-center justify-between text-sm text-[color:var(--text-primary)]">
-                          <span className="text-orange-500">{item.listing.host.businessName}</span>
-                          <button
-                            type="button"
-                            className="text-xs text-[color:var(--text-muted)] underline"
-                            onClick={() => removeCartItem(item.listing.id)}
-                          >
-                            remove
-                          </button>
-                        </div>
-                        <p>
-                          {format(new Date(item.listing.date), "EEE, MMM d")} -{" "}
-                          {item.slotTypes.join(", ")}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  {cartTotals.totalCents > 0 && (
-                    <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700">
-                      <div className="flex items-center justify-between">
-                        <span>Host total</span>
-                        <span>${(cartTotals.hostCents / 100).toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>MealScout fee</span>
-                        <span>${(cartTotals.feeCents / 100).toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between font-semibold text-[color:var(--text-primary)]">
-                        <span>Total</span>
-                        <span>${(cartTotals.totalCents / 100).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
-
-              <Card
-                id="parking-pass-details"
-                className="rounded-2xl pp-glass shadow-clean"
-              >
-                <CardContent className="p-5 space-y-3">
-                  <div>
-                    <p className="text-base font-semibold text-slate-900 font-display">
-                      {activeLocation?.host.businessName || "Select a location"}
-                    </p>
-                    <p className="text-xs text-[color:var(--text-muted)]">
-                      {activeLocation?.host.address || "Choose a spot to see details."}
-                    </p>
-                  </div>
-                  {activeListing && (
-                    <>
-                      <div className="flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
-                        <span className="rounded-full pp-chip px-2 py-1">
-                          {activeListing.host.locationType || "Location"}
-                        </span>
-                        <span className="rounded-full pp-chip px-2 py-1">
-                          Foot traffic:{" "}
-                          {activeListing.host.expectedFootTraffic || "Not shared"}
-                        </span>
-                        <span className="rounded-full pp-chip px-2 py-1">
-                          {activeListing.startTime === "00:00" &&
-                          activeListing.endTime === "23:59"
-                            ? "Any time"
-                            : `${activeListing.startTime} - ${activeListing.endTime}`}
-                        </span>
-                      </div>
-                      <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
-                        <p className="text-[11px] font-semibold text-slate-700">
-                          Schedule
-                        </p>
-                        {!selectedDateAvailable && (
-                          <p className="text-[11px] text-amber-700">
-                            No listing on {selectedDateLabel}. Showing the next scheduled day.
-                          </p>
-                        )}
-                        {selectedDateAvailable && !selectedDateHasOpenSpots && (
-                          <p className="text-[11px] text-amber-700">
-                            Fully booked on {selectedDateLabel}. Select another date to see other days.
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span>Date</span>
-                          {activeListingDateKeys.length > 0 ? (
-                            <Popover
-                              open={datePickerOpen}
-                              onOpenChange={setDatePickerOpen}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-2 text-[11px]"
-                                >
-                                  {format(
-                                    new Date(`${selectedDate}T00:00:00`),
-                                    "EEE, MMM d",
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent align="end" className="w-auto p-0">
-                                <DatePickerCalendar
-                                  mode="single"
-                                  selected={new Date(`${selectedDate}T00:00:00`)}
-                                  onSelect={(value) => {
-                                    if (!value) return;
-                                    const next = format(value, "yyyy-MM-dd");
-                                    if (!activeListingDateKeySet.has(next)) return;
-                                    setSelectedDate(next);
-                                    setDatePickerOpen(false);
-                                  }}
-                                  disabled={(date) => {
-                                    const key = format(date, "yyyy-MM-dd");
-                                    return !activeListingDateKeySet.has(key);
-                                  }}
-                                  modifiers={{ full: fullListingDates }}
-                                  modifiersClassNames={{ full: "opacity-60" }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            <span>
-                              {format(
-                                new Date(`${selectedDate}T00:00:00`),
-                                "EEE, MMM d",
-                              )}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Time</span>
-                          <span>
-                            {activeListing.startTime === "00:00" &&
-                            activeListing.endTime === "23:59"
-                              ? "Any time"
-                              : `${activeListing.startTime} - ${activeListing.endTime}`}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Status</span>
-                          <span className="capitalize">{activeListing.status}</span>
-                        </div>
-                        {activeListingAvailability && (
-                          <div className="flex items-center justify-between">
-                            <span>Availability</span>
-                            <span>{activeListingAvailability}</span>
-                          </div>
-                        )}
-                      </div>
-                      {activeListingBookings.length > 0 ? (
-                        <div className="rounded-xl pp-glass-muted p-3 text-xs text-slate-700 space-y-2">
-                          <p className="text-[11px] font-semibold text-slate-700">
-                            Booked trucks
-                          </p>
-                          <div className="space-y-1">
-                            {activeListingBookings.slice(0, 5).map((booking) => (
-                              <div
-                                key={`${booking.truckId}-${booking.slotType || "slot"}`}
-                                className="flex items-center justify-between"
-                              >
-                                <span>{booking.truckName}</span>
-                                <span className="text-[11px] text-[color:var(--text-muted)]">
-                                  {booking.slotType
-                                    ? formatSlotLabel(booking.slotType)
-                                    : "Booked"}
-                                  {booking.spotNumber
-                                    ? ` - Spot ${booking.spotNumber}`
-                                    : ""}
-                                </span>
-                              </div>
-                            ))}
-                            {activeListingBookings.length > 5 && (
-                              <div className="text-[11px] text-[color:var(--text-muted)]">
-                                +{activeListingBookings.length - 5} more
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                          No bookings yet.
-                        </p>
-                      )}
-                      {selectedDateAvailable && activeListingForDate ? (
-                        <>
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold text-[color:var(--text-secondary)]">
-                              Slot pricing
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {buildSlotOptions(activeListingForDate).map((slot) => {
-                                  const feeCents = getFeeCentsForSlots(
-                                    [slot.type],
-                                  );
-                                  const totalPrice =
-                                    ((slot.priceCents || 0) + feeCents) / 100;
-                                  const selectedSlots =
-                                    selectedSlotsByListing[activeListingForDate.id] || [];
-                                  const isSelected = selectedSlots.includes(
-                                    slot.type,
-                                  );
-                                  return (
-                                    <Button
-                                      key={slot.type}
-                                      variant={isSelected ? "default" : "outline"}
-                                      size="sm"
-                                      className="justify-between"
-                                      disabled={activeListingForDate.status !== "open"}
-                                      onClick={() =>
-                                        handleSelect(activeListingForDate, slot.type)
-                                      }
-                                    >
-                                      <span>{slot.label}</span>
-                                      <span>${totalPrice.toFixed(2)}</span>
-                                    </Button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                          {activeListingForDate.status === "open" && (
-                            <div className="flex items-center justify-between gap-3 pt-2">
-                              <p className="text-[11px] text-[color:var(--text-muted)]">
-                                Includes a $10/day MealScout fee per host. Cleanup
-                                time is 30 minutes after the end time.
-                              </p>
-                              <Button
-                                size="sm"
-                                type="button"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  handleBookSelected(activeListingForDate);
-                                }}
-                                disabled={
-                                  (selectedSlotsByListing[activeListingForDate.id] || [])
-                                    .length === 0
-                                }
-                              >
-                                Add to cart
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                          Pick a day with availability to view slot pricing.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
             </div>
-          </div>
-
-        {hasCartTotal && (
-          <div className="fixed left-0 right-0 z-[1200] px-4 lg:hidden pointer-events-none bottom-[calc(4.75rem+env(safe-area-inset-bottom))]">
-            <div className="mx-auto max-w-md rounded-2xl pp-glass shadow-clean-lg p-3 flex items-center justify-between gap-3 pointer-events-auto">
-              <div className="min-w-0">
-                <p className="text-[11px] text-[color:var(--text-muted)]">Cart ({cartItems.length})</p>
-                <p className="text-base font-semibold text-slate-900">
-                  ${(cartTotals.totalCents / 100).toFixed(2)}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  startCheckout();
-                }}
-              >
-                Checkout
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
         </div>
-        )}
-      </div>
 
-      {selectedListing && truckId && selectedSlotTypes.length > 0 && (
-        <BookingPaymentModal
-          open={paymentOpen}
-          onOpenChange={setPaymentOpen}
-          passId={selectedListing.id}
-          truckId={truckId}
-          slotTypes={selectedSlotTypes}
-          selectedDates={selectedListing?.date ? [selectedListing.date] : []}
-          eventDetails={{
-            name: "Parking Pass",
-            date: format(new Date(selectedListing.date), "MMMM d, yyyy"),
-            startTime: selectedListing.startTime,
-            endTime: selectedListing.endTime,
-            hostName: selectedListing.host.businessName,
-            hostPrice: selectedListing.hostPriceCents,
-            slotSummary: selectedSlotTypes.map(formatSlotLabel).join(", "),
-          }}
-          onSuccess={({ outcome }) => {
-            handleSuccess(outcome);
-          }}
-        />
-      )}
+        {selectedListing && truckId && selectedSlotTypes.length > 0 && (
+          <BookingPaymentModal
+            open={paymentOpen}
+            onOpenChange={setPaymentOpen}
+            passId={selectedListing.id}
+            truckId={truckId}
+            slotTypes={selectedSlotTypes}
+            selectedDates={selectedListing?.date ? [selectedListing.date] : []}
+            eventDetails={{
+              name: "Parking Pass",
+              date: format(new Date(selectedListing.date), "MMMM d, yyyy"),
+              startTime: selectedListing.startTime,
+              endTime: selectedListing.endTime,
+              hostName: selectedListing.host.businessName,
+              hostPrice: selectedListing.hostPriceCents,
+              slotSummary: selectedSlotTypes.map(formatSlotLabel).join(", "),
+            }}
+            onSuccess={({ outcome }) => {
+              handleSuccess(outcome);
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
-
-
-
-
-

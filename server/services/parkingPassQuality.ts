@@ -99,7 +99,9 @@ const toNumberOrNull = (value: any): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const firstFiniteNumber = (...values: Array<number | string | null | undefined>) => {
+const firstFiniteNumber = (
+  ...values: Array<number | string | null | undefined>
+) => {
   for (const value of values) {
     const parsed = toNumberOrNull(value);
     if (parsed !== null) return parsed;
@@ -211,7 +213,8 @@ export function computeParkingPassQualityFlags(listing: {
   if (!address) flags.push("missing_address");
   // City/state are optional because many legacy host rows store the full location in `address`.
   // If state is provided, validate it to avoid obviously bad data.
-  if (stateRaw && state && !/^[A-Za-z]{2}$/.test(state)) flags.push("invalid_state");
+  if (stateRaw && state && !/^[A-Za-z]{2}$/.test(state))
+    flags.push("invalid_state");
   if (address && !/\d/.test(address)) flags.push("bad_address_format");
 
   const lat = toNumberOrNull(listing.latitude ?? host?.latitude);
@@ -248,22 +251,40 @@ export function computeParkingPassQualityFlags(listing: {
   }
 
   const breakfast = Number(
-    firstFiniteNumber(listing.breakfastPriceCents, host?.parkingPassBreakfastPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.breakfastPriceCents,
+      host?.parkingPassBreakfastPriceCents,
+    ) ?? 0,
   );
   const lunch = Number(
-    firstFiniteNumber(listing.lunchPriceCents, host?.parkingPassLunchPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.lunchPriceCents,
+      host?.parkingPassLunchPriceCents,
+    ) ?? 0,
   );
   const dinner = Number(
-    firstFiniteNumber(listing.dinnerPriceCents, host?.parkingPassDinnerPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.dinnerPriceCents,
+      host?.parkingPassDinnerPriceCents,
+    ) ?? 0,
   );
   const daily = Number(
-    firstFiniteNumber(listing.dailyPriceCents, host?.parkingPassDailyPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.dailyPriceCents,
+      host?.parkingPassDailyPriceCents,
+    ) ?? 0,
   );
   const weekly = Number(
-    firstFiniteNumber(listing.weeklyPriceCents, host?.parkingPassWeeklyPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.weeklyPriceCents,
+      host?.parkingPassWeeklyPriceCents,
+    ) ?? 0,
   );
   const monthly = Number(
-    firstFiniteNumber(listing.monthlyPriceCents, host?.parkingPassMonthlyPriceCents) ?? 0,
+    firstFiniteNumber(
+      listing.monthlyPriceCents,
+      host?.parkingPassMonthlyPriceCents,
+    ) ?? 0,
   );
   const hasPricing = [breakfast, lunch, dinner, daily, weekly, monthly].some(
     (value) => Number.isFinite(value) && value > 0,
@@ -275,7 +296,9 @@ export function computeParkingPassQualityFlags(listing: {
   return Array.from(new Set(flags));
 }
 
-export function isParkingPassPublicReady(listing: Parameters<typeof computeParkingPassQualityFlags>[0]) {
+export function isParkingPassPublicReady(
+  listing: Parameters<typeof computeParkingPassQualityFlags>[0],
+) {
   const flags = computeParkingPassQualityFlags(listing);
   // Public-ready (pins/bookability) should match the simple model:
   // if a host has an address and any pricing, show it and allow booking.

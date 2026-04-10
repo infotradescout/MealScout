@@ -102,12 +102,13 @@ function FillRateBar({
   maxTrucks: number;
   isFull: boolean;
 }) {
-  const pct = maxTrucks > 0 ? Math.min(100, Math.round((accepted / maxTrucks) * 100)) : 0;
+  const pct =
+    maxTrucks > 0 ? Math.min(100, Math.round((accepted / maxTrucks) * 100)) : 0;
   const color = isFull
     ? "bg-[color:var(--status-success)]"
     : pct >= 60
-    ? "bg-[color:var(--status-warning)]"
-    : "bg-[color:var(--accent-text)]";
+      ? "bg-[color:var(--status-warning)]"
+      : "bg-[color:var(--accent-text)]";
 
   return (
     <div className="space-y-1">
@@ -115,7 +116,11 @@ function FillRateBar({
         <span>
           {accepted} / {maxTrucks} truck{maxTrucks !== 1 ? "s" : ""} confirmed
         </span>
-        <span className={isFull ? "text-[color:var(--status-success)] font-semibold" : ""}>
+        <span
+          className={
+            isFull ? "text-[color:var(--status-success)] font-semibold" : ""
+          }
+        >
           {pct}%{isFull ? " — Full" : ""}
         </span>
       </div>
@@ -157,7 +162,7 @@ function InterestsPanel({
           title: "Error",
           description: "Could not load interests.",
           variant: "destructive",
-        })
+        }),
       )
       .finally(() => setLoading(false));
   }, [eventId, toast]);
@@ -166,18 +171,22 @@ function InterestsPanel({
     async (interestId: string, status: "accepted" | "declined") => {
       setActionId(interestId);
       try {
-        const res = await fetch(`/api/event-coordinator/interests/${interestId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ status }),
-        });
+        const res = await fetch(
+          `/api/event-coordinator/interests/${interestId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ status }),
+          },
+        );
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (res.status === 409) {
             toast({
               title: "Event Full",
-              description: body.message || "This event has reached its truck capacity.",
+              description:
+                body.message || "This event has reached its truck capacity.",
               variant: "destructive",
             });
           } else {
@@ -188,16 +197,19 @@ function InterestsPanel({
         setData((prev) => {
           if (!prev) return prev;
           const updated = prev.interests.map((i) =>
-            i.id === interestId ? { ...i, status } : i
+            i.id === interestId ? { ...i, status } : i,
           );
-          const acceptedCount = updated.filter((i) => i.status === "accepted").length;
+          const acceptedCount = updated.filter(
+            (i) => i.status === "accepted",
+          ).length;
           const maxTrucks = prev.summary.maxTrucks;
           const newSummary: InterestsPayload["summary"] = {
             ...prev.summary,
             accepted: acceptedCount,
             pending: updated.filter((i) => i.status === "pending").length,
             declined: updated.filter((i) => i.status === "declined").length,
-            fillRate: maxTrucks > 0 ? Math.round((acceptedCount / maxTrucks) * 100) : 0,
+            fillRate:
+              maxTrucks > 0 ? Math.round((acceptedCount / maxTrucks) * 100) : 0,
             isFull: maxTrucks > 0 && acceptedCount >= maxTrucks,
           };
           onSummaryChange(eventId, newSummary);
@@ -211,12 +223,16 @@ function InterestsPanel({
               : "The truck has been declined.",
         });
       } catch (err: any) {
-        toast({ title: "Error", description: err.message, variant: "destructive" });
+        toast({
+          title: "Error",
+          description: err.message,
+          variant: "destructive",
+        });
       } finally {
         setActionId(null);
       }
     },
-    [eventId, onSummaryChange, toast]
+    [eventId, onSummaryChange, toast],
   );
 
   if (loading) {
@@ -241,7 +257,11 @@ function InterestsPanel({
   const accepted = data.interests.filter((i) => i.status === "accepted");
   const declined = data.interests.filter((i) => i.status === "declined");
 
-  const renderGroup = (label: string, items: TruckInterest[], showActions: boolean) => {
+  const renderGroup = (
+    label: string,
+    items: TruckInterest[],
+    showActions: boolean,
+  ) => {
     if (items.length === 0) return null;
     return (
       <div className="space-y-2">
@@ -270,10 +290,14 @@ function InterestsPanel({
                   {interest.truck?.name ?? "Unknown Truck"}
                 </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[color:var(--text-muted)]">
-                  {interest.truck?.cuisineType && <span>{interest.truck.cuisineType}</span>}
+                  {interest.truck?.cuisineType && (
+                    <span>{interest.truck.cuisineType}</span>
+                  )}
                   {(interest.truck?.city || interest.truck?.state) && (
                     <span>
-                      {[interest.truck.city, interest.truck.state].filter(Boolean).join(", ")}
+                      {[interest.truck.city, interest.truck.state]
+                        .filter(Boolean)
+                        .join(", ")}
                     </span>
                   )}
                   {interest.truck?.phone && (
@@ -499,7 +523,10 @@ function EventCard({
 
       {expanded && (
         <div className="px-5 pb-5 border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]">
-          <InterestsPanel eventId={event.id} onSummaryChange={onSummaryChange} />
+          <InterestsPanel
+            eventId={event.id}
+            onSummaryChange={onSummaryChange}
+          />
         </div>
       )}
     </Card>
@@ -586,10 +613,12 @@ export default function EventCoordinatorDashboard() {
   const handleSummaryChange = useCallback(
     (eventId: string, newSummary: InterestSummary) => {
       setEvents((prev) =>
-        prev.map((e) => (e.id === eventId ? { ...e, interestSummary: newSummary } : e))
+        prev.map((e) =>
+          e.id === eventId ? { ...e, interestSummary: newSummary } : e,
+        ),
       );
     },
-    []
+    [],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -634,7 +663,10 @@ export default function EventCoordinatorDashboard() {
         maxTrucks: 1,
         hardCapEnabled: false,
       });
-      toast({ title: "Event Published!", description: "Trucks can now express interest." });
+      toast({
+        title: "Event Published!",
+        description: "Trucks can now express interest.",
+      });
     } catch (err: any) {
       setCreateError(err.message);
     } finally {
@@ -658,11 +690,16 @@ export default function EventCoordinatorDashboard() {
     return (
       <div className="max-w-xl mx-auto px-4 py-12 min-h-screen bg-[var(--bg-layered)]">
         <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] p-6 space-y-4 shadow-clean">
-          <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">Premium Required</h1>
+          <h1 className="text-2xl font-bold text-[color:var(--text-primary)]">
+            Premium Required
+          </h1>
           <p className="text-sm text-[color:var(--text-secondary)]">
-            Event coordinator access is a paid feature. Upgrade to post events and manage truck interest.
+            Event coordinator access is a paid feature. Upgrade to post events
+            and manage truck interest.
           </p>
-          <Button onClick={() => setLocation("/subscription")}>View subscription</Button>
+          <Button onClick={() => setLocation("/subscription")}>
+            View subscription
+          </Button>
         </div>
       </div>
     );
@@ -684,8 +721,18 @@ export default function EventCoordinatorDashboard() {
             Post open calls and manage truck interest.
           </p>
         </div>
-        <Button onClick={() => setIsCreating(!isCreating)} className="w-full sm:w-auto shrink-0">
-          {isCreating ? "Cancel" : <><Plus className="mr-2 h-4 w-4" />New Event</>}
+        <Button
+          onClick={() => setIsCreating(!isCreating)}
+          className="w-full sm:w-auto shrink-0"
+        >
+          {isCreating ? (
+            "Cancel"
+          ) : (
+            <>
+              <Plus className="mr-2 h-4 w-4" />
+              New Event
+            </>
+          )}
         </Button>
       </div>
 
@@ -702,49 +749,141 @@ export default function EventCoordinatorDashboard() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="organizationName">Organization Name</Label>
-                <Input id="organizationName" value={formData.organizationName} onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="organizationName"
+                  value={formData.organizationName}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      organizationName: e.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="contactPhone">Contact Phone</Label>
-                <Input id="contactPhone" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="contactPhone"
+                  value={formData.contactPhone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, contactPhone: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
             </div>
             <div className="grid md:grid-cols-4 gap-4">
               <div className="md:col-span-2 space-y-2">
                 <Label htmlFor="address">Address</Label>
-                <Input id="address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
-                <Input id="city" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) =>
+                    setFormData({ ...formData, city: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="state">State</Label>
-                <Input id="state" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="state"
+                  value={formData.state}
+                  onChange={(e) =>
+                    setFormData({ ...formData, state: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="eventName">Event Name</Label>
-                <Input id="eventName" value={formData.eventName} onChange={(e) => setFormData({ ...formData, eventName: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="eventName"
+                  value={formData.eventName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, eventName: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="maxTrucks">Trucks Needed</Label>
-                <Input id="maxTrucks" type="number" min="1" max="100" value={formData.maxTrucks} onChange={(e) => setFormData({ ...formData, maxTrucks: Number(e.target.value) })} className={inputClassName} required />
+                <Input
+                  id="maxTrucks"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.maxTrucks}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      maxTrucks: Number(e.target.value),
+                    })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
             </div>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
-                <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) =>
+                    setFormData({ ...formData, date: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="startTime">Start Time</Label>
-                <Input id="startTime" type="time" value={formData.startTime} onChange={(e) => setFormData({ ...formData, startTime: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, startTime: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endTime">End Time</Label>
-                <Input id="endTime" type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} className={inputClassName} required />
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) =>
+                    setFormData({ ...formData, endTime: e.target.value })
+                  }
+                  className={inputClassName}
+                  required
+                />
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -752,7 +891,9 @@ export default function EventCoordinatorDashboard() {
                 id="hardCapEnabled"
                 type="checkbox"
                 checked={formData.hardCapEnabled}
-                onChange={(e) => setFormData({ ...formData, hardCapEnabled: e.target.checked })}
+                onChange={(e) =>
+                  setFormData({ ...formData, hardCapEnabled: e.target.checked })
+                }
                 className="h-4 w-4 accent-[color:var(--accent-text)]"
               />
               <Label htmlFor="hardCapEnabled" className="cursor-pointer">
@@ -761,12 +902,29 @@ export default function EventCoordinatorDashboard() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Event details, expectations, vendor notes..." className={inputClassName} rows={4} />
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="Event details, expectations, vendor notes..."
+                className={inputClassName}
+                rows={4}
+              />
             </div>
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>Cancel</Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreating(false)}
+              >
+                Cancel
+              </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                {isSubmitting && (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                )}
                 Publish Event
               </Button>
             </div>
@@ -777,7 +935,9 @@ export default function EventCoordinatorDashboard() {
       {/* Events tabs */}
       <Tabs defaultValue="upcoming" className="w-full">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-semibold text-[color:var(--text-primary)]">Your Events</h2>
+          <h2 className="text-xl font-semibold text-[color:var(--text-primary)]">
+            Your Events
+          </h2>
           <TabsList className="w-full sm:w-auto">
             <TabsTrigger value="upcoming">
               Upcoming
@@ -798,7 +958,10 @@ export default function EventCoordinatorDashboard() {
               <p className="font-medium">No upcoming events yet.</p>
               <p className="text-sm mt-1">
                 Click{" "}
-                <button className="text-[color:var(--accent-text)] hover:underline" onClick={() => setIsCreating(true)}>
+                <button
+                  className="text-[color:var(--accent-text)] hover:underline"
+                  onClick={() => setIsCreating(true)}
+                >
                   New Event
                 </button>{" "}
                 to post your first open call.
@@ -807,7 +970,11 @@ export default function EventCoordinatorDashboard() {
           ) : (
             <div className="grid gap-4">
               {upcoming.map((event) => (
-                <EventCard key={event.id} event={event} onSummaryChange={handleSummaryChange} />
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onSummaryChange={handleSummaryChange}
+                />
               ))}
             </div>
           )}
@@ -821,7 +988,11 @@ export default function EventCoordinatorDashboard() {
           ) : (
             <div className="grid gap-4 opacity-80">
               {past.map((event) => (
-                <EventCard key={event.id} event={event} onSummaryChange={handleSummaryChange} />
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onSummaryChange={handleSummaryChange}
+                />
               ))}
             </div>
           )}

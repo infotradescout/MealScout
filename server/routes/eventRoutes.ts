@@ -36,7 +36,11 @@ import {
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
 import crypto from "crypto";
-import { handleReportRequest, renderReportPdfForToken, requestReportSchema } from "../services/pensacolaReportLeadMagnet";
+import {
+  handleReportRequest,
+  renderReportPdfForToken,
+  requestReportSchema,
+} from "../services/pensacolaReportLeadMagnet";
 import { buildSlotDateTimes } from "../services/timeIntent";
 import {
   resolveCityTimeZone,
@@ -65,15 +69,17 @@ export function registerEventRoutes(
     windowMs: 60 * 1000,
   });
 
-  let parkingPassPublicFeedCache:
-    | { expiresAt: number; payload: any[] }
-    | null = null;
+  let parkingPassPublicFeedCache: { expiresAt: number; payload: any[] } | null =
+    null;
   let parkingPassPublicFeedLastGood: { payload: any[] } | null = null;
 
   const toTeaserId = (value: string) =>
     crypto.createHash("sha256").update(value).digest("hex").slice(0, 16);
 
-  const normalizeLoose = (value: unknown) => String(value || "").trim().toLowerCase();
+  const normalizeLoose = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .toLowerCase();
   const normalizeStateToken = (value: unknown) =>
     normalizeLoose(value).replace(/[^a-z]/g, "");
 
@@ -145,7 +151,8 @@ export function registerEventRoutes(
     const redacted: any = { ...event, host };
     if ("hostAddress" in redacted) redacted.hostAddress = null;
     if ("address" in redacted) redacted.address = null;
-    if ("hostBusinessName" in redacted) redacted.hostBusinessName = "Verified host";
+    if ("hostBusinessName" in redacted)
+      redacted.hostBusinessName = "Verified host";
     return redacted;
   };
 
@@ -159,7 +166,8 @@ export function registerEventRoutes(
 
     const payoutsEnabled = (event: any) =>
       Boolean(
-        event?.host?.stripeConnectAccountId && event?.host?.stripeChargesEnabled,
+        event?.host?.stripeConnectAccountId &&
+        event?.host?.stripeChargesEnabled,
       );
     const isPublicHostProfile = (host: any, event?: any) =>
       isHostProfileMapEligible({
@@ -417,30 +425,42 @@ export function registerEventRoutes(
   });
 
   // Parking Pass listings (truck-paid slots only)
-  app.get("/api/parking-pass", parkingPassFeedLimiter, async (req: any, res) => {
-    try {
-      res.setHeader("Cache-Control", "public, max-age=60");
-      const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-      if (
-        parkingPassPublicFeedCache &&
-        parkingPassPublicFeedCache.expiresAt > Date.now()
-      ) {
-        const payload = parkingPassPublicFeedCache.payload;
-        return res.json(isAuthed ? payload : payload.map(redactParkingPassEventForGuest));
-      }
-      const enhancedEvents = await buildParkingPassPublicFeed();
-      res.json(isAuthed ? enhancedEvents : enhancedEvents.map(redactParkingPassEventForGuest));
-    } catch (error: any) {
-      console.error("Error fetching parking pass listings:", error);
-      if (parkingPassPublicFeedLastGood?.payload) {
-        res.setHeader("X-MealScout-Stale", "1");
+  app.get(
+    "/api/parking-pass",
+    parkingPassFeedLimiter,
+    async (req: any, res) => {
+      try {
+        res.setHeader("Cache-Control", "public, max-age=60");
         const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-        const payload = parkingPassPublicFeedLastGood.payload;
-        return res.json(isAuthed ? payload : payload.map(redactParkingPassEventForGuest));
+        if (
+          parkingPassPublicFeedCache &&
+          parkingPassPublicFeedCache.expiresAt > Date.now()
+        ) {
+          const payload = parkingPassPublicFeedCache.payload;
+          return res.json(
+            isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
+          );
+        }
+        const enhancedEvents = await buildParkingPassPublicFeed();
+        res.json(
+          isAuthed
+            ? enhancedEvents
+            : enhancedEvents.map(redactParkingPassEventForGuest),
+        );
+      } catch (error: any) {
+        console.error("Error fetching parking pass listings:", error);
+        if (parkingPassPublicFeedLastGood?.payload) {
+          res.setHeader("X-MealScout-Stale", "1");
+          const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
+          const payload = parkingPassPublicFeedLastGood.payload;
+          return res.json(
+            isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
+          );
+        }
+        res.status(200).json([]);
       }
-      res.status(200).json([]);
-    }
-  });
+    },
+  );
 
   // Lead-magnet feed (Pensacola): redact exact host details unless logged in.
   app.get("/api/public/pensacola/parking-pass-leads", async (req: any, res) => {
@@ -449,17 +469,23 @@ export function registerEventRoutes(
       const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
 
       const feed =
-        parkingPassPublicFeedCache && parkingPassPublicFeedCache.expiresAt > Date.now()
+        parkingPassPublicFeedCache &&
+        parkingPassPublicFeedCache.expiresAt > Date.now()
           ? parkingPassPublicFeedCache.payload
           : await buildParkingPassPublicFeed();
 
-      const pensacolaEvents = (Array.isArray(feed) ? feed : []).filter((row: any) => {
-        const host = row?.host || {};
-        const city = host.city ?? row?.hostCity ?? row?.city;
-        const state = host.state ?? row?.hostState ?? row?.state;
-        const address = host.address ?? row?.hostAddress ?? row?.address;
-        return (isPensacola(city) || isPensacola(address)) && (isFlorida(state) || isFloridaLoose(address));
-      });
+      const pensacolaEvents = (Array.isArray(feed) ? feed : []).filter(
+        (row: any) => {
+          const host = row?.host || {};
+          const city = host.city ?? row?.hostCity ?? row?.city;
+          const state = host.state ?? row?.hostState ?? row?.state;
+          const address = host.address ?? row?.hostAddress ?? row?.address;
+          return (
+            (isPensacola(city) || isPensacola(address)) &&
+            (isFlorida(state) || isFloridaLoose(address))
+          );
+        },
+      );
 
       // One card per host location: pick the soonest upcoming occurrence per host.
       const byHost = new Map<string, any>();
@@ -473,7 +499,11 @@ export function registerEventRoutes(
         }
         const existingDate = new Date(existing?.date || 0).getTime();
         const nextDate = new Date(row?.date || 0).getTime();
-        if (Number.isFinite(nextDate) && nextDate > 0 && nextDate < existingDate) {
+        if (
+          Number.isFinite(nextDate) &&
+          nextDate > 0 &&
+          nextDate < existingDate
+        ) {
           byHost.set(hostId, row);
         }
       }
@@ -490,7 +520,9 @@ export function registerEventRoutes(
           const teaserId = toTeaserId(
             String(row?.id || host?.id || JSON.stringify(row || {})),
           );
-          const city = String(host.city || row?.hostCity || row?.city || "Pensacola");
+          const city = String(
+            host.city || row?.hostCity || row?.city || "Pensacola",
+          );
           const state = normalizeUsStateAbbr(
             String(host.state || row?.hostState || row?.state || "FL"),
           );
@@ -529,7 +561,9 @@ export function registerEventRoutes(
                 row?.businessName ||
                 "Host",
             ),
-            address: String(host.address || row?.hostAddress || row?.address || ""),
+            address: String(
+              host.address || row?.hostAddress || row?.address || "",
+            ),
             city,
             state,
             latitude: roundCoord(lat, 6),
@@ -562,7 +596,8 @@ export function registerEventRoutes(
   app.get("/api/public/events/:eventId", async (req: any, res) => {
     try {
       const eventId = String(req.params.eventId || "").trim();
-      if (!eventId) return res.status(400).json({ message: "eventId required" });
+      if (!eventId)
+        return res.status(400).json({ message: "eventId required" });
 
       const [row] = await db
         .select({
@@ -608,10 +643,9 @@ export function registerEventRoutes(
           .replace(/(^-|-$)+/g, "")
           .slice(0, 80);
 
-      const baseUrl = String(process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(
-        /\/+$/,
-        "",
-      );
+      const baseUrl = String(
+        process.env.PUBLIC_BASE_URL || "https://www.mealscout.us",
+      ).replace(/\/+$/, "");
 
       const title =
         row.name ||
@@ -619,7 +653,10 @@ export function registerEventRoutes(
       const slug = `${toSlug(title) || row.id}--${row.id}`;
       const canonicalUrl = `${baseUrl}/event/${encodeURIComponent(slug)}`;
 
-      const timeZone = await resolveCityTimeZone({ city: row.hostCity, state: row.hostState });
+      const timeZone = await resolveCityTimeZone({
+        city: row.hostCity,
+        state: row.hostState,
+      });
       const dt = buildSlotDateTimes({
         timeZone,
         date: new Date(row.date as any),
@@ -628,7 +665,9 @@ export function registerEventRoutes(
       });
 
       const now = new Date();
-      const lastConfirmedAtUtc = new Date(row.lastConfirmedAt || row.updatedAt || row.date || Date.now());
+      const lastConfirmedAtUtc = new Date(
+        row.lastConfirmedAt || row.updatedAt || row.date || Date.now(),
+      );
       const slot: PublicSlot | null = dt
         ? {
             source: "parking_pass_booking",
@@ -716,39 +755,53 @@ export function registerEventRoutes(
     limit: 3,
     windowMs: 60 * 60 * 1000,
     key: (req) => {
-      const email = String((req as any).body?.email || "").trim().toLowerCase();
+      const email = String((req as any).body?.email || "")
+        .trim()
+        .toLowerCase();
       return email || String(req.ip || "unknown");
     },
   });
 
-  app.post("/api/public/pensacola/report/request", reportBurstLimiter, reportDailyLimiter, reportEmailLimiter, async (req: any, res) => {
-    try {
-      const parsed = requestReportSchema.parse(req.body);
-      const result = await handleReportRequest({
-        email: parsed.email,
-        firstName: parsed.firstName || null,
-        ip: String(req.ip || ""),
-        userAgent: String(req.get("User-Agent") || ""),
-      });
+  app.post(
+    "/api/public/pensacola/report/request",
+    reportBurstLimiter,
+    reportDailyLimiter,
+    reportEmailLimiter,
+    async (req: any, res) => {
+      try {
+        const parsed = requestReportSchema.parse(req.body);
+        const result = await handleReportRequest({
+          email: parsed.email,
+          firstName: parsed.firstName || null,
+          ip: String(req.ip || ""),
+          userAgent: String(req.get("User-Agent") || ""),
+        });
 
-      if (!result.ok && result.code === "disabled") {
-        return res.status(503).json({ ok: false, message: "Report is temporarily unavailable." });
-      }
+        if (!result.ok && result.code === "disabled") {
+          return res
+            .status(503)
+            .json({ ok: false, message: "Report is temporarily unavailable." });
+        }
 
-      return res.json({
-        ok: true,
-        leadId: (result as any).leadId,
-        emailed: (result as any).emailed ?? false,
-        downloadUrl: (result as any).downloadUrl ?? null,
-      });
-    } catch (error: any) {
-      if (error?.name === "ZodError") {
-        return res.status(400).json({ ok: false, message: "Valid email is required." });
+        return res.json({
+          ok: true,
+          leadId: (result as any).leadId,
+          emailed: (result as any).emailed ?? false,
+          downloadUrl: (result as any).downloadUrl ?? null,
+        });
+      } catch (error: any) {
+        if (error?.name === "ZodError") {
+          return res
+            .status(400)
+            .json({ ok: false, message: "Valid email is required." });
+        }
+        console.error("[pensacola-report] request failed:", error);
+        return res
+          .status(500)
+          .json({ ok: false, message: "Unable to send report right now." });
       }
-      console.error("[pensacola-report] request failed:", error);
-      return res.status(500).json({ ok: false, message: "Unable to send report right now." });
-    }
-  });
+    },
+  );
 
   // Pensacola Report download: serve PDF by token (no auth required)
   app.get("/api/public/pensacola/report/download", async (req: any, res) => {
@@ -764,7 +817,10 @@ export function registerEventRoutes(
       }
 
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", "attachment; filename=\"pensacola-food-truck-report.pdf\"");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="pensacola-food-truck-report.pdf"',
+      );
       res.setHeader("Cache-Control", "no-store");
       return res.status(200).send(result.pdf);
     } catch (error) {
@@ -775,139 +831,152 @@ export function registerEventRoutes(
 
   // Lightweight helper for map gating: which hosts have public-ready (priced) parking pass listings?
   // This endpoint intentionally avoids booking lookups/geocoding so maps can load quickly.
-  let parkingPassHostIdsCache:
-    | { expiresAt: number; payload: { generatedAt: string; hostIds: string[] } }
-    | null = null;
-  let parkingPassHostIdsLastGood:
-    | { payload: { generatedAt: string; hostIds: string[] } }
-    | null = null;
-  app.get("/api/parking-pass/host-ids", parkingPassBookabilityLimiter, async (_req: any, res) => {
-    try {
-      res.setHeader("Cache-Control", "public, max-age=60");
-      if (parkingPassHostIdsCache && parkingPassHostIdsCache.expiresAt > Date.now()) {
-        return res.json(parkingPassHostIdsCache.payload);
-      }
-
-      // Prefer the simple model: host pricing fields are the source of truth.
-      // If host pricing columns are not present (older DB) this will naturally return [] and we'll fall back below.
-      const hostPricingIds = new Set<string>();
+  let parkingPassHostIdsCache: {
+    expiresAt: number;
+    payload: { generatedAt: string; hostIds: string[] };
+  } | null = null;
+  let parkingPassHostIdsLastGood: {
+    payload: { generatedAt: string; hostIds: string[] };
+  } | null = null;
+  app.get(
+    "/api/parking-pass/host-ids",
+    parkingPassBookabilityLimiter,
+    async (_req: any, res) => {
       try {
-        const allHosts = await storage.getAllHosts();
-        for (const host of allHosts as any[]) {
-          const hostId = String(host?.id || "").trim();
-          if (!hostId) continue;
+        res.setHeader("Cache-Control", "public, max-age=60");
+        if (
+          parkingPassHostIdsCache &&
+          parkingPassHostIdsCache.expiresAt > Date.now()
+        ) {
+          return res.json(parkingPassHostIdsCache.payload);
+        }
+
+        // Prefer the simple model: host pricing fields are the source of truth.
+        // If host pricing columns are not present (older DB) this will naturally return [] and we'll fall back below.
+        const hostPricingIds = new Set<string>();
+        try {
+          const allHosts = await storage.getAllHosts();
+          for (const host of allHosts as any[]) {
+            const hostId = String(host?.id || "").trim();
+            if (!hostId) continue;
+            if (
+              !isHostProfileMapEligible({
+                businessName: host?.businessName,
+                address: host?.address,
+                city: host?.city,
+                state: host?.state,
+              })
+            ) {
+              continue;
+            }
+
+            const listing = {
+              host,
+              startTime:
+                String(host?.parkingPassStartTime || "").trim() ||
+                PARKING_PASS_MEAL_WINDOWS.breakfast.start,
+              endTime:
+                String(host?.parkingPassEndTime || "").trim() ||
+                PARKING_PASS_MEAL_WINDOWS.dinner.end,
+              maxTrucks: host?.spotCount ?? 1,
+              breakfastPriceCents: host?.parkingPassBreakfastPriceCents ?? 0,
+              lunchPriceCents: host?.parkingPassLunchPriceCents ?? 0,
+              dinnerPriceCents: host?.parkingPassDinnerPriceCents ?? 0,
+              dailyPriceCents: host?.parkingPassDailyPriceCents ?? 0,
+              weeklyPriceCents: host?.parkingPassWeeklyPriceCents ?? 0,
+              monthlyPriceCents: host?.parkingPassMonthlyPriceCents ?? 0,
+            };
+            if (!isParkingPassPublicReady(listing as any)) continue;
+            hostPricingIds.add(hostId);
+          }
+        } catch (error) {
+          console.warn(
+            "parking-pass/host-ids host-pricing fast path failed:",
+            error,
+          );
+        }
+
+        if (hostPricingIds.size > 0) {
+          const payload = {
+            generatedAt: new Date().toISOString(),
+            hostIds: Array.from(hostPricingIds),
+          };
+          parkingPassHostIdsCache = {
+            payload,
+            expiresAt: Date.now() + 60_000,
+          };
+          parkingPassHostIdsLastGood = { payload };
+          return res.json(payload);
+        }
+
+        // Bookable = host has a public-ready Parking Pass series (address + pricing + valid window/spots).
+        // Coordinates are best-effort and do not block bookability.
+        const rows = await db
+          .select({
+            host: hosts,
+            series: eventSeries,
+            isDisabled: users.isDisabled,
+          })
+          .from(eventSeries)
+          .innerJoin(hosts, eq(hosts.id, eventSeries.hostId))
+          .leftJoin(users, eq(hosts.userId, users.id))
+          .where(eq(eventSeries.seriesType, "parking_pass"));
+
+        const hostIds = new Set<string>();
+        rows.forEach((row: any) => {
+          const hostId = String(row?.host?.id || "").trim();
+          if (!hostId) return;
+          if (row?.isDisabled === true) return;
           if (
             !isHostProfileMapEligible({
-              businessName: host?.businessName,
-              address: host?.address,
-              city: host?.city,
-              state: host?.state,
+              businessName: row?.host?.businessName,
+              address: row?.host?.address,
+              city: row?.host?.city,
+              state: row?.host?.state,
             })
           ) {
-            continue;
+            return;
           }
 
-          const listing = {
-            host,
-            startTime:
-              String(host?.parkingPassStartTime || "").trim() ||
-              PARKING_PASS_MEAL_WINDOWS.breakfast.start,
-            endTime:
-              String(host?.parkingPassEndTime || "").trim() ||
-              PARKING_PASS_MEAL_WINDOWS.dinner.end,
-            maxTrucks: host?.spotCount ?? 1,
-            breakfastPriceCents: host?.parkingPassBreakfastPriceCents ?? 0,
-            lunchPriceCents: host?.parkingPassLunchPriceCents ?? 0,
-            dinnerPriceCents: host?.parkingPassDinnerPriceCents ?? 0,
-            dailyPriceCents: host?.parkingPassDailyPriceCents ?? 0,
-            weeklyPriceCents: host?.parkingPassWeeklyPriceCents ?? 0,
-            monthlyPriceCents: host?.parkingPassMonthlyPriceCents ?? 0,
-          };
-          if (!isParkingPassPublicReady(listing as any)) continue;
-          hostPricingIds.add(hostId);
-        }
-      } catch (error) {
-        console.warn("parking-pass/host-ids host-pricing fast path failed:", error);
-      }
+          const publicReady = isParkingPassPublicReady({
+            host: row.host,
+            startTime: row?.series?.defaultStartTime,
+            endTime: row?.series?.defaultEndTime,
+            maxTrucks: row?.series?.defaultMaxTrucks,
+            breakfastPriceCents: row?.series?.defaultBreakfastPriceCents,
+            lunchPriceCents: row?.series?.defaultLunchPriceCents,
+            dinnerPriceCents: row?.series?.defaultDinnerPriceCents,
+            dailyPriceCents: row?.series?.defaultDailyPriceCents,
+            weeklyPriceCents: row?.series?.defaultWeeklyPriceCents,
+            monthlyPriceCents: row?.series?.defaultMonthlyPriceCents,
+          });
+          if (!publicReady) return;
 
-      if (hostPricingIds.size > 0) {
+          hostIds.add(hostId);
+        });
+
         const payload = {
           generatedAt: new Date().toISOString(),
-          hostIds: Array.from(hostPricingIds),
+          hostIds: Array.from(hostIds),
         };
         parkingPassHostIdsCache = {
           payload,
           expiresAt: Date.now() + 60_000,
         };
         parkingPassHostIdsLastGood = { payload };
-        return res.json(payload);
-      }
-
-      // Bookable = host has a public-ready Parking Pass series (address + pricing + valid window/spots).
-      // Coordinates are best-effort and do not block bookability.
-      const rows = await db
-        .select({
-          host: hosts,
-          series: eventSeries,
-          isDisabled: users.isDisabled,
-        })
-        .from(eventSeries)
-        .innerJoin(hosts, eq(hosts.id, eventSeries.hostId))
-        .leftJoin(users, eq(hosts.userId, users.id))
-        .where(eq(eventSeries.seriesType, "parking_pass"));
-
-      const hostIds = new Set<string>();
-      rows.forEach((row: any) => {
-        const hostId = String(row?.host?.id || "").trim();
-        if (!hostId) return;
-        if (row?.isDisabled === true) return;
-        if (
-          !isHostProfileMapEligible({
-            businessName: row?.host?.businessName,
-            address: row?.host?.address,
-            city: row?.host?.city,
-            state: row?.host?.state,
-          })
-        ) {
-          return;
+        res.json(payload);
+      } catch (error: any) {
+        console.error("Error fetching parking pass host ids:", error);
+        if (parkingPassHostIdsLastGood?.payload) {
+          res.setHeader("X-MealScout-Stale", "1");
+          return res.json(parkingPassHostIdsLastGood.payload);
         }
-
-        const publicReady = isParkingPassPublicReady({
-          host: row.host,
-          startTime: row?.series?.defaultStartTime,
-          endTime: row?.series?.defaultEndTime,
-          maxTrucks: row?.series?.defaultMaxTrucks,
-          breakfastPriceCents: row?.series?.defaultBreakfastPriceCents,
-          lunchPriceCents: row?.series?.defaultLunchPriceCents,
-          dinnerPriceCents: row?.series?.defaultDinnerPriceCents,
-          dailyPriceCents: row?.series?.defaultDailyPriceCents,
-          weeklyPriceCents: row?.series?.defaultWeeklyPriceCents,
-          monthlyPriceCents: row?.series?.defaultMonthlyPriceCents,
-        });
-        if (!publicReady) return;
-
-        hostIds.add(hostId);
-      });
-
-      const payload = {
-        generatedAt: new Date().toISOString(),
-        hostIds: Array.from(hostIds),
-      };
-      parkingPassHostIdsCache = {
-        payload,
-        expiresAt: Date.now() + 60_000,
-      };
-      parkingPassHostIdsLastGood = { payload };
-      res.json(payload);
-    } catch (error: any) {
-      console.error("Error fetching parking pass host ids:", error);
-      if (parkingPassHostIdsLastGood?.payload) {
-        res.setHeader("X-MealScout-Stale", "1");
-        return res.json(parkingPassHostIdsLastGood.payload);
+        res
+          .status(200)
+          .json({ generatedAt: new Date().toISOString(), hostIds: [] });
       }
-      res.status(200).json({ generatedAt: new Date().toISOString(), hostIds: [] });
-    }
-  });
+    },
+  );
 
   let parkingPassHostStatusCacheByDate = new Map<
     string,
@@ -992,7 +1061,10 @@ export function registerEventRoutes(
       { confirmed: number; pending: number }
     >();
     for (const row of bookingCounts) {
-      const prev = countsByEvent.get(row.eventId) || { confirmed: 0, pending: 0 };
+      const prev = countsByEvent.get(row.eventId) || {
+        confirmed: 0,
+        pending: 0,
+      };
       if (row.status === "confirmed") prev.confirmed = Number(row.count || 0);
       if (row.status === "pending") prev.pending = Number(row.count || 0);
       countsByEvent.set(row.eventId, prev);
@@ -1048,35 +1120,36 @@ export function registerEventRoutes(
     "/api/parking-pass/host-status",
     parkingPassBookabilityLimiter,
     async (req: any, res) => {
-    try {
-      res.setHeader("Cache-Control", "public, max-age=60");
-      const dateKey = normalizeDateKey(req.query?.date);
-      const cached = parkingPassHostStatusCacheByDate.get(dateKey);
-      if (cached && cached.expiresAt > Date.now()) {
-        return res.json(cached.payload);
-      }
+      try {
+        res.setHeader("Cache-Control", "public, max-age=60");
+        const dateKey = normalizeDateKey(req.query?.date);
+        const cached = parkingPassHostStatusCacheByDate.get(dateKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          return res.json(cached.payload);
+        }
 
-      const payload = await buildParkingPassHostStatusPayload(dateKey);
-      parkingPassHostStatusCacheByDate.set(dateKey, {
-        payload,
-        expiresAt: Date.now() + 60_000,
-      });
-      res.json(payload);
-    } catch (error: any) {
-      console.error("Error fetching parking pass host status:", error);
-      const dateKey = normalizeDateKey(req.query?.date);
-      const stale = parkingPassHostStatusCacheByDate.get(dateKey);
-      if (stale?.payload) {
-        res.setHeader("X-MealScout-Stale", "1");
-        return res.json(stale.payload);
+        const payload = await buildParkingPassHostStatusPayload(dateKey);
+        parkingPassHostStatusCacheByDate.set(dateKey, {
+          payload,
+          expiresAt: Date.now() + 60_000,
+        });
+        res.json(payload);
+      } catch (error: any) {
+        console.error("Error fetching parking pass host status:", error);
+        const dateKey = normalizeDateKey(req.query?.date);
+        const stale = parkingPassHostStatusCacheByDate.get(dateKey);
+        if (stale?.payload) {
+          res.setHeader("X-MealScout-Stale", "1");
+          return res.json(stale.payload);
+        }
+        res.status(200).json({
+          generatedAt: new Date().toISOString(),
+          date: dateKey,
+          hosts: [],
+        });
       }
-      res.status(200).json({
-        generatedAt: new Date().toISOString(),
-        date: dateKey,
-        hosts: [],
-      });
-    }
-  });
+    },
+  );
 
   app.get(
     "/api/admin/parking-pass/host-status",
@@ -1165,7 +1238,9 @@ export function registerEventRoutes(
         const seriesRows = await storage.getParkingPassSeriesSafe();
         const hostIds = Array.from(
           new Set<string>(
-            seriesRows.map((row) => String(row.hostId || "").trim()).filter(Boolean),
+            seriesRows
+              .map((row) => String(row.hostId || "").trim())
+              .filter(Boolean),
           ),
         );
         const hostRows = await storage.getHostsByIds(hostIds);
@@ -1176,7 +1251,9 @@ export function registerEventRoutes(
         const items = seriesRows.map((series: any) => {
           const hostId = String(series.hostId || "").trim();
           const host = hostById.get(hostId) ?? null;
-          const platformPaymentsEnabled = Boolean(process.env.STRIPE_SECRET_KEY);
+          const platformPaymentsEnabled = Boolean(
+            process.env.STRIPE_SECRET_KEY,
+          );
           const listing = {
             host,
             startTime: series.defaultStartTime,
@@ -1298,7 +1375,9 @@ export function registerEventRoutes(
           if (String(series.status || "").toLowerCase() === "draft") {
             prev.draft += 1;
           }
-          const updatedAt = series.updatedAt ? new Date(series.updatedAt) : null;
+          const updatedAt = series.updatedAt
+            ? new Date(series.updatedAt)
+            : null;
           const prevUpdatedAt = prev.latestUpdatedAt
             ? new Date(prev.latestUpdatedAt)
             : null;
@@ -1342,7 +1421,10 @@ export function registerEventRoutes(
           occurrenceByHost.set(hostId, prev);
         });
 
-        const legacyByHost = new Map<string, { total: number; publicReady: number }>();
+        const legacyByHost = new Map<
+          string,
+          { total: number; publicReady: number }
+        >();
         legacyUpcoming.forEach((event: any) => {
           if (event?.eventType !== "parking_pass") return;
           const hostId = String(event?.hostId ?? event?.host?.id ?? "").trim();
@@ -1376,7 +1458,10 @@ export function registerEventRoutes(
               qualityFlags: new Set<string>(),
               nextDate: null,
             };
-            const legacy = legacyByHost.get(hostId) || { total: 0, publicReady: 0 };
+            const legacy = legacyByHost.get(hostId) || {
+              total: 0,
+              publicReady: 0,
+            };
 
             const lat = parseCoord(host?.latitude);
             const lng = parseCoord(host?.longitude);
@@ -1404,10 +1489,15 @@ export function registerEventRoutes(
             if (occurrences.publicReady === 0 && legacy.publicReady === 0) {
               reasons.push("no_public_ready_parking_pass");
             }
-            occurrences.qualityFlags.forEach((flag) => reasons.push(`quality:${flag}`));
+            occurrences.qualityFlags.forEach((flag) =>
+              reasons.push(`quality:${flag}`),
+            );
 
             const mapFeedCandidate = Boolean(
-              host && !isDisabled && hasAddress && hostQualityFlags.length === 0,
+              host &&
+              !isDisabled &&
+              hasAddress &&
+              hostQualityFlags.length === 0,
             );
             const parkingPassFeedVisible =
               occurrences.publicReady > 0 || legacy.publicReady > 0;
@@ -1448,9 +1538,11 @@ export function registerEventRoutes(
         const summary = {
           hostCount: rows.length,
           mapFeedCandidates: rows.filter((row) => row.mapFeedCandidate).length,
-          parkingPassVisible: rows.filter((row) => row.parkingPass.visibleInFeed)
+          parkingPassVisible: rows.filter(
+            (row) => row.parkingPass.visibleInFeed,
+          ).length,
+          withBlockingReasons: rows.filter((row) => row.reasons.length > 0)
             .length,
-          withBlockingReasons: rows.filter((row) => row.reasons.length > 0).length,
           generatedAt: new Date().toISOString(),
           horizonDays,
         };
@@ -1485,14 +1577,12 @@ export function registerEventRoutes(
         // Verify ownership
         const ownsRestaurant = await storage.verifyRestaurantOwnership(
           restaurantId,
-          req.user.id
+          req.user.id,
         );
         if (!ownsRestaurant) {
-          return res
-            .status(403)
-            .json({
-              message: "You can only express interest for restaurants you own",
-            });
+          return res.status(403).json({
+            message: "You can only express interest for restaurants you own",
+          });
         }
 
         // Check event expiry
@@ -1519,15 +1609,13 @@ export function registerEventRoutes(
         // Check idempotency
         const existing = await storage.getEventInterestByTruckId(
           eventId,
-          restaurantId
+          restaurantId,
         );
         if (existing) {
-          return res
-            .status(200)
-            .json({
-              message: "Interest already expressed",
-              interest: existing,
-            });
+          return res.status(200).json({
+            message: "Interest already expressed",
+            interest: existing,
+          });
         }
 
         const parsed = insertEventInterestSchema.parse({
@@ -1565,7 +1653,7 @@ export function registerEventRoutes(
                     hostUser.email,
                     host.businessName,
                     truck.name,
-                    new Date(event.date).toLocaleDateString()
+                    new Date(event.date).toLocaleDateString(),
                   );
                 }
               }
@@ -1585,7 +1673,7 @@ export function registerEventRoutes(
         }
         res.status(500).json({ message: "Failed to submit interest" });
       }
-    }
+    },
   );
 
   app.post("/api/events/signup", isAuthenticated, async (req: any, res) => {
@@ -1605,7 +1693,7 @@ export function registerEventRoutes(
       if (req.user?.userType === "customer") {
         const updatedUser = await storage.updateUserType(
           req.user.id,
-          "event_coordinator"
+          "event_coordinator",
         );
         updatedUserType = updatedUser.userType;
       }
@@ -1698,9 +1786,7 @@ export function registerEventRoutes(
           req.user.id,
         );
         if (!ownsT) {
-          return res
-            .status(403)
-            .json({ message: "You do not own that truck" });
+          return res.status(403).json({ message: "You do not own that truck" });
         }
 
         const [event] = await db
@@ -1718,12 +1804,10 @@ export function registerEventRoutes(
           });
         }
         if (!event.requiresPayment) {
-          return res
-            .status(400)
-            .json({
-              message:
-                "This event does not require payment — use the interest flow instead",
-            });
+          return res.status(400).json({
+            message:
+              "This event does not require payment — use the interest flow instead",
+          });
         }
         if (event.status !== "open") {
           return res
@@ -1731,9 +1815,7 @@ export function registerEventRoutes(
             .json({ message: "Event is not available for booking" });
         }
         if (new Date(event.date) < new Date()) {
-          return res
-            .status(400)
-            .json({ message: "Event has already passed" });
+          return res.status(400).json({ message: "Event has already passed" });
         }
 
         const hostPriceCents = event.hostPriceCents ?? 0;
@@ -1794,9 +1876,7 @@ export function registerEventRoutes(
           );
         const confirmedCount = Number(countRow?.count ?? 0);
         if (confirmedCount >= event.maxTrucks) {
-          return res
-            .status(409)
-            .json({ message: "Event is fully booked" });
+          return res.status(409).json({ message: "Event is fully booked" });
         }
 
         // Insert pending booking record first (so we have the ID for metadata)
@@ -1855,7 +1935,10 @@ export function registerEventRoutes(
         // Attach the PaymentIntent ID to the booking record
         await db
           .update(eventBookings)
-          .set({ stripePaymentIntentId: paymentIntent.id, updatedAt: new Date() })
+          .set({
+            stripePaymentIntentId: paymentIntent.id,
+            updatedAt: new Date(),
+          })
           .where(eq(eventBookings.id, booking.id));
 
         res.json({
@@ -2031,10 +2114,7 @@ export function registerEventRoutes(
           return res.status(403).json({ message: "Not authorized" });
         }
 
-        if (
-          booking.status === "cancelled" ||
-          booking.status === "refunded"
-        ) {
+        if (booking.status === "cancelled" || booking.status === "refunded") {
           return res
             .status(400)
             .json({ message: `Booking already ${booking.status}` });
@@ -2135,48 +2215,46 @@ export function registerEventRoutes(
    * GET /api/my/bookings?truckId=…
    * Returns all bookings for the authenticated truck owner.
    */
-  app.get(
-    "/api/my/bookings",
-    isRestaurantOwner,
-    async (req: any, res) => {
-      try {
-        const { truckId } = req.query;
-        if (!truckId) {
-          return res.status(400).json({ message: "truckId query param required" });
-        }
-
-        const ownsT = await storage.verifyRestaurantOwnership(
-          String(truckId),
-          req.user.id,
-        );
-        if (!ownsT) {
-          return res.status(403).json({ message: "Not authorized" });
-        }
-
-        const rows = await db
-          .select({
-            booking: eventBookings,
-            eventName: events.name,
-            eventDate: events.date,
-            eventStartTime: events.startTime,
-            eventEndTime: events.endTime,
-            hostId: events.hostId,
-            hostName: hosts.businessName,
-            hostAddress: hosts.address,
-            hostCity: hosts.city,
-            hostState: hosts.state,
-          })
-          .from(eventBookings)
-          .leftJoin(events, eq(eventBookings.eventId, events.id))
-          .leftJoin(hosts, eq(eventBookings.hostId, hosts.id))
-          .where(eq(eventBookings.truckId, String(truckId)))
-          .orderBy(desc(eventBookings.createdAt));
-
-        res.json({ bookings: rows });
-      } catch (error: any) {
-        console.error("Error fetching truck bookings:", error);
-        res.status(500).json({ message: "Failed to fetch bookings" });
+  app.get("/api/my/bookings", isRestaurantOwner, async (req: any, res) => {
+    try {
+      const { truckId } = req.query;
+      if (!truckId) {
+        return res
+          .status(400)
+          .json({ message: "truckId query param required" });
       }
-    },
-  );
+
+      const ownsT = await storage.verifyRestaurantOwnership(
+        String(truckId),
+        req.user.id,
+      );
+      if (!ownsT) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+
+      const rows = await db
+        .select({
+          booking: eventBookings,
+          eventName: events.name,
+          eventDate: events.date,
+          eventStartTime: events.startTime,
+          eventEndTime: events.endTime,
+          hostId: events.hostId,
+          hostName: hosts.businessName,
+          hostAddress: hosts.address,
+          hostCity: hosts.city,
+          hostState: hosts.state,
+        })
+        .from(eventBookings)
+        .leftJoin(events, eq(eventBookings.eventId, events.id))
+        .leftJoin(hosts, eq(eventBookings.hostId, hosts.id))
+        .where(eq(eventBookings.truckId, String(truckId)))
+        .orderBy(desc(eventBookings.createdAt));
+
+      res.json({ bookings: rows });
+    } catch (error: any) {
+      console.error("Error fetching truck bookings:", error);
+      res.status(500).json({ message: "Failed to fetch bookings" });
+    }
+  });
 }

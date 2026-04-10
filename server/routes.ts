@@ -5,9 +5,7 @@ import {
   getParkingPassPricingAudit,
   repairParkingPassPricingDrift,
 } from "./parkingPassReminder";
-import {
-  getLocationDemandFunnelKpis,
-} from "./services/locationDemandActivation";
+import { getLocationDemandFunnelKpis } from "./services/locationDemandActivation";
 import Stripe from "stripe";
 import { storage } from "./storage";
 import {
@@ -898,5 +896,3 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
-
-

@@ -55,7 +55,9 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const deals = await storage.getDealsByRestaurant(req.params.restaurantId);
+        const deals = await storage.getDealsByRestaurant(
+          req.params.restaurantId,
+        );
         const stats = {
           totalDeals: deals.length,
           activeDeals: deals.filter((deal) => deal.isActive).length,
@@ -69,8 +71,9 @@ export function registerRestaurantOperationsRoutes(
           ),
           conversionRate: 0,
           averageRating:
-            (await storage.getRestaurantAverageRating(req.params.restaurantId)) ||
-            0,
+            (await storage.getRestaurantAverageRating(
+              req.params.restaurantId,
+            )) || 0,
         };
 
         if (stats.totalViews > 0) {
@@ -175,7 +178,9 @@ export function registerRestaurantOperationsRoutes(
         console.error("Error updating restaurant location:", error);
         res.status(400).json({
           message:
-            error instanceof Error ? error.message : "Failed to update location",
+            error instanceof Error
+              ? error.message
+              : "Failed to update location",
         });
       }
     },
@@ -417,7 +422,9 @@ export function registerRestaurantOperationsRoutes(
         console.error("Error updating location:", error);
         res.status(400).json({
           message:
-            error instanceof Error ? error.message : "Failed to update location",
+            error instanceof Error
+              ? error.message
+              : "Failed to update location",
         });
       }
     },
@@ -451,7 +458,11 @@ export function registerRestaurantOperationsRoutes(
         return res.status(400).json({ message: "Invalid coordinates range" });
       }
 
-      const trucks = await storage.getLiveTrucksNearby(latitude, longitude, radius);
+      const trucks = await storage.getLiveTrucksNearby(
+        latitude,
+        longitude,
+        radius,
+      );
       const visibleTrucks = (
         await Promise.all(
           trucks.map(async (truck: any) => {

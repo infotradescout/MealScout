@@ -585,7 +585,8 @@ function TruckDiscovery() {
           }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.message || "Failed to submit interest");
+        if (!res.ok)
+          throw new Error(data.message || "Failed to submit interest");
         setInterestedEvents((prev) => new Set(prev).add(eventId));
         toast({
           title: "Interest Sent!",
@@ -652,7 +653,14 @@ function TruckDiscovery() {
           <div className="mt-4 flex items-start gap-2 text-sm text-[color:var(--text-secondary)] bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] rounded-lg px-4 py-3">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-[color:var(--accent-text)]" />
             <span>
-              Event participation is a premium feature. <button className="text-[color:var(--accent-text)] hover:underline font-medium" onClick={() => setLocation("/subscription")}>Upgrade your plan</button> to send interest to organizers.
+              Event participation is a premium feature.{" "}
+              <button
+                className="text-[color:var(--accent-text)] hover:underline font-medium"
+                onClick={() => setLocation("/subscription")}
+              >
+                Upgrade your plan
+              </button>{" "}
+              to send interest to organizers.
             </span>
           </div>
         )}

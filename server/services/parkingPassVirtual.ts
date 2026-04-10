@@ -9,7 +9,10 @@ import {
   type EventSeries,
   hosts,
 } from "@shared/schema";
-import { PARKING_PASS_MEAL_WINDOWS, timeToMinutes } from "@shared/parkingPassSlots";
+import {
+  PARKING_PASS_MEAL_WINDOWS,
+  timeToMinutes,
+} from "@shared/parkingPassSlots";
 import {
   addDaysToDateKey,
   dateKeyInZone,
@@ -58,7 +61,9 @@ const firstDefined = <T>(...values: Array<T | null | undefined>) => {
   return null;
 };
 
-const firstFiniteNumber = (...values: Array<number | string | null | undefined>) => {
+const firstFiniteNumber = (
+  ...values: Array<number | string | null | undefined>
+) => {
   for (const value of values) {
     if (value === null || value === undefined) continue;
     const parsed = typeof value === "string" ? Number(value) : value;
@@ -119,11 +124,18 @@ export async function listParkingPassOccurrences(options?: {
   } catch (error) {
     // Production DB schema drift has historically caused Drizzle "select all columns" queries to throw.
     // Fall back to the schema-tolerant storage projection so public feeds degrade gracefully.
-    console.warn("listParkingPassOccurrences: falling back to safe event_series projection:", error);
+    console.warn(
+      "listParkingPassOccurrences: falling back to safe event_series projection:",
+      error,
+    );
     const raw = await storage.getParkingPassSeriesSafe();
-    const allowStatuses = includeDraft ? new Set(["published", "draft"]) : new Set(["published"]);
+    const allowStatuses = includeDraft
+      ? new Set(["published", "draft"])
+      : new Set(["published"]);
     const allowHostIds = options?.hostIds?.length
-      ? new Set(options.hostIds.map((id) => String(id || "").trim()).filter(Boolean))
+      ? new Set(
+          options.hostIds.map((id) => String(id || "").trim()).filter(Boolean),
+        )
       : null;
 
     const safeRows = raw.filter((row) => {
@@ -149,7 +161,8 @@ export async function listParkingPassOccurrences(options?: {
         endDate: end as any,
         defaultStartTime:
           row.defaultStartTime ?? PARKING_PASS_MEAL_WINDOWS.breakfast.start,
-        defaultEndTime: row.defaultEndTime ?? PARKING_PASS_MEAL_WINDOWS.dinner.end,
+        defaultEndTime:
+          row.defaultEndTime ?? PARKING_PASS_MEAL_WINDOWS.dinner.end,
         defaultMaxTrucks: row.defaultMaxTrucks ?? 1,
         defaultHardCapEnabled: row.defaultHardCapEnabled ?? false,
         seriesType: "parking_pass",
@@ -162,7 +175,9 @@ export async function listParkingPassOccurrences(options?: {
         defaultMonthlyPriceCents: row.defaultMonthlyPriceCents ?? 0,
         defaultHostPriceCents: row.defaultHostPriceCents ?? 0,
         status: row.status ?? (includeDraft ? "draft" : "published"),
-        publishedAt: row.publishedAt ? (new Date(row.publishedAt) as any) : null,
+        publishedAt: row.publishedAt
+          ? (new Date(row.publishedAt) as any)
+          : null,
         createdAt: null as any,
         updatedAt: row.updatedAt ? (new Date(row.updatedAt) as any) : null,
       } as any,
@@ -181,7 +196,9 @@ export async function listParkingPassOccurrences(options?: {
     ),
   );
   const hostRows = await storage.getHostsByIds(seriesHostIds);
-  const hostById = new Map<string, any>((hostRows || []).map((host: any) => [host.id, host]));
+  const hostById = new Map<string, any>(
+    (hostRows || []).map((host: any) => [host.id, host]),
+  );
   const stubHost = (id: string) =>
     ({
       id,
@@ -241,7 +258,10 @@ export async function listParkingPassOccurrences(options?: {
   }
 
   const blackoutRows: Array<{ seriesId: string; date: Date }> = await db
-    .select({ seriesId: parkingPassBlackoutDates.seriesId, date: parkingPassBlackoutDates.date })
+    .select({
+      seriesId: parkingPassBlackoutDates.seriesId,
+      date: parkingPassBlackoutDates.date,
+    })
     .from(parkingPassBlackoutDates)
     .where(
       and(
@@ -266,7 +286,9 @@ export async function listParkingPassOccurrences(options?: {
     const hostId = String(series.hostId || "").trim();
     const host = hostById.get(hostId) ?? stubHost(hostId);
 
-    const daysOfWeek = normalizeDaysOfWeek(series.parkingPassDaysOfWeek as unknown);
+    const daysOfWeek = normalizeDaysOfWeek(
+      series.parkingPassDaysOfWeek as unknown,
+    );
     const includeAllDays = daysOfWeek.length === 0;
     const window = ensureValidWindow(
       firstDefined(series.defaultStartTime, host.parkingPassStartTime) ??
@@ -296,8 +318,13 @@ export async function listParkingPassOccurrences(options?: {
       const effectiveDate = override?.date ?? utcDateFromDateKey(dateKey);
 
       const maxTrucks =
-        firstFiniteNumber(override?.maxTrucks, series.defaultMaxTrucks, host.spotCount) ?? 1;
-      const hardCapEnabled = override?.hardCapEnabled ?? series.defaultHardCapEnabled ?? false;
+        firstFiniteNumber(
+          override?.maxTrucks,
+          series.defaultMaxTrucks,
+          host.spotCount,
+        ) ?? 1;
+      const hardCapEnabled =
+        override?.hardCapEnabled ?? series.defaultHardCapEnabled ?? false;
       const status = override?.status ?? "open";
 
       const breakfastPriceCents =
@@ -337,8 +364,11 @@ export async function listParkingPassOccurrences(options?: {
           host.parkingPassMonthlyPriceCents,
         ) ?? 0;
       const hostPriceCents =
-        firstFiniteNumber(override?.hostPriceCents, series.defaultHostPriceCents, dailyPriceCents) ??
-        0;
+        firstFiniteNumber(
+          override?.hostPriceCents,
+          series.defaultHostPriceCents,
+          dailyPriceCents,
+        ) ?? 0;
 
       occurrences.push({
         id,
@@ -372,7 +402,8 @@ export async function listParkingPassOccurrences(options?: {
           null,
         stripeProductId: override?.stripeProductId ?? null,
         stripePriceId: override?.stripePriceId ?? null,
-        unbookedNotificationSentAt: override?.unbookedNotificationSentAt ?? null,
+        unbookedNotificationSentAt:
+          override?.unbookedNotificationSentAt ?? null,
         createdAt: override?.createdAt ?? null,
         updatedAt: override?.updatedAt ?? null,
         host,
@@ -380,7 +411,9 @@ export async function listParkingPassOccurrences(options?: {
     }
   }
 
-  occurrences.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  occurrences.sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
   return { occurrences, start, end };
 }
 
@@ -440,16 +473,25 @@ export async function ensureParkingPassEventRow(args: {
   }
 
   // Day-of-week check
-  const days = normalizeDaysOfWeek(seriesRow.series.parkingPassDaysOfWeek as unknown);
-  if (days.length > 0 && !days.includes(weekdayInZoneForDateKey(dateKey, seriesTimeZone))) {
+  const days = normalizeDaysOfWeek(
+    seriesRow.series.parkingPassDaysOfWeek as unknown,
+  );
+  if (
+    days.length > 0 &&
+    !days.includes(weekdayInZoneForDateKey(dateKey, seriesTimeZone))
+  ) {
     return null;
   }
 
   const window = ensureValidWindow(
-    firstDefined(seriesRow.series.defaultStartTime, seriesRow.host.parkingPassStartTime) ??
-      PARKING_PASS_MEAL_WINDOWS.breakfast.start,
-    firstDefined(seriesRow.series.defaultEndTime, seriesRow.host.parkingPassEndTime) ??
-      PARKING_PASS_MEAL_WINDOWS.dinner.end,
+    firstDefined(
+      seriesRow.series.defaultStartTime,
+      seriesRow.host.parkingPassStartTime,
+    ) ?? PARKING_PASS_MEAL_WINDOWS.breakfast.start,
+    firstDefined(
+      seriesRow.series.defaultEndTime,
+      seriesRow.host.parkingPassEndTime,
+    ) ?? PARKING_PASS_MEAL_WINDOWS.dinner.end,
   );
 
   // Upsert-like behavior: if already exists, return it.
@@ -473,7 +515,10 @@ export async function ensureParkingPassEventRow(args: {
     startTime: window.startTime,
     endTime: window.endTime,
     maxTrucks:
-      firstFiniteNumber(seriesRow.series.defaultMaxTrucks, seriesRow.host.spotCount) ?? 1,
+      firstFiniteNumber(
+        seriesRow.series.defaultMaxTrucks,
+        seriesRow.host.spotCount,
+      ) ?? 1,
     status: "open",
     bookedRestaurantId: null,
     hardCapEnabled: seriesRow.series.defaultHardCapEnabled ?? false,
