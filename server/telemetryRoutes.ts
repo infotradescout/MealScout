@@ -32,6 +32,13 @@ const UX_RECOVERY_EVENT_NAMES = [
   "map_cluster_zoom_in_clicked",
 ] as const;
 
+const PREMIUM_OPS_EVENT_NAMES = [
+  "premium_summary_viewed",
+  "premium_summary_emailed",
+  "premium_live_location_used",
+  "premium_manual_schedule_used",
+] as const;
+
 /**
  * GET /api/admin/telemetry/velocity
  * Interest creation velocity (last 7/30/90 days)
@@ -55,6 +62,123 @@ router.get("/velocity", isAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error fetching telemetry velocity:", error);
     res.status(500).json({ error: "Failed to fetch velocity data" });
+  }
+});
+
+/**
+ * GET /api/admin/telemetry/premium-ops
+ * Premium operator adoption metrics for weekly summary and usage events
+ */
+router.get("/premium-ops", isAdmin, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const startDate = getRange(days);
+
+    const [totalsRows, dailyRows] = await Promise.all([
+      db
+        .select({
+          eventName: telemetryEvents.eventName,
+          count: sql<number>`count(*)`,
+          uniqueUsers: sql<number>`count(distinct user_id)`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            inArray(telemetryEvents.eventName, [...PREMIUM_OPS_EVENT_NAMES]),
+          ),
+        )
+        .groupBy(telemetryEvents.eventName),
+      db
+        .select({
+          date: sql<string>`DATE(${telemetryEvents.createdAt})`,
+          eventName: telemetryEvents.eventName,
+          count: sql<number>`count(*)`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            inArray(telemetryEvents.eventName, [...PREMIUM_OPS_EVENT_NAMES]),
+          ),
+        )
+        .groupBy(sql`DATE(${telemetryEvents.createdAt})`, telemetryEvents.eventName)
+        .orderBy(sql`DATE(${telemetryEvents.createdAt})`),
+    ]);
+
+    const totalsByEvent = Object.fromEntries(
+      totalsRows.map((row) => [
+        row.eventName,
+        {
+          count: Number(row.count || 0),
+          uniqueUsers: Number(row.uniqueUsers || 0),
+        },
+      ]),
+    );
+
+    const byDate = new Map<
+      string,
+      {
+        date: string;
+        premium_summary_viewed: number;
+        premium_summary_emailed: number;
+        premium_live_location_used: number;
+        premium_manual_schedule_used: number;
+      }
+    >();
+
+    for (const row of dailyRows) {
+      const date = String(row.date);
+      const existing =
+        byDate.get(date) || {
+          date,
+          premium_summary_viewed: 0,
+          premium_summary_emailed: 0,
+          premium_live_location_used: 0,
+          premium_manual_schedule_used: 0,
+        };
+
+      const count = Number(row.count || 0);
+      if (row.eventName === "premium_summary_viewed") {
+        existing.premium_summary_viewed = count;
+      } else if (row.eventName === "premium_summary_emailed") {
+        existing.premium_summary_emailed = count;
+      } else if (row.eventName === "premium_live_location_used") {
+        existing.premium_live_location_used = count;
+      } else if (row.eventName === "premium_manual_schedule_used") {
+        existing.premium_manual_schedule_used = count;
+      }
+
+      byDate.set(date, existing);
+    }
+
+    const history = Array.from(byDate.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    res.json({
+      days,
+      totals: {
+        summaryViewed: totalsByEvent.premium_summary_viewed?.count || 0,
+        summaryViewedUniqueUsers:
+          totalsByEvent.premium_summary_viewed?.uniqueUsers || 0,
+        summaryEmailed: totalsByEvent.premium_summary_emailed?.count || 0,
+        summaryEmailedUniqueUsers:
+          totalsByEvent.premium_summary_emailed?.uniqueUsers || 0,
+        liveLocationUsed:
+          totalsByEvent.premium_live_location_used?.count || 0,
+        liveLocationUsedUniqueUsers:
+          totalsByEvent.premium_live_location_used?.uniqueUsers || 0,
+        manualScheduleUsed:
+          totalsByEvent.premium_manual_schedule_used?.count || 0,
+        manualScheduleUsedUniqueUsers:
+          totalsByEvent.premium_manual_schedule_used?.uniqueUsers || 0,
+      },
+      history,
+    });
+  } catch (error) {
+    console.error("Error fetching premium ops telemetry:", error);
+    res.status(500).json({ error: "Failed to fetch premium ops telemetry" });
   }
 });
 

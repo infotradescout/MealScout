@@ -57,7 +57,17 @@ export default function AdminTelemetry() {
     }
   });
 
-  if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries) {
+  // 6. Premium ops telemetry
+  const { data: premiumOps, isLoading: loadingPremiumOps } = useQuery({
+    queryKey: ['/api/admin/telemetry/premium-ops'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/telemetry/premium-ops?days=30');
+      if (!res.ok) throw new Error('Failed to fetch premium ops telemetry');
+      return res.json();
+    }
+  });
+
+  if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries || loadingPremiumOps) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -105,6 +115,53 @@ export default function AdminTelemetry() {
               {coverage?.history?.[0]?.coverage || 0}%
             </div>
             <p className="text-xs text-muted-foreground">Last week's eligible hosts reached</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Weekly Summary Views (30d)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{premiumOps?.totals?.summaryViewed || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {premiumOps?.totals?.summaryViewedUniqueUsers || 0} unique operators
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Summary Emails (30d)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{premiumOps?.totals?.summaryEmailed || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {premiumOps?.totals?.summaryEmailedUniqueUsers || 0} unique operators
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Live Location Uses (30d)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{premiumOps?.totals?.liveLocationUsed || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {premiumOps?.totals?.liveLocationUsedUniqueUsers || 0} unique operators
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Manual Schedules (30d)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{premiumOps?.totals?.manualScheduleUsed || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {premiumOps?.totals?.manualScheduleUsedUniqueUsers || 0} unique operators
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -225,6 +282,29 @@ export default function AdminTelemetry() {
               <Bar yAxisId="left" dataKey="sent" name="Sent Emails" fill="#8884d8" radius={[4, 4, 0, 0]} />
               <Line yAxisId="right" type="monotone" dataKey="coverage" name="Coverage %" stroke="#82ca9d" />
             </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Premium Ops Adoption Trend (Last 30 Days)</CardTitle>
+          <CardDescription>
+            Daily usage of weekly summary, live location, and manual scheduling
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="h-[320px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={premiumOps?.history || []}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" fontSize={12} />
+              <YAxis fontSize={12} />
+              <Tooltip />
+              <Line type="monotone" dataKey="premium_summary_viewed" name="Summary Views" stroke="#2563eb" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="premium_summary_emailed" name="Summary Emails" stroke="#7c3aed" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="premium_live_location_used" name="Live Location" stroke="#16a34a" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="premium_manual_schedule_used" name="Manual Schedule" stroke="#ea580c" strokeWidth={2} dot={false} />
+            </LineChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
