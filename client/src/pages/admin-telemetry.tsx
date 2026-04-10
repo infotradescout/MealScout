@@ -67,6 +67,76 @@ export default function AdminTelemetry() {
     }
   });
 
+  const premiumTotals = premiumOps?.totals || {};
+  const summaryViewed = Number(premiumTotals.summaryViewed || 0);
+  const summaryEmailed = Number(premiumTotals.summaryEmailed || 0);
+  const summaryViewedUniqueUsers = Number(
+    premiumTotals.summaryViewedUniqueUsers || 0,
+  );
+  const summaryEmailedUniqueUsers = Number(
+    premiumTotals.summaryEmailedUniqueUsers || 0,
+  );
+  const liveLocationUsedUniqueUsers = Number(
+    premiumTotals.liveLocationUsedUniqueUsers || 0,
+  );
+  const manualScheduleUsedUniqueUsers = Number(
+    premiumTotals.manualScheduleUsedUniqueUsers || 0,
+  );
+
+  const toPercent = (numerator: number, denominator: number) => {
+    if (!denominator || denominator <= 0) return 0;
+    return (numerator / denominator) * 100;
+  };
+
+  const summaryEmailActionRate = toPercent(summaryEmailed, summaryViewed);
+  const summaryEmailUserRate = toPercent(
+    summaryEmailedUniqueUsers,
+    summaryViewedUniqueUsers,
+  );
+  const liveActivationUserRate = toPercent(
+    liveLocationUsedUniqueUsers,
+    summaryViewedUniqueUsers,
+  );
+  const manualScheduleUserRate = toPercent(
+    manualScheduleUsedUniqueUsers,
+    summaryViewedUniqueUsers,
+  );
+
+  const recommendation = (() => {
+    if (summaryViewedUniqueUsers < 5) {
+      return {
+        title: "Increase weekly summary exposure",
+        body: "Too few operators are seeing the summary card. Surface it in one more high-traffic owner screen before optimizing downstream actions.",
+      };
+    }
+
+    if (summaryEmailUserRate < 25) {
+      return {
+        title: "Target summary-viewed but not emailed",
+        body: "Email adoption is low after view. Prioritize a stronger CTA and remind users that emailed summaries help weekly ops reviews.",
+      };
+    }
+
+    if (liveActivationUserRate < 35) {
+      return {
+        title: "Target summary users not using go-live",
+        body: "Live-location activation lags summary usage. Add a direct link from summary to one-click live location for the next test cycle.",
+      };
+    }
+
+    if (manualScheduleUserRate < 35) {
+      return {
+        title: "Target summary users not scheduling manually",
+        body: "Manual scheduling usage is lagging. Drive users from summary into off-platform schedule creation with a prefilled action link.",
+      };
+    }
+
+    return {
+      title: "Scale retention nudges",
+      body: "Adoption rates are healthy. Move to retention by sending inactivity nudges to premium users with no live or schedule actions in 7 days.",
+    };
+  })();
+
   if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries || loadingPremiumOps) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -306,6 +376,58 @@ export default function AdminTelemetry() {
               <Line type="monotone" dataKey="premium_manual_schedule_used" name="Manual Schedule" stroke="#ea580c" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Summary to Email (Events)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summaryEmailActionRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">Email actions / summary views</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Summary to Email (Users)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summaryEmailUserRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">Users who viewed and emailed</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Live Activation Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{liveActivationUserRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">Live-location users / summary users</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Manual Schedule Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{manualScheduleUserRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">Schedule users / summary users</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Premium Ops Next Target</CardTitle>
+          <CardDescription>
+            Recommendation generated from the current 30-day adoption profile
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-base font-semibold">{recommendation.title}</div>
+          <p className="text-sm text-muted-foreground mt-2">{recommendation.body}</p>
         </CardContent>
       </Card>
 
