@@ -29,15 +29,6 @@ class EmailDeliveryAudit {
   private attempts: EmailAttempt[] = [];
   private maxItems = 200;
 
-
-interface PremiumWeeklySummaryEmailData {
-  weekStart: string;
-  weekEnd: string;
-  stopsCovered: number;
-  liveLocationActivations: number;
-  manualScheduleUsage: number;
-  parkingReportsCompleted: number;
-}
   add(attempt: EmailAttempt) {
     this.attempts.unshift(attempt);
     if (this.attempts.length > this.maxItems) {
@@ -142,6 +133,15 @@ interface BookingConfirmationParams {
   endDate: string;
   slotSummary?: string;
   totalCents: number;
+}
+
+interface PremiumWeeklySummaryEmailData {
+  weekStart: string;
+  weekEnd: string;
+  stopsCovered: number;
+  liveLocationActivations: number;
+  manualScheduleUsage: number;
+  parkingReportsCompleted: number;
 }
 
 // Email templates
