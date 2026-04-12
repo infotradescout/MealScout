@@ -3,6 +3,9 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { isAuthenticated, verifyResourceOwnership } from "../unifiedAuth";
 import { insertDealSchema, insertDealViewSchema } from "@shared/schema";
+import {
+  hasBusinessPermissionForRestaurant,
+} from "../services/businessTeamAccess";
 
 type SubscriptionValidationResult = {
   isValid: boolean;
@@ -247,7 +250,14 @@ export function registerDealManagementRoutes(
 
       const dealData = insertDealSchema.parse(normalized);
       const restaurant = await storage.getRestaurant(dealData.restaurantId);
-      if (!restaurant || restaurant.ownerId !== userId) {
+      const canManageDeals = restaurant
+        ? await hasBusinessPermissionForRestaurant(
+            userId,
+            dealData.restaurantId,
+            "manageDeals",
+          )
+        : false;
+      if (!restaurant || !canManageDeals) {
         console.warn(
           "🚫 Deal creation rejected - unauthorized restaurant ownership",
           {
@@ -259,7 +269,8 @@ export function registerDealManagementRoutes(
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      const subscriptionValidation = await validateSubscriptionLimits(userId);
+      const billingUserId = restaurant.ownerId;
+      const subscriptionValidation = await validateSubscriptionLimits(billingUserId);
       console.log("📊 Subscription validation", subscriptionValidation);
       if (!subscriptionValidation.isValid) {
         return res.status(402).json({

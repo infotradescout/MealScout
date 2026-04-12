@@ -128,6 +128,7 @@ import {
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "./brevoCrm";
 import { ensureAffiliateTag } from "./affiliateTagService";
+import { getBusinessAccessContext } from "./services/businessTeamAccess";
 import { forwardGeocode } from "./utils/geocoding";
 import { isParkingPassPublicReady } from "./services/parkingPassQuality";
 import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
@@ -295,6 +296,11 @@ export interface IStorage {
   verifyRestaurantOwnership(
     restaurantId: string,
     userId: string,
+    requiredPermission?:
+      | "manageDeals"
+      | "manageParkingPass"
+      | "viewAnalytics"
+      | "manageProfile",
   ): Promise<boolean>;
   createTruckManualSchedule(
     schedule: InsertTruckManualSchedule,
@@ -3021,6 +3027,11 @@ export class DatabaseStorage implements IStorage {
   async verifyRestaurantOwnership(
     restaurantId: string,
     userId: string,
+    requiredPermission?:
+      | "manageDeals"
+      | "manageParkingPass"
+      | "viewAnalytics"
+      | "manageProfile",
   ): Promise<boolean> {
     const [restaurant] = await db
       .select({ ownerId: restaurants.ownerId })
@@ -3028,7 +3039,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(restaurants.id, restaurantId))
       .limit(1);
 
-    return restaurant?.ownerId === userId;
+    if (restaurant?.ownerId === userId) {
+      return true;
+    }
+    if (!requiredPermission) {
+      return false;
+    }
+    const context = await getBusinessAccessContext(userId);
+    const match = context.restaurants.find((row) => row.id === restaurantId);
+    return Boolean(match?.permissions?.[requiredPermission]);
   }
 
   async createTruckManualSchedule(

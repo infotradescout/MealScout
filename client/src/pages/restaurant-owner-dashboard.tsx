@@ -172,15 +172,46 @@ export default function RestaurantOwnerDashboard() {
   const isAdmin =
     user?.userType === "admin" || user?.userType === "super_admin";
   const isStaff = user?.userType === "staff";
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: {
+      manageDeals: boolean;
+      manageParkingPass: boolean;
+      viewAnalytics: boolean;
+      manageProfile: boolean;
+    };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (!user) return;
 
     // Restaurant owners and food trucks share this dashboard, plus staff/admin access.
-    if (!isRestaurantOwner && !isFoodTruck && !isHost && !isAdmin && !isStaff) {
+    const hasTeamAccess = Boolean(businessAccess?.hasAnyAccess);
+    if (
+      !isRestaurantOwner &&
+      !isFoodTruck &&
+      !isHost &&
+      !isAdmin &&
+      !isStaff &&
+      !hasTeamAccess
+    ) {
       setLocation("/");
     }
-  }, [user, isRestaurantOwner, isFoodTruck, isHost, isAdmin, isStaff, setLocation]);
+  }, [
+    user,
+    isRestaurantOwner,
+    isFoodTruck,
+    isHost,
+    isAdmin,
+    isStaff,
+    businessAccess?.hasAnyAccess,
+    setLocation,
+  ]);
 
   // Location update state
   const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);

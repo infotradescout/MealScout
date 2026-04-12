@@ -69,6 +69,7 @@ export function registerBookingRoutes(
         const isOwner = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         const isAdmin = ["admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
@@ -160,6 +161,7 @@ export function registerBookingRoutes(
         const isOwner = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         const isAdmin = ["admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
@@ -565,6 +567,7 @@ export function registerBookingRoutes(
         includePrivate = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
       }
 
@@ -600,6 +603,7 @@ export function registerBookingRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -682,6 +686,7 @@ export function registerBookingRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -709,6 +714,7 @@ export function registerBookingRoutes(
         const isOwner = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         const isAdmin = ["admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
@@ -752,6 +758,7 @@ export function registerBookingRoutes(
         const isOwner = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         const isAdmin = ["admin", "super_admin", "staff"].includes(
           req.user?.userType || "",
@@ -862,6 +869,7 @@ export function registerBookingRoutes(
         const isOwner = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         includePending = isAdmin || (isOwner && ownerHasPremiumAccess);
       }

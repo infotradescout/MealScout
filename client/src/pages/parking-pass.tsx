@@ -504,6 +504,15 @@ export default function ParkingPassPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: { manageParkingPass: boolean };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
     user?.userType || "",
   );
@@ -3090,6 +3099,7 @@ export default function ParkingPassPage() {
     isAuthenticated &&
     user &&
     !["food_truck", "admin", "super_admin", "staff"].includes(user.userType) &&
+    businessAccess?.permissions?.manageParkingPass !== true &&
     !hasHostProfile &&
     !isLoading
   ) {

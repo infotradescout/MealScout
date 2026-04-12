@@ -328,6 +328,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       labelKey: "nav.subscription",
       fallbackLabel: "Subscription",
     },
+    {
+      path: "/business-team",
+      icon: Users,
+      fallbackLabel: "Team",
+    },
     { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
   ];
 
@@ -436,6 +441,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     [
       { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
       { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
+      { path: "/business-team", icon: Users, fallbackLabel: "Team" },
       ...(canSeeParkingPassNav
         ? ([
             {

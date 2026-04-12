@@ -19,6 +19,7 @@ import {
   updateRestaurantMobileSettingsSchema,
   updateRestaurantOperatingHoursSchema,
 } from "@shared/schema";
+import { getBusinessAccessContext } from "../services/businessTeamAccess";
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -143,10 +144,31 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const restaurantsByOwner = await storage.getRestaurantsByOwner(
-          req.user.id,
-        );
-        res.json(restaurantsByOwner);
+        const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
+        const context = await getBusinessAccessContext(req.user.id);
+
+        const ownedIds = new Set(restaurantsByOwner.map((r: any) => r.id));
+        const collaboratorRestaurantIds = context.restaurants
+          .filter((r) => !r.isOwner)
+          .map((r) => r.id);
+
+        if (!collaboratorRestaurantIds.length) {
+          return res.json(restaurantsByOwner);
+        }
+
+        const collaboratorRestaurants = await db
+          .select()
+          .from(restaurants)
+          .where(inArray(restaurants.id, collaboratorRestaurantIds));
+
+        const merged = [...restaurantsByOwner];
+        for (const restaurant of collaboratorRestaurants) {
+          if (!ownedIds.has(restaurant.id)) {
+            merged.push(restaurant);
+          }
+        }
+
+        res.json(merged);
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });

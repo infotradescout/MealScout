@@ -124,6 +124,10 @@ const PublicProfilePage = lazy(() => import("@/pages/public-profile"));
 const PensacolaSpots = lazy(() => import("@/pages/pensacola-spots"));
 const PensacolaReport = lazy(() => import("@/pages/pensacola-report"));
 const ShareHubPage = lazy(() => import("@/pages/share-hub-page"));
+const BusinessTeamPage = lazy(() => import("@/pages/business-team"));
+const BusinessTeamAcceptPage = lazy(
+  () => import("@/pages/business-team-accept"),
+);
 
 // Loading fallback component
 const PageLoader = () => (
@@ -176,6 +180,7 @@ const publicRoutePrefixes = [
   "/change-password",
   "/account-setup",
   "/admin",
+  "/business-team/accept",
 ];
 
 const isPublicPath = (path: string) =>
@@ -324,6 +329,7 @@ function Router() {
             <Route path="/pensacola/report" component={PensacolaReport} />
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/share-hub" component={ShareHubPage} />
+            <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
@@ -473,6 +479,8 @@ function Router() {
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/share-hub" component={ShareHubPage} />
+            <Route path="/business-team" component={BusinessTeamPage} />
+            <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
           </>
         )}
         <Route component={NotFound} />

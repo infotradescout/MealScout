@@ -7,6 +7,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express } from "express";
 import { storage } from "./storage";
+import { hasBusinessPermissionForRestaurant } from "./services/businessTeamAccess";
 import { emailService } from "./emailService";
 import { sendSms } from "./smsService";
 import type {
@@ -2074,11 +2075,18 @@ export const verifyResourceOwnership = (
         }
 
         // Allow if user is restaurant owner or admin
-        if (
-          restaurant.ownerId !== req.user.id &&
-          req.user.userType !== "admin" &&
-          req.user.userType !== "super_admin"
-        ) {
+        const isAdmin =
+          req.user.userType === "admin" || req.user.userType === "super_admin";
+        const canManageDeals =
+          restaurant.ownerId === req.user.id
+            ? true
+            : await hasBusinessPermissionForRestaurant(
+                req.user.id,
+                restaurant.id,
+                "manageDeals",
+              );
+
+        if (!canManageDeals && !isAdmin) {
           return res.status(403).json({ error: "You do not own this deal" });
         }
       }

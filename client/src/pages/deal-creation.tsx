@@ -170,6 +170,15 @@ export default function DealCreation() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: { manageDeals: boolean };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: isAuthenticated,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   console.log("Deal Creation - Subscription Data:", subscription);
   console.log(
@@ -551,6 +560,7 @@ export default function DealCreation() {
       user.userType === "staff");
   const hasAccess =
     isAdminOrStaff ||
+    businessAccess?.permissions?.manageDeals === true ||
     (subscription &&
       ((subscription as any).status === "active" ||
         (subscription as any).hasAccess === true));

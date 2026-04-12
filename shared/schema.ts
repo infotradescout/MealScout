@@ -239,6 +239,70 @@ export const restaurants = pgTable("restaurants", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const businessStaffInvites = pgTable(
+  "business_staff_invites",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    createdByUserId: varchar("created_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: varchar("email"),
+    tokenHash: varchar("token_hash").notNull(),
+    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("pending"), // pending | accepted | revoked | expired
+    expiresAt: timestamp("expires_at"),
+    acceptedByUserId: varchar("accepted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    acceptedAt: timestamp("accepted_at"),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_business_staff_invites_restaurant").on(table.restaurantId),
+    index("idx_business_staff_invites_status").on(table.status),
+    unique("uq_business_staff_invites_token_hash").on(table.tokenHash),
+  ],
+);
+
+export const businessStaffMemberships = pgTable(
+  "business_staff_memberships",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invitedByUserId: varchar("invited_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
+    status: varchar("status").notNull().default("active"), // active | revoked
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_business_staff_memberships_restaurant").on(table.restaurantId),
+    index("idx_business_staff_memberships_user").on(table.userId),
+    index("idx_business_staff_memberships_status").on(table.status),
+    unique("uq_business_staff_memberships_restaurant_user").on(
+      table.restaurantId,
+      table.userId,
+    ),
+  ],
+);
+
 export const truckImportBatches = pgTable(
   "truck_import_batches",
   {
@@ -2338,6 +2402,29 @@ export const insertRestaurantUserRecommendationSchema = createInsertSchema(
   createdAt: true,
 });
 
+export const insertBusinessStaffInviteSchema = createInsertSchema(
+  businessStaffInvites,
+).omit({
+  id: true,
+  tokenHash: true,
+  status: true,
+  acceptedByUserId: true,
+  acceptedAt: true,
+  revokedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBusinessStaffMembershipSchema = createInsertSchema(
+  businessStaffMemberships,
+).omit({
+  id: true,
+  status: true,
+  revokedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertRestaurantRecommendationSchema = createInsertSchema(
   restaurantRecommendations,
 )
@@ -2652,6 +2739,16 @@ export type InsertRestaurantUserRecommendation = z.infer<
 >;
 export type RestaurantUserRecommendation =
   typeof restaurantUserRecommendations.$inferSelect;
+
+export type InsertBusinessStaffInvite = z.infer<
+  typeof insertBusinessStaffInviteSchema
+>;
+export type BusinessStaffInvite = typeof businessStaffInvites.$inferSelect;
+
+export type InsertBusinessStaffMembership = z.infer<
+  typeof insertBusinessStaffMembershipSchema
+>;
+export type BusinessStaffMembership = typeof businessStaffMemberships.$inferSelect;
 
 export type InsertRestaurantRecommendation = z.infer<
   typeof insertRestaurantRecommendationSchema
