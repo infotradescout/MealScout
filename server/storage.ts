@@ -6764,24 +6764,11 @@ export class DatabaseStorage implements IStorage {
 
   // API Key operations
   async getActiveApiKeys(): Promise<any[]> {
-    // Get all active, non-expired API keys
-    const keys = await db
-      .select()
-      .from(apiKeys)
-      .where(
-        and(
-          eq(apiKeys.isActive, true),
-          or(isNull(apiKeys.expiresAt), gte(apiKeys.expiresAt, new Date())),
-        ),
-      );
-    return keys;
+    return this.authTokensRepository.getActiveApiKeys();
   }
 
   async updateApiKeyLastUsed(keyId: string): Promise<void> {
-    await db
-      .update(apiKeys)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(apiKeys.id, keyId));
+    return this.authTokensRepository.updateApiKeyLastUsed(keyId);
   }
 
   // Deal feedback operations

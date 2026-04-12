@@ -21,6 +21,7 @@ This plan turns the current hotspot audit into an execution order that reduces b
 
 - Phase 1 startup extraction is in place: schedulers, static/compliance pages, operational endpoints, and recurring startup jobs are wired through `server/bootstrap/*` modules.
 - Phase 3 started: auth-token lifecycle methods were extracted from `server/storage.ts` into `server/storage/authTokensRepository.ts` while keeping `IStorage` and `DatabaseStorage` public method signatures unchanged.
+- Phase 3 continued: API key lookup/update persistence methods were moved into the same `authTokensRepository` module and `DatabaseStorage` now delegates to it.
 
 ## Guardrails
 
