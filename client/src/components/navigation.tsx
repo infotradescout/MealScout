@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   ParkingSquare,
   Truck,
+  Share2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -51,7 +52,8 @@ type NavItem = {
     | "nav.admin"
     | "nav.controlCenter"
     | "nav.affiliates"
-    | "nav.featuredSpecials";
+    | "nav.featuredSpecials"
+    | "nav.share";
   fallbackLabel: string;
   onClick?: () => void;
   isBug?: boolean;
@@ -213,6 +215,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
     ...(user
       ? ([{ path: "/profile", icon: User, labelKey: "nav.profile", fallbackLabel: "Profile" }] as NavItem[])
+      : []),
+    ...(user && !isAdmin && !isStaff
+      ? ([{
+          path: "/dashboard?tab=share",
+          icon: Share2,
+          labelKey: "nav.share",
+          fallbackLabel: "Share",
+        }] as NavItem[])
       : []),
   ];
 

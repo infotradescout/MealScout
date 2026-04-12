@@ -34,6 +34,7 @@ type TranslationKey =
   | "nav.controlCenter"
   | "nav.affiliates"
   | "nav.featuredSpecials"
+  | "nav.share"
   | "toast.bugSentTitle"
   | "toast.bugSentDescription"
   | "toast.bugFailedTitle"
@@ -65,6 +66,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     "nav.controlCenter": "Control Center",
     "nav.affiliates": "Affiliates",
     "nav.featuredSpecials": "Featured Specials",
+    "nav.share": "Share",
     "toast.bugSentTitle": "Bug report sent!",
     "toast.bugSentDescription": "Thank you for helping us improve MealScout.",
     "toast.bugFailedTitle": "Failed to send report",
@@ -95,6 +97,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     "nav.controlCenter": "Centro de Control",
     "nav.affiliates": "Afiliados",
     "nav.featuredSpecials": "Ofertas Destacadas",
+    "nav.share": "Compartir",
     "toast.bugSentTitle": "Reporte enviado",
     "toast.bugSentDescription": "Gracias por ayudarnos a mejorar MealScout.",
     "toast.bugFailedTitle": "No se pudo enviar",

@@ -4,9 +4,24 @@ import { Request, Response, NextFunction } from 'express';
 const allowedBots = ['TradeScout', 'tradescout'];
 const allowedBrowsers = ['Chrome', 'Firefox', 'Safari', 'Edge', 'OPR', 'Brave'];
 const bannedSignatures = ['curl', 'python', 'wget', 'httpclient', 'libwww', 'scrapy', 'postman'];
+const knownSearchOrLlmBots =
+  /(googlebot|google-inspectiontool|bingbot|adidxbot|duckduckbot|applebot|facebookexternalhit|linkedinbot|gptbot|oai-searchbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
+
+const isSeoCriticalPath = (path: string) => {
+  const value = String(path || "").toLowerCase();
+  return (
+    value === "/robots.txt" ||
+    value === "/llms.txt" ||
+    value === "/ai.txt" ||
+    value === "/sitemap.xml" ||
+    /^\/sitemap[\w-]*\.xml$/.test(value)
+  );
+};
 
 export function antiScrape(req: Request, res: Response, next: NextFunction) {
   const ua = (req.headers['user-agent'] || '').toLowerCase();
+
+  if (isSeoCriticalPath(req.path || req.url || "")) return next();
 
   // Always allow API routes that require auth
   if (req.path.startsWith('/api/')) return next();
@@ -16,11 +31,12 @@ export function antiScrape(req: Request, res: Response, next: NextFunction) {
 
   // Allow TradeScout crawler explicitly
   const isTradeScout = allowedBots.some((b) => ua.includes(b.toLowerCase()));
+  const isKnownCrawler = knownSearchOrLlmBots.test(ua);
 
   // Block obvious scraper signatures
   const isBanned = bannedSignatures.some((b) => ua.includes(b));
 
-  if (isTradeScout) return next();
+  if (isTradeScout || isKnownCrawler) return next();
   if (isBanned && !isBrowser) {
     return res.status(403).send('Scraping is not permitted.');
   }

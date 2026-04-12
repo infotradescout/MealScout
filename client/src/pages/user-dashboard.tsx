@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   User,
   Heart,
@@ -51,10 +51,22 @@ interface UserStats {
 
 export default function UserDashboard() {
   const { user } = useAuth();
+  const [routeLocation] = useLocation();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
     null,
   );
   const [locationName, setLocationName] = useState("Getting location...");
+  const [activeTab, setActiveTab] = useState<
+    "recent" | "nearby" | "favorites" | "recommended" | "videos" | "share"
+  >("recent");
+
+  useEffect(() => {
+    const tabParam =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("tab")
+        : null;
+    setActiveTab(tabParam === "share" ? "share" : "recent");
+  }, [routeLocation]);
 
   // Get user location
   useEffect(() => {
@@ -246,7 +258,21 @@ export default function UserDashboard() {
 
       {/* Dashboard Content */}
       <div className="px-4 sm:px-6">
-        <Tabs defaultValue="recent" className="space-y-4">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) =>
+            setActiveTab(
+              value as
+                | "recent"
+                | "nearby"
+                | "favorites"
+                | "recommended"
+                | "videos"
+                | "share",
+            )
+          }
+          className="space-y-4"
+        >
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="nearby">Nearby</TabsTrigger>

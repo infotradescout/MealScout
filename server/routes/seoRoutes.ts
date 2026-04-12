@@ -876,11 +876,67 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
+  app.get("/llms.txt", async (_req, res) => {
+    try {
+      const baseUrl = resolveSitemapSiteUrl();
+      const lines = [
+        "# MealScout",
+        "",
+        "MealScout helps restaurant owners, food truck owners, and host-location partners create recurring local demand.",
+        "",
+        "## Priority Pages",
+        `${baseUrl}/for-restaurants`,
+        `${baseUrl}/restaurant-signup`,
+        `${baseUrl}/claim-truck`,
+        `${baseUrl}/for-hosts`,
+        `${baseUrl}/host-location-partner`,
+        `${baseUrl}/map`,
+        `${baseUrl}/events/public`,
+        `${baseUrl}/sitemap`,
+        `${baseUrl}/sitemap.xml`,
+        "",
+        "## Policies",
+        `Public marketing pages may be indexed and summarized.`,
+        `Private account and admin pages are not for indexing.`,
+        "",
+        "## Contact",
+        "Email: info.mealscout@gmail.com",
+      ].join("\n");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+      res.send(lines);
+    } catch (e) {
+      console.error("llms.txt failed", e);
+      res.status(500).send("MealScout");
+    }
+  });
+
+  app.get("/ai.txt", async (_req, res) => {
+    try {
+      const baseUrl = resolveSitemapSiteUrl();
+      const lines = [
+        "MealScout",
+        `${baseUrl}/llms.txt`,
+      ].join("\n");
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+      res.send(lines);
+    } catch (e) {
+      console.error("ai.txt failed", e);
+      res.status(500).send("MealScout");
+    }
+  });
+
   app.get("/robots.txt", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
       const robots = [
         "User-agent: *",
+        "Allow: /robots.txt",
+        "Allow: /llms.txt",
+        "Allow: /ai.txt",
+        "Allow: /sitemap.xml",
+        "Allow: /sitemap-*.xml",
         "Allow: /truck/",
         "Allow: /location/",
         "Allow: /city/",
@@ -907,6 +963,8 @@ export function registerSeoRoutes(app: Express) {
         `Sitemap: ${baseUrl}/sitemap-deals.xml`,
         `Sitemap: ${baseUrl}/sitemap-suppliers.xml`,
         `Sitemap: ${baseUrl}/sitemap-videos.xml`,
+        "",
+        `AI: ${baseUrl}/llms.txt`,
         "",
       ].join("\n");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
