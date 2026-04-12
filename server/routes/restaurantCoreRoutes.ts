@@ -14,6 +14,7 @@ import {
   insertRestaurantFollowSchema,
   insertRestaurantUserRecommendationSchema,
   insertVerificationRequestSchema,
+  telemetryEvents,
   truckImportListings,
 } from "@shared/schema";
 
@@ -54,6 +55,30 @@ export function registerRestaurantCoreRoutes(
   app: Express,
   { validateAnalyticsAccess }: RestaurantCoreRouteDependencies,
 ) {
+  const trackEngagement = async (
+    eventName: string,
+    userId: string | null | undefined,
+    restaurantId: string | null | undefined,
+    properties?: Record<string, any>,
+  ) => {
+    const safeUserId = String(userId || "").trim();
+    const safeRestaurantId = String(restaurantId || "").trim();
+    if (!safeUserId || !safeRestaurantId) return;
+
+    try {
+      await db.insert(telemetryEvents).values({
+        eventName,
+        userId: safeUserId,
+        properties: {
+          restaurantId: safeRestaurantId,
+          ...(properties || {}),
+        },
+      });
+    } catch (error) {
+      console.warn(`[telemetry] Failed to record ${eventName}:`, error);
+    }
+  };
+
   app.post("/api/restaurants", isRestaurantOwner, async (req: any, res) => {
     try {
       const userId = req.user.id;
@@ -266,10 +291,20 @@ export function registerRestaurantCoreRoutes(
         });
 
         const favorite = await storage.createRestaurantFavorite(favoriteData);
+        void trackEngagement(
+          "restaurant_favorite_added",
+          userId,
+          restaurantId,
+        );
         res.json(favorite);
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
         if (error.code === "23505") {
+          void trackEngagement(
+            "restaurant_favorite_duplicate",
+            req.user?.id,
+            req.params?.restaurantId,
+          );
           return res.status(200).json({
             success: true,
             alreadyExists: true,
@@ -301,6 +336,11 @@ export function registerRestaurantCoreRoutes(
         }
 
         await storage.removeRestaurantFavorite(restaurantId, userId);
+        void trackEngagement(
+          "restaurant_favorite_removed",
+          userId,
+          restaurantId,
+        );
         res.json({ success: true });
       } catch (error) {
         console.error("Error removing restaurant favorite:", error);
@@ -352,10 +392,16 @@ export function registerRestaurantCoreRoutes(
         });
 
         const follow = await storage.createRestaurantFollow(followData);
+        void trackEngagement("restaurant_follow_added", userId, restaurantId);
         res.json(follow);
       } catch (error: any) {
         console.error("Error adding restaurant follow:", error);
         if (error.code === "23505") {
+          void trackEngagement(
+            "restaurant_follow_duplicate",
+            req.user?.id,
+            req.params?.restaurantId,
+          );
           return res.status(200).json({
             success: true,
             alreadyExists: true,
@@ -387,6 +433,7 @@ export function registerRestaurantCoreRoutes(
         }
 
         await storage.removeRestaurantFollow(restaurantId, userId);
+        void trackEngagement("restaurant_follow_removed", userId, restaurantId);
         res.json({ success: true });
       } catch (error) {
         console.error("Error removing restaurant follow:", error);
@@ -440,10 +487,20 @@ export function registerRestaurantCoreRoutes(
 
         const recommendation =
           await storage.createRestaurantUserRecommendation(recommendationData);
+        void trackEngagement(
+          "restaurant_recommend_added",
+          userId,
+          restaurantId,
+        );
         res.json(recommendation);
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
         if (error.code === "23505") {
+          void trackEngagement(
+            "restaurant_recommend_duplicate",
+            req.user?.id,
+            req.params?.restaurantId,
+          );
           return res.status(200).json({
             success: true,
             alreadyExists: true,
