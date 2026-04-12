@@ -873,8 +873,8 @@ export default function Home() {
       <section className="section section--full section--surface py-4">
         <div className="content">
           <SEOInternalLinks
-            title="Popular City + Cuisine Entry Pages"
-            description="Crawlable city and cuisine pages for local food-truck intent."
+            title={`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
+            description="Popular food spots and cuisines people are checking out in your area."
             maxCities={8}
             maxCuisineLinksPerCity={2}
           />

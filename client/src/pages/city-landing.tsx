@@ -624,8 +624,7 @@ export default function CityLanding() {
             Explore By Cuisine
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Programmatic pages for high-intent local food searches in{" "}
-            {cityLabel}.
+            Browse the most popular food categories in {cityLabel}.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {topCuisineLinks.map((cuisine) => (
@@ -645,8 +644,8 @@ export default function CityLanding() {
         </section>
 
         <SEOInternalLinks
-          title={`More City + Cuisine Pages Near ${data.city.name}`}
-          description="Crawlable city and cuisine paths to keep exploring local food intent."
+          title={`More Popular Spots Near ${data.city.name}`}
+          description="Explore more nearby city and cuisine picks people are viewing."
           excludeCitySlug={data.city.slug}
           maxCities={6}
           maxCuisineLinksPerCity={3}
