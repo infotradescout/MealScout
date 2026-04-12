@@ -29,6 +29,27 @@ type RestaurantCoreRouteDependencies = {
   validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
 };
 
+const ENGAGEMENT_ACTION_COOLDOWN_MS = 3000;
+const engagementActionLastSeen = new Map<string, number>();
+
+const consumeEngagementWindow = (key: string) => {
+  const now = Date.now();
+  const lastSeen = engagementActionLastSeen.get(key) || 0;
+  const elapsed = now - lastSeen;
+  if (elapsed < ENGAGEMENT_ACTION_COOLDOWN_MS) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil((ENGAGEMENT_ACTION_COOLDOWN_MS - elapsed) / 1000),
+      ),
+    };
+  }
+
+  engagementActionLastSeen.set(key, now);
+  return { allowed: true, retryAfterSeconds: 0 };
+};
+
 export function registerRestaurantCoreRoutes(
   app: Express,
   { validateAnalyticsAccess }: RestaurantCoreRouteDependencies,
@@ -216,6 +237,15 @@ export function registerRestaurantCoreRoutes(
         const { restaurantId } = req.params;
         const userId = req.user.id;
         const maxFavorites = 3;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:favorite:add`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
 
         const restaurant = await storage.getRestaurant(restaurantId);
         if (!restaurant) {
@@ -240,9 +270,11 @@ export function registerRestaurantCoreRoutes(
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
         if (error.code === "23505") {
-          return res
-            .status(400)
-            .json({ message: "Restaurant already favorited" });
+          return res.status(200).json({
+            success: true,
+            alreadyExists: true,
+            message: "Restaurant already favorited",
+          });
         }
         res
           .status(400)
@@ -258,6 +290,15 @@ export function registerRestaurantCoreRoutes(
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:favorite:remove`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
 
         await storage.removeRestaurantFavorite(restaurantId, userId);
         res.json({ success: true });
@@ -290,6 +331,15 @@ export function registerRestaurantCoreRoutes(
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:follow:add`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
 
         const restaurant = await storage.getRestaurant(restaurantId);
         if (!restaurant) {
@@ -306,9 +356,11 @@ export function registerRestaurantCoreRoutes(
       } catch (error: any) {
         console.error("Error adding restaurant follow:", error);
         if (error.code === "23505") {
-          return res
-            .status(400)
-            .json({ message: "Restaurant already followed" });
+          return res.status(200).json({
+            success: true,
+            alreadyExists: true,
+            message: "Restaurant already followed",
+          });
         }
         res
           .status(400)
@@ -324,6 +376,15 @@ export function registerRestaurantCoreRoutes(
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:follow:remove`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
 
         await storage.removeRestaurantFollow(restaurantId, userId);
         res.json({ success: true });
@@ -356,6 +417,15 @@ export function registerRestaurantCoreRoutes(
       try {
         const { restaurantId } = req.params;
         const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:recommend:add`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
 
         const restaurant = await storage.getRestaurant(restaurantId);
         if (!restaurant) {
@@ -374,9 +444,11 @@ export function registerRestaurantCoreRoutes(
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
         if (error.code === "23505") {
-          return res
-            .status(400)
-            .json({ message: "Restaurant already recommended" });
+          return res.status(200).json({
+            success: true,
+            alreadyExists: true,
+            message: "Restaurant already recommended",
+          });
         }
         res.status(400).json({
           message: error.message || "Failed to recommend restaurant",
