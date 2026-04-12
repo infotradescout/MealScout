@@ -137,6 +137,17 @@ export function registerSubscriptionRoutes(
 
       try {
         const { locked, priceId, label } = await getLockedPriceForUser(user.id);
+        if (!priceId.startsWith("price_")) {
+          console.error(
+            `[subscriptions/initialize] PRICE_MONTHLY_25 is "${priceId}" — not a valid Stripe price ID.`,
+          );
+          return res.status(503).json({
+            error: {
+              message:
+                "Payment configuration error: invalid price ID. Please contact support.",
+            },
+          });
+        }
         return res.send({
           status: "quote",
           priceId,
@@ -380,6 +391,18 @@ export function registerSubscriptionRoutes(
 
       const { locked, priceId, label } = await getLockedPriceForUser(user.id);
       const amount = 2500;
+
+      if (!priceId.startsWith("price_")) {
+        console.error(
+          `[create-subscription] PRICE_MONTHLY_25 is set to "${priceId}" which is not a valid Stripe price ID (must start with "price_"). Check the PRICE_MONTHLY_25 environment variable.`,
+        );
+        return res.status(503).json({
+          error: {
+            message:
+              "Payment configuration error: invalid price ID. Please contact support.",
+          },
+        });
+      }
 
       const subscription = await stripe.subscriptions.create({
         customer: customerId,

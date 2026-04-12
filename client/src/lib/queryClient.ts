@@ -10,7 +10,8 @@ async function getErrorMessage(res: Response) {
     const json = JSON.parse(text);
     return (
       json?.message ||
-      json?.error ||
+      json?.error?.message ||
+      (typeof json?.error === "string" ? json.error : undefined) ||
       json?.errors?.[0]?.message ||
       res.statusText ||
       "Request failed"
