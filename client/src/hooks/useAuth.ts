@@ -15,7 +15,9 @@ export function useAuth() {
     isError,
     error,
     refetch,
-  } = useQuery<User & { requiresPasswordReset?: boolean }>({
+  } = useQuery<
+    User & { requiresPasswordReset?: boolean; loginAnnouncement?: string }
+  >({
     queryKey: ["/api/auth/user"],
     queryFn: getQueryFn({ on401: "returnNull", timeoutMs: 6000 }),
     retry: (failureCount, error: any) => {

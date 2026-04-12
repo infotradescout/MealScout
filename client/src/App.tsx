@@ -4,11 +4,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BetaDisclaimer } from "@/components/beta-disclaimer";
 import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
+import { useToast } from "@/hooks/use-toast";
 
 // Eager load only critical pages (home, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -189,7 +190,9 @@ function DashboardSwitcherPage() {
 }
 
 function Router() {
-  const { authState, isAuthenticated } = useAuth();
+  const { authState, isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
+  const shownAnnouncementRef = useRef<string>("");
   const [location] = useLocation();
   const [affiliateTag, setAffiliateTag] = useState<string>("");
   const isLikelyPublicRoute = isPublicPath(location);
@@ -226,6 +229,17 @@ function Router() {
     url.searchParams.set("ref", affiliateTag);
     window.history.replaceState({}, "", url.toString());
   }, [affiliateTag, location]);
+
+  useEffect(() => {
+    const message = String((user as any)?.loginAnnouncement || "").trim();
+    if (!message) return;
+    if (shownAnnouncementRef.current === message) return;
+    shownAnnouncementRef.current = message;
+    toast({
+      title: "Partner Access Activated",
+      description: message,
+    });
+  }, [user, toast]);
 
   // Canonical guard: never redirect until authState resolves
   if (authState === "loading" && !isLikelyPublicRoute) {

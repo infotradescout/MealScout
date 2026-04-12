@@ -4,7 +4,9 @@ import type Stripe from "stripe";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isAuthenticated } from "../unifiedAuth";
-import type { User } from "@shared/schema";
+import { db } from "../db";
+import { and, eq } from "drizzle-orm";
+import { restaurants, restaurantSubscriptions, type User } from "@shared/schema";
 
 type LockedPriceResult = {
   locked: boolean;
@@ -22,6 +24,27 @@ type SubscriptionRouteDependencies = {
 async function userHasVerifiedBusiness(userId: string) {
   const restaurantsByOwner = await storage.getRestaurantsByOwner(userId);
   return restaurantsByOwner.some((restaurant) => restaurant.isVerified);
+}
+
+async function userHasLifetimeRestaurantAccess(userId: string): Promise<boolean> {
+  const ownerId = String(userId || "").trim();
+  if (!ownerId) return false;
+  const rows = await db
+    .select({ id: restaurantSubscriptions.id })
+    .from(restaurantSubscriptions)
+    .innerJoin(
+      restaurants,
+      eq(restaurantSubscriptions.restaurantId, restaurants.id),
+    )
+    .where(
+      and(
+        eq(restaurants.ownerId, ownerId),
+        eq(restaurantSubscriptions.isLifetimeFree, true),
+        eq(restaurantSubscriptions.status, "active"),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 export function registerSubscriptionRoutes(
@@ -422,6 +445,15 @@ export function registerSubscriptionRoutes(
         trialAccess: true,
         trialEndsAt: hydratedUser.trialEndsAt,
         message: "30-day premium trial active",
+      });
+    }
+
+    if (await userHasLifetimeRestaurantAccess(req.user.id)) {
+      return res.json({
+        status: "active",
+        hasAccess: true,
+        lifetimeAccess: true,
+        message: "Lifetime premium partner access active",
       });
     }
 

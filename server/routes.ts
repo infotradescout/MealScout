@@ -74,6 +74,7 @@ import {
   userAddresses,
   locationRequests,
   restaurants,
+  restaurantSubscriptions,
   truckInterests,
   suppliers,
   socialPostQueue,
@@ -537,6 +538,10 @@ async function validateAnalyticsAccess(userId: string): Promise<{
       return { hasAccess: true, subscriptionTier: "trial" };
     }
 
+    if (await hasLifetimeRestaurantAccess(userId)) {
+      return { hasAccess: true, subscriptionTier: "lifetime" };
+    }
+
     // Check if user has active subscription
     if (!stripe || !hydratedUser.stripeSubscriptionId) {
       return {
@@ -596,6 +601,10 @@ async function validateSubscriptionLimits(
     console.log("🔍 validateSubscriptionLimits - User ID:", userId);
 
     if (isTrialActive(hydratedUser)) {
+      return { isValid: true, currentCount: 0, maxDeals: 999 };
+    }
+
+    if (await hasLifetimeRestaurantAccess(userId)) {
       return { isValid: true, currentCount: 0, maxDeals: 999 };
     }
 
@@ -710,6 +719,8 @@ async function hasBusinessDistributionAccess(userId: string): Promise<boolean> {
         hasAccess = true;
       } else if (hasAccountAgeTrialAccess(user)) {
         hasAccess = true;
+      } else if (await hasLifetimeRestaurantAccess(key)) {
+        hasAccess = true;
       } else if (stripe && user.stripeSubscriptionId) {
         try {
           const subscription = await stripe.subscriptions.retrieve(
@@ -743,6 +754,35 @@ async function hasBusinessDistributionAccess(userId: string): Promise<boolean> {
     expiresAt: now + BUSINESS_ACCESS_CACHE_TTL_MS,
   });
   return hasAccess;
+}
+
+async function hasLifetimeRestaurantAccess(userId: string): Promise<boolean> {
+  const ownerId = String(userId || "").trim();
+  if (!ownerId) return false;
+  try {
+    const rows = await db
+      .select({ id: restaurantSubscriptions.id })
+      .from(restaurantSubscriptions)
+      .innerJoin(
+        restaurants,
+        eq(restaurantSubscriptions.restaurantId, restaurants.id),
+      )
+      .where(
+        and(
+          eq(restaurants.ownerId, ownerId),
+          eq(restaurantSubscriptions.isLifetimeFree, true),
+          eq(restaurantSubscriptions.status, "active"),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (error) {
+    console.warn("[subscription] Failed lifetime access lookup", {
+      userId: ownerId,
+      error: (error as any)?.message || error,
+    });
+    return false;
+  }
 }
 
 async function filterDealsByBusinessAccess<

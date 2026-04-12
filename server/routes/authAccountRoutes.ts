@@ -16,7 +16,125 @@ import {
   uploadToCloudinary,
   isCloudinaryConfigured,
 } from "../imageUpload";
-import { insertUserAddressSchema, suppliers } from "@shared/schema";
+import {
+  insertUserAddressSchema,
+  restaurantSubscriptions,
+  suppliers,
+} from "@shared/schema";
+
+const FIRST_PARTNER_MESSAGE =
+  "As an appreciation of being our first MealScout Partner, 3D Eats now has lifetime free access to all paid features. Keep killin it.";
+
+function isLikely3DEatsPartner(
+  user: any,
+  ownedRestaurants: Array<{ name?: string | null }>,
+) {
+  const firstName = String(user?.firstName || "")
+    .trim()
+    .toLowerCase();
+  if (firstName !== "sean") return false;
+
+  const has3dEatsRestaurant = ownedRestaurants.some((row) =>
+    String(row?.name || "")
+      .trim()
+      .toLowerCase()
+      .includes("3d eats"),
+  );
+
+  if (has3dEatsRestaurant) return true;
+
+  const email = String(user?.email || "")
+    .trim()
+    .toLowerCase();
+  return email.includes("3d") && email.includes("eat");
+}
+
+async function ensureFirstPartnerLifetimeAccess(user: any) {
+  if (!user?.id) return user;
+  if (!["restaurant_owner", "food_truck"].includes(String(user.userType || ""))) {
+    return user;
+  }
+
+  const ownedRestaurants = await storage.getRestaurantsByOwner(String(user.id));
+  if (!isLikely3DEatsPartner(user, ownedRestaurants as any[])) {
+    return user;
+  }
+
+  const now = new Date();
+  for (const restaurant of ownedRestaurants as any[]) {
+    const restaurantId = String(restaurant?.id || "").trim();
+    if (!restaurantId) continue;
+
+    const existing = await db
+      .select({ id: restaurantSubscriptions.id })
+      .from(restaurantSubscriptions)
+      .where(eq(restaurantSubscriptions.restaurantId, restaurantId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(restaurantSubscriptions)
+        .set({
+          tier: "premium",
+          status: "active",
+          isLifetimeFree: true,
+          lifetimeGrantedBy: "system:first-partner",
+          lifetimeGrantedAt: now,
+          lifetimeReason: "First MealScout Partner - 3D Eats",
+          canPostVideos: true,
+          canPostDeals: true,
+          canUseFeaturedSlots: true,
+          maxFeaturedSlots: 3,
+          hasAnalytics: true,
+          hasDealScheduling: true,
+          canceledAt: null,
+          updatedAt: now,
+        })
+        .where(eq(restaurantSubscriptions.id, existing[0].id));
+    } else {
+      await db.insert(restaurantSubscriptions).values({
+        restaurantId,
+        tier: "premium",
+        status: "active",
+        isLifetimeFree: true,
+        lifetimeGrantedBy: "system:first-partner",
+        lifetimeGrantedAt: now,
+        lifetimeReason: "First MealScout Partner - 3D Eats",
+        canPostVideos: true,
+        canPostDeals: true,
+        canUseFeaturedSlots: true,
+        maxFeaturedSlots: 3,
+        hasAnalytics: true,
+        hasDealScheduling: true,
+      });
+    }
+  }
+
+  const currentSettings =
+    user?.accountSettings && typeof user.accountSettings === "object"
+      ? { ...(user.accountSettings as any) }
+      : {};
+  const partnerProgram = {
+    ...(currentSettings.partnerProgram || {}),
+    partnerKey: "3d-eats",
+    lifetimeFreeAccess: true,
+    lifetimeGrantedAt: now.toISOString(),
+    loginAnnouncement: {
+      message: FIRST_PARTNER_MESSAGE,
+      pending: true,
+      queuedAt: now.toISOString(),
+    },
+  };
+
+  const updated = await storage.updateUser(String(user.id), {
+    accountSettings: {
+      ...currentSettings,
+      partnerProgram,
+    } as any,
+  });
+
+  return updated || user;
+}
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -158,9 +276,50 @@ export function registerAuthAccountRoutes(app: Express) {
         }
       }
 
+      user = await ensureFirstPartnerLifetimeAccess(user);
+
       console.log("✅ Returning user:", user.id, user.email, user.userType);
 
-      const safeUser = sanitizeUser(user);
+      const safeUser: any = sanitizeUser(user) || {};
+      const partnerProgram =
+        user?.accountSettings && typeof user.accountSettings === "object"
+          ? (user.accountSettings as any).partnerProgram
+          : null;
+      const pendingAnnouncement = partnerProgram?.loginAnnouncement;
+
+      if (
+        pendingAnnouncement &&
+        pendingAnnouncement.pending === true &&
+        String(pendingAnnouncement.message || "").trim()
+      ) {
+        safeUser.loginAnnouncement = String(pendingAnnouncement.message);
+
+        try {
+          const nextAccountSettings = {
+            ...(user.accountSettings || {}),
+            partnerProgram: {
+              ...(partnerProgram || {}),
+              loginAnnouncement: {
+                ...pendingAnnouncement,
+                pending: false,
+                shownAt: new Date().toISOString(),
+              },
+            },
+          };
+          const updated = await storage.updateUser(user.id, {
+            accountSettings: nextAccountSettings as any,
+          });
+          if (updated) {
+            req.user = updated;
+          }
+        } catch (announcementError) {
+          console.warn(
+            "Unable to mark partner login announcement as shown:",
+            announcementError,
+          );
+        }
+      }
+
       if (user.mustResetPassword) {
         return res.json({ ...safeUser, requiresPasswordReset: true });
       }
