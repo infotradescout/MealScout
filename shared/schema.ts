@@ -4258,6 +4258,7 @@ export const restaurantCreditRedemptionsRelations = relations(
 
 export type LocationRequest = typeof locationRequests.$inferSelect;
 export type InsertLocationRequest = z.infer<typeof insertLocationRequestSchema>;
+export type InsertHostPartnerLead = z.infer<typeof insertHostPartnerLeadSchema>;
 export type TruckInterest = typeof truckInterests.$inferSelect;
 export type InsertTruckInterest = z.infer<typeof insertTruckInterestSchema>;
 export type HostLocationClaim = typeof hostLocationClaims.$inferSelect;
@@ -4808,6 +4809,98 @@ export const emailSequenceSends = pgTable(
 
 export type EmailSequenceSend = typeof emailSequenceSends.$inferSelect;
 export type InsertEmailSequenceSend = typeof emailSequenceSends.$inferInsert;
+
+// Host partner lead magnet: non-food businesses with parking capacity
+export const hostPartnerLeads = pgTable(
+  "host_partner_leads",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    email: varchar("email").notNull(),
+    firstName: varchar("first_name"),
+    phone: varchar("phone"),
+    businessName: varchar("business_name").notNull(),
+    address: text("address"),
+    city: varchar("city"),
+    state: varchar("state"),
+    locationType: varchar("location_type").notNull().default("other"),
+    parkingSpots: integer("parking_spots"),
+    dailyFootTraffic: integer("daily_foot_traffic"),
+    notes: text("notes"),
+    source: varchar("source").notNull().default("host_location_partner"),
+    status: varchar("status").notNull().default("new"), // 'new' | 'contacted' | 'qualified' | 'converted' | 'unqualified'
+    ip: varchar("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_host_partner_leads_created").on(table.createdAt),
+    index("idx_host_partner_leads_status").on(table.status, table.createdAt),
+    index("idx_host_partner_leads_source").on(table.source, table.createdAt),
+  ],
+);
+
+export const hostPartnerLeadSequenceSends = pgTable(
+  "host_partner_lead_sequence_sends",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    leadId: varchar("lead_id")
+      .notNull()
+      .references(() => hostPartnerLeads.id, { onDelete: "cascade" }),
+    sequence: varchar("sequence").notNull(),
+    step: integer("step").notNull(),
+    sentAt: timestamp("sent_at").defaultNow(),
+    metadata: jsonb("metadata"),
+  },
+  (table) => [
+    unique("uq_host_partner_lead_sequence_step").on(
+      table.leadId,
+      table.sequence,
+      table.step,
+    ),
+    index("idx_host_partner_lead_sequence_step_sent").on(
+      table.sequence,
+      table.step,
+      table.sentAt,
+    ),
+  ],
+);
+
+export type HostPartnerLead = typeof hostPartnerLeads.$inferSelect;
+export type InsertHostPartnerLeadRow = typeof hostPartnerLeads.$inferInsert;
+export type HostPartnerLeadSequenceSend =
+  typeof hostPartnerLeadSequenceSends.$inferSelect;
+export type InsertHostPartnerLeadSequenceSend =
+  typeof hostPartnerLeadSequenceSends.$inferInsert;
+
+export const insertHostPartnerLeadSchema = createInsertSchema(
+  hostPartnerLeads,
+  {
+    email: z.string().email("Enter a valid email address"),
+    firstName: z.string().trim().min(1).max(80).optional(),
+    phone: z.string().trim().min(7).max(30).optional(),
+    businessName: z.string().trim().min(2).max(140),
+    address: z.string().trim().max(240).optional(),
+    city: z.string().trim().max(120).optional(),
+    state: z.string().trim().max(40).optional(),
+    locationType: z.string().trim().min(2).max(40),
+    parkingSpots: z.number().int().min(1).max(2000).optional(),
+    dailyFootTraffic: z.number().int().min(0).max(100000).optional(),
+    notes: z.string().trim().max(1000).optional(),
+    source: z.string().trim().max(80).optional(),
+  },
+).omit({
+  id: true,
+  status: true,
+  ip: true,
+  userAgent: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 // Pensacola lead magnet: report leads + download tokens
 export const pensacolaReportLeads = pgTable(

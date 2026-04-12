@@ -18,6 +18,7 @@ import { notifyUnbookedEvents } from "../eventNotificationCron";
 import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
+import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { db } from "../db";
@@ -177,6 +178,24 @@ export async function registerSchedulers(app: Express): Promise<void> {
         }
       } catch (error) {
         console.error("[drip] Pensacola report lead sequence failed:", error);
+      }
+    });
+  }
+
+  // Host partner lead drip — every 30 min (feature-flagged, enabled by default)
+  if (
+    String(process.env.HOST_PARTNER_DRIP_ENABLED || "true")
+      .trim()
+      .toLowerCase() !== "false"
+  ) {
+    cron.schedule("*/30 * * * *", async () => {
+      try {
+        const result = await runHostPartnerLeadDripCron();
+        if ((result as any)?.sent) {
+          console.log("[drip] Host partner lead sequence sent:", result);
+        }
+      } catch (error) {
+        console.error("[drip] Host partner lead sequence failed:", error);
       }
     });
   }

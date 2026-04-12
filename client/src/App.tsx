@@ -105,6 +105,9 @@ const EventDetailPage = lazy(() => import("@/pages/event-detail"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
 const ForBars = lazy(() => import("@/pages/for-bars"));
 const ForHosts = lazy(() => import("@/pages/for-hosts"));
+const HostLocationPartnerPage = lazy(
+  () => import("@/pages/host-location-partner"),
+);
 const ForEvents = lazy(() => import("@/pages/for-events"));
 const FindFood = lazy(() => import("@/pages/find-food"));
 const VideoPage = lazy(() => import("@/pages/video"));
@@ -153,6 +156,7 @@ const publicRoutePrefixes = [
   "/for-restaurants",
   "/for-bars",
   "/for-hosts",
+  "/host-location-partner",
   "/for-events",
   "/find-food",
   "/event-signup",
@@ -273,6 +277,10 @@ function Router() {
             <Route path="/for-restaurants" component={ForRestaurants} />
             <Route path="/for-bars" component={ForBars} />
             <Route path="/for-hosts" component={ForHosts} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
             <Route path="/event-signup" component={EventSignup} />
@@ -339,6 +347,10 @@ function Router() {
             <Route path="/for-restaurants" component={ForRestaurants} />
             <Route path="/for-bars" component={ForBars} />
             <Route path="/for-hosts" component={ForHosts} />
+            <Route
+              path="/host-location-partner"
+              component={HostLocationPartnerPage}
+            />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
             <Route path="/search" component={Search} />
@@ -486,4 +498,3 @@ function App() {
 }
 
 export default App;
-

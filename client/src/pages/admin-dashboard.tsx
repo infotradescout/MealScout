@@ -39,6 +39,7 @@ import {
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
+import ShareHub from "@/components/share-hub";
 import { getOptimizedImageUrl } from "@/lib/images";
 import {
   Dialog,
@@ -5908,6 +5909,13 @@ export default function AdminDashboard() {
             >
               Host Locations
             </TabsTrigger>
+            <TabsTrigger
+              value="share-portal"
+              data-testid="tab-share-portal"
+              className="flex-shrink-0"
+            >
+              Share Portal
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -7884,6 +7892,14 @@ export default function AdminDashboard() {
                 <HostLocationManager />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="share-portal" className="space-y-4">
+            <ShareHub
+              mode="admin"
+              title="Share Portal"
+              description="One-click growth and onboarding links for owners, food trucks, and host-location partners."
+            />
           </TabsContent>
         </Tabs>
       </div>

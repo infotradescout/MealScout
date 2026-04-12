@@ -201,18 +201,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
     { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
     ...(user && canSeeParkingPassNav
-      ? [
+      ? ([
           {
             path: "/parking-pass",
             icon: ParkingSquare,
             labelKey: "nav.parkingPass",
             fallbackLabel: "Parking Pass",
           },
-        ]
+        ] as NavItem[])
       : []),
     { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
     ...(user
-      ? [{ path: "/profile", icon: User, labelKey: "nav.profile", fallbackLabel: "Profile" }]
+      ? ([{ path: "/profile", icon: User, labelKey: "nav.profile", fallbackLabel: "Profile" }] as NavItem[])
       : []),
   ];
 
@@ -394,14 +394,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     customerExtras,
     hostExtras,
     canSeeParkingPassNav
-      ? [
+      ? ([
           {
             path: "/parking-pass",
             icon: ParkingSquare,
             labelKey: "nav.parkingPass",
             fallbackLabel: "Parking Pass",
           },
-        ]
+        ] as NavItem[])
       : [],
   );
 
@@ -427,14 +427,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
       { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
       ...(canSeeParkingPassNav
-        ? [
+        ? ([
             {
               path: "/parking-pass",
               icon: ParkingSquare,
               labelKey: "nav.parkingPass",
               fallbackLabel: "Parking Pass",
             },
-          ]
+          ] as NavItem[])
         : []),
     ],
   );

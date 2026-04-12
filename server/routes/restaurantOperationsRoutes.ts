@@ -49,7 +49,9 @@ export function registerRestaurantOperationsRoutes(
       .from(restaurants)
       .where(eq(restaurants.ownerId, userId));
 
-    const restaurantIds = ownedRestaurants.map((restaurant) => restaurant.id);
+    const restaurantIds = ownedRestaurants.map(
+      (restaurant: { id: string }) => restaurant.id,
+    );
 
     if (restaurantIds.length === 0) {
       return {

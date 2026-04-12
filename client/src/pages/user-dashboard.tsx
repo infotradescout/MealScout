@@ -39,6 +39,7 @@ import Navigation from "@/components/navigation";
 import { VideoUploadModal } from "@/components/video-upload-modal";
 import type { Deal, Restaurant, DealClaim } from "@shared/schema";
 import { SEOHead } from "@/components/seo-head";
+import ShareHub from "@/components/share-hub";
 
 interface UserStats {
   totalDealsUsed: number;
@@ -246,12 +247,13 @@ export default function UserDashboard() {
       {/* Dashboard Content */}
       <div className="px-4 sm:px-6">
         <Tabs defaultValue="recent" className="space-y-4">
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-5">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="nearby">Nearby</TabsTrigger>
             <TabsTrigger value="favorites">Favorites</TabsTrigger>
             <TabsTrigger value="recommended">For You</TabsTrigger>
             <TabsTrigger value="videos">My Videos</TabsTrigger>
+            <TabsTrigger value="share">Share Hub</TabsTrigger>
           </TabsList>
 
           <TabsContent value="recent" className="space-y-4">
@@ -582,6 +584,14 @@ export default function UserDashboard() {
           {/* ── My Videos Tab ── */}
           <TabsContent value="videos" className="space-y-4">
             <VideoCreatorSection userId={user?.id} />
+          </TabsContent>
+
+          <TabsContent value="share" className="space-y-4">
+            <ShareHub
+              mode="user"
+              title="Share Hub"
+              description="Useful links you can share in one tap to help grow MealScout."
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -14,8 +14,17 @@ import {
   Share2,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
+import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { apiUrl } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  buildFoodTrucksCityCanonicalUrl,
+  buildFoodTrucksCityPath,
+  deslugSeoTerm,
+  normalizeSeoTerm,
+  slugifySeoTerm,
+  titleCaseSeoTerm,
+} from "@/lib/seo-city";
 
 type CityPayload = {
   city: { name: string; slug: string; state?: string | null };
@@ -67,19 +76,6 @@ type AffiliateTag = {
   sharePath: string;
 };
 
-const normalize = (value?: string | null) =>
-  String(value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .replace(/\s+/g, " ");
-
-const slugify = (value?: string | null) =>
-  normalize(value).replace(/\s+/g, "-");
-
-const deslug = (value?: string) =>
-  normalize(String(value || "").replace(/-/g, " "));
-
 function fetchCity(slug: string) {
   return fetch(apiUrl(`/api/cities/${encodeURIComponent(slug)}`)).then(
     async (r) => {
@@ -93,7 +89,7 @@ export default function CityLanding() {
   const params = useParams() as Record<string, string | undefined>;
   const citySlug = String(params.citySlug || params.city || "").trim();
   const cuisineSlug = String(params.cuisineSlug || "").trim();
-  const cuisineNeedle = deslug(cuisineSlug);
+  const cuisineNeedle = deslugSeoTerm(cuisineSlug);
   const { isAuthenticated } = useAuth();
 
   const { data, isLoading, error } = useQuery({
@@ -170,7 +166,7 @@ export default function CityLanding() {
       return { trucks: data.trucks, restaurants: data.restaurants };
     }
     const byCuisine = (entry: { cuisineType?: string | null }) =>
-      normalize(entry.cuisineType).includes(cuisineNeedle);
+      normalizeSeoTerm(entry.cuisineType).includes(cuisineNeedle);
     return {
       trucks: data.trucks.filter(byCuisine),
       restaurants: data.restaurants.filter(byCuisine),
@@ -203,10 +199,7 @@ export default function CityLanding() {
 
   const cityLabel = `${data.city.name}${data.city.state ? `, ${data.city.state}` : ""}`;
   const cuisineLabel = cuisineNeedle
-    ? cuisineNeedle
-        .split(" ")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ")
+    ? titleCaseSeoTerm(cuisineNeedle)
     : "";
   const pageTitle = cuisineLabel
     ? `${cuisineLabel} Food Trucks in ${cityLabel} | MealScout`
@@ -214,9 +207,10 @@ export default function CityLanding() {
   const pageDescription = cuisineLabel
     ? `Find ${cuisineLabel.toLowerCase()} food trucks and local restaurant deals in ${cityLabel}. Browse live spots, events, and nearby offers on MealScout.`
     : `Find food trucks, local restaurant deals, and nearby events in ${cityLabel}. Browse live local offers on MealScout.`;
-  const canonicalPath = cuisineLabel
-    ? `https://www.mealscout.us/food-trucks/${data.city.slug}/${slugify(cuisineLabel)}`
-    : `https://www.mealscout.us/food-trucks/${data.city.slug}`;
+  const canonicalPath = buildFoodTrucksCityCanonicalUrl(
+    data.city.slug,
+    cuisineLabel ? slugifySeoTerm(cuisineLabel) : undefined,
+  );
 
   const cityDeals = (cityDealsPayload?.deals ?? []).slice(0, 6);
 
@@ -637,7 +631,10 @@ export default function CityLanding() {
             {topCuisineLinks.map((cuisine) => (
               <Link
                 key={cuisine.name}
-                href={`/food-trucks/${data.city.slug}/${slugify(cuisine.name)}`}
+                href={buildFoodTrucksCityPath(
+                  data.city.slug,
+                  slugifySeoTerm(cuisine.name),
+                )}
               >
                 <Button variant="outline" size="sm">
                   {cuisine.name} ({cuisine.count})
@@ -646,6 +643,14 @@ export default function CityLanding() {
             ))}
           </div>
         </section>
+
+        <SEOInternalLinks
+          title={`More City + Cuisine Pages Near ${data.city.name}`}
+          description="Crawlable city and cuisine paths to keep exploring local food intent."
+          excludeCitySlug={data.city.slug}
+          maxCities={6}
+          maxCuisineLinksPerCity={3}
+        />
 
         <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">

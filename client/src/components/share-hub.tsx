@@ -1,0 +1,266 @@
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+
+type ShareHubMode = "admin" | "staff" | "user";
+
+interface ShareHubItem {
+  key: string;
+  title: string;
+  description: string;
+  href: string;
+  audience: string;
+  priority?: number;
+  outreachText?: string;
+}
+
+const USER_ITEMS: ShareHubItem[] = [
+  {
+    key: "owner-signup",
+    title: "1) Owner Signup",
+    description: "Primary link for restaurant owners and food truck operators to start.",
+    href: "/restaurant-signup",
+    audience: "Restaurant + Food Truck Owners",
+    priority: 1,
+    outreachText:
+      "Get your business on MealScout and start getting monthly visibility and booking leads: ",
+  },
+  {
+    key: "claim-truck",
+    title: "2) Food Truck Claim",
+    description: "Direct page for food truck operators to claim and activate their profile.",
+    href: "/claim-truck",
+    audience: "Food Truck Owners",
+    priority: 2,
+    outreachText:
+      "Claim your food truck listing and start receiving local booking opportunities here: ",
+  },
+  {
+    key: "host-partner",
+    title: "3) Host Location Signup",
+    description: "Direct intake page for non-food businesses with usable parking.",
+    href: "/host-location-partner",
+    audience: "Potential Hosts",
+    priority: 3,
+    outreachText:
+      "Have parking space? Become a MealScout host location and earn from food truck bookings: ",
+  },
+  {
+    key: "for-restaurants",
+    title: "Restaurant Growth Page",
+    description: "Share this with restaurant owners ready for monthly growth.",
+    href: "/for-restaurants",
+    audience: "Restaurant Owners",
+  },
+  {
+    key: "for-hosts",
+    title: "Host Program Page",
+    description: "Great for businesses with parking lots that can host trucks.",
+    href: "/for-hosts",
+    audience: "Potential Hosts",
+  },
+  {
+    key: "map",
+    title: "Live Food Map",
+    description: "Send people straight to nearby food trucks and restaurants.",
+    href: "/map",
+    audience: "Customers",
+  },
+  {
+    key: "sitemap",
+    title: "Site Directory",
+    description: "Shareable index of important public pages.",
+    href: "/sitemap",
+    audience: "General",
+  },
+];
+
+const STAFF_ADMIN_ITEMS: ShareHubItem[] = [
+  ...USER_ITEMS,
+  {
+    key: "staff-dashboard",
+    title: "Staff Dashboard",
+    description: "Account creation and host-location operations in one place.",
+    href: "/staff/dashboard",
+    audience: "Internal",
+  },
+  {
+    key: "admin-dashboard",
+    title: "Admin Dashboard",
+    description: "Platform operations, moderation, imports, and host controls.",
+    href: "/admin/dashboard",
+    audience: "Internal",
+  },
+  {
+    key: "lisa",
+    title: "LISA Control Center",
+    description: "AI operations, traffic insights, and growth automation tools.",
+    href: "/admin/control-center",
+    audience: "Internal",
+  },
+  {
+    key: "admin-affiliates",
+    title: "Affiliate Manager",
+    description: "Manage referral tags and commission settings.",
+    href: "/admin/affiliates",
+    audience: "Internal",
+  },
+];
+
+export default function ShareHub({
+  mode,
+  title,
+  description,
+}: {
+  mode: ShareHubMode;
+  title: string;
+  description: string;
+}) {
+  const { toast } = useToast();
+  const [affiliateTag, setAffiliateTag] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/affiliate/tag", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.tag) {
+          setAffiliateTag(String(data.tag));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const items = useMemo(() => {
+    const base = mode === "user" ? USER_ITEMS : STAFF_ADMIN_ITEMS;
+    if (!affiliateTag) return base;
+    const referralItem: ShareHubItem = {
+      key: "referral",
+      title: "My Referral Link",
+      description: "Use this one-click link to share and auto-credit referrals.",
+      href: `/ref/${affiliateTag}`,
+      audience: "All",
+    };
+    return [referralItem, ...base];
+  }, [mode, affiliateTag]);
+
+  const absoluteUrl = (href: string) => {
+    if (href.startsWith("http://") || href.startsWith("https://")) return href;
+    if (typeof window === "undefined") return href;
+    return `${window.location.origin}${href}`;
+  };
+
+  const copyLink = async (href: string) => {
+    const value = absoluteUrl(href);
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: "Copied", description: value });
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Clipboard permission was blocked.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyOutreachText = async (item: ShareHubItem) => {
+    const value = absoluteUrl(item.href);
+    const text = item.outreachText ? `${item.outreachText}${value}` : value;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Outreach text copied", description: item.title });
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Clipboard permission was blocked.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const shareLink = async (titleValue: string, href: string) => {
+    const value = absoluteUrl(href);
+    if (!navigator.share) {
+      await copyLink(href);
+      return;
+    }
+    try {
+      await navigator.share({
+        title: titleValue,
+        text: "Useful MealScout link",
+        url: value,
+      });
+    } catch {
+      // user dismissed share modal
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {items.map((item) => (
+            <div
+              key={item.key}
+              className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h4 className="font-semibold">{item.title}</h4>
+                <div className="flex items-center gap-2">
+                  {typeof item.priority === "number" ? (
+                    <Badge>{`P${item.priority}`}</Badge>
+                  ) : null}
+                  <Badge variant="secondary">{item.audience}</Badge>
+                </div>
+              </div>
+              <p className="mb-3 text-sm text-muted-foreground">{item.description}</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" asChild>
+                  <a
+                    href={item.href}
+                    target={item.href.startsWith("http") ? "_blank" : undefined}
+                    rel={
+                      item.href.startsWith("http")
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
+                  >
+                    Open
+                  </a>
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => copyLink(item.href)}>
+                  Copy Link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => shareLink(item.title, item.href)}
+                >
+                  Share
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => copyOutreachText(item)}
+                >
+                  Copy Outreach
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

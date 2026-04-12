@@ -107,7 +107,7 @@ router.get("/premium-ops", isAdmin, async (req, res) => {
     ]);
 
     const totalsByEvent = Object.fromEntries(
-      totalsRows.map((row) => [
+      totalsRows.map((row: { eventName: string; count: number; uniqueUsers: number }) => [
         row.eventName,
         {
           count: Number(row.count || 0),

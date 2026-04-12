@@ -44,6 +44,7 @@ import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
+import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 
@@ -866,6 +867,17 @@ export default function Home() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="section section--full section--surface py-4">
+        <div className="content">
+          <SEOInternalLinks
+            title="Popular City + Cuisine Entry Pages"
+            description="Crawlable city and cuisine pages for local food-truck intent."
+            maxCities={8}
+            maxCuisineLinksPerCity={2}
+          />
         </div>
       </section>
 

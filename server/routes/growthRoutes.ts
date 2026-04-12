@@ -30,6 +30,7 @@ import { and, eq, gte, isNull, lte, or, ilike, sql, desc } from "drizzle-orm";
 import { DinerDigestService } from "../dinerDigestService";
 import { OnboardingDripService } from "../onboardingDripService";
 import { RestaurantActivationService } from "../restaurantActivationService";
+import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
 
 function bucketScore(
   count: number,
@@ -276,6 +277,23 @@ export function registerGrowthRoutes(app: Express): void {
       } catch (err) {
         console.error("[growth/restaurant-activation/run] error:", err);
         res.status(500).json({ message: "Restaurant activation run failed" });
+      }
+    },
+  );
+
+  // Manual trigger for host partner lead drip
+  app.post(
+    "/api/admin/growth/host-partner-drip/run",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      try {
+        const stats = await runHostPartnerLeadDripCron();
+        res.json({ ok: true, stats });
+      } catch (err) {
+        console.error("[growth/host-partner-drip/run] error:", err);
+        res.status(500).json({ message: "Host partner drip run failed" });
       }
     },
   );

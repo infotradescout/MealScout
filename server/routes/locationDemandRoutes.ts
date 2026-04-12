@@ -5,11 +5,14 @@ import { eq } from "drizzle-orm";
 import { storage } from "../storage";
 import { db } from "../db";
 import { emailService } from "../emailService";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { forwardGeocode } from "../utils/geocoding";
 import { sendTruckInterestNotification } from "../emailNotifications";
+import { handleHostPartnerLeadRequest } from "../services/hostPartnerLeadMagnet";
 import {
   insertHostLocationClaimSchema,
+  insertHostPartnerLeadSchema,
   insertLocationRequestSchema,
   insertTruckInterestSchema,
   restaurants,
@@ -18,6 +21,75 @@ import {
 } from "@shared/schema";
 
 export function registerLocationDemandRoutes(app: Express) {
+  const hostPartnerBurstLimiter = distributedRateLimit({
+    scope: "host-partner:burst",
+    limit: 6,
+    windowMs: 5 * 60 * 1000,
+    key: (req) => {
+      const ua = String(req.get("User-Agent") || "").slice(0, 80);
+      return `${req.ip}:${ua}`;
+    },
+  });
+  const hostPartnerDailyLimiter = distributedRateLimit({
+    scope: "host-partner:daily",
+    limit: 40,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+  const hostPartnerEmailLimiter = distributedRateLimit({
+    scope: "host-partner:email",
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+    key: (req) => {
+      const email = String((req as any).body?.email || "")
+        .trim()
+        .toLowerCase();
+      return email || String(req.ip || "unknown");
+    },
+  });
+
+  app.post(
+    "/api/public/host-partner-leads",
+    hostPartnerBurstLimiter,
+    hostPartnerDailyLimiter,
+    hostPartnerEmailLimiter,
+    async (req: any, res) => {
+      try {
+        const parsed = insertHostPartnerLeadSchema.parse(req.body);
+        const result = await handleHostPartnerLeadRequest({
+          ...parsed,
+          ip: String(req.ip || ""),
+          userAgent: String(req.get("User-Agent") || ""),
+        });
+
+        if (!result.ok && result.code === "disabled") {
+          return res.status(503).json({
+            ok: false,
+            message: "Host partner intake is temporarily unavailable.",
+          });
+        }
+
+        return res.json({
+          ok: true,
+          leadId: (result as any).leadId,
+          emailed: (result as any).emailed ?? false,
+        });
+      } catch (error: any) {
+        console.error("Error creating host partner lead:", error);
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            ok: false,
+            message: "Invalid host partner lead data",
+            errors: error.errors,
+          });
+        }
+        return res.status(500).json({
+          ok: false,
+          message: "Unable to save host partner lead right now",
+        });
+      }
+    },
+  );
+
   app.post("/api/location-requests", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;

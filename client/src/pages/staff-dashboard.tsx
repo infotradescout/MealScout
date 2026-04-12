@@ -25,6 +25,7 @@ import Navigation from "@/components/navigation";
 import { Link } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import HostLocationManager from "@/components/admin/host-location-manager";
+import ShareHub from "@/components/share-hub";
 
 interface CreatedAccount {
   userId: string;
@@ -64,9 +65,9 @@ export default function StaffDashboard() {
   const [createdAccount, setCreatedAccount] = useState<CreatedAccount | null>(
     null,
   );
-  const [selectedTab, setSelectedTab] = useState<"accounts" | "host-locations">(
-    "accounts",
-  );
+  const [selectedTab, setSelectedTab] = useState<
+    "accounts" | "host-locations" | "share-portal"
+  >("accounts");
   const canEditHostLocations =
     user?.userType === "admin" ||
     user?.userType === "staff" ||
@@ -283,7 +284,9 @@ export default function StaffDashboard() {
         <Tabs
           value={selectedTab}
           onValueChange={(value) =>
-            setSelectedTab(value as "accounts" | "host-locations")
+            setSelectedTab(
+              value as "accounts" | "host-locations" | "share-portal",
+            )
           }
         >
           <TabsList className="w-full inline-flex h-auto flex-wrap gap-1 p-1 mb-4">
@@ -292,6 +295,9 @@ export default function StaffDashboard() {
             </TabsTrigger>
             <TabsTrigger value="host-locations" className="flex-shrink-0">
               Host Locations
+            </TabsTrigger>
+            <TabsTrigger value="share-portal" className="flex-shrink-0">
+              Share Portal
             </TabsTrigger>
           </TabsList>
 
@@ -605,6 +611,14 @@ export default function StaffDashboard() {
                 <HostLocationManager canEdit={canEditHostLocations} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="share-portal" className="space-y-4">
+            <ShareHub
+              mode="staff"
+              title="Share Portal"
+              description="Important growth and onboarding links in one place for quick outreach."
+            />
           </TabsContent>
         </Tabs>
 

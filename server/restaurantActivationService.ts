@@ -10,7 +10,7 @@
 
 import { db } from "./db";
 import { users, restaurants, deals, telemetryEvents } from "@shared/schema";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, or, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
 
 function isEmailEnabled(user: { accountSettings?: unknown }): boolean {
@@ -88,13 +88,17 @@ export class RestaurantActivationService {
         id: users.id,
         email: users.email,
         firstName: users.firstName,
+        userType: users.userType,
         accountSettings: users.accountSettings,
         createdAt: users.createdAt,
       })
       .from(users)
       .where(
         and(
-          eq(users.userType, "restaurant_owner"),
+          or(
+            eq(users.userType, "restaurant_owner"),
+            eq(users.userType, "food_truck"),
+          ),
           gte(users.createdAt, day14Start),
           lte(users.createdAt, day7End),
         ),
@@ -166,7 +170,7 @@ export class RestaurantActivationService {
     const isFollowUp = step === "day14";
     const subject = isFollowUp
       ? "⏰ Last reminder: Add a deal to your MealScout listing"
-      : "🎉 Your MealScout profile is live — add your first deal!";
+      : "🎉 Your MealScout listing is live — add your first deal!";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -182,10 +186,10 @@ export class RestaurantActivationService {
       <p>Hey ${name}!</p>
       ${
         isFollowUp
-          ? `<p>We noticed you haven't added a deal to your MealScout profile yet. Restaurants with active deals get <strong>3-5x more profile views</strong> than those without.</p>
+          ? `<p>We noticed you haven't added a deal to your MealScout listing yet. Businesses with active deals get <strong>3-5x more profile views</strong> than those without.</p>
            <p>It takes less than 2 minutes — just set a title, discount amount, and expiry date. That's it.</p>`
-          : `<p>Your MealScout business profile is live! The only thing standing between you and new customers is your first deal.</p>
-           <p>Deals get discovered through our search, map, and weekly customer emails. <strong>Adding one deal is the single highest-leverage thing you can do right now.</strong></p>`
+          : `<p>Your MealScout business listing is live! The only thing standing between you and new customers is your first deal.</p>
+           <p>Deals get discovered through search, map, and weekly customer emails. <strong>Adding one deal is the single highest-leverage thing you can do right now.</strong></p>`
       }
       <div style="background:#fff8f5;border-left:4px solid #ff6b35;padding:20px;margin:20px 0;border-radius:4px;">
         <strong>How to create a deal in 2 minutes:</strong><br>
