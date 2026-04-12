@@ -156,6 +156,31 @@ export default function ShareHub({
     return `${window.location.origin}${href}`;
   };
 
+  const trackShareHubEvent = async (
+    action: "open" | "copy_link" | "copy_outreach" | "share",
+    item: ShareHubItem,
+  ) => {
+    try {
+      await fetch("/api/telemetry/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          eventName: "share_hub_action",
+          properties: {
+            action,
+            mode,
+            itemKey: item.key,
+            href: item.href,
+            audience: item.audience,
+          },
+        }),
+      });
+    } catch {
+      // Best-effort telemetry only
+    }
+  };
+
   const copyLink = async (href: string) => {
     const value = absoluteUrl(href);
     try {
@@ -175,6 +200,7 @@ export default function ShareHub({
     const text = item.outreachText ? `${item.outreachText}${value}` : value;
     try {
       await navigator.clipboard.writeText(text);
+      void trackShareHubEvent("copy_outreach", item);
       toast({ title: "Outreach text copied", description: item.title });
     } catch {
       toast({
@@ -186,8 +212,10 @@ export default function ShareHub({
   };
 
   const shareLink = async (titleValue: string, href: string) => {
+    const item = items.find((entry) => entry.title === titleValue && entry.href === href);
     const value = absoluteUrl(href);
     if (!navigator.share) {
+      if (item) void trackShareHubEvent("share", item);
       await copyLink(href);
       return;
     }
@@ -197,6 +225,7 @@ export default function ShareHub({
         text: "Useful MealScout link",
         url: value,
       });
+      if (item) void trackShareHubEvent("share", item);
     } catch {
       // user dismissed share modal
     }
@@ -235,11 +264,19 @@ export default function ShareHub({
                         ? "noopener noreferrer"
                         : undefined
                     }
+                    onClick={() => void trackShareHubEvent("open", item)}
                   >
                     Open
                   </a>
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => copyLink(item.href)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    await copyLink(item.href);
+                    void trackShareHubEvent("copy_link", item);
+                  }}
+                >
                   Copy Link
                 </Button>
                 <Button

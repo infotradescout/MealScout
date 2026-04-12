@@ -19,6 +19,7 @@ import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
+import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { db } from "../db";
@@ -210,6 +211,29 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.error("❌ Parking Pass Completion Reminders Failed:", error);
     }
   });
+
+  // Social post queue processor — every 10 minutes (enabled by default)
+  if (
+    String(process.env.SOCIAL_QUEUE_PROCESSOR_ENABLED || "true")
+      .trim()
+      .toLowerCase() !== "false"
+  ) {
+    const expression = String(
+      process.env.SOCIAL_QUEUE_PROCESSOR_CRON || "*/10 * * * *",
+    );
+    cron.schedule(expression, async () => {
+      try {
+        const stats = await runSocialQueueProcessor(
+          Number(process.env.SOCIAL_QUEUE_PROCESSOR_BATCH || 25),
+        );
+        if (stats.attempted > 0) {
+          console.log("[social-queue] processed:", stats);
+        }
+      } catch (error) {
+        console.error("[social-queue] processor failed:", error);
+      }
+    });
+  }
 
   // Notify unbooked events — hourly
   cron.schedule("0 * * * *", async () => {

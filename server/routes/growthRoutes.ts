@@ -33,6 +33,10 @@ import { OnboardingDripService } from "../onboardingDripService";
 import { RestaurantActivationService } from "../restaurantActivationService";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
 import { getIndexNowConfig, submitIndexNowUrls } from "../services/indexNow";
+import {
+  getSocialQueueStatus,
+  runSocialQueueProcessor,
+} from "../services/socialQueueProcessor";
 
 function bucketScore(
   count: number,
@@ -60,6 +64,9 @@ function isAdmin(req: Request): boolean {
 export function registerGrowthRoutes(app: Express): void {
   const indexNowPayloadSchema = z.object({
     urls: z.array(z.string().url()).min(1).max(10000),
+  });
+  const socialQueueRunSchema = z.object({
+    limit: z.number().int().min(1).max(200).optional(),
   });
 
   // City health scores
@@ -349,6 +356,48 @@ export function registerGrowthRoutes(app: Express): void {
       } catch (err) {
         console.error("[growth/indexnow/submit] error:", err);
         res.status(500).json({ message: "IndexNow submission failed" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/growth/social-queue/status",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      try {
+        const status = await getSocialQueueStatus();
+        res.json({ ok: true, status });
+      } catch (err) {
+        console.error("[growth/social-queue/status] error:", err);
+        res.status(500).json({ message: "Failed to load social queue status" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/growth/social-queue/run",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const parsed = socialQueueRunSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Invalid payload",
+          errors: parsed.error.flatten(),
+        });
+      }
+
+      try {
+        const stats = await runSocialQueueProcessor(parsed.data.limit || 25);
+        const status = await getSocialQueueStatus();
+        res.json({ ok: true, stats, status });
+      } catch (err) {
+        console.error("[growth/social-queue/run] error:", err);
+        res.status(500).json({ message: "Social queue run failed" });
       }
     },
   );
