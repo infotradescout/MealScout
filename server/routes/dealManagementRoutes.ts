@@ -34,6 +34,13 @@ type DealManagementRouteDependencies = {
     lng: number;
   }) => Promise<void>;
   toNumeric: (value: unknown) => number | null;
+  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  queueSocialPost: (payload: {
+    platform: string;
+    target?: string | null;
+    message: string;
+    link?: string | null;
+  }) => Promise<void>;
 };
 
 export function registerDealManagementRoutes(
@@ -43,6 +50,8 @@ export function registerDealManagementRoutes(
     validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
     toNumeric,
+    hasBusinessDistributionAccess,
+    queueSocialPost,
   }: DealManagementRouteDependencies,
 ) {
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
@@ -280,6 +289,90 @@ export function registerDealManagementRoutes(
         }).catch((error) => {
           console.error("Failed to send nearby deal notifications:", error);
         });
+      }
+
+      // Hands-off auto-sharing: queue social posts when deal trigger is enabled
+      // and the owner has disabled prompt-before-post in social settings.
+      try {
+        const hasDistributionAccess = await hasBusinessDistributionAccess(userId);
+        const socialSettings =
+          restaurant?.socialAutopostSettings &&
+          typeof restaurant.socialAutopostSettings === "object"
+            ? (restaurant.socialAutopostSettings as Record<string, any>)
+            : {};
+        const triggers =
+          socialSettings.triggers && typeof socialSettings.triggers === "object"
+            ? (socialSettings.triggers as Record<string, any>)
+            : {};
+        const rawPlatforms =
+          socialSettings.platforms &&
+          typeof socialSettings.platforms === "object"
+            ? (socialSettings.platforms as Record<string, any>)
+            : {};
+        const platforms = {
+          facebook: rawPlatforms.facebook !== false,
+          instagram: rawPlatforms.instagram !== false,
+          x: rawPlatforms.x !== false,
+        };
+        const dealTriggerEnabled = triggers.deal !== false;
+        const shouldQueueAutopost =
+          hasDistributionAccess &&
+          dealTriggerEnabled &&
+          socialSettings.promptBeforePost === false;
+
+        if (shouldQueueAutopost) {
+          const baseUrl = (
+            process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
+          ).replace(/\/+$/, "");
+          const link = `${baseUrl}/deal/${deal.id}`;
+          const message = `New deal at ${restaurant.name}: ${deal.title}. Check it out on MealScout.`;
+
+          const postJobs: Promise<void>[] = [];
+          if (platforms.facebook) {
+            postJobs.push(
+              queueSocialPost({
+                platform: "facebook",
+                target: restaurant.facebookPageUrl || "mealscout_page",
+                message,
+                link,
+              }),
+            );
+          }
+          if (platforms.instagram) {
+            postJobs.push(
+              queueSocialPost({
+                platform: "instagram",
+                target: restaurant.instagramUrl || null,
+                message,
+                link,
+              }),
+            );
+          }
+          if (platforms.x) {
+            postJobs.push(
+              queueSocialPost({
+                platform: "x",
+                target: restaurant.xUrl || null,
+                message,
+                link,
+              }),
+            );
+          }
+          if (postJobs.length > 0) {
+            void Promise.allSettled(postJobs).then((results) => {
+              results.forEach((result, index) => {
+                if (result.status === "rejected") {
+                  console.error(
+                    `Failed to queue social deal post [${index}]:`,
+                    result.reason,
+                  );
+                }
+              });
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to process deal auto-share queue:", error);
       }
 
       res.json(deal);

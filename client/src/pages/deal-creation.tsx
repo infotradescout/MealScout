@@ -375,7 +375,7 @@ export default function DealCreation() {
             : null;
         const dealId = created?.id || created?.deal?.id;
         const link = dealId
-          ? `${window.location.origin}/deals/${dealId}`
+          ? `${window.location.origin}/deal/${dealId}`
           : window.location.origin;
         const dealTitle = form.getValues("title") || "New deal";
         const restaurantName = restaurant?.name || "our truck";

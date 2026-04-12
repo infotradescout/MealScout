@@ -218,7 +218,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       : []),
     ...(user && !isAdmin && !isStaff
       ? ([{
-          path: "/dashboard?tab=share",
+          path: "/share-hub",
           icon: Share2,
           labelKey: "nav.share",
           fallbackLabel: "Share",

@@ -123,6 +123,7 @@ const SupplyOrdersPage = lazy(() => import("@/pages/supply-orders"));
 const PublicProfilePage = lazy(() => import("@/pages/public-profile"));
 const PensacolaSpots = lazy(() => import("@/pages/pensacola-spots"));
 const PensacolaReport = lazy(() => import("@/pages/pensacola-report"));
+const ShareHubPage = lazy(() => import("@/pages/share-hub-page"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -322,6 +323,7 @@ function Router() {
             <Route path="/pensacola/spots" component={PensacolaSpots} />
             <Route path="/pensacola/report" component={PensacolaReport} />
             <Route path="/parking-pass" component={ParkingPassPage} />
+            <Route path="/share-hub" component={ShareHubPage} />
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
@@ -470,6 +472,7 @@ function Router() {
             />
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
+            <Route path="/share-hub" component={ShareHubPage} />
           </>
         )}
         <Route component={NotFound} />

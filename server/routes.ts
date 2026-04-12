@@ -854,6 +854,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
     toNumeric,
+    hasBusinessDistributionAccess,
+    queueSocialPost,
   });
 
   registerDealDiscoveryRoutes(app, {
