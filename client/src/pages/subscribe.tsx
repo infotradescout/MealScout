@@ -206,7 +206,7 @@ const PlanSelector = ({
   onContinue: () => void;
 }) => {
   const getPricingDisplay = () =>
-    "$25/month forever for signups before April 1, 2026";
+    "Locked-in promo pricing at $25/month (normally $50).";
   const getPricingAmount = () => (
     <>
       <span className="mr-2 text-xl text-[color:var(--text-muted)] line-through">
@@ -222,7 +222,7 @@ const PlanSelector = ({
       <Card className="bg-[linear-gradient(110deg,rgba(34,197,94,0.12),rgba(20,184,166,0.12))] border-[color:var(--border-subtle)] shadow-clean">
         <CardContent className="p-6">
           <h3 className="text-xl font-bold text-[color:var(--text-primary)] mb-4 text-center">
-            Monthly Plan
+            Choose Your Plan
           </h3>
           <div className="grid grid-cols-1 gap-4">
             <div
@@ -231,10 +231,10 @@ const PlanSelector = ({
               data-testid="card-billing-monthly"
             >
               <div className="font-semibold text-[color:var(--text-primary)] mb-1">
-                Monthly
+                Monthly Premium
               </div>
               <div className="text-sm text-[color:var(--text-secondary)]">
-                Billed monthly
+                Cancel anytime
               </div>
             </div>
           </div>
@@ -248,19 +248,19 @@ const PlanSelector = ({
             htmlFor="promoCode"
             className="text-base font-semibold text-[color:var(--text-primary)] mb-2 block"
           >
-            Promo Code (Optional)
+            Have a promo code?
           </Label>
           <Input
             id="promoCode"
             type="text"
-            placeholder="Enter promo code"
+            placeholder="Type promo code"
             value={promoCode}
             onChange={(e) => onPromoCodeChange(e.target.value.toUpperCase())}
             className="text-center font-mono"
             data-testid="input-promo-code"
           />
           <p className="text-sm text-muted-foreground mt-2 text-center">
-            If you received a promo code from MealScout, enter it above.
+            We'll apply it before checkout.
           </p>
         </CardContent>
       </Card>
@@ -270,12 +270,12 @@ const PlanSelector = ({
         <CardContent className="p-6">
           <div className="text-center">
             <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-              Plan Summary
+              You're Almost Set
             </h3>
             <div className="flex justify-center items-center space-x-2 mb-2">
               <Check className="w-5 h-5 text-[color:var(--status-success)]" />
               <span className="font-semibold text-[color:var(--text-primary)]">
-                MealScout Premium Plan
+                MealScout Premium
               </span>
             </div>
             <div className="text-3xl font-bold text-[color:var(--accent-text)] mb-2">
@@ -294,7 +294,7 @@ const PlanSelector = ({
               className="w-full py-3 font-semibold text-sm"
               data-testid="button-continue-to-payment"
             >
-              Continue to Payment
+              Continue to Checkout
             </Button>
           </div>
         </CardContent>
@@ -881,7 +881,7 @@ export default function Subscribe() {
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
         <BackHeader
-          title="Pricing & Subscriptions"
+          title="Plans & Billing"
           fallbackHref={nextPath}
           icon={CreditCard}
           className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
@@ -900,7 +900,7 @@ export default function Subscribe() {
                 className="w-full mb-2"
                 onClick={() => setLocation(nextPath)}
               >
-                Continue (No Premium)
+                Skip Premium for now
               </Button>
               <Link href="/">
                 <Button variant="outline" className="w-full">
@@ -922,7 +922,7 @@ export default function Subscribe() {
   return (
     <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
       <BackHeader
-        title="Pricing & Subscriptions"
+        title="Plans & Billing"
         fallbackHref={nextPath}
         icon={CreditCard}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
@@ -934,12 +934,11 @@ export default function Subscribe() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  Premium is optional
+                  Start free, upgrade when you're ready
                 </div>
                 <div className="text-xs text-[color:var(--text-secondary)]">
-                  Premium unlocks deal creation + analytics
-                  (trial/subscription). Parking Pass is separate and always
-                  available for food trucks.
+                  Premium helps you publish deals and track performance.
+                  Parking Pass booking fees stay separate for food trucks.
                 </div>
               </div>
               <Button
@@ -948,7 +947,7 @@ export default function Subscribe() {
                 onClick={() => setLocation(nextPath)}
                 data-testid="button-continue-without-premium"
               >
-                Continue
+                Skip for now
               </Button>
             </div>
             <div className="flex gap-2">
@@ -958,7 +957,7 @@ export default function Subscribe() {
                   className="w-full"
                   data-testid="button-go-parking-pass"
                 >
-                  Parking Pass
+                  Book Parking Pass
                 </Button>
               </Link>
               <Link href="/deal-creation">
@@ -967,14 +966,14 @@ export default function Subscribe() {
                   className="w-full"
                   data-testid="button-go-deal-creation"
                 >
-                  Premium Features
+                  Create Deals
                 </Button>
               </Link>
             </div>
             {(currentSubscription as any)?.trialAccess &&
               (currentSubscription as any)?.trialEndsAt && (
                 <div className="text-xs text-[color:var(--status-success)]">
-                  Trial active until{" "}
+                  Your free trial ends{" "}
                   {new Date(
                     (currentSubscription as any).trialEndsAt,
                   ).toLocaleDateString("en-US", {
@@ -997,14 +996,13 @@ export default function Subscribe() {
             <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(168,85,247,0.12))] border-[color:var(--border-subtle)] shadow-clean">
               <CardContent className="p-6 text-center">
                 <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-                  Change Plan or Use Promo Code
+                  Need to update your plan?
                 </h3>
                 <p className="text-sm text-[color:var(--text-secondary)] mb-2">
-                  Change your billing frequency or apply a promo code
+                  You can switch plans or add a promo code anytime.
                 </p>
                 <p className="text-xs text-[color:var(--accent-text)] font-medium mb-4">
-                  Tip: If you received a promo code from MealScout, enter it
-                  below.
+                  Have a code? Add it in the next step.
                 </p>
                 <Button
                   onClick={showNewSubscription}
@@ -1012,7 +1010,7 @@ export default function Subscribe() {
                   className="w-full"
                   data-testid="button-change-plan"
                 >
-                  View Plans & Enter Promo Code
+                  Manage Plan & Promo
                 </Button>
               </CardContent>
             </Card>
@@ -1029,8 +1027,8 @@ export default function Subscribe() {
                   <div className="flex items-center gap-2 text-[color:var(--status-warning)]">
                     <AlertCircle className="h-4 w-4" />
                     <span className="text-sm font-medium">
-                      You currently have an active subscription. Selecting a new
-                      plan will replace your current plan.
+                      You already have Premium. Picking a new plan will replace
+                      your current one.
                     </span>
                   </div>
                 </CardContent>
@@ -1039,18 +1037,18 @@ export default function Subscribe() {
 
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader>
-                <CardTitle>Apply Credits</CardTitle>
+                <CardTitle>Use Credits</CardTitle>
                 <CardDescription>
-                  Credits can reduce your next subscription invoice.
+                  Use available credits to lower your next bill.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-[color:var(--text-secondary)]">
-                  Available: $
+                  Credit balance: $
                   {Number(creditBalanceData?.balance || 0).toFixed(2)}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="credit-apply">Credits to apply</Label>
+                  <Label htmlFor="credit-apply">Amount to use</Label>
                   <Input
                     id="credit-apply"
                     type="number"
@@ -1061,7 +1059,7 @@ export default function Subscribe() {
                     placeholder="0.00"
                   />
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    Credits apply to the upcoming invoice only.
+                    Credits are applied to your next invoice.
                   </p>
                 </div>
               </CardContent>
@@ -1087,7 +1085,7 @@ export default function Subscribe() {
                     className="w-full"
                     data-testid="button-back-to-management"
                   >
-                    Back to Subscription Management
+                    Back to Billing Overview
                   </Button>
                 </CardContent>
               </Card>
@@ -1106,7 +1104,7 @@ export default function Subscribe() {
                 className="text-muted-foreground"
                 data-testid="text-initializing"
               >
-                Initializing your subscription...
+                Setting up your plan...
               </p>
             </div>
           </div>
