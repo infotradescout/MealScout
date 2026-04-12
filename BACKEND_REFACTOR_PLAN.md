@@ -17,6 +17,11 @@ This plan turns the current hotspot audit into an execution order that reduces b
 - Scheduler and cron registration are split across `server/routes.ts` and `server/index.ts`.
 - Some compliance/static handlers exist in both `server/index.ts` and `server/routes.ts`.
 
+## Progress Updates
+
+- Phase 1 startup extraction is in place: schedulers, static/compliance pages, operational endpoints, and recurring startup jobs are wired through `server/bootstrap/*` modules.
+- Phase 3 started: auth-token lifecycle methods were extracted from `server/storage.ts` into `server/storage/authTokensRepository.ts` while keeping `IStorage` and `DatabaseStorage` public method signatures unchanged.
+
 ## Guardrails
 
 - Do not change database schema as part of the first refactor wave.

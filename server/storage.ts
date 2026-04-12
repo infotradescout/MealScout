@@ -134,6 +134,7 @@ import { isParkingPassPublicReady } from "./services/parkingPassQuality";
 import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
 import { broadcastLisaClaim } from "./websocket";
+import { createAuthTokensRepository } from "./storage/authTokensRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -762,6 +763,7 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private readonly authTokensRepository = createAuthTokensRepository();
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -6651,214 +6653,113 @@ export class DatabaseStorage implements IStorage {
   async createPasswordResetToken(
     tokenData: InsertPasswordResetToken,
   ): Promise<PasswordResetToken> {
-    const [token] = await db
-      .insert(passwordResetTokens)
-      .values(tokenData)
-      .returning();
-    return token;
+    return this.authTokensRepository.createPasswordResetToken(tokenData);
   }
 
   async getPasswordResetToken(
     id: string,
   ): Promise<PasswordResetToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(passwordResetTokens)
-      .where(eq(passwordResetTokens.id, id));
-    return token;
+    return this.authTokensRepository.getPasswordResetToken(id);
   }
 
   async getPasswordResetTokenByTokenHash(
     tokenHash: string,
   ): Promise<PasswordResetToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(passwordResetTokens)
-      .where(
-        and(
-          eq(passwordResetTokens.tokenHash, tokenHash),
-          gte(passwordResetTokens.expiresAt, new Date()),
-          isNull(passwordResetTokens.usedAt),
-        ),
-      );
-    return token;
+    return this.authTokensRepository.getPasswordResetTokenByTokenHash(tokenHash);
   }
 
   async markPasswordResetTokenUsed(id: string): Promise<PasswordResetToken> {
-    const [token] = await db
-      .update(passwordResetTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(passwordResetTokens.id, id))
-      .returning();
-    return token;
+    return this.authTokensRepository.markPasswordResetTokenUsed(id);
   }
 
   async deleteUserResetTokens(userId: string): Promise<void> {
-    // Security-first behavior: invalidate all prior reset links when issuing a new one.
-    await db
-      .delete(passwordResetTokens)
-      .where(eq(passwordResetTokens.userId, userId));
+    return this.authTokensRepository.deleteUserResetTokens(userId);
   }
 
   async deleteExpiredResetTokens(): Promise<number> {
-    const result = await db
-      .delete(passwordResetTokens)
-      .where(lte(passwordResetTokens.expiresAt, new Date()));
-
-    // Return the number of deleted rows
-    return result.rowCount || 0;
+    return this.authTokensRepository.deleteExpiredResetTokens();
   }
 
   async createPhoneVerificationToken(
     tokenData: InsertPhoneVerificationToken,
   ): Promise<PhoneVerificationToken> {
-    const [token] = await db
-      .insert(phoneVerificationTokens)
-      .values(tokenData)
-      .returning();
-    return token;
+    return this.authTokensRepository.createPhoneVerificationToken(tokenData);
   }
 
   async getPhoneVerificationTokenByHash(
     phone: string,
     tokenHash: string,
   ): Promise<PhoneVerificationToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(phoneVerificationTokens)
-      .where(
-        and(
-          eq(phoneVerificationTokens.phone, phone),
-          eq(phoneVerificationTokens.tokenHash, tokenHash),
-          gte(phoneVerificationTokens.expiresAt, new Date()),
-          isNull(phoneVerificationTokens.usedAt),
-        ),
-      );
-    return token;
+    return this.authTokensRepository.getPhoneVerificationTokenByHash(
+      phone,
+      tokenHash,
+    );
   }
 
   async markPhoneVerificationTokenUsed(
     id: string,
   ): Promise<PhoneVerificationToken> {
-    const [token] = await db
-      .update(phoneVerificationTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(phoneVerificationTokens.id, id))
-      .returning();
-    return token;
+    return this.authTokensRepository.markPhoneVerificationTokenUsed(id);
   }
 
   async deletePhoneVerificationTokens(phone: string): Promise<void> {
-    await db
-      .delete(phoneVerificationTokens)
-      .where(eq(phoneVerificationTokens.phone, phone));
+    return this.authTokensRepository.deletePhoneVerificationTokens(phone);
   }
 
   async deleteExpiredPhoneVerificationTokens(): Promise<number> {
-    const result = await db
-      .delete(phoneVerificationTokens)
-      .where(lte(phoneVerificationTokens.expiresAt, new Date()));
-    return result.rowCount || 0;
+    return this.authTokensRepository.deleteExpiredPhoneVerificationTokens();
   }
 
   // Account setup token operations
   async createAccountSetupToken(
     tokenData: InsertAccountSetupToken,
   ): Promise<AccountSetupToken> {
-    const [token] = await db
-      .insert(accountSetupTokens)
-      .values(tokenData)
-      .returning();
-    return token;
+    return this.authTokensRepository.createAccountSetupToken(tokenData);
   }
 
   async getAccountSetupToken(
     id: string,
   ): Promise<AccountSetupToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(accountSetupTokens)
-      .where(eq(accountSetupTokens.id, id));
-    return token;
+    return this.authTokensRepository.getAccountSetupToken(id);
   }
 
   async getAccountSetupTokenByTokenHash(
     tokenHash: string,
   ): Promise<AccountSetupToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(accountSetupTokens)
-      .where(
-        and(
-          eq(accountSetupTokens.tokenHash, tokenHash),
-          gte(accountSetupTokens.expiresAt, new Date()),
-          isNull(accountSetupTokens.usedAt),
-        ),
-      );
-    return token;
+    return this.authTokensRepository.getAccountSetupTokenByTokenHash(tokenHash);
   }
 
   async markAccountSetupTokenUsed(id: string): Promise<AccountSetupToken> {
-    const [token] = await db
-      .update(accountSetupTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(accountSetupTokens.id, id))
-      .returning();
-    return token;
+    return this.authTokensRepository.markAccountSetupTokenUsed(id);
   }
 
   async deleteUserSetupTokens(userId: string): Promise<void> {
-    // Security-first behavior: keep at most one valid invite/setup token per user.
-    await db
-      .delete(accountSetupTokens)
-      .where(eq(accountSetupTokens.userId, userId));
+    return this.authTokensRepository.deleteUserSetupTokens(userId);
   }
 
   async deleteExpiredSetupTokens(): Promise<number> {
-    const result = await db
-      .delete(accountSetupTokens)
-      .where(lte(accountSetupTokens.expiresAt, new Date()));
-
-    // Return the number of deleted rows
-    return result.rowCount || 0;
+    return this.authTokensRepository.deleteExpiredSetupTokens();
   }
 
   // Email verification token operations
   async createEmailVerificationToken(
     tokenData: InsertEmailVerificationToken,
   ): Promise<EmailVerificationToken> {
-    const [token] = await db
-      .insert(emailVerificationTokens)
-      .values(tokenData)
-      .returning();
-    return token;
+    return this.authTokensRepository.createEmailVerificationToken(tokenData);
   }
 
   async getEmailVerificationTokenByTokenHash(
     tokenHash: string,
   ): Promise<EmailVerificationToken | undefined> {
-    const [token] = await db
-      .select()
-      .from(emailVerificationTokens)
-      .where(
-        and(
-          eq(emailVerificationTokens.tokenHash, tokenHash),
-          gte(emailVerificationTokens.expiresAt, new Date()),
-          isNull(emailVerificationTokens.usedAt),
-        ),
-      );
-    return token;
+    return this.authTokensRepository.getEmailVerificationTokenByTokenHash(
+      tokenHash,
+    );
   }
 
   async markEmailVerificationTokenUsed(
     id: string,
   ): Promise<EmailVerificationToken> {
-    const [token] = await db
-      .update(emailVerificationTokens)
-      .set({ usedAt: new Date() })
-      .where(eq(emailVerificationTokens.id, id))
-      .returning();
-    return token;
+    return this.authTokensRepository.markEmailVerificationTokenUsed(id);
   }
 
   // API Key operations
