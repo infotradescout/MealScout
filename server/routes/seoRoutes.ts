@@ -24,6 +24,7 @@ import {
   truckManualSchedules,
   videoStories,
 } from "@shared/schema";
+import { getIndexNowConfig } from "../services/indexNow";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -130,6 +131,16 @@ const sendUrlsetXml = (
 };
 
 export function registerSeoRoutes(app: Express) {
+  const indexNowConfig = getIndexNowConfig();
+  if (indexNowConfig.enabled && indexNowConfig.key) {
+    const keyPath = `/${indexNowConfig.key}.txt`;
+    app.get(keyPath, async (_req, res) => {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+      res.send(indexNowConfig.key);
+    });
+  }
+
   app.get("/sitemap.xml", async (_req, res) => {
     try {
       const cityRows = await db
@@ -965,6 +976,11 @@ export function registerSeoRoutes(app: Express) {
         `Sitemap: ${baseUrl}/sitemap-videos.xml`,
         "",
         `AI: ${baseUrl}/llms.txt`,
+        ...(indexNowConfig.enabled &&
+        indexNowConfig.key &&
+        indexNowConfig.keyLocation
+          ? [`IndexNow: ${indexNowConfig.keyLocation}`]
+          : []),
         "",
       ].join("\n");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");

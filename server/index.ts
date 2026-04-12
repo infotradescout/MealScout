@@ -28,6 +28,7 @@ import { runOpsDataCleanup } from "./opsCleanup";
 import { runMarketplaceHealthAudit } from "./marketplaceHealth";
 import { videoStories, restaurants, requestLogs } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
+import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 
 validateEnv();
 
@@ -775,6 +776,8 @@ app.use((req, res, next) => {
 
   // Crawler-friendly static HTML routes for Facebook/Google compliance
   // MUST be registered before any SPA routing or Vite middleware
+  registerAcquisitionPrerenderRoutes(app, canonicalBaseUrl);
+
   // Crawler-friendly SSR route for video transcripts
   // Serves initial HTML with transcript and VideoObject JSON-LD for /video/:id
   app.get("/video/:storyId", async (req, res) => {

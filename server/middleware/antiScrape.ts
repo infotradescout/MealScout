@@ -9,10 +9,15 @@ const knownSearchOrLlmBots =
 
 const isSeoCriticalPath = (path: string) => {
   const value = String(path || "").toLowerCase();
+  const indexNowKey = String(process.env.INDEXNOW_KEY || "")
+    .trim()
+    .toLowerCase();
+  const indexNowKeyPath = indexNowKey ? `/${indexNowKey}.txt` : "";
   return (
     value === "/robots.txt" ||
     value === "/llms.txt" ||
     value === "/ai.txt" ||
+    (indexNowKeyPath && value === indexNowKeyPath) ||
     value === "/sitemap.xml" ||
     /^\/sitemap[\w-]*\.xml$/.test(value)
   );

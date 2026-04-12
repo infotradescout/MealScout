@@ -27,10 +27,12 @@ import {
   telemetryEvents,
 } from "@shared/schema";
 import { and, eq, gte, isNull, lte, or, ilike, sql, desc } from "drizzle-orm";
+import { z } from "zod";
 import { DinerDigestService } from "../dinerDigestService";
 import { OnboardingDripService } from "../onboardingDripService";
 import { RestaurantActivationService } from "../restaurantActivationService";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
+import { getIndexNowConfig, submitIndexNowUrls } from "../services/indexNow";
 
 function bucketScore(
   count: number,
@@ -56,6 +58,10 @@ function isAdmin(req: Request): boolean {
 }
 
 export function registerGrowthRoutes(app: Express): void {
+  const indexNowPayloadSchema = z.object({
+    urls: z.array(z.string().url()).min(1).max(10000),
+  });
+
   // City health scores
   app.get(
     "/api/admin/growth/city-health",
@@ -294,6 +300,55 @@ export function registerGrowthRoutes(app: Express): void {
       } catch (err) {
         console.error("[growth/host-partner-drip/run] error:", err);
         res.status(500).json({ message: "Host partner drip run failed" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/growth/indexnow/status",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const cfg = getIndexNowConfig();
+      res.json({
+        ok: true,
+        enabled: cfg.enabled,
+        host: cfg.host,
+        keyConfigured: Boolean(cfg.key),
+        keyLocation: cfg.keyLocation || null,
+      });
+    },
+  );
+
+  app.post(
+    "/api/admin/growth/indexnow/submit",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const parsed = indexNowPayloadSchema.safeParse(req.body || {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: "Invalid payload",
+          errors: parsed.error.flatten(),
+        });
+      }
+
+      try {
+        const result = await submitIndexNowUrls(parsed.data.urls);
+        if (!result.ok) {
+          return res.status(502).json({
+            ok: false,
+            message: "IndexNow submission failed",
+            result,
+          });
+        }
+        res.json({ ok: true, result });
+      } catch (err) {
+        console.error("[growth/indexnow/submit] error:", err);
+        res.status(500).json({ message: "IndexNow submission failed" });
       }
     },
   );

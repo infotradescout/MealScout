@@ -83,6 +83,19 @@ export default function HostLocationPartnerPage() {
         title="Host Food Trucks at Your Business | MealScout"
         description="Non-food businesses with parking space can host food trucks and earn recurring monthly booking revenue with MealScout."
         canonicalUrl="https://www.mealscout.us/host-location-partner"
+        schemaData={{
+          "@context": "https://schema.org",
+          "@type": "LocalBusiness",
+          name: "MealScout Host Location Partner",
+          url: "https://www.mealscout.us/host-location-partner",
+          description:
+            "Apply to host food trucks at your parking location and receive recurring booking demand.",
+          areaServed: "United States",
+          potentialAction: {
+            "@type": "ApplyAction",
+            target: "https://www.mealscout.us/host-location-partner",
+          },
+        }}
       />
 
       <div className="mx-auto max-w-4xl space-y-6">
@@ -299,4 +312,3 @@ export default function HostLocationPartnerPage() {
     </div>
   );
 }
-
