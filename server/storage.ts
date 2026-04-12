@@ -1,4 +1,4 @@
-﻿import {
+import {
   users,
   restaurants,
   deals,
@@ -135,6 +135,7 @@ import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
 import { broadcastLisaClaim } from "./websocket";
 import { createAuthTokensRepository } from "./storage/authTokensRepository";
+import { createUsersRepository } from "./storage/usersRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -764,6 +765,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   private readonly authTokensRepository = createAuthTokensRepository();
+  private readonly usersRepository = createUsersRepository();
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -2110,14 +2112,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Stripe helpers
-  async updateUserStripeCustomerId(
-    userId: string,
-    customerId: string,
-  ): Promise<void> {
-    await db
-      .update(users)
-      .set({ stripeCustomerId: customerId })
-      .where(eq(users.id, userId));
+  async updateUserStripeCustomerId(userId: string, customerId: string): Promise<void> {
+    return this.usersRepository.updateUserStripeCustomerId(userId, customerId);
   }
 
   async updateUserStripeInfo(
@@ -2126,17 +2122,7 @@ export class DatabaseStorage implements IStorage {
     stripeSubscriptionId: string,
     subscriptionBillingInterval?: string,
   ): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({
-        stripeCustomerId,
-        stripeSubscriptionId,
-        subscriptionBillingInterval,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
+    return this.usersRepository.updateUserStripeInfo(id, stripeCustomerId, stripeSubscriptionId, subscriptionBillingInterval);
   }
 
   async updateUser(
@@ -2166,120 +2152,29 @@ export class DatabaseStorage implements IStorage {
       >
     >,
   ): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({
-        ...updates,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
+    return this.usersRepository.updateUser(id, updates);
   }
 
   // User operations
   // (IMPORTANT) these user operations are mandatory for authentication.
   async getUser(id: string): Promise<User | undefined> {
-    const normalizedId = String(id || "").trim();
-    if (!normalizedId) return undefined;
-    try {
-      const rows = await this.selectUsersSafe(`where "id" = $1 limit 1`, [
-        normalizedId,
-      ]);
-      const row = (rows[0] as any) || undefined;
-      if (!row) return undefined;
-      if (row.isDisabled === true) return undefined;
-      return row as any;
-    } catch (error) {
-      console.warn("getUser safe projection failed, falling back:", error);
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(
-          and(
-            eq(users.id, normalizedId),
-            or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-          ),
-        );
-      return user;
-    }
+    return this.usersRepository.getUser(id);
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.facebookId,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+    return this.usersRepository.upsertUser(userData);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const normalizedEmail = String(email || "").trim();
-    if (!normalizedEmail) return undefined;
-    try {
-      const rows = await this.selectUsersSafe(`where "email" = $1 limit 1`, [
-        normalizedEmail,
-      ]);
-      const row = (rows[0] as any) || undefined;
-      if (!row) return undefined;
-      if (row.isDisabled === true) return undefined;
-      return row as any;
-    } catch (error) {
-      console.warn(
-        "getUserByEmail safe projection failed, falling back:",
-        error,
-      );
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(
-          and(
-            eq(users.email, normalizedEmail),
-            or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-          ),
-        );
-      return user;
-    }
+    return this.usersRepository.getUserByEmail(email);
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const normalizedPhone = String(phone || "").trim();
-    if (!normalizedPhone) return undefined;
-    try {
-      const rows = await this.selectUsersSafe(`where "phone" = $1 limit 1`, [
-        normalizedPhone,
-      ]);
-      const row = (rows[0] as any) || undefined;
-      if (!row) return undefined;
-      if (row.isDisabled === true) return undefined;
-      return row as any;
-    } catch (error) {
-      console.warn(
-        "getUserByPhone safe projection failed, falling back:",
-        error,
-      );
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(
-          and(
-            eq(users.phone, normalizedPhone),
-            or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-          ),
-        );
-      return user;
-    }
+    return this.usersRepository.getUserByPhone(phone);
   }
 
   async getUserById(id: string): Promise<User | undefined> {
-    return await this.getUser(id);
+    return this.usersRepository.getUserById(id);
   }
 
   async updateUserType(
@@ -2294,63 +2189,15 @@ export class DatabaseStorage implements IStorage {
       | "admin"
       | "super_admin",
   ): Promise<User> {
-    // Protect super admin email from demotion; allow upgrading it to super_admin
-    const SUPER_ADMIN_EMAIL =
-      process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
-    const user = await this.getUser(id);
-    if (user?.email === SUPER_ADMIN_EMAIL && userType !== "super_admin") {
-      throw new Error("Cannot modify super admin account");
-    }
-
-    const affiliatePercent =
-      userType === "staff"
-        ? 25
-        : userType === "admin" || userType === "super_admin"
-          ? 0
-          : undefined;
-    const shouldAutoVerify = userType === "admin" || userType === "super_admin";
-    const [updatedUser] = await db
-      .update(users)
-      .set({
-        userType,
-        ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
-        ...(shouldAutoVerify ? { emailVerified: true } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
-    void syncUserToBrevo(updatedUser).catch(() => {});
-    return updatedUser;
+    return this.usersRepository.updateUserType(id, userType);
   }
 
-  async getUserByStripeCustomerId(
-    stripeCustomerId: string,
-  ): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.stripeCustomerId, stripeCustomerId),
-          or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-        ),
-      );
-    return user;
+  async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
+    return this.usersRepository.getUserByStripeCustomerId(stripeCustomerId);
   }
 
-  async getUserByStripeSubscriptionId(
-    stripeSubscriptionId: string,
-  ): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(
-        and(
-          eq(users.stripeSubscriptionId, stripeSubscriptionId),
-          or(eq(users.isDisabled, false), isNull(users.isDisabled)),
-        ),
-      );
-    return user;
+  async getUserByStripeSubscriptionId(stripeSubscriptionId: string): Promise<User | undefined> {
+    return this.usersRepository.getUserByStripeSubscriptionId(stripeSubscriptionId);
   }
 
   async upsertUserByAuth(
@@ -2363,502 +2210,9 @@ export class DatabaseStorage implements IStorage {
     userType: User["userType"] = "customer",
     appContext: "mealscout" | "tradescout" = "mealscout",
   ): Promise<User> {
-    try {
-      if (authType === "tradescout") {
-        const tsData = userData as TradeScoutUserData;
-        console.log("ðŸ” upsertUserByAuth - TradeScout:", {
-          tradescoutId: tsData.tradescoutId,
-          email: tsData.email,
-          userType,
-          appContext,
-        });
-
-        // Step 1: Try to find existing user by TradeScout ID
-        let existingUser = await db
-          .select()
-          .from(users)
-          .where(eq(users.tradescoutId, tsData.tradescoutId))
-          .limit(1);
-
-        if (existingUser.length > 0) {
-          console.log("âœ… Found existing user by TradeScout ID, updating...");
-          const current = existingUser[0];
-
-          // Merge app contexts: if user previously used mealscout, now using tradescout â†’ set to 'both'
-          const newAppContext =
-            current.appContext && current.appContext !== appContext
-              ? "both"
-              : appContext;
-
-          const [user] = await db
-            .update(users)
-            .set({
-              email: tsData.email ?? current.email,
-              ...(tsData.email ? { emailVerified: true } : {}),
-              firstName: tsData.firstName ?? current.firstName,
-              lastName: tsData.lastName ?? current.lastName,
-              appContext: newAppContext,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, current.id))
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        }
-
-        // Step 2: If email provided, try to find by email and link the TradeScout account
-        if (tsData.email) {
-          existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, tsData.email))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log(
-              "âœ… Found existing user by email, linking TradeScout account...",
-            );
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const current = existingUser[0];
-
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-
-            const [user] = await db
-              .update(users)
-              .set({
-                tradescoutId: tsData.tradescoutId,
-                emailVerified: true,
-                firstName: tsData.firstName ?? current.firstName,
-                lastName: tsData.lastName ?? current.lastName,
-                appContext: newAppContext,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, current.id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        }
-
-        // Step 3: Create new user linked to TradeScout
-        console.log("âœ… Creating new TradeScout-linked user...");
-        const [user] = await db
-          .insert(users)
-          .values({
-            userType,
-            tradescoutId: tsData.tradescoutId,
-            email: tsData.email ?? undefined,
-            emailVerified: Boolean(tsData.email),
-            firstName: tsData.firstName ?? undefined,
-            lastName: tsData.lastName ?? undefined,
-            appContext,
-          })
-          .returning();
-        console.log("âœ… TradeScout user created successfully:", {
-          userId: user.id,
-          email: user.email,
-          appContext,
-        });
-        void syncUserToBrevo(user).catch(() => {});
-        return user;
-      } else if (authType === "google") {
-        const googleData = userData as GoogleUserData;
-        console.log("ðŸ” upsertUserByAuth - Google:", {
-          googleId: googleData.googleId,
-          email: googleData.email,
-          userType,
-          appContext,
-        });
-
-        // Step 1: Try to find existing user by Google ID
-        let existingUser = await db
-          .select()
-          .from(users)
-          .where(eq(users.googleId, googleData.googleId))
-          .limit(1);
-
-        if (existingUser.length > 0) {
-          console.log("âœ… Found existing user by Google ID, updating...");
-          const current = existingUser[0];
-          const newAppContext =
-            current.appContext && current.appContext !== appContext
-              ? "both"
-              : appContext;
-
-          const [user] = await db
-            .update(users)
-            .set({
-              email: googleData.email,
-              emailVerified: true,
-              firstName: googleData.firstName,
-              lastName: googleData.lastName,
-              profileImageUrl: googleData.profileImageUrl,
-              googleAccessToken: googleData.googleAccessToken,
-              appContext: newAppContext,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, existingUser[0].id))
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        }
-
-        // Step 2: If email provided, try to find by email and link the Google account
-        if (googleData.email) {
-          existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, googleData.email))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log(
-              "âœ… Found existing user by email, linking Google account...",
-            );
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const current = existingUser[0];
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-
-            const [user] = await db
-              .update(users)
-              .set({
-                googleId: googleData.googleId,
-                emailVerified: true,
-                firstName: googleData.firstName || existingUser[0].firstName,
-                lastName: googleData.lastName || existingUser[0].lastName,
-                profileImageUrl:
-                  googleData.profileImageUrl || existingUser[0].profileImageUrl,
-                googleAccessToken: googleData.googleAccessToken,
-                appContext: newAppContext,
-                // Preserve existing userType to prevent account type changes
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        }
-
-        // Step 3: Create new user
-        console.log("âœ… Creating new Google user...");
-        const [user] = await db
-          .insert(users)
-          .values({
-            userType,
-            googleId: googleData.googleId,
-            email: googleData.email,
-            emailVerified: true,
-            firstName: googleData.firstName,
-            lastName: googleData.lastName,
-            profileImageUrl: googleData.profileImageUrl,
-            googleAccessToken: googleData.googleAccessToken,
-            appContext,
-          })
-          .returning();
-        console.log("âœ… Google user created successfully:", {
-          userId: user.id,
-          email: user.email,
-          appContext,
-        });
-        void syncUserToBrevo(user).catch(() => {});
-        return user;
-      } else if (authType === "facebook") {
-        const facebookData = userData as FacebookUserData;
-        console.log("ðŸ” upsertUserByAuth - Facebook:", {
-          facebookId: facebookData.facebookId,
-          email: facebookData.email,
-          userType,
-          appContext,
-        });
-
-        // Step 1: Try to find existing user by Facebook ID
-        let existingUser = await db
-          .select()
-          .from(users)
-          .where(eq(users.facebookId, facebookData.facebookId))
-          .limit(1);
-
-        if (existingUser.length > 0) {
-          console.log("âœ… Found existing user by Facebook ID, updating...");
-          const current = existingUser[0];
-          const newAppContext =
-            current.appContext && current.appContext !== appContext
-              ? "both"
-              : appContext;
-
-          const [user] = await db
-            .update(users)
-            .set({
-              email: facebookData.email,
-              emailVerified: true,
-              firstName: facebookData.firstName,
-              lastName: facebookData.lastName,
-              profileImageUrl: facebookData.profileImageUrl,
-              facebookAccessToken: facebookData.facebookAccessToken,
-              appContext: newAppContext,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, existingUser[0].id))
-            .returning();
-          void syncUserToBrevo(user).catch(() => {});
-          return user;
-        }
-
-        // Step 2: If email provided, try to find by email and link the Facebook account
-        if (facebookData.email) {
-          existingUser = await db
-            .select()
-            .from(users)
-            .where(eq(users.email, facebookData.email))
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log(
-              "âœ… Found existing user by email, linking Facebook account...",
-            );
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const current = existingUser[0];
-            const newAppContext =
-              current.appContext && current.appContext !== appContext
-                ? "both"
-                : appContext;
-
-            const [user] = await db
-              .update(users)
-              .set({
-                facebookId: facebookData.facebookId,
-                emailVerified: true,
-                firstName: facebookData.firstName || existingUser[0].firstName,
-                lastName: facebookData.lastName || existingUser[0].lastName,
-                profileImageUrl:
-                  facebookData.profileImageUrl ||
-                  existingUser[0].profileImageUrl,
-                facebookAccessToken: facebookData.facebookAccessToken,
-                appContext: newAppContext,
-                // Preserve existing userType to prevent account type changes
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        }
-
-        // Step 3: Create new user
-        console.log("âœ… Creating new Facebook user...");
-        const [user] = await db
-          .insert(users)
-          .values({
-            userType,
-            facebookId: facebookData.facebookId,
-            email: facebookData.email,
-            emailVerified: true,
-            firstName: facebookData.firstName,
-            lastName: facebookData.lastName,
-            profileImageUrl: facebookData.profileImageUrl,
-            facebookAccessToken: facebookData.facebookAccessToken,
-            appContext,
-          })
-          .returning();
-        console.log("âœ… Facebook user created successfully:", {
-          userId: user.id,
-          email: user.email,
-          appContext,
-        });
-        void syncUserToBrevo(user).catch(() => {});
-        return user;
-      } else {
-        const emailData = userData as EmailUserData;
-        console.log("ðŸ” upsertUserByAuth - Email:", {
-          email: emailData.email,
-          userType,
-          appContext,
-        });
-
-        const [user] = await db
-          .insert(users)
-          .values({
-            userType,
-            email: emailData.email,
-            firstName: emailData.firstName,
-            lastName: emailData.lastName,
-            phone: emailData.phone,
-            passwordHash: emailData.passwordHash,
-            emailVerified: false,
-            appContext,
-          })
-          .returning();
-        console.log("âœ… Email user created successfully:", {
-          userId: user.id,
-          email: user.email,
-          appContext,
-        });
-        void syncUserToBrevo(user).catch(() => {});
-        return user;
-      }
-    } catch (error: any) {
-      console.error("âŒ upsertUserByAuth error:", {
-        authType,
-        userType,
-        appContext,
-        errorCode: error.code,
-        errorMessage: error.message,
-        errorConstraint: error.constraint,
-        errorDetail: error.detail,
-      });
-
-      // Handle unique constraint violations (23505)
-      if (error.code === "23505") {
-        console.log(
-          "ðŸ”„ Handling unique constraint violation, retrying with fetch-and-update...",
-        );
-
-        if (authType === "tradescout") {
-          const tsData = userData as TradeScoutUserData;
-
-          const existingUser = await db
-            .select()
-            .from(users)
-            .where(
-              tsData.email
-                ? or(
-                    eq(users.tradescoutId, tsData.tradescoutId),
-                    eq(users.email, tsData.email),
-                  )
-                : eq(users.tradescoutId, tsData.tradescoutId),
-            )
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log(
-              "âœ… Found existing user during TradeScout retry, updating...",
-            );
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const current = existingUser[0];
-            const [user] = await db
-              .update(users)
-              .set({
-                tradescoutId: tsData.tradescoutId,
-                email: tsData.email ?? current.email,
-                ...(tsData.email ? { emailVerified: true } : {}),
-                firstName: tsData.firstName ?? current.firstName,
-                lastName: tsData.lastName ?? current.lastName,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, current.id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        } else if (authType === "google") {
-          const googleData = userData as GoogleUserData;
-
-          // Retry: find by GoogleID or email and update
-          const existingUser = await db
-            .select()
-            .from(users)
-            .where(
-              googleData.email
-                ? or(
-                    eq(users.googleId, googleData.googleId),
-                    eq(users.email, googleData.email),
-                  )
-                : eq(users.googleId, googleData.googleId),
-            )
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log("âœ… Found existing user during retry, updating...");
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const [user] = await db
-              .update(users)
-              .set({
-                googleId: googleData.googleId,
-                email: googleData.email,
-                firstName: googleData.firstName,
-                lastName: googleData.lastName,
-                profileImageUrl: googleData.profileImageUrl,
-                googleAccessToken: googleData.googleAccessToken,
-                // Preserve existing userType to prevent account type changes
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        } else if (authType === "facebook") {
-          const facebookData = userData as FacebookUserData;
-
-          // Retry: find by FacebookID or email and update
-          const existingUser = await db
-            .select()
-            .from(users)
-            .where(
-              facebookData.email
-                ? or(
-                    eq(users.facebookId, facebookData.facebookId),
-                    eq(users.email, facebookData.email),
-                  )
-                : eq(users.facebookId, facebookData.facebookId),
-            )
-            .limit(1);
-
-          if (existingUser.length > 0) {
-            console.log("âœ… Found existing user during retry, updating...");
-            console.log(
-              "âš ï¸  Preserving existing userType:",
-              existingUser[0].userType,
-            );
-            const [user] = await db
-              .update(users)
-              .set({
-                facebookId: facebookData.facebookId,
-                email: facebookData.email,
-                firstName: facebookData.firstName,
-                lastName: facebookData.lastName,
-                profileImageUrl: facebookData.profileImageUrl,
-                facebookAccessToken: facebookData.facebookAccessToken,
-                // Preserve existing userType to prevent account type changes
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, existingUser[0].id))
-              .returning();
-            void syncUserToBrevo(user).catch(() => {});
-            return user;
-          }
-        }
-      }
-
-      // Re-throw the error if we can't handle it
-      throw error;
-    }
+    return this.usersRepository.upsertUserByAuth(authType, userData, userType, appContext);
   }
 
-  // Restaurant operations
   async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
     // NORTH STAR RULE: Apply pricing lock for restaurants (not trucks) created before April 1, 2026
     const now = new Date();
@@ -3544,32 +2898,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllUsers(): Promise<User[]> {
-    try {
-      const { columns } = await this.getUserTableInfo();
-      const hasDisabled = columns.size === 0 || columns.has("is_disabled");
-      const whereSql = hasDisabled
-        ? `where coalesce("is_disabled"::boolean, false) = false`
-        : "";
-      return (await this.selectUsersSafe(
-        `${whereSql} order by "created_at" desc`,
-        [],
-      )) as any;
-    } catch (error) {
-      console.warn("getAllUsers safe projection failed, falling back:", error);
-      return await db
-        .select()
-        .from(users)
-        .where(or(eq(users.isDisabled, false), isNull(users.isDisabled)))
-        .orderBy(desc(users.createdAt));
-    }
+    return this.usersRepository.getAllUsers();
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<void> {
-    // Use isDisabled flag on users to represent active status
-    await db
-      .update(users)
-      .set({ isDisabled: !isActive })
-      .where(eq(users.id, userId));
+    return this.usersRepository.updateUserStatus(userId, isActive);
   }
 
   async createUserManually(userData: {
@@ -3580,37 +2913,7 @@ export class DatabaseStorage implements IStorage {
     userType: string;
     tempPassword: string;
   }): Promise<User> {
-    const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
-    const affiliatePercent =
-      userData.userType === "staff"
-        ? 25
-        : userData.userType === "admin" || userData.userType === "super_admin"
-          ? 0
-          : undefined;
-
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        phone: userData.phone,
-        userType: userData.userType,
-        passwordHash: hashedPassword,
-        mustResetPassword: true,
-        emailVerified: true, // Admin-created accounts are pre-verified
-        ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
-      })
-      .returning();
-
-    if (this.shouldAssignAffiliateTag(user.userType)) {
-      ensureAffiliateTag(user.id).catch((error) =>
-        console.error("[affiliate] Failed to assign tag:", error),
-      );
-    }
-
-    void syncUserToBrevo(user).catch(() => {});
-    return user;
+    return this.usersRepository.createUserManually(userData);
   }
 
   async createUserInvite(data: {
@@ -3628,37 +2931,7 @@ export class DatabaseStorage implements IStorage {
       | "admin"
       | "super_admin";
   }): Promise<User> {
-    const affiliatePercent =
-      data.userType === "staff"
-        ? 25
-        : data.userType === "admin" || data.userType === "super_admin"
-          ? 0
-          : undefined;
-    const shouldAutoVerify =
-      data.userType === "admin" || data.userType === "super_admin";
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: data.email,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        userType: data.userType,
-        passwordHash: null,
-        mustResetPassword: false,
-        emailVerified: shouldAutoVerify,
-        ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
-      })
-      .returning();
-
-    if (this.shouldAssignAffiliateTag(user.userType)) {
-      ensureAffiliateTag(user.id).catch((error) =>
-        console.error("[affiliate] Failed to assign tag:", error),
-      );
-    }
-
-    void syncUserToBrevo(user).catch(() => {});
-    return user;
+    return this.usersRepository.createUserInvite(data);
   }
 
   async createRestaurantForUser(restaurantData: {
