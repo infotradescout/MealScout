@@ -6,3 +6,4 @@
 export { registerSchedulers } from "./registerSchedulers";
 export { registerStaticPages } from "./registerStaticPages";
 export { registerOperationalEndpoints } from "./registerOperationalEndpoints";
+export { registerRecurringJobs } from "./registerRecurringJobs";

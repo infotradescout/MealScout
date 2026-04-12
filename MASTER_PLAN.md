@@ -166,6 +166,8 @@ Keep but inactive unless approved for activation:
 
 ## Execution Log
 
+- Completed backend refactor Phase 1 startup extraction for recurring background jobs: moved session cleanup, ops cleanup, marketplace health audit, and startup schema validation out of `server/index.ts` into `server/bootstrap/registerRecurringJobs.ts`, and wired through the bootstrap barrel.
+- Verified role visibility rules remain aligned with Immediate Next Actions: parking pass nav only renders for authenticated eligible roles in `client/src/components/navigation.tsx`, events posting remains coordinator-gated in `client/src/pages/events.tsx`, and coordinator role enforcement is active in `server/routes/eventCoordinatorRoutes.ts`.
 - Event coordinator routing updated so `/events` remains the primary coordinator surface for posting.
 - Navigation rendering hardened for sharper mobile labels (reduced all-property transitions and enforced crisp text rendering rules).
 - `restaurant-signup` high-visibility header/card styles moved to current tokenized theme system.
