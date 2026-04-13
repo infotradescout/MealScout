@@ -36,6 +36,10 @@ import {
   restaurantSubscriptions,
   ORDER_STATUS,
   type PickupOrder,
+  type PickupOrderItem,
+  type MenuItem,
+  type MenuItemVariant,
+  type MenuItemModifier,
 } from "@shared/schema";
 import {
   isPremiumTrialActive,
@@ -77,11 +81,7 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(userId: string, restaurantId: string) {
-  const ok = await storage.verifyRestaurantOwnership(
-    restaurantId,
-    userId,
-    "manageOrders",
-  );
+  const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
   if (!ok) throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
@@ -152,16 +152,17 @@ async function sendOrderReadyNotification(order: PickupOrder) {
   if (order.customerEmail) {
     promises.push(
       emailService
-        .sendEmail({
-          to: order.customerEmail,
-          subject: "Your order is ready! 🍽️",
-          html: `
+        .sendBasicEmail(
+          order.customerEmail,
+          "Your order is ready! 🍽️",
+          `
             <p>Hi ${order.customerName},</p>
             <p>Your MealScout order <strong>#${order.id.slice(-6).toUpperCase()}</strong> is ready for pickup!</p>
             <p>Head over to pick it up. Thanks for ordering with MealScout.</p>
           `,
-          text: `Hi ${order.customerName}, your order #${order.id.slice(-6).toUpperCase()} is ready for pickup!`,
-        })
+          `Hi ${order.customerName}, your order #${order.id.slice(-6).toUpperCase()} is ready for pickup!`,
+          "general",
+        )
         .then(() =>
           db.insert(orderNotifications).values({
             orderId: order.id,
@@ -299,12 +300,12 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Resolve all menu items
       const itemIds = body.items.map((i) => i.menuItemId);
-      const dbItems = await db
+      const dbItems: MenuItem[] = await db
         .select()
         .from(menuItems)
         .where(and(inArray(menuItems.id, itemIds), eq(menuItems.isAvailable, true)));
 
-      const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+      const itemMap = new Map<string, MenuItem>(dbItems.map((i) => [i.id, i]));
 
       // Check every requested item exists and is available
       for (const reqItem of body.items) {
@@ -328,7 +329,7 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       // Fetch all variants + modifiers for requested items
-      const [allVariants, allModifiers] = await Promise.all([
+      const [allVariants, allModifiers]: [MenuItemVariant[], MenuItemModifier[]] = await Promise.all([
         db
           .select()
           .from(menuItemVariants)
@@ -339,8 +340,12 @@ export function registerPickupOrderRoutes(app: Express) {
           .where(inArray(menuItemModifiers.menuItemId, itemIds)),
       ]);
 
-      const variantMap = new Map(allVariants.map((v) => [v.id, v]));
-      const modifierMap = new Map(allModifiers.map((m) => [m.id, m]));
+      const variantMap = new Map<string, MenuItemVariant>(
+        allVariants.map((v) => [v.id, v]),
+      );
+      const modifierMap = new Map<string, MenuItemModifier>(
+        allModifiers.map((m) => [m.id, m]),
+      );
 
       // Build order line items with pricing
       let subtotalCents = 0;
@@ -491,12 +496,13 @@ export function registerPickupOrderRoutes(app: Express) {
         // Send email confirmation
         if (body.customerEmail) {
           emailService
-            .sendEmail({
-              to: body.customerEmail,
-              subject: `Order confirmed – ${restaurant.name}`,
-              html: `<p>Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)</p>`,
-              text: `Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)`,
-            })
+            .sendBasicEmail(
+              body.customerEmail,
+              `Order confirmed – ${restaurant.name}`,
+              `<p>Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)</p>`,
+              `Hi ${body.customerName}, your order has been received! Total: $${(totalCents / 100).toFixed(2)} (pay at restaurant)`,
+              "general",
+            )
             .catch(() => {});
         }
 
@@ -587,11 +593,7 @@ export function registerPickupOrderRoutes(app: Express) {
       const isOwner =
         userId &&
         (order.customerId === userId ||
-          (await storage.verifyRestaurantOwnership(
-            order.restaurantId,
-            userId,
-            "viewOrders",
-          )));
+          (await storage.verifyRestaurantOwnership(order.restaurantId, userId)));
 
       const safeOrder = isOwner
         ? order
@@ -647,7 +649,7 @@ export function registerPickupOrderRoutes(app: Express) {
       await assertOwnsRestaurant(req.user.id, restaurantId);
       await assertHasOrderingSubscription(req.user.id);
 
-      const activeOrders = await db
+      const activeOrders: PickupOrder[] = await db
         .select()
         .from(pickupOrders)
         .where(
@@ -664,7 +666,7 @@ export function registerPickupOrderRoutes(app: Express) {
         .orderBy(desc(pickupOrders.createdAt));
 
       const orderIds = activeOrders.map((o) => o.id);
-      const items =
+      const items: PickupOrderItem[] =
         orderIds.length > 0
           ? await db
               .select()

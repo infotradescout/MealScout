@@ -29,6 +29,11 @@ import {
   insertMenuItemSchema,
   insertMenuItemVariantSchema,
   insertMenuItemModifierSchema,
+  type Menu,
+  type MenuCategory,
+  type MenuItem,
+  type MenuItemVariant,
+  type MenuItemModifier,
 } from "@shared/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
@@ -50,11 +55,7 @@ const upload = multer({
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(userId: string, restaurantId: string) {
-  const ok = await storage.verifyRestaurantOwnership(
-    restaurantId,
-    userId,
-    "manageMenus",
-  );
+  const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
   if (!ok) throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
@@ -103,7 +104,7 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
 
-      const restaurantMenus = await db
+      const restaurantMenus: Menu[] = await db
         .select()
         .from(menus)
         .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
@@ -115,7 +116,7 @@ export function registerMenuRoutes(app: Express) {
 
       const menuIds = restaurantMenus.map((m) => m.id);
 
-      const [categories, items, variants, modifiers] = await Promise.all([
+      const [categories, items] = await Promise.all([
         db
           .select()
           .from(menuCategories)
@@ -136,30 +137,13 @@ export function registerMenuRoutes(app: Express) {
             ),
           )
           .orderBy(asc(menuItems.sortOrder)),
-        db
-          .select()
-          .from(menuItemVariants)
-          .where(
-            inArray(
-              menuItemVariants.menuItemId,
-              // seeded below after items are fetched
-              ["__placeholder__"],
-            ),
-          ),
-        db
-          .select()
-          .from(menuItemModifiers)
-          .where(
-            inArray(
-              menuItemModifiers.menuItemId,
-              ["__placeholder__"],
-            ),
-          ),
       ]);
 
       // Re-query variants + modifiers now that we have item IDs
-      const itemIds = items.map((i) => i.id);
-      const [realVariants, realModifiers] = itemIds.length
+      const typedCategories = categories as MenuCategory[];
+      const typedItems = items as MenuItem[];
+      const itemIds = typedItems.map((i) => i.id);
+      const [realVariants, realModifiers]: [MenuItemVariant[], MenuItemModifier[]] = itemIds.length
         ? await Promise.all([
             db
               .select()
@@ -175,8 +159,8 @@ export function registerMenuRoutes(app: Express) {
         : [[], []];
 
       const result = restaurantMenus.map((menu) => {
-        const menuCats = categories.filter((c) => c.menuId === menu.id);
-        const menuItemsList = items.filter((i) => i.menuId === menu.id);
+        const menuCats = typedCategories.filter((c) => c.menuId === menu.id);
+        const menuItemsList = typedItems.filter((i) => i.menuId === menu.id);
 
         const enrichedItems = menuItemsList.map((item) => ({
           ...item,

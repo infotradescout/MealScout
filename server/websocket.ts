@@ -259,7 +259,6 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
           const isAuthorized = await storage.verifyRestaurantOwnership(
             restaurantId,
             socket.user.id,
-            "manageOrders",
           );
           if (!isAuthorized) {
             socket.emit("error", { message: "Unauthorized: kitchen access denied" });

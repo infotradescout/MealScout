@@ -61,6 +61,7 @@
     "audit:theme": "node scripts/audit-theme-colors.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@getbrevo/brevo": "^3.0.1",
     "@hookform/resolvers": "^3.10.0",
     "@neondatabase/serverless": "^0.10.4",

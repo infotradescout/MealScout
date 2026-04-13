@@ -94,8 +94,11 @@ export async function parsePdfMenuWithAi(
       ],
     });
 
+    const textBlock = message.content.find((b) => b.type === "text");
     rawJson =
-      message.content.find((b) => b.type === "text")?.text?.trim() ?? "";
+      textBlock && "text" in textBlock && typeof textBlock.text === "string"
+        ? textBlock.text.trim()
+        : "";
   } catch (err: any) {
     return {
       imported: [],
