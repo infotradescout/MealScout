@@ -138,6 +138,8 @@ import { createAuthTokensRepository } from "./storage/authTokensRepository";
 import { createHostsEventsRepository } from "./storage/hostsEventsRepository";
 import { createRestaurantsDealsRepository } from "./storage/restaurantsDealsRepository";
 import { createUsersRepository } from "./storage/usersRepository";
+import { createAnalyticsRepository } from "./storage/analyticsRepository";
+import { createParkingPassRepository } from "./storage/parkingPassRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -773,6 +775,11 @@ export class DatabaseStorage implements IStorage {
       this.ensureCityExists(name, state),
   });
   private readonly usersRepository = createUsersRepository();
+  private readonly analyticsRepository = createAnalyticsRepository();
+  private readonly parkingPassRepository = createParkingPassRepository({
+    getHost: (id: string) => this.getHost(id),
+    getAllHosts: () => this.getAllHosts(),
+  });
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -1077,84 +1084,8 @@ export class DatabaseStorage implements IStorage {
     return result.rows || [];
   }
 
-  async getParkingPassSeriesSafe(): Promise<
-    Array<{
-      id: string;
-      hostId: string;
-      name: string | null;
-      description: string | null;
-      status: string | null;
-      publishedAt: string | null;
-      updatedAt: string | null;
-      defaultStartTime: string | null;
-      defaultEndTime: string | null;
-      defaultMaxTrucks: number | null;
-      defaultHardCapEnabled: boolean | null;
-      parkingPassDaysOfWeek: unknown | null;
-      defaultBreakfastPriceCents: number | null;
-      defaultLunchPriceCents: number | null;
-      defaultDinnerPriceCents: number | null;
-      defaultDailyPriceCents: number | null;
-      defaultWeeklyPriceCents: number | null;
-      defaultMonthlyPriceCents: number | null;
-      defaultHostPriceCents: number | null;
-    }>
-  > {
-    const { columns } = await this.getEventSeriesTableInfo();
-    const hasSeriesType = columns.size === 0 || columns.has("series_type");
-    const whereSql = hasSeriesType ? `where "series_type" = $1` : "";
-    const params = hasSeriesType ? ["parking_pass"] : [];
-    const rows = await this.selectEventSeriesSafe(whereSql, params);
-    return rows.map((row: any) => ({
-      id: String(row.id),
-      hostId: String(row.hostId),
-      name: row.name == null ? null : String(row.name),
-      description: row.description == null ? null : String(row.description),
-      status: row.status == null ? null : String(row.status),
-      publishedAt: row.publishedAt
-        ? new Date(row.publishedAt).toISOString()
-        : null,
-      updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
-      defaultStartTime:
-        row.defaultStartTime == null ? null : String(row.defaultStartTime),
-      defaultEndTime:
-        row.defaultEndTime == null ? null : String(row.defaultEndTime),
-      defaultMaxTrucks:
-        row.defaultMaxTrucks == null ? null : Number(row.defaultMaxTrucks),
-      defaultHardCapEnabled:
-        row.defaultHardCapEnabled == null
-          ? null
-          : Boolean(row.defaultHardCapEnabled),
-      parkingPassDaysOfWeek: row.parkingPassDaysOfWeek ?? null,
-      defaultBreakfastPriceCents:
-        row.defaultBreakfastPriceCents == null
-          ? null
-          : Number(row.defaultBreakfastPriceCents),
-      defaultLunchPriceCents:
-        row.defaultLunchPriceCents == null
-          ? null
-          : Number(row.defaultLunchPriceCents),
-      defaultDinnerPriceCents:
-        row.defaultDinnerPriceCents == null
-          ? null
-          : Number(row.defaultDinnerPriceCents),
-      defaultDailyPriceCents:
-        row.defaultDailyPriceCents == null
-          ? null
-          : Number(row.defaultDailyPriceCents),
-      defaultWeeklyPriceCents:
-        row.defaultWeeklyPriceCents == null
-          ? null
-          : Number(row.defaultWeeklyPriceCents),
-      defaultMonthlyPriceCents:
-        row.defaultMonthlyPriceCents == null
-          ? null
-          : Number(row.defaultMonthlyPriceCents),
-      defaultHostPriceCents:
-        row.defaultHostPriceCents == null
-          ? null
-          : Number(row.defaultHostPriceCents),
-    }));
+  async getParkingPassSeriesSafe() {
+    return this.parkingPassRepository.getParkingPassSeriesSafe();
   }
 
   private async selectUpcomingEventsSafe(fromDate: Date): Promise<any[]> {
@@ -1271,240 +1202,15 @@ export class DatabaseStorage implements IStorage {
   private shouldAssignAffiliateTag(userType?: string | null) {
     return userType !== "admin" && userType !== "super_admin";
   }
-  private async createDraftParkingPassForHost(host: Host): Promise<boolean> {
-    // Create an unpriced draft Parking Pass series (listing defaults). Occurrences are virtual.
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const horizon = new Date(today);
-    horizon.setDate(horizon.getDate() + 30);
-
-    const existing = await db
-      .select({ id: eventSeries.id })
-      .from(eventSeries)
-      .where(
-        and(
-          eq(eventSeries.hostId, host.id),
-          eq(eventSeries.seriesType, "parking_pass"),
-        ),
-      )
-      .limit(1);
-    if (existing.length > 0) {
-      return false;
-    }
-
-    const defaultStartTime = PARKING_PASS_MEAL_WINDOWS.breakfast.start;
-    const defaultEndTime = PARKING_PASS_MEAL_WINDOWS.dinner.end;
-    const spotCount = host.spotCount ?? 1;
-
-    const breakfast =
-      Number((host as any).parkingPassBreakfastPriceCents ?? 0) || 0;
-    const lunch = Number((host as any).parkingPassLunchPriceCents ?? 0) || 0;
-    const dinner = Number((host as any).parkingPassDinnerPriceCents ?? 0) || 0;
-    const daily = Number((host as any).parkingPassDailyPriceCents ?? 0) || 0;
-    const weekly = Number((host as any).parkingPassWeeklyPriceCents ?? 0) || 0;
-    const monthly =
-      Number((host as any).parkingPassMonthlyPriceCents ?? 0) || 0;
-    const hostPrice = breakfast + lunch + dinner;
-    const startTime = String((host as any).parkingPassStartTime || "").trim();
-    const endTime = String((host as any).parkingPassEndTime || "").trim();
-    const daysOfWeek = (host as any).parkingPassDaysOfWeek ?? [];
-
-    const listing = {
-      host,
-      startTime: startTime || defaultStartTime,
-      endTime: endTime || defaultEndTime,
-      maxTrucks: spotCount,
-      breakfastPriceCents: breakfast,
-      lunchPriceCents: lunch,
-      dinnerPriceCents: dinner,
-      dailyPriceCents: daily || hostPrice,
-      weeklyPriceCents: weekly,
-      monthlyPriceCents: monthly,
-    };
-    const publicReady = isParkingPassPublicReady(listing as any);
-    const seriesTimezone = resolveCityTimeZoneSync({
-      city: host.city,
-      state: host.state,
-    });
-
-    const [created] = await db
-      .insert(eventSeries)
-      .values({
-        hostId: host.id,
-        name: `Parking Pass - ${host.businessName}`,
-        description: host.address,
-        timezone: seriesTimezone,
-        recurrenceRule: null,
-        startDate: today,
-        endDate: horizon,
-        defaultStartTime: startTime || defaultStartTime,
-        defaultEndTime: endTime || defaultEndTime,
-        defaultMaxTrucks: spotCount,
-        defaultHardCapEnabled: false,
-        seriesType: "parking_pass",
-        parkingPassDaysOfWeek: Array.isArray(daysOfWeek)
-          ? (daysOfWeek as any)
-          : [],
-        defaultBreakfastPriceCents: breakfast,
-        defaultLunchPriceCents: lunch,
-        defaultDinnerPriceCents: dinner,
-        defaultDailyPriceCents: daily || hostPrice,
-        defaultWeeklyPriceCents: weekly,
-        defaultMonthlyPriceCents: monthly,
-        defaultHostPriceCents: hostPrice,
-        status: publicReady ? "published" : "draft",
-        publishedAt: publicReady ? new Date() : null,
-      })
-      .onConflictDoNothing()
-      .returning();
-    return Boolean(created?.id);
-  }
 
   async syncParkingPassSeriesFromHost(hostId: string): Promise<string | null> {
-    const normalizedHostId = String(hostId || "").trim();
-    if (!normalizedHostId) return null;
-    const host = await this.getHost(normalizedHostId);
-    if (!host) return null;
-
-    // Ensure a series exists (required for bookable virtual ids).
-    await this.ensureDraftParkingPassForHost(host.id).catch(() => false);
-
-    const defaultStartTime = PARKING_PASS_MEAL_WINDOWS.breakfast.start;
-    const defaultEndTime = PARKING_PASS_MEAL_WINDOWS.dinner.end;
-    const startTime =
-      String((host as any).parkingPassStartTime || "").trim() ||
-      defaultStartTime;
-    const endTime =
-      String((host as any).parkingPassEndTime || "").trim() || defaultEndTime;
-
-    const breakfast =
-      Number((host as any).parkingPassBreakfastPriceCents ?? 0) || 0;
-    const lunch = Number((host as any).parkingPassLunchPriceCents ?? 0) || 0;
-    const dinner = Number((host as any).parkingPassDinnerPriceCents ?? 0) || 0;
-    const daily = Number((host as any).parkingPassDailyPriceCents ?? 0) || 0;
-    const weekly = Number((host as any).parkingPassWeeklyPriceCents ?? 0) || 0;
-    const monthly =
-      Number((host as any).parkingPassMonthlyPriceCents ?? 0) || 0;
-    const hostPrice = breakfast + lunch + dinner;
-    const daysOfWeek = (host as any).parkingPassDaysOfWeek ?? [];
-    const spotCount = Number((host as any).spotCount ?? 1) || 1;
-
-    const listing = {
-      host,
-      startTime,
-      endTime,
-      maxTrucks: spotCount,
-      breakfastPriceCents: breakfast,
-      lunchPriceCents: lunch,
-      dinnerPriceCents: dinner,
-      dailyPriceCents: daily || hostPrice,
-      weeklyPriceCents: weekly,
-      monthlyPriceCents: monthly,
-    };
-    const publicReady = isParkingPassPublicReady(listing as any);
-
-    // Find existing series id (schema drift tolerant).
-    let seriesId: string | null = null;
-    try {
-      const existing = await db
-        .select({ id: eventSeries.id })
-        .from(eventSeries)
-        .where(
-          and(
-            eq(eventSeries.hostId, host.id),
-            eq(eventSeries.seriesType, "parking_pass"),
-          ),
-        )
-        .limit(1);
-      seriesId = existing?.[0]?.id ?? null;
-    } catch {
-      const safe = await this.getParkingPassSeriesSafe().catch(() => []);
-      const match = safe.find(
-        (row) => String(row.hostId || "").trim() === host.id,
-      );
-      seriesId = match?.id ?? null;
-    }
-
-    const updates: any = {
-      name: `Parking Pass - ${host.businessName}`,
-      description: host.address,
-      defaultStartTime: startTime,
-      defaultEndTime: endTime,
-      defaultMaxTrucks: spotCount,
-      parkingPassDaysOfWeek: Array.isArray(daysOfWeek) ? daysOfWeek : [],
-      defaultBreakfastPriceCents: breakfast,
-      defaultLunchPriceCents: lunch,
-      defaultDinnerPriceCents: dinner,
-      defaultDailyPriceCents: daily || hostPrice,
-      defaultWeeklyPriceCents: weekly,
-      defaultMonthlyPriceCents: monthly,
-      defaultHostPriceCents: hostPrice,
-      status: publicReady ? "published" : "draft",
-      publishedAt: publicReady ? new Date() : null,
-      updatedAt: new Date(),
-    };
-
-    try {
-      if (seriesId) {
-        await db
-          .update(eventSeries)
-          .set(updates)
-          .where(eq(eventSeries.id, seriesId));
-        return seriesId;
-      }
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const horizon = new Date(today);
-      horizon.setDate(horizon.getDate() + 30);
-      const [created] = await db
-        .insert(eventSeries)
-        .values({
-          hostId: host.id,
-          timezone: resolveCityTimeZoneSync({
-            city: host.city,
-            state: host.state,
-          }),
-          recurrenceRule: null,
-          startDate: today,
-          endDate: horizon,
-          defaultHardCapEnabled: false,
-          seriesType: "parking_pass",
-          ...updates,
-        } as any)
-        .onConflictDoNothing()
-        .returning();
-      if (created?.id) return created.id;
-      const [existingAfterConflict] = await db
-        .select({ id: eventSeries.id })
-        .from(eventSeries)
-        .where(
-          and(
-            eq(eventSeries.hostId, host.id),
-            eq(eventSeries.seriesType, "parking_pass"),
-          ),
-        )
-        .limit(1);
-      return existingAfterConflict?.id ?? null;
-    } catch (error) {
-      console.warn("syncParkingPassSeriesFromHost failed:", error);
-      return seriesId;
-    }
+    return this.parkingPassRepository.syncParkingPassSeriesFromHost(hostId);
   }
 
   async ensureDraftParkingPassesForHosts(): Promise<number> {
-    // Use the schema-tolerant host projection so admin tools don't 500 when the DB schema lags.
-    const hostList = await this.getAllHosts();
-    let created = 0;
-    for (const host of hostList) {
-      try {
-        const didCreate = await this.createDraftParkingPassForHost(host);
-        if (didCreate) created += 1;
-      } catch (error) {
-        console.warn("ensureDraftParkingPassForHosts failed:", error);
-      }
-    }
-    return created;
+    return this.parkingPassRepository.ensureDraftParkingPassesForHosts();
   }
+
   // Host operations
   async createHost(host: InsertHost): Promise<Host> {
     const [newHost] = await db.insert(hosts).values(host).returning();
@@ -1528,14 +1234,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async ensureDraftParkingPassForHost(hostId: string): Promise<boolean> {
-    const host = await this.getHost(hostId);
-    if (!host) return false;
-    try {
-      return await this.createDraftParkingPassForHost(host);
-    } catch (e) {
-      console.warn("ensureDraftParkingPassForHost failed:", e);
-      return false;
-    }
+    return this.parkingPassRepository.ensureDraftParkingPassForHost(hostId);
   }
 
   async getHost(id: string): Promise<Host | undefined> {
@@ -1830,47 +1529,20 @@ export class DatabaseStorage implements IStorage {
   async getParkingPassBlackoutDates(
     seriesId: string,
   ): Promise<ParkingPassBlackoutDate[]> {
-    return await db
-      .select()
-      .from(parkingPassBlackoutDates)
-      .where(eq(parkingPassBlackoutDates.seriesId, seriesId))
-      .orderBy(asc(parkingPassBlackoutDates.date));
+    return this.parkingPassRepository.getParkingPassBlackoutDates(seriesId);
   }
 
   async createParkingPassBlackoutDate(
     blackout: InsertParkingPassBlackoutDate,
   ): Promise<ParkingPassBlackoutDate> {
-    const rawDate =
-      blackout.date instanceof Date ? blackout.date : new Date(blackout.date as any);
-    const dateKey = rawDate.toISOString().split("T")[0];
-    const normalizedDate = utcDateFromDateKey(dateKey);
-    const [created] = await db
-      .insert(parkingPassBlackoutDates)
-      .values({
-        ...blackout,
-        date: normalizedDate,
-      })
-      .returning();
-    return created;
+    return this.parkingPassRepository.createParkingPassBlackoutDate(blackout);
   }
 
   async deleteParkingPassBlackoutDate(
     seriesId: string,
     date: Date,
   ): Promise<void> {
-    const dateKey = date.toISOString().split("T")[0];
-    const start = utcDateFromDateKey(dateKey);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 1);
-    await db
-      .delete(parkingPassBlackoutDates)
-      .where(
-        and(
-          eq(parkingPassBlackoutDates.seriesId, seriesId),
-          gte(parkingPassBlackoutDates.date, start),
-          lt(parkingPassBlackoutDates.date, end),
-        ),
-      );
+    return this.parkingPassRepository.deleteParkingPassBlackoutDate(seriesId, date);
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {
@@ -4114,27 +3786,14 @@ export class DatabaseStorage implements IStorage {
 
   // Deal view tracking operations
   async recordDealView(view: InsertDealView): Promise<DealView> {
-    const [newView] = await db.insert(dealViews).values(view).returning();
-    return newView;
+    return this.analyticsRepository.recordDealView(view);
   }
 
   async getDealViewsCount(
     dealId: string,
     dateRange?: { start: Date; end: Date },
   ): Promise<number> {
-    const conditions = [eq(dealViews.dealId, dealId)];
-
-    if (dateRange) {
-      conditions.push(gte(dealViews.viewedAt, dateRange.start));
-      conditions.push(lte(dealViews.viewedAt, dateRange.end));
-    }
-
-    const [result] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(dealViews)
-      .where(and(...conditions));
-
-    return result.count;
+    return this.analyticsRepository.getDealViewsCount(dealId, dateRange);
   }
 
   async hasRecentDealView(
@@ -4143,29 +3802,12 @@ export class DatabaseStorage implements IStorage {
     sessionId?: string,
     timeWindowMs: number = 3600000,
   ): Promise<boolean> {
-    const cutoffTime = new Date(Date.now() - timeWindowMs);
-    const conditions = [
-      eq(dealViews.dealId, dealId),
-      gte(dealViews.viewedAt, cutoffTime),
-    ];
-
-    // Check for either userId OR sessionId to handle both logged-in and anonymous users
-    if (userId) {
-      conditions.push(eq(dealViews.userId, userId));
-    } else if (sessionId) {
-      conditions.push(eq(dealViews.sessionId, sessionId));
-    } else {
-      // If no identity provided, can't rate limit properly - allow the view
-      return false;
-    }
-
-    const [result] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(dealViews)
-      .where(and(...conditions))
-      .limit(1);
-
-    return result.count > 0;
+    return this.analyticsRepository.hasRecentDealView(
+      dealId,
+      userId,
+      sessionId,
+      timeWindowMs,
+    );
   }
 
   // Deal claim revenue operations
@@ -4173,16 +3815,7 @@ export class DatabaseStorage implements IStorage {
     claimId: string,
     orderAmount?: number | null,
   ): Promise<DealClaim | null> {
-    const [claim] = await db
-      .update(dealClaims)
-      .set({
-        isUsed: true,
-        usedAt: new Date(),
-        orderAmount: orderAmount == null ? null : orderAmount.toString(),
-      })
-      .where(and(eq(dealClaims.id, claimId), eq(dealClaims.isUsed, false)))
-      .returning();
-    return claim || null;
+    return this.analyticsRepository.markClaimAsUsed(claimId, orderAmount);
   }
 
   async verifyRestaurantOwnershipByClaim(
@@ -4205,81 +3838,10 @@ export class DatabaseStorage implements IStorage {
     restaurantId: string,
     dateRange?: { start: Date; end: Date },
   ) {
-    const dealIds = await db
-      .select({ id: deals.id })
-      .from(deals)
-      .where(eq(deals.restaurantId, restaurantId));
-
-    const dealIdArray = dealIds.map((d: any) => d.id);
-
-    if (dealIdArray.length === 0) {
-      return {
-        totalViews: 0,
-        totalClaims: 0,
-        totalRevenue: 0,
-        conversionRate: 0,
-        topDeals: [],
-      };
-    }
-
-    // Build conditions for date range
-    const viewConditions = [inArray(dealViews.dealId, dealIdArray)];
-    const claimConditions = [inArray(dealClaims.dealId, dealIdArray)];
-
-    if (dateRange) {
-      viewConditions.push(gte(dealViews.viewedAt, dateRange.start));
-      viewConditions.push(lte(dealViews.viewedAt, dateRange.end));
-      claimConditions.push(gte(dealClaims.claimedAt, dateRange.start));
-      claimConditions.push(lte(dealClaims.claimedAt, dateRange.end));
-    }
-
-    // Get totals
-    const [viewsResult] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(dealViews)
-      .where(and(...viewConditions));
-
-    const [claimsResult] = await db
-      .select({
-        count: sql<number>`count(*)`,
-        revenue: sql<number>`coalesce(sum(cast(order_amount as decimal)), 0)`,
-      })
-      .from(dealClaims)
-      .where(and(...claimConditions, eq(dealClaims.isUsed, true)));
-
-    const totalViews = viewsResult.count || 0;
-    const totalClaims = claimsResult.count || 0;
-    const totalRevenue = claimsResult.revenue || 0;
-    const conversionRate =
-      totalViews > 0 ? (totalClaims / totalViews) * 100 : 0;
-
-    // Get top deals
-    const topDeals = await db
-      .select({
-        dealId: deals.id,
-        title: deals.title,
-        views: sql<number>`count(distinct ${dealViews.id})`,
-        claims: sql<number>`count(distinct ${dealClaims.id})`,
-        revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-      })
-      .from(deals)
-      .leftJoin(dealViews, eq(deals.id, dealViews.dealId))
-      .leftJoin(
-        dealClaims,
-        and(eq(deals.id, dealClaims.dealId), eq(dealClaims.isUsed, true)),
-      )
-      .where(eq(deals.restaurantId, restaurantId))
-      .groupBy(deals.id, deals.title)
-      .orderBy(desc(sql`count(distinct ${dealViews.id})`))
-      .limit(5);
-
-    return {
-      totalViews,
-      totalClaims,
-      totalRevenue,
-      conversionRate,
-      topDeals,
-    };
+    return this.analyticsRepository.getRestaurantAnalyticsSummary(
+      restaurantId,
+      dateRange,
+    );
   }
 
   async getRestaurantAnalyticsTimeseries(
@@ -4287,201 +3849,31 @@ export class DatabaseStorage implements IStorage {
     dateRange: { start: Date; end: Date },
     interval: "day" | "week",
   ) {
-    const dealIds = await db
-      .select({ id: deals.id })
-      .from(deals)
-      .where(eq(deals.restaurantId, restaurantId));
-
-    const dealIdArray = dealIds.map((d: any) => d.id);
-
-    if (dealIdArray.length === 0) {
-      return [];
-    }
-
-    const dateFormat = interval === "day" ? "YYYY-MM-DD" : 'YYYY-"W"WW';
-
-    const timeseries = await db
-      .select({
-        date: sql<string>`to_char(${dealViews.viewedAt}, '${dateFormat}')`,
-        views: sql<number>`count(distinct ${dealViews.id})`,
-        claims: sql<number>`count(distinct ${dealClaims.id})`,
-        revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-      })
-      .from(dealViews)
-      .leftJoin(
-        dealClaims,
-        and(
-          eq(dealViews.dealId, dealClaims.dealId),
-          eq(dealClaims.isUsed, true),
-          gte(dealClaims.claimedAt, dateRange.start),
-          lte(dealClaims.claimedAt, dateRange.end),
-        ),
-      )
-      .where(
-        and(
-          inArray(dealViews.dealId, dealIdArray),
-          gte(dealViews.viewedAt, dateRange.start),
-          lte(dealViews.viewedAt, dateRange.end),
-        ),
-      )
-      .groupBy(sql`to_char(${dealViews.viewedAt}, '${dateFormat}')`)
-      .orderBy(sql`to_char(${dealViews.viewedAt}, '${dateFormat}')`);
-
-    return timeseries;
+    return this.analyticsRepository.getRestaurantAnalyticsTimeseries(
+      restaurantId,
+      dateRange,
+      interval,
+    );
   }
 
   async getRestaurantCustomerInsights(
     restaurantId: string,
     dateRange?: { start: Date; end: Date },
   ) {
-    const dealIds = await db
-      .select({ id: deals.id })
-      .from(deals)
-      .where(eq(deals.restaurantId, restaurantId));
-
-    const dealIdArray = dealIds.map((d: any) => d.id);
-
-    if (dealIdArray.length === 0) {
-      return {
-        repeatCustomers: 0,
-        averageOrderValue: 0,
-        peakHours: [],
-        demographics: {
-          ageGroups: [],
-          genderBreakdown: [],
-        },
-      };
-    }
-
-    const conditions = [
-      inArray(dealClaims.dealId, dealIdArray),
-      eq(dealClaims.isUsed, true),
-    ];
-
-    if (dateRange) {
-      conditions.push(gte(dealClaims.usedAt, dateRange.start));
-      conditions.push(lte(dealClaims.usedAt, dateRange.end));
-    }
-
-    // Get repeat customers
-    const [repeatResult] = await db.select({
-      count: sql<number>`count(distinct user_id) filter (where claim_count > 1)`,
-    }).from(sql`(
-        select user_id, count(*) as claim_count
-        from ${dealClaims}
-        where ${and(...conditions)}
-        group by user_id
-      ) as user_claims`);
-
-    // Get average order value
-    const [avgResult] = await db
-      .select({
-        avg: sql<number>`avg(cast(order_amount as decimal))`,
-      })
-      .from(dealClaims)
-      .where(and(...conditions));
-
-    // Get peak hours
-    const peakHours = await db
-      .select({
-        hour: sql<number>`extract(hour from used_at)`,
-        count: sql<number>`count(*)`,
-      })
-      .from(dealClaims)
-      .where(and(...conditions))
-      .groupBy(sql`extract(hour from used_at)`)
-      .orderBy(desc(sql`count(*)`))
-      .limit(5);
-
-    // Get age demographics (calculate from birth year)
-    const ageGroups = await db
-      .select({
-        range: sql<string>`
-          case
-            when extract(year from now()) - birth_year < 25 then '18-24'
-            when extract(year from now()) - birth_year < 35 then '25-34'
-            when extract(year from now()) - birth_year < 45 then '35-44'
-            when extract(year from now()) - birth_year < 55 then '45-54'
-            when extract(year from now()) - birth_year >= 55 then '55+'
-            else 'Unknown'
-          end
-        `,
-        count: sql<number>`count(distinct ${users.id})`,
-      })
-      .from(dealClaims)
-      .innerJoin(users, eq(dealClaims.userId, users.id))
-      .where(and(...conditions)).groupBy(sql`
-        case
-          when extract(year from now()) - birth_year < 25 then '18-24'
-          when extract(year from now()) - birth_year < 35 then '25-34'
-          when extract(year from now()) - birth_year < 45 then '35-44'
-          when extract(year from now()) - birth_year < 55 then '45-54'
-          when extract(year from now()) - birth_year >= 55 then '55+'
-          else 'Unknown'
-        end
-      `);
-
-    // Get gender breakdown
-    const genderBreakdown = await db
-      .select({
-        gender: sql<string>`coalesce(gender, 'Unknown')`,
-        count: sql<number>`count(distinct ${users.id})`,
-      })
-      .from(dealClaims)
-      .innerJoin(users, eq(dealClaims.userId, users.id))
-      .where(and(...conditions))
-      .groupBy(users.gender);
-
-    return {
-      repeatCustomers: repeatResult.count || 0,
-      averageOrderValue: avgResult.avg || 0,
-      peakHours,
-      demographics: {
-        ageGroups,
-        genderBreakdown,
-      },
-    };
+    return this.analyticsRepository.getRestaurantCustomerInsights(
+      restaurantId,
+      dateRange,
+    );
   }
 
   async getRestaurantAnalyticsExport(
     restaurantId: string,
     dateRange: { start: Date; end: Date },
   ) {
-    const exportData = await db
-      .select({
-        dealTitle: deals.title,
-        date: sql<string>`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`,
-        views: sql<number>`count(distinct ${dealViews.id})`,
-        claims: sql<number>`count(distinct ${dealClaims.id})`,
-        revenue: sql<number>`coalesce(sum(cast(${dealClaims.orderAmount} as decimal)), 0)`,
-      })
-      .from(deals)
-      .leftJoin(
-        dealViews,
-        and(
-          eq(deals.id, dealViews.dealId),
-          gte(dealViews.viewedAt, dateRange.start),
-          lte(dealViews.viewedAt, dateRange.end),
-        ),
-      )
-      .leftJoin(
-        dealClaims,
-        and(
-          eq(deals.id, dealClaims.dealId),
-          eq(dealClaims.isUsed, true),
-          gte(dealClaims.usedAt, dateRange.start),
-          lte(dealClaims.usedAt, dateRange.end),
-        ),
-      )
-      .where(eq(deals.restaurantId, restaurantId))
-      .groupBy(
-        deals.id,
-        deals.title,
-        sql`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`,
-      )
-      .orderBy(deals.title, sql`to_char(${dealViews.viewedAt}, 'YYYY-MM-DD')`);
-
-    return exportData;
+    return this.analyticsRepository.getRestaurantAnalyticsExport(
+      restaurantId,
+      dateRange,
+    );
   }
 
   // Food truck operations
@@ -5092,62 +4484,10 @@ export class DatabaseStorage implements IStorage {
     restaurantId: string,
     dateRange?: { start: Date; end: Date },
   ) {
-    let favorites;
-    if (dateRange) {
-      favorites = await db
-        .select({
-          id: restaurantFavorites.id,
-          favoritedAt: restaurantFavorites.favoritedAt,
-          userId: restaurantFavorites.userId,
-        })
-        .from(restaurantFavorites)
-        .where(
-          and(
-            eq(restaurantFavorites.restaurantId, restaurantId),
-            gte(restaurantFavorites.favoritedAt, dateRange.start),
-            lte(restaurantFavorites.favoritedAt, dateRange.end),
-          ),
-        );
-    } else {
-      favorites = await db
-        .select({
-          id: restaurantFavorites.id,
-          favoritedAt: restaurantFavorites.favoritedAt,
-          userId: restaurantFavorites.userId,
-        })
-        .from(restaurantFavorites)
-        .where(eq(restaurantFavorites.restaurantId, restaurantId));
-    }
-
-    // Calculate trend data (group by day)
-    const favoritesTrend = await db
-      .select({
-        date: sql<string>`DATE(${restaurantFavorites.favoritedAt})`,
-        count: sql<number>`COUNT(*)`,
-      })
-      .from(restaurantFavorites)
-      .where(
-        dateRange
-          ? and(
-              eq(restaurantFavorites.restaurantId, restaurantId),
-              gte(restaurantFavorites.favoritedAt, dateRange.start),
-              lte(restaurantFavorites.favoritedAt, dateRange.end),
-            )
-          : eq(restaurantFavorites.restaurantId, restaurantId),
-      )
-      .groupBy(sql`DATE(${restaurantFavorites.favoritedAt})`)
-      .orderBy(sql`DATE(${restaurantFavorites.favoritedAt})`);
-
-    return {
-      totalFavorites: favorites.length,
-      favoritesTrend,
-      recentFavorites: favorites
-        .slice(0, 10)
-        .map((f: { userId: string; favoritedAt: Date | null }) => ({
-          userId: f.userId,
-          favoritedAt: f.favoritedAt || new Date(),
-        })),
-    };
+    return this.analyticsRepository.getRestaurantFavoritesAnalytics(
+      restaurantId,
+      dateRange,
+    );
   }
 
   // Restaurant recommendations operations
@@ -5158,117 +4498,25 @@ export class DatabaseStorage implements IStorage {
     recommendationType: "homepage" | "search" | "nearby" | "personalized";
     recommendationContext?: string;
   }): Promise<RestaurantRecommendation> {
-    const [result] = await db
-      .insert(restaurantRecommendations)
-      .values(recommendation)
-      .returning();
-    return result;
+    return this.analyticsRepository.trackRestaurantRecommendation(
+      recommendation,
+    );
   }
 
   async markRecommendationClicked(recommendationId: string): Promise<void> {
-    await db
-      .update(restaurantRecommendations)
-      .set({
-        isClicked: true,
-        clickedAt: new Date(),
-      })
-      .where(eq(restaurantRecommendations.id, recommendationId));
+    return this.analyticsRepository.markRecommendationClicked(
+      recommendationId,
+    );
   }
 
   async getRestaurantRecommendationsAnalytics(
     restaurantId: string,
     dateRange?: { start: Date; end: Date },
   ) {
-    let recommendations;
-    if (dateRange) {
-      recommendations = await db
-        .select({
-          id: restaurantRecommendations.id,
-          recommendationType: restaurantRecommendations.recommendationType,
-          isClicked: restaurantRecommendations.isClicked,
-          showedAt: restaurantRecommendations.showedAt,
-          clickedAt: restaurantRecommendations.clickedAt,
-        })
-        .from(restaurantRecommendations)
-        .where(
-          and(
-            eq(restaurantRecommendations.restaurantId, restaurantId),
-            gte(restaurantRecommendations.showedAt, dateRange.start),
-            lte(restaurantRecommendations.showedAt, dateRange.end),
-          ),
-        );
-    } else {
-      recommendations = await db
-        .select({
-          id: restaurantRecommendations.id,
-          recommendationType: restaurantRecommendations.recommendationType,
-          isClicked: restaurantRecommendations.isClicked,
-          showedAt: restaurantRecommendations.showedAt,
-          clickedAt: restaurantRecommendations.clickedAt,
-        })
-        .from(restaurantRecommendations)
-        .where(eq(restaurantRecommendations.restaurantId, restaurantId));
-    }
-
-    const totalClicks = recommendations.filter(
-      (r: { isClicked: boolean | null }) => r.isClicked === true,
-    ).length;
-    const clickThroughRate =
-      recommendations.length > 0
-        ? (totalClicks / recommendations.length) * 100
-        : 0;
-
-    // Group by recommendation type
-    const recommendationsByType = recommendations.reduce(
-      (
-        acc: Array<{ type: string; count: number; clicks: number }>,
-        rec: { recommendationType: string; isClicked: boolean | null },
-      ) => {
-        const existing = acc.find(
-          (item: { type: string }) => item.type === rec.recommendationType,
-        );
-        if (existing) {
-          existing.count++;
-          if (rec.isClicked === true) existing.clicks++;
-        } else {
-          acc.push({
-            type: rec.recommendationType,
-            count: 1,
-            clicks: rec.isClicked === true ? 1 : 0,
-          });
-        }
-        return acc;
-      },
-      [] as Array<{ type: string; count: number; clicks: number }>,
+    return this.analyticsRepository.getRestaurantRecommendationsAnalytics(
+      restaurantId,
+      dateRange,
     );
-
-    // Calculate trend data (group by day)
-    const recommendationsTrend = await db
-      .select({
-        date: sql<string>`DATE(${restaurantRecommendations.showedAt})`,
-        count: sql<number>`COUNT(*)`,
-        clicks: sql<number>`SUM(CASE WHEN ${restaurantRecommendations.isClicked} = true THEN 1 ELSE 0 END)`,
-      })
-      .from(restaurantRecommendations)
-      .where(
-        dateRange
-          ? and(
-              eq(restaurantRecommendations.restaurantId, restaurantId),
-              gte(restaurantRecommendations.showedAt, dateRange.start),
-              lte(restaurantRecommendations.showedAt, dateRange.end),
-            )
-          : eq(restaurantRecommendations.restaurantId, restaurantId),
-      )
-      .groupBy(sql`DATE(${restaurantRecommendations.showedAt})`)
-      .orderBy(sql`DATE(${restaurantRecommendations.showedAt})`);
-
-    return {
-      totalRecommendations: recommendations.length,
-      totalClicks,
-      clickThroughRate: Math.round(clickThroughRate * 100) / 100, // Round to 2 decimal places
-      recommendationsByType,
-      recommendationsTrend,
-    };
   }
 
   // Host location request operations
