@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, MapPin, Users, Clock } from "lucide-react";
+import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -132,6 +133,11 @@ export default function EventsPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-layered)]">
+      <SEOHead
+        title="Food Truck Events & Open Calls | MealScout"
+        description="Browse upcoming food truck events and open calls near you. Find events looking for food trucks, or discover local food festivals and pop-ups on MealScout."
+        ogType="website"
+      />
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         {/* Header */}
         <div className="space-y-4">

@@ -361,9 +361,9 @@ export default function Home() {
   return (
     <div className="page relative overflow-hidden home-cinematic pb-20">
       <SEOHead
-        title="MealScout | Find Food Trucks Near You"
-        description="Find food trucks near you, discover live locations, and browse local deals from restaurants, bars, and hosts with MealScout."
-        keywords="food truck finder, food trucks near me, local food deals, meal deals, restaurant deals, food truck map, food truck events near me, food deals today"
+        title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout"
+        description="Find food trucks, restaurants, and bars near you. Discover live locations, local specials, and deals in your city — all on MealScout."
+        keywords="food trucks near me, food truck finder, local restaurants near me, food truck map, local food deals, restaurant specials near me, food truck events near me, find food near me"
         canonicalUrl="https://www.mealscout.us/"
         schemaData={homeSchemaData}
       />

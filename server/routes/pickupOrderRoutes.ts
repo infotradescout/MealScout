@@ -111,7 +111,7 @@ async function assertHasOrderingSubscription(
     : restaurants_.map((r) => r.id);
   if (restaurantIds.length > 0) {
     const [sub] = await db
-      .select({ id: restaurantSubscriptions.id })
+      .select({ id: restaurantSubscriptions.id, isLifetimeFree: restaurantSubscriptions.isLifetimeFree })
       .from(restaurantSubscriptions)
       .where(
         and(
@@ -120,7 +120,7 @@ async function assertHasOrderingSubscription(
         ),
       )
       .limit(1);
-    if (sub) return;
+    if (sub) return; // covers both lifetime (isLifetimeFree=true) and active paid subscriptions
   }
 
   // 3. Stripe subscription check as final fallback

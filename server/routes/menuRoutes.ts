@@ -192,13 +192,14 @@ export function registerMenuRoutes(app: Express) {
       // We also check trial status via users.trialEndsAt.
       let orderingEnabled = false;
       const [restaurantRow] = await db
-        .select({ ownerId: restaurants.ownerId })
+        .select({ ownerId: restaurants.ownerId, name: restaurants.name, city: restaurants.city, isFoodTruck: restaurants.isFoodTruck, cuisineType: restaurants.cuisineType })
         .from(restaurants)
         .where(eq(restaurants.id, restaurantId))
         .limit(1);
 
       if (restaurantRow?.ownerId) {
         const restaurantIds = restaurantMenus.map((m) => m.restaurantId);
+        // Check for active subscription (includes lifetime isLifetimeFree=true rows)
         const [activeSub] = await db
           .select({ id: restaurantSubscriptions.id })
           .from(restaurantSubscriptions)
@@ -209,13 +210,12 @@ export function registerMenuRoutes(app: Express) {
             ),
           )
           .limit(1);
-
         if (activeSub) {
           orderingEnabled = true;
         } else {
           // Check trial access
           const [ownerRow] = await db
-            .select({ trialEndsAt: users.trialEndsAt })
+            .select({ trialEndsAt: users.trialEndsAt, stripeSubscriptionId: users.stripeSubscriptionId })
             .from(users)
             .where(eq(users.id, restaurantRow.ownerId))
             .limit(1);
@@ -224,11 +224,21 @@ export function registerMenuRoutes(app: Express) {
             new Date(ownerRow.trialEndsAt) > new Date()
           ) {
             orderingEnabled = true;
+          } else if (ownerRow?.stripeSubscriptionId) {
+            // Stripe subscription as final fallback (active check deferred to server-side gate)
+            orderingEnabled = true;
           }
         }
       }
 
-      res.json({ menus: result, orderingEnabled });
+      res.json({
+        menus: result,
+        orderingEnabled,
+        restaurantName: restaurantRow?.name ?? null,
+        restaurantCity: restaurantRow?.city ?? null,
+        isFoodTruck: restaurantRow?.isFoodTruck ?? false,
+        cuisineType: restaurantRow?.cuisineType ?? null,
+      });
     }),
   );
 

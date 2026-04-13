@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import Navigation from "@/components/navigation";
+import { SEOHead } from "@/components/seo-head";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -136,7 +137,7 @@ export default function MenuPage() {
     setCart(getCart());
   }, []);
 
-  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean }>({
+  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; cuisineType?: string | null }>({
     queryKey: ["/api/menus", restaurantId],
     queryFn: async () => {
       const res = await fetch(
@@ -151,6 +152,17 @@ export default function MenuPage() {
   const menus = menusQuery.data?.menus ?? [];
   const orderingEnabled = menusQuery.data?.orderingEnabled ?? false;
   const activeMenus = menus.filter((m) => m.isActive);
+  const restaurantName = menusQuery.data?.restaurantName ?? null;
+  const restaurantCity = menusQuery.data?.restaurantCity ?? null;
+  const isFoodTruck = menusQuery.data?.isFoodTruck ?? false;
+  const cuisineType = menusQuery.data?.cuisineType ?? null;
+  const entityType = isFoodTruck ? "Food Truck" : "Restaurant";
+  const seoTitle = restaurantName
+    ? `${restaurantName} Menu${restaurantCity ? ` - ${restaurantCity}` : ""} | MealScout`
+    : `Online Menu | MealScout`;
+  const seoDescription = restaurantName
+    ? `Order online from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}. Browse the full menu${cuisineType ? ` — ${cuisineType}` : ""} and place a pickup order on MealScout.`
+    : `Browse the full menu and place a pickup order on MealScout.`;
 
   useEffect(() => {
     if (activeMenus.length > 0 && !selectedMenuId) {
@@ -230,6 +242,11 @@ export default function MenuPage() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        ogType="website"
+      />
       <Navigation />
 
       <div className="max-w-3xl mx-auto px-4 py-6">

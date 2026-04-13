@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { format, isPast, isToday } from "date-fns";
+import { SEOHead } from "@/components/seo-head";
 import {
   Calendar,
   Clock,
@@ -616,6 +617,11 @@ function TruckDiscovery() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12 min-h-screen bg-[var(--bg-layered)]">
+      <SEOHead
+        title="Open Call Events for Food Trucks | MealScout"
+        description="Browse open call events posted by organizers looking for food trucks. Find local festivals, markets, and pop-ups near you and express interest on MealScout."
+        ogType="website"
+      />
       {/* Hero */}
       <div className="mb-8 rounded-2xl border border-[color:var(--border-subtle)] bg-[linear-gradient(145deg,rgba(255,77,46,0.10),rgba(245,158,11,0.07),rgba(0,0,0,0.06))] p-6 md:p-8">
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)] mb-3">

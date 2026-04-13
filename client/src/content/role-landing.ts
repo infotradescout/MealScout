@@ -46,10 +46,10 @@ export type RoleLandingContent = {
 export const roleLandingContent = {
   truck: {
     seo: {
-      title: "Food Trucks on MealScout",
+      title: "List Your Food Truck | Get Booked at Local Spots | MealScout",
       description:
-        "Live food truck locations, local specials, and easy booking in one place. Join MealScout to get discovered and book better spots.",
-      keywords: "food truck booking platform, food truck parking locations, host spots for food trucks, truck scheduling tools, local food truck discovery",
+        "List your food truck on MealScout to get discovered, book host locations, and grow your schedule. Free to join — built for food truck owners.",
+      keywords: "list food truck, food truck booking platform, food truck host locations, book food truck spots, food truck scheduling, local food truck discovery",
       canonicalPath: "/truck-landing",
     },
     badge: "MealScout for Trucks",
@@ -131,10 +131,10 @@ export const roleLandingContent = {
   },
   restaurants: {
     seo: {
-      title: "MealScout for Restaurants",
+      title: "List Your Restaurant | Local Discovery & Specials | MealScout",
       description:
-        "Bring locals to your restaurant with a profile built for discovery, specials, and repeat visits.",
-      keywords: "restaurant local discovery, restaurant specials platform, meal deals near me, restaurant marketing for locals, restaurant listing tools",
+        "Get your restaurant discovered by locals. Publish specials, build your profile, and drive repeat visits — free to join on MealScout.",
+      keywords: "list restaurant online, restaurant local discovery, restaurant specials near me, local restaurant marketing, restaurant listing platform",
       canonicalPath: "/for-restaurants",
     },
     badge: "MealScout for Restaurants",
@@ -213,10 +213,10 @@ export const roleLandingContent = {
   },
   bars: {
     seo: {
-      title: "MealScout for Bars",
+      title: "List Your Bar | Local Specials & Nightlife Discovery | MealScout",
       description:
-        "Get discovered locally, publish specials, and stay visible to the people who actually live nearby.",
-      keywords: "bar local discovery, bar specials near me, nightlife listings, local bar promotions, bar profile platform",
+        "Get your bar discovered by locals. Publish happy hour specials, stay visible in local search, and drive repeat visits on MealScout.",
+      keywords: "list bar online, bar specials near me, happy hour discovery, local nightlife listings, bar marketing platform",
       canonicalPath: "/for-bars",
     },
     badge: "MealScout for Bars",
@@ -295,10 +295,10 @@ export const roleLandingContent = {
   },
   diners: {
     seo: {
-      title: "Find Food Near You | MealScout",
+      title: "Find Food Near Me | Local Restaurants, Bars & Food Trucks | MealScout",
       description:
-        "Discover local restaurants, bars, and food trucks with specials and recommendations from your community.",
-      keywords: "find food near me, local food recommendations, nearby food trucks, nearby restaurant deals, local dining discovery",
+        "Find local restaurants, bars, and food trucks near you. Discover specials, deals, and community recommendations on MealScout.",
+      keywords: "find food near me, local restaurants near me, food trucks near me, nearby bars and restaurants, local food discovery",
       canonicalPath: "/find-food",
     },
     badge: "MealScout for Diners",
@@ -377,10 +377,10 @@ export const roleLandingContent = {
   },
   hosts: {
     seo: {
-      title: "MealScout for Hosts",
+      title: "Host Food Trucks at Your Location | MealScout",
       description:
-        "List parking pass locations by address and make it easy for food trucks to book your spots.",
-      keywords: "host food truck location, parking pass host tools, bookable truck spots, host scheduling slots, food truck host platform",
+        "List your parking spot or lot and let food trucks book your location. Turn your address into a bookable food truck host spot on MealScout.",
+      keywords: "host food truck location, food truck parking spot, bookable truck spots, food truck host platform, list parking for food trucks",
       canonicalPath: "/for-hosts",
     },
     badge: "MealScout for Hosts",
@@ -459,10 +459,10 @@ export const roleLandingContent = {
   },
   events: {
     seo: {
-      title: "MealScout for Event Coordinators",
+      title: "Food Truck Events & Open Calls | Event Coordinator Tools | MealScout",
       description:
-        "Create and manage events built for food trucks and local hosts. Keep the flow clean and coordinated.",
-      keywords: "food truck event coordinator, local food events platform, truck event management, event vendor booking, community event planning",
+        "Create and manage food truck events and open calls. Post your event, set truck capacity, and coordinate vendors — all in one place on MealScout.",
+      keywords: "food truck event coordinator, food truck open call, local food events platform, truck event management, food festival vendor booking",
       canonicalPath: "/for-events",
     },
     badge: "MealScout for Events",
