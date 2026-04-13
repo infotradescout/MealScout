@@ -16,8 +16,18 @@ let subscribedRestaurantId = String(
 let unsubscribedRestaurantId = String(
   process.env.ORDERING_UNSUBSCRIBED_RESTAURANT_ID || "",
 ).trim();
-const ownerEmail = String(process.env.ORDERING_OWNER_EMAIL || "").trim();
-const ownerPassword = String(process.env.ORDERING_OWNER_PASSWORD || "").trim();
+const ownerEmail = String(
+  process.env.ORDERING_OWNER_EMAIL ||
+    process.env.MEALSCOUT_ADMIN_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    "",
+).trim();
+const ownerPassword = String(
+  process.env.ORDERING_OWNER_PASSWORD ||
+    process.env.MEALSCOUT_ADMIN_PASSWORD ||
+    process.env.ADMIN_PASSWORD ||
+    "",
+).trim();
 
 const getCookieHeaderFromResponse = (res) => {
   const setCookie =
@@ -28,7 +38,11 @@ const getCookieHeaderFromResponse = (res) => {
           return value ? [value] : [];
         })();
   return setCookie
-    .map((line) => String(line || "").split(";")[0].trim())
+    .map((line) =>
+      String(line || "")
+        .split(";")[0]
+        .trim(),
+    )
     .filter(Boolean)
     .join("; ");
 };
@@ -93,10 +107,13 @@ const autoDiscoverRestaurants = async (cookie) => {
   for (const restaurant of mine.data) {
     const id = String(restaurant?.id || "").trim();
     if (!id) continue;
-    const menuRes = await fetch(`${baseUrl}/api/menus/${encodeURIComponent(id)}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
+    const menuRes = await fetch(
+      `${baseUrl}/api/menus/${encodeURIComponent(id)}`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      },
+    );
     const menuBody = await menuRes.json().catch(() => ({}));
     states.push({ id, orderingEnabled: Boolean(menuBody?.orderingEnabled) });
   }
@@ -123,7 +140,7 @@ const ensureInputs = async () => {
 
   if (!ownerCookie) {
     console.log(
-      "[ordering-smoke] SKIP: set ORDERING_OWNER_COOKIE or ORDERING_OWNER_EMAIL + ORDERING_OWNER_PASSWORD",
+      "[ordering-smoke] SKIP: set ORDERING_OWNER_COOKIE or login envs (ORDERING_OWNER_EMAIL/ORDERING_OWNER_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD)",
     );
     process.exit(0);
   }
@@ -181,7 +198,9 @@ const run = async () => {
       );
       if (!ok) {
         failed += 1;
-        console.log(`[ordering-smoke] response: ${JSON.stringify(result.data)}`);
+        console.log(
+          `[ordering-smoke] response: ${JSON.stringify(result.data)}`,
+        );
       }
     } catch (error) {
       failed += 1;
