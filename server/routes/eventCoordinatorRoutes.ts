@@ -9,7 +9,7 @@ import {
 } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
-import { inArray, desc } from "drizzle-orm";
+import { and, eq, inArray, desc, sql } from "drizzle-orm";
 import {
   computeAcceptedCount,
   shouldBlockAcceptance,
@@ -427,6 +427,176 @@ export function registerEventCoordinatorRoutes(
         res.status(400).json({
           message: error.message || "Failed to create event",
         });
+      }
+    },
+  );
+
+  // ── PATCH /api/event-coordinator/events/:eventId ──────────────────────
+  /**
+   * Update an event's details (name, description, date, times, maxTrucks).
+   * Only the owning coordinator may update.
+   */
+  app.patch(
+    "/api/event-coordinator/events/:eventId",
+    isEventCoordinator,
+    async (req: any, res) => {
+      try {
+        if (!(await ensurePaidEventAccess(req, res))) return;
+        const { eventId } = req.params;
+        const event = await storage.getEvent(eventId);
+        if (!event) return res.status(404).json({ message: "Event not found" });
+        const host = await storage.getHostByUserId(req.user.id);
+        const ownsEvent =
+          (host && event.hostId === host.id) ||
+          event.coordinatorUserId === req.user.id ||
+          ["admin", "super_admin", "staff"].includes(req.user.userType);
+        if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
+        const schema = z.object({
+          name: z.string().min(1).optional(),
+          description: z.string().optional(),
+          date: z.string().optional(),
+          startTime: z.string().optional(),
+          endTime: z.string().optional(),
+          maxTrucks: z.number().int().min(1).max(50).optional(),
+          hardCapEnabled: z.boolean().optional(),
+          status: z.enum(["open", "closed", "cancelled"]).optional(),
+        });
+        const body = schema.parse(req.body);
+        const updates: Record<string, any> = { ...body, updatedAt: new Date() };
+        const [updated] = await db
+          .update(events)
+          .set(updates)
+          .where(eq(events.id, eventId))
+          .returning();
+        res.json({ event: updated });
+      } catch (error: any) {
+        console.error("Error updating event:", error);
+        if (error instanceof z.ZodError)
+          return res.status(400).json({ message: error.errors[0]?.message || "Validation error" });
+        res.status(500).json({ message: error.message || "Failed to update event" });
+      }
+    },
+  );
+
+  // ── DELETE /api/event-coordinator/events/:eventId ─────────────────────
+  /**
+   * Cancel an event. Sets status to 'cancelled' and notifies interested trucks.
+   * Hard-delete is not allowed; coordinators cancel, not delete.
+   */
+  app.delete(
+    "/api/event-coordinator/events/:eventId",
+    isEventCoordinator,
+    async (req: any, res) => {
+      try {
+        if (!(await ensurePaidEventAccess(req, res))) return;
+        const { eventId } = req.params;
+        const event = await storage.getEvent(eventId);
+        if (!event) return res.status(404).json({ message: "Event not found" });
+        const host = await storage.getHostByUserId(req.user.id);
+        const ownsEvent =
+          (host && event.hostId === host.id) ||
+          event.coordinatorUserId === req.user.id ||
+          ["admin", "super_admin", "staff"].includes(req.user.userType);
+        if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
+        if ((event as any).status === "cancelled") {
+          return res.status(409).json({ message: "Event is already cancelled" });
+        }
+        // Cancel all pending interests
+        await db
+          .update(eventInterests)
+          .set({ status: "declined", updatedAt: new Date() } as any)
+          .where(and(eq(eventInterests.eventId, eventId), eq(eventInterests.status, "pending")));
+        // Mark event as cancelled
+        const [cancelled] = await db
+          .update(events)
+          .set({ status: "cancelled", updatedAt: new Date() } as any)
+          .where(eq(events.id, eventId))
+          .returning();
+        res.json({ event: cancelled, message: "Event cancelled" });
+      } catch (error: any) {
+        console.error("Error cancelling event:", error);
+        res.status(500).json({ message: error.message || "Failed to cancel event" });
+      }
+    },
+  );
+
+  // ── GET /api/event-coordinator/metrics ─────────────────────────────────
+  /**
+   * Operator metrics: series fill rate, acceptance throughput, cancellation impact.
+   * Returns aggregate stats across all events owned by this coordinator.
+   */
+  app.get(
+    "/api/event-coordinator/metrics",
+    isEventCoordinator,
+    async (req: any, res) => {
+      try {
+        if (!(await ensurePaidEventAccess(req, res))) return;
+        const eventsData = await storage.getEventsOwnedByUser(req.user.id);
+        if (eventsData.length === 0) {
+          return res.json({
+            totalEvents: 0,
+            totalCapacity: 0,
+            totalAccepted: 0,
+            overallFillRate: 0,
+            acceptanceRate: 0,
+            cancellationRate: 0,
+            avgFillRateByEvent: [],
+          });
+        }
+        const eventIds = eventsData.map((e) => e.id);
+        const allInterests = await db
+          .select({
+            eventId: eventInterests.eventId,
+            status: eventInterests.status,
+          })
+          .from(eventInterests)
+          .where(inArray(eventInterests.eventId, eventIds));
+        const byEvent: Record<string, { pending: number; accepted: number; declined: number; cancelled: number }> = {};
+        for (const ev of eventsData) byEvent[ev.id] = { pending: 0, accepted: 0, declined: 0, cancelled: 0 };
+        for (const i of allInterests) {
+          const bucket = byEvent[i.eventId];
+          if (!bucket) continue;
+          if (i.status === "pending") bucket.pending++;
+          else if (i.status === "accepted") bucket.accepted++;
+          else if (i.status === "declined") bucket.declined++;
+          else if (i.status === "cancelled") bucket.cancelled++;
+        }
+        const totalCapacity = eventsData.reduce((s, e) => s + (e.maxTrucks || 0), 0);
+        const totalAccepted = Object.values(byEvent).reduce((s, b) => s + b.accepted, 0);
+        const totalInterests = allInterests.length;
+        const totalDeclined = Object.values(byEvent).reduce((s, b) => s + b.declined, 0);
+        const totalCancelled = Object.values(byEvent).reduce((s, b) => s + b.cancelled, 0);
+        const overallFillRate = totalCapacity > 0 ? Math.round((totalAccepted / totalCapacity) * 100) : 0;
+        const acceptanceRate = totalInterests > 0 ? Math.round(((totalAccepted + totalDeclined) / totalInterests) * 100) : 0;
+        const cancellationRate = totalInterests > 0 ? Math.round((totalCancelled / totalInterests) * 100) : 0;
+        const avgFillRateByEvent = eventsData.map((ev) => {
+          const b = byEvent[ev.id];
+          const fillRate = ev.maxTrucks > 0 ? Math.round((b.accepted / ev.maxTrucks) * 100) : 0;
+          return {
+            eventId: ev.id,
+            eventName: ev.name,
+            date: ev.date,
+            maxTrucks: ev.maxTrucks,
+            accepted: b.accepted,
+            pending: b.pending,
+            declined: b.declined,
+            fillRate,
+            isFull: b.accepted >= ev.maxTrucks,
+          };
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        res.json({
+          totalEvents: eventsData.length,
+          totalCapacity,
+          totalAccepted,
+          overallFillRate,
+          acceptanceRate,
+          cancellationRate,
+          avgFillRateByEvent,
+          generatedAt: new Date().toISOString(),
+        });
+      } catch (error: any) {
+        console.error("Error fetching event coordinator metrics:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch metrics" });
       }
     },
   );
