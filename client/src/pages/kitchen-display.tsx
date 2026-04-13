@@ -96,7 +96,7 @@ export default function KitchenDisplayPage() {
       if (!restaurantId) return [];
       const res = await fetch(
         `/api/owner/kitchen-queue/${encodeURIComponent(restaurantId)}`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -126,7 +126,9 @@ export default function KitchenDisplayPage() {
   useEffect(() => {
     if (!restaurantId || !ENABLE_SOCKETS) return;
 
-    const socketUrl = import.meta.env.DEV ? undefined : (API_BASE_URL || undefined);
+    const socketUrl = import.meta.env.DEV
+      ? undefined
+      : API_BASE_URL || undefined;
     const socket: Socket = io(socketUrl as string, {
       autoConnect: true,
       transports: ["polling", "websocket"],
@@ -175,8 +177,18 @@ export default function KitchenDisplayPage() {
   }, [restaurantId]);
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/owner/orders/${orderId}/status`, { status });
+    mutationFn: async ({
+      orderId,
+      status,
+    }: {
+      orderId: string;
+      status: string;
+    }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/owner/orders/${orderId}/status`,
+        { status },
+      );
       return res.json();
     },
     onSuccess: (updatedOrder: KitchenOrder) => {
@@ -222,14 +234,18 @@ export default function KitchenDisplayPage() {
       <div className="min-h-screen">
         <Navigation />
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">No restaurant linked to your account.</p>
+          <p className="text-muted-foreground">
+            No restaurant linked to your account.
+          </p>
         </div>
       </div>
     );
   }
 
   const pendingOrders = orders.filter((o) => o.status === "pending");
-  const activeOrders = orders.filter((o) => ["confirmed", "preparing"].includes(o.status));
+  const activeOrders = orders.filter((o) =>
+    ["confirmed", "preparing"].includes(o.status),
+  );
   const readyOrders = orders.filter((o) => o.status === "ready");
 
   return (
@@ -280,7 +296,9 @@ export default function KitchenDisplayPage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Package className="w-12 h-12 text-muted-foreground mb-3" />
             <h3 className="font-medium text-lg">No active orders</h3>
-            <p className="text-muted-foreground text-sm">New orders will appear here automatically.</p>
+            <p className="text-muted-foreground text-sm">
+              New orders will appear here automatically.
+            </p>
           </div>
         )}
 
@@ -292,7 +310,9 @@ export default function KitchenDisplayPage() {
               <h2 className="font-semibold text-amber-800">
                 New Orders
                 {pendingOrders.length > 0 && (
-                  <Badge className="ml-2 bg-amber-500 text-white">{pendingOrders.length}</Badge>
+                  <Badge className="ml-2 bg-amber-500 text-white">
+                    {pendingOrders.length}
+                  </Badge>
                 )}
               </h2>
             </div>
@@ -309,7 +329,10 @@ export default function KitchenDisplayPage() {
                     })
                   }
                   onCancel={() =>
-                    updateStatusMutation.mutate({ orderId: order.id, status: "cancelled" })
+                    updateStatusMutation.mutate({
+                      orderId: order.id,
+                      status: "cancelled",
+                    })
                   }
                   isUpdating={updateStatusMutation.isPending}
                 />
@@ -324,7 +347,9 @@ export default function KitchenDisplayPage() {
               <h2 className="font-semibold text-orange-800">
                 In Progress
                 {activeOrders.length > 0 && (
-                  <Badge className="ml-2 bg-orange-500 text-white">{activeOrders.length}</Badge>
+                  <Badge className="ml-2 bg-orange-500 text-white">
+                    {activeOrders.length}
+                  </Badge>
                 )}
               </h2>
             </div>
@@ -341,7 +366,10 @@ export default function KitchenDisplayPage() {
                     })
                   }
                   onCancel={() =>
-                    updateStatusMutation.mutate({ orderId: order.id, status: "cancelled" })
+                    updateStatusMutation.mutate({
+                      orderId: order.id,
+                      status: "cancelled",
+                    })
                   }
                   isUpdating={updateStatusMutation.isPending}
                 />
@@ -356,7 +384,9 @@ export default function KitchenDisplayPage() {
               <h2 className="font-semibold text-green-800">
                 Ready for Pickup
                 {readyOrders.length > 0 && (
-                  <Badge className="ml-2 bg-green-500 text-white">{readyOrders.length}</Badge>
+                  <Badge className="ml-2 bg-green-500 text-white">
+                    {readyOrders.length}
+                  </Badge>
                 )}
               </h2>
             </div>
@@ -373,7 +403,10 @@ export default function KitchenDisplayPage() {
                     })
                   }
                   onCancel={() =>
-                    updateStatusMutation.mutate({ orderId: order.id, status: "cancelled" })
+                    updateStatusMutation.mutate({
+                      orderId: order.id,
+                      status: "cancelled",
+                    })
                   }
                   isUpdating={updateStatusMutation.isPending}
                 />
@@ -400,17 +433,24 @@ function OrderCard({
   onCancel: () => void;
   isUpdating: boolean;
 }) {
-  const colorClass = ORDER_STATUS_COLOR[order.status] ?? ORDER_STATUS_COLOR.pending;
-  const timeAgo = formatDistanceToNow(new Date(order.createdAt), { addSuffix: true });
+  const colorClass =
+    ORDER_STATUS_COLOR[order.status] ?? ORDER_STATUS_COLOR.pending;
+  const timeAgo = formatDistanceToNow(new Date(order.createdAt), {
+    addSuffix: true,
+  });
   const orderNum = order.id.slice(-6).toUpperCase();
 
   return (
-    <Card className={`border-2 ${order.status === "pending" ? "border-amber-400 shadow-amber-100 shadow-md" : "border-border"}`}>
+    <Card
+      className={`border-2 ${order.status === "pending" ? "border-amber-400 shadow-amber-100 shadow-md" : "border-border"}`}
+    >
       <CardHeader className="pb-2 pt-3 px-4">
         <div className="flex items-center justify-between">
           <div>
             <span className="font-bold text-base">#{orderNum}</span>
-            <span className="ml-2 text-sm text-muted-foreground">{order.customerName}</span>
+            <span className="ml-2 text-sm text-muted-foreground">
+              {order.customerName}
+            </span>
           </div>
           <div className="flex flex-col items-end gap-1">
             <Badge className={`text-xs px-1.5 py-0 ${colorClass}`}>
@@ -428,7 +468,11 @@ function OrderCard({
           </Badge>
           {order.scheduledFor && (
             <Badge variant="outline" className="text-xs">
-              ⏰ {new Date(order.scheduledFor).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              ⏰{" "}
+              {new Date(order.scheduledFor).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Badge>
           )}
         </div>
@@ -439,11 +483,16 @@ function OrderCard({
           {order.items.map((item) => (
             <div key={item.id} className="text-sm">
               <div className="flex gap-2">
-                <span className="font-semibold text-base w-5 text-right shrink-0">{item.quantity}×</span>
+                <span className="font-semibold text-base w-5 text-right shrink-0">
+                  {item.quantity}×
+                </span>
                 <div className="flex-1">
                   <span className="font-medium">{item.itemName}</span>
                   {item.variantLabel && (
-                    <span className="text-muted-foreground text-xs"> · {item.variantLabel}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {" "}
+                      · {item.variantLabel}
+                    </span>
                   )}
                   {item.modifierLabels && item.modifierLabels.length > 0 && (
                     <div className="text-xs text-muted-foreground">
@@ -468,29 +517,35 @@ function OrderCard({
         )}
 
         {/* Actions */}
-        {nextStatusLabel && order.status !== "completed" && order.status !== "cancelled" && (
-          <div className="flex gap-2 mt-2">
-            <Button
-              size="sm"
-              className="flex-1"
-              onClick={onAdvance}
-              disabled={isUpdating}
-            >
-              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : nextStatusLabel}
-            </Button>
-            {order.status === "pending" && (
+        {nextStatusLabel &&
+          order.status !== "completed" &&
+          order.status !== "cancelled" && (
+            <div className="flex gap-2 mt-2">
               <Button
                 size="sm"
-                variant="destructive"
-                onClick={onCancel}
+                className="flex-1"
+                onClick={onAdvance}
                 disabled={isUpdating}
-                className="px-3"
               >
-                ✕
+                {isUpdating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  nextStatusLabel
+                )}
               </Button>
-            )}
-          </div>
-        )}
+              {order.status === "pending" && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={onCancel}
+                  disabled={isUpdating}
+                  className="px-3"
+                >
+                  ✕
+                </Button>
+              )}
+            </div>
+          )}
       </CardContent>
     </Card>
   );

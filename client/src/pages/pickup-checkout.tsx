@@ -17,11 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
-import { Loader2, ShoppingCart, AlertCircle, CreditCard, Banknote } from "lucide-react";
+  Loader2,
+  ShoppingCart,
+  AlertCircle,
+  CreditCard,
+  Banknote,
+} from "lucide-react";
 import type { CartItem } from "./online-menu";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
@@ -73,7 +76,9 @@ export default function CheckoutPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   useEffect(() => {
-    const restaurantCart = getCart().filter((i) => i.restaurantId === restaurantId);
+    const restaurantCart = getCart().filter(
+      (i) => i.restaurantId === restaurantId,
+    );
     setCart(restaurantCart);
 
     // Also fetch menu to check acceptsCash + hidePlatformFee
@@ -102,7 +107,10 @@ export default function CheckoutPage() {
         <div className="max-w-lg mx-auto px-4 py-20 text-center">
           <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">Your cart is empty.</p>
-          <Button className="mt-4" onClick={() => navigate(`/menu/${restaurantId}`)}>
+          <Button
+            className="mt-4"
+            onClick={() => navigate(`/menu/${restaurantId}`)}
+          >
             Back to Menu
           </Button>
         </div>
@@ -224,7 +232,8 @@ export default function CheckoutPage() {
         {!orderingEnabled && (
           <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            Online ordering is currently unavailable for this restaurant. Please order in person.
+            Online ordering is currently unavailable for this restaurant. Please
+            order in person.
           </div>
         )}
 
@@ -239,7 +248,10 @@ export default function CheckoutPage() {
                 <span>
                   {item.quantity}× {item.itemName}
                   {item.variantLabel && (
-                    <span className="text-muted-foreground"> · {item.variantLabel}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {item.variantLabel}
+                    </span>
                   )}
                 </span>
                 <span>{formatMoney(item.lineTotalCents)}</span>
@@ -274,25 +286,41 @@ export default function CheckoutPage() {
               <Label>Name *</Label>
               <Input
                 value={contact.name}
-                onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
+                onChange={(e) =>
+                  setContact((c) => ({ ...c, name: e.target.value }))
+                }
                 placeholder="Your name"
               />
             </div>
             <div>
-              <Label>Email <span className="text-muted-foreground text-xs">(for confirmation)</span></Label>
+              <Label>
+                Email{" "}
+                <span className="text-muted-foreground text-xs">
+                  (for confirmation)
+                </span>
+              </Label>
               <Input
                 type="email"
                 value={contact.email}
-                onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
+                onChange={(e) =>
+                  setContact((c) => ({ ...c, email: e.target.value }))
+                }
                 placeholder="you@email.com"
               />
             </div>
             <div>
-              <Label>Phone <span className="text-muted-foreground text-xs">(for SMS when ready)</span></Label>
+              <Label>
+                Phone{" "}
+                <span className="text-muted-foreground text-xs">
+                  (for SMS when ready)
+                </span>
+              </Label>
               <Input
                 type="tel"
                 value={contact.phone}
-                onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))}
+                onChange={(e) =>
+                  setContact((c) => ({ ...c, phone: e.target.value }))
+                }
                 placeholder="(555) 000-0000"
               />
             </div>
@@ -312,11 +340,21 @@ export default function CheckoutPage() {
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="pickup" id="ot-pickup" />
-                <Label htmlFor="ot-pickup" className="cursor-pointer font-normal">Pickup</Label>
+                <Label
+                  htmlFor="ot-pickup"
+                  className="cursor-pointer font-normal"
+                >
+                  Pickup
+                </Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="dine_in" id="ot-dinein" />
-                <Label htmlFor="ot-dinein" className="cursor-pointer font-normal">Dine In</Label>
+                <Label
+                  htmlFor="ot-dinein"
+                  className="cursor-pointer font-normal"
+                >
+                  Dine In
+                </Label>
               </div>
             </RadioGroup>
           </CardContent>
@@ -335,14 +373,20 @@ export default function CheckoutPage() {
             >
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="card" id="pm-card" />
-                <Label htmlFor="pm-card" className="cursor-pointer font-normal flex items-center gap-1">
+                <Label
+                  htmlFor="pm-card"
+                  className="cursor-pointer font-normal flex items-center gap-1"
+                >
                   <CreditCard className="w-4 h-4" /> Card
                 </Label>
               </div>
               {menuInfo?.acceptsCash && (
                 <div className="flex items-center gap-2">
                   <RadioGroupItem value="cash" id="pm-cash" />
-                  <Label htmlFor="pm-cash" className="cursor-pointer font-normal flex items-center gap-1">
+                  <Label
+                    htmlFor="pm-cash"
+                    className="cursor-pointer font-normal flex items-center gap-1"
+                  >
                     <Banknote className="w-4 h-4" /> Cash at Pickup
                   </Label>
                 </div>
@@ -364,7 +408,9 @@ export default function CheckoutPage() {
           disabled={isCreating || !contact.name.trim() || !orderingEnabled}
         >
           {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-          {paymentMethod === "cash" ? "Place Order (Cash)" : `Pay ${formatMoney(total)}`}
+          {paymentMethod === "cash"
+            ? "Place Order (Cash)"
+            : `Pay ${formatMoney(total)}`}
         </Button>
       </div>
     </div>

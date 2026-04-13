@@ -275,7 +275,10 @@ function Router() {
             <Route path="/search" component={Search} />
             <Route path="/map" component={MapPage} />
             <Route path="/suppliers" component={SuppliersPage} />
-            <Route path="/suppliers/:supplierId" component={SupplierDetailPage} />
+            <Route
+              path="/suppliers/:supplierId"
+              component={SupplierDetailPage}
+            />
             <Route path="/supplier/:slug" component={SupplierDetailPage} />
             <Route path="/video" component={VideoPage} />
             <Route path="/video/:id" component={VideoDetailPage} />
@@ -288,9 +291,18 @@ function Router() {
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
             <Route path="/location/:slug" component={LocationDetailPage} />
-            <Route path="/location/:slug/food-trucks" component={LocationDetailPage} />
-            <Route path="/location/:slug/food-trucks-now" component={LocationDiscoveryPage} />
-            <Route path="/location/:slug/food-trucks-tonight" component={LocationDiscoveryPage} />
+            <Route
+              path="/location/:slug/food-trucks"
+              component={LocationDetailPage}
+            />
+            <Route
+              path="/location/:slug/food-trucks-now"
+              component={LocationDiscoveryPage}
+            />
+            <Route
+              path="/location/:slug/food-trucks-tonight"
+              component={LocationDiscoveryPage}
+            />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
@@ -328,7 +340,10 @@ function Router() {
               path="/golden-plate-winners"
               component={GoldenPlateWinners}
             />
-            <Route path="/p/:profileType/:profileId" component={PublicProfilePage} />
+            <Route
+              path="/p/:profileType/:profileId"
+              component={PublicProfilePage}
+            />
             <Route
               path="/p/:profileType/:profileId/:profileSlug"
               component={PublicProfilePage}
@@ -337,7 +352,10 @@ function Router() {
             <Route path="/pensacola/report" component={PensacolaReport} />
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/share-hub" component={ShareHubPage} />
-            <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
+            <Route
+              path="/business-team/accept"
+              component={BusinessTeamAcceptPage}
+            />
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
@@ -345,8 +363,14 @@ function Router() {
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
-            <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
-            <Route path="/order-confirmation/:orderId" component={OrderConfirmationPage} />
+            <Route
+              path="/checkout/:restaurantId"
+              component={PickupCheckoutPage}
+            />
+            <Route
+              path="/order-confirmation/:orderId"
+              component={OrderConfirmationPage}
+            />
           </>
         ) : (
           <>
@@ -371,11 +395,11 @@ function Router() {
             />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/user-dashboard" component={UserDashboard} />
-        <Route path="/host/dashboard" component={HostDashboard} />
-        <Route
-          path="/event-coordinator/dashboard"
-          component={EventCoordinatorDashboard}
-        />
+            <Route path="/host/dashboard" component={HostDashboard} />
+            <Route
+              path="/event-coordinator/dashboard"
+              component={EventCoordinatorDashboard}
+            />
             <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route path="/for-restaurants" component={ForRestaurants} />
             <Route path="/for-bars" component={ForBars} />
@@ -389,14 +413,20 @@ function Router() {
             <Route path="/search" component={Search} />
             <Route path="/map" component={MapPage} />
             <Route path="/suppliers" component={SuppliersPage} />
-            <Route path="/suppliers/:supplierId" component={SupplierDetailPage} />
+            <Route
+              path="/suppliers/:supplierId"
+              component={SupplierDetailPage}
+            />
             <Route path="/supplier/:slug" component={SupplierDetailPage} />
             <Route path="/supply/orders" component={SupplyOrdersPage} />
             <Route path="/video" component={VideoPage} />
             <Route path="/favorites" component={Favorites} />
             <Route path="/orders" component={Orders} />
             <Route path="/profile" component={Profile} />
-            <Route path="/supplier/dashboard" component={SupplierDashboardPage} />
+            <Route
+              path="/supplier/dashboard"
+              component={SupplierDashboardPage}
+            />
             <Route path="/affiliate/earnings" component={AffiliateEarnings} />
             <Route path="/staff" component={StaffDashboard} />
             <Route path="/admin" component={AdminLogin} />
@@ -424,7 +454,10 @@ function Router() {
             <Route path="/admin/audit-logs" component={AdminAuditLogs} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
-            <Route path="/admin/affiliates" component={AdminAffiliateManagement} />
+            <Route
+              path="/admin/affiliates"
+              component={AdminAffiliateManagement}
+            />
             <Route path="/admin/switcher" component={DashboardSwitcherPage} />
             <Route path="/category/:category" component={CategoryPage} />
             <Route path="/cuisine/:type" component={CategoryPage} />
@@ -435,9 +468,18 @@ function Router() {
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
             <Route path="/location/:slug" component={LocationDetailPage} />
-            <Route path="/location/:slug/food-trucks" component={LocationDetailPage} />
-            <Route path="/location/:slug/food-trucks-now" component={LocationDiscoveryPage} />
-            <Route path="/location/:slug/food-trucks-tonight" component={LocationDiscoveryPage} />
+            <Route
+              path="/location/:slug/food-trucks"
+              component={LocationDetailPage}
+            />
+            <Route
+              path="/location/:slug/food-trucks-now"
+              component={LocationDiscoveryPage}
+            />
+            <Route
+              path="/location/:slug/food-trucks-tonight"
+              component={LocationDiscoveryPage}
+            />
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
@@ -451,11 +493,11 @@ function Router() {
             <Route path="/host-signup" component={HostSignup} />
             <Route path="/event-signup" component={EventSignup} />
             <Route path="/events" component={EventsRouter} />
-             <Route path="/events/public" component={EventsPage} />
-             <Route path="/event/:slug" component={EventDetailPage} />
-             <Route path="/pensacola/spots" component={PensacolaSpots} />
-             <Route path="/pensacola/report" component={PensacolaReport} />
-             <Route path="/food-trucks/:citySlug" component={CityLanding} />
+            <Route path="/events/public" component={EventsPage} />
+            <Route path="/event/:slug" component={EventDetailPage} />
+            <Route path="/pensacola/spots" component={PensacolaSpots} />
+            <Route path="/pensacola/report" component={PensacolaReport} />
+            <Route path="/food-trucks/:citySlug" component={CityLanding} />
             <Route
               path="/food-trucks/:citySlug/:cuisineSlug"
               component={CityLanding}
@@ -463,7 +505,10 @@ function Router() {
             <Route path="/sitemap" component={Sitemap} />
             <Route path="/truck-landing" component={TruckLanding} />
             <Route path="/status" component={StatusPage} />
-            <Route path="/p/:profileType/:profileId" component={PublicProfilePage} />
+            <Route
+              path="/p/:profileType/:profileId"
+              component={PublicProfilePage}
+            />
             <Route
               path="/p/:profileType/:profileId/:profileSlug"
               component={PublicProfilePage}
@@ -491,10 +536,19 @@ function Router() {
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/share-hub" component={ShareHubPage} />
             <Route path="/business-team" component={BusinessTeamPage} />
-            <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
+            <Route
+              path="/business-team/accept"
+              component={BusinessTeamAcceptPage}
+            />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
-            <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
-            <Route path="/order-confirmation/:orderId" component={OrderConfirmationPage} />
+            <Route
+              path="/checkout/:restaurantId"
+              component={PickupCheckoutPage}
+            />
+            <Route
+              path="/order-confirmation/:orderId"
+              component={OrderConfirmationPage}
+            />
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
           </>

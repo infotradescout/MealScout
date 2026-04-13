@@ -38,7 +38,10 @@ type ParseResult = {
 
 // Normalize column header to a canonical key.
 function normalizeHeader(h: string): string {
-  return h.toLowerCase().replace(/[\s_-]+/g, "_").trim();
+  return h
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "_")
+    .trim();
 }
 
 // Parse a price string into cents. Accepts "$12.99", "12.99", "1299" (cents).
@@ -108,7 +111,10 @@ export async function parseMenuCsv(
     const priceRaw = col(row, "price", "price_cents", "cost", "amount");
     const priceCents = parsePriceCents(priceRaw);
     if (priceCents === null || priceCents < 0) {
-      errors.push({ row: rowNum, reason: `Invalid or missing price: "${priceRaw}"` });
+      errors.push({
+        row: rowNum,
+        reason: `Invalid or missing price: "${priceRaw}"`,
+      });
       return;
     }
 

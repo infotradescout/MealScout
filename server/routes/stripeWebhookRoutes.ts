@@ -155,12 +155,18 @@ export function registerStripeWebhookRoutes(
                 const [order] = await db
                   .select()
                   .from(pickupOrders)
-                  .where(eq(pickupOrders.stripePaymentIntentId, paymentIntent.id))
+                  .where(
+                    eq(pickupOrders.stripePaymentIntentId, paymentIntent.id),
+                  )
                   .limit(1);
                 if (order && order.status === "pending") {
                   const [updated] = await db
                     .update(pickupOrders)
-                    .set({ status: "confirmed", confirmedAt: new Date(), updatedAt: new Date() })
+                    .set({
+                      status: "confirmed",
+                      confirmedAt: new Date(),
+                      updatedAt: new Date(),
+                    })
                     .where(eq(pickupOrders.id, order.id))
                     .returning();
 
@@ -172,10 +178,11 @@ export function registerStripeWebhookRoutes(
                         .from(restaurants)
                         .where(eq(restaurants.id, order.restaurantId))
                         .limit(1);
-                      const connectAccountId = (restaurant as any)?.stripeConnectAccountId;
+                      const connectAccountId = (restaurant as any)
+                        ?.stripeConnectAccountId;
                       if (connectAccountId) {
                         const transferAmount = order.feePaidByBusiness
-                          ? (order.subtotalCents - 100)
+                          ? order.subtotalCents - 100
                           : order.subtotalCents;
                         if (transferAmount > 0) {
                           await stripe.transfers.create({
@@ -187,23 +194,36 @@ export function registerStripeWebhookRoutes(
                           });
                           await db
                             .update(pickupOrders)
-                            .set({ payoutStatus: "transferred", updatedAt: new Date() })
+                            .set({
+                              payoutStatus: "transferred",
+                              updatedAt: new Date(),
+                            })
                             .where(eq(pickupOrders.id, order.id));
                         }
                       }
                     } catch (transferError) {
-                      console.error("[WEBHOOK] Pickup order transfer failed:", transferError);
+                      console.error(
+                        "[WEBHOOK] Pickup order transfer failed:",
+                        transferError,
+                      );
                     }
                   }
 
                   // Emit kitchen update via WebSocket
                   const wsIo = getWebSocketServer();
                   if (wsIo && updated) {
-                    wsIo.to(`kitchen:${order.restaurantId}`).emit("kitchen:order_update", { order: updated as Record<string, unknown> });
+                    wsIo
+                      .to(`kitchen:${order.restaurantId}`)
+                      .emit("kitchen:order_update", {
+                        order: updated as Record<string, unknown>,
+                      });
                   }
                 }
               } catch (pickupError) {
-                console.error("[WEBHOOK] Pickup order payment confirmation failed:", pickupError);
+                console.error(
+                  "[WEBHOOK] Pickup order payment confirmation failed:",
+                  pickupError,
+                );
               }
               break;
             }

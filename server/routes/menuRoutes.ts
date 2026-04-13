@@ -56,27 +56,31 @@ const upload = multer({
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(userId: string, restaurantId: string) {
   const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
-  if (!ok) throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
+  if (!ok)
+    throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
 async function assertOwnsMenu(userId: string, menuId: string) {
   const [menu] = await db.select().from(menus).where(eq(menus.id, menuId));
-  if (!menu) throw Object.assign(new Error("Menu not found"), { statusCode: 404 });
+  if (!menu)
+    throw Object.assign(new Error("Menu not found"), { statusCode: 404 });
   await assertOwnsRestaurant(userId, menu.restaurantId);
   return menu;
 }
 
 async function assertOwnsMenuItem(userId: string, itemId: string) {
-  const [item] = await db.select().from(menuItems).where(eq(menuItems.id, itemId));
-  if (!item) throw Object.assign(new Error("Item not found"), { statusCode: 404 });
+  const [item] = await db
+    .select()
+    .from(menuItems)
+    .where(eq(menuItems.id, itemId));
+  if (!item)
+    throw Object.assign(new Error("Item not found"), { statusCode: 404 });
   await assertOwnsRestaurant(userId, item.restaurantId);
   return item;
 }
 
 // ── Error wrapper ─────────────────────────────────────────────────────────────
-function wrap(
-  handler: (req: any, res: any) => Promise<void>,
-) {
+function wrap(handler: (req: any, res: any) => Promise<void>) {
   return async (req: any, res: any) => {
     try {
       await handler(req, res);
@@ -107,7 +111,9 @@ export function registerMenuRoutes(app: Express) {
       const restaurantMenus: Menu[] = await db
         .select()
         .from(menus)
-        .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+        .where(
+          and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)),
+        )
         .orderBy(asc(menus.serviceType));
 
       if (restaurantMenus.length === 0) {
@@ -143,7 +149,10 @@ export function registerMenuRoutes(app: Express) {
       const typedCategories = categories as MenuCategory[];
       const typedItems = items as MenuItem[];
       const itemIds = typedItems.map((i) => i.id);
-      const [realVariants, realModifiers]: [MenuItemVariant[], MenuItemModifier[]] = itemIds.length
+      const [realVariants, realModifiers]: [
+        MenuItemVariant[],
+        MenuItemModifier[],
+      ] = itemIds.length
         ? await Promise.all([
             db
               .select()
@@ -210,7 +219,10 @@ export function registerMenuRoutes(app: Express) {
             .from(users)
             .where(eq(users.id, restaurantRow.ownerId))
             .limit(1);
-          if (ownerRow?.trialEndsAt && new Date(ownerRow.trialEndsAt) > new Date()) {
+          if (
+            ownerRow?.trialEndsAt &&
+            new Date(ownerRow.trialEndsAt) > new Date()
+          ) {
             orderingEnabled = true;
           }
         }
@@ -275,7 +287,9 @@ export function registerMenuRoutes(app: Express) {
       const { menuId } = req.params;
       await assertOwnsMenu(req.user.id, menuId);
 
-      const updateSchema = insertMenuSchema.partial().omit({ restaurantId: true });
+      const updateSchema = insertMenuSchema
+        .partial()
+        .omit({ restaurantId: true });
       const updates = updateSchema.parse(req.body);
 
       const [updated] = await db
@@ -582,12 +596,17 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status: errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status:
+          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
       });
 
       await db
         .update(menus)
-        .set({ importSource: "csv", importedAt: new Date(), updatedAt: new Date() })
+        .set({
+          importSource: "csv",
+          importedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(menus.id, menuId));
 
       res.json({
@@ -633,12 +652,17 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status: errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status:
+          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
       });
 
       await db
         .update(menus)
-        .set({ importSource: "pdf", importedAt: new Date(), updatedAt: new Date() })
+        .set({
+          importSource: "pdf",
+          importedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(menus.id, menuId));
 
       res.json({ imported: imported.length, skipped, errors });
@@ -662,7 +686,14 @@ export function registerMenuRoutes(app: Express) {
       const menu = await assertOwnsMenu(req.user.id, menuId);
 
       const bodySchema = z.object({
-        source: z.enum(["ubereats", "doordash", "clover", "toast", "square", "gmb"]),
+        source: z.enum([
+          "ubereats",
+          "doordash",
+          "clover",
+          "toast",
+          "square",
+          "gmb",
+        ]),
         // Raw exported data from the third-party platform.
         // Shape varies per source; normalizer handles each.
         rawData: z.array(z.record(z.any())).min(1).max(500),
@@ -688,12 +719,17 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status: errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status:
+          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
       });
 
       await db
         .update(menus)
-        .set({ importSource: source, importedAt: new Date(), updatedAt: new Date() })
+        .set({
+          importSource: source,
+          importedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(menus.id, menuId));
 
       res.json({ imported: imported.length, skipped, errors });
@@ -783,11 +819,11 @@ function normalizeExternalMenuData(
         return;
       }
       // Heuristic: if value > 500 assume it's already in cents
-      priceCents = numPrice > 500 ? Math.round(numPrice) : Math.round(numPrice * 100);
+      priceCents =
+        numPrice > 500 ? Math.round(numPrice) : Math.round(numPrice * 100);
 
-      const description = String(
-        row.description || row.desc || row.details || "",
-      ).trim() || null;
+      const description =
+        String(row.description || row.desc || row.details || "").trim() || null;
 
       const dietaryTags: string[] = Array.isArray(row.dietaryTags)
         ? row.dietaryTags

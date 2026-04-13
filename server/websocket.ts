@@ -7,12 +7,21 @@ import type { Session } from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Socket } from "socket.io";
 import type { InsertFoodTruckLocation } from "@shared/schema";
-import { incConnect, incDisconnect, incSubscribeNearby, maybeWarnIfChurn } from "./utils/realtimeMetrics";
+import {
+  incConnect,
+  incDisconnect,
+  incSubscribeNearby,
+  maybeWarnIfChurn,
+} from "./utils/realtimeMetrics";
 
 const PgSession = connectPg(session);
 
 type ClientToServerEvents = {
-  subscribe_nearby: (data: { latitude: number; longitude: number; radiusKm?: number }) => void;
+  subscribe_nearby: (data: {
+    latitude: number;
+    longitude: number;
+    radiusKm?: number;
+  }) => void;
   subscribe_restaurant: (data: { restaurantId: string }) => void;
   subscribe_kitchen: (data: { restaurantId: string }) => void;
   unsubscribe_kitchen: (data: { restaurantId: string }) => void;
@@ -20,7 +29,9 @@ type ClientToServerEvents = {
   ping: () => void;
 };
 
-type NearbyTruck = Awaited<ReturnType<typeof storage.getLiveTrucksNearby>>[number];
+type NearbyTruck = Awaited<
+  ReturnType<typeof storage.getLiveTrucksNearby>
+>[number];
 
 type BroadcastLocation = {
   latitude: number | string;
@@ -56,10 +67,23 @@ type ServerToClientEvents = {
       createdAt: string;
     };
   }) => void;
-  location_update: (payload: { type: "location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
-  truck_location_update: (payload: { type: "truck_location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
-  status_update: (payload: { restaurantId: string; status: { isOnline: boolean; mobileOnline?: boolean } }) => void;
-  'kitchen:order_update': (payload: { order: Record<string, unknown> }) => void;
+  location_update: (payload: {
+    type: "location_update";
+    restaurantId: string;
+    location: BroadcastLocation;
+    timestamp: string;
+  }) => void;
+  truck_location_update: (payload: {
+    type: "truck_location_update";
+    restaurantId: string;
+    location: BroadcastLocation;
+    timestamp: string;
+  }) => void;
+  status_update: (payload: {
+    restaurantId: string;
+    status: { isOnline: boolean; mobileOnline?: boolean };
+  }) => void;
+  "kitchen:order_update": (payload: { order: Record<string, unknown> }) => void;
 };
 
 type InterServerEvents = Record<string, never>;
@@ -70,7 +94,12 @@ type SocketData = {
   user?: Awaited<ReturnType<typeof storage.getUser>> | null;
 };
 
-type RealtimeSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData> & {
+type RealtimeSocket = Socket<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
+> & {
   userId?: string | null;
   sessionID?: string;
   user?: Awaited<ReturnType<typeof storage.getUser>> | null;
@@ -91,7 +120,7 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret) {
     throw new Error(
-      "SESSION_SECRET is required for WebSocket session authentication"
+      "SESSION_SECRET is required for WebSocket session authentication",
     );
   }
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -100,7 +129,7 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
   const sessionMiddleware = session({
     store: new PgSession({
       conString: process.env.DATABASE_URL,
-      tableName: 'sessions',
+      tableName: "sessions",
       createTableIfMissing: false,
       ttl: sessionTtl,
     }),
@@ -109,7 +138,7 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
     saveUninitialized: false,
     proxy: true,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: sessionTtl,
@@ -117,16 +146,24 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
   });
 
   // Create Socket.IO server with restricted CORS
-  const defaultOrigins = 'http://localhost:5000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,https://meal-scout.vercel.app,https://mealscout.us,https://www.mealscout.us,https://mealscout.onrender.com';
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || defaultOrigins).split(',').map(o => o.trim());
-  io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(httpServer, {
+  const defaultOrigins =
+    "http://localhost:5000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,https://meal-scout.vercel.app,https://mealscout.us,https://www.mealscout.us,https://mealscout.onrender.com";
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || defaultOrigins)
+    .split(",")
+    .map((o) => o.trim());
+  io = new SocketIOServer<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    InterServerEvents,
+    SocketData
+  >(httpServer, {
     path: "/socket.io",
     cors: {
-      origin: function(origin, callback) {
+      origin: function (origin, callback) {
         if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
-          callback(new Error('Not allowed by CORS'));
+          callback(new Error("Not allowed by CORS"));
         }
       },
       methods: ["GET", "POST"],
@@ -141,191 +178,240 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
     socket.userId = null;
     socket.sessionID = undefined;
     socket.user = null;
-    
+
     // Extract session data if available (non-blocking, best-effort)
-    sessionMiddleware(socket.request as unknown as Request, {} as unknown as Response, async () => {
-      const session = (socket.request as SessionRequest).session;
-      const user = session?.passport?.user;
-      
-      if (user) {
-        socket.userId = user;
-        socket.sessionID = (socket.request as SessionRequest).sessionID;
-        socket.user = await storage.getUser(socket.userId);
-        console.log(`WebSocket connected: ${socket.id}, userId: ${socket.userId}`);
+    sessionMiddleware(
+      socket.request as unknown as Request,
+      {} as unknown as Response,
+      async () => {
+        const session = (socket.request as SessionRequest).session;
+        const user = session?.passport?.user;
 
-        if (["staff", "admin", "super_admin"].includes(String(socket.user?.userType || ""))) {
-          socket.join("admin_lisa");
-        }
-      } else {
-        socket.userId = null;
-        socket.sessionID = `anon_${Date.now()}_${Math.random()}`;
-        console.log(`WebSocket connected: ${socket.id} (anonymous)`);
-      }
+        if (user) {
+          socket.userId = user;
+          socket.sessionID = (socket.request as SessionRequest).sessionID;
+          socket.user = await storage.getUser(socket.userId);
+          console.log(
+            `WebSocket connected: ${socket.id}, userId: ${socket.userId}`,
+          );
 
-      // Initialize user subscriptions tracking
-      const userKey = socket.userId || socket.sessionID || `fallback_${socket.id}`;
-      if (!userSubscriptions.has(userKey)) {
-        userSubscriptions.set(userKey, new Set());
-      }
-
-      // Handle subscription to nearby trucks by location
-      socket.on("subscribe_nearby", async (data: { latitude: number; longitude: number; radiusKm?: number }) => {
-        try {
-          incSubscribeNearby();
-          const { latitude, longitude, radiusKm = 5 } = data;
-          
-          // Validate coordinates
-          if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
-              latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-            socket.emit("error", { message: "Invalid coordinates" });
-            return;
+          if (
+            ["staff", "admin", "super_admin"].includes(
+              String(socket.user?.userType || ""),
+            )
+          ) {
+            socket.join("admin_lisa");
           }
+        } else {
+          socket.userId = null;
+          socket.sessionID = `anon_${Date.now()}_${Math.random()}`;
+          console.log(`WebSocket connected: ${socket.id} (anonymous)`);
+        }
 
-          // Create geographic room key (grid-based approach for efficiency)
-          const gridSize = 0.1; // ~11km grid squares
-          const gridLat = Math.floor(latitude / gridSize) * gridSize;
-          const gridLng = Math.floor(longitude / gridSize) * gridSize;
-          const roomKey = `grid_${gridLat}_${gridLng}`;
-          
-          // Leave previous geographic rooms
-          const userSubs = userSubscriptions.get(userKey);
-          if (userSubs) {
-            userSubs.forEach(room => {
-              if (room.startsWith('grid_')) {
-                socket.leave(room);
-                userSubs.delete(room);
+        // Initialize user subscriptions tracking
+        const userKey =
+          socket.userId || socket.sessionID || `fallback_${socket.id}`;
+        if (!userSubscriptions.has(userKey)) {
+          userSubscriptions.set(userKey, new Set());
+        }
+
+        // Handle subscription to nearby trucks by location
+        socket.on(
+          "subscribe_nearby",
+          async (data: {
+            latitude: number;
+            longitude: number;
+            radiusKm?: number;
+          }) => {
+            try {
+              incSubscribeNearby();
+              const { latitude, longitude, radiusKm = 5 } = data;
+
+              // Validate coordinates
+              if (
+                typeof latitude !== "number" ||
+                typeof longitude !== "number" ||
+                latitude < -90 ||
+                latitude > 90 ||
+                longitude < -180 ||
+                longitude > 180
+              ) {
+                socket.emit("error", { message: "Invalid coordinates" });
+                return;
               }
+
+              // Create geographic room key (grid-based approach for efficiency)
+              const gridSize = 0.1; // ~11km grid squares
+              const gridLat = Math.floor(latitude / gridSize) * gridSize;
+              const gridLng = Math.floor(longitude / gridSize) * gridSize;
+              const roomKey = `grid_${gridLat}_${gridLng}`;
+
+              // Leave previous geographic rooms
+              const userSubs = userSubscriptions.get(userKey);
+              if (userSubs) {
+                userSubs.forEach((room) => {
+                  if (room.startsWith("grid_")) {
+                    socket.leave(room);
+                    userSubs.delete(room);
+                  }
+                });
+              }
+
+              // Join new geographic room
+              socket.join(roomKey);
+              userSubs?.add(roomKey);
+
+              // Send initial nearby trucks data
+              const nearbyTrucks = await storage.getLiveTrucksNearby(
+                latitude,
+                longitude,
+                radiusKm,
+              );
+              socket.emit("nearby_trucks", { trucks: nearbyTrucks });
+
+              console.log(
+                `User ${userKey} subscribed to nearby trucks in ${roomKey}`,
+              );
+            } catch (error) {
+              console.error("Error handling nearby subscription:", error);
+              socket.emit("error", {
+                message: "Failed to subscribe to nearby trucks",
+              });
+            }
+          },
+        );
+
+        // Handle subscription to specific restaurant updates (for owners)
+        socket.on("subscribe_restaurant", async (data) => {
+          try {
+            const { restaurantId } = data;
+
+            if (!socket.user) {
+              socket.emit("error", { message: "Authentication required" });
+              return;
+            }
+
+            // Verify user owns this restaurant
+            const isAuthorized = await storage.verifyRestaurantOwnership(
+              restaurantId,
+              socket.user.id,
+              "manageProfile",
+            );
+            if (!isAuthorized) {
+              socket.emit("error", {
+                message:
+                  "Unauthorized: You can only subscribe to restaurants you own",
+              });
+              return;
+            }
+
+            const roomKey = `restaurant_${restaurantId}`;
+            socket.join(roomKey);
+            userSubscriptions.get(userKey)?.add(roomKey);
+
+            socket.emit("subscribed", { restaurantId, room: roomKey });
+            console.log(
+              `User ${userKey} subscribed to restaurant ${restaurantId}`,
+            );
+          } catch (error) {
+            console.error("Error handling restaurant subscription:", error);
+            socket.emit("error", {
+              message: "Failed to subscribe to restaurant",
             });
           }
+        });
 
-          // Join new geographic room
-          socket.join(roomKey);
-          userSubs?.add(roomKey);
+        // Handle kitchen queue subscription (restaurant owners / staff)
+        socket.on("subscribe_kitchen", async (data) => {
+          try {
+            const { restaurantId } = data;
 
-          // Send initial nearby trucks data
-          const nearbyTrucks = await storage.getLiveTrucksNearby(latitude, longitude, radiusKm);
-          socket.emit("nearby_trucks", { trucks: nearbyTrucks });
-          
-          console.log(`User ${userKey} subscribed to nearby trucks in ${roomKey}`);
-        } catch (error) {
-          console.error("Error handling nearby subscription:", error);
-          socket.emit("error", { message: "Failed to subscribe to nearby trucks" });
-        }
-      });
+            if (!socket.user) {
+              socket.emit("error", { message: "Authentication required" });
+              return;
+            }
 
-      // Handle subscription to specific restaurant updates (for owners)
-      socket.on("subscribe_restaurant", async (data) => {
-        try {
-          const { restaurantId } = data;
-          
-          if (!socket.user) {
-            socket.emit("error", { message: "Authentication required" });
-            return;
+            const isAuthorized = await storage.verifyRestaurantOwnership(
+              restaurantId,
+              socket.user.id,
+            );
+            if (!isAuthorized) {
+              socket.emit("error", {
+                message: "Unauthorized: kitchen access denied",
+              });
+              return;
+            }
+
+            const roomKey = `kitchen:${restaurantId}`;
+            socket.join(roomKey);
+            userSubscriptions.get(userKey)?.add(roomKey);
+
+            socket.emit("subscribed", { restaurantId, room: roomKey });
+            console.log(
+              `User ${userKey} subscribed to kitchen queue for ${restaurantId}`,
+            );
+          } catch (error) {
+            console.error("Error handling kitchen subscription:", error);
+            socket.emit("error", {
+              message: "Failed to subscribe to kitchen queue",
+            });
           }
+        });
 
-          // Verify user owns this restaurant
-          const isAuthorized = await storage.verifyRestaurantOwnership(
-            restaurantId,
-            socket.user.id,
-            "manageProfile",
+        socket.on("unsubscribe_kitchen", (data) => {
+          try {
+            const roomKey = `kitchen:${data.restaurantId}`;
+            const userSubs = userSubscriptions.get(userKey);
+            if (userSubs?.has(roomKey)) {
+              socket.leave(roomKey);
+              userSubs.delete(roomKey);
+              socket.emit("unsubscribed", { room: roomKey });
+            }
+          } catch (error) {
+            console.error("Error handling kitchen unsubscribe:", error);
+            socket.emit("error", {
+              message: "Failed to unsubscribe from kitchen queue",
+            });
+          }
+        });
+
+        // Handle unsubscribe
+        socket.on("unsubscribe", (data) => {
+          try {
+            const userSubs = userSubscriptions.get(userKey);
+            if (data.room && userSubs?.has(data.room)) {
+              socket.leave(data.room);
+              userSubs.delete(data.room);
+              socket.emit("unsubscribed", { room: data.room });
+            }
+          } catch (error) {
+            console.error("Error handling unsubscribe:", error);
+            socket.emit("error", { message: "Failed to unsubscribe" });
+          }
+        });
+
+        // Handle ping for connection keepalive
+        socket.on("ping", () => {
+          try {
+            socket.emit("pong", {});
+          } catch (error) {
+            console.error("Error handling ping:", error);
+          }
+        });
+
+        // Handle disconnect
+        socket.on("disconnect", (reason) => {
+          console.log(
+            `WebSocket disconnected: ${socket.id}, reason: ${reason}`,
           );
-          if (!isAuthorized) {
-            socket.emit("error", { message: "Unauthorized: You can only subscribe to restaurants you own" });
-            return;
-          }
+          incDisconnect();
+          maybeWarnIfChurn((msg) => console.warn(msg));
 
-          const roomKey = `restaurant_${restaurantId}`;
-          socket.join(roomKey);
-          userSubscriptions.get(userKey)?.add(roomKey);
-          
-          socket.emit("subscribed", { restaurantId, room: roomKey });
-          console.log(`User ${userKey} subscribed to restaurant ${restaurantId}`);
-        } catch (error) {
-          console.error("Error handling restaurant subscription:", error);
-          socket.emit("error", { message: "Failed to subscribe to restaurant" });
-        }
-      });
-
-      // Handle kitchen queue subscription (restaurant owners / staff)
-      socket.on("subscribe_kitchen", async (data) => {
-        try {
-          const { restaurantId } = data;
-
-          if (!socket.user) {
-            socket.emit("error", { message: "Authentication required" });
-            return;
-          }
-
-          const isAuthorized = await storage.verifyRestaurantOwnership(
-            restaurantId,
-            socket.user.id,
-          );
-          if (!isAuthorized) {
-            socket.emit("error", { message: "Unauthorized: kitchen access denied" });
-            return;
-          }
-
-          const roomKey = `kitchen:${restaurantId}`;
-          socket.join(roomKey);
-          userSubscriptions.get(userKey)?.add(roomKey);
-
-          socket.emit("subscribed", { restaurantId, room: roomKey });
-          console.log(`User ${userKey} subscribed to kitchen queue for ${restaurantId}`);
-        } catch (error) {
-          console.error("Error handling kitchen subscription:", error);
-          socket.emit("error", { message: "Failed to subscribe to kitchen queue" });
-        }
-      });
-
-      socket.on("unsubscribe_kitchen", (data) => {
-        try {
-          const roomKey = `kitchen:${data.restaurantId}`;
-          const userSubs = userSubscriptions.get(userKey);
-          if (userSubs?.has(roomKey)) {
-            socket.leave(roomKey);
-            userSubs.delete(roomKey);
-            socket.emit("unsubscribed", { room: roomKey });
-          }
-        } catch (error) {
-          console.error("Error handling kitchen unsubscribe:", error);
-          socket.emit("error", { message: "Failed to unsubscribe from kitchen queue" });
-        }
-      });
-
-      // Handle unsubscribe
-      socket.on("unsubscribe", (data) => {
-        try {
-          const userSubs = userSubscriptions.get(userKey);
-          if (data.room && userSubs?.has(data.room)) {
-            socket.leave(data.room);
-            userSubs.delete(data.room);
-            socket.emit("unsubscribed", { room: data.room });
-          }
-        } catch (error) {
-          console.error("Error handling unsubscribe:", error);
-          socket.emit("error", { message: "Failed to unsubscribe" });
-        }
-      });
-
-      // Handle ping for connection keepalive
-      socket.on("ping", () => {
-        try {
-          socket.emit("pong", {});
-        } catch (error) {
-          console.error("Error handling ping:", error);
-        }
-      });
-
-      // Handle disconnect
-      socket.on("disconnect", (reason) => {
-        console.log(`WebSocket disconnected: ${socket.id}, reason: ${reason}`);
-        incDisconnect();
-        maybeWarnIfChurn((msg) => console.warn(msg));
-        
-        // Clean up user subscriptions
-        userSubscriptions.delete(userKey);
-      });
-    });
+          // Clean up user subscriptions
+          userSubscriptions.delete(userKey);
+        });
+      },
+    );
   });
 
   console.log("Socket.IO server setup complete at default path");
@@ -333,7 +419,10 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
 }
 
 // Broadcast location update to subscribers
-export function broadcastLocationUpdate(restaurantId: string, locationData: BroadcastLocation) {
+export function broadcastLocationUpdate(
+  restaurantId: string,
+  locationData: BroadcastLocation,
+) {
   if (!io) {
     console.warn("WebSocket server not initialized");
     return;
@@ -352,8 +441,14 @@ export function broadcastLocationUpdate(restaurantId: string, locationData: Broa
     // Broadcast to geographic grid rooms (for nearby customers)
     if (locationData.latitude && locationData.longitude) {
       const gridSize = 0.1;
-      const latNum = typeof locationData.latitude === 'string' ? Number(locationData.latitude) : locationData.latitude;
-      const lngNum = typeof locationData.longitude === 'string' ? Number(locationData.longitude) : locationData.longitude;
+      const latNum =
+        typeof locationData.latitude === "string"
+          ? Number(locationData.latitude)
+          : locationData.latitude;
+      const lngNum =
+        typeof locationData.longitude === "string"
+          ? Number(locationData.longitude)
+          : locationData.longitude;
 
       if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
         console.warn("Skipping broadcast: invalid coordinates", locationData);
@@ -362,14 +457,14 @@ export function broadcastLocationUpdate(restaurantId: string, locationData: Broa
 
       const gridLat = Math.floor(latNum / gridSize) * gridSize;
       const gridLng = Math.floor(lngNum / gridSize) * gridSize;
-      
+
       // Broadcast to current grid and adjacent grids for seamless coverage
       for (let latOffset = -1; latOffset <= 1; latOffset++) {
         for (let lngOffset = -1; lngOffset <= 1; lngOffset++) {
-          const targetGridLat = gridLat + (latOffset * gridSize);
-          const targetGridLng = gridLng + (lngOffset * gridSize);
+          const targetGridLat = gridLat + latOffset * gridSize;
+          const targetGridLng = gridLng + lngOffset * gridSize;
           const gridRoom = `grid_${targetGridLat}_${targetGridLng}`;
-          
+
           io.to(gridRoom).emit("truck_location_update", {
             type: "truck_location_update",
             restaurantId,
@@ -387,7 +482,10 @@ export function broadcastLocationUpdate(restaurantId: string, locationData: Broa
 }
 
 // Broadcast status update (online/offline)
-export function broadcastStatusUpdate(restaurantId: string, status: { isOnline: boolean; mobileOnline?: boolean }) {
+export function broadcastStatusUpdate(
+  restaurantId: string,
+  status: { isOnline: boolean; mobileOnline?: boolean },
+) {
   if (!io) {
     console.warn("WebSocket server not initialized");
     return;
@@ -397,7 +495,7 @@ export function broadcastStatusUpdate(restaurantId: string, status: { isOnline: 
     // Broadcast to restaurant-specific room
     const restaurantRoom = `restaurant_${restaurantId}`;
     io.to(restaurantRoom).emit("status_update", {
-      type: "status_update", 
+      type: "status_update",
       restaurantId,
       status,
       timestamp: new Date().toISOString(),
@@ -413,7 +511,10 @@ export function broadcastStatusUpdate(restaurantId: string, status: { isOnline: 
       });
     }
 
-    console.log(`Broadcasted status update for restaurant ${restaurantId}:`, status);
+    console.log(
+      `Broadcasted status update for restaurant ${restaurantId}:`,
+      status,
+    );
   } catch (error) {
     console.error("Error broadcasting status update:", error);
   }
@@ -473,8 +574,8 @@ export function getConnectionStats() {
   if (!io) return { totalConnections: 0, rooms: [] };
 
   const sockets = io.sockets.sockets;
-  const rooms = Array.from(io.sockets.adapter.rooms.keys()).filter(room => 
-    !sockets.has(room) // Filter out socket IDs (which are also stored as rooms)
+  const rooms = Array.from(io.sockets.adapter.rooms.keys()).filter(
+    (room) => !sockets.has(room), // Filter out socket IDs (which are also stored as rooms)
   );
 
   return {

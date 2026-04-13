@@ -35,12 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Accordion,
   AccordionContent,
@@ -119,9 +114,7 @@ interface MenuItem {
 }
 
 interface FullMenu extends Menu {
-  categories: Array<
-    MenuCategory & { items: MenuItem[] }
-  >;
+  categories: Array<MenuCategory & { items: MenuItem[] }>;
 }
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
@@ -150,7 +143,7 @@ export default function MenuBuilderPage() {
       if (!restaurantId) return [];
       const res = await fetch(
         `/api/owner/menus/${encodeURIComponent(restaurantId)}`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menus");
       return res.json();
@@ -165,7 +158,7 @@ export default function MenuBuilderPage() {
       if (!selectedMenuId || !restaurantId) throw new Error("No menu selected");
       const res = await fetch(
         `/api/menus/${encodeURIComponent(restaurantId)}?menuId=${encodeURIComponent(selectedMenuId)}`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menu");
       const data = await res.json();
@@ -187,13 +180,20 @@ export default function MenuBuilderPage() {
       return res.json();
     },
     onSuccess: (menu) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/owner/menus", restaurantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/owner/menus", restaurantId],
+      });
       setSelectedMenuId(menu.id);
       setShowNewMenuDialog(false);
       setNewMenuName("");
       toast({ title: "Menu created!" });
     },
-    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+    onError: (err: Error) =>
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      }),
   });
 
   // import menu items
@@ -205,11 +205,13 @@ export default function MenuBuilderPage() {
       form.append("file", importFile);
       const res = await fetch(
         `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/${importType}`,
-        { method: "POST", body: form, credentials: "include" }
+        { method: "POST", body: form, credentials: "include" },
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Import failed");
-      queryClient.invalidateQueries({ queryKey: ["/api/menus", selectedMenuId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/menus", selectedMenuId],
+      });
       setShowImportDialog(false);
       setImportFile(null);
       toast({
@@ -217,7 +219,11 @@ export default function MenuBuilderPage() {
         description: `${data.inserted ?? 0} items imported.`,
       });
     } catch (err: any) {
-      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+      toast({
+        title: "Import failed",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setIsImporting(false);
     }
@@ -228,7 +234,9 @@ export default function MenuBuilderPage() {
       <div className="min-h-screen">
         <Navigation />
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">No restaurant linked to your account.</p>
+          <p className="text-muted-foreground">
+            No restaurant linked to your account.
+          </p>
         </div>
       </div>
     );
@@ -249,7 +257,8 @@ export default function MenuBuilderPage() {
               Menu Builder
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Create and manage your online menus for pickup &amp; dine-in ordering.
+              Create and manage your online menus for pickup &amp; dine-in
+              ordering.
             </p>
           </div>
           <div className="flex gap-2">
@@ -330,8 +339,12 @@ export default function MenuBuilderPage() {
                 menu={selectedMenu}
                 restaurantId={restaurantId}
                 onRefresh={() => {
-                  queryClient.invalidateQueries({ queryKey: ["/api/menus", selectedMenuId] });
-                  queryClient.invalidateQueries({ queryKey: ["/api/owner/menus", restaurantId] });
+                  queryClient.invalidateQueries({
+                    queryKey: ["/api/menus", selectedMenuId],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ["/api/owner/menus", restaurantId],
+                  });
                 }}
               />
             ) : null}
@@ -357,7 +370,10 @@ export default function MenuBuilderPage() {
             </div>
             <div>
               <Label htmlFor="service-type">Service Type</Label>
-              <Select value={newMenuServiceType} onValueChange={setNewMenuServiceType}>
+              <Select
+                value={newMenuServiceType}
+                onValueChange={setNewMenuServiceType}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -375,14 +391,19 @@ export default function MenuBuilderPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewMenuDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowNewMenuDialog(false)}
+            >
               Cancel
             </Button>
             <Button
               onClick={() => createMenuMutation.mutate()}
               disabled={!newMenuName.trim() || createMenuMutation.isPending}
             >
-              {createMenuMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {createMenuMutation.isPending && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Create Menu
             </Button>
           </DialogFooter>
@@ -427,7 +448,10 @@ export default function MenuBuilderPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowImportDialog(false)}
+            >
               Cancel
             </Button>
             <Button
@@ -456,7 +480,9 @@ function MenuEditor({
 }) {
   const { toast } = useToast();
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(
+    null,
+  );
   const [categoryName, setCategoryName] = useState("");
   const [categoryDesc, setCategoryDesc] = useState("");
   const [showItemDialog, setShowItemDialog] = useState(false);
@@ -472,10 +498,14 @@ function MenuEditor({
   const saveCategory = async () => {
     try {
       if (editingCategory) {
-        await apiRequest("PATCH", `/api/owner/menu-categories/${editingCategory.id}`, {
-          name: categoryName,
-          description: categoryDesc || null,
-        });
+        await apiRequest(
+          "PATCH",
+          `/api/owner/menu-categories/${editingCategory.id}`,
+          {
+            name: categoryName,
+            description: categoryDesc || null,
+          },
+        );
       } else {
         await apiRequest("POST", "/api/owner/menu-categories", {
           menuId: menu.id,
@@ -491,7 +521,11 @@ function MenuEditor({
       setEditingCategory(null);
       toast({ title: editingCategory ? "Category updated" : "Category added" });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -502,7 +536,11 @@ function MenuEditor({
       onRefresh();
       toast({ title: "Category deleted" });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -513,7 +551,11 @@ function MenuEditor({
       onRefresh();
       toast({ title: "Settings saved" });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setSavingSettings(false);
     }
@@ -542,7 +584,9 @@ function MenuEditor({
         <CardContent>
           <Tabs defaultValue="categories">
             <TabsList>
-              <TabsTrigger value="categories">Categories &amp; Items</TabsTrigger>
+              <TabsTrigger value="categories">
+                Categories &amp; Items
+              </TabsTrigger>
               <TabsTrigger value="settings">Menu Settings</TabsTrigger>
             </TabsList>
 
@@ -571,7 +615,11 @@ function MenuEditor({
 
               <Accordion type="multiple" className="space-y-2">
                 {menu.categories.map((cat) => (
-                  <AccordionItem key={cat.id} value={cat.id} className="border rounded-lg">
+                  <AccordionItem
+                    key={cat.id}
+                    value={cat.id}
+                    className="border rounded-lg"
+                  >
                     <div className="flex items-center px-4">
                       <AccordionTrigger className="flex-1 text-left font-medium py-3">
                         {cat.name}
@@ -645,21 +693,29 @@ function MenuEditor({
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Menu Active</Label>
-                  <p className="text-xs text-muted-foreground">Customers can order from this menu</p>
+                  <p className="text-xs text-muted-foreground">
+                    Customers can order from this menu
+                  </p>
                 </div>
                 <Switch
                   checked={menuSettings.isActive}
-                  onCheckedChange={(v) => setMenuSettings((s) => ({ ...s, isActive: v }))}
+                  onCheckedChange={(v) =>
+                    setMenuSettings((s) => ({ ...s, isActive: v }))
+                  }
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Accept Cash Payments</Label>
-                  <p className="text-xs text-muted-foreground">Allow cash for pickup orders</p>
+                  <p className="text-xs text-muted-foreground">
+                    Allow cash for pickup orders
+                  </p>
                 </div>
                 <Switch
                   checked={menuSettings.acceptsCash}
-                  onCheckedChange={(v) => setMenuSettings((s) => ({ ...s, acceptsCash: v }))}
+                  onCheckedChange={(v) =>
+                    setMenuSettings((s) => ({ ...s, acceptsCash: v }))
+                  }
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -671,11 +727,15 @@ function MenuEditor({
                 </div>
                 <Switch
                   checked={menuSettings.hidePlatformFee}
-                  onCheckedChange={(v) => setMenuSettings((s) => ({ ...s, hidePlatformFee: v }))}
+                  onCheckedChange={(v) =>
+                    setMenuSettings((s) => ({ ...s, hidePlatformFee: v }))
+                  }
                 />
               </div>
               <Button onClick={saveMenuSettings} disabled={savingSettings}>
-                {savingSettings && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {savingSettings && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
                 Save Settings
               </Button>
             </TabsContent>
@@ -687,7 +747,9 @@ function MenuEditor({
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingCategory ? "Edit Category" : "Add Category"}</DialogTitle>
+            <DialogTitle>
+              {editingCategory ? "Edit Category" : "Add Category"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
@@ -709,7 +771,10 @@ function MenuEditor({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoryDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowCategoryDialog(false)}
+            >
               Cancel
             </Button>
             <Button onClick={saveCategory} disabled={!categoryName.trim()}>
@@ -760,7 +825,11 @@ function MenuItemRow({
       });
       onRefresh();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -770,7 +839,11 @@ function MenuItemRow({
       await apiRequest("DELETE", `/api/owner/menu-items/${item.id}`, undefined);
       onRefresh();
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -780,7 +853,9 @@ function MenuItemRow({
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm truncate">{item.name}</span>
           {!item.isAvailable && (
-            <Badge variant="secondary" className="text-xs">86'd</Badge>
+            <Badge variant="secondary" className="text-xs">
+              86'd
+            </Badge>
           )}
         </div>
         <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
@@ -792,14 +867,24 @@ function MenuItemRow({
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleAvailable}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={toggleAvailable}
+        >
           {item.isAvailable ? (
             <Eye className="w-3.5 h-3.5" />
           ) : (
             <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
           )}
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onEdit}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={onEdit}
+        >
           <Pencil className="w-3.5 h-3.5" />
         </Button>
         <Button
@@ -864,10 +949,16 @@ function MenuItemDialog({
             ? parseInt(form.inventoryQty)
             : null,
         dietaryTags: form.dietaryTags
-          ? form.dietaryTags.split(",").map((t) => t.trim()).filter(Boolean)
+          ? form.dietaryTags
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
           : [],
         allergens: form.allergens
-          ? form.allergens.split(",").map((a) => a.trim()).filter(Boolean)
+          ? form.allergens
+              .split(",")
+              .map((a) => a.trim())
+              .filter(Boolean)
           : [],
       };
 
@@ -879,7 +970,11 @@ function MenuItemDialog({
       onSaved();
       toast({ title: item ? "Item updated" : "Item added" });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -897,7 +992,9 @@ function MenuItemDialog({
               <Label>Item Name *</Label>
               <Input
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 placeholder="e.g. Classic Burger"
               />
             </div>
@@ -908,7 +1005,9 @@ function MenuItemDialog({
                 <Input
                   className="pl-8"
                   value={form.priceCents}
-                  onChange={(e) => setForm((f) => ({ ...f, priceCents: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, priceCents: e.target.value }))
+                  }
                   placeholder="0.00"
                   type="number"
                   min="0"
@@ -920,7 +1019,9 @@ function MenuItemDialog({
               <Label>Calories</Label>
               <Input
                 value={form.calories}
-                onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, calories: e.target.value }))
+                }
                 placeholder="e.g. 650"
                 type="number"
                 min="0"
@@ -930,24 +1031,40 @@ function MenuItemDialog({
               <Label>Description</Label>
               <Textarea
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
                 placeholder="Brief appetizing description"
                 rows={2}
               />
             </div>
             <div className="col-span-2">
-              <Label>Dietary Tags <span className="text-xs text-muted-foreground">(comma separated)</span></Label>
+              <Label>
+                Dietary Tags{" "}
+                <span className="text-xs text-muted-foreground">
+                  (comma separated)
+                </span>
+              </Label>
               <Input
                 value={form.dietaryTags}
-                onChange={(e) => setForm((f) => ({ ...f, dietaryTags: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, dietaryTags: e.target.value }))
+                }
                 placeholder="vegan, gluten-free, keto"
               />
             </div>
             <div className="col-span-2">
-              <Label>Allergens <span className="text-xs text-muted-foreground">(comma separated)</span></Label>
+              <Label>
+                Allergens{" "}
+                <span className="text-xs text-muted-foreground">
+                  (comma separated)
+                </span>
+              </Label>
               <Input
                 value={form.allergens}
-                onChange={(e) => setForm((f) => ({ ...f, allergens: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, allergens: e.target.value }))
+                }
                 placeholder="nuts, dairy, gluten"
               />
             </div>
@@ -958,14 +1075,18 @@ function MenuItemDialog({
               <Label>Available</Label>
               <Switch
                 checked={form.isAvailable}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, isAvailable: v }))}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, isAvailable: v }))
+                }
               />
             </div>
             <div className="flex items-center justify-between">
               <Label>Track Inventory</Label>
               <Switch
                 checked={form.trackInventory}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, trackInventory: v }))}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, trackInventory: v }))
+                }
               />
             </div>
             {form.trackInventory && (
@@ -973,7 +1094,9 @@ function MenuItemDialog({
                 <Label>In Stock Quantity</Label>
                 <Input
                   value={form.inventoryQty}
-                  onChange={(e) => setForm((f) => ({ ...f, inventoryQty: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, inventoryQty: e.target.value }))
+                  }
                   type="number"
                   min="0"
                   placeholder="e.g. 20"
@@ -983,8 +1106,13 @@ function MenuItemDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={isSaving || !form.name.trim() || !form.priceCents}>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={save}
+            disabled={isSaving || !form.name.trim() || !form.priceCents}
+          >
             {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {item ? "Save Changes" : "Add Item"}
           </Button>

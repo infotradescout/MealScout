@@ -83,7 +83,8 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(userId: string, restaurantId: string) {
   const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
-  if (!ok) throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
+  if (!ok)
+    throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
 // ── Subscription gate ─────────────────────────────────────────────────────────
@@ -96,7 +97,8 @@ async function assertHasOrderingSubscription(
   restaurantId?: string,
 ) {
   const user = await storage.getUser(userId);
-  if (!user) throw Object.assign(new Error("User not found"), { statusCode: 401 });
+  if (!user)
+    throw Object.assign(new Error("User not found"), { statusCode: 401 });
 
   // 1. Trial access
   const hydratedUser = await ensurePremiumTrialForUser(user);
@@ -144,7 +146,10 @@ async function assertHasOrderingSubscription(
       },
     });
   } catch (telemetryError) {
-    console.warn("[pickupOrderRoutes] Failed to record telemetry event", telemetryError);
+    console.warn(
+      "[pickupOrderRoutes] Failed to record telemetry event",
+      telemetryError,
+    );
   }
 
   throw Object.assign(
@@ -250,7 +255,6 @@ function emitKitchenUpdate(restaurantId: string, order: any) {
 }
 
 export function registerPickupOrderRoutes(app: Express) {
-
   // ── ─────────────────────────────────────────────────────────────────────────
   // CUSTOMER: Create order + payment intent
   // ── ─────────────────────────────────────────────────────────────────────────
@@ -306,7 +310,10 @@ export function registerPickupOrderRoutes(app: Express) {
         .select()
         .from(menus)
         .where(
-          and(eq(menus.id, body.menuId), eq(menus.restaurantId, body.restaurantId)),
+          and(
+            eq(menus.id, body.menuId),
+            eq(menus.restaurantId, body.restaurantId),
+          ),
         );
       if (!menu || !menu.isActive) {
         return res.status(400).json({ message: "Menu not available" });
@@ -315,7 +322,9 @@ export function registerPickupOrderRoutes(app: Express) {
       if (body.paymentMethod === "cash" && !menu.acceptsCash) {
         return res
           .status(400)
-          .json({ message: "This restaurant does not accept cash orders online" });
+          .json({
+            message: "This restaurant does not accept cash orders online",
+          });
       }
 
       // Resolve all menu items
@@ -323,7 +332,9 @@ export function registerPickupOrderRoutes(app: Express) {
       const dbItems: MenuItem[] = await db
         .select()
         .from(menuItems)
-        .where(and(inArray(menuItems.id, itemIds), eq(menuItems.isAvailable, true)));
+        .where(
+          and(inArray(menuItems.id, itemIds), eq(menuItems.isAvailable, true)),
+        );
 
       const itemMap = new Map<string, MenuItem>(dbItems.map((i) => [i.id, i]));
 
@@ -349,7 +360,10 @@ export function registerPickupOrderRoutes(app: Express) {
       }
 
       // Fetch all variants + modifiers for requested items
-      const [allVariants, allModifiers]: [MenuItemVariant[], MenuItemModifier[]] = await Promise.all([
+      const [allVariants, allModifiers]: [
+        MenuItemVariant[],
+        MenuItemModifier[],
+      ] = await Promise.all([
         db
           .select()
           .from(menuItemVariants)
@@ -479,9 +493,9 @@ export function registerPickupOrderRoutes(app: Express) {
         .returning();
 
       // Insert line items
-      await db.insert(pickupOrderItems).values(
-        lineItems.map((li) => ({ ...li, orderId: order.id })),
-      );
+      await db
+        .insert(pickupOrderItems)
+        .values(lineItems.map((li) => ({ ...li, orderId: order.id })));
 
       // Deduct inventory for tracked items
       for (const reqItem of body.items) {
@@ -532,9 +546,7 @@ export function registerPickupOrderRoutes(app: Express) {
       // Card payment: create Stripe PaymentIntent
       if (!stripe) {
         // No Stripe configured – should not happen in production
-        await db
-          .delete(pickupOrders)
-          .where(eq(pickupOrders.id, order.id));
+        await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
         return res
           .status(503)
           .json({ message: "Payment processing is not configured" });
@@ -561,8 +573,13 @@ export function registerPickupOrderRoutes(app: Express) {
       } catch (stripeErr: any) {
         // Clean up pending order if Stripe fails
         await db.delete(pickupOrders).where(eq(pickupOrders.id, order.id));
-        console.error("[pickupOrderRoutes] Stripe PI creation failed:", stripeErr);
-        return res.status(502).json({ message: "Payment setup failed. Please try again." });
+        console.error(
+          "[pickupOrderRoutes] Stripe PI creation failed:",
+          stripeErr,
+        );
+        return res
+          .status(502)
+          .json({ message: "Payment setup failed. Please try again." });
       }
 
       // Attach intent IDs to order
@@ -613,7 +630,10 @@ export function registerPickupOrderRoutes(app: Express) {
       const isOwner =
         userId &&
         (order.customerId === userId ||
-          (await storage.verifyRestaurantOwnership(order.restaurantId, userId)));
+          (await storage.verifyRestaurantOwnership(
+            order.restaurantId,
+            userId,
+          )));
 
       const safeOrder = isOwner
         ? order
@@ -772,8 +792,14 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Validate transition
       const validTransitions: Record<string, string[]> = {
-        [ORDER_STATUS.PENDING]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
-        [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.PREPARING, ORDER_STATUS.CANCELLED],
+        [ORDER_STATUS.PENDING]: [
+          ORDER_STATUS.CONFIRMED,
+          ORDER_STATUS.CANCELLED,
+        ],
+        [ORDER_STATUS.CONFIRMED]: [
+          ORDER_STATUS.PREPARING,
+          ORDER_STATUS.CANCELLED,
+        ],
         [ORDER_STATUS.PREPARING]: [ORDER_STATUS.READY, ORDER_STATUS.CANCELLED],
         [ORDER_STATUS.READY]: [ORDER_STATUS.COMPLETED],
       };
@@ -781,7 +807,9 @@ export function registerPickupOrderRoutes(app: Express) {
       if (!allowed.includes(status)) {
         return res
           .status(400)
-          .json({ message: `Cannot transition from ${order.status} to ${status}` });
+          .json({
+            message: `Cannot transition from ${order.status} to ${status}`,
+          });
       }
 
       const now = new Date();

@@ -104,13 +104,19 @@ export async function parsePdfMenuWithAi(
       imported: [],
       skipped: 0,
       errors: [
-        { row: 0, reason: `AI extraction failed: ${err?.message || String(err)}` },
+        {
+          row: 0,
+          reason: `AI extraction failed: ${err?.message || String(err)}`,
+        },
       ],
     };
   }
 
   // Strip any accidental markdown code fences
-  rawJson = rawJson.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  rawJson = rawJson
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
 
   let parsed: any[];
   try {
@@ -143,7 +149,10 @@ export async function parsePdfMenuWithAi(
 
     const price = Number(item.price);
     if (isNaN(price) || price < 0) {
-      errors.push({ row: idx, reason: `Item "${name}" has invalid price: ${item.price}` });
+      errors.push({
+        row: idx,
+        reason: `Item "${name}" has invalid price: ${item.price}`,
+      });
       return;
     }
 

@@ -54,7 +54,9 @@ function run() {
     "Customer order creation must verify subscription against restaurant.id",
   );
 
-  console.log("[ordering-scope-test] PASS: restaurant-scoped ordering gate is enforced");
+  console.log(
+    "[ordering-scope-test] PASS: restaurant-scoped ordering gate is enforced",
+  );
 }
 
 try {

@@ -48,70 +48,78 @@ export const sessions = pgTable(
 );
 
 // User storage table supporting multiple authentication methods
-export const users: any = pgTable("users", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
-  // TradeScout SSO linkage (for unified accounts between TradeScout and MealScout)
-  tradescoutId: varchar("tradescout_id").unique(),
-  // Facebook authentication (for regular users)
-  facebookId: varchar("facebook_id").unique(),
-  facebookAccessToken: text("facebook_access_token"),
-  // Google authentication (for all users)
-  googleId: varchar("google_id").unique(),
-  googleAccessToken: text("google_access_token"),
-  // Email/password authentication (for all users)
-  passwordHash: text("password_hash"),
-  emailVerified: boolean("email_verified").default(false),
-  // Staff-created account flags
-  mustResetPassword: boolean("must_reset_password").default(false),
-  isDisabled: boolean("is_disabled").default(false),
-  // Common fields
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  phone: varchar("phone"),
-  profileImageUrl: varchar("profile_image_url"),
-  affiliateTag: varchar("affiliate_tag"),
-  affiliatePercent: integer("affiliate_percent").default(5),
-  affiliateCloserUserId: varchar("affiliate_closer_user_id").references(
-    () => users.id,
-    { onDelete: "set null" },
-  ),
-  affiliateCloserPercent: integer("affiliate_closer_percent"),
-  affiliateBookerUserId: varchar("affiliate_booker_user_id").references(
-    () => users.id,
-    { onDelete: "set null" },
-  ),
-  affiliateBookerPercent: integer("affiliate_booker_percent"),
-  stripeCustomerId: varchar("stripe_customer_id"),
-  stripeSubscriptionId: varchar("stripe_subscription_id"),
-  subscriptionBillingInterval: varchar("subscription_billing_interval"), // 'month' | '3-month' | 'year'
-  subscriptionSignupDate: timestamp("subscription_signup_date"), // Track when user first subscribed for price lock-in
-  trialStartedAt: timestamp("trial_started_at"),
-  trialEndsAt: timestamp("trial_ends_at"),
-  trialUsed: boolean("trial_used").default(false),
-  // Optional demographics for aggregated analytics insights (privacy-conscious)
-  birthYear: integer("birth_year"),
-  gender: varchar("gender"), // 'male' | 'female' | 'other' | 'prefer_not_to_say'
-  postalCode: varchar("postal_code"),
-  // Golden Fork Award for influential food reviewers
-  hasGoldenFork: boolean("has_golden_fork").default(false),
-  goldenForkEarnedAt: timestamp("golden_fork_earned_at"),
-  reviewCount: integer("review_count").default(0),
-  recommendationCount: integer("recommendation_count").default(0),
-  influenceScore: integer("influence_score").default(0), // Calculated from reviews, recommendations, favorites
-  // App context for multi-platform shared auth (TradeScout + MealScout)
-  appContext: varchar("app_context").default("mealscout"), // 'mealscout' | 'tradescout' | 'both'
-  publicProfileSettings: jsonb("public_profile_settings").notNull().default(sql`'{}'::jsonb`),
-  accountSettings: jsonb("account_settings").notNull().default(sql`'{}'::jsonb`),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_users_affiliate_tag").on(table.affiliateTag),
-  unique("uq_users_affiliate_tag").on(table.affiliateTag),
-]);
+export const users: any = pgTable(
+  "users",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
+    // TradeScout SSO linkage (for unified accounts between TradeScout and MealScout)
+    tradescoutId: varchar("tradescout_id").unique(),
+    // Facebook authentication (for regular users)
+    facebookId: varchar("facebook_id").unique(),
+    facebookAccessToken: text("facebook_access_token"),
+    // Google authentication (for all users)
+    googleId: varchar("google_id").unique(),
+    googleAccessToken: text("google_access_token"),
+    // Email/password authentication (for all users)
+    passwordHash: text("password_hash"),
+    emailVerified: boolean("email_verified").default(false),
+    // Staff-created account flags
+    mustResetPassword: boolean("must_reset_password").default(false),
+    isDisabled: boolean("is_disabled").default(false),
+    // Common fields
+    email: varchar("email").unique(),
+    firstName: varchar("first_name"),
+    lastName: varchar("last_name"),
+    phone: varchar("phone"),
+    profileImageUrl: varchar("profile_image_url"),
+    affiliateTag: varchar("affiliate_tag"),
+    affiliatePercent: integer("affiliate_percent").default(5),
+    affiliateCloserUserId: varchar("affiliate_closer_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    affiliateCloserPercent: integer("affiliate_closer_percent"),
+    affiliateBookerUserId: varchar("affiliate_booker_user_id").references(
+      () => users.id,
+      { onDelete: "set null" },
+    ),
+    affiliateBookerPercent: integer("affiliate_booker_percent"),
+    stripeCustomerId: varchar("stripe_customer_id"),
+    stripeSubscriptionId: varchar("stripe_subscription_id"),
+    subscriptionBillingInterval: varchar("subscription_billing_interval"), // 'month' | '3-month' | 'year'
+    subscriptionSignupDate: timestamp("subscription_signup_date"), // Track when user first subscribed for price lock-in
+    trialStartedAt: timestamp("trial_started_at"),
+    trialEndsAt: timestamp("trial_ends_at"),
+    trialUsed: boolean("trial_used").default(false),
+    // Optional demographics for aggregated analytics insights (privacy-conscious)
+    birthYear: integer("birth_year"),
+    gender: varchar("gender"), // 'male' | 'female' | 'other' | 'prefer_not_to_say'
+    postalCode: varchar("postal_code"),
+    // Golden Fork Award for influential food reviewers
+    hasGoldenFork: boolean("has_golden_fork").default(false),
+    goldenForkEarnedAt: timestamp("golden_fork_earned_at"),
+    reviewCount: integer("review_count").default(0),
+    recommendationCount: integer("recommendation_count").default(0),
+    influenceScore: integer("influence_score").default(0), // Calculated from reviews, recommendations, favorites
+    // App context for multi-platform shared auth (TradeScout + MealScout)
+    appContext: varchar("app_context").default("mealscout"), // 'mealscout' | 'tradescout' | 'both'
+    publicProfileSettings: jsonb("public_profile_settings")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    accountSettings: jsonb("account_settings")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_users_affiliate_tag").on(table.affiliateTag),
+    unique("uq_users_affiliate_tag").on(table.affiliateTag),
+  ],
+);
 
 // Security audit log table for all critical actions
 export const securityAuditLog = pgTable(
@@ -253,12 +261,17 @@ export const businessStaffInvites = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     email: varchar("email"),
     tokenHash: varchar("token_hash").notNull(),
-    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
+    permissions: jsonb("permissions")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     status: varchar("status").notNull().default("pending"), // pending | accepted | revoked | expired
     expiresAt: timestamp("expires_at"),
-    acceptedByUserId: varchar("accepted_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    acceptedByUserId: varchar("accepted_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     acceptedAt: timestamp("accepted_at"),
     revokedAt: timestamp("revoked_at"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -286,7 +299,9 @@ export const businessStaffMemberships = pgTable(
     invitedByUserId: varchar("invited_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    permissions: jsonb("permissions").notNull().default(sql`'{}'::jsonb`),
+    permissions: jsonb("permissions")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     status: varchar("status").notNull().default("active"), // active | revoked
     revokedAt: timestamp("revoked_at"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -411,18 +426,30 @@ export const suppliers = pgTable(
     isActive: boolean("is_active").default(true),
     stripeConnectAccountId: varchar("stripe_connect_account_id"),
     stripeConnectStatus: varchar("stripe_connect_status").default("pending"),
-    stripeOnboardingCompleted: boolean("stripe_onboarding_completed").default(false),
+    stripeOnboardingCompleted: boolean("stripe_onboarding_completed").default(
+      false,
+    ),
     stripeChargesEnabled: boolean("stripe_charges_enabled").default(false),
     stripePayoutsEnabled: boolean("stripe_payouts_enabled").default(false),
-    onlinePaymentsEnabled: boolean("online_payments_enabled").notNull().default(false),
-    onlinePaymentsAllowAch: boolean("online_payments_allow_ach").notNull().default(true),
-    onlinePaymentsAllowCard: boolean("online_payments_allow_card").notNull().default(true),
-    onlinePaymentsMinOrderCents: integer("online_payments_min_order_cents").notNull().default(0),
+    onlinePaymentsEnabled: boolean("online_payments_enabled")
+      .notNull()
+      .default(false),
+    onlinePaymentsAllowAch: boolean("online_payments_allow_ach")
+      .notNull()
+      .default(true),
+    onlinePaymentsAllowCard: boolean("online_payments_allow_card")
+      .notNull()
+      .default(true),
+    onlinePaymentsMinOrderCents: integer("online_payments_min_order_cents")
+      .notNull()
+      .default(0),
     onlinePaymentsNotes: text("online_payments_notes"),
     offersDelivery: boolean("offers_delivery").notNull().default(false),
     deliveryRadiusMiles: integer("delivery_radius_miles"),
     deliveryFeeCents: integer("delivery_fee_cents").notNull().default(0),
-    deliveryMinOrderCents: integer("delivery_min_order_cents").notNull().default(0),
+    deliveryMinOrderCents: integer("delivery_min_order_cents")
+      .notNull()
+      .default(0),
     deliveryNotes: text("delivery_notes"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -473,8 +500,10 @@ export const supplierRequests = pgTable(
     buyerUserId: varchar("buyer_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    buyerRestaurantId: varchar("buyer_restaurant_id")
-      .references(() => restaurants.id, { onDelete: "restrict" }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      { onDelete: "restrict" },
+    ),
     status: varchar("status").notNull().default("submitted"), // 'submitted' | 'accepted' | 'declined' | 'cancelled'
     requestedFulfillment: varchar("requested_fulfillment")
       .notNull()
@@ -548,12 +577,16 @@ export const supplierOrders = pgTable(
     buyerUserId: varchar("buyer_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    truckRestaurantId: varchar("truck_restaurant_id")
-      .references(() => restaurants.id, { onDelete: "restrict" }),
+    truckRestaurantId: varchar("truck_restaurant_id").references(
+      () => restaurants.id,
+      { onDelete: "restrict" },
+    ),
     status: varchar("status").notNull().default("submitted"), // 'submitted' | 'ready' | 'completed' | 'cancelled'
     paymentMethod: varchar("payment_method").notNull().default("offsite"), // 'stripe' | 'offsite'
     paymentStatus: varchar("payment_status").notNull().default("unpaid"), // 'unpaid' | 'paid' | 'offsite'
-    requestedFulfillment: varchar("requested_fulfillment").notNull().default("pickup"), // 'pickup' | 'delivery'
+    requestedFulfillment: varchar("requested_fulfillment")
+      .notNull()
+      .default("pickup"), // 'pickup' | 'delivery'
     subtotalCents: integer("subtotal_cents").notNull().default(0),
     deliveryFeeCents: integer("delivery_fee_cents").notNull().default(0),
     platformFeeCents: integer("platform_fee_cents").notNull().default(0),
@@ -562,9 +595,15 @@ export const supplierOrders = pgTable(
       .default(0),
     totalCents: integer("total_cents").notNull().default(0),
     stripePaymentIntentId: varchar("stripe_payment_intent_id"),
-    stripeChargeAmountCents: integer("stripe_charge_amount_cents").notNull().default(0),
-    stripeApplicationFeeCents: integer("stripe_application_fee_cents").notNull().default(0),
-    stripeTransferAmountCents: integer("stripe_transfer_amount_cents").notNull().default(0),
+    stripeChargeAmountCents: integer("stripe_charge_amount_cents")
+      .notNull()
+      .default(0),
+    stripeApplicationFeeCents: integer("stripe_application_fee_cents")
+      .notNull()
+      .default(0),
+    stripeTransferAmountCents: integer("stripe_transfer_amount_cents")
+      .notNull()
+      .default(0),
     buyerDiscountCents: integer("buyer_discount_cents").notNull().default(0),
     buyerPaymentMethod: varchar("buyer_payment_method"),
     pickupNote: text("pickup_note"),
@@ -607,9 +646,12 @@ export const supplyDemands = pgTable(
     id: varchar("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
-      onDelete: "set null",
-    }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     itemKey: varchar("item_key").notNull(),
     itemName: varchar("item_name").notNull(),
     quantity: integer("quantity"),
@@ -641,8 +683,13 @@ export const supplyDemandNotifications = pgTable(
     lastNotifiedAt: timestamp("last_notified_at").notNull().defaultNow(),
   },
   (table) => [
-    unique("uq_supply_demand_notifications_supplier_item").on(table.supplierId, table.itemKey),
-    index("idx_supply_demand_notifications_last_notified").on(table.lastNotifiedAt),
+    unique("uq_supply_demand_notifications_supplier_item").on(
+      table.supplierId,
+      table.itemKey,
+    ),
+    index("idx_supply_demand_notifications_last_notified").on(
+      table.lastNotifiedAt,
+    ),
   ],
 );
 
@@ -655,9 +702,12 @@ export const supplyReceipts = pgTable(
     uploadedByUserId: varchar("uploaded_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
-      onDelete: "set null",
-    }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     supplierId: varchar("supplier_id").references(() => suppliers.id, {
       onDelete: "set null",
     }),
@@ -800,9 +850,12 @@ export const supplyPrices = pgTable(
     storeId: varchar("store_id")
       .notNull()
       .references(() => supplyStores.id, { onDelete: "cascade" }),
-    storeLocationId: varchar("store_location_id").references(() => supplyStoreLocations.id, {
-      onDelete: "set null",
-    }),
+    storeLocationId: varchar("store_location_id").references(
+      () => supplyStoreLocations.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     itemId: varchar("item_id")
       .notNull()
       .references(() => supplyItems.id, { onDelete: "cascade" }),
@@ -830,9 +883,12 @@ export const supplyPriceWatches = pgTable(
     userId: varchar("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
-      onDelete: "set null",
-    }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     itemKey: varchar("item_key").notNull(),
     itemName: varchar("item_name").notNull(),
     targetPriceCents: integer("target_price_cents"),
@@ -861,9 +917,12 @@ export const supplyPriceAlerts = pgTable(
     userId: varchar("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
-      onDelete: "set null",
-    }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     itemKey: varchar("item_key").notNull(),
     itemName: varchar("item_name").notNull(),
     alertType: varchar("alert_type").notNull().default("price_target_hit"),
@@ -874,16 +933,22 @@ export const supplyPriceAlerts = pgTable(
     storeId: varchar("store_id").references(() => supplyStores.id, {
       onDelete: "set null",
     }),
-    storeLocationId: varchar("store_location_id").references(() => supplyStoreLocations.id, {
-      onDelete: "set null",
-    }),
+    storeLocationId: varchar("store_location_id").references(
+      () => supplyStoreLocations.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     storeName: varchar("store_name"),
     storeCity: varchar("store_city"),
     storeState: varchar("store_state"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
-    index("idx_supply_price_alerts_user_created").on(table.userId, table.createdAt),
+    index("idx_supply_price_alerts_user_created").on(
+      table.userId,
+      table.createdAt,
+    ),
     index("idx_supply_price_alerts_watch").on(table.watchId),
     index("idx_supply_price_alerts_item_key").on(table.itemKey),
   ],
@@ -912,7 +977,10 @@ export const supplyPriceDailySnapshots = pgTable(
       table.areaKey,
       table.snapshotDay,
     ),
-    index("idx_supply_price_daily_snapshots_item_day").on(table.itemKey, table.snapshotDay),
+    index("idx_supply_price_daily_snapshots_item_day").on(
+      table.itemKey,
+      table.snapshotDay,
+    ),
   ],
 );
 
@@ -925,9 +993,12 @@ export const supplyShoppingLists = pgTable(
     ownerUserId: varchar("owner_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    buyerRestaurantId: varchar("buyer_restaurant_id").references(() => restaurants.id, {
-      onDelete: "set null",
-    }),
+    buyerRestaurantId: varchar("buyer_restaurant_id").references(
+      () => restaurants.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     name: varchar("name").notNull(),
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -948,9 +1019,13 @@ export const supplyShoppingListItems = pgTable(
     listId: varchar("list_id")
       .notNull()
       .references(() => supplyShoppingLists.id, { onDelete: "cascade" }),
-    itemId: varchar("item_id").references(() => supplyItems.id, { onDelete: "set null" }),
+    itemId: varchar("item_id").references(() => supplyItems.id, {
+      onDelete: "set null",
+    }),
     rawName: varchar("raw_name").notNull(),
-    quantity: decimal("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+    quantity: decimal("quantity", { precision: 10, scale: 2 })
+      .notNull()
+      .default("1"),
     unit: varchar("unit"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -988,7 +1063,9 @@ export const supplyBarcodeMappings = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     barcode: varchar("barcode").notNull(),
-    itemId: varchar("item_id").references(() => supplyItems.id, { onDelete: "set null" }),
+    itemId: varchar("item_id").references(() => supplyItems.id, {
+      onDelete: "set null",
+    }),
     alias: varchar("alias"),
     createdByUserId: varchar("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -1192,10 +1269,7 @@ export const restaurantFollows = pgTable(
       table.userId,
       table.followedAt.desc(),
     ),
-    index("IDX_restaurant_follows_unique").on(
-      table.restaurantId,
-      table.userId,
-    ),
+    index("IDX_restaurant_follows_unique").on(table.restaurantId, table.userId),
   ],
 );
 
@@ -1507,7 +1581,9 @@ export const clientQuotas = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     tier: varchar("tier", { length: 20 }).notNull().default("bronze"), // 'bronze' | 'silver' | 'gold' | 'custom'
     rateLimitPerHour: integer("rate_limit_per_hour").notNull().default(60),
-    monthlyRequestLimit: integer("monthly_request_limit").notNull().default(1000),
+    monthlyRequestLimit: integer("monthly_request_limit")
+      .notNull()
+      .default(1000),
     lastBillingCycle: timestamp("last_billing_cycle").defaultNow(),
     currentMonthlyUsage: integer("current_monthly_usage").default(0),
     isActive: boolean("is_active").default(true),
@@ -1533,7 +1609,9 @@ export const rateLimitCounters = pgTable(
   },
   (table) => [
     index("idx_rate_limit_counters_updated_at").on(table.updatedAt),
-    primaryKey({ columns: [table.scope, table.identityKey, table.windowStart] }),
+    primaryKey({
+      columns: [table.scope, table.identityKey, table.windowStart],
+    }),
   ],
 );
 
@@ -1789,7 +1867,9 @@ export const geoAds = pgTable(
       .default(sql`gen_random_uuid()`),
     name: varchar("name").notNull(),
     status: varchar("status").notNull().default("draft"),
-    placements: jsonb("placements").notNull().default(sql`'[]'::jsonb`),
+    placements: jsonb("placements")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     title: varchar("title").notNull(),
     body: text("body"),
     mediaUrl: text("media_url"),
@@ -2748,7 +2828,8 @@ export type BusinessStaffInvite = typeof businessStaffInvites.$inferSelect;
 export type InsertBusinessStaffMembership = z.infer<
   typeof insertBusinessStaffMembershipSchema
 >;
-export type BusinessStaffMembership = typeof businessStaffMemberships.$inferSelect;
+export type BusinessStaffMembership =
+  typeof businessStaffMemberships.$inferSelect;
 
 export type InsertRestaurantRecommendation = z.infer<
   typeof insertRestaurantRecommendationSchema
@@ -3154,7 +3235,9 @@ export const hosts = pgTable(
 
     // Parking Pass pricing defaults (simple model: host address + any price => bookable).
     // These are synced into the host's parking_pass series as an implementation detail.
-    parkingPassBreakfastPriceCents: integer("parking_pass_breakfast_price_cents")
+    parkingPassBreakfastPriceCents: integer(
+      "parking_pass_breakfast_price_cents",
+    )
       .notNull()
       .default(0),
     parkingPassLunchPriceCents: integer("parking_pass_lunch_price_cents")
@@ -3272,9 +3355,12 @@ export const eventSeries = pgTable(
     hostId: varchar("host_id")
       .notNull()
       .references(() => hosts.id, { onDelete: "cascade" }),
-    coordinatorUserId: varchar("coordinator_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    coordinatorUserId: varchar("coordinator_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     name: varchar("name").notNull(), // e.g. "Summer Market Series"
     description: text("description"),
     timezone: varchar("timezone").notNull().default("America/New_York"), // IANA timezone
@@ -3336,9 +3422,12 @@ export const events = pgTable(
     hostId: varchar("host_id")
       .notNull()
       .references(() => hosts.id, { onDelete: "cascade" }),
-    coordinatorUserId: varchar("coordinator_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    coordinatorUserId: varchar("coordinator_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     seriesId: varchar("series_id").references(() => eventSeries.id, {
       onDelete: "set null",
     }), // Open Calls: FK to parent series
@@ -3525,14 +3614,14 @@ export const truckManualSchedules = pgTable(
     notes: text("notes"),
     isPublic: boolean("is_public").default(true),
     lastConfirmedAt: timestamp("last_confirmed_at"),
-      createdAt: timestamp("created_at").defaultNow(),
-      updatedAt: timestamp("updated_at").defaultNow(),
-    },
-    (table) => [
-      index("idx_truck_manual_schedule_truck").on(table.truckId, table.date),
-      index("idx_truck_manual_schedule_last_confirmed").on(table.lastConfirmedAt),
-    ],
-  );
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_truck_manual_schedule_truck").on(table.truckId, table.date),
+    index("idx_truck_manual_schedule_last_confirmed").on(table.lastConfirmedAt),
+  ],
+);
 
 // Daily parking reports for food trucks (Parking Pass + manual stops)
 export const truckParkingReports = pgTable(
@@ -3696,7 +3785,9 @@ export const hostEarningsLedger = pgTable(
     }),
     stripePaymentIntentId: varchar("stripe_payment_intent_id"),
     entryType: varchar("entry_type").notNull(), // 'booking_earned' | 'refund' | 'adjustment' | 'payout'
-    sourceType: varchar("source_type").notNull().default("parking_pass_booking"),
+    sourceType: varchar("source_type")
+      .notNull()
+      .default("parking_pass_booking"),
     amountCents: integer("amount_cents").notNull(), // positive or negative
     description: text("description"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -3706,7 +3797,10 @@ export const hostEarningsLedger = pgTable(
     index("idx_host_earnings_booking").on(table.bookingId),
     index("idx_host_earnings_intent").on(table.stripePaymentIntentId),
     index("idx_host_earnings_created").on(table.createdAt),
-    unique("uq_host_earnings_booking_entry").on(table.bookingId, table.entryType),
+    unique("uq_host_earnings_booking_entry").on(
+      table.bookingId,
+      table.entryType,
+    ),
   ],
 );
 
@@ -3726,9 +3820,12 @@ export const hostPayoutRequests = pgTable(
     amountCents: integer("amount_cents").notNull(),
     status: varchar("status").notNull().default("pending"), // 'pending' | 'approved' | 'paid' | 'rejected' | 'cancelled'
     notes: text("notes"),
-    reviewedByUserId: varchar("reviewed_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    reviewedByUserId: varchar("reviewed_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     reviewedAt: timestamp("reviewed_at"),
     paidAt: timestamp("paid_at"),
     createdAt: timestamp("created_at").defaultNow(),
@@ -4271,7 +4368,6 @@ export const truckParkingReportsRelations = relations(
   }),
 );
 
-
 export const referralsRelations = relations(referrals, ({ one }) => ({
   affiliateUser: one(users, {
     fields: [referrals.affiliateUserId],
@@ -4678,7 +4774,11 @@ export const insertHostSchema = createInsertSchema(hosts)
   .extend({
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
-    spotCount: z.number().int().min(1, "Number of spots must be at least 1").optional(),
+    spotCount: z
+      .number()
+      .int()
+      .min(1, "Number of spots must be at least 1")
+      .optional(),
   });
 
 export type Host = typeof hosts.$inferSelect;
@@ -4784,7 +4884,8 @@ export const insertEmailVerificationTokenSchema = createInsertSchema(
   createdAt: true,
 });
 
-export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
+export type EmailVerificationToken =
+  typeof emailVerificationTokens.$inferSelect;
 export type InsertEmailVerificationToken = z.infer<
   typeof insertEmailVerificationTokenSchema
 >;
@@ -5041,9 +5142,11 @@ export const reportDownloadTokens = pgTable(
 );
 
 export type PensacolaReportLead = typeof pensacolaReportLeads.$inferSelect;
-export type InsertPensacolaReportLead = typeof pensacolaReportLeads.$inferInsert;
+export type InsertPensacolaReportLead =
+  typeof pensacolaReportLeads.$inferInsert;
 export type ReportDownloadToken = typeof reportDownloadTokens.$inferSelect;
-export type InsertReportDownloadToken = typeof reportDownloadTokens.$inferInsert;
+export type InsertReportDownloadToken =
+  typeof reportDownloadTokens.$inferInsert;
 
 export const reportLeadSequenceSends = pgTable(
   "report_lead_sequence_sends",
@@ -5073,8 +5176,10 @@ export const reportLeadSequenceSends = pgTable(
   ],
 );
 
-export type ReportLeadSequenceSend = typeof reportLeadSequenceSends.$inferSelect;
-export type InsertReportLeadSequenceSend = typeof reportLeadSequenceSends.$inferInsert;
+export type ReportLeadSequenceSend =
+  typeof reportLeadSequenceSends.$inferSelect;
+export type InsertReportLeadSequenceSend =
+  typeof reportLeadSequenceSends.$inferInsert;
 
 export const socialPostQueue = pgTable(
   "social_post_queue",
@@ -5109,12 +5214,17 @@ export const searchQueryEvents = pgTable(
       .default(sql`gen_random_uuid()`),
     query: text("query").notNull(),
     source: varchar("source").notNull().default("unknown"),
-    userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+    userId: varchar("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
     index("idx_search_query_events_created_at").on(table.createdAt),
-    index("idx_search_query_events_query_created_at").on(table.query, table.createdAt),
+    index("idx_search_query_events_query_created_at").on(
+      table.query,
+      table.createdAt,
+    ),
   ],
 );
 
@@ -5323,8 +5433,10 @@ export const menus = pgTable(
     serviceType: varchar("service_type").notNull().default("all"),
     // 'all' | 'breakfast' | 'lunch' | 'dinner' | 'late_night' | 'weekend_brunch'
     availableFrom: varchar("available_from"), // "06:00"  24-h HH:MM
-    availableTo: varchar("available_to"),     // "11:00"
-    availableDays: jsonb("available_days").default(sql`'["mon","tue","wed","thu","fri","sat","sun"]'::jsonb`),
+    availableTo: varchar("available_to"), // "11:00"
+    availableDays: jsonb("available_days").default(
+      sql`'["mon","tue","wed","thu","fri","sat","sun"]'::jsonb`,
+    ),
     // e.g. ["mon","tue","wed","thu","fri","sat","sun"]
     isActive: boolean("is_active").notNull().default(true),
     acceptsCash: boolean("accepts_cash").notNull().default(false),
@@ -5379,8 +5491,9 @@ export const menuItems = pgTable(
     menuId: varchar("menu_id")
       .notNull()
       .references(() => menus.id, { onDelete: "cascade" }),
-    categoryId: varchar("category_id")
-      .references(() => menuCategories.id, { onDelete: "set null" }),
+    categoryId: varchar("category_id").references(() => menuCategories.id, {
+      onDelete: "set null",
+    }),
     restaurantId: varchar("restaurant_id")
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
@@ -5435,9 +5548,7 @@ export const menuItemVariants = pgTable(
     isDefault: boolean("is_default").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
   },
-  (table) => [
-    index("idx_menu_item_variants_item").on(table.menuItemId),
-  ],
+  (table) => [index("idx_menu_item_variants_item").on(table.menuItemId)],
 );
 
 /**
@@ -5454,7 +5565,7 @@ export const menuItemModifiers = pgTable(
       .notNull()
       .references(() => menuItems.id, { onDelete: "cascade" }),
     groupName: varchar("group_name").notNull(), // "Sauces", "Toppings", "Temperature"
-    label: varchar("label").notNull(),          // "Ranch", "Extra Cheese", "Well Done"
+    label: varchar("label").notNull(), // "Ranch", "Extra Cheese", "Well Done"
     additionalCents: integer("additional_cents").notNull().default(0),
     isRequired: boolean("is_required").notNull().default(false),
     maxSelections: integer("max_selections").default(1),
@@ -5463,7 +5574,10 @@ export const menuItemModifiers = pgTable(
   },
   (table) => [
     index("idx_menu_item_modifiers_item").on(table.menuItemId),
-    index("idx_menu_item_modifiers_group").on(table.menuItemId, table.groupName),
+    index("idx_menu_item_modifiers_group").on(
+      table.menuItemId,
+      table.groupName,
+    ),
   ],
 );
 
@@ -5514,8 +5628,9 @@ export const pickupOrders = pgTable(
     restaurantId: varchar("restaurant_id")
       .notNull()
       .references(() => restaurants.id, { onDelete: "cascade" }),
-    customerId: varchar("customer_id")
-      .references(() => users.id, { onDelete: "set null" }),
+    customerId: varchar("customer_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     // Guest checkout: customerName / customerEmail / customerPhone are required
     customerName: varchar("customer_name").notNull(),
     customerEmail: varchar("customer_email"),
@@ -5548,7 +5663,9 @@ export const pickupOrders = pgTable(
     cancelledAt: timestamp("cancelled_at"),
     cancellationReason: text("cancellation_reason"),
     // Notifications
-    readyNotificationSent: boolean("ready_notification_sent").notNull().default(false),
+    readyNotificationSent: boolean("ready_notification_sent")
+      .notNull()
+      .default(false),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -5575,8 +5692,9 @@ export const pickupOrderItems = pgTable(
     orderId: varchar("order_id")
       .notNull()
       .references(() => pickupOrders.id, { onDelete: "cascade" }),
-    menuItemId: varchar("menu_item_id")
-      .references(() => menuItems.id, { onDelete: "set null" }),
+    menuItemId: varchar("menu_item_id").references(() => menuItems.id, {
+      onDelete: "set null",
+    }),
     // Snapshot fields (preserved even if item is later deleted)
     itemName: varchar("item_name").notNull(),
     itemDescription: text("item_description"),
@@ -5609,8 +5727,8 @@ export const orderNotifications = pgTable(
       .notNull()
       .references(() => pickupOrders.id, { onDelete: "cascade" }),
     channel: varchar("channel").notNull(), // 'email' | 'sms' | 'push'
-    type: varchar("type").notNull(),       // 'confirmation' | 'ready' | 'cancelled'
-    recipient: varchar("recipient"),       // email address or phone
+    type: varchar("type").notNull(), // 'confirmation' | 'ready' | 'cancelled'
+    recipient: varchar("recipient"), // email address or phone
     sentAt: timestamp("sent_at").defaultNow(),
     status: varchar("status").notNull().default("sent"), // 'sent' | 'failed'
     errorMessage: text("error_message"),
@@ -5679,7 +5797,10 @@ export const deliveryJobs = pgTable(
     // human-readable: "Fri–Sun 5pm–10pm"
     rateOfferedCents: integer("rate_offered_cents"),
     // null = open to driver's rate
-    deliveryZoneRadius: decimal("delivery_zone_radius", { precision: 6, scale: 2 }),
+    deliveryZoneRadius: decimal("delivery_zone_radius", {
+      precision: 6,
+      scale: 2,
+    }),
     // miles
     status: varchar("status").notNull().default("open"),
     // 'open' | 'filled' | 'closed'
@@ -5721,7 +5842,10 @@ export const deliveryJobApplications = pgTable(
     index("idx_delivery_job_apps_job").on(table.jobId),
     index("idx_delivery_job_apps_driver").on(table.driverProfileId),
     index("idx_delivery_job_apps_status").on(table.status),
-    unique("uq_delivery_job_apps_job_driver").on(table.jobId, table.driverProfileId),
+    unique("uq_delivery_job_apps_job_driver").on(
+      table.jobId,
+      table.driverProfileId,
+    ),
   ],
 );
 
@@ -5736,13 +5860,16 @@ export const menusRelations = relations(menus, ({ one, many }) => ({
   items: many(menuItems),
 }));
 
-export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
-  menu: one(menus, {
-    fields: [menuCategories.menuId],
-    references: [menus.id],
+export const menuCategoriesRelations = relations(
+  menuCategories,
+  ({ one, many }) => ({
+    menu: one(menus, {
+      fields: [menuCategories.menuId],
+      references: [menus.id],
+    }),
+    items: many(menuItems),
   }),
-  items: many(menuItems),
-}));
+);
 
 export const menuItemsRelations = relations(menuItems, ({ one, many }) => ({
   menu: one(menus, {
@@ -5757,100 +5884,136 @@ export const menuItemsRelations = relations(menuItems, ({ one, many }) => ({
   modifiers: many(menuItemModifiers),
 }));
 
-export const menuItemVariantsRelations = relations(menuItemVariants, ({ one }) => ({
-  item: one(menuItems, {
-    fields: [menuItemVariants.menuItemId],
-    references: [menuItems.id],
+export const menuItemVariantsRelations = relations(
+  menuItemVariants,
+  ({ one }) => ({
+    item: one(menuItems, {
+      fields: [menuItemVariants.menuItemId],
+      references: [menuItems.id],
+    }),
   }),
-}));
+);
 
-export const menuItemModifiersRelations = relations(menuItemModifiers, ({ one }) => ({
-  item: one(menuItems, {
-    fields: [menuItemModifiers.menuItemId],
-    references: [menuItems.id],
+export const menuItemModifiersRelations = relations(
+  menuItemModifiers,
+  ({ one }) => ({
+    item: one(menuItems, {
+      fields: [menuItemModifiers.menuItemId],
+      references: [menuItems.id],
+    }),
   }),
-}));
+);
 
-export const pickupOrdersRelations = relations(pickupOrders, ({ one, many }) => ({
-  restaurant: one(restaurants, {
-    fields: [pickupOrders.restaurantId],
-    references: [restaurants.id],
+export const pickupOrdersRelations = relations(
+  pickupOrders,
+  ({ one, many }) => ({
+    restaurant: one(restaurants, {
+      fields: [pickupOrders.restaurantId],
+      references: [restaurants.id],
+    }),
+    customer: one(users, {
+      fields: [pickupOrders.customerId],
+      references: [users.id],
+    }),
+    items: many(pickupOrderItems),
+    notifications: many(orderNotifications),
   }),
-  customer: one(users, {
-    fields: [pickupOrders.customerId],
-    references: [users.id],
-  }),
-  items: many(pickupOrderItems),
-  notifications: many(orderNotifications),
-}));
+);
 
-export const pickupOrderItemsRelations = relations(pickupOrderItems, ({ one }) => ({
-  order: one(pickupOrders, {
-    fields: [pickupOrderItems.orderId],
-    references: [pickupOrders.id],
+export const pickupOrderItemsRelations = relations(
+  pickupOrderItems,
+  ({ one }) => ({
+    order: one(pickupOrders, {
+      fields: [pickupOrderItems.orderId],
+      references: [pickupOrders.id],
+    }),
+    menuItem: one(menuItems, {
+      fields: [pickupOrderItems.menuItemId],
+      references: [menuItems.id],
+    }),
   }),
-  menuItem: one(menuItems, {
-    fields: [pickupOrderItems.menuItemId],
-    references: [menuItems.id],
-  }),
-}));
+);
 
-export const orderNotificationsRelations = relations(orderNotifications, ({ one }) => ({
-  order: one(pickupOrders, {
-    fields: [orderNotifications.orderId],
-    references: [pickupOrders.id],
+export const orderNotificationsRelations = relations(
+  orderNotifications,
+  ({ one }) => ({
+    order: one(pickupOrders, {
+      fields: [orderNotifications.orderId],
+      references: [pickupOrders.id],
+    }),
   }),
-}));
+);
 
-export const driverProfilesRelations = relations(driverProfiles, ({ one, many }) => ({
-  user: one(users, {
-    fields: [driverProfiles.userId],
-    references: [users.id],
+export const driverProfilesRelations = relations(
+  driverProfiles,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [driverProfiles.userId],
+      references: [users.id],
+    }),
+    applications: many(deliveryJobApplications),
   }),
-  applications: many(deliveryJobApplications),
-}));
+);
 
-export const deliveryJobsRelations = relations(deliveryJobs, ({ one, many }) => ({
-  restaurant: one(restaurants, {
-    fields: [deliveryJobs.restaurantId],
-    references: [restaurants.id],
+export const deliveryJobsRelations = relations(
+  deliveryJobs,
+  ({ one, many }) => ({
+    restaurant: one(restaurants, {
+      fields: [deliveryJobs.restaurantId],
+      references: [restaurants.id],
+    }),
+    applications: many(deliveryJobApplications),
   }),
-  applications: many(deliveryJobApplications),
-}));
+);
 
-export const deliveryJobApplicationsRelations = relations(deliveryJobApplications, ({ one }) => ({
-  job: one(deliveryJobs, {
-    fields: [deliveryJobApplications.jobId],
-    references: [deliveryJobs.id],
+export const deliveryJobApplicationsRelations = relations(
+  deliveryJobApplications,
+  ({ one }) => ({
+    job: one(deliveryJobs, {
+      fields: [deliveryJobApplications.jobId],
+      references: [deliveryJobs.id],
+    }),
+    driverProfile: one(driverProfiles, {
+      fields: [deliveryJobApplications.driverProfileId],
+      references: [driverProfiles.id],
+    }),
   }),
-  driverProfile: one(driverProfiles, {
-    fields: [deliveryJobApplications.driverProfileId],
-    references: [driverProfiles.id],
-  }),
-}));
+);
 
 // ── ZOOD VALIDATION SCHEMAS ──────────────────────────────────────────────────
 
 export const insertMenuSchema = createInsertSchema(menus).omit({
-  id: true, createdAt: true, updatedAt: true,
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
-export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit({
-  id: true, createdAt: true, updatedAt: true,
-});
+export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit(
+  {
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  },
+);
 
 export const insertMenuItemSchema = createInsertSchema(menuItems, {
   priceCents: z.number().int().min(0),
   calories: z.number().int().min(0).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 
-export const insertMenuItemVariantSchema = createInsertSchema(menuItemVariants, {
-  additionalCents: z.number().int().min(0),
-}).omit({ id: true });
+export const insertMenuItemVariantSchema = createInsertSchema(
+  menuItemVariants,
+  {
+    additionalCents: z.number().int().min(0),
+  },
+).omit({ id: true });
 
-export const insertMenuItemModifierSchema = createInsertSchema(menuItemModifiers, {
-  additionalCents: z.number().int().min(0),
-}).omit({ id: true });
+export const insertMenuItemModifierSchema = createInsertSchema(
+  menuItemModifiers,
+  {
+    additionalCents: z.number().int().min(0),
+  },
+).omit({ id: true });
 
 export const insertPickupOrderSchema = createInsertSchema(pickupOrders, {
   subtotalCents: z.number().int().min(1),
@@ -5871,11 +6034,14 @@ export const insertPickupOrderSchema = createInsertSchema(pickupOrders, {
   updatedAt: true,
 });
 
-export const insertPickupOrderItemSchema = createInsertSchema(pickupOrderItems, {
-  basePriceCents: z.number().int().min(0),
-  lineTotalCents: z.number().int().min(0),
-  quantity: z.number().int().min(1),
-}).omit({ id: true, createdAt: true });
+export const insertPickupOrderItemSchema = createInsertSchema(
+  pickupOrderItems,
+  {
+    basePriceCents: z.number().int().min(0),
+    lineTotalCents: z.number().int().min(0),
+    quantity: z.number().int().min(1),
+  },
+).omit({ id: true, createdAt: true });
 
 export const insertDriverProfileSchema = createInsertSchema(driverProfiles, {
   ratePerDeliveryCents: z.number().int().min(0).optional().nullable(),
@@ -5891,9 +6057,12 @@ export const insertDeliveryJobSchema = createInsertSchema(deliveryJobs, {
   rateOfferedCents: z.number().int().min(0).optional().nullable(),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 
-export const insertDeliveryJobApplicationSchema = createInsertSchema(deliveryJobApplications, {
-  proposedRateCents: z.number().int().min(0).optional().nullable(),
-}).omit({ id: true, respondedAt: true, createdAt: true });
+export const insertDeliveryJobApplicationSchema = createInsertSchema(
+  deliveryJobApplications,
+  {
+    proposedRateCents: z.number().int().min(0).optional().nullable(),
+  },
+).omit({ id: true, respondedAt: true, createdAt: true });
 
 // ── MENU / ORDER TYPES ───────────────────────────────────────────────────────
 
@@ -5906,7 +6075,9 @@ export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
 export type MenuItemVariant = typeof menuItemVariants.$inferSelect;
 export type InsertMenuItemVariant = z.infer<typeof insertMenuItemVariantSchema>;
 export type MenuItemModifier = typeof menuItemModifiers.$inferSelect;
-export type InsertMenuItemModifier = z.infer<typeof insertMenuItemModifierSchema>;
+export type InsertMenuItemModifier = z.infer<
+  typeof insertMenuItemModifierSchema
+>;
 export type MenuImportLog = typeof menuImportLogs.$inferSelect;
 export type PickupOrder = typeof pickupOrders.$inferSelect;
 export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
@@ -5917,8 +6088,11 @@ export type DriverProfile = typeof driverProfiles.$inferSelect;
 export type InsertDriverProfile = z.infer<typeof insertDriverProfileSchema>;
 export type DeliveryJob = typeof deliveryJobs.$inferSelect;
 export type InsertDeliveryJob = z.infer<typeof insertDeliveryJobSchema>;
-export type DeliveryJobApplication = typeof deliveryJobApplications.$inferSelect;
-export type InsertDeliveryJobApplication = z.infer<typeof insertDeliveryJobApplicationSchema>;
+export type DeliveryJobApplication =
+  typeof deliveryJobApplications.$inferSelect;
+export type InsertDeliveryJobApplication = z.infer<
+  typeof insertDeliveryJobApplicationSchema
+>;
 
 // ── ORDER STATUS ENUM ────────────────────────────────────────────────────────
 

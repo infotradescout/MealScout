@@ -8,7 +8,14 @@ import Navigation from "@/components/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle, Clock, ChefHat, Package, XCircle } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle,
+  Clock,
+  ChefHat,
+  Package,
+  XCircle,
+} from "lucide-react";
 import { Link } from "wouter";
 
 const formatMoney = (cents: number) =>
@@ -56,7 +63,13 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const STATUS_ORDER = ["pending", "confirmed", "preparing", "ready", "completed"];
+const STATUS_ORDER = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "ready",
+  "completed",
+];
 
 interface OrderItem {
   id: string;
@@ -92,9 +105,12 @@ export default function OrderConfirmationPage() {
 
   const fetchOrder = async () => {
     try {
-      const res = await fetch(`/api/pickup-orders/${encodeURIComponent(orderId ?? "")}`, {
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/pickup-orders/${encodeURIComponent(orderId ?? "")}`,
+        {
+          credentials: "include",
+        },
+      );
       if (!res.ok) {
         // Try by payment_intent (Stripe redirect case)
         const url = new URL(window.location.href);
@@ -102,7 +118,7 @@ export default function OrderConfirmationPage() {
         if (piId) {
           const piRes = await fetch(
             `/api/pickup-orders/by-intent/${encodeURIComponent(piId)}`,
-            { credentials: "include" }
+            { credentials: "include" },
           );
           if (piRes.ok) {
             const data = await piRes.json();
@@ -171,7 +187,9 @@ export default function OrderConfirmationPage() {
           <StatusIcon className={`w-16 h-16 mx-auto mb-3 ${config.color}`} />
           <h1 className="text-2xl font-bold">{config.label}</h1>
           <p className="text-muted-foreground mt-1">{config.description}</p>
-          <p className="font-mono text-sm mt-2 text-muted-foreground">Order #{orderNum}</p>
+          <p className="font-mono text-sm mt-2 text-muted-foreground">
+            Order #{orderNum}
+          </p>
         </div>
 
         {/* Progress bar (for non-cancelled orders) */}
@@ -188,8 +206,8 @@ export default function OrderConfirmationPage() {
                       isDone
                         ? "bg-green-500 text-white"
                         : isCurrent
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {isDone ? "✓" : idx + 1}
@@ -218,7 +236,10 @@ export default function OrderConfirmationPage() {
                 <span>
                   {item.quantity}× {item.itemName}
                   {item.variantLabel && (
-                    <span className="text-muted-foreground"> · {item.variantLabel}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {item.variantLabel}
+                    </span>
                   )}
                 </span>
                 <span>{formatMoney(item.lineTotalCents)}</span>
@@ -241,7 +262,9 @@ export default function OrderConfirmationPage() {
               </div>
             </div>
             <div className="text-xs text-muted-foreground pt-1 flex gap-3 flex-wrap">
-              <span className="capitalize">{order.orderType.replace("_", " ")}</span>
+              <span className="capitalize">
+                {order.orderType.replace("_", " ")}
+              </span>
               <span className="capitalize">{order.paymentMethod}</span>
             </div>
           </CardContent>
@@ -261,11 +284,7 @@ export default function OrderConfirmationPage() {
             </Button>
           </Link>
           {!isTerminal && (
-            <Button
-              variant="ghost"
-              className="shrink-0"
-              onClick={fetchOrder}
-            >
+            <Button variant="ghost" className="shrink-0" onClick={fetchOrder}>
               <Loader2 className="w-4 h-4 mr-1" />
               Refresh
             </Button>
