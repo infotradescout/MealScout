@@ -29,6 +29,9 @@ import {
   insertMenuItemSchema,
   insertMenuItemVariantSchema,
   insertMenuItemModifierSchema,
+  LISA_CLAIM_TYPES,
+  LISA_CLAIM_SOURCES,
+  lisaClaims,
   type Menu,
   type MenuCategory,
   type MenuItem,
@@ -281,6 +284,19 @@ export function registerMenuRoutes(app: Express) {
       await assertOwnsRestaurant(req.user.id, body.restaurantId);
 
       const [menu] = await db.insert(menus).values(body).returning();
+
+      // Emit LISA claim for menu published
+      db.insert(lisaClaims).values({
+        app: "mealscout",
+        claimType: LISA_CLAIM_TYPES.MENU_PUBLISHED,
+        source: LISA_CLAIM_SOURCES.MENU,
+        subjectType: "menu",
+        subjectId: menu.id,
+        actorType: "user",
+        actorId: req.user.id,
+        payload: { restaurantId: body.restaurantId, menuName: menu.name },
+      }).catch(() => {});
+
       res.status(201).json({ menu });
     }),
   );

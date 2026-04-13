@@ -7,6 +7,7 @@ import {
   supplyItemAliases,
   supplyItems,
   supplyPrices,
+  supplyPriceWatches,
   supplyScoutPreferences,
   supplyShoppingListItems,
   supplyShoppingLists,
@@ -770,6 +771,91 @@ export function registerSupplyScoutRoutes(app: Express) {
         return res.status(403).json({ message: "Not authorized" });
       }
       res.status(500).json({ message: error.message || "Failed to optimize shopping plan" });
+    }
+  });
+
+  // ── Price Watches CRUD ─────────────────────────────────────────────────────
+
+  /**
+   * GET /api/supply-scout/price-watches
+   * List all active price watches for the authenticated user.
+   */
+  app.get("/api/supply-scout/price-watches", isAuthenticated, async (req: any, res) => {
+    try {
+      const watches = await db
+        .select()
+        .from(supplyPriceWatches)
+        .where(and(eq(supplyPriceWatches.userId, String(req.user.id)), eq(supplyPriceWatches.isActive, true)))
+        .orderBy(desc(supplyPriceWatches.createdAt))
+        .limit(200);
+      res.json({ watches });
+    } catch (error: any) {
+      console.error("Error fetching price watches:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch price watches" });
+    }
+  });
+
+  const createPriceWatchSchema = z.object({
+    itemKey: z.string().min(1).max(200),
+    itemName: z.string().min(1).max(200),
+    targetPriceCents: z.number().int().positive().optional(),
+    maxRadiusMiles: z.number().int().min(1).max(500).default(25),
+    buyerRestaurantId: z.string().optional(),
+  });
+
+  /**
+   * POST /api/supply-scout/price-watches
+   * Create a new price watch for an item.
+   */
+  app.post("/api/supply-scout/price-watches", isAuthenticated, async (req: any, res) => {
+    try {
+      const body = createPriceWatchSchema.parse(req.body);
+      // Verify restaurant ownership if buyerRestaurantId provided
+      if (body.buyerRestaurantId) {
+        const ok = await storage.verifyRestaurantOwnership(body.buyerRestaurantId, String(req.user.id));
+        if (!ok) return res.status(403).json({ message: "Not authorized for that restaurant" });
+      }
+      const [watch] = await db
+        .insert(supplyPriceWatches)
+        .values({
+          userId: String(req.user.id),
+          itemKey: body.itemKey,
+          itemName: body.itemName,
+          targetPriceCents: body.targetPriceCents ?? null,
+          maxRadiusMiles: body.maxRadiusMiles,
+          buyerRestaurantId: body.buyerRestaurantId ?? null,
+          isActive: true,
+        })
+        .returning();
+      res.status(201).json({ watch });
+    } catch (error: any) {
+      console.error("Error creating price watch:", error);
+      if (error instanceof z.ZodError) return res.status(400).json({ message: error.errors[0]?.message || "Validation error" });
+      res.status(500).json({ message: error.message || "Failed to create price watch" });
+    }
+  });
+
+  /**
+   * DELETE /api/supply-scout/price-watches/:watchId
+   * Deactivate (soft-delete) a price watch.
+   */
+  app.delete("/api/supply-scout/price-watches/:watchId", isAuthenticated, async (req: any, res) => {
+    try {
+      const watchId = String(req.params.watchId || "").trim();
+      const [watch] = await db
+        .select()
+        .from(supplyPriceWatches)
+        .where(and(eq(supplyPriceWatches.id, watchId), eq(supplyPriceWatches.userId, String(req.user.id))))
+        .limit(1);
+      if (!watch) return res.status(404).json({ message: "Price watch not found" });
+      await db
+        .update(supplyPriceWatches)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(supplyPriceWatches.id, watchId));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting price watch:", error);
+      res.status(500).json({ message: error.message || "Failed to delete price watch" });
     }
   });
 }

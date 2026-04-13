@@ -36,6 +36,9 @@ import {
   restaurantSubscriptions,
   telemetryEvents,
   ORDER_STATUS,
+  LISA_CLAIM_TYPES,
+  LISA_CLAIM_SOURCES,
+  lisaClaims,
   type PickupOrder,
   type PickupOrderItem,
   type MenuItem,
@@ -540,6 +543,23 @@ export function registerPickupOrderRoutes(app: Express) {
             .catch(() => {});
         }
 
+        // Emit LISA claim for order placed
+        db.insert(lisaClaims).values({
+          app: "mealscout",
+          claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+          source: LISA_CLAIM_SOURCES.ORDER,
+          subjectType: "order",
+          subjectId: confirmed.id,
+          actorType: req.user?.id ? "user" : "guest",
+          actorId: req.user?.id ?? "guest",
+          payload: {
+            restaurantId: body.restaurantId,
+            orderType: body.orderType,
+            totalCents,
+            paymentMethod: "cash",
+          },
+        }).catch(() => {});
+
         return res.status(201).json({ order: confirmed, clientSecret: null });
       }
 
@@ -592,6 +612,23 @@ export function registerPickupOrderRoutes(app: Express) {
         })
         .where(eq(pickupOrders.id, order.id))
         .returning();
+
+      // Emit LISA claim for card order placed (payment pending)
+      db.insert(lisaClaims).values({
+        app: "mealscout",
+        claimType: LISA_CLAIM_TYPES.ORDER_PLACED,
+        source: LISA_CLAIM_SOURCES.ORDER,
+        subjectType: "order",
+        subjectId: updatedOrder.id,
+        actorType: req.user?.id ? "user" : "guest",
+        actorId: req.user?.id ?? "guest",
+        payload: {
+          restaurantId: body.restaurantId,
+          orderType: body.orderType,
+          totalCents,
+          paymentMethod: "card",
+        },
+      }).catch(() => {});
 
       res.status(201).json({
         order: updatedOrder,
@@ -843,6 +880,31 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Emit to kitchen display WebSocket room
       emitKitchenUpdate(order.restaurantId, updated);
+
+      // Emit LISA claims for terminal status transitions
+      if (status === ORDER_STATUS.COMPLETED) {
+        db.insert(lisaClaims).values({
+          app: "mealscout",
+          claimType: LISA_CLAIM_TYPES.ORDER_COMPLETED,
+          source: LISA_CLAIM_SOURCES.ORDER,
+          subjectType: "order",
+          subjectId: updated.id,
+          actorType: "restaurant",
+          actorId: updated.restaurantId,
+          payload: { totalCents: updated.totalCents, orderType: updated.orderType },
+        }).catch(() => {});
+      } else if (status === ORDER_STATUS.CANCELLED) {
+        db.insert(lisaClaims).values({
+          app: "mealscout",
+          claimType: LISA_CLAIM_TYPES.ORDER_CANCELLED,
+          source: LISA_CLAIM_SOURCES.ORDER,
+          subjectType: "order",
+          subjectId: updated.id,
+          actorType: "restaurant",
+          actorId: updated.restaurantId,
+          payload: { cancellationReason: updated.cancellationReason },
+        }).catch(() => {});
+      }
 
       res.json({ order: updated });
     }),

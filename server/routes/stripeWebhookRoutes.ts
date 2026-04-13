@@ -6,7 +6,7 @@ import {
   PARKING_PASS_SLOT_TYPES,
   isSlotWithinHours,
 } from "@shared/parkingPassSlots";
-import { hosts, suppliers } from "@shared/schema";
+import { hosts, suppliers, lisaClaims, LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from "@shared/schema";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
@@ -1244,10 +1244,30 @@ export function registerStripeWebhookRoutes(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is now ${subscriptionUpdated.status} for user ${userForUpdate.id}`,
               );
               // The validateSubscriptionLimits function will catch this on next deal creation attempt
+              db.insert(lisaClaims).values({
+                app: "mealscout",
+                claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_CANCELLED,
+                source: LISA_CLAIM_SOURCES.SUBSCRIPTION,
+                subjectType: "subscription",
+                subjectId: subscriptionUpdated.id,
+                actorType: "user",
+                actorId: userForUpdate.id,
+                payload: { status: subscriptionUpdated.status },
+              }).catch(() => {});
             } else if (subscriptionUpdated.status === "active") {
               console.log(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is active for user ${userForUpdate.id}`,
               );
+              db.insert(lisaClaims).values({
+                app: "mealscout",
+                claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_STARTED,
+                source: LISA_CLAIM_SOURCES.SUBSCRIPTION,
+                subjectType: "subscription",
+                subjectId: subscriptionUpdated.id,
+                actorType: "user",
+                actorId: userForUpdate.id,
+                payload: { stripeSubscriptionId: subscriptionUpdated.id },
+              }).catch(() => {});
             }
           } else {
             console.log(

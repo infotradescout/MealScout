@@ -5292,11 +5292,29 @@ export const LISA_CLAIM_TYPES = {
   USER_LOGGED_IN: "user_logged_in",
   OAUTH_PROVIDER_USED: "oauth_provider_used",
 
-  // MealScout
+  // MealScout — Discovery & Content
   VIDEO_RECOMMENDATION_CREATED: "video_recommendation_created",
   VIDEO_RECOMMENDATION_VIEWED: "video_recommendation_viewed",
   MERCHANT_LISTED: "merchant_listed",
   DEAL_CREATED: "deal_created",
+
+  // MealScout — Ordering & Menus
+  ORDER_PLACED: "order_placed",
+  ORDER_COMPLETED: "order_completed",
+  ORDER_CANCELLED: "order_cancelled",
+  MENU_PUBLISHED: "menu_published",
+  MENU_ITEM_CREATED: "menu_item_created",
+
+  // MealScout — Subscriptions & Monetization
+  SUBSCRIPTION_STARTED: "subscription_started",
+  SUBSCRIPTION_CANCELLED: "subscription_cancelled",
+  PARKING_PASS_BOOKED: "parking_pass_booked",
+  PARKING_PASS_CANCELLED: "parking_pass_cancelled",
+
+  // MealScout — Events
+  EVENT_CREATED: "event_created",
+  EVENT_INTEREST_EXPRESSED: "event_interest_expressed",
+  EVENT_CANCELLED: "event_cancelled",
 
   // TradeScout (reserved for shared account claims)
   PROJECT_POSTED: "project_posted",
@@ -5316,6 +5334,11 @@ export const LISA_CLAIM_SOURCES = {
   RECOMMENDATION: "recommendation",
   DEAL: "deal",
   MERCHANT: "merchant",
+  ORDER: "order",
+  MENU: "menu",
+  SUBSCRIPTION: "subscription",
+  PARKING: "parking",
+  EVENT: "event",
 } as const;
 
 export type LisaClaimSource =
