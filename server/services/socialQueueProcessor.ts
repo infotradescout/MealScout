@@ -1,10 +1,12 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { db } from "../db";
+import { db, pool } from "../db";
 import { socialPostQueue } from "@shared/schema";
 
 type QueueStatus = "pending" | "posted" | "failed" | "manual_required";
 
 type QueueCounts = Record<QueueStatus, number>;
+
+const SOCIAL_QUEUE_LOCK_KEY = 20260412;
 
 const postToFacebookPage = async (message: string, link?: string | null) => {
   const pageId = process.env.MEALSCOUT_FB_PAGE_ID;
@@ -37,70 +39,100 @@ const postToFacebookPage = async (message: string, link?: string | null) => {
 
 export async function runSocialQueueProcessor(limit = 25) {
   const normalizedLimit = Math.max(1, Math.min(Math.floor(limit), 200));
-  const rows = await db
-    .select()
-    .from(socialPostQueue)
-    .where(eq(socialPostQueue.status, "pending"))
-    .orderBy(asc(socialPostQueue.createdAt))
-    .limit(normalizedLimit);
+  let lockAcquired = false;
 
-  const stats = {
-    attempted: rows.length,
-    posted: 0,
-    failed: 0,
-    manualRequired: 0,
-  };
-
-  for (const row of rows) {
-    try {
-      if (row.platform === "facebook") {
-        const result = await postToFacebookPage(row.message, row.link);
-        const status: QueueStatus = result.ok ? "posted" : "failed";
-        await db
-          .update(socialPostQueue)
-          .set({
-            status,
-            errorMessage: result.ok ? null : result.error || null,
-            updatedAt: new Date(),
-          })
-          .where(eq(socialPostQueue.id, row.id));
-
-        if (result.ok) {
-          stats.posted += 1;
-        } else {
-          stats.failed += 1;
-        }
-        continue;
-      }
-
-      await db
-        .update(socialPostQueue)
-        .set({
-          status: "manual_required",
-          errorMessage:
-            `Automatic publishing for platform '${row.platform}' is not configured. ` +
-            "Keep this post as a manual publish task.",
-          updatedAt: new Date(),
-        })
-        .where(eq(socialPostQueue.id, row.id));
-      stats.manualRequired += 1;
-    } catch (error) {
-      await db
-        .update(socialPostQueue)
-        .set({
-          status: "failed",
-          errorMessage:
-            error instanceof Error
-              ? error.message.slice(0, 1000)
-              : "Queue processing failed",
-          updatedAt: new Date(),
-        })
-        .where(eq(socialPostQueue.id, row.id));
-      stats.failed += 1;
+  if (pool) {
+    const lockResult = await pool.query(
+      "select pg_try_advisory_lock($1) as locked",
+      [SOCIAL_QUEUE_LOCK_KEY],
+    );
+    lockAcquired = Boolean(lockResult.rows?.[0]?.locked);
+    if (!lockAcquired) {
+      return {
+        attempted: 0,
+        posted: 0,
+        failed: 0,
+        manualRequired: 0,
+        skipped: true,
+      };
     }
   }
 
-  return stats;
+  try {
+    const rows = await db
+      .select()
+      .from(socialPostQueue)
+      .where(eq(socialPostQueue.status, "pending"))
+      .orderBy(asc(socialPostQueue.createdAt))
+      .limit(normalizedLimit);
+
+    const stats = {
+      attempted: rows.length,
+      posted: 0,
+      failed: 0,
+      manualRequired: 0,
+      skipped: false,
+    };
+
+    for (const row of rows) {
+      try {
+        if (row.platform === "facebook") {
+          const result = await postToFacebookPage(row.message, row.link);
+          const status: QueueStatus = result.ok ? "posted" : "failed";
+          await db
+            .update(socialPostQueue)
+            .set({
+              status,
+              errorMessage: result.ok ? null : result.error || null,
+              updatedAt: new Date(),
+            })
+            .where(eq(socialPostQueue.id, row.id));
+
+          if (result.ok) {
+            stats.posted += 1;
+          } else {
+            stats.failed += 1;
+          }
+          continue;
+        }
+
+        await db
+          .update(socialPostQueue)
+          .set({
+            status: "manual_required",
+            errorMessage:
+              `Automatic publishing for platform '${row.platform}' is not configured. ` +
+              "Keep this post as a manual publish task.",
+            updatedAt: new Date(),
+          })
+          .where(eq(socialPostQueue.id, row.id));
+        stats.manualRequired += 1;
+      } catch (error) {
+        await db
+          .update(socialPostQueue)
+          .set({
+            status: "failed",
+            errorMessage:
+              error instanceof Error
+                ? error.message.slice(0, 1000)
+                : "Queue processing failed",
+            updatedAt: new Date(),
+          })
+          .where(eq(socialPostQueue.id, row.id));
+        stats.failed += 1;
+      }
+    }
+
+    return stats;
+  } finally {
+    if (lockAcquired && pool) {
+      await pool
+        .query("select pg_advisory_unlock($1)", [SOCIAL_QUEUE_LOCK_KEY])
+        .catch((error) => {
+          console.error("[social-queue] failed to release advisory lock:", error);
+        });
+    }
+  }
 }
 
 export async function getSocialQueueStatus() {

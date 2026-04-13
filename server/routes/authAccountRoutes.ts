@@ -34,19 +34,21 @@ function isLikely3DEatsPartner(
     .toLowerCase();
   if (firstName !== "sean") return false;
 
-  const has3dEatsRestaurant = ownedRestaurants.some((row) =>
-    String(row?.name || "")
-      .trim()
-      .toLowerCase()
-      .includes("3d eats"),
+  const hasExact3dEatsRestaurant = ownedRestaurants.some(
+    (row) => String(row?.name || "").trim().toLowerCase() === "3d eats",
   );
+  if (hasExact3dEatsRestaurant) return true;
 
-  if (has3dEatsRestaurant) return true;
-
+  const allowlistedEmails = String(
+    process.env.MEALSCOUT_FIRST_PARTNER_EMAILS || "",
+  )
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
   const email = String(user?.email || "")
     .trim()
     .toLowerCase();
-  return email.includes("3d") && email.includes("eat");
+  return email.length > 0 && allowlistedEmails.includes(email);
 }
 
 async function ensureFirstPartnerLifetimeAccess(user: any) {
@@ -65,32 +67,62 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
     const restaurantId = String(restaurant?.id || "").trim();
     if (!restaurantId) continue;
 
-    const existing = await db
-      .select({ id: restaurantSubscriptions.id })
+    const [existing] = await db
+      .select({
+        id: restaurantSubscriptions.id,
+        tier: restaurantSubscriptions.tier,
+        status: restaurantSubscriptions.status,
+        isLifetimeFree: restaurantSubscriptions.isLifetimeFree,
+        lifetimeGrantedBy: restaurantSubscriptions.lifetimeGrantedBy,
+        lifetimeReason: restaurantSubscriptions.lifetimeReason,
+        canPostVideos: restaurantSubscriptions.canPostVideos,
+        canPostDeals: restaurantSubscriptions.canPostDeals,
+        canUseFeaturedSlots: restaurantSubscriptions.canUseFeaturedSlots,
+        maxFeaturedSlots: restaurantSubscriptions.maxFeaturedSlots,
+        hasAnalytics: restaurantSubscriptions.hasAnalytics,
+        hasDealScheduling: restaurantSubscriptions.hasDealScheduling,
+        canceledAt: restaurantSubscriptions.canceledAt,
+      })
       .from(restaurantSubscriptions)
       .where(eq(restaurantSubscriptions.restaurantId, restaurantId))
       .limit(1);
 
-    if (existing.length > 0) {
-      await db
-        .update(restaurantSubscriptions)
-        .set({
-          tier: "premium",
-          status: "active",
-          isLifetimeFree: true,
-          lifetimeGrantedBy: "system:first-partner",
-          lifetimeGrantedAt: now,
-          lifetimeReason: "First MealScout Partner - 3D Eats",
-          canPostVideos: true,
-          canPostDeals: true,
-          canUseFeaturedSlots: true,
-          maxFeaturedSlots: 3,
-          hasAnalytics: true,
-          hasDealScheduling: true,
-          canceledAt: null,
-          updatedAt: now,
-        })
-        .where(eq(restaurantSubscriptions.id, existing[0].id));
+    if (existing) {
+      const alreadyGranted =
+        existing.tier === "premium" &&
+        existing.status === "active" &&
+        existing.isLifetimeFree === true &&
+        existing.lifetimeGrantedBy === "system:first-partner" &&
+        existing.lifetimeReason === "First MealScout Partner - 3D Eats" &&
+        existing.canPostVideos === true &&
+        existing.canPostDeals === true &&
+        existing.canUseFeaturedSlots === true &&
+        existing.maxFeaturedSlots === 3 &&
+        existing.hasAnalytics === true &&
+        existing.hasDealScheduling === true &&
+        existing.canceledAt == null;
+
+      if (!alreadyGranted) {
+        await db
+          .update(restaurantSubscriptions)
+          .set({
+            tier: "premium",
+            status: "active",
+            isLifetimeFree: true,
+            lifetimeGrantedBy: "system:first-partner",
+            lifetimeGrantedAt: now,
+            lifetimeReason: "First MealScout Partner - 3D Eats",
+            canPostVideos: true,
+            canPostDeals: true,
+            canUseFeaturedSlots: true,
+            maxFeaturedSlots: 3,
+            hasAnalytics: true,
+            hasDealScheduling: true,
+            canceledAt: null,
+            updatedAt: now,
+          })
+          .where(eq(restaurantSubscriptions.id, existing.id));
+      }
     } else {
       await db.insert(restaurantSubscriptions).values({
         restaurantId,
@@ -114,17 +146,30 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
     user?.accountSettings && typeof user.accountSettings === "object"
       ? { ...(user.accountSettings as any) }
       : {};
+  const existingPartnerProgram = currentSettings.partnerProgram || {};
+  const existingAnnouncement = existingPartnerProgram.loginAnnouncement || null;
+  const shouldQueueAnnouncement =
+    !existingAnnouncement?.pending && !existingAnnouncement?.shownAt;
   const partnerProgram = {
-    ...(currentSettings.partnerProgram || {}),
+    ...existingPartnerProgram,
     partnerKey: "3d-eats",
     lifetimeFreeAccess: true,
-    lifetimeGrantedAt: now.toISOString(),
-    loginAnnouncement: {
-      message: FIRST_PARTNER_MESSAGE,
-      pending: true,
-      queuedAt: now.toISOString(),
-    },
+    lifetimeGrantedAt: existingPartnerProgram.lifetimeGrantedAt || now.toISOString(),
+    loginAnnouncement: shouldQueueAnnouncement
+      ? {
+          message: FIRST_PARTNER_MESSAGE,
+          pending: true,
+          queuedAt: now.toISOString(),
+        }
+      : existingAnnouncement,
   };
+
+  if (
+    JSON.stringify(partnerProgram) ===
+    JSON.stringify(currentSettings.partnerProgram || {})
+  ) {
+    return user;
+  }
 
   const updated = await storage.updateUser(String(user.id), {
     accountSettings: {

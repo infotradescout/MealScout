@@ -192,6 +192,18 @@ export function registerBusinessTeamRoutes(app: Express) {
         return res.status(400).json({ message: "Invite has expired" });
       }
 
+      const inviteEmail = String(invite.email || "")
+        .trim()
+        .toLowerCase();
+      const userEmail = String(req.user?.email || "")
+        .trim()
+        .toLowerCase();
+      if (inviteEmail && (!userEmail || userEmail !== inviteEmail)) {
+        return res.status(403).json({
+          message: "This invite is assigned to a different email address.",
+        });
+      }
+
       const owner = await getRestaurantOwnerUser(invite.restaurantId);
       if (!owner) {
         return res.status(404).json({ message: "Restaurant not found" });
@@ -238,16 +250,6 @@ export function registerBusinessTeamRoutes(app: Express) {
           updatedAt: new Date(),
         })
         .where(eq(businessStaffInvites.id, invite.id));
-
-      // Upgrade plain customer accounts so they can access business tools UI.
-      if (String(req.user?.userType || "") === "customer") {
-        const ownerType = String(owner.ownerUserType || "");
-        const nextType = ownerType === "food_truck" ? "food_truck" : "restaurant_owner";
-        await db
-          .update(users)
-          .set({ userType: nextType as any, updatedAt: new Date() })
-          .where(eq(users.id, req.user.id));
-      }
 
       res.json({ success: true });
     } catch (error: any) {
