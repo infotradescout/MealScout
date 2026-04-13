@@ -186,6 +186,24 @@ export default function RestaurantOwnerDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const canManageDeals =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.manageDeals === true;
+  const canManageParkingPass =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.manageParkingPass === true;
+  const canViewAnalytics =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.viewAnalytics === true;
 
   useEffect(() => {
     if (!user) return;
@@ -257,7 +275,10 @@ export default function RestaurantOwnerDashboard() {
     refetchOnWindowFocus: false,
   });
   const hasPremiumLocationTools =
-    isAdmin || isStaff || Boolean(subscription?.hasAccess);
+    canManageParkingPass && (isAdmin || isStaff || Boolean(subscription?.hasAccess));
+  const hasAnalyticsAccess =
+    canViewAnalytics && (isAdmin || isStaff || Boolean(subscription?.hasAccess));
+  const canManageBilling = isAdmin || isStaff || isRestaurantOwner || isFoodTruck;
 
   // Fetch favorites analytics for paid users
   const { data: favoritesAnalytics, isLoading: loadingFavorites } =
@@ -266,7 +287,7 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/favorites`,
         analyticsDateRange,
       ],
-      enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+      enabled: !!selectedRestaurant && hasAnalyticsAccess,
     });
 
   // Fetch recommendations analytics for paid users
@@ -276,20 +297,19 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/recommendations`,
         analyticsDateRange,
       ],
-      enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+      enabled: !!selectedRestaurant && hasAnalyticsAccess,
     });
 
   // Fetch deals for selected restaurant
   const { data: deals = [], isLoading: loadingDeals } = useQuery<Deal[]>({
     queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
-    enabled: !!selectedRestaurant,
+    enabled: !!selectedRestaurant && canManageDeals,
   });
 
   const { data: truckBookings = [], isLoading: loadingTruckBookings } =
     useQuery<TruckBookingItem[]>({
       queryKey: ["/api/bookings/my-truck"],
-      enabled:
-        !!user && (isRestaurantOwner || isFoodTruck || isAdmin || isStaff),
+      enabled: !!user && canManageParkingPass,
     });
 
   // Fetch dashboard stats
@@ -306,7 +326,7 @@ export default function RestaurantOwnerDashboard() {
       "analytics/summary",
       analyticsDateRange,
     ],
-    enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+    enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: analyticsTimeseries } = useQuery({
@@ -316,7 +336,7 @@ export default function RestaurantOwnerDashboard() {
       "analytics/timeseries",
       analyticsDateRange,
     ],
-    enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+    enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: customerInsights } = useQuery({
@@ -326,7 +346,7 @@ export default function RestaurantOwnerDashboard() {
       "analytics/customers",
       analyticsDateRange,
     ],
-    enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+    enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   const { data: comparison } = useQuery({
@@ -354,7 +374,7 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/compare?currentStart=${currentStart.toISOString()}&currentEnd=${currentEnd.toISOString()}&previousStart=${previousStart.toISOString()}&previousEnd=${previousEnd.toISOString()}`,
       );
     },
-    enabled: !!selectedRestaurant && (subscription?.hasAccess ?? false),
+    enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
   // Calculate distance between two GPS coordinates
@@ -1171,6 +1191,13 @@ export default function RestaurantOwnerDashboard() {
       });
     },
   });
+  const availableTabs = [
+    ...(canManageDeals ? (["active", "inactive"] as const) : []),
+    ...(canViewAnalytics ? (["analytics"] as const) : []),
+    ...(canManageBilling ? (["credits"] as const) : []),
+    ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
+  ];
+  const defaultTab = availableTabs[0] ?? "analytics";
 
   if (loadingRestaurants) {
     return (
@@ -1215,39 +1242,43 @@ export default function RestaurantOwnerDashboard() {
         icon={Store}
         rightActions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            {(subscription as any)?.status === "active" ||
-            (subscription as any)?.hasAccess === true ? (
-              <Link href="/deal-creation">
+            {canManageDeals ? (
+              (subscription as any)?.status === "active" ||
+              (subscription as any)?.hasAccess === true ? (
+                <Link href="/deal-creation">
+                  <Button
+                    data-testid="button-create-deal"
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create New Special
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/subscribe?next=/deal-creation&reason=create_deals">
+                  <Button
+                    variant="default"
+                    data-testid="button-subscribe"
+                    className="w-full sm:w-auto"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Subscribe to Create Specials
+                  </Button>
+                </Link>
+              )
+            ) : null}
+            {canManageBilling ? (
+              <Link href="/subscription">
                 <Button
-                  data-testid="button-create-deal"
+                  variant="outline"
+                  data-testid="button-manage-subscription"
                   className="w-full sm:w-auto"
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create New Special
+                  <Settings className="mr-2 h-4 w-4" />
+                  Manage Subscription
                 </Button>
               </Link>
-            ) : (
-              <Link href="/subscribe?next=/deal-creation&reason=create_deals">
-                <Button
-                  variant="default"
-                  data-testid="button-subscribe"
-                  className="w-full sm:w-auto"
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Subscribe to Create Specials
-                </Button>
-              </Link>
-            )}
-            <Link href="/subscription">
-              <Button
-                variant="outline"
-                data-testid="button-manage-subscription"
-                className="w-full sm:w-auto"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Manage Subscription
-              </Button>
-            </Link>
+            ) : null}
           </div>
         }
         className="bg-[var(--bg-card)] border-b border-border mb-8"
@@ -1275,6 +1306,7 @@ export default function RestaurantOwnerDashboard() {
       )}
 
       {/* Stats Cards */}
+      {(canManageDeals || canViewAnalytics) && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardHeader className="pb-2">
@@ -1322,25 +1354,26 @@ export default function RestaurantOwnerDashboard() {
           </CardHeader>
         </Card>
       </div>
+      )}
 
       {/* Deals Management */}
-      <Tabs defaultValue="active" className="space-y-4">
+      <Tabs defaultValue={defaultTab} className="space-y-4">
         <TabsList className="w-full">
-          <TabsTrigger value="active">Active Specials</TabsTrigger>
-          <TabsTrigger value="inactive">Inactive Specials</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="credits">
+          {canManageDeals ? <TabsTrigger value="active">Active Specials</TabsTrigger> : null}
+          {canManageDeals ? <TabsTrigger value="inactive">Inactive Specials</TabsTrigger> : null}
+          {canViewAnalytics ? <TabsTrigger value="analytics">Analytics</TabsTrigger> : null}
+          {canManageBilling ? <TabsTrigger value="credits">
             <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
             MealScout Credits
-          </TabsTrigger>
-          <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
+          </TabsTrigger> : null}
+          {canManageParkingPass ? <TabsTrigger value="bookings">Bookings</TabsTrigger> : null}
+          {canManageParkingPass ? <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
             <Truck className="mr-1 hidden h-4 w-4 sm:block" />
             Food Truck
-          </TabsTrigger>
+          </TabsTrigger> : null}
         </TabsList>
 
-        <TabsContent value="active" className="space-y-4">
+        {canManageDeals ? <TabsContent value="active" className="space-y-4">
           {loadingDeals ? (
             <Card>
               <CardContent className="flex items-center justify-center py-12">
@@ -1472,9 +1505,9 @@ export default function RestaurantOwnerDashboard() {
                 </CardContent>
               </Card>
             )}
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="inactive" className="space-y-4">
+        {canManageDeals ? <TabsContent value="inactive" className="space-y-4">
           {deals
             .filter((deal) => !deal.isActive)
             .map((deal) => (
@@ -1527,9 +1560,9 @@ export default function RestaurantOwnerDashboard() {
                 </CardContent>
               </Card>
             )}
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="analytics">
+        {canViewAnalytics ? <TabsContent value="analytics">
           <div className="space-y-6">
             {/* Analytics Header with Date Range */}
             <Card>
@@ -1572,7 +1605,7 @@ export default function RestaurantOwnerDashboard() {
                         data-testid="input-analytics-end-date"
                       />
                     </div>
-                    {subscription?.hasAccess && (
+                    {hasAnalyticsAccess && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1825,7 +1858,7 @@ export default function RestaurantOwnerDashboard() {
             )}
 
             {/* Premium Analytics Cards - Favorites & Recommendations */}
-            {subscription?.hasAccess ? (
+            {hasAnalyticsAccess ? (
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <Card className="border-yellow-200 dark:border-yellow-800">
                   <CardContent className="p-6">
@@ -2172,10 +2205,10 @@ export default function RestaurantOwnerDashboard() {
               </Card>
             </div>
           </div>
-        </TabsContent>
+        </TabsContent> : null}
 
         {/* PHASE R1: MealScout Credits Redemption */}
-        <TabsContent value="credits" className="space-y-6">
+        {canManageBilling ? <TabsContent value="credits" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2201,9 +2234,9 @@ export default function RestaurantOwnerDashboard() {
               }}
             />
           )}
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="bookings" className="space-y-6">
+        {canManageParkingPass ? <TabsContent value="bookings" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2365,9 +2398,9 @@ export default function RestaurantOwnerDashboard() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> : null}
 
-        <TabsContent value="foodtruck" className="space-y-6">
+        {canManageParkingPass ? <TabsContent value="foodtruck" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2903,7 +2936,7 @@ export default function RestaurantOwnerDashboard() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> : null}
       </Tabs>
 
       {/* Bottom Navigation */}

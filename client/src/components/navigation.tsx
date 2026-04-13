@@ -1,5 +1,6 @@
 import { useState, useEffect, type ComponentType } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   Home,
   Search,
@@ -148,10 +149,43 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     user && (user.userType === "admin" || user.userType === "super_admin");
   const isStaff = user && user.userType === "staff";
   const isEventCoordinator = user && user.userType === "event_coordinator";
+  const { data: businessAccess } = useQuery<{
+    hasAnyAccess: boolean;
+    permissions: {
+      manageDeals: boolean;
+      manageParkingPass: boolean;
+      viewAnalytics: boolean;
+      manageProfile: boolean;
+    };
+  }>({
+    queryKey: ["/api/business-access/me"],
+    enabled: !!user,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const hasBusinessTeamAccess = Boolean(businessAccess?.hasAnyAccess);
+  const canManageDeals =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.manageDeals === true;
+  const canManageParkingPass =
+    isAdmin ||
+    isStaff ||
+    isFoodTruck ||
+    isRestaurantOwner ||
+    businessAccess?.permissions?.manageParkingPass === true;
+  const canManageBusinessProfile =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.manageProfile === true;
 
   const [isHost, setIsHost] = useState(false);
   const canSeeParkingPassNav =
-    isAdmin || isStaff || isFoodTruck || isRestaurantOwner || isHost;
+    canManageParkingPass || isHost;
 
   // Detect if this user has a host profile so we can show host flows
   useEffect(() => {
@@ -316,23 +350,31 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       labelKey: "nav.dashboard",
       fallbackLabel: "Dashboard",
     },
-    {
-      path: "/deal-creation",
-      icon: Plus,
-      labelKey: "nav.createSpecial",
-      fallbackLabel: "Create Special",
-    },
+    ...(canManageDeals
+      ? ([
+          {
+            path: "/deal-creation",
+            icon: Plus,
+            labelKey: "nav.createSpecial",
+            fallbackLabel: "Create Special",
+          },
+        ] as NavItem[])
+      : []),
     {
       path: "/subscription",
       icon: BarChart3,
       labelKey: "nav.subscription",
       fallbackLabel: "Subscription",
     },
-    {
-      path: "/business-team",
-      icon: Users,
-      fallbackLabel: "Team",
-    },
+    ...(hasBusinessTeamAccess || canManageBusinessProfile
+      ? ([
+          {
+            path: "/business-team",
+            icon: Users,
+            fallbackLabel: "Team",
+          },
+        ] as NavItem[])
+      : []),
     { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
   ];
 
@@ -441,7 +483,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     [
       { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
       { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
-      { path: "/business-team", icon: Users, fallbackLabel: "Team" },
+      ...(hasBusinessTeamAccess || canManageBusinessProfile
+        ? ([{ path: "/business-team", icon: Users, fallbackLabel: "Team" }] as NavItem[])
+        : []),
+      ...(canManageDeals
+        ? ([
+            {
+              path: "/deal-creation",
+              icon: Plus,
+              labelKey: "nav.createSpecial",
+              fallbackLabel: "Create Special",
+            },
+          ] as NavItem[])
+        : []),
       ...(canSeeParkingPassNav
         ? ([
             {
@@ -454,6 +508,37 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         : []),
     ],
   );
+  const collaboratorNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
+    {
+      path: "/restaurant-owner-dashboard",
+      icon: LayoutDashboard,
+      labelKey: "nav.dashboard",
+      fallbackLabel: "Dashboard",
+    },
+    ...(canManageDeals
+      ? ([
+          {
+            path: "/deal-creation",
+            icon: Plus,
+            labelKey: "nav.createSpecial",
+            fallbackLabel: "Create Special",
+          },
+        ] as NavItem[])
+      : []),
+    ...(canManageParkingPass
+      ? ([
+          {
+            path: "/parking-pass",
+            icon: ParkingSquare,
+            labelKey: "nav.parkingPass",
+            fallbackLabel: "Parking Pass",
+          },
+        ] as NavItem[])
+      : []),
+    ...(hasBusinessTeamAccess || canManageBusinessProfile
+      ? ([{ path: "/business-team", icon: Users, fallbackLabel: "Team" }] as NavItem[])
+      : []),
+  ]);
 
   const supplierExtras: NavItem[] = [
     {
@@ -471,7 +556,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       ? [...adminNavItems, bugNavItem]
       : isStaff
         ? [...staffNavItems, bugNavItem]
-        : isEventCoordinator
+      : isEventCoordinator
           ? [...eventCoordinatorNavItems, bugNavItem]
           : isSupplier
             ? [...supplierNavItems, bugNavItem]
@@ -479,6 +564,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             ? [...foodTruckNavItems, bugNavItem]
             : isRestaurantOwner
               ? [...restaurantOwnerNavItems, bugNavItem]
+              : hasBusinessTeamAccess
+                ? [...collaboratorNavItems, bugNavItem]
               : isHost
                 ? [...hostNavItems, bugNavItem]
               : [...customerNavItems, bugNavItem];
