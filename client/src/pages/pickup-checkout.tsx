@@ -59,6 +59,7 @@ export default function CheckoutPage() {
   const [, navigate] = useLocation();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [menuInfo, setMenuInfo] = useState<MenuInfo | null>(null);
+  const [orderingEnabled, setOrderingEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "cash">("card");
   const [orderType, setOrderType] = useState<"pickup" | "dine_in">("pickup");
   const [contact, setContact] = useState({
@@ -79,8 +80,10 @@ export default function CheckoutPage() {
     if (restaurantId) {
       fetch(`/api/menus/${encodeURIComponent(restaurantId)}`)
         .then((r) => r.json())
-        .then((menus: any[]) => {
-          const activeMenu = menus?.find?.((m: any) => m.isActive);
+        .then((payload: any) => {
+          setOrderingEnabled(Boolean(payload?.orderingEnabled));
+          const menus = Array.isArray(payload?.menus) ? payload.menus : [];
+          const activeMenu = menus.find((m: any) => m.isActive);
           if (activeMenu) {
             setMenuInfo({
               acceptsCash: activeMenu.acceptsCash,
@@ -156,7 +159,14 @@ export default function CheckoutPage() {
         setClientSecret(data.clientSecret);
       }
     } catch (err: any) {
-      setOrderError(err.message);
+      const message = String(err?.message || "Failed to create order");
+      if (message.toLowerCase().includes("subscription")) {
+        setOrderError(
+          "Online ordering is not active for this restaurant yet. You can still browse the menu and order in person.",
+        );
+      } else {
+        setOrderError(message);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -210,6 +220,13 @@ export default function CheckoutPage() {
       <Navigation />
       <div className="max-w-lg mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+
+        {!orderingEnabled && (
+          <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            Online ordering is currently unavailable for this restaurant. Please order in person.
+          </div>
+        )}
 
         {/* Order summary */}
         <Card className="mb-6">
@@ -344,7 +361,7 @@ export default function CheckoutPage() {
         <Button
           className="w-full h-12 text-base"
           onClick={createOrder}
-          disabled={isCreating || !contact.name.trim()}
+          disabled={isCreating || !contact.name.trim() || !orderingEnabled}
         >
           {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
           {paymentMethod === "cash" ? "Place Order (Cash)" : `Pay ${formatMoney(total)}`}

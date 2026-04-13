@@ -34,6 +34,7 @@ import {
   orderNotifications,
   restaurants,
   restaurantSubscriptions,
+  telemetryEvents,
   ORDER_STATUS,
   type PickupOrder,
   type PickupOrderItem,
@@ -130,6 +131,20 @@ async function assertHasOrderingSubscription(
     } catch {
       // fall through to denial
     }
+  }
+
+  try {
+    await db.insert(telemetryEvents).values({
+      eventName: "ordering_subscription_denied",
+      userId,
+      properties: {
+        restaurantId: restaurantId ?? null,
+        userType: user.userType ?? null,
+        reason: "subscription_inactive",
+      },
+    });
+  } catch (telemetryError) {
+    console.warn("[pickupOrderRoutes] Failed to record telemetry event", telemetryError);
   }
 
   throw Object.assign(

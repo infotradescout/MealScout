@@ -84,6 +84,7 @@ export default function KitchenDisplayPage() {
   const restaurantId = useRestaurantId();
   const { toast } = useToast();
   const [orders, setOrders] = useState<KitchenOrder[]>([]);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const audioRef = useRef<boolean>(false);
@@ -97,8 +98,19 @@ export default function KitchenDisplayPage() {
         `/api/owner/kitchen-queue/${encodeURIComponent(restaurantId)}`,
         { credentials: "include" }
       );
-      if (!res.ok) throw new Error("Failed to load kitchen queue");
-      return res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = data?.message || "Failed to load kitchen queue";
+        if (
+          res.status === 403 &&
+          String(message).toLowerCase().includes("subscription")
+        ) {
+          setSubscriptionBlocked(true);
+        }
+        throw new Error(message);
+      }
+      setSubscriptionBlocked(false);
+      return Array.isArray(data?.orders) ? data.orders : [];
     },
     enabled: !!restaurantId,
     refetchInterval: 30_000, // fallback polling every 30s
@@ -176,7 +188,18 @@ export default function KitchenDisplayPage() {
       });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      const isSubscriptionError = String(err.message)
+        .toLowerCase()
+        .includes("subscription");
+      toast({
+        title: isSubscriptionError
+          ? "Online Ordering Subscription Required"
+          : "Error",
+        description: isSubscriptionError
+          ? "Kitchen tools require an active $25/month subscription for this restaurant."
+          : err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -245,7 +268,11 @@ export default function KitchenDisplayPage() {
         {queueQuery.isError && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 mb-4 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-destructive" />
-            <span className="text-sm text-destructive">Failed to load orders. Check your connection.</span>
+            <span className="text-sm text-destructive">
+              {subscriptionBlocked
+                ? "Kitchen display is disabled until this restaurant has an active online ordering subscription."
+                : "Failed to load orders. Check your connection."}
+            </span>
           </div>
         )}
 

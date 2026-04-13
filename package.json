@@ -28,6 +28,8 @@
     "test:supplier-payments": "tsx scripts/testSupplierPaymentIntentFlow.ts",
     "test:supplier-pay-intent-switch": "tsx scripts/testSupplierPayIntentMethodSwitch.ts",
     "test:ordering-subscription-scope": "tsx scripts/testOrderingSubscriptionScope.ts",
+    "smoke:ordering-subscription-access": "node scripts/smokeOrderingSubscriptionAccess.mjs",
+    "test:ordering-all": "npm run test:ordering-subscription-scope && npm run smoke:ordering-subscription-access",
     "load:supplier-payments": "tsx scripts/loadSupplierPayments.ts",
     "check:scale-readiness": "tsx scripts/scaleReadinessCheck.ts",
     "verify:deal-writes": "npx dotenv-cli -e .env -- npx tsx scripts/verifyDealWrites.ts",
