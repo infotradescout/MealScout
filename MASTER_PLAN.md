@@ -11,128 +11,84 @@ Single source of truth for roadmap, operations, deployment, testing, deferred fe
 - Enforce trust, verification, and role-based actions.
 - Grow monetization without pay-to-play ranking.
 
-## Current Reality (as of now)
+## Current Reality (as of April 2026)
 
-- Core app is live with auth, map, parking pass, events, deals, admin, Stripe support.
-- Several implementation docs marked "complete" exist, but execution and UX parity remain uneven.
-- Deferred modules still exist in codebase and need explicit keep/remove decisions.
+- Core app is live with auth, map, parking pass, events, deals, admin, and Stripe support.
+- **Online Ordering** has been launched and gated behind a $25/mo premium subscription per restaurant.
+- **LISA (Location Intelligence & Supply Analytics)** is actively processing market intel, supply prices, and operating briefs.
+- **Backend Refactoring** is underway (Phase 3 in progress), successfully extracting auth tokens, analytics, and parking pass repositories behind `IStorage`.
+- **Mobile Responsiveness** has been completed across 30+ pages with a mobile-first design strategy (320px baseline).
+- **Map & Geocode Integrity** is complete, achieving 100% coordinate coverage for primary hosts and secondary addresses.
 
 ## Execution Plan
 
-### Phase 1: Production Reliability (Now)
+### Phase 1: Ordering & Premium Hardening (Now)
 
-1. Lock production env correctness.
+1. **Ordering Access Control**
+   - Ensure the `$25/mo` subscription gate remains robust across all ordering and menu management routes.
+   - Monitor the `ordering_subscription_denied` telemetry events to track conversion opportunities.
+   - Maintain the automated ordering smoke auth and restaurant discovery tests.
 
-- Validate required env vars in production (`DATABASE_URL`, `SESSION_SECRET`, `CLIENT_ORIGIN`, `PUBLIC_BASE_URL`, auth and payments keys as used).
-- Confirm cookie/session behavior across domains and subdomains.
-- Confirm proxy + secure cookie behavior in production logs.
+2. **Premium Conversion Funnel**
+   - Optimize the premium weekly summary cards, emails, and KPI tracking.
+   - Refine the sales cheat sheet and operator-first value messaging.
+   - Monitor share-to-conversion funnel metrics for delegated business permissions.
 
-2. Stabilize startup and request latency.
+### Phase 2: Backend Refactor Continuation (Now)
 
-- Keep initial route load lightweight.
-- Ensure auth/user bootstrap does not block first paint.
-- Track and resolve repeated 5xx or gateway failures first.
+1. **Complete Phase 3 (Storage Split)**
+   - Finish extracting domain-specific query logic into repository-style modules (e.g., `usersRepository`, `hostsEventsRepository`, `restaurantsDealsRepository`).
+   - Keep `IStorage` stable while moving implementation code behind it.
 
-3. Deployment controls.
+2. **Phase 4 (Route Decomposition)**
+   - Break up oversized extracted route modules (`adminManagementRoutes`, `supplierMarketplaceRoutes`, `hostRoutes`) into focused sub-modules.
 
-- Keep one canonical frontend deployment path.
-- Keep one canonical API origin for frontend.
-- Maintain rollback procedure for each release.
+3. **Phase 5 (Schema Modularization)**
+   - Modularize `shared/schema.ts` into focused files by domain (e.g., `core`, `users`, `restaurants`, `deals`) while preserving the `@shared/schema` import path.
 
-### Phase 2: UX Consistency + Access Rules (Now)
+### Phase 3: LISA & Market Intel Expansion (Near Term)
 
-1. Match UI system across all pages.
+1. **LISA Operating Briefs**
+   - Expand daily LISA operating briefs and direct actions.
+   - Improve the translation of LISA livestream rows into actionable decisions for operators.
+   - Track LISA brief actions across admin surfaces (snooze, done states).
 
-- Apply current style tokens/components to login/signup/create account and any remaining legacy pages.
-- Fix blurry/low-contrast nav and button text rendering.
+2. **Supply Market Intel**
+   - Harden Price Scout feed access and expand export surfaces.
+   - Monitor automated supply market lanes and localized supply price watch data.
 
-2. Enforce role visibility rules.
+### Phase 4: Events and Open Calls (Near Term)
 
-- Hide `Parking Pass` nav for logged-out users.
-- Show event posting on Events surface for event coordinators.
-- Remove or de-emphasize Host page if redundant with Events and Parking Pass workflows.
+1. **Complete Event Open Calls Productization**
+   - Finalize `event_series` model decisions.
+   - Publish/occurrence generation and per-occurrence overrides.
+   - Keep capacity guard semantics per occurrence.
 
-3. Schedule and map UX cleanup.
+2. **Series Operations**
+   - Ensure full cancellation and truck notification behavior remain reliable.
+   - Add operator metrics for series fill rate, acceptance throughput, cancellation impact.
 
-- Improve parking schedule readability and day-state clarity.
-- Ensure user map logic matches parking pass map logic (grouping, pin selection, dedupe).
+### Phase 5: Growth Surfaces (Near-Mid Term)
 
-### Phase 3: Data Accuracy + Trust (Now)
+1. **SEO and Location Growth**
+   - Execute SEO expansion tasks from current canonical strategy (IndexNow, LLM SEO endpoints).
+   - Improve empty-market bootstrap flows where useful.
+   - Monitor the Pensacola report lead magnet and food truck drip campaigns.
 
-1. Map and geocode integrity.
+2. **Social & Share Hub**
+   - Monitor the social queue processor automation and share hub telemetry.
+   - Ensure engagement actions remain hardened with throttling and idempotent writes.
 
-- Ensure all host addresses (including secondary addresses) are considered.
-- Geocode queue/retry with backoff and cache.
-- Ensure verified/active locations render as pins when coordinates exist or can be derived.
+### Phase 6: Mobile App Track (Mid Term)
 
-2. Admin stats integrity.
+1. **Wrapper Strategy**
+   - Use Capacitor fast-track unless full migration is justified.
 
-- Resolve count mismatches (users/restaurants/role totals).
-- Prevent double-counting in member summaries.
-- Display complete role/member counts in admin dashboard.
+2. **Mobile Readiness**
+   - Validate auth/session behavior, deep links, geolocation permissions, push support.
 
-3. Content and feed behavior.
-
-- Ensure video/feed behavior is correct for guest vs auth users.
-- Keep clear error states with actionable retry.
-
-### Phase 4: Monetization + Payments (Near Term)
-
-1. Stripe hardening.
-
-- Confirm host onboarding status lifecycle and UI states.
-- Confirm booking payment flow end-to-end for paid and free slots.
-- Confirm locked pricing logic and plan messaging are consistent.
-
-2. Billing and settlement confidence.
-
-- Verify payment status transitions (`pending`, `confirmed`, `refunded`, etc.).
-- Reconcile pending/queued/paid summaries and admin visibility.
-
-### Phase 5: Events and Open Calls (Near Term)
-
-1. Complete Event Open Calls productization.
-
-- Finalize `event_series` model decisions.
-- Publish/occurrence generation and per-occurrence overrides.
-- Keep capacity guard semantics per occurrence.
-
-2. Series operations.
-
-- Ensure full cancellation and truck notification behavior remain reliable.
-- Add operator metrics for series fill rate, acceptance throughput, cancellation impact.
-
-### Phase 6: Growth Surfaces (Near-Mid Term)
-
-1. Video activation before semantics expansion.
-
-- Run activation checks (upload reliability, engagement, content quality).
-- Defer recommendation semantics until volume/quality supports it.
-
-2. SEO and location growth.
-
-- Execute SEO expansion tasks from current canonical strategy.
-- Improve empty-market bootstrap flows where useful.
-
-3. Notifications rollout.
-
-- Phase 1 triggers: nearby deals, truck updates, events, digest.
-- Phase 2 triggers: parking pass reminders, host capacity warnings, coordinator updates.
-- Respect opt-in, quiet hours, dedupe windows.
-
-### Phase 7: Mobile App Track (Mid Term)
-
-1. Wrapper strategy.
-
-- Use Capacitor fast-track unless full migration is justified.
-
-2. Mobile readiness.
-
-- Validate auth/session behavior, deep links, geolocation permissions, push support.
-
-3. Store readiness.
-
-- Complete listing assets, privacy forms, testflight/internal testing, submission.
+3. **Store Readiness**
+   - Complete listing assets, privacy forms, testflight/internal testing, submission.
 
 ## Deferred Feature Registry (Explicit)
 
@@ -145,49 +101,49 @@ Keep but inactive unless approved for activation:
 
 ## Acceptance Gates
 
-- Release gate: no auth/session regressions, no map pin regressions, no payment regressions.
-- Data gate: admin counts match canonical queries.
-- UX gate: no legacy style pages on core flows.
-- Ops gate: rollback confirmed before release.
+- **Release gate:** no auth/session regressions, no map pin regressions, no payment regressions.
+- **Data gate:** admin counts match canonical queries.
+- **UX gate:** no legacy style pages on core flows.
+- **Ops gate:** rollback confirmed before release.
 
 ## Operating Cadence
 
-- Daily: production errors, auth health, map/geocode failures, payment failures.
-- Weekly: conversion funnel, upload volume, booking throughput, role growth.
-- Monthly: pricing outcomes, deferred-feature decisions, roadmap reprioritization.
+- **Daily:** production errors, auth health, map/geocode failures, payment failures, LISA signal anomalies.
+- **Weekly:** conversion funnel, upload volume, booking throughput, role growth, premium subscription conversions.
+- **Monthly:** pricing outcomes, deferred-feature decisions, roadmap reprioritization.
 
 ## Immediate Next Actions
 
-- [In Progress] Audit remaining legacy-styled pages and patch to current design system.
-- [In Progress] Verify parking pass visibility and event posting role rules in production.
-- [In Progress] Run map pin parity audit: host address count vs rendered pin count.
-- [In Progress] Reconcile admin counts against DB queries and lock definitions.
-- [In Progress] Run full booking and Stripe onboarding smoke test in production mode (scripted runner added; awaiting production execution).
+- [In Progress] Complete Phase 3 of the backend refactor (extracting remaining storage domains).
+- [In Progress] Monitor the newly launched online ordering subscription gate and resolve any edge cases.
+- [In Progress] Refine LISA market intel feeds and operator briefs based on initial usage data.
+- [In Progress] Continue modularizing oversized route files (`adminManagementRoutes`, etc.).
 
 ## Execution Log
 
-- Completed backend refactor Phase 1 startup extraction for recurring background jobs: moved session cleanup, ops cleanup, marketplace health audit, and startup schema validation out of `server/index.ts` into `server/bootstrap/registerRecurringJobs.ts`, and wired through the bootstrap barrel.
-- Verified role visibility rules remain aligned with Immediate Next Actions: parking pass nav only renders for authenticated eligible roles in `client/src/components/navigation.tsx`, events posting remains coordinator-gated in `client/src/pages/events.tsx`, and coordinator role enforcement is active in `server/routes/eventCoordinatorRoutes.ts`.
-- Event coordinator routing updated so `/events` remains the primary coordinator surface for posting.
-- Navigation rendering hardened for sharper mobile labels (reduced all-property transitions and enforced crisp text rendering rules).
-- `restaurant-signup` high-visibility header/card styles moved to current tokenized theme system.
-- Added `/api/admin/map-pin-audit` and a `Map Pin Parity` admin overview panel to quantify mapped vs missing host pins.
-- Reconciled admin restaurant metrics into explicit profile vs owner-account counts.
-- Added one-click admin geocode retry (`POST /api/admin/map-pin-audit/retry-geocode`) and wired it into the admin dashboard parity card.
-- Added row-level retry (`POST /api/admin/map-pin-audit/retry-geocode-item`) with sample missing locations listed directly in admin.
-- Completed token-style parity pass on `login` and expanded parity cleanup across remaining `restaurant-signup` legacy blocks (pricing, terms, verification, and form states).
-- Refreshed `not-found` and `status` pages to current theme tokens, card styling, and action buttons.
-- Refreshed `orders`, `subscribe`, `reviews`, `search`, `favorites`, `category`, `deals-featured`, `deal-detail`, `deal-creation`, `events`, `event-coordinator-dashboard`, `host-dashboard`, `user-dashboard`, `restaurant-owner-dashboard`, `restaurant-detail`, `profile`, `home`, `map`, `profile/notifications`, `profile/payment`, `truck-discovery`, and `video-detail` pages to current theme tokens and card styles.
-- Applied tokenized theme cleanup across admin surfaces (`AdminControlCenter`, `AdminAffiliateManagement`, `AdminIncidents`, `AdminModerationEvents`, `AdminSupportTickets`, `AdminAuditLogs`, `admin-moderation-metrics`) and legacy pages (`about`, `account-setup`, `AffiliateEarnings`, `change-password`, `data-deletion`, `deal-edit`, `EmptyCountyExperience`, `events-router`, `faq`, `forgot-password`, `home-north-star`, `golden-plate-winners`, `how-it-works`, `host-signup`, `oauth-setup-guide`, `parking-pass`, `reset-password`, `privacy-policy`, `sitemap`, `staff-dashboard`, `terms-of-service`), including accent/status mappings, background/surface tokens, and shadow normalization.
-- Tokenized remaining component/UI surfaces (`video-feed`, `deal-share-modal`, `cancel-series-dialog`, `dashboard-switcher`, `document-upload`, `WelcomeLocationModal`, `RestaurantCreditRedemptionForm`, `ui/toast`) and removed legacy color utility blocks from `client/src/index.css` and `client/src/facebook-browser.css`.
-- Cleaned remaining encoding artifacts in `client/src/content/role-landing.ts` (ASCII-safe copy).
-- Addressed TypeScript check failures: added missing `useQuery` import in `parking-pass`, typed map pin audit and geocode helpers in `server/routes.ts` and `server/routes/adminManagementRoutes.ts`, added missing copy labels in `hostOnboarding.copy.ts`, guarded Stripe usage in `hostRoutes`, and tightened reducer typing in `server/storage.ts`.
-- Added `smoke:parking-pass-stripe` script to validate host Stripe status, parking-pass checkout intent creation, duplicate booking protection, and hold cancellation behavior in staging/production.
-- Rebuilt `/profile/notifications` as a server-backed preferences surface using `accountSettings.notifications` (channels, topics, location radius, quiet hours, max/day), with browser notification service sync for consistent behavior.
-- Weekly digest pipeline now respects notification opt-ins (`channels.email` and `topics.weeklyDigest`) and digest coverage telemetry now calculates eligible hosts using opt-in-aware rules instead of total hosts.
-
-- **Mobile Responsiveness Cleanup**: Applied responsive padding pattern (px-4 sm:px-6) to 16 pages/components for mobile optimization, including: suppliers (dialog widths max-w-sm sm:max-w-lg and max-w-sm md:max-w-3xl), profile, search, user-dashboard, restaurant-detail, reviews, video-detail, status, reset-password, privacy-policy, and terms-of-service. Verified all admin tables have overflow-x-auto protection for mobile horizontal scroll. Ratified responsive design strategy: mobile-first with px-4 baseline, sm: breakpoint for tablet padding (px-6), lg: for desktop refinements. All content areas now scale gracefully on 320px+ screens.
-
-- **Mobile Responsiveness Cleanup Complete**: Applied responsive padding pattern (px-4 sm:px-6) across 30+ pages including all major user-facing and admin pages. Updated dialog max-widths with responsive variants (max-w-sm sm:max-w-md md:max-w-lg/3xl). Verified all admin tables have overflow-x-auto scroll containers. Ratified platform-wide mobile-first design strategy: 320px mobile baseline with sm:, md:, lg: breakpoints for tablet/desktop scaling. All content areas now responsive and properly sized for screens from 320px to 1920px+.
-
-- **Phase 3: Map & Geocode Integrity Complete**: Audited all host and secondary address geocoding. Achieved 100% coordinate coverage (21/21 addresses): 20 primary hosts + 1 secondary address (Exxon) geocoded via automatic fallback chain or manual centroid fallback. Verified all coordinates within valid ranges (no invalid lat/lng). Identified 0 state mismatches. Geocoding infrastructure validated: forward geocoding queue working, cache operational, provider fallback chain functional (Google -> Nominatim -> Census). Secondary addresses properly joined to verified host users in batch geocoding. Created audit toolkit: auditGeocoding.ts (coverage metrics), geocodeMissingAddresses.ts (automatic fixes with fallbacks), manualGeocode.ts (manual updates). Next: reverse geocoding validation and map pin parity audit.
+- **April 2026:** Gated online ordering features behind a $25/mo subscription. Automated ordering smoke auth and restaurant discovery. Enforced ordering subscription per restaurant.
+- **April 2026:** Aligned deal and parking action panels with team permissions. Gated business nav and dashboard tabs by team permissions. Hardened delegated business permissions across owner-gated routes.
+- **April 2026:** Extracted `analyticsRepository` and `parkingPassRepository` (Phase 3 backend refactor).
+- **April 2026:** Extracted `host/event` and `restaurant/deal` persistence into repositories. Extracted user persistence methods into `usersRepository` module.
+- **April 2026:** Extended auth token repository with API key persistence. Extracted auth token storage methods into repository module.
+- **April 2026:** Refactored startup recurring jobs into bootstrap module and logged plan progress.
+- **April 2026:** Added business employee invite links with selectable feature permissions.
+- **April 2026:** Rewrote subscription flow copy for clearer user-facing messaging.
+- **April 2026:** Replaced internal SEO phrasing with user-facing popular-nearby language. Tracked favorite, follow, recommend engagement telemetry events.
+- **April 2026:** Added social queue processor automation and share hub telemetry. Hardened engagement actions with throttling and idempotent writes.
+- **April 2026:** Added dedicated share hub nav and queued deal auto-share posts.
+- **April 2026:** Boosted crawlability with prerender routes, IndexNow, and LLM SEO endpoints.
+- **April 2026:** Added premium conversion funnel, target recommendation, ops telemetry to admin dashboard, weekly summary card, email, and KPI tracking.
+- **April 2026:** Reframed premium around operator-first value. Simplified sales cheat sheet language. Refined restaurant mission and mobile ordering messaging.
+- **April 2026:** Applied premium access gating and parking pass fallback fixes.
+- **April 2026:** Added Spanish-ready client locale support.
+- **April 2026:** Completed booking follow-through with parking-pass-only paid checkout. Event booking & payment system with no-refund policy.
+- **April 2026:** Added foot-traffic cells with Google-enriched map overlays. Added density-aware traffic scoring and adaptive windows.
+- **April 2026:** Added filterable observed-events API for row-level LISA truth inspection. Added canonical request event spine and consumed explicit actor/session fields in LISA intel.
+- **April 2026:** Separated human truth scoring from machine support and added observed-event contract feed. Hardened auth and enforced truth-first LISA contract across MealScout.
+- **April 2026:** Implemented monetization tiers and client API key management for Price Scout Feed. Hardened Price Scout feed access and expanded export surfaces.
+- **April 2026:** Added automated supply market lanes and LISA lane exports. Added localized supply price watch market intel and food trend data.
+- **April 2026:** Added daily LISA operating briefs, grouped repeated LISA livestream patterns, and translated LISA livestream rows into decisions.
+- **March 2026:** Phase 3 Map & Geocode Integrity Complete. Audited all host and secondary address geocoding. Achieved 100% coordinate coverage.
+- **March 2026:** Mobile Responsiveness Cleanup Complete. Applied responsive padding pattern (px-4 sm:px-6) across 30+ pages.
+- **March 2026:** Completed backend refactor Phase 1 startup extraction for recurring background jobs.
