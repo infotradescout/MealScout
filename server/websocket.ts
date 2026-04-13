@@ -221,7 +221,11 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
           }
 
           // Verify user owns this restaurant
-          const isAuthorized = await storage.verifyRestaurantOwnership(restaurantId, socket.user.id);
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            socket.user.id,
+            "manageProfile",
+          );
           if (!isAuthorized) {
             socket.emit("error", { message: "Unauthorized: You can only subscribe to restaurants you own" });
             return;

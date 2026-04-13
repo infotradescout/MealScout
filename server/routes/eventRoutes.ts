@@ -1578,6 +1578,7 @@ export function registerEventRoutes(
         const ownsRestaurant = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!ownsRestaurant) {
           return res.status(403).json({
@@ -1784,6 +1785,7 @@ export function registerEventRoutes(
         const ownsT = await storage.verifyRestaurantOwnership(
           truckId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!ownsT) {
           return res.status(403).json({ message: "You do not own that truck" });
@@ -1982,6 +1984,7 @@ export function registerEventRoutes(
         const ownsT = await storage.verifyRestaurantOwnership(
           booking.truckId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!ownsT) {
           return res.status(403).json({ message: "Not authorized" });
@@ -2102,6 +2105,7 @@ export function registerEventRoutes(
         const ownsTruck = await storage.verifyRestaurantOwnership(
           booking.truckId,
           req.user.id,
+          "manageParkingPass",
         );
         const [host] = await db
           .select({ userId: hosts.userId })
@@ -2227,6 +2231,7 @@ export function registerEventRoutes(
       const ownsT = await storage.verifyRestaurantOwnership(
         String(truckId),
         req.user.id,
+        "manageParkingPass",
       );
       if (!ownsT) {
         return res.status(403).json({ message: "Not authorized" });

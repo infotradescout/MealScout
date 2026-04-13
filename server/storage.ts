@@ -128,7 +128,10 @@ import {
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "./brevoCrm";
 import { ensureAffiliateTag } from "./affiliateTagService";
-import { getBusinessAccessContext } from "./services/businessTeamAccess";
+import {
+  getBusinessAccessContext,
+  hasBusinessPermissionForRestaurant,
+} from "./services/businessTeamAccess";
 import { forwardGeocode } from "./utils/geocoding";
 import { isParkingPassPublicReady } from "./services/parkingPassQuality";
 import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
@@ -3823,14 +3826,24 @@ export class DatabaseStorage implements IStorage {
     userId: string,
   ): Promise<boolean> {
     const result = await db
-      .select({ ownerId: restaurants.ownerId })
+      .select({
+        ownerId: restaurants.ownerId,
+        restaurantId: deals.restaurantId,
+      })
       .from(dealClaims)
       .innerJoin(deals, eq(dealClaims.dealId, deals.id))
       .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
       .where(eq(dealClaims.id, claimId))
       .limit(1);
 
-    return result.length > 0 && result[0].ownerId === userId;
+    if (result.length === 0) return false;
+    const row = result[0];
+    if (row.ownerId === userId) return true;
+    return hasBusinessPermissionForRestaurant(
+      userId,
+      row.restaurantId,
+      "manageDeals",
+    );
   }
 
   // Advanced analytics operations

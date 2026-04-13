@@ -541,6 +541,7 @@ export function registerRestaurantCoreRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           userId,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -592,6 +593,7 @@ export function registerRestaurantCoreRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           userId,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({

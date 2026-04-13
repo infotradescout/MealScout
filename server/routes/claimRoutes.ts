@@ -142,6 +142,7 @@ export function registerClaimRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageDeals",
         );
         if (!isAuthorized) {
           return res.status(403).json({

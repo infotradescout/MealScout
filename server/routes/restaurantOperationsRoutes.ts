@@ -317,6 +317,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -360,6 +361,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -415,6 +417,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -459,6 +462,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -536,6 +540,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -573,6 +578,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -610,6 +616,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -727,6 +734,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageProfile",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -766,6 +774,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -813,6 +822,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -864,6 +874,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -912,6 +923,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({
@@ -992,6 +1004,7 @@ export function registerRestaurantOperationsRoutes(
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "viewAnalytics",
         );
         if (!isAuthorized) {
           return res.status(403).json({

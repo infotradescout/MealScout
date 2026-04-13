@@ -297,6 +297,7 @@ export function registerLocationDemandRoutes(app: Express) {
         const ownsRestaurant = await storage.verifyRestaurantOwnership(
           restaurantId,
           req.user.id,
+          "manageParkingPass",
         );
         if (!ownsRestaurant) {
           return res
