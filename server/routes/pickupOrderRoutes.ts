@@ -33,9 +33,14 @@ import {
   pickupOrderItems,
   orderNotifications,
   restaurants,
+  restaurantSubscriptions,
   ORDER_STATUS,
   type PickupOrder,
 } from "@shared/schema";
+import {
+  isPremiumTrialActive,
+  ensurePremiumTrialForUser,
+} from "../services/premiumTrial";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { storage } from "../storage";
@@ -78,6 +83,56 @@ async function assertOwnsRestaurant(userId: string, restaurantId: string) {
     "manageOrders",
   );
   if (!ok) throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
+}
+
+// ── Subscription gate ─────────────────────────────────────────────────────────
+/**
+ * Throws 403 if the user (restaurant owner) does not have an active ordering
+ * subscription. Access hierarchy: trial → lifetime → active monthly subscription.
+ */
+async function assertHasOrderingSubscription(userId: string) {
+  const user = await storage.getUser(userId);
+  if (!user) throw Object.assign(new Error("User not found"), { statusCode: 401 });
+
+  // 1. Trial access
+  const hydratedUser = await ensurePremiumTrialForUser(user);
+  if (isPremiumTrialActive(hydratedUser)) return;
+
+  // 2. Lifetime or active subscription via restaurantSubscriptions table
+  const restaurants_ = await storage.getRestaurantsByOwner(userId);
+  const restaurantIds = restaurants_.map((r) => r.id);
+  if (restaurantIds.length > 0) {
+    const [sub] = await db
+      .select({ id: restaurantSubscriptions.id })
+      .from(restaurantSubscriptions)
+      .where(
+        and(
+          inArray(restaurantSubscriptions.restaurantId, restaurantIds),
+          eq(restaurantSubscriptions.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (sub) return;
+  }
+
+  // 3. Stripe subscription check as final fallback
+  if (stripe && hydratedUser?.stripeSubscriptionId) {
+    try {
+      const stripeSub = await stripe.subscriptions.retrieve(
+        hydratedUser.stripeSubscriptionId,
+      );
+      if (stripeSub?.status === "active") return;
+    } catch {
+      // fall through to denial
+    }
+  }
+
+  throw Object.assign(
+    new Error(
+      "Online ordering requires an active MealScout subscription ($25/mo). Visit your account settings to subscribe.",
+    ),
+    { statusCode: 403 },
+  );
 }
 
 // ── Calculate line total ──────────────────────────────────────────────────────
@@ -371,6 +426,11 @@ export function registerPickupOrderRoutes(app: Express) {
         return res.status(400).json({ message: "Restaurant not available" });
       }
 
+      // Verify this restaurant has an active ordering subscription
+      if (restaurant.ownerId) {
+        await assertHasOrderingSubscription(restaurant.ownerId);
+      }
+
       // Insert order
       const [order] = await db
         .insert(pickupOrders)
@@ -585,6 +645,7 @@ export function registerPickupOrderRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
+      await assertHasOrderingSubscription(req.user.id);
 
       const activeOrders = await db
         .select()
@@ -631,6 +692,7 @@ export function registerPickupOrderRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
+      await assertHasOrderingSubscription(req.user.id);
 
       const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
       const limit = 50;
@@ -684,6 +746,7 @@ export function registerPickupOrderRoutes(app: Express) {
       if (!order) return res.status(404).json({ message: "Order not found" });
 
       await assertOwnsRestaurant(req.user.id, order.restaurantId);
+      await assertHasOrderingSubscription(req.user.id);
 
       // Validate transition
       const validTransitions: Record<string, string[]> = {

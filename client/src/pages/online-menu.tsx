@@ -136,7 +136,7 @@ export default function MenuPage() {
     setCart(getCart());
   }, []);
 
-  const menusQuery = useQuery<Menu[]>({
+  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean }>({
     queryKey: ["/api/menus", restaurantId],
     queryFn: async () => {
       const res = await fetch(`/api/menus/${encodeURIComponent(restaurantId ?? "")}`);
@@ -146,7 +146,8 @@ export default function MenuPage() {
     enabled: !!restaurantId,
   });
 
-  const menus = menusQuery.data ?? [];
+  const menus = menusQuery.data?.menus ?? [];
+  const orderingEnabled = menusQuery.data?.orderingEnabled ?? false;
   const activeMenus = menus.filter((m) => m.isActive);
 
   useEffect(() => {
@@ -243,10 +244,23 @@ export default function MenuPage() {
 
         {selectedMenu && (
           <>
-            {!selectedMenu.hidePlatformFee && (
+            {!orderingEnabled && (
+              <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>
+                  Online ordering is not available for this restaurant yet. Browse the menu and order in person.
+                </span>
+              </div>
+            )}
+            {!selectedMenu.hidePlatformFee && orderingEnabled && (
               <p className="text-xs text-muted-foreground mb-4 text-center">
                 A $1.00 MealScout service fee is added at checkout.
                 {selectedMenu.acceptsCash && " Cash payments accepted."}
+              </p>
+            )}
+            {selectedMenu.hidePlatformFee && orderingEnabled && selectedMenu.acceptsCash && (
+              <p className="text-xs text-muted-foreground mb-4 text-center">
+                Cash payments accepted.
               </p>
             )}
 
@@ -265,7 +279,8 @@ export default function MenuPage() {
                       <MenuItemCard
                         key={item.id}
                         item={item}
-                        onAdd={() => setAddingItem(item)}
+                        onAdd={orderingEnabled ? () => setAddingItem(item) : () => {}}
+                        orderingEnabled={orderingEnabled}
                       />
                     ))}
                   </div>
@@ -277,7 +292,7 @@ export default function MenuPage() {
       </div>
 
       {/* Floating cart button */}
-      {cartItemCount > 0 && (
+      {cartItemCount > 0 && orderingEnabled && (
         <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-50">
           <Button className="w-full h-12 text-base shadow-lg" onClick={() => setCartOpen(true)}>
             <ShoppingCart className="w-5 h-5 mr-2" />
@@ -288,7 +303,7 @@ export default function MenuPage() {
       )}
 
       {/* Add item dialog */}
-      {addingItem && selectedMenu && (
+      {addingItem && selectedMenu && orderingEnabled && (
         <AddItemDialog
           item={addingItem}
           menuId={selectedMenu.id}
@@ -389,9 +404,16 @@ export default function MenuPage() {
 }
 
 // ─────────────────────────────── MenuItemCard ─────────────────────────────────
-function MenuItemCard({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
+function MenuItemCard({ item, onAdd, orderingEnabled = true }: { item: MenuItem; onAdd: () => void; orderingEnabled?: boolean }) {
   return (
-    <div className="flex gap-3 py-3 cursor-pointer hover:bg-muted/30 px-1 rounded transition-colors" onClick={onAdd}>
+    <div
+      className={`flex gap-3 py-3 px-1 rounded transition-colors ${
+        orderingEnabled
+          ? "cursor-pointer hover:bg-muted/30"
+          : "cursor-default opacity-80"
+      }`}
+      onClick={orderingEnabled ? onAdd : undefined}
+    >
       <div className="flex-1">
         <div className="font-medium">{item.name}</div>
         {item.description && (

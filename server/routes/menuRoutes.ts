@@ -22,6 +22,8 @@ import {
   menuItemModifiers,
   menuImportLogs,
   restaurants,
+  restaurantSubscriptions,
+  users,
   insertMenuSchema,
   insertMenuCategorySchema,
   insertMenuItemSchema,
@@ -108,7 +110,7 @@ export function registerMenuRoutes(app: Express) {
         .orderBy(asc(menus.serviceType));
 
       if (restaurantMenus.length === 0) {
-        return res.json({ menus: [] });
+        return res.json({ menus: [], orderingEnabled: false });
       }
 
       const menuIds = restaurantMenus.map((m) => m.id);
@@ -192,7 +194,45 @@ export function registerMenuRoutes(app: Express) {
         };
       });
 
-      res.json({ menus: result });
+      // Determine if online ordering is enabled for this restaurant.
+      // Ordering is part of the $25/month subscription (or lifetime access).
+      // We also check trial status via users.trialEndsAt.
+      let orderingEnabled = false;
+      const [restaurantRow] = await db
+        .select({ ownerId: restaurants.ownerId })
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1);
+
+      if (restaurantRow?.ownerId) {
+        const restaurantIds = restaurantMenus.map((m) => m.restaurantId);
+        const [activeSub] = await db
+          .select({ id: restaurantSubscriptions.id })
+          .from(restaurantSubscriptions)
+          .where(
+            and(
+              inArray(restaurantSubscriptions.restaurantId, restaurantIds),
+              eq(restaurantSubscriptions.status, "active"),
+            ),
+          )
+          .limit(1);
+
+        if (activeSub) {
+          orderingEnabled = true;
+        } else {
+          // Check trial access
+          const [ownerRow] = await db
+            .select({ trialEndsAt: users.trialEndsAt })
+            .from(users)
+            .where(eq(users.id, restaurantRow.ownerId))
+            .limit(1);
+          if (ownerRow?.trialEndsAt && new Date(ownerRow.trialEndsAt) > new Date()) {
+            orderingEnabled = true;
+          }
+        }
+      }
+
+      res.json({ menus: result, orderingEnabled });
     }),
   );
 
