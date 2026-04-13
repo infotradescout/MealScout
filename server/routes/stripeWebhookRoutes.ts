@@ -146,6 +146,68 @@ export function registerStripeWebhookRoutes(
               await import("@shared/schema");
             const metadata = paymentIntent.metadata || {};
 
+            // Pickup order payment (menuOrderId metadata)
+            const pickupOrderId = metadata.pickupOrderId;
+            if (pickupOrderId) {
+              try {
+                const { pickupOrders } = await import("@shared/schema");
+                const { getWebSocketServer } = await import("../websocket");
+                const [order] = await db
+                  .select()
+                  .from(pickupOrders)
+                  .where(eq(pickupOrders.stripePaymentIntentId, paymentIntent.id))
+                  .limit(1);
+                if (order && order.status === "pending") {
+                  const [updated] = await db
+                    .update(pickupOrders)
+                    .set({ status: "confirmed", confirmedAt: new Date(), updatedAt: new Date() })
+                    .where(eq(pickupOrders.id, order.id))
+                    .returning();
+
+                  // Transfer subtotal (minus platform fee) to business Stripe Connect account
+                  if (order.stripeTransferGroupId && stripe) {
+                    try {
+                      const [restaurant] = await db
+                        .select()
+                        .from(restaurants)
+                        .where(eq(restaurants.id, order.restaurantId))
+                        .limit(1);
+                      const connectAccountId = (restaurant as any)?.stripeConnectAccountId;
+                      if (connectAccountId) {
+                        const transferAmount = order.feePaidByBusiness
+                          ? (order.subtotalCents - 100)
+                          : order.subtotalCents;
+                        if (transferAmount > 0) {
+                          await stripe.transfers.create({
+                            amount: transferAmount,
+                            currency: "usd",
+                            destination: connectAccountId,
+                            transfer_group: order.stripeTransferGroupId,
+                            metadata: { pickupOrderId: order.id },
+                          });
+                          await db
+                            .update(pickupOrders)
+                            .set({ payoutStatus: "transferred", updatedAt: new Date() })
+                            .where(eq(pickupOrders.id, order.id));
+                        }
+                      }
+                    } catch (transferError) {
+                      console.error("[WEBHOOK] Pickup order transfer failed:", transferError);
+                    }
+                  }
+
+                  // Emit kitchen update via WebSocket
+                  const wsIo = getWebSocketServer();
+                  if (wsIo && updated) {
+                    wsIo.to(`kitchen:${order.restaurantId}`).emit("kitchen:order_update", { order: updated as Record<string, unknown> });
+                  }
+                }
+              } catch (pickupError) {
+                console.error("[WEBHOOK] Pickup order payment confirmation failed:", pickupError);
+              }
+              break;
+            }
+
             // Supplier marketplace order payment
             const supplierOrderId = metadata.supplierOrderId;
             if (supplierOrderId) {

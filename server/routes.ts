@@ -192,6 +192,8 @@ import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
 import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
+import { registerMenuRoutes } from "./routes/menuRoutes";
+import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 
 // Optional Stripe integration
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -926,6 +928,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     registerSupplyScoutRoutes(app);
   }
   registerStripeWebhookRoutes(app, { notifyHostCapacityWarning });
+
+  // Online menus + pickup ordering
+  registerMenuRoutes(app);
+  registerPickupOrderRoutes(app);
 
   // Admin API endpoints
   registerAdminManagementRoutes(app);

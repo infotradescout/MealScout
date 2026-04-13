@@ -5300,3 +5300,635 @@ export const CLAIM_STATUS = {
 } as const;
 
 export type ClaimStatus = (typeof CLAIM_STATUS)[keyof typeof CLAIM_STATUS];
+
+// ============================================================
+// ONLINE MENUS, PICKUP ORDERING & DELIVERY INFRASTRUCTURE
+// ============================================================
+
+/**
+ * menus – one menu per business (supports time-based availability).
+ * A business may eventually have multiple menus (e.g. breakfast / lunch /
+ * dinner) but for Phase 1 we differentiate them by serviceType.
+ */
+export const menus = pgTable(
+  "menus",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    name: varchar("name").notNull().default("Menu"), // e.g. "Breakfast Menu"
+    serviceType: varchar("service_type").notNull().default("all"),
+    // 'all' | 'breakfast' | 'lunch' | 'dinner' | 'late_night' | 'weekend_brunch'
+    availableFrom: varchar("available_from"), // "06:00"  24-h HH:MM
+    availableTo: varchar("available_to"),     // "11:00"
+    availableDays: jsonb("available_days").default(sql`'["mon","tue","wed","thu","fri","sat","sun"]'::jsonb`),
+    // e.g. ["mon","tue","wed","thu","fri","sat","sun"]
+    isActive: boolean("is_active").notNull().default(true),
+    acceptsCash: boolean("accepts_cash").notNull().default(false),
+    // When true customers see a "Pay in-store" option at checkout
+    hidePlatformFee: boolean("hide_platform_fee").notNull().default(false),
+    // If true the $1 fee is absorbed by the business (not shown to customer)
+    importSource: varchar("import_source"),
+    // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
+    importedAt: timestamp("imported_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menus_restaurant").on(table.restaurantId),
+    index("idx_menus_service_type").on(table.serviceType),
+    index("idx_menus_is_active").on(table.isActive),
+  ],
+);
+
+export const menuCategories = pgTable(
+  "menu_categories",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    menuId: varchar("menu_id")
+      .notNull()
+      .references(() => menus.id, { onDelete: "cascade" }),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    name: varchar("name").notNull(), // "Appetizers", "Mains", "Drinks"
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_categories_menu").on(table.menuId),
+    index("idx_menu_categories_restaurant").on(table.restaurantId),
+    index("idx_menu_categories_sort").on(table.menuId, table.sortOrder),
+  ],
+);
+
+export const menuItems = pgTable(
+  "menu_items",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    menuId: varchar("menu_id")
+      .notNull()
+      .references(() => menus.id, { onDelete: "cascade" }),
+    categoryId: varchar("category_id")
+      .references(() => menuCategories.id, { onDelete: "set null" }),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    name: varchar("name").notNull(),
+    description: text("description"),
+    priceCents: integer("price_cents").notNull(), // base price in cents
+    imageUrl: varchar("image_url"),
+    sku: varchar("sku"),
+    // Nutrition info (optional, for health-conscious labeling)
+    calories: integer("calories"),
+    proteinG: decimal("protein_g", { precision: 6, scale: 2 }),
+    carbsG: decimal("carbs_g", { precision: 6, scale: 2 }),
+    fatG: decimal("fat_g", { precision: 6, scale: 2 }),
+    allergens: jsonb("allergens").default(sql`'[]'::jsonb`),
+    // e.g. ["gluten","dairy","nuts"]
+    dietaryTags: jsonb("dietary_tags").default(sql`'[]'::jsonb`),
+    // e.g. ["vegan","gluten-free","keto"]
+    // Inventory
+    trackInventory: boolean("track_inventory").notNull().default(false),
+    inventoryQty: integer("inventory_qty"),
+    // Availability
+    isAvailable: boolean("is_available").notNull().default(true),
+    availableFrom: varchar("available_from"), // override menu-level time
+    availableTo: varchar("available_to"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_items_menu").on(table.menuId),
+    index("idx_menu_items_category").on(table.categoryId),
+    index("idx_menu_items_restaurant").on(table.restaurantId),
+    index("idx_menu_items_available").on(table.isAvailable),
+  ],
+);
+
+/**
+ * menuItemVariants – size / style variants that change the price.
+ * e.g. Small ($8), Medium ($10), Large ($12)
+ */
+export const menuItemVariants = pgTable(
+  "menu_item_variants",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    menuItemId: varchar("menu_item_id")
+      .notNull()
+      .references(() => menuItems.id, { onDelete: "cascade" }),
+    label: varchar("label").notNull(), // "Large", "12 oz", "Spicy"
+    additionalCents: integer("additional_cents").notNull().default(0),
+    isDefault: boolean("is_default").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_menu_item_variants_item").on(table.menuItemId),
+  ],
+);
+
+/**
+ * menuItemModifiers – optional add-ons that can be selected at order time.
+ * e.g. "Extra Cheese +$0.50", "No Onions (free)"
+ */
+export const menuItemModifiers = pgTable(
+  "menu_item_modifiers",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    menuItemId: varchar("menu_item_id")
+      .notNull()
+      .references(() => menuItems.id, { onDelete: "cascade" }),
+    groupName: varchar("group_name").notNull(), // "Sauces", "Toppings", "Temperature"
+    label: varchar("label").notNull(),          // "Ranch", "Extra Cheese", "Well Done"
+    additionalCents: integer("additional_cents").notNull().default(0),
+    isRequired: boolean("is_required").notNull().default(false),
+    maxSelections: integer("max_selections").default(1),
+    // If > 1, customer can pick multiple from this group
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    index("idx_menu_item_modifiers_item").on(table.menuItemId),
+    index("idx_menu_item_modifiers_group").on(table.menuItemId, table.groupName),
+  ],
+);
+
+/**
+ * menuImportLogs – audit trail for every menu import event.
+ */
+export const menuImportLogs = pgTable(
+  "menu_import_logs",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    importedByUserId: varchar("imported_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: varchar("source").notNull(),
+    // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
+    fileName: varchar("file_name"),
+    itemsImported: integer("items_imported").default(0),
+    itemsSkipped: integer("items_skipped").default(0),
+    errors: jsonb("errors").default(sql`'[]'::jsonb`),
+    status: varchar("status").notNull().default("complete"),
+    // 'pending' | 'processing' | 'complete' | 'failed'
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_menu_import_logs_restaurant").on(table.restaurantId),
+    index("idx_menu_import_logs_created").on(table.createdAt),
+  ],
+);
+
+// ── PICKUP ORDERS ────────────────────────────────────────────────────────────
+
+/**
+ * pickupOrders – every order placed through MealScout (pickup or dine-in).
+ * Payment is always collected by MealScout; business receives payout via
+ * Stripe Connect minus the $1 platform fee.
+ */
+export const pickupOrders = pgTable(
+  "pickup_orders",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    customerId: varchar("customer_id")
+      .references(() => users.id, { onDelete: "set null" }),
+    // Guest checkout: customerName / customerEmail / customerPhone are required
+    customerName: varchar("customer_name").notNull(),
+    customerEmail: varchar("customer_email"),
+    customerPhone: varchar("customer_phone"),
+    orderType: varchar("order_type").notNull().default("pickup"),
+    // 'pickup' | 'dine_in'
+    status: varchar("status").notNull().default("pending"),
+    // 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled'
+    // Pricing (all in cents)
+    subtotalCents: integer("subtotal_cents").notNull(),
+    platformFeeCents: integer("platform_fee_cents").notNull().default(100), // fixed $1.00
+    feePaidByBusiness: boolean("fee_paid_by_business").notNull().default(false),
+    // true if business absorbed the fee (hidePlatformFee = true on menu)
+    totalCents: integer("total_cents").notNull(),
+    // Payment
+    paymentMethod: varchar("payment_method").notNull().default("card"),
+    // 'card' | 'cash'
+    stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+    stripeTransferGroupId: varchar("stripe_transfer_group_id"),
+    payoutStatus: varchar("payout_status").notNull().default("pending"),
+    // 'pending' | 'transferred' | 'failed'
+    // Fulfillment
+    specialInstructions: text("special_instructions"),
+    prepTimeMinutes: integer("prep_time_minutes").default(20),
+    scheduledFor: timestamp("scheduled_for"),
+    // null = ASAP; future timestamp = pre-order
+    confirmedAt: timestamp("confirmed_at"),
+    readyAt: timestamp("ready_at"),
+    completedAt: timestamp("completed_at"),
+    cancelledAt: timestamp("cancelled_at"),
+    cancellationReason: text("cancellation_reason"),
+    // Notifications
+    readyNotificationSent: boolean("ready_notification_sent").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_pickup_orders_restaurant").on(table.restaurantId),
+    index("idx_pickup_orders_customer").on(table.customerId),
+    index("idx_pickup_orders_status").on(table.status),
+    index("idx_pickup_orders_created").on(table.createdAt),
+    index("idx_pickup_orders_scheduled").on(table.scheduledFor),
+    index("idx_pickup_orders_payout_status").on(table.payoutStatus),
+  ],
+);
+
+/**
+ * pickupOrderItems – line items within a pickup order.
+ * Prices snapshot at purchase time so menu changes don't break receipts.
+ */
+export const pickupOrderItems = pgTable(
+  "pickup_order_items",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    orderId: varchar("order_id")
+      .notNull()
+      .references(() => pickupOrders.id, { onDelete: "cascade" }),
+    menuItemId: varchar("menu_item_id")
+      .references(() => menuItems.id, { onDelete: "set null" }),
+    // Snapshot fields (preserved even if item is later deleted)
+    itemName: varchar("item_name").notNull(),
+    itemDescription: text("item_description"),
+    basePriceCents: integer("base_price_cents").notNull(),
+    selectedVariant: jsonb("selected_variant"),
+    // { id, label, additionalCents }
+    selectedModifiers: jsonb("selected_modifiers").default(sql`'[]'::jsonb`),
+    // [{ id, groupName, label, additionalCents }]
+    quantity: integer("quantity").notNull().default(1),
+    lineTotalCents: integer("line_total_cents").notNull(),
+    specialInstructions: text("special_instructions"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_pickup_order_items_order").on(table.orderId),
+    index("idx_pickup_order_items_menu_item").on(table.menuItemId),
+  ],
+);
+
+/**
+ * orderNotifications – log of all customer notifications sent for an order.
+ */
+export const orderNotifications = pgTable(
+  "order_notifications",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    orderId: varchar("order_id")
+      .notNull()
+      .references(() => pickupOrders.id, { onDelete: "cascade" }),
+    channel: varchar("channel").notNull(), // 'email' | 'sms' | 'push'
+    type: varchar("type").notNull(),       // 'confirmation' | 'ready' | 'cancelled'
+    recipient: varchar("recipient"),       // email address or phone
+    sentAt: timestamp("sent_at").defaultNow(),
+    status: varchar("status").notNull().default("sent"), // 'sent' | 'failed'
+    errorMessage: text("error_message"),
+  },
+  (table) => [
+    index("idx_order_notifications_order").on(table.orderId),
+    index("idx_order_notifications_sent").on(table.sentAt),
+  ],
+);
+
+// ── DELIVERY INFRASTRUCTURE (Phase 2 – schema ready, routes dormant) ─────────
+
+/**
+ * driverProfiles – contractor driver resume + reputation.
+ * Linked to a regular MealScout user account.
+ */
+export const driverProfiles = pgTable(
+  "driver_profiles",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bio: text("bio"),
+    vehicleType: varchar("vehicle_type"), // 'car' | 'motorcycle' | 'bicycle' | 'scooter'
+    serviceCities: jsonb("service_cities").default(sql`'[]'::jsonb`),
+    // list of city slugs where the driver works
+    ratePerDeliveryCents: integer("rate_per_delivery_cents"),
+    // driver's requested rate; null = negotiable
+    totalDeliveries: integer("total_deliveries").notNull().default(0),
+    averageRating: decimal("average_rating", { precision: 3, scale: 2 }),
+    isActive: boolean("is_active").notNull().default(true),
+    backgroundCheckStatus: varchar("background_check_status").default("none"),
+    // 'none' | 'pending' | 'approved' | 'rejected'
+    resumeUrl: varchar("resume_url"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_driver_profiles_user").on(table.userId),
+    index("idx_driver_profiles_active").on(table.isActive),
+  ],
+);
+
+/**
+ * deliveryJobs – job listings posted by businesses looking for drivers.
+ * Can be recurring (e.g. "every Fri-Sun 5-10pm") or one-time.
+ */
+export const deliveryJobs = pgTable(
+  "delivery_jobs",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    title: varchar("title").notNull(),
+    description: text("description"),
+    jobType: varchar("job_type").notNull().default("recurring"),
+    // 'recurring' | 'one_time'
+    scheduleDescription: text("schedule_description"),
+    // human-readable: "Fri–Sun 5pm–10pm"
+    rateOfferedCents: integer("rate_offered_cents"),
+    // null = open to driver's rate
+    deliveryZoneRadius: decimal("delivery_zone_radius", { precision: 6, scale: 2 }),
+    // miles
+    status: varchar("status").notNull().default("open"),
+    // 'open' | 'filled' | 'closed'
+    positionsAvailable: integer("positions_available").default(1),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_delivery_jobs_restaurant").on(table.restaurantId),
+    index("idx_delivery_jobs_status").on(table.status),
+    index("idx_delivery_jobs_created").on(table.createdAt),
+  ],
+);
+
+/**
+ * deliveryJobApplications – driver applies to a job listing.
+ */
+export const deliveryJobApplications = pgTable(
+  "delivery_job_applications",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    jobId: varchar("job_id")
+      .notNull()
+      .references(() => deliveryJobs.id, { onDelete: "cascade" }),
+    driverProfileId: varchar("driver_profile_id")
+      .notNull()
+      .references(() => driverProfiles.id, { onDelete: "cascade" }),
+    coverNote: text("cover_note"),
+    proposedRateCents: integer("proposed_rate_cents"),
+    status: varchar("status").notNull().default("pending"),
+    // 'pending' | 'accepted' | 'rejected' | 'withdrawn'
+    respondedAt: timestamp("responded_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_delivery_job_apps_job").on(table.jobId),
+    index("idx_delivery_job_apps_driver").on(table.driverProfileId),
+    index("idx_delivery_job_apps_status").on(table.status),
+    unique("uq_delivery_job_apps_job_driver").on(table.jobId, table.driverProfileId),
+  ],
+);
+
+// ── RELATIONS ────────────────────────────────────────────────────────────────
+
+export const menusRelations = relations(menus, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [menus.restaurantId],
+    references: [restaurants.id],
+  }),
+  categories: many(menuCategories),
+  items: many(menuItems),
+}));
+
+export const menuCategoriesRelations = relations(menuCategories, ({ one, many }) => ({
+  menu: one(menus, {
+    fields: [menuCategories.menuId],
+    references: [menus.id],
+  }),
+  items: many(menuItems),
+}));
+
+export const menuItemsRelations = relations(menuItems, ({ one, many }) => ({
+  menu: one(menus, {
+    fields: [menuItems.menuId],
+    references: [menus.id],
+  }),
+  category: one(menuCategories, {
+    fields: [menuItems.categoryId],
+    references: [menuCategories.id],
+  }),
+  variants: many(menuItemVariants),
+  modifiers: many(menuItemModifiers),
+}));
+
+export const menuItemVariantsRelations = relations(menuItemVariants, ({ one }) => ({
+  item: one(menuItems, {
+    fields: [menuItemVariants.menuItemId],
+    references: [menuItems.id],
+  }),
+}));
+
+export const menuItemModifiersRelations = relations(menuItemModifiers, ({ one }) => ({
+  item: one(menuItems, {
+    fields: [menuItemModifiers.menuItemId],
+    references: [menuItems.id],
+  }),
+}));
+
+export const pickupOrdersRelations = relations(pickupOrders, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [pickupOrders.restaurantId],
+    references: [restaurants.id],
+  }),
+  customer: one(users, {
+    fields: [pickupOrders.customerId],
+    references: [users.id],
+  }),
+  items: many(pickupOrderItems),
+  notifications: many(orderNotifications),
+}));
+
+export const pickupOrderItemsRelations = relations(pickupOrderItems, ({ one }) => ({
+  order: one(pickupOrders, {
+    fields: [pickupOrderItems.orderId],
+    references: [pickupOrders.id],
+  }),
+  menuItem: one(menuItems, {
+    fields: [pickupOrderItems.menuItemId],
+    references: [menuItems.id],
+  }),
+}));
+
+export const orderNotificationsRelations = relations(orderNotifications, ({ one }) => ({
+  order: one(pickupOrders, {
+    fields: [orderNotifications.orderId],
+    references: [pickupOrders.id],
+  }),
+}));
+
+export const driverProfilesRelations = relations(driverProfiles, ({ one, many }) => ({
+  user: one(users, {
+    fields: [driverProfiles.userId],
+    references: [users.id],
+  }),
+  applications: many(deliveryJobApplications),
+}));
+
+export const deliveryJobsRelations = relations(deliveryJobs, ({ one, many }) => ({
+  restaurant: one(restaurants, {
+    fields: [deliveryJobs.restaurantId],
+    references: [restaurants.id],
+  }),
+  applications: many(deliveryJobApplications),
+}));
+
+export const deliveryJobApplicationsRelations = relations(deliveryJobApplications, ({ one }) => ({
+  job: one(deliveryJobs, {
+    fields: [deliveryJobApplications.jobId],
+    references: [deliveryJobs.id],
+  }),
+  driverProfile: one(driverProfiles, {
+    fields: [deliveryJobApplications.driverProfileId],
+    references: [driverProfiles.id],
+  }),
+}));
+
+// ── ZOOD VALIDATION SCHEMAS ──────────────────────────────────────────────────
+
+export const insertMenuSchema = createInsertSchema(menus).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const insertMenuCategorySchema = createInsertSchema(menuCategories).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export const insertMenuItemSchema = createInsertSchema(menuItems, {
+  priceCents: z.number().int().min(0),
+  calories: z.number().int().min(0).optional().nullable(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertMenuItemVariantSchema = createInsertSchema(menuItemVariants, {
+  additionalCents: z.number().int().min(0),
+}).omit({ id: true });
+
+export const insertMenuItemModifierSchema = createInsertSchema(menuItemModifiers, {
+  additionalCents: z.number().int().min(0),
+}).omit({ id: true });
+
+export const insertPickupOrderSchema = createInsertSchema(pickupOrders, {
+  subtotalCents: z.number().int().min(1),
+  totalCents: z.number().int().min(1),
+  prepTimeMinutes: z.number().int().min(1).max(120).optional().nullable(),
+}).omit({
+  id: true,
+  stripePaymentIntentId: true,
+  stripeTransferGroupId: true,
+  payoutStatus: true,
+  confirmedAt: true,
+  readyAt: true,
+  completedAt: true,
+  cancelledAt: true,
+  cancellationReason: true,
+  readyNotificationSent: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPickupOrderItemSchema = createInsertSchema(pickupOrderItems, {
+  basePriceCents: z.number().int().min(0),
+  lineTotalCents: z.number().int().min(0),
+  quantity: z.number().int().min(1),
+}).omit({ id: true, createdAt: true });
+
+export const insertDriverProfileSchema = createInsertSchema(driverProfiles, {
+  ratePerDeliveryCents: z.number().int().min(0).optional().nullable(),
+}).omit({
+  id: true,
+  totalDeliveries: true,
+  averageRating: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDeliveryJobSchema = createInsertSchema(deliveryJobs, {
+  rateOfferedCents: z.number().int().min(0).optional().nullable(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const insertDeliveryJobApplicationSchema = createInsertSchema(deliveryJobApplications, {
+  proposedRateCents: z.number().int().min(0).optional().nullable(),
+}).omit({ id: true, respondedAt: true, createdAt: true });
+
+// ── MENU / ORDER TYPES ───────────────────────────────────────────────────────
+
+export type Menu = typeof menus.$inferSelect;
+export type InsertMenu = z.infer<typeof insertMenuSchema>;
+export type MenuCategory = typeof menuCategories.$inferSelect;
+export type InsertMenuCategory = z.infer<typeof insertMenuCategorySchema>;
+export type MenuItem = typeof menuItems.$inferSelect;
+export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
+export type MenuItemVariant = typeof menuItemVariants.$inferSelect;
+export type InsertMenuItemVariant = z.infer<typeof insertMenuItemVariantSchema>;
+export type MenuItemModifier = typeof menuItemModifiers.$inferSelect;
+export type InsertMenuItemModifier = z.infer<typeof insertMenuItemModifierSchema>;
+export type MenuImportLog = typeof menuImportLogs.$inferSelect;
+export type PickupOrder = typeof pickupOrders.$inferSelect;
+export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
+export type PickupOrderItem = typeof pickupOrderItems.$inferSelect;
+export type InsertPickupOrderItem = z.infer<typeof insertPickupOrderItemSchema>;
+export type OrderNotification = typeof orderNotifications.$inferSelect;
+export type DriverProfile = typeof driverProfiles.$inferSelect;
+export type InsertDriverProfile = z.infer<typeof insertDriverProfileSchema>;
+export type DeliveryJob = typeof deliveryJobs.$inferSelect;
+export type InsertDeliveryJob = z.infer<typeof insertDeliveryJobSchema>;
+export type DeliveryJobApplication = typeof deliveryJobApplications.$inferSelect;
+export type InsertDeliveryJobApplication = z.infer<typeof insertDeliveryJobApplicationSchema>;
+
+// ── ORDER STATUS ENUM ────────────────────────────────────────────────────────
+
+export const ORDER_STATUS = {
+  PENDING: "pending",
+  CONFIRMED: "confirmed",
+  PREPARING: "preparing",
+  READY: "ready",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+} as const;
+
+export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];

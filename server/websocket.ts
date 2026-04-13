@@ -14,6 +14,8 @@ const PgSession = connectPg(session);
 type ClientToServerEvents = {
   subscribe_nearby: (data: { latitude: number; longitude: number; radiusKm?: number }) => void;
   subscribe_restaurant: (data: { restaurantId: string }) => void;
+  subscribe_kitchen: (data: { restaurantId: string }) => void;
+  unsubscribe_kitchen: (data: { restaurantId: string }) => void;
   unsubscribe: (data: { room?: string }) => void;
   ping: () => void;
 };
@@ -57,6 +59,7 @@ type ServerToClientEvents = {
   location_update: (payload: { type: "location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
   truck_location_update: (payload: { type: "truck_location_update"; restaurantId: string; location: BroadcastLocation; timestamp: string }) => void;
   status_update: (payload: { restaurantId: string; status: { isOnline: boolean; mobileOnline?: boolean } }) => void;
+  'kitchen:order_update': (payload: { order: Record<string, unknown> }) => void;
 };
 
 type InterServerEvents = Record<string, never>;
@@ -240,6 +243,53 @@ export function setupWebSocketServer(httpServer: Server): SocketIOServer {
         } catch (error) {
           console.error("Error handling restaurant subscription:", error);
           socket.emit("error", { message: "Failed to subscribe to restaurant" });
+        }
+      });
+
+      // Handle kitchen queue subscription (restaurant owners / staff)
+      socket.on("subscribe_kitchen", async (data) => {
+        try {
+          const { restaurantId } = data;
+
+          if (!socket.user) {
+            socket.emit("error", { message: "Authentication required" });
+            return;
+          }
+
+          const isAuthorized = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            socket.user.id,
+            "manageOrders",
+          );
+          if (!isAuthorized) {
+            socket.emit("error", { message: "Unauthorized: kitchen access denied" });
+            return;
+          }
+
+          const roomKey = `kitchen:${restaurantId}`;
+          socket.join(roomKey);
+          userSubscriptions.get(userKey)?.add(roomKey);
+
+          socket.emit("subscribed", { restaurantId, room: roomKey });
+          console.log(`User ${userKey} subscribed to kitchen queue for ${restaurantId}`);
+        } catch (error) {
+          console.error("Error handling kitchen subscription:", error);
+          socket.emit("error", { message: "Failed to subscribe to kitchen queue" });
+        }
+      });
+
+      socket.on("unsubscribe_kitchen", (data) => {
+        try {
+          const roomKey = `kitchen:${data.restaurantId}`;
+          const userSubs = userSubscriptions.get(userKey);
+          if (userSubs?.has(roomKey)) {
+            socket.leave(roomKey);
+            userSubs.delete(roomKey);
+            socket.emit("unsubscribed", { room: roomKey });
+          }
+        } catch (error) {
+          console.error("Error handling kitchen unsubscribe:", error);
+          socket.emit("error", { message: "Failed to unsubscribe from kitchen queue" });
         }
       });
 

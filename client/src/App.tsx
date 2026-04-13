@@ -128,6 +128,11 @@ const BusinessTeamPage = lazy(() => import("@/pages/business-team"));
 const BusinessTeamAcceptPage = lazy(
   () => import("@/pages/business-team-accept"),
 );
+const MenuBuilderPage = lazy(() => import("@/pages/menu-builder"));
+const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
+const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
+const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
+const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -181,6 +186,9 @@ const publicRoutePrefixes = [
   "/account-setup",
   "/admin",
   "/business-team/accept",
+  "/menu/",
+  "/checkout/",
+  "/order-confirmation/",
 ];
 
 const isPublicPath = (path: string) =>
@@ -336,6 +344,9 @@ function Router() {
             <Route path="/account-setup" component={AccountSetup} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
+            <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
+            <Route path="/order-confirmation/:orderId" component={OrderConfirmationPage} />
           </>
         ) : (
           <>
@@ -481,6 +492,11 @@ function Router() {
             <Route path="/share-hub" component={ShareHubPage} />
             <Route path="/business-team" component={BusinessTeamPage} />
             <Route path="/business-team/accept" component={BusinessTeamAcceptPage} />
+            <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
+            <Route path="/checkout/:restaurantId" component={PickupCheckoutPage} />
+            <Route path="/order-confirmation/:orderId" component={OrderConfirmationPage} />
+            <Route path="/menu-builder" component={MenuBuilderPage} />
+            <Route path="/kitchen" component={KitchenDisplayPage} />
           </>
         )}
         <Route component={NotFound} />
