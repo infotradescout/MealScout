@@ -172,7 +172,10 @@ export default function DealCreation() {
   });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
-    permissions: { manageDeals: boolean };
+    permissions: {
+      manageDeals: boolean;
+      manageProfile?: boolean;
+    };
   }>({
     queryKey: ["/api/business-access/me"],
     enabled: isAuthenticated,
@@ -438,6 +441,14 @@ export default function DealCreation() {
   });
 
   const onSubmit = (data: DealFormData) => {
+    if (!canManageDeals) {
+      toast({
+        title: "Permission required",
+        description: "Your account does not have permission to publish specials.",
+        variant: "destructive",
+      });
+      return;
+    }
     // Server-side validation will handle subscription limits
     createDealMutation.mutate(data);
   };
@@ -558,12 +569,24 @@ export default function DealCreation() {
     (user.userType === "admin" ||
       user.userType === "super_admin" ||
       user.userType === "staff");
+  const canManageDeals =
+    Boolean(isAdminOrStaff) ||
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck" ||
+    businessAccess?.permissions?.manageDeals === true;
+  const canManageBusinessProfile =
+    Boolean(isAdminOrStaff) ||
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "food_truck" ||
+    businessAccess?.permissions?.manageProfile === true;
   const hasAccess =
-    isAdminOrStaff ||
-    businessAccess?.permissions?.manageDeals === true ||
-    (subscription &&
-      ((subscription as any).status === "active" ||
-        (subscription as any).hasAccess === true));
+    canManageDeals &&
+    (Boolean(isAdminOrStaff) ||
+      Boolean(
+        subscription &&
+          ((subscription as any).status === "active" ||
+            (subscription as any).hasAccess === true),
+      ));
 
   if (!isSubscriptionError && subscription && !hasAccess) {
     console.log(
@@ -1296,6 +1319,12 @@ export default function DealCreation() {
                   Connect your Facebook page to automatically post specials and tag
                   @MealScout
                 </p>
+                {!canManageBusinessProfile && (
+                  <p className="text-xs text-amber-700 mb-3">
+                    Your team role can publish specials, but profile/social links
+                    are view-only without profile access.
+                  </p>
+                )}
 
                 <FormField
                   control={form.control}
@@ -1307,6 +1336,7 @@ export default function DealCreation() {
                           type="url"
                           placeholder="https://facebook.com/your-restaurant-page"
                           {...field}
+                          disabled={!canManageBusinessProfile}
                           data-testid="input-facebook-url"
                         />
                       </FormControl>
@@ -1330,6 +1360,7 @@ export default function DealCreation() {
                 type="button"
                 variant="outline"
                 className="py-3 px-4"
+                disabled={!canManageDeals}
                 data-testid="button-save-draft"
               >
                 Save Draft
@@ -1337,7 +1368,7 @@ export default function DealCreation() {
               <Button
                 type="submit"
                 className="py-3 px-4"
-                disabled={createDealMutation.isPending}
+                disabled={createDealMutation.isPending || !canManageDeals}
                 data-testid="button-publish-deal"
               >
                 {createDealMutation.isPending

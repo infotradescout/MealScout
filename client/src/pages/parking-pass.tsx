@@ -506,7 +506,10 @@ export default function ParkingPassPage() {
   });
   const { data: businessAccess } = useQuery<{
     hasAnyAccess: boolean;
-    permissions: { manageParkingPass: boolean };
+    permissions: {
+      manageParkingPass: boolean;
+      manageProfile?: boolean;
+    };
   }>({
     queryKey: ["/api/business-access/me"],
     enabled: !!user,
@@ -516,8 +519,16 @@ export default function ParkingPassPage() {
   const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
     user?.userType || "",
   );
+  const canManageParkingPass =
+    isAdminOrStaff ||
+    user?.userType === "food_truck" ||
+    businessAccess?.permissions?.manageParkingPass === true;
+  const canManageTruckProfile =
+    isAdminOrStaff ||
+    user?.userType === "food_truck" ||
+    businessAccess?.permissions?.manageProfile === true;
   const hasPremiumTruckTools =
-    isAdminOrStaff || Boolean(subscription?.hasAccess);
+    canManageParkingPass && (isAdminOrStaff || Boolean(subscription?.hasAccess));
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -2558,6 +2569,15 @@ export default function ParkingPassPage() {
   };
 
   const handleSaveSocialSettings = async () => {
+    if (!canManageTruckProfile) {
+      toast({
+        title: "Profile access required",
+        description:
+          "Your team access allows Parking Pass actions, but not social/profile settings.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
@@ -2658,6 +2678,15 @@ export default function ParkingPassPage() {
   };
 
   const handleShareLocation = async () => {
+    if (!canManageTruckProfile) {
+      toast({
+        title: "Profile access required",
+        description:
+          "Your team access allows Parking Pass actions, but not live profile/location updates.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
@@ -2753,7 +2782,7 @@ export default function ParkingPassPage() {
     }
   };
 
-  const isTruckViewUser = user?.userType === "food_truck" || isAdminOrStaff;
+  const isTruckViewUser = canManageParkingPass;
   const showHostParkingPass =
     isAuthenticated && (hasHostProfile || isAdminOrStaff);
   const canScheduleTab = Boolean(isTruckViewUser);
@@ -3098,8 +3127,7 @@ export default function ParkingPassPage() {
   if (
     isAuthenticated &&
     user &&
-    !["food_truck", "admin", "super_admin", "staff"].includes(user.userType) &&
-    businessAccess?.permissions?.manageParkingPass !== true &&
+    !canManageParkingPass &&
     !hasHostProfile &&
     !isLoading
   ) {
@@ -4782,6 +4810,12 @@ export default function ParkingPassPage() {
                     bookings still appear in your calendar on free.
                   </div>
                 )}
+                {hasPremiumTruckTools && !canManageTruckProfile && (
+                  <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-amber-50 p-4 text-sm text-amber-900">
+                    You can manage Parking Pass bookings and schedules, but live
+                    location and social/profile settings require profile access.
+                  </div>
+                )}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -4796,7 +4830,10 @@ export default function ParkingPassPage() {
                     className="w-full sm:w-auto"
                     onClick={handleShareLocation}
                     disabled={
-                      isSharingLocation || !truckId || !hasPremiumTruckTools
+                      isSharingLocation ||
+                      !truckId ||
+                      !hasPremiumTruckTools ||
+                      !canManageTruckProfile
                     }
                   >
                     <Share2 className="h-4 w-4 mr-1" />
@@ -4868,7 +4905,7 @@ export default function ParkingPassPage() {
                       className="pp-field"
                       placeholder="https://facebook.com/yourpage"
                       value={socialLinks.facebookPageUrl}
-                      disabled={!hasPremiumTruckTools}
+                      disabled={!hasPremiumTruckTools || !canManageTruckProfile}
                       onChange={(event) =>
                         setSocialLinks((current) => ({
                           ...current,
@@ -4884,7 +4921,7 @@ export default function ParkingPassPage() {
                       className="pp-field"
                       placeholder="https://instagram.com/yourtruck"
                       value={socialLinks.instagramUrl}
-                      disabled={!hasPremiumTruckTools}
+                      disabled={!hasPremiumTruckTools || !canManageTruckProfile}
                       onChange={(event) =>
                         setSocialLinks((current) => ({
                           ...current,
@@ -4900,7 +4937,7 @@ export default function ParkingPassPage() {
                       className="pp-field"
                       placeholder="https://x.com/yourtruck"
                       value={socialLinks.xUrl}
-                      disabled={!hasPremiumTruckTools}
+                      disabled={!hasPremiumTruckTools || !canManageTruckProfile}
                       onChange={(event) =>
                         setSocialLinks((current) => ({
                           ...current,
@@ -4929,7 +4966,9 @@ export default function ParkingPassPage() {
                         <span>{platform.label}</span>
                         <Switch
                           checked={socialSettings.platforms[platform.key]}
-                          disabled={!hasPremiumTruckTools}
+                          disabled={
+                            !hasPremiumTruckTools || !canManageTruckProfile
+                          }
                           onCheckedChange={(checked) =>
                             setSocialSettings((current) => ({
                               ...current,
@@ -4962,7 +5001,9 @@ export default function ParkingPassPage() {
                         <span>{trigger.label}</span>
                         <Switch
                           checked={socialSettings.triggers[trigger.key]}
-                          disabled={!hasPremiumTruckTools}
+                          disabled={
+                            !hasPremiumTruckTools || !canManageTruckProfile
+                          }
                           onCheckedChange={(checked) =>
                             setSocialSettings((current) => ({
                               ...current,
@@ -4981,7 +5022,7 @@ export default function ParkingPassPage() {
                   <div className="flex items-center gap-2 text-xs text-slate-700">
                     <Switch
                       checked={socialSettings.promptBeforePost}
-                      disabled={!hasPremiumTruckTools}
+                      disabled={!hasPremiumTruckTools || !canManageTruckProfile}
                       onCheckedChange={(checked) =>
                         setSocialSettings((current) => ({
                           ...current,
@@ -4994,7 +5035,11 @@ export default function ParkingPassPage() {
                   <Button
                     size="sm"
                     onClick={handleSaveSocialSettings}
-                    disabled={isSavingSocialSettings || !hasPremiumTruckTools}
+                    disabled={
+                      isSavingSocialSettings ||
+                      !hasPremiumTruckTools ||
+                      !canManageTruckProfile
+                    }
                   >
                     {isSavingSocialSettings ? "Saving..." : "Save settings"}
                   </Button>
