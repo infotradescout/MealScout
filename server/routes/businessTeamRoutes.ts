@@ -1,14 +1,17 @@
 import type { Express } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
 
 import { db } from "../db";
 import { isAuthenticated } from "../unifiedAuth";
 import {
+  affiliateCommissionLedger,
   businessStaffInvites,
   businessStaffMemberships,
+  referrals,
   restaurants,
+  telemetryEvents,
   users,
 } from "@shared/schema";
 import {
@@ -56,6 +59,133 @@ export function registerBusinessTeamRoutes(app: Express) {
     } catch (error) {
       console.error("Error loading business access context:", error);
       res.status(500).json({ message: "Failed to load business access context" });
+    }
+  });
+
+  app.get("/api/business/team/funnel", isAuthenticated, async (req: any, res) => {
+    try {
+      const rawDays = Number(req.query?.days || 30);
+      const days = Number.isFinite(rawDays)
+        ? Math.max(1, Math.min(Math.floor(rawDays), 365))
+        : 30;
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+      const shareEvents = await db
+        .select({
+          action: sql<string>`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
+          itemKey: sql<string>`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
+          count: sql<number>`count(*)`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            eq(telemetryEvents.userId, req.user.id),
+            eq(telemetryEvents.eventName, "share_hub_action"),
+            gte(telemetryEvents.createdAt, since),
+          ),
+        )
+        .groupBy(
+          sql`coalesce(${telemetryEvents.properties}->>'action', 'unknown')`,
+          sql`coalesce(${telemetryEvents.properties}->>'itemKey', 'unknown')`,
+        )
+        .orderBy(desc(sql`count(*)`));
+
+      const referralRows = await db
+        .select({
+          status: referrals.status,
+          count: sql<number>`count(*)`,
+        })
+        .from(referrals)
+        .where(
+          and(
+            eq(referrals.affiliateUserId, req.user.id),
+            gte(referrals.clickedAt, since),
+          ),
+        )
+        .groupBy(referrals.status);
+
+      const [commissionTotals] = await db
+        .select({
+          commissionsEarnedCents:
+            sql<number>`coalesce(sum(${affiliateCommissionLedger.sourceAmountCents}), 0)`,
+        })
+        .from(affiliateCommissionLedger)
+        .where(
+          and(
+            eq(affiliateCommissionLedger.affiliateUserId, req.user.id),
+            gte(affiliateCommissionLedger.createdAt, since),
+          ),
+        );
+
+      const actionCounts = {
+        open: 0,
+        copy_link: 0,
+        copy_outreach: 0,
+        share: 0,
+      };
+      const topItems = new Map<string, number>();
+      let shareHubActionTotal = 0;
+
+      for (const row of shareEvents) {
+        const count = Number(row.count || 0);
+        shareHubActionTotal += count;
+        const action = String(row.action || "unknown");
+        if (action in actionCounts) {
+          (actionCounts as any)[action] += count;
+        }
+        const itemKey = String(row.itemKey || "unknown");
+        topItems.set(itemKey, (topItems.get(itemKey) || 0) + count);
+      }
+
+      let clicked = 0;
+      let signedUp = 0;
+      let activated = 0;
+      let paid = 0;
+      for (const row of referralRows) {
+        const status = String(row.status || "clicked");
+        const count = Number(row.count || 0);
+        if (status === "clicked") clicked += count;
+        if (status === "signed_up") signedUp += count;
+        if (status === "activated") activated += count;
+        if (status === "paid") paid += count;
+      }
+
+      const effectiveClicks = clicked + signedUp + activated + paid;
+      const signupsOrBetter = signedUp + activated + paid;
+      const activationOrBetter = activated + paid;
+
+      res.json({
+        days,
+        since: since.toISOString(),
+        shareHubActions: {
+          total: shareHubActionTotal,
+          byAction: actionCounts,
+          topItems: Array.from(topItems.entries())
+            .map(([itemKey, count]) => ({ itemKey, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8),
+        },
+        referrals: {
+          clicked: effectiveClicks,
+          signedUp: signupsOrBetter,
+          activated: activationOrBetter,
+          paid,
+          signupRate:
+            effectiveClicks > 0
+              ? Number(((signupsOrBetter / effectiveClicks) * 100).toFixed(1))
+              : 0,
+          paidRate:
+            effectiveClicks > 0
+              ? Number(((paid / effectiveClicks) * 100).toFixed(1))
+              : 0,
+        },
+        commissions: {
+          sourceRevenueCents: Number(commissionTotals?.commissionsEarnedCents || 0),
+        },
+      });
+    } catch (error) {
+      console.error("Error loading business team funnel:", error);
+      res.status(500).json({ message: "Failed to load funnel metrics" });
     }
   });
 

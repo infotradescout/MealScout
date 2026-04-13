@@ -30,6 +30,9 @@ export default function BusinessTeamPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [permissions, setPermissions] = useState<PermissionSet>(defaultPermissions);
   const [latestInviteLink, setLatestInviteLink] = useState("");
+  const [memberPermissionDrafts, setMemberPermissionDrafts] = useState<
+    Record<string, PermissionSet>
+  >({});
 
   const { data: teamData } = useQuery<{
     restaurants: Array<{ id: string; name: string; isOwner?: boolean }>;
@@ -52,6 +55,31 @@ export default function BusinessTeamPage() {
     }>;
   }>({
     queryKey: ["/api/business/team"],
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: funnel } = useQuery<{
+    days: number;
+    shareHubActions: {
+      total: number;
+      byAction: {
+        open: number;
+        copy_link: number;
+        copy_outreach: number;
+        share: number;
+      };
+      topItems: Array<{ itemKey: string; count: number }>;
+    };
+    referrals: {
+      clicked: number;
+      signedUp: number;
+      activated: number;
+      paid: number;
+      signupRate: number;
+      paidRate: number;
+    };
+  }>({
+    queryKey: ["/api/business/team/funnel"],
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -112,6 +140,23 @@ export default function BusinessTeamPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/business/team"] });
     },
   });
+  const updateMemberPermissions = useMutation({
+    mutationFn: async (payload: { membershipId: string; permissions: PermissionSet }) =>
+      await apiRequest("PATCH", `/api/business/team/members/${payload.membershipId}`, {
+        permissions: payload.permissions,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/business/team"] });
+      toast({ title: "Permissions updated" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error?.message || "Could not update permissions.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const copyInviteLink = async () => {
     if (!latestInviteLink) return;
@@ -123,6 +168,30 @@ export default function BusinessTeamPage() {
     <div className="max-w-3xl mx-auto min-h-screen bg-[var(--bg-layered)]">
       <BackHeader title="Team Access" fallbackHref="/restaurant-owner-dashboard" />
       <main className="p-4 space-y-4 pb-28">
+        <Card className="shadow-clean border-[color:var(--border-subtle)]">
+          <CardHeader>
+            <CardTitle>Share to Conversion Snapshot (30d)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <div className="text-xs text-[color:var(--text-secondary)]">Share actions</div>
+              <div className="text-lg font-semibold">{funnel?.shareHubActions.total ?? 0}</div>
+            </div>
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <div className="text-xs text-[color:var(--text-secondary)]">Referral clicks</div>
+              <div className="text-lg font-semibold">{funnel?.referrals.clicked ?? 0}</div>
+            </div>
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <div className="text-xs text-[color:var(--text-secondary)]">Signed up</div>
+              <div className="text-lg font-semibold">{funnel?.referrals.signedUp ?? 0}</div>
+            </div>
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <div className="text-xs text-[color:var(--text-secondary)]">Paid conversion</div>
+              <div className="text-lg font-semibold">{funnel?.referrals.paidRate ?? 0}%</div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="shadow-clean border-[color:var(--border-subtle)]">
           <CardHeader>
             <CardTitle>Create Employee Access Link</CardTitle>
@@ -244,13 +313,60 @@ export default function BusinessTeamPage() {
                         <div className="text-xs text-[color:var(--text-secondary)] mb-2">
                           {member.email}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => removeMember.mutate(member.id)}
-                        >
-                          Remove Access
-                        </Button>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-3">
+                          {(
+                            [
+                              ["manageDeals", "Manage deals"],
+                              ["manageParkingPass", "Manage parking pass"],
+                              ["viewAnalytics", "View analytics"],
+                              ["manageProfile", "Edit business profile"],
+                            ] as Array<[keyof PermissionSet, string]>
+                          ).map(([key, label]) => {
+                            const current =
+                              memberPermissionDrafts[member.id] || member.permissions;
+                            return (
+                              <Label
+                                key={`${member.id}-${key}`}
+                                className="flex items-center gap-2 font-normal"
+                              >
+                                <Checkbox
+                                  checked={current[key]}
+                                  onCheckedChange={(value) =>
+                                    setMemberPermissionDrafts((prev) => ({
+                                      ...prev,
+                                      [member.id]: {
+                                        ...current,
+                                        [key]: value === true,
+                                      },
+                                    }))
+                                  }
+                                />
+                                {label}
+                              </Label>
+                            );
+                          })}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              updateMemberPermissions.mutate({
+                                membershipId: member.id,
+                                permissions:
+                                  memberPermissionDrafts[member.id] || member.permissions,
+                              })
+                            }
+                          >
+                            Save Permissions
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => removeMember.mutate(member.id)}
+                          >
+                            Remove Access
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
