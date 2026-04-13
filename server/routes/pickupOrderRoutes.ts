@@ -90,7 +90,10 @@ async function assertOwnsRestaurant(userId: string, restaurantId: string) {
  * Throws 403 if the user (restaurant owner) does not have an active ordering
  * subscription. Access hierarchy: trial → lifetime → active monthly subscription.
  */
-async function assertHasOrderingSubscription(userId: string) {
+async function assertHasOrderingSubscription(
+  userId: string,
+  restaurantId?: string,
+) {
   const user = await storage.getUser(userId);
   if (!user) throw Object.assign(new Error("User not found"), { statusCode: 401 });
 
@@ -100,7 +103,9 @@ async function assertHasOrderingSubscription(userId: string) {
 
   // 2. Lifetime or active subscription via restaurantSubscriptions table
   const restaurants_ = await storage.getRestaurantsByOwner(userId);
-  const restaurantIds = restaurants_.map((r) => r.id);
+  const restaurantIds = restaurantId
+    ? restaurants_.filter((r) => r.id === restaurantId).map((r) => r.id)
+    : restaurants_.map((r) => r.id);
   if (restaurantIds.length > 0) {
     const [sub] = await db
       .select({ id: restaurantSubscriptions.id })
@@ -433,7 +438,7 @@ export function registerPickupOrderRoutes(app: Express) {
 
       // Verify this restaurant has an active ordering subscription
       if (restaurant.ownerId) {
-        await assertHasOrderingSubscription(restaurant.ownerId);
+        await assertHasOrderingSubscription(restaurant.ownerId, restaurant.id);
       }
 
       // Insert order
@@ -647,7 +652,7 @@ export function registerPickupOrderRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
-      await assertHasOrderingSubscription(req.user.id);
+      await assertHasOrderingSubscription(req.user.id, restaurantId);
 
       const activeOrders: PickupOrder[] = await db
         .select()
@@ -694,7 +699,7 @@ export function registerPickupOrderRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
-      await assertHasOrderingSubscription(req.user.id);
+      await assertHasOrderingSubscription(req.user.id, restaurantId);
 
       const page = Math.max(1, parseInt(String(req.query.page || "1"), 10));
       const limit = 50;
@@ -748,7 +753,7 @@ export function registerPickupOrderRoutes(app: Express) {
       if (!order) return res.status(404).json({ message: "Order not found" });
 
       await assertOwnsRestaurant(req.user.id, order.restaurantId);
-      await assertHasOrderingSubscription(req.user.id);
+      await assertHasOrderingSubscription(req.user.id, order.restaurantId);
 
       // Validate transition
       const validTransitions: Record<string, string[]> = {
