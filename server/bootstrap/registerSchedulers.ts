@@ -20,10 +20,11 @@ import { runLocationDemandActivationCron } from "../services/locationDemandActiv
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
+import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { db } from "../db";
-import { requestLogs, adminDailyReports } from "@shared/schema";
+import { requestLogs, adminDailyReports, cities } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -444,6 +445,45 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.error("❌ Parking Pass hold cleanup failed:", error);
     }
   });
+
+  // IndexNow daily sitemap submission — 4:00 AM (feature-flagged)
+  if (
+    String(process.env.INDEXNOW_ENABLED || "")
+      .trim()
+      .toLowerCase() === "true"
+  ) {
+    cron.schedule("0 4 * * *", async () => {
+      try {
+        const cfg = getIndexNowConfig();
+        if (!cfg.enabled || !cfg.key) return;
+        const baseUrl = `https://${cfg.host}`;
+        // Build the canonical URL list: home, discovery, city landing pages, deals, events
+        const staticUrls = [
+          baseUrl,
+          `${baseUrl}/find-food`,
+          `${baseUrl}/deals/featured`,
+          `${baseUrl}/events/public`,
+          `${baseUrl}/for-restaurants`,
+          `${baseUrl}/for-bars`,
+          `${baseUrl}/for-events`,
+        ];
+        // Fetch active city slugs for city landing pages
+        const cityRows = await db
+          .select({ slug: cities.slug })
+          .from(cities)
+          .limit(200);
+        const cityUrls = cityRows
+          .filter((r: { slug: string | null }) => r.slug)
+          .map((r: { slug: string | null }) => `${baseUrl}/food-trucks/${encodeURIComponent(r.slug!)}`);
+
+        const allUrls = [...staticUrls, ...cityUrls];
+        const result = await submitIndexNowUrls(allUrls);
+        console.log(`[indexnow] daily submission: ${result.submitted} URLs, status ${result.status}`);
+      } catch (error) {
+        console.error("[indexnow] daily cron failed:", error);
+      }
+    });
+  }
 
   console.log("✅ All schedulers registered");
 }

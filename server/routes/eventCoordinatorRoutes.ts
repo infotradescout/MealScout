@@ -6,6 +6,7 @@ import {
   eventInterests,
   events,
   restaurants,
+  socialPostQueue,
 } from "@shared/schema";
 import { storage } from "../storage";
 import { db } from "../db";
@@ -410,6 +411,18 @@ export function registerEventCoordinatorRoutes(
         }
 
         const created = await storage.createEvent(eventPayload);
+
+        // Auto-enqueue social post for new event
+        db.insert(socialPostQueue).values({
+          platform: "facebook",
+          target: null,
+          message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
+          link: null,
+          status: "pending",
+          errorMessage: null,
+          updatedAt: new Date(),
+        }).catch(() => {});
+
         res.status(201).json({
           ...created,
           host: {
