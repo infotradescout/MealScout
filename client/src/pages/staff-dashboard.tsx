@@ -635,6 +635,9 @@ export default function StaffDashboard() {
               <Link href="/admin/control-center">
                 <Button variant="outline">LISA Control Center</Button>
               </Link>
+              <Link href="/admin/moderation/queue">
+                <Button variant="outline">Moderation Queue</Button>
+              </Link>
             </CardContent>
           </Card>
         )}

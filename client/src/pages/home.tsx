@@ -1646,6 +1646,12 @@ export default function Home() {
               >
                 Terms
               </Link>
+              <Link
+                href="/moderation-policy"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Moderation Policy
+              </Link>
             </div>
             <div className="space-y-2">
               <h4 className="font-semibold text-foreground">Support</h4>
