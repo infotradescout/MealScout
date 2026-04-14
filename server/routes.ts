@@ -40,6 +40,7 @@ import { registerBookingRoutes } from "./routes/bookingRoutes";
 import { registerSupplierMarketplaceRoutes } from "./routes/supplierMarketplaceRoutes";
 import { registerSupplyScoutRoutes } from "./routes/supplyScoutRoutes";
 import { registerStaffRoutes } from "./staffRoutes";
+import { registerModerationRoutes } from "./moderationRoutes";
 import {
   validateEnvironmentForStartup,
   validateRequiredEnvOnModuleLoad,
@@ -938,6 +939,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
   registerGrowthRoutes(app);
+  
+  // Moderation and community trust
+  registerModerationRoutes(app);
+  
   // Staff management and user creation endpoints
   registerStaffRoutes(app);
 

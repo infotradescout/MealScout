@@ -81,6 +81,11 @@ export const users: any = pgTable(
     reviewCount: integer("review_count").default(0),
     recommendationCount: integer("recommendation_count").default(0),
     influenceScore: integer("influence_score").default(0), // Calculated from reviews, recommendations, favorites
+    // Reporter reputation for moderation system
+    reporterReputationScore: integer("reporter_reputation_score").default(100),
+    flaggedCount: integer("flagged_count").default(0),
+    upheldAgainstCount: integer("upheld_against_count").default(0),
+    falseFlagCount: integer("false_flag_count").default(0),
     // App context for multi-platform shared auth (TradeScout + MealScout)
     appContext: varchar("app_context").default("mealscout"), // 'mealscout' | 'tradescout' | 'both'
     publicProfileSettings: jsonb("public_profile_settings")
