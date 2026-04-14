@@ -61,7 +61,7 @@ export const roleLandingContent = {
       label: "Claim my business",
       href: "/restaurant-signup?businessType=food_truck&claim=1",
     },
-    bullets: ["Free to join", "Full access on sale: $50 -> $25/mo until April 1", "Built for bookings"],
+    bullets: ["Free to join", "Premium tools: $25/mo", "Built for bookings"],
     map: {
       kicker: "Concept map",
       title: "Host hotspots + time slots",
@@ -83,7 +83,7 @@ export const roleLandingContent = {
       },
       {
         icon: Sparkles,
-        text: "Free to join, full access on sale: $50 -> $25/mo until April 1",
+        text: "Free to join, premium tools are $25/mo",
       },
     ],
     steps: [
@@ -115,10 +115,10 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your presence today. Full access is on sale: $50 -> $25/month for signups before April 1, 2026.",
+      copy: "Build your presence today. Upgrade anytime to premium tools for $25/month.",
       bullets: [
         "Signup is free",
-        "Full access on sale: $50 -> $25/month before April 1, 2026",
+        "Premium tools: $25/month",
         "Cancel anytime",
       ],
     },
@@ -197,10 +197,10 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your profile today. Full access is on sale: $50 -> $25/month for signups before April 1, 2026.",
+      copy: "Build your profile today. Upgrade anytime to premium tools for $25/month.",
       bullets: [
         "Signup is free",
-        "Full access on sale: $50 -> $25/month before April 1, 2026",
+        "Premium tools: $25/month",
         "Cancel anytime",
       ],
     },
@@ -279,10 +279,10 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your profile today. Full access is on sale: $50 -> $25/month for signups before April 1, 2026.",
+      copy: "Build your profile today. Upgrade anytime to premium tools for $25/month.",
       bullets: [
         "Signup is free",
-        "Full access on sale: $50 -> $25/month before April 1, 2026",
+        "Premium tools: $25/month",
         "Cancel anytime",
       ],
     },
