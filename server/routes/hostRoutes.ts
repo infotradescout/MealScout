@@ -2594,8 +2594,7 @@ export function registerHostRoutes(app: Express) {
           });
         }
 
-        const eventDate = new Date(event.date);
-        const eventDateKey = dateKeyInZone(eventDate, bookingTimeZone);
+        const eventDateKey = dateKeyFromUnknown(event.date);
         const rangeStart = utcDateFromDateKey(eventDateKey);
 
         const requestedDateKeys = Array.isArray(selectedDates)
@@ -2672,7 +2671,7 @@ export function registerHostRoutes(app: Express) {
 
         const eventsByDate = new Map<string, (typeof bookingEvents)[number]>();
         for (const row of bookingEvents) {
-          const dateKey = dateKeyInZone(new Date(row.date), bookingTimeZone);
+          const dateKey = dateKeyFromUnknown(row.date);
           eventsByDate.set(dateKey, row);
         }
 

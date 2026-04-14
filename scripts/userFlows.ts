@@ -46,12 +46,26 @@ class UserFlowTester {
   private baseUrl: string;
   private origin: string;
   private flows: FlowResult[] = [];
+  private forwardedFor: string;
 
   constructor(
     baseUrl: string = process.env.MEALSCOUT_BASE_URL || 'http://localhost:5200',
   ) {
     this.baseUrl = baseUrl;
     this.origin = new URL(baseUrl).origin;
+    this.forwardedFor = process.env.MEALSCOUT_TEST_IP || this.buildRunScopedTestIp();
+  }
+
+  private buildRunScopedTestIp(): string {
+    // Generate high-entropy TEST-NET style address to avoid auth limiter collisions across runs.
+    const seed = `${Date.now()}-${process.pid}-${Math.random()}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const third = ((hash >> 8) % 254) + 1;
+    const fourth = (hash % 254) + 1;
+    return `198.51.${third}.${fourth}`;
   }
 
   private log(message: string, level: 'info' | 'error' | 'success' | 'warn' = 'info') {
@@ -78,6 +92,7 @@ class UserFlowTester {
         'User-Agent': 'MealScout-UserFlow/1.0',
         'Origin': this.origin,
         'Referer': `${this.origin}/`,
+        'X-Forwarded-For': this.forwardedFor,
         ...config.headers,
       };
 
@@ -148,6 +163,7 @@ class UserFlowTester {
     body?: Record<string, any>,
     token?: string,
     cookieJar?: CookieJar,
+    headers?: Record<string, string>,
   ): Promise<StepResult> {
     const startTime = Date.now();
     try {
@@ -156,6 +172,7 @@ class UserFlowTester {
         path,
         body,
         token,
+        headers,
       }, cookieJar);
 
       const responseTime = Date.now() - startTime;
@@ -167,7 +184,15 @@ class UserFlowTester {
         success,
         statusCode: response.status,
         responseTime,
-        error: success ? undefined : `Expected ${expectedStatus}, got ${response.status}`,
+        error: success
+          ? undefined
+          : `Expected ${expectedStatus}, got ${response.status}${
+              response.body?.message
+                ? ` (${response.body.message})`
+                : response.body?.error
+                  ? ` (${response.body.error})`
+                  : ''
+            }`,
       };
     } catch (error: any) {
       return {
@@ -647,17 +672,44 @@ class UserFlowTester {
       return;
     }
 
-    steps.push(
-      await this.recordStep(
-        '1. Admin login',
-        'POST',
-        '/api/auth/login',
-        200,
-        { email: adminCreds.email, password: adminCreds.password },
-        undefined,
-        session,
-      ),
-    );
+    {
+      const start = Date.now();
+      let loginStatus = 0;
+      let loginOk = false;
+      let attempts = 0;
+      while (attempts < 2 && !loginOk) {
+        attempts += 1;
+        const response = await this.makeRequest(
+          {
+            method: 'POST',
+            path: '/api/auth/login',
+            body: { email: adminCreds.email, password: adminCreds.password },
+          },
+          session,
+        );
+        loginStatus = response.status;
+        if (response.status === 200) {
+          loginOk = true;
+          break;
+        }
+        // If rate-limited, wait briefly and retry once.
+        if (response.status === 429 && attempts < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        } else {
+          break;
+        }
+      }
+
+      steps.push(
+        this.makeStep(
+          '1. Admin login',
+          loginOk,
+          Date.now() - start,
+          loginStatus,
+          loginOk ? undefined : `Expected 200, got ${loginStatus}`,
+        ),
+      );
+    }
 
     if (!steps[steps.length - 1].success) {
       const duration = Date.now() - flowStart;
@@ -682,8 +734,8 @@ class UserFlowTester {
           state: 'TX',
           locationType: 'office',
           contactPhone: '555-000-0000',
-          latitude: 30.2672,
-          longitude: -97.7431,
+          latitude: '30.2672',
+          longitude: '-97.7431',
           spotCount: 2,
         };
         const createStart = Date.now();
@@ -724,6 +776,7 @@ class UserFlowTester {
     }
 
     let passId: string | undefined;
+    let bookingDateKey: string | undefined;
     {
       const payload = {
         hostId,
@@ -733,7 +786,8 @@ class UserFlowTester {
         breakfastPriceCents: 1200,
         lunchPriceCents: 1500,
         dinnerPriceCents: 1800,
-        daysOfWeek: [new Date().getDay()],
+        dailyPriceCents: 3000,
+        daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
         maxTrucks: 2,
       };
       const start = Date.now();
@@ -746,7 +800,30 @@ class UserFlowTester {
         Array.isArray(created.body) &&
         created.body.length > 0 &&
         created.body[0]?.id;
-      passId = ok ? created.body[0].id : undefined;
+      if (ok) {
+        const tomorrowKey = new Date(Date.now() + 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const preferred = created.body.find(
+          (item: any) => typeof item?.id === 'string' && item.id.includes(`:${tomorrowKey}`),
+        );
+        const selectedPass = preferred || created.body[0];
+        passId = selectedPass.id;
+        if (selectedPass?.date) {
+          const parsed = new Date(selectedPass.date);
+          if (!Number.isNaN(parsed.getTime())) {
+            bookingDateKey = parsed.toISOString().slice(0, 10);
+          }
+        }
+        if (!bookingDateKey && typeof passId === 'string') {
+          const idDate = passId.split(':').pop();
+          if (idDate && /^\d{4}-\d{2}-\d{2}$/.test(idDate)) {
+            bookingDateKey = idDate;
+          }
+        }
+      } else {
+        passId = undefined;
+      }
       steps.push(
         this.makeStep(
           '3. Create parking pass listing',
@@ -768,56 +845,33 @@ class UserFlowTester {
 
     let truckId: string | undefined;
     {
-      const start = Date.now();
-      const response = await this.makeRequest(
-        { method: 'GET', path: '/api/restaurants/my' },
+      const createStart = Date.now();
+      const truckPayload = {
+        name: `Test Truck ${Date.now()}`,
+        address: '200 Truck Rd',
+        city: 'Austin',
+        state: 'TX',
+        businessType: 'food_truck',
+        isFoodTruck: true,
+        cuisineType: 'Street Food',
+        latitude: '30.2672',
+        longitude: '-97.7431',
+      };
+      const created = await this.makeRequest(
+        { method: 'POST', path: '/api/restaurants', body: truckPayload },
         session,
       );
-      if (response.status === 200 && Array.isArray(response.body)) {
-        const existing = response.body.find((item: any) => item?.isFoodTruck);
-        if (existing?.id) {
-          truckId = existing.id;
-          steps.push(this.makeStep('4. Load food truck', true, Date.now() - start, response.status));
-        } else {
-          const createStart = Date.now();
-          const truckPayload = {
-            name: `Test Truck ${Date.now()}`,
-            address: '200 Truck Rd',
-            city: 'Austin',
-            state: 'TX',
-            businessType: 'food_truck',
-            isFoodTruck: true,
-            cuisineType: 'Street Food',
-            latitude: 30.2672,
-            longitude: -97.7431,
-          };
-          const created = await this.makeRequest(
-            { method: 'POST', path: '/api/restaurants', body: truckPayload },
-            session,
-          );
-          const ok = created.status === 200 && created.body?.id;
-          truckId = created.body?.id;
-          steps.push(
-            this.makeStep(
-              '4. Create food truck',
-              ok,
-              Date.now() - createStart,
-              created.status,
-              ok ? undefined : `Expected 200, got ${created.status}`,
-            ),
-          );
-        }
-      } else {
-        steps.push(
-          this.makeStep(
-            '4. Load food truck',
-            false,
-            Date.now() - start,
-            response.status,
-            `Expected 200, got ${response.status}`,
-          ),
-        );
-      }
+      const ok = created.status === 200 && created.body?.id;
+      truckId = created.body?.id;
+      steps.push(
+        this.makeStep(
+          '4. Create food truck',
+          ok,
+          Date.now() - createStart,
+          created.status,
+          ok ? undefined : `Expected 200, got ${created.status}`,
+        ),
+      );
     }
 
     if (!truckId) {
@@ -834,9 +888,16 @@ class UserFlowTester {
         'POST',
         `/api/parking-pass/${passId}/book`,
         200,
-        { truckId, slotTypes: ['lunch'] },
+        {
+          truckId,
+          slotTypes: ['daily'],
+          ...(bookingDateKey ? { selectedDates: [bookingDateKey] } : {}),
+        },
         undefined,
         session,
+        {
+          'Idempotency-Key': `flow-book-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
+        },
       ),
     );
 

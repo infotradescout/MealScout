@@ -82,17 +82,29 @@ function killTree(child) {
 async function main() {
   const port = await getFreePort(5001);
   const baseUrl = `http://localhost:${port}`;
+  const runIp = `198.51.${Math.floor(Math.random() * 254) + 1}.${Math.floor(Math.random() * 254) + 1}`;
 
   // Use an endpoint that exists everywhere and returns 401 when not logged in.
   const livenessUrl = `${baseUrl}/api/auth/user`;
 
   log(`Using PORT=${port}`);
+  log(`Using MEALSCOUT_TEST_IP=${runIp}`);
   log(`Starting backend (dev:server)...`);
 
   const serverEnv = {
     ...process.env,
     PORT: String(port),
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:5174",
+    MEALSCOUT_BYPASS_STRIPE:
+      process.env.MEALSCOUT_BYPASS_STRIPE || "true",
+    ALLOWED_ORIGINS: (() => {
+      const existing = String(process.env.ALLOWED_ORIGINS || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const required = [baseUrl, "http://localhost:5000", "http://localhost:5174"];
+      return Array.from(new Set([...existing, ...required])).join(",");
+    })(),
     // Keep NODE_ENV as-is; dev server should already be dev-friendly.
   };
 
@@ -113,6 +125,9 @@ async function main() {
     const flowsEnv = {
       ...process.env,
       BASE_URL: baseUrl,
+      MEALSCOUT_TEST_IP: process.env.MEALSCOUT_TEST_IP || runIp,
+      MEALSCOUT_BYPASS_STRIPE:
+        process.env.MEALSCOUT_BYPASS_STRIPE || "true",
     };
 
     const flows = spawnCmd("npm", ["run", "test:flows"], { env: flowsEnv });
