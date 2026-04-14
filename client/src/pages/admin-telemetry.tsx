@@ -1,12 +1,17 @@
 
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminTelemetry() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
   // 1. Interest Velocity Query
   const { data: velocity, isLoading: loadingVelocity } = useQuery({
     queryKey: ['/api/admin/telemetry/velocity'],
@@ -65,6 +70,77 @@ export default function AdminTelemetry() {
       if (!res.ok) throw new Error('Failed to fetch premium ops telemetry');
       return res.json();
     }
+  });
+
+  const { data: pensacolaOps, isLoading: loadingPensacolaOps } = useQuery({
+    queryKey: ["/api/admin/growth/pensacola/ops"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/growth/pensacola/ops");
+      if (!res.ok) throw new Error("Failed to fetch Pensacola ops snapshot");
+      return res.json();
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const runPensacolaReportDrip = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/growth/pensacola/report-drip/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || "Failed to run Pensacola report drip");
+      }
+      return payload;
+    },
+    onSuccess: async (payload) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/admin/growth/pensacola/ops"],
+      });
+      toast({
+        title: "Pensacola report drip ran",
+        description: `Sent ${Number(payload?.stats?.sent || 0)} message(s).`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Report drip failed",
+        description: error?.message || "Unable to run Pensacola report drip.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const runPensacolaTruckDrip = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/growth/pensacola/truck-drip/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || "Failed to run Pensacola truck drip");
+      }
+      return payload;
+    },
+    onSuccess: async (payload) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/admin/growth/pensacola/ops"],
+      });
+      toast({
+        title: "Pensacola truck drip ran",
+        description: `Sent ${Number(payload?.stats?.sent || 0)} message(s).`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Truck drip failed",
+        description: error?.message || "Unable to run Pensacola truck drip.",
+        variant: "destructive",
+      });
+    },
   });
 
   const premiumTotals = premiumOps?.totals || {};
@@ -153,6 +229,91 @@ export default function AdminTelemetry() {
           <p className="text-muted-foreground">Operational insights from system events (Read-Only)</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pensacola Launch Ops</CardTitle>
+          <CardDescription>
+            Report leads, truck onboarding funnel, and one-click drip execution for launch market conversion.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Report Leads (7d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {loadingPensacolaOps ? "..." : Number(pensacolaOps?.report?.leads7d || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  30d: {Number(pensacolaOps?.report?.leads30d || 0)} · All: {Number(pensacolaOps?.report?.leadsAllTime || 0)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Pensacola Trucks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {loadingPensacolaOps ? "..." : Number(pensacolaOps?.trucks?.pensacolaTrucks || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Owners: {Number(pensacolaOps?.trucks?.pensacolaOwners || 0)} · Verified: {Number(pensacolaOps?.trucks?.verifiedOwners || 0)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Active Premium Trucks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {loadingPensacolaOps ? "..." : Number(pensacolaOps?.trucks?.activePremiumTrucks || 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  New owners (7d): {Number(pensacolaOps?.trucks?.newOwners7d || 0)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Launch Sequence Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm space-y-1">
+                  <div>Report S1: {Number(pensacolaOps?.report?.stepSends?.step1 || 0)} · S2: {Number(pensacolaOps?.report?.stepSends?.step2 || 0)} · S3: {Number(pensacolaOps?.report?.stepSends?.step3 || 0)}</div>
+                  <div>Truck S1: {Number(pensacolaOps?.trucks?.stepSends?.step1 || 0)} · S2: {Number(pensacolaOps?.trucks?.stepSends?.step2 || 0)} · S3: {Number(pensacolaOps?.trucks?.stepSends?.step3 || 0)} · S4: {Number(pensacolaOps?.trucks?.stepSends?.step4 || 0)}</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => runPensacolaReportDrip.mutate()}
+              disabled={runPensacolaReportDrip.isPending}
+            >
+              {runPensacolaReportDrip.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Run Report Drip Now
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => runPensacolaTruckDrip.mutate()}
+              disabled={runPensacolaTruckDrip.isPending}
+            >
+              {runPensacolaTruckDrip.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Run Truck Drip Now
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Top Row: Key Metrics */}
       <div className="grid gap-4 md:grid-cols-3">

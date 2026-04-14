@@ -25,13 +25,31 @@ import {
   events,
   deals,
   telemetryEvents,
+  pensacolaReportLeads,
+  reportLeadSequenceSends,
+  emailSequenceSends,
+  users,
+  restaurantSubscriptions,
 } from "@shared/schema";
-import { and, eq, gte, isNull, lte, or, ilike, sql, desc } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  isNull,
+  lte,
+  or,
+  ilike,
+  sql,
+  desc,
+  inArray,
+} from "drizzle-orm";
 import { z } from "zod";
 import { DinerDigestService } from "../dinerDigestService";
 import { OnboardingDripService } from "../onboardingDripService";
 import { RestaurantActivationService } from "../restaurantActivationService";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
+import { runPensacolaReportLeadDripCron } from "../services/pensacolaReportDrip";
+import { runPensacolaFoodTruckDripCron } from "../services/pensacolaFoodTruckDrip";
 import { getIndexNowConfig, submitIndexNowUrls } from "../services/indexNow";
 import {
   getSocialQueueStatus,
@@ -307,6 +325,226 @@ export function registerGrowthRoutes(app: Express): void {
       } catch (err) {
         console.error("[growth/host-partner-drip/run] error:", err);
         res.status(500).json({ message: "Host partner drip run failed" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/growth/pensacola/ops",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      try {
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = new Date(
+          now.getTime() - 30 * 24 * 60 * 60 * 1000,
+        );
+
+        const [reportLeads7dRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(pensacolaReportLeads)
+          .where(gte(pensacolaReportLeads.createdAt, sevenDaysAgo));
+        const [reportLeads30dRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(pensacolaReportLeads)
+          .where(gte(pensacolaReportLeads.createdAt, thirtyDaysAgo));
+        const [reportLeadsAllRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(pensacolaReportLeads);
+
+        const reportStepRows = (await db
+          .select({
+            step: reportLeadSequenceSends.step,
+            count: sql<number>`count(*)`,
+          })
+          .from(reportLeadSequenceSends)
+          .where(eq(reportLeadSequenceSends.sequence, "pensacola_report_v1"))
+          .groupBy(reportLeadSequenceSends.step)) as Array<{
+          step: number | null;
+          count: number | null;
+        }>;
+        const reportStepSends: Record<string, number> = {};
+        for (const row of reportStepRows) {
+          reportStepSends[`step${Number(row.step || 0)}`] = Number(
+            row.count || 0,
+          );
+        }
+
+        const pensacolaTruckRows = (await db
+          .select({
+            restaurantId: restaurants.id,
+            ownerId: restaurants.ownerId,
+            emailVerified: users.emailVerified,
+            isDisabled: users.isDisabled,
+          })
+          .from(restaurants)
+          .innerJoin(users, eq(users.id, restaurants.ownerId))
+          .where(
+            and(
+              eq(restaurants.businessType, "food_truck"),
+              ilike(restaurants.city, "pensacola"),
+              or(
+                ilike(restaurants.state, "fl"),
+                ilike(restaurants.state, "florida"),
+              ),
+            ),
+          )) as Array<{
+          restaurantId: string | null;
+          ownerId: string | null;
+          emailVerified: boolean | null;
+          isDisabled: boolean | null;
+        }>;
+
+        const pensacolaRestaurantIds: string[] = Array.from(
+          new Set(
+            pensacolaTruckRows
+              .map((row) => String(row.restaurantId || "").trim())
+              .filter(Boolean),
+          ),
+        );
+        const pensacolaOwnerIds: string[] = Array.from(
+          new Set(
+            pensacolaTruckRows
+              .map((row) => String(row.ownerId || "").trim())
+              .filter(Boolean),
+          ),
+        );
+
+        const verifiedOwnerIds = new Set(
+          pensacolaTruckRows
+            .filter((row) => row.emailVerified && !row.isDisabled)
+            .map((row) => String(row.ownerId || "").trim())
+            .filter(Boolean),
+        );
+
+        let activePremiumCount = 0;
+        if (pensacolaRestaurantIds.length > 0) {
+          const activeSubs = (await db
+            .select({
+              restaurantId: restaurantSubscriptions.restaurantId,
+            })
+            .from(restaurantSubscriptions)
+            .where(
+              and(
+                eq(restaurantSubscriptions.status, "active"),
+                or(
+                  eq(restaurantSubscriptions.isLifetimeFree, true),
+                  sql`${restaurantSubscriptions.tier} != 'free'`,
+                ),
+                inArray(
+                  restaurantSubscriptions.restaurantId,
+                  pensacolaRestaurantIds,
+                ),
+              ),
+            )) as Array<{ restaurantId: string | null }>;
+          activePremiumCount = new Set(
+            activeSubs
+              .map((row) => String(row.restaurantId || "").trim())
+              .filter(Boolean),
+          ).size;
+        }
+
+        const [newTruckOwners7dRow] = pensacolaOwnerIds.length
+          ? await db
+              .select({ count: sql<number>`count(distinct ${users.id})` })
+              .from(users)
+              .where(
+                and(
+                  gte(users.createdAt, sevenDaysAgo),
+                  inArray(users.id, pensacolaOwnerIds),
+                ),
+              )
+          : [{ count: 0 }];
+
+        const truckStepRows = (await db
+          .select({
+            step: emailSequenceSends.step,
+            count: sql<number>`count(*)`,
+          })
+          .from(emailSequenceSends)
+          .where(
+            and(
+              eq(
+                emailSequenceSends.sequence,
+                "pensacola_food_truck_onboarding_v1",
+              ),
+              pensacolaOwnerIds.length
+                ? inArray(emailSequenceSends.userId, pensacolaOwnerIds)
+                : sql`false`,
+            ),
+          )
+          .groupBy(emailSequenceSends.step)) as Array<{
+          step: number | null;
+          count: number | null;
+        }>;
+        const truckStepSends: Record<string, number> = {};
+        for (const row of truckStepRows) {
+          truckStepSends[`step${Number(row.step || 0)}`] = Number(
+            row.count || 0,
+          );
+        }
+
+        return res.json({
+          generatedAt: now.toISOString(),
+          report: {
+            leads7d: Number(reportLeads7dRow?.count || 0),
+            leads30d: Number(reportLeads30dRow?.count || 0),
+            leadsAllTime: Number(reportLeadsAllRow?.count || 0),
+            stepSends: reportStepSends,
+          },
+          trucks: {
+            pensacolaTrucks: pensacolaRestaurantIds.length,
+            pensacolaOwners: pensacolaOwnerIds.length,
+            verifiedOwners: verifiedOwnerIds.size,
+            activePremiumTrucks: activePremiumCount,
+            newOwners7d: Number(newTruckOwners7dRow?.count || 0),
+            stepSends: truckStepSends,
+          },
+        });
+      } catch (err) {
+        console.error("[growth/pensacola/ops] error:", err);
+        return res
+          .status(500)
+          .json({ message: "Failed to load Pensacola growth ops snapshot" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/growth/pensacola/report-drip/run",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      try {
+        const stats = await runPensacolaReportLeadDripCron();
+        return res.json({ ok: true, stats });
+      } catch (err) {
+        console.error("[growth/pensacola/report-drip/run] error:", err);
+        return res
+          .status(500)
+          .json({ message: "Pensacola report drip run failed" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/growth/pensacola/truck-drip/run",
+    async (req: Request, res: Response) => {
+      if (!isAdmin(req)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      try {
+        const stats = await runPensacolaFoodTruckDripCron();
+        return res.json({ ok: true, stats });
+      } catch (err) {
+        console.error("[growth/pensacola/truck-drip/run] error:", err);
+        return res
+          .status(500)
+          .json({ message: "Pensacola truck drip run failed" });
       }
     },
   );
