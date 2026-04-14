@@ -1,0 +1,290 @@
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FlagProfileContentDialog } from "@/components/moderation/FlagDialogs";
+import {
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  CheckCircle,
+  Shield,
+} from "lucide-react";
+
+interface RestaurantTrustStats {
+  restaurantId: string;
+  totalFlags: number;
+  flagsUpheld: number;
+  flagsDismissed: number;
+  flagsPartial: number;
+  profileAccuracyScore: number; // 0-100
+  activeDisputes: number;
+  resolvedDisputes: number;
+  lastFlagDate?: string;
+  trend: "improving" | "declining" | "stable";
+}
+
+export function RestaurantTrustPanel({
+  restaurantId,
+}: {
+  restaurantId: string;
+}) {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["restaurant-trust", restaurantId],
+    queryFn: async () => {
+      // This endpoint would need to be created on the backend
+      // For now, showing the component structure
+      const response = await fetch(
+        `/api/restaurants/${restaurantId}/trust-stats`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch trust stats");
+      return response.json() as Promise<RestaurantTrustStats>;
+    },
+  });
+
+  if (isLoading) {
+    return <div className="p-4">Loading trust information...</div>;
+  }
+
+  if (!stats) {
+    return null;
+  }
+
+  const accuracyPercent = stats.profileAccuracyScore;
+  const upheldPercent =
+    stats.totalFlags > 0 ? (stats.flagsUpheld / stats.totalFlags) * 100 : 0;
+
+  const getTrendIcon = () => {
+    if (stats.trend === "improving") {
+      return <TrendingUp className="h-4 w-4 text-green-500" />;
+    } else if (stats.trend === "declining") {
+      return <TrendingDown className="h-4 w-4 text-red-500" />;
+    } else {
+      return <Shield className="h-4 w-4 text-blue-500" />;
+    }
+  };
+
+  const getTrustLevel = () => {
+    if (accuracyPercent >= 95) return "Excellent";
+    if (accuracyPercent >= 85) return "Good";
+    if (accuracyPercent >= 70) return "Fair";
+    if (accuracyPercent >= 50) return "Poor";
+    return "Low";
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Community Trust Profile
+          </CardTitle>
+          <CardDescription>
+            Based on community feedback and moderation decisions
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Main Trust Score */}
+          <div className="space-y-4">
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-4xl font-bold">{accuracyPercent}%</div>
+                <div className="text-sm text-muted-foreground">
+                  Profile Accuracy Score
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {getTrendIcon()}
+                <Badge
+                  variant={
+                    accuracyPercent >= 85
+                      ? "default"
+                      : accuracyPercent >= 70
+                        ? "secondary"
+                        : "destructive"
+                  }
+                >
+                  {getTrustLevel()}
+                </Badge>
+              </div>
+            </div>
+            <Progress value={accuracyPercent} className="h-2" />
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Flagged Content */}
+            <Card className="bg-muted/50">
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Community Flags</span>
+                    <span className="text-2xl font-bold">
+                      {stats.totalFlags}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-green-600">Upheld</span>
+                      <span className="font-medium">
+                        {stats.flagsUpheld} ({upheldPercent.toFixed(0)}%)
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-600">Dismissed</span>
+                      <span className="font-medium">{stats.flagsDismissed}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-yellow-600">Partial</span>
+                      <span className="font-medium">{stats.flagsPartial}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Disputes */}
+            <Card className="bg-muted/50">
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Active Disputes</span>
+                      <span className="text-xl font-bold">
+                        {stats.activeDisputes}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">Resolved</span>
+                      <span className="text-xl font-bold">
+                        {stats.resolvedDisputes}
+                      </span>
+                    </div>
+
+                    {stats.lastFlagDate && (
+                      <div className="flex justify-between pt-2 border-t">
+                        <span className="text-muted-foreground">
+                          Last Flag
+                        </span>
+                        <span className="text-xs">
+                          {new Date(stats.lastFlagDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Info Boxes */}
+          {upheldPercent > 30 && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This business has several upheld community flags. Profile
+                information may be inaccurate. Use caution when relying on
+                listed details.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {stats.activeDisputes > 0 && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {stats.activeDisputes} community flag
+                {stats.activeDisputes > 1 ? "s" : ""} currently under review.
+                We'll update information as disputes are resolved.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {accuracyPercent >= 95 && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-900">
+                This business maintains excellent profile accuracy as verified
+                by community moderation.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Report Section */}
+          <div className="border-t pt-4">
+            <div className="text-sm">
+              <p className="font-medium mb-2">
+                Found inaccurate information?
+              </p>
+              <p className="text-muted-foreground text-xs mb-3">
+                Help keep the community informed by reporting profile issues.
+                Our moderators review reports for policy compliance.
+              </p>
+              <FlagProfileContentDialog restaurantId={restaurantId} />
+            </div>
+          </div>
+
+          {/* Explanation */}
+          <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm">
+            <p className="font-medium text-blue-900 mb-2">
+              How We Calculate Trust
+            </p>
+            <ul className="text-xs text-blue-800 space-y-1">
+              <li>
+                ✓ Community members flag profile issues (spam, false info,
+                etc.)
+              </li>
+              <li>✓ Our moderators verify if content violates our policy</li>
+              <li>
+                ✓ Accuracy score reflects ratio of valid to dismissed flags
+              </li>
+              <li>
+                ✓ Higher score = more reliable profile information according
+                to community
+              </li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function RestaurantTrustBadge({ restaurantId }: { restaurantId: string }) {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["restaurant-trust-badge", restaurantId],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${restaurantId}/trust-stats`,
+      );
+      if (!response.ok) return null;
+      return response.json() as Promise<RestaurantTrustStats>;
+    },
+  });
+
+  if (isLoading || !stats) return null;
+
+  const getTrustColor = () => {
+    if (stats.profileAccuracyScore >= 95) return "text-green-600";
+    if (stats.profileAccuracyScore >= 85) return "text-blue-600";
+    if (stats.profileAccuracyScore >= 70) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Shield className={`h-4 w-4 ${getTrustColor()}`} />
+      <span className="text-xs font-medium">{stats.profileAccuracyScore}%</span>
+    </div>
+  );
+}

@@ -5,6 +5,8 @@ import { createModerationService } from "./moderationService";
 import { db } from "./db";
 import { recommendationFlags } from "@shared/schema";
 import { and, desc } from "drizzle-orm";
+import { profileContentFlags, moderationCases, moderationResolutions } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const flagRecommendationSchema = z.object({
   recommendationId: z.string().min(1),
