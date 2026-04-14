@@ -361,6 +361,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         ] as NavItem[])
       : []),
     {
+      path: "/menu-builder",
+      icon: Store,
+      fallbackLabel: "Menu Builder",
+    },
+    {
       path: "/subscription",
       icon: BarChart3,
       labelKey: "nav.subscription",
@@ -496,6 +501,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             },
           ] as NavItem[])
         : []),
+      {
+        path: "/menu-builder",
+        icon: Store,
+        fallbackLabel: "Menu Builder",
+      },
       ...(canSeeParkingPassNav
         ? ([
             {
@@ -525,6 +535,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           },
         ] as NavItem[])
       : []),
+    {
+      path: "/menu-builder",
+      icon: Store,
+      fallbackLabel: "Menu Builder",
+    },
     ...(canManageParkingPass
       ? ([
           {
@@ -580,6 +595,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     "/staff",
     "/host/dashboard",
     "/supplier/dashboard",
+    "/menu-builder",
   ];
   const desktopQuickActions = navItems
     .filter((item) => item.path && desktopQuickActionPaths.includes(item.path))
