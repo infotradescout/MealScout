@@ -99,6 +99,9 @@ export default function PensacolaSpots() {
             MealScout hosts list guaranteed parking pass slots. Create a free account to
             unlock exact addresses, availability, and the Book Now button.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Pensacola is launch ground zero, then we expand market-by-market from here.
+          </p>
           <div className="flex gap-3 flex-wrap items-center">
             {primaryCta}
             <Button variant="secondary" asChild>

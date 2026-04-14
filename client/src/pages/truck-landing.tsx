@@ -4,6 +4,11 @@ import { Link } from "wouter";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import { apiUrl } from "@/lib/api";
+import {
+  PENSACOLA_MARKET,
+  haversineMiles,
+  isPensacolaAreaCity,
+} from "@/lib/launchMarkets";
 import RoleLandingPage from "@/components/role-landing";
 import { roleLandingContent } from "@/content/role-landing";
 import { Card, CardContent } from "@/components/ui/card";
@@ -151,7 +156,40 @@ export default function TruckLanding() {
       return haystack.includes("pensacola");
     }).length;
   }, [hostPins]);
-  const cities = Array.isArray(cityData) ? cityData.slice(0, 12) : [];
+  const cities = useMemo(() => {
+    const raw = Array.isArray(cityData) ? [...cityData] : [];
+    return raw
+      .sort((a, b) => {
+        const aLaunch = isPensacolaAreaCity(a.name);
+        const bLaunch = isPensacolaAreaCity(b.name);
+        if (aLaunch !== bLaunch) return aLaunch ? -1 : 1;
+
+        const aLat = Number((a as any).latitude);
+        const aLng = Number((a as any).longitude);
+        const bLat = Number((b as any).latitude);
+        const bLng = Number((b as any).longitude);
+        const aHasCoords = Number.isFinite(aLat) && Number.isFinite(aLng);
+        const bHasCoords = Number.isFinite(bLat) && Number.isFinite(bLng);
+        if (aHasCoords && bHasCoords) {
+          const aDist = haversineMiles(
+            PENSACOLA_MARKET.latitude,
+            PENSACOLA_MARKET.longitude,
+            aLat,
+            aLng,
+          );
+          const bDist = haversineMiles(
+            PENSACOLA_MARKET.latitude,
+            PENSACOLA_MARKET.longitude,
+            bLat,
+            bLng,
+          );
+          if (aDist !== bDist) return aDist - bDist;
+        }
+
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      })
+      .slice(0, 12);
+  }, [cityData]);
   const trendingQueries = (Array.isArray(trendingSearches) ? trendingSearches : [])
     .map((row) => String(row?.query || "").trim())
     .filter(Boolean);
@@ -283,6 +321,9 @@ export default function TruckLanding() {
                   <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
                     Active Markets
                   </h3>
+                  <p className="mt-1 text-xs text-[var(--ink-dark-muted)]">
+                    Ordered from our launch core outward from Pensacola.
+                  </p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {cities.map((city) => (
                       <Link key={city.id} href={`/food-trucks/${city.slug}`}>

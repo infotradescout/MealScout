@@ -36,6 +36,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { PENSACOLA_RADIATE_MARKETS } from "@/lib/launchMarkets";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -627,6 +628,9 @@ function TruckDiscovery() {
   const applyMarketFilter = useCallback((value: string) => {
     setSearch(value);
   }, []);
+  const launchMarketFilters = PENSACOLA_RADIATE_MARKETS.slice(0, 6).map(
+    (row) => `${row.city}, ${row.state}`,
+  );
 
   // ---------------------------------------------------------------------------
   // Render
@@ -732,6 +736,18 @@ function TruckDiscovery() {
         >
           Pensacola
         </Button>
+        {launchMarketFilters
+          .filter((row) => row !== "Pensacola, FL")
+          .map((label) => (
+            <Button
+              key={label}
+              size="sm"
+              variant="outline"
+              onClick={() => applyMarketFilter(label)}
+            >
+              {label.replace(", FL", "")}
+            </Button>
+          ))}
         <Button
           size="sm"
           variant="outline"
