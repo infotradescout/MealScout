@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { 
   Shield, User, Store, Eye,
-  Monitor, Settings
+  Monitor, Settings, Users, Calendar, Truck, ParkingSquare, ChefHat, Package
 } from "lucide-react";
 
 // Import the dashboard components
@@ -74,6 +74,18 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
       description: 'Experience what restaurant owners see',
       color: 'bg-[color:var(--status-success)]/12 text-[color:var(--status-success)]'
     }
+  ];
+  const featureShortcuts = [
+    { label: "Host", href: "/host/dashboard", icon: Users },
+    { label: "Coordinator", href: "/event-coordinator/dashboard", icon: Calendar },
+    { label: "Supplier", href: "/supplier/dashboard", icon: Store },
+    { label: "Open Calls", href: "/truck-discovery?city=Pensacola%2C%20FL", icon: Truck },
+    { label: "Parking Truck", href: "/parking-pass?adminMode=truck", icon: ParkingSquare },
+    { label: "Parking Host", href: "/parking-pass?adminMode=host", icon: ParkingSquare },
+    { label: "Menu", href: "/menu-builder", icon: Store },
+    { label: "Kitchen", href: "/kitchen", icon: ChefHat },
+    { label: "Orders", href: "/orders", icon: User },
+    { label: "Delivery", href: "/supply/orders", icon: Package },
   ];
 
   const renderDashboard = () => {
@@ -154,6 +166,16 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
                   <Link href="/admin/dashboard">Exit Switcher</Link>
                 </Button>
               </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {featureShortcuts.map((shortcut) => (
+                <Button key={shortcut.href} variant="outline" size="sm" asChild>
+                  <Link href={shortcut.href}>
+                    <shortcut.icon className="h-4 w-4 mr-1" />
+                    {shortcut.label}
+                  </Link>
+                </Button>
+              ))}
             </div>
           </div>
         </div>

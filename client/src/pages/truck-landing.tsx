@@ -12,6 +12,8 @@ type HostPin = {
   id: string;
   name: string;
   address: string;
+  city?: string | null;
+  state?: string | null;
   spotImageUrl?: string | null;
   latitude: number | string | null;
   longitude: number | string | null;
@@ -143,6 +145,12 @@ export default function TruckLanding() {
   }, [hostPins]);
 
   const showLiveMap = hostPins.length > 0 && !mapError;
+  const pensacolaHostCount = useMemo(() => {
+    return hostPins.filter((host) => {
+      const haystack = `${host.name || ""} ${host.address || ""} ${host.city || ""} ${host.state || ""}`.toLowerCase();
+      return haystack.includes("pensacola");
+    }).length;
+  }, [hostPins]);
   const cities = Array.isArray(cityData) ? cityData.slice(0, 12) : [];
   const trendingQueries = (Array.isArray(trendingSearches) ? trendingSearches : [])
     .map((row) => String(row?.query || "").trim())
@@ -163,6 +171,10 @@ export default function TruckLanding() {
       ...roleLandingContent.truck.map,
       badge: showLiveMap ? "Live view" : roleLandingContent.truck.map.badge,
     },
+    stats: [
+      { label: "Live host spots", value: String(hostPins.length) },
+      { label: "Pensacola spots", value: String(pensacolaHostCount) },
+    ],
   };
 
   return (
@@ -170,6 +182,49 @@ export default function TruckLanding() {
       content={content}
       discoverySlot={
         <div className="space-y-6">
+          <Card className="border shadow-clean-lg bg-[var(--card)]" style={{ borderColor: "var(--border)" }}>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
+                    Launch Market
+                  </p>
+                  <h2 className="text-2xl font-semibold text-[var(--ink-dark)]">
+                    Pensacola Truck Fast-Track
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--ink-dark-muted)]">
+                    We already have host locations live in Pensacola. Claim your truck, view open calls, and lock your first operating slots.
+                  </p>
+                </div>
+                <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                  <div className="font-semibold text-[var(--ink-dark)]">
+                    {pensacolaHostCount} Pensacola host spot{pensacolaHostCount === 1 ? "" : "s"}
+                  </div>
+                  <div className="text-[var(--ink-dark-muted)]">
+                    currently visible on MealScout
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/truck-discovery?city=Pensacola%2C%20FL">
+                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
+                    View Pensacola open calls
+                  </div>
+                </Link>
+                <Link href="/pensacola/spots">
+                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
+                    See Pensacola host spots
+                  </div>
+                </Link>
+                <Link href="/restaurant-signup?businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL">
+                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
+                    Claim my truck
+                  </div>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border shadow-clean-lg bg-[var(--card)]" style={{ borderColor: "var(--border)" }}>
             <CardContent className="p-6 space-y-4">
               <h2 className="text-2xl font-semibold text-[var(--ink-dark)]">

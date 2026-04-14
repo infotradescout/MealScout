@@ -22,6 +22,9 @@ import {
   ParkingSquare,
   Truck,
   Share2,
+  ChefHat,
+  Package,
+  ShoppingCart,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -366,6 +369,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       fallbackLabel: "Menu Builder",
     },
     {
+      path: "/kitchen",
+      icon: ChefHat,
+      fallbackLabel: "Kitchen",
+    },
+    {
+      path: "/orders",
+      icon: ShoppingCart,
+      fallbackLabel: "Orders",
+    },
+    {
+      path: "/supply/orders",
+      icon: Package,
+      fallbackLabel: "Delivery",
+    },
+    {
       path: "/subscription",
       icon: BarChart3,
       labelKey: "nav.subscription",
@@ -461,6 +479,26 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
     ...restaurantOwnerExtras,
     {
+      path: "/truck-discovery",
+      icon: Truck,
+      fallbackLabel: "Open Calls",
+    },
+    {
+      path: "/kitchen",
+      icon: ChefHat,
+      fallbackLabel: "Kitchen",
+    },
+    {
+      path: "/orders",
+      icon: ShoppingCart,
+      fallbackLabel: "Orders",
+    },
+    {
+      path: "/supply/orders",
+      icon: Package,
+      fallbackLabel: "Delivery",
+    },
+    {
       path: "/parking-pass",
       icon: ParkingSquare,
       labelKey: "nav.parkingPass",
@@ -541,6 +579,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         icon: Store,
         fallbackLabel: "Menu Builder",
       },
+      {
+        path: "/kitchen",
+        icon: ChefHat,
+        fallbackLabel: "Kitchen",
+      },
+      {
+        path: "/orders",
+        icon: ShoppingCart,
+        fallbackLabel: "Orders",
+      },
+      {
+        path: "/supply/orders",
+        icon: Package,
+        fallbackLabel: "Delivery",
+      },
       ...(canSeeParkingPassNav
         ? ([
             {
@@ -574,6 +627,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       path: "/menu-builder",
       icon: Store,
       fallbackLabel: "Menu Builder",
+    },
+    {
+      path: "/kitchen",
+      icon: ChefHat,
+      fallbackLabel: "Kitchen",
+    },
+    {
+      path: "/orders",
+      icon: ShoppingCart,
+      fallbackLabel: "Orders",
+    },
+    {
+      path: "/supply/orders",
+      icon: Package,
+      fallbackLabel: "Delivery",
     },
     ...(canManageParkingPass
       ? ([

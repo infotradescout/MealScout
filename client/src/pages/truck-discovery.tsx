@@ -447,7 +447,12 @@ function TruckDiscovery() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    const cityPreset = params.get("city") || params.get("market");
+    return params.get("q") || params.get("search") || cityPreset || "";
+  });
   const [interestedEvents, setInterestedEvents] = useState<Set<string>>(
     new Set(),
   );
@@ -514,6 +519,15 @@ function TruckDiscovery() {
         (ev.description ?? "").toLowerCase().includes(q),
     );
   }, [events, search]);
+  const pensacolaEventCount = useMemo(
+    () =>
+      events.filter((ev) => {
+        const haystack = `${ev.host.businessName || ""} ${ev.host.address || ""} ${ev.host.city || ""} ${ev.host.state || ""}`.toLowerCase();
+        return haystack.includes("pensacola");
+      }).length,
+    [events],
+  );
+  const showingPensacolaOnly = search.trim().toLowerCase().includes("pensacola");
 
   // Group by series
   const { seriesGroups, standalone } = useMemo(() => {
@@ -610,6 +624,9 @@ function TruckDiscovery() {
     () => setLocation("/restaurant-signup?businessType=food_truck&claim=1"),
     [setLocation],
   );
+  const applyMarketFilter = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -704,6 +721,44 @@ function TruckDiscovery() {
           </button>
         )}
       </div>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
+          Market quick filters
+        </span>
+        <Button
+          size="sm"
+          variant={showingPensacolaOnly ? "default" : "outline"}
+          onClick={() => applyMarketFilter("Pensacola, FL")}
+        >
+          Pensacola
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => applyMarketFilter("")}
+        >
+          All Markets
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setLocation(
+              "/restaurant-signup?businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL",
+            )
+          }
+        >
+          Claim truck (Pensacola)
+        </Button>
+      </div>
+      {pensacolaEventCount > 0 && (
+        <div className="mb-6 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 text-sm text-[color:var(--text-secondary)]">
+          <span className="font-semibold text-[color:var(--text-primary)]">
+            {pensacolaEventCount}
+          </span>{" "}
+          open call event{pensacolaEventCount === 1 ? "" : "s"} currently tied to Pensacola host locations.
+        </div>
+      )}
 
       {/* Stats bar */}
       {!isLoading && totalEvents > 0 && (

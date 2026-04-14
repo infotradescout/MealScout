@@ -66,8 +66,12 @@ export default function PensacolaSpots() {
     }
     return (
       <Button asChild>
-        <a href={`/restaurant-signup?redirect=${encodeURIComponent("/pensacola/spots")}`}>
-          Create free account
+        <a
+          href={`/restaurant-signup?businessType=food_truck&claim=1&redirect=${encodeURIComponent(
+            "/truck-discovery?city=Pensacola%2C%20FL",
+          )}`}
+        >
+          Claim or list your truck
         </a>
       </Button>
     );
@@ -86,6 +90,11 @@ export default function PensacolaSpots() {
           </p>
           <div className="flex gap-3 flex-wrap items-center">
             {primaryCta}
+            <Button variant="secondary" asChild>
+              <a href="/truck-discovery?city=Pensacola%2C%20FL">
+                See Pensacola open calls
+              </a>
+            </Button>
             {!isAuthenticated ? (
               <Button variant="outline" asChild>
                 <a href={`/login?redirect=${encodeURIComponent("/pensacola/spots")}`}>
@@ -169,11 +178,11 @@ export default function PensacolaSpots() {
                             {cardLocked ? (
                               <Button asChild>
                                 <a
-                                  href={`/restaurant-signup?redirect=${encodeURIComponent(
-                                    "/pensacola/spots",
+                                  href={`/restaurant-signup?businessType=food_truck&claim=1&redirect=${encodeURIComponent(
+                                    "/truck-discovery?city=Pensacola%2C%20FL",
                                   )}`}
                                 >
-                                  Unlock details
+                                  Claim truck & unlock
                                 </a>
                               </Button>
                             ) : (
