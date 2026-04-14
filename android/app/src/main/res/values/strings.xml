@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MealScout</string>
+    <string name="title_activity_main">MealScout</string>
+    <string name="package_name">us.mealscout.app</string>
+    <string name="custom_url_scheme">us.mealscout.app</string>
+</resources>

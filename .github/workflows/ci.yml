@@ -24,3 +24,11 @@ jobs:
 
       - name: Typecheck
         run: npm run check
+
+      - name: Mobile Readiness
+        run: npm run check:mobile-readiness
+
+      - name: Store Readiness (Strict Metadata)
+        run: npm run check:store-readiness
+        env:
+          STRICT_STORE_METADATA: "true"

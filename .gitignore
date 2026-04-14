@@ -15,6 +15,19 @@ vite.config.ts.*
 .env
 .env.*
 .env*.local
+
+# Capacitor native build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+ios/DerivedData/
+ios/App/build/
+ios/App/Pods/
+ios/App/.symlinks/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcworkspace/xcshareddata/swiftpm/
+ios/App/App.xcodeproj/xcuserdata/
 .tools/
 
 .env*.local

@@ -94,7 +94,7 @@ export async function parsePdfMenuWithAi(
       ],
     });
 
-    const textBlock = message.content.find((b) => b.type === "text");
+    const textBlock = message.content.find((b: any) => b.type === "text");
     rawJson =
       textBlock && "text" in textBlock && typeof textBlock.text === "string"
         ? textBlock.text.trim()
