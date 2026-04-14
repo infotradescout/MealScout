@@ -24,6 +24,7 @@ import {
   Calendar,
   Link as LinkIcon,
   Video,
+  Flag,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
@@ -158,6 +159,12 @@ export default function ProfilePage() {
       label: "Help & Support",
       badge: null,
       href: "/profile/help",
+    },
+    {
+      icon: Flag,
+      label: "Reporter Reputation",
+      badge: null,
+      href: "/profile/reporter-reputation",
     },
   ];
 

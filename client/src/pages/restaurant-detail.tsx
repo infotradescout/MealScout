@@ -6,6 +6,8 @@ import DealCard from "@/components/deal-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RestaurantTrustPanel } from "@/components/RestaurantTrustPanel";
+import { FlagRecommendationDialog, FlagProfileContentDialog } from "@/components/moderation/FlagDialogs";
 import { BackHeader } from "@/components/back-header";
 import {
   MapPin,
@@ -939,15 +941,27 @@ export default function RestaurantDetailPage() {
           )}
         </div>
 
+        {/* Restaurant Trust Panel */}
+        {restaurantId && (
+          <div className="mt-10">
+            <RestaurantTrustPanel restaurantId={restaurantId} />
+          </div>
+        )}
+
         {/* Community Recommendations */}
         <div className="mt-10">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-foreground">
               Community Recommendations
             </h2>
-            <Badge variant="outline">
-              {recommendationRows.length} total
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                {recommendationRows.length} total
+              </Badge>
+              {restaurantId && (
+                <FlagProfileContentDialog restaurantId={restaurantId} />
+              )}
+            </div>
           </div>
           {recommendationRows.length > 0 ? (
             <div className="space-y-3">
@@ -1014,6 +1028,7 @@ export default function RestaurantDetailPage() {
                           <Share2 className="w-3.5 h-3.5 mr-1" />
                           {rec.shareCount}
                         </Button>
+                        <FlagRecommendationDialog recommendationId={rec.id} />
                       </div>
                     </div>
                   </CardContent>

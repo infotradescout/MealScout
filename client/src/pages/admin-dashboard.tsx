@@ -5475,6 +5475,26 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
+          <Card className="col-span-2 md:col-span-4 border-[color:var(--status-warning)]/25 bg-[color:var(--status-warning)]/5">
+            <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    MODERATION
+                  </span>
+                </div>
+                <h2 className="text-lg font-semibold">Review Flagged Content</h2>
+                <p className="text-sm text-muted-foreground">
+                  Review flagged recommendations and profile content, assign cases, and resolve reports.
+                </p>
+              </div>
+              <Link href="/admin/moderation/queue">
+                <Button variant="outline">Open Moderation Queue</Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
