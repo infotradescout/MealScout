@@ -84,13 +84,41 @@ interface LiveTruck {
   lastBroadcastAt?: string;
 }
 
-interface BusinessDealsSummary {
+interface PublicBusinessProfile {
   id: string;
   name: string;
+  address?: string;
   cuisineType?: string;
   businessType?: string;
   isFoodTruck?: boolean;
+  isVerified?: boolean;
+  mobileOnline?: boolean;
+  distance?: number | null;
+  updatedAt?: string;
+  favoriteCount?: number;
+  followCount?: number;
+  recommendationCount?: number;
+  videoRecommendationCount?: number;
+  activeDealCount?: number;
+}
+
+interface BusinessDealsSummary {
+  id: string;
+  name: string;
+  address?: string;
+  cuisineType?: string;
+  businessType?: string;
+  isFoodTruck?: boolean;
+  isVerified?: boolean;
+  mobileOnline?: boolean;
   distance?: number;
+  updatedAt?: string;
+  favoriteCount: number;
+  followCount: number;
+  recommendationCount: number;
+  videoRecommendationCount: number;
+  activeDealCount: number;
+  fairnessScore: number;
   deals: Deal[];
 }
 
@@ -139,6 +167,11 @@ function BusinessDealsCard({
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {business.cuisineType || businessTypeLabel}
             </p>
+            {business.address && (
+              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                {business.address}
+              </p>
+            )}
           </div>
           <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {businessTypeLabel}
@@ -148,6 +181,13 @@ function BusinessDealsCard({
         {distanceLabel && (
           <p className="mt-2 text-xs text-muted-foreground">{distanceLabel}</p>
         )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <span>Recs {business.recommendationCount}</span>
+          <span>Video Recs {business.videoRecommendationCount}</span>
+          <span>Follows {business.followCount}</span>
+          <span>Favorites {business.favoriteCount}</span>
+          <span>Deals {business.activeDealCount}</span>
+        </div>
 
         <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -350,8 +390,6 @@ export default function Home() {
 
   const {
     data: featuredDeals,
-    isLoading: featuredLoading,
-    isError: featuredError,
     refetch: refetchFeaturedDeals,
   } = useQuery<Deal[]>({
     queryKey: ["/api/deals/featured"],
@@ -393,41 +431,118 @@ export default function Home() {
     return grouped;
   }, [sortedFeaturedDeals]);
 
+  const {
+    data: publicProfiles = [],
+    isLoading: publicProfilesLoading,
+    isError: publicProfilesError,
+    refetch: refetchPublicProfiles,
+  } = useQuery<PublicBusinessProfile[]>({
+    queryKey: location
+      ? ["/api/restaurants/public", location.lat, location.lng]
+      : ["/api/restaurants/public", "all"],
+    queryFn: async () => {
+      const base = "/api/restaurants/public";
+      const url = location
+        ? `${base}?lat=${location.lat}&lng=${location.lng}&radius=12&limit=120`
+        : `${base}?limit=120`;
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch public profiles");
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+
   const featuredBusinesses = useMemo(() => {
-    const grouped = new Map<string, BusinessDealsSummary>();
-    sortedFeaturedDeals.forEach((deal) => {
-      const key = String(deal.restaurantId || "").trim();
-      if (!key) return;
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.deals.push(deal);
-        if (
-          typeof deal.distance === "number" &&
-          Number.isFinite(deal.distance) &&
-          (existing.distance == null || deal.distance < existing.distance)
-        ) {
-          existing.distance = deal.distance;
+    const profiles = Array.isArray(publicProfiles) ? publicProfiles : [];
+    const computeFairnessScore = (profile: PublicBusinessProfile, dealCount: number) => {
+      const recommendationCount = Number(profile.recommendationCount || 0);
+      const videoRecommendationCount = Number(
+        profile.videoRecommendationCount || 0,
+      );
+      const followCount = Number(profile.followCount || 0);
+      const favoriteCount = Number(profile.favoriteCount || 0);
+      const activeDealCount = Math.max(
+        Number(profile.activeDealCount || 0),
+        dealCount,
+      );
+      const locationBoost =
+        typeof profile.distance === "number" && Number.isFinite(profile.distance)
+          ? Math.max(0, 12 - Math.min(profile.distance, 12)) / 12
+          : 0;
+      const liveTruckBoost =
+        profile.isFoodTruck && profile.mobileOnline ? 1.5 : 0;
+      const recommendationSignal =
+        recommendationCount * 4 + videoRecommendationCount * 12;
+
+      return (
+        recommendationSignal +
+        followCount * 4 +
+        favoriteCount * 3 +
+        activeDealCount * 5 +
+        locationBoost * 4 +
+        liveTruckBoost
+      );
+    };
+
+    return profiles
+      .map((profile) => {
+        const profileDeals = dealsByRestaurant.get(String(profile.id)) || [];
+        const recommendationCount = Number(profile.recommendationCount || 0);
+        const videoRecommendationCount = Number(
+          profile.videoRecommendationCount || 0,
+        );
+        const followCount = Number(profile.followCount || 0);
+        const favoriteCount = Number(profile.favoriteCount || 0);
+        const activeDealCount = Math.max(
+          Number(profile.activeDealCount || 0),
+          profileDeals.length,
+        );
+        const fairnessScore = computeFairnessScore(profile, profileDeals.length);
+        return {
+          id: profile.id,
+          name: profile.name || "Local Spot",
+          address: profile.address,
+          cuisineType: profile.cuisineType,
+          businessType: profile.businessType,
+          isFoodTruck: Boolean(profile.isFoodTruck),
+          isVerified: Boolean(profile.isVerified),
+          mobileOnline: Boolean(profile.mobileOnline),
+          distance:
+            typeof profile.distance === "number" && Number.isFinite(profile.distance)
+              ? profile.distance
+              : undefined,
+          updatedAt: profile.updatedAt,
+          recommendationCount,
+          videoRecommendationCount,
+          followCount,
+          favoriteCount,
+          activeDealCount,
+          fairnessScore,
+          deals: profileDeals,
+        } as BusinessDealsSummary;
+      })
+      .sort((a, b) => {
+        if (a.fairnessScore !== b.fairnessScore) {
+          return b.fairnessScore - a.fairnessScore;
         }
-        return;
-      }
 
-      grouped.set(key, {
-        id: key,
-        name: deal.restaurant?.name || "Local Spot",
-        cuisineType: deal.restaurant?.cuisineType,
-        businessType: deal.restaurant?.businessType,
-        isFoodTruck: deal.restaurant?.isFoodTruck,
-        distance: deal.distance,
-        deals: [deal],
+        const aDistance =
+          typeof a.distance === "number" && Number.isFinite(a.distance)
+            ? a.distance
+            : Number.POSITIVE_INFINITY;
+        const bDistance =
+          typeof b.distance === "number" && Number.isFinite(b.distance)
+            ? b.distance
+            : Number.POSITIVE_INFINITY;
+        if (aDistance !== bDistance) return aDistance - bDistance;
+
+        const aUpdated = new Date(a.updatedAt || 0).getTime();
+        const bUpdated = new Date(b.updatedAt || 0).getTime();
+        return bUpdated - aUpdated;
       });
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => {
-      const aDistance = a.distance ?? Number.POSITIVE_INFINITY;
-      const bDistance = b.distance ?? Number.POSITIVE_INFINITY;
-      return aDistance - bDistance;
-    });
-  }, [sortedFeaturedDeals]);
+  }, [publicProfiles, dealsByRestaurant]);
 
   const {
     data: liveTrucksData,
@@ -517,21 +632,21 @@ export default function Home() {
           description:
             "Find food trucks near you, discover live locations, and browse local deals from restaurants, bars, and hosts with MealScout.",
           url: "https://www.mealscout.us/",
-          mainEntity: {
-            "@type": "ItemList",
-            name: "Featured Local Deals",
-            numberOfItems: sortedFeaturedDeals.slice(0, 10).length,
-            itemListElement: sortedFeaturedDeals.slice(0, 10).map((deal: Deal, index: number) => ({
-              "@type": "ListItem",
-              position: index + 1,
-              name: deal.title,
-              url: `${typeof window !== "undefined" ? window.location.origin : "https://www.mealscout.us"}/deal/${deal.id}`,
-            })),
+            mainEntity: {
+              "@type": "ItemList",
+              name: "Public Local Food Profiles",
+              numberOfItems: featuredBusinesses.slice(0, 12).length,
+              itemListElement: featuredBusinesses.slice(0, 12).map((business, index: number) => ({
+                "@type": "ListItem",
+                position: index + 1,
+                name: business.name,
+                url: `${typeof window !== "undefined" ? window.location.origin : "https://www.mealscout.us"}/restaurant/${business.id}`,
+              })),
+            },
           },
-        },
-      ],
-    }),
-    [sortedFeaturedDeals],
+        ],
+      }),
+    [featuredBusinesses],
   );
 
   return (
@@ -1044,19 +1159,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Deals Section - ORIGINAL LAYOUT */}
+      {/* Public Profiles Section */}
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="mb-3">
             <h2 className="text-base font-bold text-foreground flex items-center">
               <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-              Trending in{" "}
+              Food Spots in{" "}
               {shortLocation === "Your Location"
                 ? "Your Neighborhood"
                 : shortLocation}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Fast-moving offers from spots around you
+              Public truck, restaurant, and bar profiles. Video recommendations carry extra weight.
             </p>
             <Link href="/deals/featured">
               <Button
@@ -1068,25 +1183,28 @@ export default function Home() {
             </Link>
           </div>
 
-          {featuredLoading ? (
+          {publicProfilesLoading ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 w-56 bg-[var(--bg-surface-muted)]/60 rounded-lg h-48 animate-pulse"
+                  className="flex-shrink-0 w-64 bg-[var(--bg-surface-muted)]/60 rounded-lg h-52 animate-pulse"
                 />
               ))}
             </div>
-          ) : featuredError ? (
+          ) : publicProfilesError ? (
             <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-              <p>We couldn't load deals right now. Try again in a bit.</p>
+              <p>We couldn't load profiles right now. Try again in a bit.</p>
               <Button
                 size="sm"
                 variant="outline"
                 className="mt-3"
-                onClick={() => refetchFeaturedDeals()}
+                onClick={() => {
+                  refetchPublicProfiles();
+                  refetchFeaturedDeals();
+                }}
               >
-                Retry Deals
+                Retry Profiles
               </Button>
             </div>
           ) : featuredBusinesses.length > 0 ? (
@@ -1099,7 +1217,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              <p className="mb-3">No deals nearby yet</p>
+              <p className="mb-3">No public profiles to show yet.</p>
               <div className="flex flex-wrap justify-center gap-2">
                 <Link href="/map">
                   <Button size="sm" variant="outline">
@@ -1315,10 +1433,10 @@ export default function Home() {
           ) : (
             <div className="max-w-[520px] mx-auto">
               <h3 className="text-lg font-bold text-foreground mb-4">
-                Deals Nearby
+                Nearby Profiles
               </h3>
 
-              {featuredLoading ? (
+              {publicProfilesLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <div
@@ -1327,16 +1445,19 @@ export default function Home() {
                     />
                   ))}
                 </div>
-              ) : featuredError ? (
+              ) : publicProfilesError ? (
                 <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-                  <p>We couldn't load deals right now. Try again in a bit.</p>
+                  <p>We couldn't load profiles right now. Try again in a bit.</p>
                   <Button
                     size="sm"
                     variant="outline"
                     className="mt-3"
-                    onClick={() => refetchFeaturedDeals()}
+                    onClick={() => {
+                      refetchPublicProfiles();
+                      refetchFeaturedDeals();
+                    }}
                   >
-                    Retry Deals
+                    Retry Profiles
                   </Button>
                 </div>
               ) : featuredBusinesses.length > 0 ? (
@@ -1397,6 +1518,24 @@ export default function Home() {
                 className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
               >
                 About
+              </Link>
+              <Link
+                href="/compare"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Comparisons
+              </Link>
+              <Link
+                href="/delivery-app-alternatives"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Delivery Alternatives
+              </Link>
+              <Link
+                href="/online-ordering-platforms"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Ordering Platforms
               </Link>
               <Link
                 href="/contact"

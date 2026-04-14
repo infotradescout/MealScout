@@ -79,6 +79,16 @@ const TermsOfService = lazy(() => import("@/pages/terms-of-service"));
 const PrivacyPolicy = lazy(() => import("@/pages/privacy-policy"));
 const DataDeletion = lazy(() => import("@/pages/data-deletion"));
 const About = lazy(() => import("@/pages/about"));
+const ComparePage = lazy(() => import("@/pages/compare"));
+const CompareDoorDashPage = lazy(() => import("@/pages/compare-doordash"));
+const CompareUberEatsPage = lazy(() => import("@/pages/compare-uber-eats"));
+const CompareGrubhubPage = lazy(() => import("@/pages/compare-grubhub"));
+const DeliveryAppAlternativesPage = lazy(
+  () => import("@/pages/delivery-app-alternatives"),
+);
+const OnlineOrderingPlatformsPage = lazy(
+  () => import("@/pages/online-ordering-platforms"),
+);
 const FAQ = lazy(() => import("@/pages/faq"));
 const HowItWorks = lazy(() => import("@/pages/how-it-works"));
 const Contact = lazy(() => import("@/pages/contact"));
@@ -159,6 +169,9 @@ const publicRoutePrefixes = [
   "/privacy-policy",
   "/data-deletion",
   "/about",
+  "/compare",
+  "/delivery-app-alternatives",
+  "/online-ordering-platforms",
   "/faq",
   "/how-it-works",
   "/contact",
@@ -309,6 +322,18 @@ function Router() {
             <Route path="/privacy-policy" component={PrivacyPolicy} />
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
+            <Route path="/compare" component={ComparePage} />
+            <Route path="/compare/doordash" component={CompareDoorDashPage} />
+            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
+            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
+            <Route
+              path="/delivery-app-alternatives"
+              component={DeliveryAppAlternativesPage}
+            />
+            <Route
+              path="/online-ordering-platforms"
+              component={OnlineOrderingPlatformsPage}
+            />
             <Route path="/faq" component={FAQ} />
             <Route path="/how-it-works" component={HowItWorks} />
             <Route path="/contact" component={Contact} />
@@ -486,6 +511,18 @@ function Router() {
             <Route path="/privacy-policy" component={PrivacyPolicy} />
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
+            <Route path="/compare" component={ComparePage} />
+            <Route path="/compare/doordash" component={CompareDoorDashPage} />
+            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
+            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
+            <Route
+              path="/delivery-app-alternatives"
+              component={DeliveryAppAlternativesPage}
+            />
+            <Route
+              path="/online-ordering-platforms"
+              component={OnlineOrderingPlatformsPage}
+            />
             <Route path="/faq" component={FAQ} />
             <Route path="/how-it-works" component={HowItWorks} />
             <Route path="/contact" component={Contact} />

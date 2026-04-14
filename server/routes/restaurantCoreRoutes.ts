@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -14,6 +14,11 @@ import {
   insertRestaurantFollowSchema,
   insertRestaurantUserRecommendationSchema,
   insertVerificationRequestSchema,
+  deals,
+  restaurantFavorites,
+  restaurantFollows,
+  restaurantUserRecommendations,
+  videoStories,
   telemetryEvents,
   truckImportListings,
 } from "@shared/schema";
@@ -224,6 +229,202 @@ export function registerRestaurantCoreRoutes(
     } catch (error) {
       console.error("Error searching restaurants:", error);
       res.status(500).json({ message: "Failed to search restaurants" });
+    }
+  });
+
+  app.get("/api/restaurants/public", async (req, res) => {
+    try {
+      const { lat, lng, radius = 12, limit = 80 } = req.query as Record<
+        string,
+        string | undefined
+      >;
+      const parsedLimit = Math.max(
+        1,
+        Math.min(200, Number.parseInt(String(limit || "80"), 10) || 80),
+      );
+      const hasLocation = typeof lat === "string" && typeof lng === "string";
+      const userLat = hasLocation ? Number.parseFloat(lat!) : Number.NaN;
+      const userLng = hasLocation ? Number.parseFloat(lng!) : Number.NaN;
+      const radiusKm = Math.max(
+        1,
+        Math.min(50, Number.parseFloat(String(radius || "12")) || 12),
+      );
+
+      const allRestaurants = await storage.getAllRestaurants();
+      const activeRestaurants = allRestaurants.filter(
+        (restaurant: any) => restaurant?.isActive,
+      );
+      const restaurantIds = activeRestaurants
+        .map((restaurant: any) => String(restaurant?.id || "").trim())
+        .filter(Boolean);
+
+      const [
+        favoriteRows,
+        followRows,
+        recommendationRows,
+        activeDealRows,
+        videoRecommendationRows,
+      ] =
+        restaurantIds.length > 0
+          ? await Promise.all([
+              db
+                .select({
+                  restaurantId: restaurantFavorites.restaurantId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(restaurantFavorites)
+                .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
+                .groupBy(restaurantFavorites.restaurantId),
+              db
+                .select({
+                  restaurantId: restaurantFollows.restaurantId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(restaurantFollows)
+                .where(inArray(restaurantFollows.restaurantId, restaurantIds))
+                .groupBy(restaurantFollows.restaurantId),
+              db
+                .select({
+                  restaurantId: restaurantUserRecommendations.restaurantId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(restaurantUserRecommendations)
+                .where(
+                  inArray(
+                    restaurantUserRecommendations.restaurantId,
+                    restaurantIds,
+                  ),
+                )
+                .groupBy(restaurantUserRecommendations.restaurantId),
+              db
+                .select({
+                  restaurantId: deals.restaurantId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(deals)
+                .where(
+                  and(
+                    eq(deals.isActive, true),
+                    inArray(deals.restaurantId, restaurantIds),
+                  ),
+                )
+                .groupBy(deals.restaurantId),
+              db
+                .select({
+                  restaurantId: videoStories.restaurantId,
+                  count: sql<number>`cast(count(*) as integer)`,
+                })
+                .from(videoStories)
+                .where(
+                  and(
+                    inArray(videoStories.restaurantId, restaurantIds),
+                    eq(videoStories.status, "ready"),
+                    isNull(videoStories.deletedAt),
+                  ),
+                )
+                .groupBy(videoStories.restaurantId),
+            ])
+          : [[], [], [], [], []];
+
+      const favoritesByRestaurant = new Map(
+        favoriteRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+      );
+      const followsByRestaurant = new Map(
+        followRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+      );
+      const recommendationsByRestaurant = new Map(
+        recommendationRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
+      );
+      const activeDealsByRestaurant = new Map(
+        activeDealRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+      );
+      const videoRecommendationsByRestaurant = new Map(
+        videoRecommendationRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
+      );
+
+      const withDistance = activeRestaurants
+        .map((restaurant: any) => {
+          if (!hasLocation || Number.isNaN(userLat) || Number.isNaN(userLng)) {
+            const restaurantId = String(restaurant.id || "");
+            return {
+              ...restaurant,
+              distance: null,
+              favoriteCount: favoritesByRestaurant.get(restaurantId) || 0,
+              followCount: followsByRestaurant.get(restaurantId) || 0,
+              recommendationCount:
+                recommendationsByRestaurant.get(restaurantId) || 0,
+              videoRecommendationCount:
+                videoRecommendationsByRestaurant.get(restaurantId) || 0,
+              activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
+            };
+          }
+
+          const latRaw =
+            restaurant.currentLatitude ?? restaurant.latitude ?? null;
+          const lngRaw =
+            restaurant.currentLongitude ?? restaurant.longitude ?? null;
+          const targetLat =
+            typeof latRaw === "number" ? latRaw : Number.parseFloat(String(latRaw));
+          const targetLng =
+            typeof lngRaw === "number" ? lngRaw : Number.parseFloat(String(lngRaw));
+          if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
+            return null;
+          }
+
+          const earthRadiusKm = 6371;
+          const dLat = ((targetLat - userLat) * Math.PI) / 180;
+          const dLng = ((targetLng - userLng) * Math.PI) / 180;
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((userLat * Math.PI) / 180) *
+              Math.cos((targetLat * Math.PI) / 180) *
+              Math.sin(dLng / 2) *
+              Math.sin(dLng / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distanceKm = earthRadiusKm * c;
+          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) return null;
+
+          const restaurantId = String(restaurant.id || "");
+          return {
+            ...restaurant,
+            distance: distanceKm * 0.621371,
+            favoriteCount: favoritesByRestaurant.get(restaurantId) || 0,
+            followCount: followsByRestaurant.get(restaurantId) || 0,
+            recommendationCount:
+              recommendationsByRestaurant.get(restaurantId) || 0,
+            videoRecommendationCount:
+              videoRecommendationsByRestaurant.get(restaurantId) || 0,
+            activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
+          };
+        })
+        .filter(Boolean) as Array<any>;
+
+      const sorted = withDistance.sort((a: any, b: any) => {
+        const aDistance =
+          typeof a.distance === "number" && Number.isFinite(a.distance)
+            ? a.distance
+            : Number.POSITIVE_INFINITY;
+        const bDistance =
+          typeof b.distance === "number" && Number.isFinite(b.distance)
+            ? b.distance
+            : Number.POSITIVE_INFINITY;
+        if (aDistance !== bDistance) return aDistance - bDistance;
+
+        const aUpdated = new Date(a.updatedAt || 0).getTime();
+        const bUpdated = new Date(b.updatedAt || 0).getTime();
+        return bUpdated - aUpdated;
+      });
+
+      res.json(sorted.slice(0, parsedLimit));
+    } catch (error) {
+      console.error("Error fetching public restaurants:", error);
+      res.status(500).json({ message: "Failed to fetch public restaurants" });
     }
   });
 

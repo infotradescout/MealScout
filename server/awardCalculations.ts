@@ -7,7 +7,7 @@ import {
   videoStories,
   restaurantUserRecommendations,
 } from '@shared/schema';
-import { eq, and, or, like, sql, isNotNull } from 'drizzle-orm';
+import { eq, and, or, like, sql, isNotNull, isNull } from 'drizzle-orm';
 
 // Golden Fork Award Criteria
 const GOLDEN_FORK_CRITERIA = {
@@ -57,8 +57,52 @@ export async function getUserRecommendationCount(userId: string): Promise<number
 }
 
 /**
+ * Weighted recommendation score for a user.
+ * Video recommendations (restaurant-tagged stories) count higher than
+ * button/text recommendations.
+ */
+export async function getUserWeightedRecommendationScore(
+  userId: string,
+): Promise<number> {
+  const storyRecommendations = await db
+    .select({ restaurantId: videoStories.restaurantId })
+    .from(videoStories)
+    .where(
+      and(
+        eq(videoStories.userId, userId),
+        isNotNull(videoStories.restaurantId),
+      ),
+    )
+    .groupBy(videoStories.restaurantId);
+
+  const manualRecommendations = await db
+    .select({ restaurantId: restaurantUserRecommendations.restaurantId })
+    .from(restaurantUserRecommendations)
+    .where(eq(restaurantUserRecommendations.userId, userId))
+    .groupBy(restaurantUserRecommendations.restaurantId);
+
+  const videoSet = new Set<string>();
+  const manualSet = new Set<string>();
+
+  for (const rec of storyRecommendations) {
+    if (rec.restaurantId) videoSet.add(rec.restaurantId);
+  }
+  for (const rec of manualRecommendations) {
+    if (rec.restaurantId) manualSet.add(rec.restaurantId);
+  }
+
+  let weighted = 0;
+  for (const restaurantId of manualSet) {
+    weighted += videoSet.has(restaurantId) ? 0 : 1;
+  }
+  weighted += videoSet.size * 3;
+
+  return weighted;
+}
+
+/**
  * Calculate influence score for a user
- * Formula: (reviewCount * 10) + (recommendationCount * 15) + (favoritesCount * 5)
+ * Formula: (reviewCount * 10) + (weightedRecommendationScore * 15) + (favoritesCount * 5)
  */
 export async function calculateUserInfluenceScore(userId: string): Promise<number> {
   const user = await storage.getUser(userId);
@@ -68,11 +112,13 @@ export async function calculateUserInfluenceScore(userId: string): Promise<numbe
   const favorites = await storage.getUserRestaurantFavorites(userId);
   const favoritesCount = favorites.length;
 
-  const recommendationCount = await getUserRecommendationCount(userId);
+  const weightedRecommendationScore = await getUserWeightedRecommendationScore(
+    userId,
+  );
 
   const influenceScore =
     (user.reviewCount || 0) * 10 +
-    recommendationCount * 15 +
+    weightedRecommendationScore * 15 +
     favoritesCount * 5;
 
   return influenceScore;
@@ -168,24 +214,42 @@ export async function awardGoldenFork(userId: string): Promise<boolean> {
 
 /**
  * Calculate ranking score for a restaurant
- * Formula: (recommendationCount * 50) + (favoritesCount * 30) + (avgRating * 20) + (totalDealClaims * 10) + (totalDealViews * 1)
+ * Formula: (manualRecommendations * 50) + (videoRecommendations * 150)
+ *   + (favoritesCount * 35) + (followCount * 20)
+ *   + (avgRating * 20) + (totalDealClaims * 10) + (totalDealViews * 1)
  */
 export async function calculateRestaurantRankingScore(restaurantId: string): Promise<number> {
   // Get restaurant data
   const restaurant = await storage.getRestaurant(restaurantId);
   if (!restaurant) return 0;
 
-  // Get recommendations count
-  const recommendations = await db.query.restaurantRecommendations.findMany({
+  // Manual/button recommendations
+  const manualRecommendations = await db.query.restaurantUserRecommendations.findMany({
     where: (rec: any) => eq(rec.restaurantId, restaurantId),
   });
-  const recommendationCount = recommendations.length;
+  const manualRecommendationCount = manualRecommendations.length;
+
+  // Video recommendations: stories tagged to the restaurant
+  const videoRecommendations = await db.query.videoStories.findMany({
+    where: (story: any) =>
+      and(
+        eq(story.restaurantId, restaurantId),
+        eq(story.status, 'ready'),
+        isNull(story.deletedAt),
+      ),
+  });
+  const videoRecommendationCount = videoRecommendations.length;
 
   // Get favorites count
   const favorites = await db.query.restaurantFavorites.findMany({
     where: (fav: any) => eq(fav.restaurantId, restaurantId),
   });
   const favoritesCount = favorites.length;
+
+  const follows = await db.query.restaurantFollows.findMany({
+    where: (follow: any) => eq(follow.restaurantId, restaurantId),
+  });
+  const followCount = follows.length;
 
   // Get average rating
   const reviews = await db.query.reviews.findMany({
@@ -213,8 +277,10 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
   }
 
   const rankingScore =
-    recommendationCount * 50 +
-    favoritesCount * 30 +
+    manualRecommendationCount * 50 +
+    videoRecommendationCount * 150 +
+    favoritesCount * 35 +
+    followCount * 20 +
     Math.round(avgRating * 20) +
     totalDealClaims * 10 +
     totalDealViews * 1;
