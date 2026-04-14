@@ -8,6 +8,7 @@ import {
   restaurantUserRecommendations,
 } from '@shared/schema';
 import { eq, and, or, like, sql, isNotNull, isNull } from 'drizzle-orm';
+import { AWARD_RANKING_WEIGHTS } from '@shared/rankingPolicy';
 
 // Golden Fork Award Criteria
 const GOLDEN_FORK_CRITERIA = {
@@ -133,6 +134,7 @@ export async function checkGoldenForkEligibility(userId: string): Promise<{
   stats: {
     reviewCount: number;
     recommendationCount: number;
+    weightedRecommendationScore: number;
     influenceScore: number;
   };
 }> {
@@ -141,15 +143,27 @@ export async function checkGoldenForkEligibility(userId: string): Promise<{
     return {
       eligible: false,
       reason: 'User not found',
-      stats: { reviewCount: 0, recommendationCount: 0, influenceScore: 0 },
+      stats: {
+        reviewCount: 0,
+        recommendationCount: 0,
+        weightedRecommendationScore: 0,
+        influenceScore: 0,
+      },
     };
   }
 
   const influenceScore = await calculateUserInfluenceScore(userId);
   const reviewCount = user.reviewCount || 0;
   const recommendationCount = await getUserRecommendationCount(userId);
+  const weightedRecommendationScore =
+    await getUserWeightedRecommendationScore(userId);
 
-  const stats = { reviewCount, recommendationCount, influenceScore };
+  const stats = {
+    reviewCount,
+    recommendationCount,
+    weightedRecommendationScore,
+    influenceScore,
+  };
 
   if (reviewCount < GOLDEN_FORK_CRITERIA.minReviews) {
     return {
@@ -276,14 +290,43 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     totalDealViews += views.length;
   }
 
+  // Community activity across recommendation interactions + video engagement.
+  const activityRows = await db.execute(sql<{
+    reaction_score: number | null;
+    share_count: number | null;
+    video_engagement: number | null;
+  }>`
+    select
+      coalesce(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end), 0)::int as reaction_score,
+      coalesce((select count(*)::int from recommendation_shares rs
+        join restaurant_user_recommendations rur2 on rur2.id = rs.recommendation_id
+        where rur2.restaurant_id = ${restaurantId}), 0)::int as share_count,
+      coalesce((select sum(coalesce(vs.like_count,0) + coalesce(vs.comment_count,0) + coalesce(vs.share_count,0))::int
+        from video_stories vs
+        where vs.restaurant_id = ${restaurantId}
+          and vs.status = 'ready'
+          and vs.deleted_at is null), 0)::int as video_engagement
+    from recommendation_reactions rr
+    join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
+    where rur.restaurant_id = ${restaurantId}
+  `);
+  const activityRow = Array.isArray((activityRows as any).rows)
+    ? (activityRows as any).rows[0]
+    : null;
+  const communityActivityScore =
+    Number(activityRow?.reaction_score || 0) +
+    Number(activityRow?.share_count || 0) +
+    Number(activityRow?.video_engagement || 0);
+
   const rankingScore =
-    manualRecommendationCount * 50 +
-    videoRecommendationCount * 150 +
-    favoritesCount * 35 +
-    followCount * 20 +
-    Math.round(avgRating * 20) +
-    totalDealClaims * 10 +
-    totalDealViews * 1;
+    manualRecommendationCount * AWARD_RANKING_WEIGHTS.manualRecommendation +
+    videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation +
+    favoritesCount * AWARD_RANKING_WEIGHTS.favorites +
+    followCount * AWARD_RANKING_WEIGHTS.follows +
+    Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
+    totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
+    totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
+    communityActivityScore * AWARD_RANKING_WEIGHTS.communityActivity;
 
   return rankingScore;
 }

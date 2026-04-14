@@ -199,6 +199,16 @@ export default function VideoDetailPage() {
               size="sm"
               variant="outline"
               className="w-full justify-center"
+              onShareAction={async () => {
+                try {
+                  await fetch(`/api/stories/${videoId}/share`, {
+                    method: "POST",
+                    credentials: "include",
+                  });
+                } catch {
+                  // no-op
+                }
+              }}
             />
           </div>
         </div>
@@ -246,7 +256,20 @@ export default function VideoDetailPage() {
             <Heart className="w-4 h-4 mr-2" />
             {videoData.likeCount || 0}
           </Button>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                await fetch(`/api/stories/${videoId}/share`, {
+                  method: "POST",
+                  credentials: "include",
+                });
+              } catch {
+                // no-op
+              }
+            }}
+          >
             <Share2 className="w-4 h-4 mr-2" />
             Share
           </Button>

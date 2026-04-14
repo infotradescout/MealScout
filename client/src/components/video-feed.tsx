@@ -175,6 +175,17 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
     }
   };
 
+  const trackShare = async () => {
+    try {
+      await fetch(`/api/stories/${video.videoId}/share`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Error recording story share:', err);
+    }
+  };
+
   return (
     <div className="bg-[var(--bg-card)] text-[color:var(--text-primary)] rounded-lg overflow-hidden mb-4">
       {/* Video */}
@@ -244,6 +255,7 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
             size="sm"
             variant="outline"
             className="w-full justify-center"
+            onShareAction={trackShare}
           />
         </div>
 

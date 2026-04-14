@@ -83,6 +83,9 @@ const ComparePage = lazy(() => import("@/pages/compare"));
 const CompareDoorDashPage = lazy(() => import("@/pages/compare-doordash"));
 const CompareUberEatsPage = lazy(() => import("@/pages/compare-uber-eats"));
 const CompareGrubhubPage = lazy(() => import("@/pages/compare-grubhub"));
+const ServiceCompareLandingPage = lazy(
+  () => import("@/pages/service-compare-landing"),
+);
 const DeliveryAppAlternativesPage = lazy(
   () => import("@/pages/delivery-app-alternatives"),
 );
@@ -327,6 +330,10 @@ function Router() {
             <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
             <Route path="/compare/grubhub" component={CompareGrubhubPage} />
             <Route
+              path="/compare/:service/local/:city/:cuisine"
+              component={ServiceCompareLandingPage}
+            />
+            <Route
               path="/delivery-app-alternatives"
               component={DeliveryAppAlternativesPage}
             />
@@ -515,6 +522,10 @@ function Router() {
             <Route path="/compare/doordash" component={CompareDoorDashPage} />
             <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
             <Route path="/compare/grubhub" component={CompareGrubhubPage} />
+            <Route
+              path="/compare/:service/local/:city/:cuisine"
+              component={ServiceCompareLandingPage}
+            />
             <Route
               path="/delivery-app-alternatives"
               component={DeliveryAppAlternativesPage}

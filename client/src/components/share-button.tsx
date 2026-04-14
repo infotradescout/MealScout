@@ -16,6 +16,7 @@ interface ShareButtonProps {
   variant?: 'default' | 'ghost' | 'outline';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
+  onShareAction?: () => void | Promise<void>;
 }
 
 export default function ShareButton({ 
@@ -25,9 +26,14 @@ export default function ShareButton({
   variant = 'ghost',
   size = 'sm',
   className = '',
+  onShareAction,
 }: ShareButtonProps) {
   const { toast } = useToast();
   const getShareUrl = async () => getAffiliateShareUrl(url);
+  const trackShare = () => {
+    if (!onShareAction) return;
+    Promise.resolve(onShareAction()).catch(() => {});
+  };
 
   const handleCopyLink = async () => {
     try {
@@ -37,6 +43,7 @@ export default function ShareButton({
         title: 'Link copied!',
         description: 'Share link copied to clipboard',
       });
+      trackShare();
     } catch (error) {
       toast({
         title: 'Failed to copy',
@@ -50,6 +57,7 @@ export default function ShareButton({
     getShareUrl().then((shareUrl) => {
       const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
       window.open(fbUrl, '_blank', 'width=600,height=400');
+      trackShare();
     });
   };
 
@@ -58,6 +66,7 @@ export default function ShareButton({
     getShareUrl().then((shareUrl) => {
       const twitterUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`;
       window.open(twitterUrl, '_blank', 'width=600,height=400');
+      trackShare();
     });
   };
 
@@ -66,6 +75,7 @@ export default function ShareButton({
       const text = `${title}\n${shareUrl}`;
       const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
       window.open(whatsappUrl, '_blank');
+      trackShare();
     });
   };
 
@@ -74,6 +84,7 @@ export default function ShareButton({
       const subject = encodeURIComponent(title);
       const body = encodeURIComponent(`Check this out:\n\n${title}\n${description || ''}\n\n${shareUrl}`);
       window.location.href = `mailto:?subject=${subject}&body=${body}`;
+      trackShare();
     });
   };
 
@@ -86,6 +97,7 @@ export default function ShareButton({
           text: description || title,
           url: shareUrl,
         });
+        trackShare();
       } catch (error) {
         // User cancelled or share failed
         console.log('Share cancelled or failed');

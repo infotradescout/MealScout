@@ -12,6 +12,7 @@ import {
   checkGoldenForkEligibility,
   getAreaLeaderboard,
   getUserRecommendationCount,
+  getUserWeightedRecommendationScore,
 } from "../awardCalculations";
 import { awardHistory, restaurants, users } from "@shared/schema";
 
@@ -69,6 +70,9 @@ export function registerAwardsRoutes(app: Express) {
         holders.map(async (holder: (typeof holders)[number]) => ({
           ...holder,
           recommendationCount: await getUserRecommendationCount(holder.id),
+          weightedRecommendationScore: await getUserWeightedRecommendationScore(
+            holder.id,
+          ),
         })),
       );
 
@@ -89,6 +93,8 @@ export function registerAwardsRoutes(app: Express) {
 
       const influenceScore = await calculateUserInfluenceScore(userId);
       const recommendationCount = await getUserRecommendationCount(userId);
+      const weightedRecommendationScore =
+        await getUserWeightedRecommendationScore(userId);
 
       res.json({
         userId: user.id,
@@ -96,6 +102,7 @@ export function registerAwardsRoutes(app: Express) {
         goldenForkEarnedAt: user.goldenForkEarnedAt,
         reviewCount: user.reviewCount || 0,
         recommendationCount,
+        weightedRecommendationScore,
         influenceScore,
       });
     } catch (error) {

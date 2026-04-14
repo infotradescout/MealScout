@@ -780,6 +780,25 @@ export default function setupStoriesRoutes(app: Express) {
     }
   });
 
+  // POST - Record share
+  app.post('/api/stories/:storyId/share', async (req, res) => {
+    try {
+      const { storyId } = req.params;
+
+      await db
+        .update(videoStories)
+        .set({
+          shareCount: sql`${videoStories.shareCount} + 1`,
+        })
+        .where(eq(videoStories.id, storyId));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error recording story share:', error);
+      res.status(500).json({ message: 'Failed to record share' });
+    }
+  });
+
   // GET - Leaderboards
   app.get('/api/stories/leaderboards/trending', async (req, res) => {
     try {

@@ -50,6 +50,13 @@ export default function Sitemap() {
     url: "https://www.mealscout.us/sitemap",
   };
 
+  const serviceLandingPages = [
+    { href: "/compare/doordash/local/chicago/pizza", title: "Pizza in Chicago: MealScout vs DoorDash" },
+    { href: "/compare/uber-eats/local/austin/tacos", title: "Tacos in Austin: MealScout vs Uber Eats" },
+    { href: "/compare/grubhub/local/denver/burgers", title: "Burgers in Denver: MealScout vs Grubhub" },
+    { href: "/compare/doordash/local/pensacola/seafood", title: "Seafood in Pensacola: MealScout vs DoorDash" },
+  ];
+
   const siteStructure = [
     {
       category: "Main Pages",
@@ -216,6 +223,33 @@ export default function Sitemap() {
                 )}
               </>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] shadow-clean-lg mb-8">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
+              <div className="w-8 h-8 bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)] rounded-xl flex items-center justify-center">
+                <Search className="w-5 h-5" />
+              </div>
+              Service + City + Cuisine Comparison Pages
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-3">
+              {serviceLandingPages.map((page) => (
+                <Link key={page.href} href={page.href}>
+                  <div className="p-3 rounded-lg bg-[var(--bg-surface)] border border-transparent hover:border-[color:var(--accent-text)]/30 hover:bg-[color:var(--accent-text)]/10 transition-colors">
+                    <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                      {page.title}
+                    </div>
+                    <div className="text-xs text-[color:var(--text-secondary)] mt-1">
+                      SEO landing template route
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>

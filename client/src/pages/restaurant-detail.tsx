@@ -16,6 +16,9 @@ import {
   Heart,
   CheckCircle,
   Store,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -39,6 +42,18 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
+import { apiRequest } from "@/lib/queryClient";
+
+type PublicRecommendation = {
+  id: string;
+  userId: string;
+  createdAt?: string;
+  authorName: string;
+  likeCount: number;
+  dislikeCount: number;
+  shareCount: number;
+  viewerReaction: "like" | "dislike" | null;
+};
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -85,6 +100,20 @@ export default function RestaurantDetailPage() {
     queryKey: ["/api/deals/featured"],
     enabled: true,
   });
+  const { data: recommendationRows = [], refetch: refetchRecommendations } =
+    useQuery<PublicRecommendation[]>({
+      queryKey: ["/api/restaurants", restaurantId, "recommendations-public"],
+      enabled: !!restaurantId,
+      queryFn: async () => {
+        const response = await fetch(
+          `/api/restaurants/${restaurantId}/recommendations/public?limit=16`,
+          { credentials: "include" },
+        );
+        if (!response.ok) throw new Error("Failed to fetch recommendations");
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      },
+    });
 
   const { data: canonical } = useQuery({
     queryKey: ["/api/public/canonical", "restaurant", restaurantId],
@@ -230,6 +259,54 @@ export default function RestaurantDetailPage() {
       });
     } finally {
       setIsSubmittingBooking(false);
+    }
+  };
+
+  const handleRecommendationReaction = async (
+    recommendationId: string,
+    current: "like" | "dislike" | null,
+    next: "like" | "dislike",
+  ) => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+    try {
+      await apiRequest("POST", `/api/recommendations/${recommendationId}/reaction`, {
+        reaction: current === next ? "clear" : next,
+      });
+      await refetchRecommendations();
+    } catch (error: any) {
+      toast({
+        title: "Could not save reaction",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRecommendationShare = async (recommendationId: string) => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+    try {
+      const shareUrl = `${window.location.origin}${profilePath}?rec=${recommendationId}`;
+      const shareText = `Check out this community recommendation for ${restaurantName} on MealScout`;
+      if (navigator.share) {
+        await navigator.share({
+          title: `${restaurantName} recommendation`,
+          text: shareText,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+      }
+
+      await apiRequest("POST", `/api/recommendations/${recommendationId}/share`, {});
+      await refetchRecommendations();
+    } catch {
+      // Ignore user-cancelled share actions.
     }
   };
 
@@ -857,6 +934,96 @@ export default function RestaurantDetailPage() {
                 <p className="text-sm text-muted-foreground mt-1">
                   Be the first to review this restaurant!
                 </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Community Recommendations */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-foreground">
+              Community Recommendations
+            </h2>
+            <Badge variant="outline">
+              {recommendationRows.length} total
+            </Badge>
+          </div>
+          {recommendationRows.length > 0 ? (
+            <div className="space-y-3">
+              {recommendationRows.map((rec) => (
+                <Card
+                  key={rec.id}
+                  className="border border-[color:var(--border-subtle)]"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm text-foreground">
+                          Recommended by {rec.authorName}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {rec.createdAt
+                            ? new Date(rec.createdAt).toLocaleDateString()
+                            : "Recent"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant={
+                            rec.viewerReaction === "like" ? "default" : "outline"
+                          }
+                          className="h-8 px-2"
+                          onClick={() =>
+                            handleRecommendationReaction(
+                              rec.id,
+                              rec.viewerReaction,
+                              "like",
+                            )
+                          }
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5 mr-1" />
+                          {rec.likeCount}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            rec.viewerReaction === "dislike"
+                              ? "destructive"
+                              : "outline"
+                          }
+                          className="h-8 px-2"
+                          onClick={() =>
+                            handleRecommendationReaction(
+                              rec.id,
+                              rec.viewerReaction,
+                              "dislike",
+                            )
+                          }
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5 mr-1" />
+                          {rec.dislikeCount}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2"
+                          onClick={() => handleRecommendationShare(rec.id)}
+                        >
+                          <Share2 className="w-3.5 h-3.5 mr-1" />
+                          {rec.shareCount}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="border border-[color:var(--border-subtle)]">
+              <CardContent className="p-6 text-sm text-muted-foreground text-center">
+                No recommendations yet. Be the first to recommend this spot.
               </CardContent>
             </Card>
           )}

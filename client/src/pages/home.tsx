@@ -37,6 +37,7 @@ import {
   Beef,
   Flame,
   ArrowDownToLine,
+  PlayCircle,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -46,6 +47,7 @@ import { SEOHead } from "@/components/seo-head";
 import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
+import { computeHomeRankingScore, getHomeRankingReasons } from "@shared/rankingPolicy";
 
 const WelcomeLocationModal = lazy(() => import("@/components/WelcomeLocationModal"));
 
@@ -99,6 +101,7 @@ interface PublicBusinessProfile {
   followCount?: number;
   recommendationCount?: number;
   videoRecommendationCount?: number;
+  communityActivityCount?: number;
   activeDealCount?: number;
 }
 
@@ -117,8 +120,10 @@ interface BusinessDealsSummary {
   followCount: number;
   recommendationCount: number;
   videoRecommendationCount: number;
+  communityActivityCount: number;
   activeDealCount: number;
   fairnessScore: number;
+  rankReason: string;
   deals: Deal[];
 }
 
@@ -129,6 +134,14 @@ interface GeoAd {
   mediaUrl?: string | null;
   targetUrl: string;
   ctaText?: string | null;
+}
+
+interface TrendingStory {
+  id: string;
+  title: string;
+  creatorName?: string;
+  viewCount?: number;
+  likeCount?: number;
 }
 
 function formatBusinessTypeLabel(business: {
@@ -188,6 +201,7 @@ function BusinessDealsCard({
           <span>Favorites {business.favoriteCount}</span>
           <span>Deals {business.activeDealCount}</span>
         </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">{business.rankReason}</p>
 
         <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -463,6 +477,7 @@ export default function Home() {
       );
       const followCount = Number(profile.followCount || 0);
       const favoriteCount = Number(profile.favoriteCount || 0);
+      const communityActivityCount = Number(profile.communityActivityCount || 0);
       const activeDealCount = Math.max(
         Number(profile.activeDealCount || 0),
         dealCount,
@@ -473,17 +488,16 @@ export default function Home() {
           : 0;
       const liveTruckBoost =
         profile.isFoodTruck && profile.mobileOnline ? 1.5 : 0;
-      const recommendationSignal =
-        recommendationCount * 4 + videoRecommendationCount * 12;
-
-      return (
-        recommendationSignal +
-        followCount * 4 +
-        favoriteCount * 3 +
-        activeDealCount * 5 +
-        locationBoost * 4 +
-        liveTruckBoost
-      );
+      return computeHomeRankingScore({
+        recommendationCount,
+        videoRecommendationCount,
+        followCount,
+        favoriteCount,
+        activeDealCount,
+        locationBoost,
+        liveTruckBoost,
+        communityActivityCount,
+      });
     };
 
     return profiles
@@ -495,11 +509,23 @@ export default function Home() {
         );
         const followCount = Number(profile.followCount || 0);
         const favoriteCount = Number(profile.favoriteCount || 0);
+        const communityActivityCount = Number(profile.communityActivityCount || 0);
         const activeDealCount = Math.max(
           Number(profile.activeDealCount || 0),
           profileDeals.length,
         );
         const fairnessScore = computeFairnessScore(profile, profileDeals.length);
+        const rankReason = getHomeRankingReasons({
+          recommendationCount,
+          videoRecommendationCount,
+          followCount,
+          favoriteCount,
+          activeDealCount,
+          hasLocationBoost:
+            typeof profile.distance === "number" &&
+            Number.isFinite(profile.distance) &&
+            profile.distance <= 12,
+        });
         return {
           id: profile.id,
           name: profile.name || "Local Spot",
@@ -518,8 +544,10 @@ export default function Home() {
           videoRecommendationCount,
           followCount,
           favoriteCount,
+          communityActivityCount,
           activeDealCount,
           fairnessScore,
+          rankReason,
           deals: profileDeals,
         } as BusinessDealsSummary;
       })
@@ -586,6 +614,22 @@ export default function Home() {
       if (!res.ok) return [];
       return res.json();
     },
+  });
+
+  const { data: weeklyTrendingVideos = [] } = useQuery<TrendingStory[]>({
+    queryKey: ["/api/stories/leaderboards/trending", "week"],
+    queryFn: async () => {
+      const response = await fetch(
+        "/api/stories/leaderboards/trending?timeframe=week",
+        { credentials: "include" },
+      );
+      if (!response.ok) return [];
+      const payload = await response.json();
+      const list = Array.isArray(payload?.trending) ? payload.trending : [];
+      return list.slice(0, 6);
+    },
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 
   useEffect(() => {
@@ -1235,6 +1279,50 @@ export default function Home() {
                   </Button>
                 </Link>
               </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-foreground flex items-center">
+                <PlayCircle className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+                Weekly Top Video Recommendations
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Most shared and watched community food videos this week.
+              </p>
+            </div>
+            <Link href="/video">
+              <Button size="sm" variant="outline">
+                Post Video Recommendation
+              </Button>
+            </Link>
+          </div>
+
+          {weeklyTrendingVideos.length > 0 ? (
+            <div className="grid grid-cols-1 gap-2.5">
+              {weeklyTrendingVideos.map((story) => (
+                <Link key={story.id} href={`/video/${story.id}`}>
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                      {story.title || "Food recommendation"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span>{story.creatorName || "MealScout User"}</span>
+                      <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
+                      <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] p-4 text-center text-sm text-muted-foreground">
+              No trending recommendation videos yet.
             </div>
           )}
         </div>

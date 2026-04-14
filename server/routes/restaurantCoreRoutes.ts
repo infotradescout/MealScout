@@ -19,6 +19,7 @@ import {
   restaurantFollows,
   restaurantUserRecommendations,
   videoStories,
+  users,
   telemetryEvents,
   truckImportListings,
 } from "@shared/schema";
@@ -264,6 +265,9 @@ export function registerRestaurantCoreRoutes(
         recommendationRows,
         activeDealRows,
         videoRecommendationRows,
+        recommendationReactionRows,
+        recommendationShareRows,
+        videoEngagementRows,
       ] =
         restaurantIds.length > 0
           ? await Promise.all([
@@ -323,8 +327,46 @@ export function registerRestaurantCoreRoutes(
                   ),
                 )
                 .groupBy(videoStories.restaurantId),
+              db.execute(sql<{
+                restaurant_id: string;
+                score: number;
+              }>`
+                select
+                  rur.restaurant_id,
+                  cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
+                from recommendation_reactions rr
+                inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
+                where rur.restaurant_id = any(${restaurantIds}::text[])
+                group by rur.restaurant_id
+              `),
+              db.execute(sql<{
+                restaurant_id: string;
+                count: number;
+              }>`
+                select
+                  rur.restaurant_id,
+                  cast(count(*) as integer) as count
+                from recommendation_shares rs
+                inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
+                where rur.restaurant_id = any(${restaurantIds}::text[])
+                group by rur.restaurant_id
+              `),
+              db.execute(sql<{
+                restaurant_id: string;
+                score: number;
+              }>`
+                select
+                  vs.restaurant_id,
+                  cast(sum(coalesce(vs.like_count, 0) + coalesce(vs.comment_count, 0) + coalesce(vs.share_count, 0)) as integer) as score
+                from video_stories vs
+                where
+                  vs.restaurant_id = any(${restaurantIds}::text[])
+                  and vs.status = 'ready'
+                  and vs.deleted_at is null
+                group by vs.restaurant_id
+              `),
             ])
-          : [[], [], [], [], []];
+          : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }];
 
       const favoritesByRestaurant = new Map(
         favoriteRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
@@ -347,6 +389,24 @@ export function registerRestaurantCoreRoutes(
           Number(row.count) || 0,
         ]),
       );
+      const reactionByRestaurant = new Map(
+        ((recommendationReactionRows as any)?.rows || []).map((row: any) => [
+          String(row.restaurant_id || ""),
+          Number(row.score) || 0,
+        ]),
+      );
+      const sharesByRestaurant = new Map(
+        ((recommendationShareRows as any)?.rows || []).map((row: any) => [
+          String(row.restaurant_id || ""),
+          Number(row.count) || 0,
+        ]),
+      );
+      const videoEngagementByRestaurant = new Map(
+        ((videoEngagementRows as any)?.rows || []).map((row: any) => [
+          String(row.restaurant_id || ""),
+          Number(row.score) || 0,
+        ]),
+      );
 
       const withDistance = activeRestaurants
         .map((restaurant: any) => {
@@ -361,6 +421,10 @@ export function registerRestaurantCoreRoutes(
                 recommendationsByRestaurant.get(restaurantId) || 0,
               videoRecommendationCount:
                 videoRecommendationsByRestaurant.get(restaurantId) || 0,
+              communityActivityCount:
+                Number(reactionByRestaurant.get(restaurantId) || 0) +
+                Number(sharesByRestaurant.get(restaurantId) || 0) +
+                Number(videoEngagementByRestaurant.get(restaurantId) || 0),
               activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
             };
           }
@@ -400,6 +464,10 @@ export function registerRestaurantCoreRoutes(
               recommendationsByRestaurant.get(restaurantId) || 0,
             videoRecommendationCount:
               videoRecommendationsByRestaurant.get(restaurantId) || 0,
+            communityActivityCount:
+              Number(reactionByRestaurant.get(restaurantId) || 0) +
+              Number(sharesByRestaurant.get(restaurantId) || 0) +
+              Number(videoEngagementByRestaurant.get(restaurantId) || 0),
             activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
           };
         })
@@ -727,6 +795,182 @@ export function registerRestaurantCoreRoutes(
       } catch (error) {
         console.error("Error fetching user restaurant recommendations:", error);
         res.status(500).json({ message: "Failed to fetch recommendations" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:restaurantId/recommendations/public",
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const viewerId = req.user?.id || null;
+        const limit = Math.max(
+          1,
+          Math.min(50, Number.parseInt(String(req.query.limit || "12"), 10) || 12),
+        );
+
+        const rowsResult = await db.execute(sql<{
+          id: string;
+          user_id: string;
+          created_at: Date;
+          first_name: string | null;
+          last_name: string | null;
+          like_count: number;
+          dislike_count: number;
+          share_count: number;
+          viewer_reaction: string | null;
+        }>`
+          select
+            rur.id,
+            rur.user_id,
+            rur.created_at,
+            u.first_name,
+            u.last_name,
+            coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
+            coalesce(sum(case rr.reaction_type when 'dislike' then 1 else 0 end), 0)::int as dislike_count,
+            coalesce(count(distinct rs.id), 0)::int as share_count,
+            max(case when rr.user_id = ${viewerId} then rr.reaction_type else null end) as viewer_reaction
+          from restaurant_user_recommendations rur
+          inner join users u on u.id = rur.user_id
+          left join recommendation_reactions rr on rr.recommendation_id = rur.id
+          left join recommendation_shares rs on rs.recommendation_id = rur.id
+          where rur.restaurant_id = ${restaurantId}
+          group by rur.id, rur.user_id, rur.created_at, u.first_name, u.last_name
+          order by rur.created_at desc
+          limit ${limit}
+        `);
+
+        const rows = Array.isArray((rowsResult as any).rows)
+          ? (rowsResult as any).rows
+          : [];
+        const payload = rows.map((row: any) => ({
+          id: String(row.id || ""),
+          userId: String(row.user_id || ""),
+          createdAt: row.created_at,
+          authorName:
+            String([row.first_name, row.last_name].filter(Boolean).join(" ").trim()) ||
+            "Community Member",
+          likeCount: Number(row.like_count) || 0,
+          dislikeCount: Number(row.dislike_count) || 0,
+          shareCount: Number(row.share_count) || 0,
+          viewerReaction:
+            row.viewer_reaction === "like" || row.viewer_reaction === "dislike"
+              ? row.viewer_reaction
+              : null,
+        }));
+
+        res.json(payload);
+      } catch (error) {
+        console.error("Error fetching public recommendations:", error);
+        res.status(500).json({ message: "Failed to fetch recommendations" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/recommendations/:recommendationId/reaction",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const recommendationId = String(req.params.recommendationId || "").trim();
+        const userId = String(req.user.id || "").trim();
+        const reaction = String(req.body?.reaction || "").trim().toLowerCase();
+
+        if (!recommendationId) {
+          return res.status(400).json({ message: "Invalid recommendation id" });
+        }
+        if (!["like", "dislike", "clear"].includes(reaction)) {
+          return res
+            .status(400)
+            .json({ message: "Reaction must be like, dislike, or clear" });
+        }
+
+        const existing = await db.execute(sql<{ id: string; reaction_type: string }>`
+          select id, reaction_type
+          from recommendation_reactions
+          where recommendation_id = ${recommendationId} and user_id = ${userId}
+          limit 1
+        `);
+        const existingRow = ((existing as any)?.rows || [])[0] as
+          | { id: string; reaction_type: string }
+          | undefined;
+
+        if (reaction === "clear") {
+          await db.execute(sql`
+            delete from recommendation_reactions
+            where recommendation_id = ${recommendationId} and user_id = ${userId}
+          `);
+        } else if (!existingRow) {
+          await db.execute(sql`
+            insert into recommendation_reactions (recommendation_id, user_id, reaction_type)
+            values (${recommendationId}, ${userId}, ${reaction})
+          `);
+        } else if (existingRow.reaction_type !== reaction) {
+          await db.execute(sql`
+            update recommendation_reactions
+            set reaction_type = ${reaction}, updated_at = now()
+            where recommendation_id = ${recommendationId} and user_id = ${userId}
+          `);
+        }
+
+        const summaryResult = await db.execute(sql<{
+          like_count: number;
+          dislike_count: number;
+        }>`
+          select
+            coalesce(sum(case reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
+            coalesce(sum(case reaction_type when 'dislike' then 1 else 0 end), 0)::int as dislike_count
+          from recommendation_reactions
+          where recommendation_id = ${recommendationId}
+        `);
+        const summary = ((summaryResult as any)?.rows || [])[0] || {
+          like_count: 0,
+          dislike_count: 0,
+        };
+
+        res.json({
+          success: true,
+          reaction: reaction === "clear" ? null : reaction,
+          likeCount: Number(summary.like_count) || 0,
+          dislikeCount: Number(summary.dislike_count) || 0,
+        });
+      } catch (error) {
+        console.error("Error reacting to recommendation:", error);
+        res.status(500).json({ message: "Failed to save reaction" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/recommendations/:recommendationId/share",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const recommendationId = String(req.params.recommendationId || "").trim();
+        const userId = String(req.user.id || "").trim();
+        if (!recommendationId) {
+          return res.status(400).json({ message: "Invalid recommendation id" });
+        }
+
+        await db.execute(sql`
+          insert into recommendation_shares (recommendation_id, user_id)
+          values (${recommendationId}, ${userId})
+        `);
+
+        const shareCountResult = await db.execute(sql<{ share_count: number }>`
+          select coalesce(count(*), 0)::int as share_count
+          from recommendation_shares
+          where recommendation_id = ${recommendationId}
+        `);
+        const shareCount = Number(
+          ((shareCountResult as any)?.rows || [])[0]?.share_count || 0,
+        );
+
+        res.json({ success: true, shareCount });
+      } catch (error) {
+        console.error("Error sharing recommendation:", error);
+        res.status(500).json({ message: "Failed to save share" });
       }
     },
   );

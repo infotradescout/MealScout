@@ -23,6 +23,7 @@ import {
   PartyPopper,
   Calendar,
   Link as LinkIcon,
+  Video,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
@@ -294,6 +295,29 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-4 border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+          <CardContent className="p-4">
+            <Link href="/video">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[var(--bg-surface-muted)] flex items-center justify-center">
+                    <Video className="w-4 h-4 text-[color:var(--accent-text)]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Post a Video Recommendation
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Help local spots get discovered faster.
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </Link>
           </CardContent>
         </Card>
       </div>
