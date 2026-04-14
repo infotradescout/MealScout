@@ -410,6 +410,42 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const adminNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
     { path: "/admin/dashboard", icon: Shield, labelKey: "nav.admin", fallbackLabel: "Admin" },
     {
+      path: "/user-dashboard",
+      icon: User,
+      fallbackLabel: "Customer",
+    },
+    {
+      path: "/restaurant-owner-dashboard",
+      icon: Store,
+      fallbackLabel: "Restaurant/Truck",
+    },
+    {
+      path: "/host/dashboard",
+      icon: Users,
+      labelKey: "nav.host",
+      fallbackLabel: "Host",
+    },
+    {
+      path: "/event-coordinator/dashboard",
+      icon: Calendar,
+      fallbackLabel: "Coordinator",
+    },
+    {
+      path: "/supplier/dashboard",
+      icon: LayoutDashboard,
+      fallbackLabel: "Supplier",
+    },
+    {
+      path: "/parking-pass?adminMode=truck",
+      icon: ParkingSquare,
+      fallbackLabel: "Parking (Truck)",
+    },
+    {
+      path: "/parking-pass?adminMode=host",
+      icon: ParkingSquare,
+      fallbackLabel: "Parking (Host)",
+    },
+    {
       path: "/admin/control-center",
       icon: LayoutDashboard,
       labelKey: "nav.controlCenter",
@@ -423,7 +459,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     },
     { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
     { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
     ...restaurantOwnerExtras,
     {
       path: "/parking-pass",

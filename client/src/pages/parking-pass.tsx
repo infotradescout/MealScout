@@ -493,7 +493,7 @@ const MapPinPicker = ({ onPick }: { onPick: (point: GeoPoint) => void }) => {
 export default function ParkingPassPage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: subscription } = useQuery<{
     status: string;
     hasAccess: boolean;
@@ -519,6 +519,9 @@ export default function ParkingPassPage() {
   const isAdminOrStaff = ["admin", "super_admin", "staff"].includes(
     user?.userType || "",
   );
+  const [adminParkingMode, setAdminParkingMode] = useState<
+    "auto" | "truck" | "host"
+  >("auto");
   const canManageParkingPass =
     isAdminOrStaff ||
     user?.userType === "food_truck" ||
@@ -2782,9 +2785,40 @@ export default function ParkingPassPage() {
     }
   };
 
-  const isTruckViewUser = canManageParkingPass;
+  useEffect(() => {
+    if (!isAdminOrStaff) {
+      setAdminParkingMode("auto");
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const mode = String(params.get("adminMode") || "")
+      .trim()
+      .toLowerCase();
+    if (mode === "truck" || mode === "host") {
+      setAdminParkingMode(mode);
+    } else {
+      setAdminParkingMode("auto");
+    }
+  }, [isAdminOrStaff, location]);
+
+  const setAdminMode = (mode: "auto" | "truck" | "host") => {
+    if (!isAdminOrStaff) return;
+    setAdminParkingMode(mode);
+    const url = new URL(window.location.href);
+    if (mode === "auto") {
+      url.searchParams.delete("adminMode");
+    } else {
+      url.searchParams.set("adminMode", mode);
+    }
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  const isTruckViewUser =
+    canManageParkingPass && (!isAdminOrStaff || adminParkingMode !== "host");
   const showHostParkingPass =
-    isAuthenticated && (hasHostProfile || isAdminOrStaff);
+    isAuthenticated &&
+    (hasHostProfile || isAdminOrStaff) &&
+    (!isAdminOrStaff || adminParkingMode !== "truck");
   const canScheduleTab = Boolean(isTruckViewUser);
   const canHostTab = Boolean(showHostParkingPass);
   const availableTabs = useMemo(
@@ -3276,6 +3310,31 @@ export default function ParkingPassPage() {
           <p className="text-xs text-[color:var(--text-muted)]">
             Book available parking spots by day and time.
           </p>
+          {isAdminOrStaff && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={adminParkingMode === "auto" ? "default" : "outline"}
+                onClick={() => setAdminMode("auto")}
+              >
+                Admin Auto
+              </Button>
+              <Button
+                size="sm"
+                variant={adminParkingMode === "truck" ? "default" : "outline"}
+                onClick={() => setAdminMode("truck")}
+              >
+                Truck Permission
+              </Button>
+              <Button
+                size="sm"
+                variant={adminParkingMode === "host" ? "default" : "outline"}
+                onClick={() => setAdminMode("host")}
+              >
+                Host Permission
+              </Button>
+            </div>
+          )}
         </div>
 
         <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
