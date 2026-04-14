@@ -2,14 +2,19 @@ import { registerGeoAuditRoutes } from "./admin/geoAuditRoutes";
 import { registerAffiliateAdminRoutes } from "./admin/affiliateAdminRoutes";
 import { registerTruckImportAdminRoutes } from "./admin/truckImportAdminRoutes";
 import { registerUserAdminRoutes } from "./admin/userAdminRoutes";
+import { registerAdminCoreOpsRoutes } from "./admin/adminCoreOpsRoutes";
+import {
+  getHostPricingColumnsCheck,
+  hasHostSpotImageColumn,
+  resetHostPricingColumnsCache,
+} from "./admin/hostSchemaSupport";
 import type { Express } from "express";
-import Stripe from "stripe";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { eq, and, inArray, or, sql, desc, isNull, gte, lt, ne } from "drizzle-orm";
 import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
-import { sanitizeUser, sanitizeUsers } from "../utils/sanitize";
+import { sanitizeUser } from "../utils/sanitize";
 import { sendAccountSetupInvite } from "../utils/accountSetup";
 import { emailService } from "../emailService";
 import { emailDeliveryAudit, getEmailConfigSummary } from "../emailService";
@@ -17,7 +22,6 @@ import { db } from "../db";
 import { logAudit } from "../auditLogger";
 import multer from "multer";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
-import { parseTruckImportFile } from "../utils/truckImport";
 import { forwardGeocode } from "../utils/geocoding";
 import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
 import {
@@ -58,11 +62,6 @@ import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../services/parkingPassIntegrity";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
 import { getSupplyMarketDataLanes } from "../services/supplyMarketIntel";
-
-// Optional Stripe integration (mirrors server/routes.ts)
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
 
 const buildLocationKey = (
   address?: string | null,
@@ -825,91 +824,6 @@ async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySum
         new Date(String(a.updatedAt)).getTime(),
     )
     .slice(0, limit * 2);
-}
-
-type HostPricingColumnsCheck = {
-  checkedAt: number;
-  hasAll: boolean;
-  missing: string[];
-};
-
-const HOST_PRICING_COLUMNS = [
-  "parking_pass_breakfast_price_cents",
-  "parking_pass_lunch_price_cents",
-  "parking_pass_dinner_price_cents",
-  "parking_pass_daily_price_cents",
-  "parking_pass_weekly_price_cents",
-  "parking_pass_monthly_price_cents",
-  "parking_pass_start_time",
-  "parking_pass_end_time",
-  "parking_pass_days_of_week",
-] as const;
-
-let hostPricingColumnsCache: HostPricingColumnsCheck | null = null;
-let hostSpotImageColumnCache: { checkedAt: number; has: boolean } | null = null;
-
-async function getHostPricingColumnsCheck(): Promise<HostPricingColumnsCheck> {
-  const now = Date.now();
-  if (
-    hostPricingColumnsCache &&
-    now - hostPricingColumnsCache.checkedAt < 5 * 60 * 1000
-  ) {
-    return hostPricingColumnsCache;
-  }
-
-  const rows = await db.execute(
-    sql`
-      select column_name
-      from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'hosts'
-        and column_name in (${sql.join(
-          HOST_PRICING_COLUMNS.map((col) => sql`${col}`),
-          sql`, `,
-        )})
-    `,
-  );
-
-  const present = new Set<string>(
-    (rows as any)?.rows?.map((r: any) => String(r?.column_name || "")) ?? [],
-  );
-  const missing = HOST_PRICING_COLUMNS.filter((col) => !present.has(col));
-  hostPricingColumnsCache = {
-    checkedAt: now,
-    hasAll: missing.length === 0,
-    missing: missing.slice(),
-  };
-  return hostPricingColumnsCache;
-}
-
-async function hasHostSpotImageColumn(): Promise<boolean> {
-  const now = Date.now();
-  if (
-    hostSpotImageColumnCache &&
-    now - hostSpotImageColumnCache.checkedAt < 5 * 60 * 1000
-  ) {
-    return hostSpotImageColumnCache.has;
-  }
-
-  const rows = await db.execute(
-    sql`
-      select column_name
-      from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'hosts'
-        and column_name = 'spot_image_url'
-      limit 1
-    `,
-  );
-
-  const present =
-    Array.isArray((rows as any)?.rows) &&
-    (rows as any).rows.some(
-      (r: any) => String(r?.column_name || "") === "spot_image_url",
-    );
-
-  hostSpotImageColumnCache = { checkedAt: now, has: present };
-  return present;
 }
 
 const truckImportUpload = multer({
@@ -4334,187 +4248,8 @@ export function registerAdminManagementRoutes(app: Express) {
     },
   );
 
-  app.get(
-    "/api/admin/payments/health",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (_req: any, res) => {
-      try {
-        const snapshot = await getPaymentHealthSnapshot();
-        res.json(snapshot);
-      } catch (error) {
-        console.error("Error fetching payment health:", error);
-        res.status(500).json({ message: "Failed to fetch payment health" });
-      }
-    },
-  );
-
   registerGeoAuditRoutes(app);
-  // Admin endpoint to sync subscriptions from Stripe to database
-  app.post(
-    "/api/admin/subscriptions/sync",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        if (!stripe) {
-          return res.status(500).json({ message: "Stripe not configured" });
-        }
-
-        const results = {
-          synced: 0,
-          skipped: 0,
-          errors: 0,
-          details: [] as any[],
-        };
-
-        // Get all users with Stripe customer IDs
-        const allUsers = await storage.getAllUsers();
-        const usersWithStripe = allUsers.filter((u) => u.stripeCustomerId);
-
-        console.log(
-          `[ADMIN SYNC] Found ${usersWithStripe.length} users with Stripe customer IDs`,
-        );
-
-        for (const user of usersWithStripe) {
-          try {
-            // Skip if user already has subscription ID
-            if (user.stripeSubscriptionId) {
-              results.skipped++;
-              continue;
-            }
-
-            // Check Stripe for active subscriptions
-            const subscriptions = await stripe.subscriptions.list({
-              customer: user.stripeCustomerId!,
-              status: "active",
-              limit: 1,
-            });
-
-            if (subscriptions.data.length > 0) {
-              const subscription = subscriptions.data[0];
-              const interval =
-                subscription.items.data[0]?.price?.recurring?.interval;
-              const intervalCount =
-                subscription.items.data[0]?.price?.recurring?.interval_count ||
-                1;
-
-              let billingInterval = "month";
-              if (interval === "month" && intervalCount === 3) {
-                billingInterval = "quarter";
-              } else if (interval === "year") {
-                billingInterval = "year";
-              }
-
-              await storage.updateUserStripeInfo(
-                user.id,
-                user.stripeCustomerId!,
-                subscription.id,
-                `standard-${billingInterval}`,
-              );
-
-              results.synced++;
-              results.details.push({
-                userId: user.id,
-                email: user.email,
-                subscriptionId: subscription.id,
-                billingInterval: `standard-${billingInterval}`,
-                status: "synced",
-              });
-
-              console.log(
-                `[ADMIN SYNC] ✅ Synced subscription ${subscription.id} for user ${user.email}`,
-              );
-            } else {
-              results.skipped++;
-            }
-          } catch (error: any) {
-            results.errors++;
-            results.details.push({
-              userId: user.id,
-              email: user.email,
-              error: error.message,
-              status: "error",
-            });
-            console.error(
-              `[ADMIN SYNC] ❌ Error syncing user ${user.email}:`,
-              error,
-            );
-          }
-        }
-
-        console.log(
-          `[ADMIN SYNC] Complete: ${results.synced} synced, ${results.skipped} skipped, ${results.errors} errors`,
-        );
-        res.json(results);
-      } catch (error) {
-        console.error("Error syncing subscriptions:", error);
-        res.status(500).json({ message: "Failed to sync subscriptions" });
-      }
-    },
-  );
-
-  app.get(
-    "/api/admin/restaurants/pending",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const restaurants = await storage.getPendingRestaurants();
-        res.json(restaurants);
-      } catch (error) {
-        console.error("Error fetching pending restaurants:", error);
-        res
-          .status(500)
-          .json({ message: "Failed to fetch pending restaurants" });
-      }
-    },
-  );
-
-  app.post(
-    "/api/admin/restaurants/:id/approve",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        await storage.approveRestaurant(req.params.id);
-        res.json({ message: "Restaurant approved successfully" });
-      } catch (error) {
-        console.error("Error approving restaurant:", error);
-        res.status(500).json({ message: "Failed to approve restaurant" });
-      }
-    },
-  );
-
-  app.delete(
-    "/api/admin/restaurants/:id",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        await storage.deleteRestaurant(req.params.id);
-        res.json({ message: "Restaurant deleted successfully" });
-      } catch (error) {
-        console.error("Error deleting restaurant:", error);
-        res.status(500).json({ message: "Failed to delete restaurant" });
-      }
-    },
-  );
-
-  app.get(
-    "/api/admin/users",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const users = await storage.getAllUsers();
-        res.json(sanitizeUsers(users, { includeStripe: true }));
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        res.status(500).json({ message: "Failed to fetch users" });
-      }
-    },
-  );
+  registerAdminCoreOpsRoutes(app);
 
   registerTruckImportAdminRoutes(app, {
     requireAdminUser,
@@ -4531,9 +4266,7 @@ export function registerAdminManagementRoutes(app: Express) {
     buildLocationKey,
     getHostPricingColumnsCheck,
     hasHostSpotImageColumn,
-    resetHostPricingColumnsCache: () => {
-      hostPricingColumnsCache = null;
-    },
+    resetHostPricingColumnsCache,
     isMissingColumnError,
   });
   registerAffiliateAdminRoutes(app, {
