@@ -4,7 +4,6 @@ import { fetchJsonWithRetry } from "@/lib/resilientFetch";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import DealCard from "@/components/deal-card";
 import Navigation from "@/components/navigation";
 import SmartSearch from "@/components/smart-search";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,7 @@ import {
   Target,
   Heart,
   Bell,
-  Map,
+  Map as MapIcon,
   LogIn,
   UserPlus,
   Store,
@@ -66,8 +65,33 @@ interface Deal {
   restaurant?: {
     name: string;
     cuisineType?: string;
+    businessType?: string;
+    isFoodTruck?: boolean;
+    address?: string;
   };
   distance?: number;
+}
+
+interface LiveTruck {
+  id: string;
+  name: string;
+  address?: string;
+  cuisineType?: string;
+  businessType?: string;
+  isFoodTruck?: boolean;
+  isVerified?: boolean;
+  distance?: number;
+  lastBroadcastAt?: string;
+}
+
+interface BusinessDealsSummary {
+  id: string;
+  name: string;
+  cuisineType?: string;
+  businessType?: string;
+  isFoodTruck?: boolean;
+  distance?: number;
+  deals: Deal[];
 }
 
 interface GeoAd {
@@ -77,6 +101,80 @@ interface GeoAd {
   mediaUrl?: string | null;
   targetUrl: string;
   ctaText?: string | null;
+}
+
+function formatBusinessTypeLabel(business: {
+  isFoodTruck?: boolean;
+  businessType?: string;
+}): string {
+  if (business.isFoodTruck) return "Food Truck";
+  const normalizedType = String(business.businessType || "")
+    .toLowerCase()
+    .trim();
+  if (normalizedType.includes("bar")) return "Bar";
+  return "Restaurant";
+}
+
+function BusinessDealsCard({
+  business,
+  compact = false,
+}: {
+  business: BusinessDealsSummary;
+  compact?: boolean;
+}) {
+  const businessTypeLabel = formatBusinessTypeLabel(business);
+  const distanceLabel =
+    typeof business.distance === "number" && Number.isFinite(business.distance)
+      ? `${business.distance.toFixed(1)} mi away`
+      : null;
+
+  return (
+    <Link href={`/restaurant/${business.id}`}>
+      <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-foreground truncate">
+              {business.name}
+            </h4>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {business.cuisineType || businessTypeLabel}
+            </p>
+          </div>
+          <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {businessTypeLabel}
+          </span>
+        </div>
+
+        {distanceLabel && (
+          <p className="mt-2 text-xs text-muted-foreground">{distanceLabel}</p>
+        )}
+
+        <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Active Deals ({business.deals.length})
+          </p>
+          {business.deals.length > 0 ? (
+            <div className="mt-1 space-y-1.5">
+              {business.deals.slice(0, compact ? 1 : 2).map((deal) => (
+                <p key={deal.id} className="text-xs text-foreground line-clamp-1">
+                  {deal.title}
+                </p>
+              ))}
+              {business.deals.length > (compact ? 1 : 2) && (
+                <p className="text-[11px] text-muted-foreground">
+                  +{business.deals.length - (compact ? 1 : 2)} more
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              No active deals yet
+            </p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 export default function Home() {
@@ -283,6 +381,84 @@ export default function Home() {
     [featuredDeals],
   );
 
+  const dealsByRestaurant = useMemo(() => {
+    const grouped = new Map<string, Deal[]>();
+    sortedFeaturedDeals.forEach((deal) => {
+      const key = String(deal.restaurantId || "").trim();
+      if (!key) return;
+      const existing = grouped.get(key) || [];
+      existing.push(deal);
+      grouped.set(key, existing);
+    });
+    return grouped;
+  }, [sortedFeaturedDeals]);
+
+  const featuredBusinesses = useMemo(() => {
+    const grouped = new Map<string, BusinessDealsSummary>();
+    sortedFeaturedDeals.forEach((deal) => {
+      const key = String(deal.restaurantId || "").trim();
+      if (!key) return;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.deals.push(deal);
+        if (
+          typeof deal.distance === "number" &&
+          Number.isFinite(deal.distance) &&
+          (existing.distance == null || deal.distance < existing.distance)
+        ) {
+          existing.distance = deal.distance;
+        }
+        return;
+      }
+
+      grouped.set(key, {
+        id: key,
+        name: deal.restaurant?.name || "Local Spot",
+        cuisineType: deal.restaurant?.cuisineType,
+        businessType: deal.restaurant?.businessType,
+        isFoodTruck: deal.restaurant?.isFoodTruck,
+        distance: deal.distance,
+        deals: [deal],
+      });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => {
+      const aDistance = a.distance ?? Number.POSITIVE_INFINITY;
+      const bDistance = b.distance ?? Number.POSITIVE_INFINITY;
+      return aDistance - bDistance;
+    });
+  }, [sortedFeaturedDeals]);
+
+  const {
+    data: liveTrucksData,
+    isLoading: liveTrucksLoading,
+    isError: liveTrucksError,
+    refetch: refetchLiveTrucks,
+  } = useQuery<{ trucks?: LiveTruck[] } | LiveTruck[]>({
+    queryKey: location
+      ? ["/api/trucks/live", location.lat, location.lng]
+      : ["/api/trucks/live", "no-location"],
+    enabled: !!location,
+    queryFn: async () => {
+      if (!location) return { trucks: [] };
+      const response = await fetch(
+        `/api/trucks/live?lat=${location.lat}&lng=${location.lng}&radiusKm=7`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Failed to fetch live trucks");
+      return response.json();
+    },
+    staleTime: 15 * 1000,
+    refetchInterval: 20 * 1000,
+    refetchIntervalInBackground: false,
+  });
+
+  const liveTrucks = useMemo(() => {
+    if (Array.isArray(liveTrucksData)) return liveTrucksData;
+    if (Array.isArray(liveTrucksData?.trucks)) return liveTrucksData.trucks;
+    return [];
+  }, [liveTrucksData]);
+
   const { data: geoAds = [] } = useQuery<GeoAd[]>({
     queryKey: ["/api/geo-ads", "home", location?.lat, location?.lng],
     enabled: !!location,
@@ -359,7 +535,7 @@ export default function Home() {
   );
 
   return (
-    <div className="page relative overflow-hidden home-cinematic pb-20">
+    <div className="page relative overflow-hidden home-cinematic pb-12">
       <SEOHead
         title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout"
         description="Find food trucks, restaurants, and bars near you. Discover live locations, local specials, and deals in your city — all on MealScout."
@@ -479,7 +655,7 @@ export default function Home() {
       </header>
 
       {/* Hero & Search Section */}
-      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-4">
+      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="home-hero-panel">
             <div className="mb-3">
@@ -533,7 +709,7 @@ export default function Home() {
                     });
                   }}
                 >
-                  <Map className="w-4 h-4 mr-1" />
+                  <MapIcon className="w-4 h-4 mr-1" />
                   Open map
                 </Button>
               </Link>
@@ -744,7 +920,7 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
-      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-4">
+      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -763,37 +939,113 @@ export default function Home() {
               </Button>
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex-shrink-0 w-56">
-                <DealCard
-                  deal={
-                    {
-                      id: `truck-${i}`,
-                      restaurantId: `truck-${i}`,
-                      title: "Food Truck Deal",
-                      description: "Special lunch combo",
-                      dealType: "percentage",
-                      discountValue: "20",
-                      minOrderAmount: "10",
-                      restaurant: {
-                        name: `Tasty Truck #${i}`,
-                        cuisineType: "Street Food",
-                      },
-                      distance: 0.3,
-                      currentUses: 45,
-                      isFeatured: false,
-                    } as any
-                  }
+          {liveTrucksLoading ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
                 />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : liveTrucksError ? (
+            <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
+              <p>We couldn't load live trucks right now.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => refetchLiveTrucks()}
+              >
+                Retry Live Trucks
+              </Button>
+            </div>
+          ) : !location ? (
+            <p className="text-xs text-muted-foreground py-3">
+              Use your location to see live trucks nearby.
+            </p>
+          ) : liveTrucks.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              {liveTrucks.map((truck) => {
+                const truckDeals = dealsByRestaurant.get(String(truck.id)) || [];
+                const distanceMiles =
+                  typeof truck.distance === "number" && Number.isFinite(truck.distance)
+                    ? truck.distance * 0.621371
+                    : null;
+                const lastSeenLabel = truck.lastBroadcastAt
+                  ? `Updated ${new Date(truck.lastBroadcastAt).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}`
+                  : "Live location active";
+
+                return (
+                  <Link key={truck.id} href={`/restaurant/${truck.id}`}>
+                    <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-semibold text-foreground truncate">
+                            {truck.name}
+                          </h4>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {truck.cuisineType || "Food Truck"}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
+                          Live
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>
+                          {distanceMiles != null
+                            ? `${distanceMiles.toFixed(1)} mi away`
+                            : "Nearby"}
+                        </span>
+                        <span>{lastSeenLabel}</span>
+                      </div>
+
+                      <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Active Deals ({truckDeals.length})
+                        </p>
+                        {truckDeals.length > 0 ? (
+                          <div className="mt-1 space-y-1.5">
+                            {truckDeals.slice(0, 2).map((deal) => (
+                              <p
+                                key={deal.id}
+                                className="text-xs text-foreground line-clamp-1"
+                              >
+                                {deal.title}
+                              </p>
+                            ))}
+                            {truckDeals.length > 2 && (
+                              <p className="text-[11px] text-muted-foreground">
+                                +{truckDeals.length - 2} more
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            No active deals yet
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground py-3">
+              No live trucks nearby right now.
+            </p>
+          )}
         </div>
       </section>
 
       {/* Featured Deals Section - ORIGINAL LAYOUT */}
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-4">
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="mb-3">
             <h2 className="text-base font-bold text-foreground flex items-center">
@@ -837,11 +1089,11 @@ export default function Home() {
                 Retry Deals
               </Button>
             </div>
-          ) : sortedFeaturedDeals.length > 0 ? (
+          ) : featuredBusinesses.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {sortedFeaturedDeals.map((deal: Deal) => (
-                <div key={deal.id} className="flex-shrink-0 w-56">
-                  <DealCard deal={deal} />
+              {featuredBusinesses.map((business) => (
+                <div key={business.id} className="flex-shrink-0 w-64">
+                  <BusinessDealsCard business={business} />
                 </div>
               ))}
             </div>
@@ -870,7 +1122,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section section--full section--surface py-4">
+      <section className="section section--full section--surface py-3">
         <div className="content">
           <SEOInternalLinks
             title={`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
@@ -883,7 +1135,7 @@ export default function Home() {
 
       {/* Owner Section - MOVED UP FOR LOGGED OUT USERS */}
       {!user && (
-        <section className="section section--full section--surface-2 py-3 text-foreground">
+        <section className="section section--full section--surface-2 py-2 text-foreground">
           <div className="content text-center">
             <ChefHat className="w-6 h-6 mx-auto mb-1 text-[color:var(--accent-text)]" />
             <h3 className="text-base font-bold mb-0.5">
@@ -907,7 +1159,7 @@ export default function Home() {
       )}
 
       {/* TWO-COLUMN SECTIONS - SIDE BY SIDE */}
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-6">
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-4">
         <div className="content">
           {!user ? (
             /* LOGGED OUT - TWO SECTIONS SIDE BY SIDE */
@@ -1087,10 +1339,14 @@ export default function Home() {
                     Retry Deals
                   </Button>
                 </div>
-              ) : sortedFeaturedDeals.length > 0 ? (
+              ) : featuredBusinesses.length > 0 ? (
                 <div className="space-y-3">
-                  {sortedFeaturedDeals.map((deal: Deal) => (
-                    <DealCard key={deal.id} deal={deal} />
+                  {featuredBusinesses.map((business) => (
+                    <BusinessDealsCard
+                      key={business.id}
+                      business={business}
+                      compact
+                    />
                   ))}
                 </div>
               ) : (
@@ -1116,7 +1372,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="section section--full border-t border-[color:var(--border-subtle)] py-6">
+      <footer className="section section--full border-t border-[color:var(--border-subtle)] py-4">
         <div className="content">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div className="space-y-2">
