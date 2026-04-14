@@ -202,3 +202,5 @@ export function ReporterReputationPage() {
     </div>
   );
 }
+
+export default ReporterReputationPage;

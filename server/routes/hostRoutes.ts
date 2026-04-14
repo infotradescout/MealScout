@@ -2594,7 +2594,12 @@ export function registerHostRoutes(app: Express) {
           });
         }
 
-        const eventDateKey = dateKeyFromUnknown(event.date);
+        const eventDateKey = dateKeyFromUnknown(event.date, bookingTimeZone);
+        if (!eventDateKey) {
+          return res.status(400).json({
+            message: "Invalid parking pass date.",
+          });
+        }
         const rangeStart = utcDateFromDateKey(eventDateKey);
 
         const requestedDateKeys = Array.isArray(selectedDates)
@@ -2671,7 +2676,10 @@ export function registerHostRoutes(app: Express) {
 
         const eventsByDate = new Map<string, (typeof bookingEvents)[number]>();
         for (const row of bookingEvents) {
-          const dateKey = dateKeyFromUnknown(row.date);
+          const dateKey = dateKeyFromUnknown(row.date, bookingTimeZone);
+          if (!dateKey) {
+            continue;
+          }
           eventsByDate.set(dateKey, row);
         }
 

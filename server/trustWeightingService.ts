@@ -32,7 +32,7 @@ export async function calculateUserTrustProfile(
     .select()
     .from(users)
     .where(eq(users.id, userId))
-    .then((res) => res[0]);
+    .then((res: any[]) => res[0]);
 
   if (!user) throw new Error("User not found");
 
@@ -53,14 +53,14 @@ export async function calculateUserTrustProfile(
     )
     // Find flags on this user's recommendations
     // This would require fetching the user's recommendations first
-    .then((res) => res[0]);
+    .then((res: any[]) => res[0]);
 
   // Get their recommendations count
   const recommendationsCount = await db
     .select({ count: count() })
     .from(restaurantUserRecommendations)
     .where(eq(restaurantUserRecommendations.userId, userId))
-    .then((res) => res[0]?.count || 0);
+    .then((res: any[]) => res[0]?.count || 0);
 
   // Calculate trust adjustment based on:
   // 1. Reporter reputation (higher is better)
@@ -149,7 +149,7 @@ export async function getRecommendationVisibilityScore(
     .from(recommendationFlags)
     .where(eq(recommendationFlags.recommendationId, recommendationId));
 
-  const unresolved = flags.filter((f) => !f.caseId);
+  const unresolved = flags.filter((f: any) => !f.caseId);
 
   // If flagged and unresolved, hide it
   if (unresolved.length > 0) {
@@ -167,12 +167,12 @@ export async function getRecommendationVisibilityScore(
     .where(eq(moderationCases.recommendationId, recommendationId));
 
   const resolutions = await Promise.all(
-    cases.map((c) =>
+    cases.map((c: any) =>
       db
         .select()
         .from(moderationResolutions)
         .where(eq(moderationResolutions.caseId, c.id))
-        .then((res) => res[0]),
+        .then((res: any[]) => res[0]),
     ),
   );
 
@@ -265,20 +265,15 @@ export async function onModerationResolved(
     .select()
     .from(users)
     .where(eq(users.id, userId))
-    .then((res) => res[0]);
+    .then((res: any[]) => res[0]);
 
   if (!user) return;
 
   let reputationDelta = 0;
-  let flagCountUpdate = 0;
-  let upheldCountUpdate = 0;
-
   if (outcome === "valid") {
     reputationDelta = 5;
-    upheldCountUpdate = 1;
   } else if (outcome === "invalid") {
     reputationDelta = -10;
-    flagCountUpdate = 1;
   } else {
     reputationDelta = 2;
   }
@@ -291,17 +286,16 @@ export async function onModerationResolved(
         10,
         (user.reporterReputationScore || 100) + reputationDelta,
       ),
-      falseFlag Count:
+      flaggedCount: (user.flaggedCount || 0) + 1,
+      falseFlagCount:
         outcome === "invalid"
           ? (user.falseFlagCount || 0) + 1
           : user.falseFlagCount,
       upheldAgainstCount:
         outcome === "valid"
-        outcome === "invalid"
-          ? (user.falseFlagCount || 0) + 1
-          : user.falseFlagCount,
           ? (user.upheldAgainstCount || 0) + 1
           : user.upheldAgainstCount,
     })
     .where(eq(users.id, userId));
 }
+

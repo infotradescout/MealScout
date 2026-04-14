@@ -49,6 +49,11 @@ const AdminModerationMetrics = lazy(
 const AdminModerationAppeals = lazy(
   () => import("@/pages/admin-moderation-appeals"),
 );
+const ModerationQueue = lazy(() => import("@/pages/admin/ModerationQueue"));
+const ReporterReputationPage = lazy(
+  () => import("@/pages/ReporterReputationPage"),
+);
+const ModerationPolicy = lazy(() => import("@/pages/public/ModerationPolicy"));
 const AdminAuditLogs = lazy(() => import("@/pages/AdminAuditLogs"));
 const AdminTelemetry = lazy(() => import("@/pages/admin-telemetry"));
 const AdminAffiliateManagement = lazy(
@@ -169,6 +174,7 @@ const publicRoutePrefixes = [
   "/deals",
   "/restaurant/",
   "/terms-of-service",
+  "/moderation-policy",
   "/privacy-policy",
   "/data-deletion",
   "/about",
@@ -322,6 +328,7 @@ function Router() {
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
+            <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
@@ -471,6 +478,7 @@ function Router() {
             <Route path="/admin/legacy-dashboard" component={AdminDashboard} />
             <Route path="/admin/tickets" component={AdminSupportTickets} />
             <Route path="/admin/moderation" component={AdminModerationEvents} />
+            <Route path="/admin/moderation/queue" component={ModerationQueue} />
             <Route
               path="/admin/moderation/videos"
               component={AdminModerationVideos}
@@ -515,6 +523,7 @@ function Router() {
             <Route path="/city/:city" component={CityLanding} />
             <Route path="/city/:city/:mode" component={CityDiscoveryPage} />
             <Route path="/terms-of-service" component={TermsOfService} />
+            <Route path="/moderation-policy" component={ModerationPolicy} />
             <Route path="/privacy-policy" component={PrivacyPolicy} />
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
@@ -576,6 +585,10 @@ function Router() {
             <Route path="/profile/addresses" component={AddressesPage} />
             <Route path="/profile/payment" component={PaymentMethodsPage} />
             <Route path="/profile/help" component={HelpSupportPage} />
+            <Route
+              path="/profile/reporter-reputation"
+              component={ReporterReputationPage}
+            />
             <Route
               path="/restaurant/:restaurantId/reviews"
               component={ReviewsPage}

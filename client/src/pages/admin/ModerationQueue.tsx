@@ -69,7 +69,7 @@ const priorityColors = {
   urgent: "destructive",
   normal: "secondary",
   low: "outline",
-};
+} as const;
 
 export function ModerationQueue() {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
@@ -323,3 +323,5 @@ export function ModerationQueue() {
     </div>
   );
 }
+
+export default ModerationQueue;

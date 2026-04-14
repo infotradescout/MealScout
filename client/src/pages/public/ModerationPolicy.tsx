@@ -1,182 +1,103 @@
-# MealScout Moderation & Community Trust Policy
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SEOHead } from "@/components/seo-head";
 
-**Last Updated:** April 14, 2026
+export default function ModerationPolicy() {
+  return (
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 space-y-6">
+      <SEOHead
+        title="MealScout Moderation Policy"
+        description="How MealScout handles flags, moderation decisions, appeals, and reporter reputation."
+        canonicalUrl="https://www.mealscout.us/moderation-policy"
+      />
 
-## Overview
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">
+          MealScout Moderation and Community Trust Policy
+        </h1>
+        <p className="text-sm text-muted-foreground">Last updated: April 14, 2026</p>
+      </div>
 
-MealScout is committed to maintaining a trustworthy community where users can share honest recommendations. This policy outlines how we handle content concerns, disputes, and maintain fair moderation standards.
+      <Card>
+        <CardHeader>
+          <CardTitle>Overview</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
+          <p>
+            MealScout is committed to a trustworthy community where users can share honest recommendations.
+            This policy explains how flags are reviewed and how decisions are made.
+          </p>
+          <p>
+            We are infrastructure, not arbitrators. We enforce policy compliance for content on our platform,
+            but we do not resolve business disputes or issue refunds between parties.
+          </p>
+        </CardContent>
+      </Card>
 
-## What Triggers Moderation?
+      <Card>
+        <CardHeader>
+          <CardTitle>What Triggers Moderation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div>
+            <h2 className="font-semibold mb-2">Recommendation Flags</h2>
+            <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+              <li>Spam, duplicates, or promotional abuse</li>
+              <li>Inappropriate, hateful, or threatening language</li>
+              <li>Misleading or fake claims</li>
+              <li>Off-topic content unrelated to the listing</li>
+            </ul>
+          </div>
+          <div>
+            <h2 className="font-semibold mb-2">Profile Content Flags</h2>
+            <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+              <li>False business information (hours, address, contact details)</li>
+              <li>Misleading or policy-violating profile content</li>
+              <li>Abusive or inappropriate text or media</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
 
-Content can be flagged for review in two categories:
+      <Card>
+        <CardHeader>
+          <CardTitle>Moderation Flow</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>1. A user files a report with optional evidence.</p>
+          <p>2. A moderator reviews the report against policy standards.</p>
+          <p>3. Outcome is recorded as valid, invalid, or partial.</p>
+          <p>4. Parties can appeal within the allowed appeal window.</p>
+        </CardContent>
+      </Card>
 
-### Recommendation Flags
-Recommendations can be reported for:
-- **Spam** - Duplicate or promotional content
-- **Inappropriate** - Offensive, harmful, or hateful language
-- **Misleading** - False or deceptive information about the restaurant
-- **Fake** - Not a genuine user experience (obvious fraud)
-- **Off-topic** - Content unrelated to the restaurant or food
-- **Abuse** - Harassment, threats, or personal attacks
+      <Card>
+        <CardHeader>
+          <CardTitle>Reporter Reputation</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>Starting score: 100 (minimum 10).</p>
+          <p>Valid report: +5.</p>
+          <p>Invalid report: -10.</p>
+          <p>Partial report: +2.</p>
+          <p>
+            Reputation helps anti-brigading and influences how quickly and strongly reports are weighted.
+          </p>
+        </CardContent>
+      </Card>
 
-### Profile Content Flags
-Business profile information can be reported for:
-- **False Information** - Factually incorrect hours, location, contact details
-- **Inappropriate** - Offensive images or descriptions
-- **Misleading** - Deceptive presentation of business information
-- **Policy Violation** - Violates our content guidelines
-- **Spam** - Promotional content or false business claims
-- **Abuse** - Offensive or harassing content
-
-## How Moderation Works
-
-### 1. You File a Report
-- Submit a flag through our interface
-- Provide reason, optional description, and optional evidence
-- Receive confirmation that your report was received
-
-### 2. Our Moderators Review
-- Our team reviews flagged content within 2-5 business days
-- Assessment is based purely on **policy compliance**, not business merit
-- We only verify if content violates our posted guidelines
-
-### 3. Decision Delivered
-- **Upheld**: Content removed or hidden; reporter reputation +5
-- **Dismissed**: Content remains visible; reporter reputation -10
-- **Partial**: Mixed validity; reporter reputation +2
-
-### 4. You Can Appeal
-- Disagree with our decision? File an appeal
-- Appeals are reviewed by a different moderator
-- We aim to respond within 5 business days
-
-## Important Note: We Are Infrastructure, Not Arbitrators
-
-**We do not referee business disputes.** We moderate based on policy compliance only:
-
-✅ **We handle:**
-- Spam and duplicate posts
-- Genuinely false factual claims (wrong address, false hours)
-- Abusive or harassing language
-- Off-topic or promotional spam
-
-❌ **We don't handle:**
-- Negative but honest reviews/recommendations
-- Disagreements about food quality or service
-- Business disputes (use courts or third-party arbitration)
-- Differences of opinion
-
-> If you received poor service or food, the business should be contacted directly or through appropriate dispute resolution channels.
-
-## Reporter Reputation System
-
-Your reporting credibility affects how much weight your reports carry.
-
-### Reputation Scoring
-- **Starting Score:** 100
-- **Minimum Score:** 10
-- **Valid Report:** +5 points
-- **Invalid Report:** -10 points
-- **Partial Report:** +2 points
-
-### How It Affects You
-- Higher reputation = your reports reviewed more carefully
-- Lower reputation = reports may receive less priority
-- Reputation affects anti-brigading algorithms
-
-### Building Reputation
-File reports that are:
-- **Specific** - Include details and evidence
-- **Policy-focused** - Cite actual violations, not opinions
-- **Fair** - Consider context before reporting
-
-## Spam & Abuse Prevention
-
-To maintain community integrity, we enforce the following limits:
-
-- **Flag Limit:** 5 reports per day per user
-- **Duplicate Prevention:** Cannot flag same content within 24 hours
-- **Reputation Weighting:** Low-reputation reporters' flags require higher evidence threshold
-- **Pattern Detection:** Accounts filing numerous false reports will be restricted
-
-## Appeals Process
-
-Disagree with a moderation decision?
-
-1. **File an appeal** within 30 days of decision
-2. **Provide reasoning** explaining why you disagree
-3. **No new evidence** - appeals based on existing information
-4. **Decision in 5 business days** from a different moderator
-5. **No further appeals** - final decision is binding
-
-## Our Moderation Principles
-
-- **Policy-focused** - We apply our guidelines consistently
-- **Transparent** - You know why your report was upheld or dismissed
-- **Fair** - Appeal mechanism available for all decisions
-- **Private** - Your reports are not publicly attributed
-- **Honest** - We don't penalize unpopular opinions
-
-## Prohibited Actions
-
-The following may result in account suspension:
-
-- **Brigading** - Coordinating false reports against a user/business
-- **Harassment** - Using reports as harassment mechanism
-- **Fraud** - False reporting with intent to harm
-- **Manipulation** - Gaming reputation system
-- **Abuse** - Creating reports as personal attacks
-
-## What Happens to Flagged Content?
-
-### Upheld Recommendations
-- Content hidden from public feed
-- Visible only to moderators and reporter
-- User notified of removal and can appeal
-
-### Upheld Profile Information
-- Inaccurate content removed or corrected
-- Business notified to provide accurate information
-- Can be appealed if incorrect
-
-### Dismissed Reports
-- Content remains visible
-- Reporter's reputation adjusted accordingly
-- No penalty to content creator
-
-## Business Information Accuracy
-
-If a business discovers inaccurate information on their profile:
-
-1. Contact us through our business support
-2. We verify the information
-3. If inaccurate, we make corrections
-4. If accurate, reporter was following policy
-
-## Transparency Reports
-
-MealScout publishes quarterly reports on:
-- Total flags received
-- Outcomes (upheld/dismissed/partial)
-- Average moderator response time
-- Appeals filed and outcomes
-- Accounts suspended for abuse
-
-## Contacting Us
-
-**Questions about Moderation?**
-- Email: moderation-support@mealscout.com
-- Response time: 2-3 business days
-
-**Report an Issue?**
-- Use our flag interface directly
-- Include as much detail as possible
-- Evidence (screenshots, links) helps
-
-## Changes to This Policy
-
-We may update this policy as needed. Changes take effect immediately. Continued use of MealScout constitutes acceptance of updated terms.
-
----
-
-**Remember:** Our goal is maintaining a trustworthy platform for honest community feedback. Thank you for helping keep MealScout fair and authentic.
+      <Card>
+        <CardHeader>
+          <CardTitle>Appeals and Abuse Prevention</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>Appeals are reviewed by a different moderator where possible.</p>
+          <p>Rate limits and duplicate-report protections are enforced to reduce abuse.</p>
+          <p>
+            Coordinated false reporting, harassment, or manipulation attempts may result in moderation actions
+            on the reporting account.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

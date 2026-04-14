@@ -3,10 +3,13 @@ import { z } from "zod";
 import { isAuthenticated } from "./unifiedAuth";
 import { createModerationService } from "./moderationService";
 import { db } from "./db";
-import { recommendationFlags } from "@shared/schema";
-import { and, desc } from "drizzle-orm";
-import { profileContentFlags, moderationCases, moderationResolutions } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import {
+  recommendationFlags,
+  profileContentFlags,
+  moderationCases,
+  moderationResolutions,
+} from "@shared/schema";
+import { and, desc, eq } from "drizzle-orm";
 
 const flagRecommendationSchema = z.object({
   recommendationId: z.string().min(1),
@@ -76,40 +79,30 @@ export function registerModerationRoutes(app: Express) {
       try {
         const { recommendationId } = req.params;
         const payload = flagRecommendationSchema.parse(req.body);
-        const userId = (req as any).userId;
-  const userId = (req as any).user.id;
-  const userId = (req as any).user.id;
+        const userId = (req as any).user?.id;
+
+        if (!userId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
 
         // Check for duplicate recent flags from same user
-        const recentFlag = await db.query
-          .recommendationFlags()
-          .where((t, { eq, and }) =>
+        const recentFlags = await db
+          .select()
+          .from(recommendationFlags)
+          .where(
             and(
-              eq(t.recommendationId, recommendationId),
-              eq(t.flaggedByUserId, userId),
+              eq(recommendationFlags.recommendationId, recommendationId),
+              eq(recommendationFlags.flaggedByUserId, userId),
             ),
           )
-          .orderBy((t) => t.flaggedAt)
-          .limit(1)
-          .execute();
-          // Check for duplicate recent flags from same user
-          const recentFlags = await db
-            .select()
-            .from(recommendationFlags)
-            .where(
-              and(
-                eq(recommendationFlags.recommendationId, recommendationId),
-                eq(recommendationFlags.flaggedByUserId, userId),
-              ),
-            )
-            .orderBy(desc(recommendationFlags.flaggedAt))
-            .limit(1);
+          .orderBy(desc(recommendationFlags.flaggedAt))
+          .limit(1);
 
-          const recentFlag = recentFlags[0];
+        const recentFlag = recentFlags[0];
 
         if (
           recentFlag &&
-          new Date().getTime() - recentFlag[0]?.flaggedAt?.getTime() <
+          new Date().getTime() - recentFlag.flaggedAt.getTime() <
             24 * 60 * 60 * 1000
         ) {
           return res
@@ -150,7 +143,11 @@ export function registerModerationRoutes(app: Express) {
       try {
         const { restaurantId } = req.params;
         const payload = flagProfileContentSchema.parse(req.body);
-        const userId = (req as any).userId;
+        const userId = (req as any).user?.id;
+
+        if (!userId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
 
         const result = await moderationService.flagProfileContent(
           restaurantId,
@@ -182,7 +179,10 @@ export function registerModerationRoutes(app: Express) {
     isAuthenticated,
     async (req: Request, res: Response) => {
       try {
-        const userId = (req as any).userId;
+        const userId = (req as any).user?.id;
+        if (!userId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
         const flags = await moderationService.getUserFlags(userId);
         res.json(flags);
       } catch (error: any) {
@@ -201,7 +201,10 @@ export function registerModerationRoutes(app: Express) {
     isAuthenticated,
     async (req: Request, res: Response) => {
       try {
-        const userId = (req as any).userId;
+        const userId = (req as any).user?.id;
+        if (!userId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
         const reputation = await moderationService.getReporterReputation(
           userId,
         );
@@ -224,7 +227,11 @@ export function registerModerationRoutes(app: Express) {
       try {
         const { resolutionId } = req.params;
         const payload = appealDecisionSchema.parse(req.body);
-        const userId = (req as any).userId;
+        const userId = (req as any).user?.id;
+
+        if (!userId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
 
         const appealId = await moderationService.appealDecision(
           resolutionId,
@@ -365,8 +372,11 @@ export function registerModerationRoutes(app: Express) {
 
         const { caseId } = req.params;
         const payload = resolveCaseSchema.parse(req.body);
-        const moderatorId = (req as any).userId || (req as any).user?.id;
-  const moderatorId = (req as any).user.id;
+        const moderatorId = (req as any).user?.id;
+
+        if (!moderatorId) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
 
         await moderationService.resolveCase(
           caseId,

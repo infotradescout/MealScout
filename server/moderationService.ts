@@ -238,24 +238,24 @@ export function createModerationService(storage: any): ModerationService {
                   .select()
                   .from(recommendationFlags)
                   .where(eq(recommendationFlags.id, caseRecord.flagId))
-                  .then((res) => res[0])
+                  .then((res: any[]) => res[0])
               : await db
                   .select()
                   .from(profileContentFlags)
                   .where(eq(profileContentFlags.id, caseRecord.flagId))
-                  .then((res) => res[0]);
+                  .then((res: any[]) => res[0]);
 
           const resolution = await db
             .select()
             .from(moderationResolutions)
             .where(eq(moderationResolutions.caseId, caseRecord.id))
-            .then((res) => res[0]);
+            .then((res: any[]) => res[0]);
 
           const reporter = await db
             .select()
             .from(users)
             .where(eq(users.id, caseRecord.reporterId))
-            .then((res) => res[0]);
+            .then((res: any[]) => res[0]);
 
           return {
             case: caseRecord,
@@ -298,7 +298,7 @@ export function createModerationService(storage: any): ModerationService {
         .select()
         .from(moderationCases)
         .where(eq(moderationCases.id, caseId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       if (!caseRecord) throw new Error("Case not found");
 
@@ -329,7 +329,7 @@ export function createModerationService(storage: any): ModerationService {
         .select()
         .from(users)
         .where(eq(users.id, caseRecord.reporterId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       let reputationDelta = 0;
       if (outcome === "valid") {
@@ -380,13 +380,13 @@ export function createModerationService(storage: any): ModerationService {
         .select()
         .from(moderationResolutions)
         .where(eq(moderationResolutions.id, resolutionId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       const caseRecord = await db
         .select()
         .from(moderationCases)
         .where(eq(moderationCases.id, resolution.caseId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       // Update case status to appealed
       await db
@@ -402,7 +402,7 @@ export function createModerationService(storage: any): ModerationService {
         .select()
         .from(users)
         .where(eq(users.id, userId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       return {
         score: user.reporterReputationScore || 100,
@@ -417,7 +417,7 @@ export function createModerationService(storage: any): ModerationService {
         .select()
         .from(moderationCases)
         .where(eq(moderationCases.id, caseId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       if (!caseRecord) return null;
 
@@ -427,24 +427,24 @@ export function createModerationService(storage: any): ModerationService {
               .select()
               .from(recommendationFlags)
               .where(eq(recommendationFlags.id, caseRecord.flagId))
-              .then((res) => res[0])
+              .then((res: any[]) => res[0])
           : await db
               .select()
               .from(profileContentFlags)
               .where(eq(profileContentFlags.id, caseRecord.flagId))
-              .then((res) => res[0]);
+              .then((res: any[]) => res[0]);
 
       const resolution = await db
         .select()
         .from(moderationResolutions)
         .where(eq(moderationResolutions.caseId, caseId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       const reporter = await db
         .select()
         .from(users)
         .where(eq(users.id, caseRecord.reporterId))
-        .then((res) => res[0]);
+        .then((res: any[]) => res[0]);
 
       return {
         case: caseRecord,
@@ -466,18 +466,18 @@ export function createModerationService(storage: any): ModerationService {
         .where(eq(recommendationFlags.flaggedByUserId, userId));
 
       const result = await Promise.all(
-        userFlags.map(async (flag) => {
+        userFlags.map(async (flag: any) => {
           const caseRecord = await db
             .select()
             .from(moderationCases)
             .where(eq(moderationCases.id, flag.caseId!))
-            .then((res) => res[0]);
+            .then((res: any[]) => res[0]);
 
           const resolution = await db
             .select()
             .from(moderationResolutions)
             .where(eq(moderationResolutions.caseId, caseRecord.id))
-            .then((res) => res[0]);
+            .then((res: any[]) => res[0]);
 
           return {
             flag: {
@@ -501,3 +501,4 @@ export function createModerationService(storage: any): ModerationService {
     },
   };
 }
+
