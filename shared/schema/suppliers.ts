@@ -1,0 +1,27 @@
+// Phase 5 schema modularization: domain barrel over legacy exports
+export {
+  suppliers,
+  supplierProducts,
+  supplierRequests,
+  supplierRequestItems,
+  supplierOrders,
+  supplierOrderItems,
+  supplyDemands,
+  supplyDemandNotifications,
+  supplyReceipts,
+  supplyReceiptItems,
+  supplyStores,
+  supplyStoreLocations,
+  supplyItems,
+  supplyItemAliases,
+  supplyPrices,
+  supplyPriceWatches,
+  supplyPriceAlerts,
+  supplyPriceDailySnapshots,
+  supplyShoppingLists,
+  supplyShoppingListItems,
+  supplyScoutPreferences,
+  supplyBarcodeMappings,
+  supplyOrderPreferences,
+} from "./legacy";
+
