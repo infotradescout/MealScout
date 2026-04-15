@@ -13,6 +13,8 @@ Record one entry before merge and one entry after deploy verification for each r
 | 2026-04-15 | PR-1 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted deal admin routes to dedicated module; deal endpoints remain functional (Flow 2 Deal Seeker: 6/6 passed); `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (failures unrelated to extraction) |
 | 2026-04-15 | PR-2 | phase-5-oversized-route-splits | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Verification routes extraction baseline snapshot |
 | 2026-04-15 | PR-2 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted 3 verification admin endpoints to dedicated module; verification endpoints remain functional; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (no regressions) |
+| 2026-04-15 | PR-4 | phase-5-oversized-route-splits | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Host profile routes extraction baseline snapshot |
+| 2026-04-15 | PR-4 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted 2 host profile endpoints (POST /api/hosts, GET /api/hosts/me) to dedicated module; endpoints remain functional; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (no regressions) |
 
 ## Usage Rules
 
