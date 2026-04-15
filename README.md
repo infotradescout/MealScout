@@ -16,6 +16,9 @@ Active docs and maintenance
 - `BUILD_OUTPUTS.md` - generated output directories and cleanup expectations
 - `BACKEND_HOTSPOTS.md` - current backend refactor seams and hotspot map
 - `BACKEND_REFACTOR_PLAN.md` - execution order and target file map for backend decomposition
+- `docs/refactor/REFACTOR_CYCLE_GUARDRAILS.md` - active freeze policy and phase gate rules for the current refactor cycle
+- `docs/refactor/REFACTOR_BOARD.md` - queue/in-progress/merged/verified/rollback tracking board
+- `docs/refactor/REFACTOR_METRICS_LOG.md` - before/after reliability metrics log for each refactor merge
 - `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration (do not modify)
 
 Local prerequisites

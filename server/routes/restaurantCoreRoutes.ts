@@ -8,6 +8,7 @@ import { sanitizeUser } from "../utils/sanitize";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
@@ -192,7 +193,9 @@ export function registerRestaurantCoreRoutes(
       }
 
       const searchTerm = query.toLowerCase();
-      const restaurants = await storage.getAllRestaurants();
+      const restaurants = (await storage.getAllRestaurants()).filter(
+        (restaurant: any) => isPublicBusinessVisible(restaurant),
+      );
 
       let filteredRestaurants = restaurants.filter(
         (restaurant: any) =>
@@ -251,7 +254,9 @@ export function registerRestaurantCoreRoutes(
         Math.min(50, Number.parseFloat(String(radius || "12")) || 12),
       );
 
-      const allRestaurants = await storage.getAllRestaurants();
+      const allRestaurants = (await storage.getAllRestaurants()).filter(
+        (restaurant: any) => isPublicBusinessVisible(restaurant),
+      );
       const activeRestaurants = allRestaurants.filter(
         (restaurant: any) => restaurant?.isActive,
       );

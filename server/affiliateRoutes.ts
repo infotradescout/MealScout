@@ -47,7 +47,13 @@ router.get('/tag', isAuthenticated, async (req, res) => {
     res.json({ tag, sharePath: `/ref/${tag}` });
   } catch (error: any) {
     console.error('Failed to fetch affiliate tag:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch tag' });
+    // Non-critical endpoint: never block app boot for affiliate-tag fetch failures.
+    res.status(200).json({
+      tag: null,
+      sharePath: null,
+      degraded: true,
+      error: 'affiliate_tag_unavailable',
+    });
   }
 });
 

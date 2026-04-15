@@ -19,6 +19,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { getBusinessAccessContext } from "../services/businessTeamAccess";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type RestaurantsDealsRepositoryDependencies = {
   ensureCityExists: (name: string, state: string | null) => Promise<void>;
@@ -103,7 +104,7 @@ export function createRestaurantsDealsRepository(
       lng: number,
       radiusKm: number,
     ): Promise<Restaurant[]> {
-      return await db
+      const results = await db
         .select()
         .from(restaurants)
         .where(
@@ -120,6 +121,9 @@ export function createRestaurantsDealsRepository(
             `,
           ),
         );
+      return results.filter((restaurant: any) =>
+        isPublicBusinessVisible(restaurant),
+      );
     },
 
     async getSubscribedRestaurants(

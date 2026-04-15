@@ -136,6 +136,7 @@ import { forwardGeocode } from "./utils/geocoding";
 import { isParkingPassPublicReady } from "./services/parkingPassQuality";
 import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
+import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
 import { broadcastLisaClaim } from "./websocket";
 import { createAuthTokensRepository } from "./storage/authTokensRepository";
 import { createHostsEventsRepository } from "./storage/hostsEventsRepository";
@@ -4286,7 +4287,10 @@ export class DatabaseStorage implements IStorage {
           sql`current_longitude IS NOT NULL`,
         ),
       );
-    const freshResults = results.filter((truck: any) => {
+    const visibleResults = results.filter((truck: any) =>
+      isPublicBusinessVisible(truck),
+    );
+    const freshResults = visibleResults.filter((truck: any) => {
       const lastBroadcastMs = truck?.lastBroadcastAt
         ? new Date(truck.lastBroadcastAt).getTime()
         : Number.NaN;

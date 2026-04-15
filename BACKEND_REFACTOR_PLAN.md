@@ -2,6 +2,8 @@
 
 This plan turns the current hotspot audit into an execution order that reduces backend risk without changing product behavior or database shape.
 
+See also: [`MEALSCOUT_DE_RISK_ORDER.md`](./MEALSCOUT_DE_RISK_ORDER.md), which defines the hard-gate sequence and SLO protection policy used to run this plan.
+
 ## Goals
 
 - Shrink the blast radius of changes in `server/routes.ts`, `server/storage.ts`, and `shared/schema.ts`.
@@ -22,6 +24,8 @@ This plan turns the current hotspot audit into an execution order that reduces b
 - Phase 1 startup extraction is in place: schedulers, static/compliance pages, operational endpoints, and recurring startup jobs are wired through `server/bootstrap/*` modules.
 - Phase 3 started: auth-token lifecycle methods were extracted from `server/storage.ts` into `server/storage/authTokensRepository.ts` while keeping `IStorage` and `DatabaseStorage` public method signatures unchanged.
 - Phase 3 continued: API key lookup/update persistence methods were moved into the same `authTokensRepository` module and `DatabaseStorage` now delegates to it.
+- Phase 2 cleanup continued: deal notification/social dependencies were extracted from `server/routes.ts` into `server/routes/dealRouteDependencies.ts`, reducing `routes.ts` to route wiring plus shared access-policy helpers.
+- Phase 2 cleanup continued: subscription/access-policy helpers moved to `server/routes/accessPolicyDependencies.ts`; `server/routes.ts` now reads as a route composition file with dependency wiring.
 
 ## Guardrails
 
