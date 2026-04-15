@@ -2474,6 +2474,46 @@ export function registerSupplierMarketplaceRoutes(app: Express) {
     }
   });
 
+  // Backward-compatibility alias for older dashboard clients that still call
+  // `/api/suppliers/dashboard` instead of the split `/api/supplier/*` endpoints.
+  app.get("/api/suppliers/dashboard", isAuthenticated, isSupplierProfileOrAdmin, async (req: any, res) => {
+    try {
+      const supplier = await ensureSupplierProfile(req.user.id);
+
+      const [products, orders, requests] = await Promise.all([
+        db
+          .select()
+          .from(supplierProducts)
+          .where(eq(supplierProducts.supplierId, supplier.id))
+          .orderBy(desc(supplierProducts.updatedAt))
+          .limit(500),
+        db
+          .select()
+          .from(supplierOrders)
+          .where(eq(supplierOrders.supplierId, supplier.id))
+          .orderBy(desc(supplierOrders.createdAt))
+          .limit(500),
+        db
+          .select()
+          .from(supplierRequests)
+          .where(eq(supplierRequests.supplierId, supplier.id))
+          .orderBy(desc(supplierRequests.createdAt))
+          .limit(500),
+      ]);
+
+      res.json({
+        supplier,
+        profile: supplier,
+        products,
+        orders,
+        requests,
+      });
+    } catch (error) {
+      console.error("Error loading legacy supplier dashboard payload:", error);
+      res.status(500).json({ message: "Failed to load supplier dashboard" });
+    }
+  });
+
   app.patch("/api/supplier/me", isAuthenticated, isSupplierProfileOrAdmin, async (req: any, res) => {
     try {
       const supplier = await ensureSupplierProfile(req.user.id);
