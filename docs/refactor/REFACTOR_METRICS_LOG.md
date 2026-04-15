@@ -9,6 +9,8 @@ Record one entry before merge and one entry after deploy verification for each r
 | 2026-04-14 | TBD | phase-2-route-composition | after | TBD | TBD | TBD | TBD | TBD | TBD | TBD | `npm run check` passed; runtime metrics collection pending deploy dashboard pull |
 | 2026-04-14 | TBD | phase-2-route-composition | before | TBD | TBD | TBD | TBD | TBD | TBD | TBD | Access-policy extraction prep (`server/routes.ts` subscription/business-access helper extraction) |
 | 2026-04-14 | TBD | phase-2-route-composition | after | TBD | TBD | TBD | TBD | TBD | TBD | TBD | `npm run check` passed after `accessPolicyDependencies` extraction; deploy metrics pending |
+| 2026-04-15 | PR-1 | phase-5-oversized-route-splits | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Deals extraction from userAdminRoutes baseline snapshot |
+| 2026-04-15 | PR-1 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted deal admin routes to dedicated module; deal endpoints remain functional (Flow 2 Deal Seeker: 6/6 passed); `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (failures unrelated to extraction) |
 
 ## Usage Rules
 

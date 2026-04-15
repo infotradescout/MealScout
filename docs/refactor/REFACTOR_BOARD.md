@@ -8,15 +8,17 @@ Use this board to track every refactor item from queue to verification.
 
 ## In Progress
 
-- [ ] [phase-2-route-composition] Split oversized admin/supplier/host route modules by subdomain (users/moderation/metrics, catalog/orders/payments, profiles/events/parking-pass) - PR TBD - owner TBD - 2026-04-14
+- [ ] [phase-5-oversized-route-splits] Extract verification admin routes (GET/POST verifications, list contexts, audit logs) from userAdminRoutes.ts to dedicated module - PR-2 - owner codex - 2026-04-15
 
 ## Merged
 
+- [x] [phase-5-oversized-route-splits] Extracted deal admin routes (GET /api/admin/deals, GET stats, DELETE, POST clone, PATCH status, PATCH extend) from userAdminRoutes.ts to dedicated dealsRoutes.ts module; created shared utilities (buildLocationKey, buildCanonicalPath, toCountDeltaLine, formatDealValueLabel) - PR-1 - owner codex - 2026-04-15
 - [x] [phase-2-route-composition] Extracted deal notification/social helper logic from `server/routes.ts` to `server/routes/dealRouteDependencies.ts` - PR TBD - owner codex - 2026-04-14
 - [x] [phase-2-route-composition] Extracted subscription/access-policy helper logic from `server/routes.ts` to `server/routes/accessPolicyDependencies.ts` - PR TBD - owner codex - 2026-04-14
 
 ## Verified
 
+- [x] [phase-5-oversized-route-splits] Extracted deal admin routes (6 endpoints) to dealsRoutes.ts; verified with `npm run check`, `npm run build:server`, and `npm run test:flows:with-server` (93.1% pass, deal flows 100%) - PR-1 - owner codex - 2026-04-15
 - [x] [phase-2-route-composition] Extracted deal notification/social helper logic from `server/routes.ts` to `server/routes/dealRouteDependencies.ts`; verified with `npm run check` - PR TBD - owner codex - 2026-04-14
 - [x] [phase-2-route-composition] Extracted subscription/access-policy helper logic from `server/routes.ts` to `server/routes/accessPolicyDependencies.ts`; verified with `npm run check` - PR TBD - owner codex - 2026-04-14
 

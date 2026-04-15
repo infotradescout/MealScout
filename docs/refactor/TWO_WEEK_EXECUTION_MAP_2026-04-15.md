@@ -36,20 +36,27 @@ No schema redesign and no new major feature streams during this window.
 
 ## PR Sequence (File-by-File)
 
-### PR-1 (Day 1): Admin Routes Scaffold + Non-Behavioral Move (Users)
+### Baseline Note
+User admin routes already extracted into `server/routes/admin/userAdminRoutes.ts` (2249 lines). Starting with deals extraction.
+
+### PR-1 (Day 1): Admin Routes Scaffold + Non-Behavioral Move (Deals)
 Lane: `phase-5-oversized-route-splits`
 
 Target files:
-- `server/routes/adminManagementRoutes.ts` (reduced orchestrator)
-- `server/routes/admin/usersRoutes.ts` (new)
+- `server/routes/adminManagementRoutes.ts` (currently 4067 lines, reduction target: 3500+)
+- `server/routes/admin/dealsRoutes.ts` (new)
 - `server/routes/admin/shared.ts` (new utility + dependency typing)
 
 Exact slice:
-- Extract user management endpoints from `adminManagementRoutes.ts`:
-  - `GET /api/admin/users`
-  - `PATCH /api/admin/users/:id/status`
-  - `GET /api/admin/users/:userId/addresses`
+- Extract deal admin endpoints from `adminManagementRoutes.ts`:
+  - `GET /api/admin/deals`
+  - `GET /api/admin/deals/:dealId/stats`
+  - `DELETE /api/admin/deals/:dealId`
+  - `POST /api/admin/deals/:dealId/clone`
+  - `PATCH /api/admin/deals/:dealId/status`
+  - `PATCH /api/admin/deals/:dealId/extend`
 - Keep middleware, status codes, response payloads identical.
+- Move helper functions (`buildCanonicalPath`, related utilities) to shared.ts.
 
 Verification commands:
 - `npm run check`
@@ -61,22 +68,20 @@ Metrics log updates required:
 
 ---
 
-### PR-2 (Day 2): Admin Routes Split (Deals)
+### PR-2 (Day 2): Admin Routes Split (Verifications)
 Lane: `phase-5-oversized-route-splits`
 
 Target files:
 - `server/routes/adminManagementRoutes.ts`
-- `server/routes/admin/dealsRoutes.ts` (new)
+- `server/routes/admin/verificationRoutes.ts` (new)
 - `server/routes/admin/shared.ts`
 
 Exact slice:
-- Extract deal admin endpoints:
-  - `GET /api/admin/deals`
-  - `GET /api/admin/deals/:dealId/stats`
-  - `DELETE /api/admin/deals/:dealId`
-  - `POST /api/admin/deals/:dealId/clone`
-  - `PATCH /api/admin/deals/:dealId/status`
-  - `PATCH /api/admin/deals/:dealId/extend`
+- Extract verification admin endpoints:
+  - `GET /api/admin/verifications`
+  - `POST /api/admin/verifications/:id/approve`
+  - `POST /api/admin/verifications/:id/reject`
+- Move verification-related helpers and logic.
 
 Verification commands:
 - `npm run check`
@@ -88,22 +93,20 @@ Metrics log updates required:
 
 ---
 
-### PR-3 (Day 3): Admin Routes Split (Verifications + Stats)
+### PR-3 (Day 3): Admin Routes Split (Stats + Core Ops)
 Lane: `phase-5-oversized-route-splits`
 
 Target files:
 - `server/routes/adminManagementRoutes.ts`
-- `server/routes/admin/verificationRoutes.ts` (new)
 - `server/routes/admin/statsRoutes.ts` (new)
 - `server/routes/admin/shared.ts`
 
 Exact slice:
-- Extract verification and core stats endpoints:
-  - `GET /api/admin/verifications`
-  - `POST /api/admin/verifications/:id/approve`
-  - `POST /api/admin/verifications/:id/reject`
+- Extract statistics and core operational endpoints:
   - `GET /api/admin/stats`
   - `POST /api/admin/subscriptions/sync`
+  - `GET /api/admin/dashboard-totals`
+- Move stats calculation helpers.
 
 Verification commands:
 - `npm run check`
