@@ -142,6 +142,7 @@ import { createAuthTokensRepository } from "./storage/authTokensRepository";
 import { createHostsEventsRepository } from "./storage/hostsEventsRepository";
 import { createRestaurantsDealsRepository } from "./storage/restaurantsDealsRepository";
 import { createUsersRepository } from "./storage/usersRepository";
+import { createPaymentsSubscriptionsRepository } from "./storage/paymentsSubscriptionsRepository";
 import { createAnalyticsRepository } from "./storage/analyticsRepository";
 import { createParkingPassRepository } from "./storage/parkingPassRepository";
 
@@ -779,6 +780,7 @@ export class DatabaseStorage implements IStorage {
       this.ensureCityExists(name, state),
   });
   private readonly usersRepository = createUsersRepository();
+  private readonly paymentsSubscriptionsRepository = createPaymentsSubscriptionsRepository();
   private readonly analyticsRepository = createAnalyticsRepository();
   private readonly parkingPassRepository = createParkingPassRepository({
     getHost: (id: string) => this.getHost(id),
@@ -1709,7 +1711,7 @@ export class DatabaseStorage implements IStorage {
 
   // Stripe helpers
   async updateUserStripeCustomerId(userId: string, customerId: string): Promise<void> {
-    return this.usersRepository.updateUserStripeCustomerId(userId, customerId);
+    return this.paymentsSubscriptionsRepository.updateUserStripeCustomerId(userId, customerId);
   }
 
   async updateUserStripeInfo(
@@ -1718,7 +1720,7 @@ export class DatabaseStorage implements IStorage {
     stripeSubscriptionId: string,
     subscriptionBillingInterval?: string,
   ): Promise<User> {
-    return this.usersRepository.updateUserStripeInfo(id, stripeCustomerId, stripeSubscriptionId, subscriptionBillingInterval);
+    return this.paymentsSubscriptionsRepository.updateUserStripeInfo(id, stripeCustomerId, stripeSubscriptionId, subscriptionBillingInterval);
   }
 
   async updateUser(
@@ -1789,11 +1791,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
-    return this.usersRepository.getUserByStripeCustomerId(stripeCustomerId);
+    return this.paymentsSubscriptionsRepository.getUserByStripeCustomerId(stripeCustomerId);
   }
 
   async getUserByStripeSubscriptionId(stripeSubscriptionId: string): Promise<User | undefined> {
-    return this.usersRepository.getUserByStripeSubscriptionId(stripeSubscriptionId);
+    return this.paymentsSubscriptionsRepository.getUserByStripeSubscriptionId(stripeSubscriptionId);
   }
 
   async upsertUserByAuth(

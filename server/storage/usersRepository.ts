@@ -104,24 +104,6 @@ function shouldAssignAffiliateTag(userType?: string | null): boolean {
 
 export function createUsersRepository() {
   return {
-    async updateUserStripeCustomerId(userId: string, customerId: string): Promise<void> {
-      await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
-    },
-
-    async updateUserStripeInfo(
-      id: string,
-      stripeCustomerId: string,
-      stripeSubscriptionId: string,
-      subscriptionBillingInterval?: string,
-    ): Promise<User> {
-      const [user] = await db
-        .update(users)
-        .set({ stripeCustomerId, stripeSubscriptionId, subscriptionBillingInterval, updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
-      return user;
-    },
-
     async updateUser(
       id: string,
       updates: Partial<
@@ -262,22 +244,6 @@ export function createUsersRepository() {
         .returning();
       void syncUserToBrevo(updatedUser).catch(() => {});
       return updatedUser;
-    },
-
-    async getUserByStripeCustomerId(stripeCustomerId: string): Promise<User | undefined> {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(and(eq(users.stripeCustomerId, stripeCustomerId), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
-      return user;
-    },
-
-    async getUserByStripeSubscriptionId(stripeSubscriptionId: string): Promise<User | undefined> {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(and(eq(users.stripeSubscriptionId, stripeSubscriptionId), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
-      return user;
     },
 
     async upsertUserByAuth(
