@@ -9,9 +9,11 @@ Use this board to track every refactor item from queue to verification.
 ## In Progress
 
 - [ ] [phase-5-oversized-route-splits] Extract supplier marketplace split (orders/payments/catalog) - PR-5 through PR-7 - owner codex - 2026-04-15
+- [ ] [phase-5-oversized-route-splits] Extract supplier orders/payments endpoints from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/ordersRoutes.ts` and `server/routes/suppliers/paymentsRoutes.ts` - PR-7 - owner codex - 2026-04-15
 
 ## Merged
 
+- [x] [phase-5-oversized-route-splits] Extracted supplier catalog read endpoints (`GET /api/suppliers`, `GET /api/suppliers/:supplierId`, `GET /api/suppliers/:supplierId/products`) from `server/routes/supplierMarketplaceRoutes.ts` to `server/routes/suppliers/catalogRoutes.ts` - PR-6 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted 2 host profile endpoints (POST /api/hosts, GET /api/hosts/me) from hostRoutes.ts to dedicated hosts/profileRoutes.ts module; created shared utilities (buildLocationKey, buildGeocodeAddress) - PR-4 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted verification admin routes (GET /api/admin/verifications, POST approve, POST reject) from userAdminRoutes.ts to dedicated verificationRoutes.ts module - PR-2 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted deal admin routes (GET /api/admin/deals, GET stats, DELETE, POST clone, PATCH status, PATCH extend) from userAdminRoutes.ts to dedicated dealsRoutes.ts module; created shared utilities (buildLocationKey, buildCanonicalPath, toCountDeltaLine, formatDealValueLabel) - PR-1 - owner codex - 2026-04-15
@@ -20,6 +22,7 @@ Use this board to track every refactor item from queue to verification.
 
 ## Verified
 
+- [x] [phase-5-oversized-route-splits] Extracted supplier catalog endpoints to `server/routes/suppliers/catalogRoutes.ts`; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` blocked by missing admin credentials env (`MEALSCOUT_ADMIN_EMAIL`/`MEALSCOUT_ADMIN_PASSWORD`) with no type/build regressions from extraction - PR-6 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted 2 host profile endpoints to hosts/profileRoutes.ts; verified with `npm run check`, `npm run build:server`, and `npm run test:flows:with-server` (93.1% pass, no regressions) - PR-4 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted 3 verification admin endpoints to verificationRoutes.ts; verified with `npm run check`, `npm run build:server`, and `npm run test:flows:with-server` (93.1% pass, no regressions) - PR-2 - owner codex - 2026-04-15
 - [x] [phase-5-oversized-route-splits] Extracted deal admin routes (6 endpoints) to dealsRoutes.ts; verified with `npm run check`, `npm run build:server`, and `npm run test:flows:with-server` (93.1% pass, deal flows 100%) - PR-1 - owner codex - 2026-04-15

@@ -15,6 +15,8 @@ Record one entry before merge and one entry after deploy verification for each r
 | 2026-04-15 | PR-2 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted 3 verification admin endpoints to dedicated module; verification endpoints remain functional; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (no regressions) |
 | 2026-04-15 | PR-4 | phase-5-oversized-route-splits | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Host profile routes extraction baseline snapshot |
 | 2026-04-15 | PR-4 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted 2 host profile endpoints (POST /api/hosts, GET /api/hosts/me) to dedicated module; endpoints remain functional; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` 93.1% pass rate (no regressions) |
+| 2026-04-15 | PR-6 | phase-5-oversized-route-splits | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Supplier marketplace catalog extraction baseline snapshot |
+| 2026-04-15 | PR-6 | phase-5-oversized-route-splits | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted supplier catalog read endpoints (`GET /api/suppliers`, `GET /api/suppliers/:supplierId`, `GET /api/suppliers/:supplierId/products`) to dedicated module; `npm run check` and `npm run build:server` passed; `npm run test:flows:with-server` blocked by missing admin env (`MEALSCOUT_ADMIN_EMAIL` / `MEALSCOUT_ADMIN_PASSWORD`) and did not indicate extraction-specific regressions |
 
 ## Usage Rules
 
