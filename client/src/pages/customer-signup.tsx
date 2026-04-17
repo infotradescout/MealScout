@@ -30,6 +30,11 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 
 const signupSchema = z
   .object({
@@ -82,6 +87,15 @@ export default function CustomerSignup() {
     "restaurant" | "food_truck"
   >(initialAccountType === "business" ? initialBusinessSubType : "restaurant");
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
+
+  useEffect(() => {
+    trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "customer_signup_view", {
+      page: "customer-signup",
+      accountType: initialAccountType,
+      businessSubType: initialBusinessSubType,
+      stage: "signup_view",
+    });
+  }, [initialAccountType, initialBusinessSubType]);
 
   const defaultValues = useMemo<SignupFormData>(() => {
     const base: SignupFormData = {
@@ -165,6 +179,16 @@ export default function CustomerSignup() {
           payload?.message ||
           "We sent a verification link to your email. Verify it, then log in to continue.",
       });
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        page: "customer-signup",
+        accountType: "diner_or_host",
+        stage: "signup_success",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "customer-signup",
+        stage: "redirect_to_login",
+        redirectPath: redirectAfterLogin,
+      });
       window.location.href = `/login?redirect=${encodeURIComponent(
         redirectAfterLogin,
       )}&signup=1`;
@@ -204,10 +228,23 @@ export default function CustomerSignup() {
           payload?.message ||
           "We sent a verification link to your email. Verify it, then log in to continue.",
       });
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        page: "customer-signup",
+        accountType: "business",
+        businessSubType,
+        stage: "signup_success",
+      });
       const businessRedirect =
         businessSubType === "food_truck"
           ? "/restaurant-signup?businessType=food_truck&claim=1"
           : "/restaurant-signup";
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "customer-signup",
+        stage: "redirect_to_login",
+        redirectPath: businessRedirect,
+        accountType: "business",
+        businessSubType,
+      });
       window.location.href = `/login?redirect=${encodeURIComponent(
         businessRedirect,
       )}&signup=1`;
@@ -246,6 +283,17 @@ export default function CustomerSignup() {
         description:
           payload?.message ||
           "We sent a verification link to your email. Verify it, then log in to continue.",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        page: "customer-signup",
+        accountType: "supplier",
+        stage: "signup_success",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "customer-signup",
+        stage: "redirect_to_login",
+        redirectPath: "/supplier/dashboard",
+        accountType: "supplier",
       });
       window.location.href = `/login?redirect=${encodeURIComponent(
         "/supplier/dashboard",
@@ -315,9 +363,23 @@ export default function CustomerSignup() {
 
   const onSubmit = (data: SignupFormData) => {
     if (isAuthenticated) {
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "customer-signup",
+        stage: "continue_with_existing_account",
+        accountType,
+        businessSubType,
+      });
       continueWithExistingAccount();
       return;
     }
+
+    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+      page: "customer-signup",
+      accountType,
+      businessSubType: accountType === "business" ? businessSubType : null,
+      stage: "signup_submit",
+      isAuthenticated,
+    });
 
     if (accountType === "business") {
       const digitsOnly = (data.phone || "").replace(/\D/g, "");

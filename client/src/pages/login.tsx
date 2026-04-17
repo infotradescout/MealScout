@@ -8,6 +8,11 @@ import { UserCheck, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { SEOHead } from "@/components/seo-head";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 
 const getSafeRedirectPath = (): string | null => {
   try {
@@ -54,6 +59,13 @@ export default function Login() {
     });
 
   useEffect(() => {
+    trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "login_view", {
+      page: "login",
+      stage: "login_view",
+    });
+  }, []);
+
+  useEffect(() => {
     if (email) return;
     try {
       const stored = window.sessionStorage.getItem("mealscout:lastSignupEmail");
@@ -62,15 +74,29 @@ export default function Login() {
   }, [email]);
 
   const handleGoogleLogin = () => {
+    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+      page: "login",
+      cta: "google_login",
+      destination: "/api/auth/google/customer",
+    });
     window.location.href = "/api/auth/google/customer";
   };
 
   const handleFacebookLogin = () => {
+    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+      page: "login",
+      cta: "facebook_login",
+      destination: "/api/auth/facebook?userType=customer",
+    });
     window.location.href = "/api/auth/facebook?userType=customer";
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+      page: "login",
+      stage: "email_login_submit",
+    });
     if (!email || !password) {
       toast({
         title: "Missing Information",
@@ -118,6 +144,16 @@ export default function Login() {
       // Small delay to ensure cookie/session propagation
       await new Promise((r) => setTimeout(r, 200));
       // Redirect after login (many flows pass `?redirect=` to /login)
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        page: "login",
+        stage: "login_success",
+        redirectPath: redirectPath || "/",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "login",
+        stage: "post_login_redirect",
+        redirectPath: redirectPath || "/",
+      });
       window.location.href = redirectPath || "/";
     } catch (error: any) {
       toast({

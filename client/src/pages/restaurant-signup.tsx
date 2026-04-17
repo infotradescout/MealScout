@@ -38,6 +38,11 @@ import {
 import DocumentUpload from "@/components/document-upload";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 import { HOST_ONBOARDING_COPY as COPY } from "@/copy/hostOnboarding.copy";
 import {
   PASSWORD_REGEX,
@@ -302,6 +307,15 @@ export default function RestaurantSignup() {
   }, [form]);
 
   useEffect(() => {
+    trackFunnelEventOncePerSession(FUNNEL_EVENTS.activationStarted, "restaurant_signup_view", {
+      page: "restaurant-signup",
+      stage: "business_onboarding_view",
+      businessType: selectedBusinessType,
+      authMode,
+    });
+  }, [selectedBusinessType, authMode]);
+
+  useEffect(() => {
     if (selectedBusinessType !== "food_truck" && claimSelection) {
       setClaimSelection(null);
       setClaimResults([]);
@@ -500,6 +514,12 @@ export default function RestaurantSignup() {
         return;
       }
 
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "restaurant-signup",
+        stage: "restaurant_profile_created",
+        businessType: selectedBusinessType,
+      });
+
       setCreatedRestaurant(restaurant);
       dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
       toast({
@@ -549,6 +569,11 @@ export default function RestaurantSignup() {
       );
     },
     onSuccess: () => {
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "restaurant-signup",
+        stage: "verification_submitted",
+        businessType: selectedBusinessType,
+      });
       toast({
         title: COPY.notifications.verification.successTitle,
         description: COPY.notifications.verification.successDescription,
@@ -571,6 +596,14 @@ export default function RestaurantSignup() {
 
   const onSubmit = async (data: RestaurantFormData) => {
     const { acceptTerms, confirmNotFoodTruck, ...restaurantData } = data;
+
+    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+      page: "restaurant-signup",
+      stage: "restaurant_onboarding_submit",
+      businessType: selectedBusinessType,
+      authMode,
+      isAuthenticated,
+    });
 
     try {
       // Create restaurant first

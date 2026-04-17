@@ -46,6 +46,11 @@ import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoA
 import { SEOHead } from "@/components/seo-head";
 import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { trackUxEvent } from "@/utils/uxTelemetry";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { computeHomeRankingScore, getHomeRankingReasons } from "@shared/rankingPolicy";
 
@@ -260,6 +265,14 @@ export default function Home() {
       setShowWelcomeModal(true);
     }
   }, [user, location]);
+
+  useEffect(() => {
+    if (user) return;
+    trackFunnelEventOncePerSession(FUNNEL_EVENTS.landingView, "home_anonymous", {
+      page: "home",
+      audience: "anonymous",
+    });
+  }, [user]);
 
   const handleLocationDetection = async () => {
     if (navigator.geolocation) {
@@ -738,7 +751,14 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setNavigateTo("/login")}
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_login",
+                      destination: "/login",
+                    });
+                    setNavigateTo("/login");
+                  }}
                   className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
                   title="Login"
                   aria-label="Log in"
@@ -748,7 +768,15 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setNavigateTo("/customer-signup")}
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_customer_signup",
+                      destination: "/customer-signup",
+                      role: "diner",
+                    });
+                    setNavigateTo("/customer-signup");
+                  }}
                   className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
                   title="Customer Sign Up"
                   aria-label="Customer sign up"
@@ -758,9 +786,15 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() =>
-                    setNavigateTo("/customer-signup?role=business")
-                  }
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_business_signup",
+                      destination: "/customer-signup?role=business",
+                      role: "business",
+                    });
+                    setNavigateTo("/customer-signup?role=business");
+                  }}
                   className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
                   title="Restaurant/Bar/Food Truck Sign Up"
                   aria-label="Business sign up"
@@ -812,6 +846,60 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {!user && (
+        <section className="section section--full border-b border-[color:var(--border-subtle)] py-3 bg-[var(--bg-card)]">
+          <div className="content">
+            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 shadow-clean">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                Traction Sprint Offer
+              </p>
+              <h2 className="mt-1 text-lg font-bold text-foreground">
+                Get your restaurant or truck live in minutes
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Post deals, appear on discovery, and start converting nearby regulars.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href="/customer-signup?role=business">
+                  <Button
+                    size="sm"
+                    className="action-primary"
+                    data-testid="button-home-focused-business-cta"
+                    onClick={() => {
+                      trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                        page: "home",
+                        cta: "focused_business_offer",
+                        destination: "/customer-signup?role=business",
+                        role: "business",
+                      });
+                    }}
+                  >
+                    Start business signup
+                  </Button>
+                </Link>
+                <Link href="/customer-signup">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="button-home-focused-diner-cta"
+                    onClick={() => {
+                      trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                        page: "home",
+                        cta: "focused_diner_offer",
+                        destination: "/customer-signup",
+                        role: "diner",
+                      });
+                    }}
+                  >
+                    I am a diner
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Hero & Search Section */}
       <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-3">
@@ -1356,6 +1444,14 @@ export default function Home() {
                 size="sm"
                 variant="secondary"
                 className="px-3 py-1 text-xs"
+                onClick={() => {
+                  trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                    page: "home",
+                    cta: "owner_section_claim_go_live",
+                    destination: "/customer-signup?role=business",
+                    role: "business",
+                  });
+                }}
               >
                 Claim & Go Live
               </Button>
@@ -1440,7 +1536,17 @@ export default function Home() {
                 </div>
 
                 <Link href="/customer-signup">
-                  <Button className="w-full text-xs font-medium">
+                  <Button
+                    className="w-full text-xs font-medium"
+                    onClick={() => {
+                      trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                        page: "home",
+                        cta: "stay_connected_create_account",
+                        destination: "/customer-signup",
+                        role: "diner",
+                      });
+                    }}
+                  >
                     Create free account
                   </Button>
                 </Link>

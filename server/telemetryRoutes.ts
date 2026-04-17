@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { db } from "./db";
-import { telemetryEvents, events, eventInterests, eventSeries, hosts, users } from "@shared/schema";
+import {
+  telemetryEvents,
+  events,
+  eventInterests,
+  eventSeries,
+  hosts,
+  users,
+} from "@shared/schema";
 import { eq, and, gte, sql, desc, inArray } from "drizzle-orm";
 import { isAdmin } from "./unifiedAuth";
 
@@ -37,6 +44,15 @@ const PREMIUM_OPS_EVENT_NAMES = [
   "premium_summary_emailed",
   "premium_live_location_used",
   "premium_manual_schedule_used",
+] as const;
+
+const TRACTION_FUNNEL_EVENT_NAMES = [
+  "funnel_landing_view",
+  "funnel_primary_cta_click",
+  "funnel_signup_started",
+  "funnel_signup_submitted",
+  "funnel_signup_completed",
+  "funnel_activation_started",
 ] as const;
 
 /**
@@ -601,6 +617,232 @@ router.get("/open-call-series", isAdmin, async (req, res) => {
   } catch (error) {
     console.error("Error fetching open-call series telemetry:", error);
     res.status(500).json({ error: "Failed to fetch open-call series telemetry" });
+  }
+});
+
+/**
+ * GET /api/admin/telemetry/funnel
+ * Traction sprint funnel from landing traffic to activation start.
+ */
+router.get("/funnel", isAdmin, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const startDate = getRange(days);
+
+    const [totalsRows, accountTypeRows] = await Promise.all([
+      db
+        .select({
+          eventName: telemetryEvents.eventName,
+          count: sql<number>`count(*)`,
+          uniqueUsers: sql<number>`count(distinct user_id)`,
+          uniqueActors: sql<number>`count(distinct coalesce(${telemetryEvents.userId}::text, nullif(${telemetryEvents.properties}->>'anonSessionId', '')))`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            inArray(telemetryEvents.eventName, [...TRACTION_FUNNEL_EVENT_NAMES]),
+          ),
+        )
+        .groupBy(telemetryEvents.eventName),
+      db
+        .select({
+          accountType: sql<string>`coalesce(${telemetryEvents.properties}->>'accountType', 'unknown')`,
+          count: sql<number>`count(*)`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            inArray(telemetryEvents.eventName, [
+              "funnel_signup_started",
+              "funnel_signup_submitted",
+              "funnel_signup_completed",
+              "funnel_activation_started",
+            ]),
+          ),
+        )
+        .groupBy(sql`coalesce(${telemetryEvents.properties}->>'accountType', 'unknown')`),
+    ]);
+
+    const totalsByEvent = Object.fromEntries(
+      totalsRows.map((row: { eventName: string; count: number; uniqueUsers: number; uniqueActors: number }) => [
+        row.eventName,
+        {
+          count: Number(row.count || 0),
+          uniqueUsers: Number(row.uniqueUsers || 0),
+          uniqueActors: Number(row.uniqueActors || 0),
+        },
+      ]),
+    );
+
+    const stepCounts = {
+      landingView: totalsByEvent.funnel_landing_view?.count || 0,
+      primaryCtaClick: totalsByEvent.funnel_primary_cta_click?.count || 0,
+      signupStarted: totalsByEvent.funnel_signup_started?.count || 0,
+      signupSubmitted: totalsByEvent.funnel_signup_submitted?.count || 0,
+      signupCompleted: totalsByEvent.funnel_signup_completed?.count || 0,
+      activationStarted: totalsByEvent.funnel_activation_started?.count || 0,
+    };
+
+    const rate = (numerator: number, denominator: number) => {
+      if (!denominator || denominator <= 0) return 0;
+      return Number(((numerator / denominator) * 100).toFixed(2));
+    };
+
+    res.json({
+      days,
+      steps: stepCounts,
+      rates: {
+        ctrLandingToCta: rate(stepCounts.primaryCtaClick, stepCounts.landingView),
+        ctaToSignupStart: rate(stepCounts.signupStarted, stepCounts.primaryCtaClick),
+        signupStartToSubmit: rate(stepCounts.signupSubmitted, stepCounts.signupStarted),
+        submitToCompleted: rate(stepCounts.signupCompleted, stepCounts.signupSubmitted),
+        completedToActivation: rate(stepCounts.activationStarted, stepCounts.signupCompleted),
+      },
+      actorCounts: {
+        landingView: totalsByEvent.funnel_landing_view?.uniqueActors || 0,
+        primaryCtaClick: totalsByEvent.funnel_primary_cta_click?.uniqueActors || 0,
+        signupStarted: totalsByEvent.funnel_signup_started?.uniqueActors || 0,
+        signupSubmitted: totalsByEvent.funnel_signup_submitted?.uniqueActors || 0,
+        signupCompleted: totalsByEvent.funnel_signup_completed?.uniqueActors || 0,
+        activationStarted: totalsByEvent.funnel_activation_started?.uniqueActors || 0,
+      },
+      byAccountType: (accountTypeRows as any[]).map((row: any) => ({
+        accountType: String(row.accountType || "unknown"),
+        count: Number(row.count || 0),
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching traction funnel telemetry:", error);
+    res.status(500).json({ error: "Failed to fetch funnel telemetry" });
+  }
+});
+
+/**
+ * GET /api/admin/telemetry/heartbeat
+ * Core-table growth heartbeat that does not rely on front-end event tracking.
+ */
+router.get("/heartbeat", isAdmin, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
+    const startDate = getRange(days);
+    const sevenDayStart = getRange(7);
+    const thirtyDayStart = getRange(30);
+    const now = new Date();
+    const fourteenDaysOut = new Date(now);
+    fourteenDaysOut.setDate(fourteenDaysOut.getDate() + 14);
+
+    const [userCountsRows, newUsersByTypeRows, restaurantRows, eventRows, interestRows, valueRows] =
+      await Promise.all([
+        db.execute(sql`
+          select
+            count(*)::int as total_users,
+            count(*) filter (where created_at >= ${startDate})::int as new_users_window,
+            count(*) filter (where created_at >= ${sevenDayStart})::int as new_users_7d,
+            count(*) filter (where created_at >= ${thirtyDayStart})::int as new_users_30d,
+            count(*) filter (
+              where user_type in ('restaurant_owner', 'food_truck', 'host', 'event_coordinator', 'supplier')
+            )::int as total_supply_side_users
+          from users
+        `),
+        db
+          .select({
+            userType: users.userType,
+            count: sql<number>`count(*)`,
+          })
+          .from(users)
+          .where(gte(users.createdAt, startDate))
+          .groupBy(users.userType),
+        db.execute(sql`
+          select
+            count(*)::int as total_restaurants,
+            count(*) filter (where is_food_truck = true)::int as total_food_trucks,
+            count(*) filter (where is_food_truck = true and created_at >= ${thirtyDayStart})::int as new_food_trucks_30d,
+            count(*) filter (where is_food_truck = true and is_verified = true)::int as verified_food_trucks,
+            count(*) filter (where is_food_truck = true and mobile_online = true)::int as trucks_currently_online
+          from restaurants
+        `),
+        db.execute(sql`
+          select
+            count(*) filter (where date >= ${now} and date <= ${fourteenDaysOut} and status in ('open', 'booked'))::int as events_upcoming_14d,
+            count(*) filter (where created_at >= ${thirtyDayStart})::int as events_created_30d,
+            count(distinct host_id) filter (where date >= ${startDate})::int as active_hosts_window
+          from events
+        `),
+        db.execute(sql`
+          select
+            count(*) filter (where created_at >= ${thirtyDayStart})::int as interests_30d,
+            count(*) filter (where created_at >= ${thirtyDayStart} and status = 'accepted')::int as interests_accepted_30d,
+            count(distinct truck_id) filter (where created_at >= ${startDate})::int as active_trucks_window
+          from event_interests
+        `),
+        db.execute(sql`
+          select
+            count(*) filter (
+              where is_active = true
+              and start_date <= ${now}
+              and (end_date is null or end_date >= ${now})
+            )::int as active_deals_now,
+            count(*) filter (where created_at >= ${thirtyDayStart})::int as deals_created_30d,
+            (select count(*)::int from deal_claims where claimed_at >= ${thirtyDayStart}) as deal_claims_30d,
+            (select count(*)::int from location_requests where created_at >= ${thirtyDayStart}) as location_requests_30d,
+            (select count(*)::int from pensacola_report_leads where created_at >= ${thirtyDayStart}) as pensacola_leads_30d,
+            (select count(*)::int from host_partner_leads where created_at >= ${thirtyDayStart}) as host_partner_leads_30d
+          from deals
+        `),
+      ]);
+
+    const userCounts = userCountsRows.rows[0] as any;
+    const restaurantCounts = restaurantRows.rows[0] as any;
+    const eventCounts = eventRows.rows[0] as any;
+    const interestCounts = interestRows.rows[0] as any;
+    const valueCounts = valueRows.rows[0] as any;
+
+    const interests30d = Number(interestCounts?.interests_30d || 0);
+    const interestsAccepted30d = Number(interestCounts?.interests_accepted_30d || 0);
+    const acceptanceRatePct = interests30d > 0 ? Number(((interestsAccepted30d / interests30d) * 100).toFixed(1)) : 0;
+
+    res.json({
+      days,
+      generatedAt: new Date().toISOString(),
+      users: {
+        totalUsers: Number(userCounts?.total_users || 0),
+        totalSupplySideUsers: Number(userCounts?.total_supply_side_users || 0),
+        newUsersWindow: Number(userCounts?.new_users_window || 0),
+        newUsers7d: Number(userCounts?.new_users_7d || 0),
+        newUsers30d: Number(userCounts?.new_users_30d || 0),
+        newUsersByTypeWindow: (newUsersByTypeRows as Array<{ userType: string | null; count: number }>).map((row) => ({
+          userType: String(row.userType || "unknown"),
+          count: Number(row.count || 0),
+        })),
+      },
+      marketplace: {
+        totalRestaurants: Number(restaurantCounts?.total_restaurants || 0),
+        totalFoodTrucks: Number(restaurantCounts?.total_food_trucks || 0),
+        newFoodTrucks30d: Number(restaurantCounts?.new_food_trucks_30d || 0),
+        verifiedFoodTrucks: Number(restaurantCounts?.verified_food_trucks || 0),
+        trucksCurrentlyOnline: Number(restaurantCounts?.trucks_currently_online || 0),
+        activeTrucksWindow: Number(interestCounts?.active_trucks_window || 0),
+        activeHostsWindow: Number(eventCounts?.active_hosts_window || 0),
+        eventsUpcoming14d: Number(eventCounts?.events_upcoming_14d || 0),
+        eventsCreated30d: Number(eventCounts?.events_created_30d || 0),
+        interests30d,
+        interestsAccepted30d,
+        acceptanceRatePct,
+      },
+      value: {
+        activeDealsNow: Number(valueCounts?.active_deals_now || 0),
+        dealsCreated30d: Number(valueCounts?.deals_created_30d || 0),
+        dealClaims30d: Number(valueCounts?.deal_claims_30d || 0),
+        locationRequests30d: Number(valueCounts?.location_requests_30d || 0),
+        pensacolaLeads30d: Number(valueCounts?.pensacola_leads_30d || 0),
+        hostPartnerLeads30d: Number(valueCounts?.host_partner_leads_30d || 0),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching telemetry heartbeat:", error);
+    res.status(500).json({ error: "Failed to fetch heartbeat telemetry" });
   }
 });
 

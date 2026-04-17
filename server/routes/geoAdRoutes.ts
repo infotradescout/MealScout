@@ -338,12 +338,30 @@ export function registerGeoAdRoutes(app: Express) {
       session[throttleKey] = now;
     }
 
+    const incomingProperties = (parsed.data.properties || {}) as Record<string, unknown>;
+    const hasUser = Boolean(req.user?.id);
+    const inferredClientPath =
+      typeof incomingProperties.path === "string" && incomingProperties.path.trim().length > 0
+        ? incomingProperties.path.trim()
+        : (() => {
+            try {
+              const referer = String(req.get("referer") || "").trim();
+              if (!referer) return null;
+              const url = new URL(referer);
+              return `${url.pathname}${url.search || ""}`;
+            } catch {
+              return null;
+            }
+          })();
+
     await db.insert(telemetryEvents).values({
       eventName,
       userId: req.user?.id || null,
       properties: {
-        ...(parsed.data.properties || {}),
-        path: req.path,
+        ...incomingProperties,
+        clientPath: inferredClientPath,
+        requestPath: req.path,
+        anonSessionId: hasUser ? null : String(req.sessionID || ""),
       },
     });
 

@@ -72,6 +72,24 @@ export default function AdminTelemetry() {
     }
   });
 
+  const { data: tractionFunnel, isLoading: loadingTractionFunnel } = useQuery({
+    queryKey: ["/api/admin/telemetry/funnel"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/telemetry/funnel?days=30");
+      if (!res.ok) throw new Error("Failed to fetch traction funnel telemetry");
+      return res.json();
+    },
+  });
+
+  const { data: heartbeat, isLoading: loadingHeartbeat } = useQuery({
+    queryKey: ["/api/admin/telemetry/heartbeat"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/telemetry/heartbeat?days=30");
+      if (!res.ok) throw new Error("Failed to fetch telemetry heartbeat");
+      return res.json();
+    },
+  });
+
   const { data: pensacolaOps, isLoading: loadingPensacolaOps } = useQuery({
     queryKey: ["/api/admin/growth/pensacola/ops"],
     queryFn: async () => {
@@ -212,14 +230,26 @@ export default function AdminTelemetry() {
       body: "Adoption rates are healthy. Move to retention by sending inactivity nudges to premium users with no live or schedule actions in 7 days.",
     };
   })();
+  const funnelSteps = tractionFunnel?.steps || {};
+  const funnelAllZero =
+    Number(funnelSteps.landingView || 0) === 0 &&
+    Number(funnelSteps.primaryCtaClick || 0) === 0 &&
+    Number(funnelSteps.signupStarted || 0) === 0 &&
+    Number(funnelSteps.signupSubmitted || 0) === 0 &&
+    Number(funnelSteps.signupCompleted || 0) === 0 &&
+    Number(funnelSteps.activationStarted || 0) === 0;
 
-  if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries || loadingPremiumOps) {
+  if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries || loadingPremiumOps || loadingTractionFunnel || loadingHeartbeat) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  const heartbeatUsers = heartbeat?.users || {};
+  const heartbeatMarketplace = heartbeat?.marketplace || {};
+  const heartbeatValue = heartbeat?.value || {};
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -229,6 +259,148 @@ export default function AdminTelemetry() {
           <p className="text-muted-foreground">Operational insights from system events (Read-Only)</p>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Marketplace Pulse (Core DB, 30d)</CardTitle>
+          <CardDescription>
+            Canonical growth and activity metrics from users, restaurants, events, interests, and deals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">New Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatUsers.newUsers30d || 0)}</div>
+                <p className="text-xs text-muted-foreground">7d: {Number(heartbeatUsers.newUsers7d || 0)} · total: {Number(heartbeatUsers.totalUsers || 0)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">New Food Trucks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatMarketplace.newFoodTrucks30d || 0)}</div>
+                <p className="text-xs text-muted-foreground">Total trucks: {Number(heartbeatMarketplace.totalFoodTrucks || 0)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Interests (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatMarketplace.interests30d || 0)}</div>
+                <p className="text-xs text-muted-foreground">Accepted: {Number(heartbeatMarketplace.interestsAccepted30d || 0)} ({Number(heartbeatMarketplace.acceptanceRatePct || 0).toFixed(1)}%)</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Active Deals Now</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatValue.activeDealsNow || 0)}</div>
+                <p className="text-xs text-muted-foreground">Claims (30d): {Number(heartbeatValue.dealClaims30d || 0)}</p>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Events Upcoming (14d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatMarketplace.eventsUpcoming14d || 0)}</div>
+                <p className="text-xs text-muted-foreground">Events created (30d): {Number(heartbeatMarketplace.eventsCreated30d || 0)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Active Hosts (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatMarketplace.activeHostsWindow || 0)}</div>
+                <p className="text-xs text-muted-foreground">Supply-side users: {Number(heartbeatUsers.totalSupplySideUsers || 0)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Active Trucks (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatMarketplace.activeTrucksWindow || 0)}</div>
+                <p className="text-xs text-muted-foreground">Online now: {Number(heartbeatMarketplace.trucksCurrentlyOnline || 0)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Demand Signals (30d)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(heartbeatValue.locationRequests30d || 0)}</div>
+                <p className="text-xs text-muted-foreground">Host leads: {Number(heartbeatValue.hostPartnerLeads30d || 0)}</p>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Traction Snapshot (30d)</CardTitle>
+          <CardDescription>
+            Fast view of acquisition-to-activation. Uses anonymous session + authenticated user events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Landing Views</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.landingView || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Unique actors: {Number(tractionFunnel?.actorCounts?.landingView || 0)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">CTA Clicks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.primaryCtaClick || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  CTR: {Number(tractionFunnel?.rates?.ctrLandingToCta || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Activation Started</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.activationStarted || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Complete → Activation: {Number(tractionFunnel?.rates?.completedToActivation || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          {funnelAllZero && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No Funnel Events Captured Yet</AlertTitle>
+              <AlertDescription>
+                Funnel telemetry is currently zero. Open the public home page while signed out, click a signup CTA, and reload this screen.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -319,11 +491,11 @@ export default function AdminTelemetry() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Events Tracked</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Active Events</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{fillRates?.totalEvents || 0}</div>
-            <p className="text-xs text-muted-foreground">Active events in system</p>
+            <p className="text-xs text-muted-foreground">Active marketplace events in system</p>
           </CardContent>
         </Card>
         <Card>
@@ -349,6 +521,82 @@ export default function AdminTelemetry() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Traction Funnel (30d)</CardTitle>
+          <CardDescription>
+            Landing traffic to activation start. If this stays flat, acquisition and conversion messaging need immediate changes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Landing Views</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.landingView || 0)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">CTA Clicks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.primaryCtaClick || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  CTR: {Number(tractionFunnel?.rates?.ctrLandingToCta || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Signup Started</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.signupStarted || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  CTA → Start: {Number(tractionFunnel?.rates?.ctaToSignupStart || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Signup Submitted</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.signupSubmitted || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Start → Submit: {Number(tractionFunnel?.rates?.signupStartToSubmit || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Signup Completed</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.signupCompleted || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Submit → Complete: {Number(tractionFunnel?.rates?.submitToCompleted || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Activation Started</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{Number(tractionFunnel?.steps?.activationStarted || 0)}</div>
+                <p className="text-xs text-muted-foreground">
+                  Complete → Activation: {Number(tractionFunnel?.rates?.completedToActivation || 0).toFixed(1)}%
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
