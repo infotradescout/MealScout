@@ -386,6 +386,7 @@ type MapFootTrafficResponse = {
   generatedAt: string;
   windowMinutes: number;
   requestedWindowMinutes?: number;
+  mode?: "avg" | "live";
   cells: MapTrafficCell[];
   signalQuality?: {
     tier?: "sparse" | "emerging" | "solid";
@@ -1389,15 +1390,18 @@ export default function MapPage() {
         south: String(trafficBounds.south),
         east: String(trafficBounds.east),
         west: String(trafficBounds.west),
-        windowMinutes: String(zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360),
+        windowMinutes: String(
+          zoomLevel >= 15 ? 360 : zoomLevel >= 13 ? 720 : 1440,
+        ),
+        mode: "avg",
         includeGoogle: "false",
       });
       const res = await fetch(apiUrl(`/api/map/foot-traffic?${params}`));
       if (!res.ok) throw new Error("Failed to load map foot traffic");
       return res.json();
     },
-    staleTime: 45_000,
-    refetchInterval: 60_000,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 

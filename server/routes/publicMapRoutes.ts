@@ -31,6 +31,41 @@ let mapLocationsLastGood: {
   payload: { hostLocations: any[]; eventLocations: any[] };
 } | null = null;
 
+type FootTrafficPayload = {
+  generatedAt: string;
+  windowMinutes: number;
+  requestedWindowMinutes: number;
+  bounds: BoundsLike;
+  mode: "avg" | "live";
+  signalQuality: {
+    tier: "sparse" | "emerging" | "solid";
+    isLowDensity: boolean;
+  };
+  firstParty: {
+    totalPings: number;
+    totalUniqueActors: number;
+    cells: TrafficCell[];
+  };
+  supplySignals: {
+    cells: TrafficCell[];
+  };
+  googlePlaces: {
+    enabled: boolean;
+    used: boolean;
+    error: string | null;
+    cells: TrafficCell[];
+  };
+  cells: TrafficCell[];
+};
+
+const mapFootTrafficCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    payload: FootTrafficPayload;
+  }
+>();
+
 type BoundsLike = {
   north: number;
   south: number;
@@ -105,6 +140,8 @@ const cellId = (
   `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
 
 const roundCell = (value: number) => Math.round(value * 1000) / 1000;
+
+const normalizeBoundForKey = (value: number) => Number(value.toFixed(3));
 
 const isMissingRelationError = (error: unknown, relationName?: string) => {
   const err = error as { code?: string; message?: string } | null;
@@ -789,11 +826,20 @@ export function registerPublicMapRoutes(app: Express) {
       return res.status(400).json({ message: "Invalid map bounds" });
     }
 
+    const modeRaw = String(req.query.mode || "")
+      .trim()
+      .toLowerCase();
+    const trafficMode: "avg" | "live" = modeRaw === "live" ? "live" : "avg";
+
     const requestedWindowRaw = toFiniteNumber(req.query.windowMinutes);
-    const requestedWindowMinutes = Math.min(
+    const requestedWindowMinutesBase = Math.min(
       24 * 60,
       Math.max(10, Math.round(requestedWindowRaw ?? 180)),
     );
+    const requestedWindowMinutes =
+      trafficMode === "avg"
+        ? Math.max(360, requestedWindowMinutesBase)
+        : requestedWindowMinutesBase;
     const maxWindowMinutes = 24 * 60;
     const since = new Date(Date.now() - maxWindowMinutes * 60 * 1000);
 
@@ -801,6 +847,23 @@ export function registerPublicMapRoutes(app: Express) {
       String(req.query.includeGoogle || "")
         .trim()
         .toLowerCase() === "true";
+    const cacheKey = JSON.stringify({
+      mode: trafficMode,
+      north: normalizeBoundForKey(bounds.north),
+      south: normalizeBoundForKey(bounds.south),
+      east: normalizeBoundForKey(bounds.east),
+      west: normalizeBoundForKey(bounds.west),
+      includeGoogle: googlePlacesRequested,
+      windowMinutes: requestedWindowMinutes,
+    });
+    const cached = mapFootTrafficCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.setHeader(
+        "Cache-Control",
+        trafficMode === "avg" ? "public, max-age=300" : "public, max-age=45",
+      );
+      return res.json(cached.payload);
+    }
 
     const minLat = bounds.south;
     const maxLat = bounds.north;
@@ -1195,12 +1258,12 @@ export function registerPublicMapRoutes(app: Express) {
       (a, b) => (b.weight || 0) - (a.weight || 0),
     );
 
-    res.setHeader("Cache-Control", "public, max-age=45");
-    return res.json({
+    const payload: FootTrafficPayload = {
       generatedAt: new Date().toISOString(),
       windowMinutes: effectiveWindowMinutes,
       requestedWindowMinutes,
       bounds,
+      mode: trafficMode,
       signalQuality: {
         tier: signalTier,
         isLowDensity: signalTier === "sparse",
@@ -1215,7 +1278,16 @@ export function registerPublicMapRoutes(app: Express) {
       },
       googlePlaces,
       cells: combinedCells,
+    };
+    mapFootTrafficCache.set(cacheKey, {
+      expiresAt: Date.now() + (trafficMode === "avg" ? 5 * 60_000 : 45_000),
+      payload,
     });
+    res.setHeader(
+      "Cache-Control",
+      trafficMode === "avg" ? "public, max-age=300" : "public, max-age=45",
+    );
+    return res.json(payload);
   });
 
   app.post(
@@ -1225,6 +1297,7 @@ export function registerPublicMapRoutes(app: Express) {
     async (_req: any, res) => {
       mapLocationsCache = null;
       mapLocationsLastGood = null;
+      mapFootTrafficCache.clear();
       res.json({ success: true });
     },
   );
