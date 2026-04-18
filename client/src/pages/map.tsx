@@ -882,6 +882,8 @@ export default function MapPage() {
   );
   const [locationError, setLocationError] = useState<string | null>(null);
   const [forceLegacyMap, setForceLegacyMap] = useState(false);
+  const [googleMapRetryNonce, setGoogleMapRetryNonce] = useState(0);
+  const [googleMapAutoRetryCount, setGoogleMapAutoRetryCount] = useState(0);
   const [googleMapsRuntimeError, setGoogleMapsRuntimeError] = useState<
     string | null
   >(null);
@@ -895,6 +897,7 @@ export default function MapPage() {
   const [geocodeFailures, setGeocodeFailures] = useState<
     Record<string, GeocodeFailureEntry>
   >({});
+  const [mapProviderGraceExpired, setMapProviderGraceExpired] = useState(false);
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationWatchIdRef = useRef<number | null>(null);
   const locationWatchStopTimerRef = useRef<number | null>(null);
@@ -1397,10 +1400,27 @@ export default function MapPage() {
       if (!res.ok) throw new Error("Failed to load map runtime config");
       return res.json();
     },
+    retry: 4,
+    retryDelay: 800,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const key = String(
+        (query.state.data as MapRuntimeResponse | undefined)?.googleMapsApiKey ||
+          "",
+      ).trim();
+      if (GOOGLE_MAPS_WEB_API_KEY.length > 0 || key.length > 0) return false;
+      return 2000;
+    },
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMapProviderGraceExpired(true);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const mapLocations: MapLocationsResponse = useMemo(() => {
     return (
@@ -1999,7 +2019,9 @@ export default function MapPage() {
   const effectiveGoogleMapsApiKey =
     runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
   const shouldHoldMapProviderSelection =
-    GOOGLE_MAPS_WEB_API_KEY.length === 0 && mapRuntimeLoading;
+    GOOGLE_MAPS_WEB_API_KEY.length === 0 &&
+    runtimeGoogleMapsApiKey.length === 0 &&
+    !mapProviderGraceExpired;
   const isGoogleProviderRequested = effectiveGoogleMapsApiKey.length > 0;
   const isGoogleProviderMissingKey = !isGoogleProviderRequested;
   const isUsingGoogleMap =
@@ -2016,6 +2038,27 @@ export default function MapPage() {
     );
     setForceLegacyMap(true);
   }, []);
+
+  useEffect(() => {
+    // If key provisioning completes after first render, allow Google map immediately.
+    if (!isGoogleProviderRequested) return;
+    setForceLegacyMap(false);
+    setGoogleMapsRuntimeError(null);
+    setGoogleMapAutoRetryCount(0);
+  }, [effectiveGoogleMapsApiKey, isGoogleProviderRequested]);
+
+  useEffect(() => {
+    // Recover from transient script/auth races without requiring user navigation.
+    if (!forceLegacyMap || !isGoogleProviderRequested) return;
+    if (googleMapAutoRetryCount >= 3) return;
+    const timer = window.setTimeout(() => {
+      setGoogleMapAutoRetryCount((prev) => prev + 1);
+      setGoogleMapsRuntimeError(null);
+      setForceLegacyMap(false);
+      setGoogleMapRetryNonce((prev) => prev + 1);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [forceLegacyMap, isGoogleProviderRequested, googleMapAutoRetryCount]);
 
   const adapterMarkers = useMemo<MapAdapterMarker[]>(() => {
     const next: MapAdapterMarker[] = [];
@@ -2450,6 +2493,7 @@ export default function MapPage() {
           {mapCenter &&
             (isUsingGoogleMap ? (
               <GoogleMapSurface
+                key={`google-map-${googleMapRetryNonce}`}
                 apiKey={effectiveGoogleMapsApiKey}
                 center={mapCenter}
                 zoom={zoomLevel}
