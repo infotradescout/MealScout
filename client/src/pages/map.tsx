@@ -413,6 +413,18 @@ type MapRuntimeResponse = {
   googleMapsApiKey?: string | null;
 };
 
+type BusinessPopularityEntry = {
+  tier: "hot" | "rising" | "steady" | "new";
+  label: string;
+  color: string;
+  score: number;
+};
+
+type BusinessPopularityResponse = {
+  generatedAt: string;
+  restaurants: Record<string, BusinessPopularityEntry>;
+};
+
 type HostUpcomingBooking = {
   eventId: string;
   date: string;
@@ -1411,6 +1423,39 @@ export default function MapPage() {
     if (!appliedMapBounds) return cells;
     return cells.filter((cell) => appliedMapBounds.contains([cell.lat, cell.lng]));
   }, [showFootTraffic, footTrafficData, appliedMapBounds]);
+
+  const popularityRestaurantIds = useMemo(() => {
+    const ids = new Set<string>();
+    deals.forEach((deal) => {
+      const id = String(deal.restaurantId || "").trim();
+      if (id) ids.add(id);
+    });
+    visibleLiveTrucks.forEach((truck) => {
+      const id = String(truck.id || "").trim();
+      if (id) ids.add(id);
+    });
+    return Array.from(ids);
+  }, [deals, visibleLiveTrucks]);
+
+  const { data: businessPopularityData } = useQuery<BusinessPopularityResponse>({
+    queryKey: ["/api/map/business-popularity", popularityRestaurantIds.join(",")],
+    enabled: popularityRestaurantIds.length > 0,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        restaurantIds: popularityRestaurantIds.join(","),
+      });
+      const res = await fetch(apiUrl(`/api/map/business-popularity?${params}`));
+      if (!res.ok) throw new Error("Failed to load business popularity");
+      return res.json();
+    },
+    staleTime: 3 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const businessPopularityByRestaurant = useMemo(() => {
+    return businessPopularityData?.restaurants || {};
+  }, [businessPopularityData]);
 
   const hostedRadiusKm = 0.12;
   const isTruckOwnerUser =
@@ -3074,9 +3119,30 @@ export default function MapPage() {
                   <h3 className="font-semibold text-foreground text-sm">
                     {selectedDeal.title}
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedDeal.restaurant?.name}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {selectedDeal.restaurant?.name}
+                    </p>
+                    {businessPopularityByRestaurant[
+                      String(selectedDeal.restaurantId || "")
+                    ] && (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                        style={{
+                          backgroundColor:
+                            businessPopularityByRestaurant[
+                              String(selectedDeal.restaurantId || "")
+                            ].color,
+                        }}
+                      >
+                        {
+                          businessPopularityByRestaurant[
+                            String(selectedDeal.restaurantId || "")
+                          ].label
+                        }
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
@@ -3358,7 +3424,14 @@ export default function MapPage() {
               <div className="space-y-4">
                 {deals.map((deal: Deal) => (
                   <div key={deal.id} onClick={() => handleDealClick(deal)}>
-                    <DealCard deal={deal} />
+                    <DealCard
+                      deal={deal}
+                      popularity={
+                        businessPopularityByRestaurant[
+                          String(deal.restaurantId || "")
+                        ] || null
+                      }
+                    />
                   </div>
                 ))}
               </div>

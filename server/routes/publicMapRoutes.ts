@@ -14,6 +14,9 @@ import {
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
 import {
+  dealClaims,
+  deals,
+  dealViews,
   events,
   geoLocationPings,
   hosts,
@@ -817,6 +820,220 @@ export function registerPublicMapRoutes(app: Express) {
     } catch (error) {
       console.error("[map] host upcoming bookings failed:", error);
       return res.status(500).json({ message: "Failed to load upcoming bookings" });
+    }
+  });
+
+  app.get("/api/map/business-popularity", async (req, res) => {
+    try {
+      const rawRestaurantIds = String(req.query.restaurantIds || "")
+        .split(",")
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      const uniqueRestaurantIds = Array.from(new Set(rawRestaurantIds)).slice(
+        0,
+        200,
+      );
+      if (uniqueRestaurantIds.length === 0) {
+        return res.json({ generatedAt: new Date().toISOString(), restaurants: {} });
+      }
+
+      const now = new Date();
+      const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const inTargetIds = inArray(restaurants.id, uniqueRestaurantIds);
+
+      const restaurantRows = await db
+        .select({
+          id: restaurants.id,
+          rankingScore: restaurants.rankingScore,
+        })
+        .from(restaurants)
+        .where(and(inTargetIds, eq(restaurants.isActive, true)))
+        .limit(250);
+
+      const activeDealRows = await db
+        .select({
+          restaurantId: deals.restaurantId,
+          count: db.$count(deals.id),
+        })
+        .from(deals)
+        .where(
+          and(
+            inArray(deals.restaurantId, uniqueRestaurantIds),
+            eq(deals.isActive, true),
+            lte(deals.startDate, now),
+            or(isNull(deals.endDate), gte(deals.endDate, now)),
+          ),
+        )
+        .groupBy(deals.restaurantId);
+
+      const claimRows = await db
+        .select({
+          restaurantId: deals.restaurantId,
+          count: db.$count(dealClaims.id),
+        })
+        .from(dealClaims)
+        .innerJoin(deals, eq(dealClaims.dealId, deals.id))
+        .where(
+          and(
+            inArray(deals.restaurantId, uniqueRestaurantIds),
+            gte(dealClaims.claimedAt, since30d),
+          ),
+        )
+        .groupBy(deals.restaurantId);
+
+      const viewRows = await db
+        .select({
+          restaurantId: deals.restaurantId,
+          count: db.$count(dealViews.id),
+        })
+        .from(dealViews)
+        .innerJoin(deals, eq(dealViews.dealId, deals.id))
+        .where(
+          and(
+            inArray(deals.restaurantId, uniqueRestaurantIds),
+            gte(dealViews.viewedAt, since30d),
+          ),
+        )
+        .groupBy(deals.restaurantId);
+
+      const bookingRows = await db
+        .select({
+          restaurantId: events.bookedRestaurantId,
+          count: db.$count(events.id),
+        })
+        .from(events)
+        .where(
+          and(
+            inArray(events.bookedRestaurantId, uniqueRestaurantIds),
+            ne(events.status, "cancelled"),
+            gte(events.date, since30d),
+          ),
+        )
+        .groupBy(events.bookedRestaurantId);
+
+      const activeDealsByRestaurant = new Map<string, number>();
+      const claimsByRestaurant = new Map<string, number>();
+      const viewsByRestaurant = new Map<string, number>();
+      const bookingsByRestaurant = new Map<string, number>();
+
+      activeDealRows.forEach((row: (typeof activeDealRows)[number]) =>
+        activeDealsByRestaurant.set(
+          String(row.restaurantId || ""),
+          Number(row.count || 0),
+        ),
+      );
+      claimRows.forEach((row: (typeof claimRows)[number]) =>
+        claimsByRestaurant.set(
+          String(row.restaurantId || ""),
+          Number(row.count || 0),
+        ),
+      );
+      viewRows.forEach((row: (typeof viewRows)[number]) =>
+        viewsByRestaurant.set(
+          String(row.restaurantId || ""),
+          Number(row.count || 0),
+        ),
+      );
+      bookingRows.forEach((row: (typeof bookingRows)[number]) =>
+        bookingsByRestaurant.set(
+          String(row.restaurantId || ""),
+          Number(row.count || 0),
+        ),
+      );
+
+      const scored = restaurantRows.map((row: (typeof restaurantRows)[number]) => {
+        const restaurantId = String(row.id || "");
+        const ranking = Math.max(0, Number(row.rankingScore || 0));
+        const activeDeals = activeDealsByRestaurant.get(restaurantId) || 0;
+        const claims30d = claimsByRestaurant.get(restaurantId) || 0;
+        const views30d = viewsByRestaurant.get(restaurantId) || 0;
+        const bookings30d = bookingsByRestaurant.get(restaurantId) || 0;
+        const rawScore =
+          ranking * 0.5 +
+          activeDeals * 15 +
+          claims30d * 4 +
+          bookings30d * 12 +
+          Math.min(40, Math.round(views30d / 5));
+        return {
+          restaurantId,
+          rawScore,
+          metrics: {
+            ranking,
+            activeDeals,
+            claims30d,
+            views30d,
+            bookings30d,
+          },
+        };
+      });
+
+      const maxRawScore = Math.max(
+        1,
+        ...scored.map((row: (typeof scored)[number]) => row.rawScore),
+      );
+      const byRestaurant: Record<
+        string,
+        {
+          tier: "hot" | "rising" | "steady" | "new";
+          label: string;
+          color: string;
+          score: number;
+          metrics: {
+            ranking: number;
+            activeDeals: number;
+            claims30d: number;
+            views30d: number;
+            bookings30d: number;
+          };
+        }
+      > = {};
+
+      scored.forEach((row: (typeof scored)[number]) => {
+        const score = Math.max(
+          0,
+          Math.min(100, Math.round((row.rawScore / maxRawScore) * 100)),
+        );
+        const tier =
+          score >= 75
+            ? "hot"
+            : score >= 45
+              ? "rising"
+              : score >= 20
+                ? "steady"
+                : "new";
+        const label =
+          tier === "hot"
+            ? "Hot spot"
+            : tier === "rising"
+              ? "Rising"
+              : tier === "steady"
+                ? "Steady"
+                : "New";
+        const color =
+          tier === "hot"
+            ? "#EF4444"
+            : tier === "rising"
+              ? "#F59E0B"
+              : tier === "steady"
+                ? "#84CC16"
+                : "#64748B";
+        byRestaurant[row.restaurantId] = {
+          tier,
+          label,
+          color,
+          score,
+          metrics: row.metrics,
+        };
+      });
+
+      res.setHeader("Cache-Control", "public, max-age=180");
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        restaurants: byRestaurant,
+      });
+    } catch (error) {
+      console.error("[map] business popularity failed:", error);
+      return res.status(500).json({ message: "Failed to load business popularity" });
     }
   });
 

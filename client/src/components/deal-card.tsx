@@ -90,6 +90,12 @@ interface Deal {
 
 interface DealCardProps {
   deal: Deal;
+  popularity?: {
+    tier: "hot" | "rising" | "steady" | "new";
+    label: string;
+    color: string;
+    score: number;
+  } | null;
 }
 
 function formatRelativeTime(value?: string | null): string | null {
@@ -193,7 +199,7 @@ const getDefaultImage = (cuisineType?: string, title?: string) => {
   return images.default;
 };
 
-export default function DealCard({ deal }: DealCardProps) {
+export default function DealCard({ deal, popularity = null }: DealCardProps) {
   const { user, isGuest } = useAuth();
   const isLiveTruck =
     !!deal.restaurant?.isFoodTruck && !!deal.restaurant?.mobileOnline;
@@ -678,12 +684,22 @@ export default function DealCard({ deal }: DealCardProps) {
 
             {/* Restaurant Name Overlay - bottom */}
             <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
-              <h3
-                className="font-semibold text-white text-xs truncate"
-                data-testid={`text-restaurant-name-${deal.id}`}
-              >
-                {deal.restaurant?.name || "Restaurant Name"}
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3
+                  className="font-semibold text-white text-xs truncate"
+                  data-testid={`text-restaurant-name-${deal.id}`}
+                >
+                  {deal.restaurant?.name || "Restaurant Name"}
+                </h3>
+                {popularity && (
+                  <span
+                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
+                    style={{ backgroundColor: popularity.color }}
+                  >
+                    {popularity.label}
+                  </span>
+                )}
+              </div>
               {deal.restaurant?.cuisineType && (
                 <p className="text-white/80 text-[10px] truncate">
                   {deal.restaurant.cuisineType}
