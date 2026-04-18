@@ -883,9 +883,6 @@ export default function MapPage() {
     string | null
   >(null);
   const [showFootTraffic, setShowFootTraffic] = useState(true);
-  const [showGoogleTrafficData, setShowGoogleTrafficData] = useState(true);
-  const [showGoogleRoadTrafficLayer, setShowGoogleRoadTrafficLayer] =
-    useState(true);
   const [hostCoords, setHostCoords] = useState<Record<string, GeoPoint>>({});
   const [eventCoords, setEventCoords] = useState<Record<string, GeoPoint>>({});
   const geocodeInFlight = useRef(false);
@@ -1042,8 +1039,6 @@ export default function MapPage() {
   useEffect(() => {
     if (isStaffOrAdmin) return;
     setShowFootTraffic(false);
-    setShowGoogleTrafficData(false);
-    setShowGoogleRoadTrafficLayer(false);
   }, [isStaffOrAdmin]);
 
   const getLocalDateKey = () => {
@@ -1253,7 +1248,7 @@ export default function MapPage() {
         Number(trafficBounds.east.toFixed(4)),
         Number(trafficBounds.west.toFixed(4)),
         zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360,
-        showGoogleTrafficData ? "google" : "first_party",
+        "first_party",
       ]
     : ["/api/map/foot-traffic", "none"];
 
@@ -1274,7 +1269,7 @@ export default function MapPage() {
         east: String(trafficBounds.east),
         west: String(trafficBounds.west),
         windowMinutes: String(zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360),
-        includeGoogle: showGoogleTrafficData ? "true" : "false",
+        includeGoogle: "false",
       });
       const res = await fetch(apiUrl(`/api/map/foot-traffic?${params}`));
       if (!res.ok) throw new Error("Failed to load map foot traffic");
@@ -2392,28 +2387,6 @@ export default function MapPage() {
               >
                 {showFootTraffic ? "Foot traffic on" : "Foot traffic off"}
               </Button>
-              <Button
-                variant={showGoogleTrafficData ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setShowGoogleTrafficData((prev) => !prev)}
-                data-testid="button-toggle-google-traffic-data"
-              >
-                {showGoogleTrafficData
-                  ? "Google Places on"
-                  : "Google Places off"}
-              </Button>
-              {isUsingGoogleMap && (
-                <Button
-                  variant={showGoogleRoadTrafficLayer ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => setShowGoogleRoadTrafficLayer((prev) => !prev)}
-                  data-testid="button-toggle-google-road-traffic"
-                >
-                  {showGoogleRoadTrafficLayer
-                    ? "Road traffic layer on"
-                    : "Road traffic layer off"}
-                </Button>
-              )}
               {showFootTraffic && (
                 <span className="text-muted-foreground">
                   {visibleTrafficCells.length} traffic cells in view
@@ -2430,15 +2403,6 @@ export default function MapPage() {
             </div>
           </>
         )}
-        {showMapDiagnostics &&
-          showFootTraffic &&
-          showGoogleTrafficData &&
-          footTrafficData?.googlePlaces?.enabled &&
-          footTrafficData?.googlePlaces?.error && (
-            <div className="mt-2 text-xs text-[color:var(--status-warning)]">
-              Enhanced traffic enrichment is temporarily unavailable.
-            </div>
-          )}
       </header>
 
       {/* Map Container */}
@@ -2464,7 +2428,7 @@ export default function MapPage() {
                 zoom={zoomLevel}
                 markers={adapterMarkers}
                 trafficCells={visibleTrafficCells}
-                showRoadTrafficLayer={showFootTraffic && showGoogleRoadTrafficLayer}
+                showRoadTrafficLayer={false}
                 userLocation={userLocation}
                 isNightTheme={isNightTheme}
                 onBoundsChanged={setMapBounds}
