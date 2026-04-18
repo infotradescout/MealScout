@@ -192,6 +192,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Staff management and user creation endpoints
   registerStaffRoutes(app);
 
+  // Public machine-readable signal endpoint for LISA source polling.
+  app.get("/api/signals", (_req, res) => {
+    res.json({
+      source: "mealscout",
+      generated_at: new Date().toISOString(),
+      count: 1,
+      signals: [
+        {
+          id: Date.now(),
+          lane: "business",
+          signal_kind: "source_heartbeat",
+          confidence: 0.9,
+          score: 58,
+          impact_level: "low",
+          trend: "neutral",
+          velocity: "steady",
+          action_hint: "mealscout source healthy",
+          tags: ["mealscout", "heartbeat"],
+          source_class: "source_api",
+          observed_fact: "MealScout API heartbeat is healthy",
+        },
+      ],
+    });
+  });
+
   await registerRuntimeBootstrapRoutes(app);
 
   const httpServer = createServer(app);
