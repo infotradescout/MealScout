@@ -1390,7 +1390,7 @@ export default function MapPage() {
     }
   }, [mapLocationsData]);
 
-  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+  const { data: mapRuntime, isLoading: mapRuntimeLoading } = useQuery<MapRuntimeResponse>({
     queryKey: ["/api/map/runtime"],
     queryFn: async () => {
       const res = await fetch(apiUrl("/api/map/runtime"));
@@ -1998,9 +1998,12 @@ export default function MapPage() {
   ).trim();
   const effectiveGoogleMapsApiKey =
     runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+  const shouldHoldMapProviderSelection =
+    GOOGLE_MAPS_WEB_API_KEY.length === 0 && mapRuntimeLoading;
   const isGoogleProviderRequested = effectiveGoogleMapsApiKey.length > 0;
   const isGoogleProviderMissingKey = !isGoogleProviderRequested;
-  const isUsingGoogleMap = isGoogleProviderRequested && !forceLegacyMap;
+  const isUsingGoogleMap =
+    !shouldHoldMapProviderSelection && isGoogleProviderRequested && !forceLegacyMap;
   const mapProviderLabel = isUsingGoogleMap
     ? "Google Maps"
     : isGoogleProviderMissingKey
@@ -2425,6 +2428,13 @@ export default function MapPage() {
       {/* Map Container */}
       <div className="relative flex-1">
         <div className="relative h-[60vh] min-h-[320px]">
+          {shouldHoldMapProviderSelection && (
+            <div className="absolute inset-0 z-[1200] flex items-center justify-center bg-[hsl(var(--background))/0.7] backdrop-blur-sm">
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-muted-foreground shadow-clean">
+                Loading map services...
+              </div>
+            </div>
+          )}
           {hasPendingAreaSearch && (
             <div className="absolute top-3 left-1/2 z-[1200] -translate-x-1/2">
               <Button
