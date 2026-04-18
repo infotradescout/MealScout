@@ -7,6 +7,7 @@ import { insertHostSchema, hosts } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { forwardGeocode } from "../../utils/geocoding";
 import { getHostByUserId } from "../../services/hostOwnership";
+import { validateUsAddress } from "../../utils/addressValidation";
 import {
   buildLocationKey,
   buildGeocodeAddress,
@@ -20,7 +21,7 @@ export function registerHostProfileRoutes(app: Express) {
       const locationRequestClaimId = String(
         req.body?.locationRequestClaimId || "",
       ).trim();
-      // Check if host profile already exists
+
       const existing = await getHostByUserId(userId);
       if (existing) {
         return res.status(400).json({ message: "Host profile already exists" });
@@ -30,6 +31,27 @@ export function registerHostProfileRoutes(app: Express) {
         ...req.body,
         userId,
       });
+
+      const validation = await validateUsAddress({
+        address: parsed.address,
+        city: parsed.city ?? null,
+        state: parsed.state ?? null,
+      }).catch(() => null);
+
+      if (validation && !validation.ok) {
+        return res.status(422).json({
+          code: "ADDRESS_VALIDATION_REQUIRED",
+          message:
+            "Please confirm or correct this address before creating the host location.",
+          reason: validation.reason,
+          missingComponentTypes: validation.missingComponentTypes,
+          suggested: validation.suggested,
+        });
+      }
+
+      const validatedAddress = validation?.suggested?.address || parsed.address;
+      const validatedCity = validation?.suggested?.city || parsed.city;
+      const validatedState = validation?.suggested?.state || parsed.state;
 
       const existingHosts = await db
         .select({
@@ -42,9 +64,9 @@ export function registerHostProfileRoutes(app: Express) {
         .where(eq(hosts.userId, userId));
 
       const newKey = buildLocationKey(
-        parsed.address,
-        parsed.city ?? null,
-        parsed.state ?? null,
+        validatedAddress,
+        validatedCity ?? null,
+        validatedState ?? null,
       );
       const hasDuplicate = existingHosts.some(
         (host: (typeof existingHosts)[number]) =>
@@ -85,9 +107,9 @@ export function registerHostProfileRoutes(app: Express) {
       }
 
       const geocodeAddress = buildGeocodeAddress(
-        parsed.address,
-        parsed.city ?? null,
-        parsed.state ?? null,
+        validatedAddress,
+        validatedCity ?? null,
+        validatedState ?? null,
       );
       let coords: { lat: number; lng: number } | null = null;
       if (!manualCoords && geocodeAddress) {
@@ -100,6 +122,9 @@ export function registerHostProfileRoutes(app: Express) {
 
       const host = await storage.createHost({
         ...parsed,
+        address: validatedAddress,
+        city: validatedCity ?? null,
+        state: validatedState ?? null,
         latitude: manualCoords
           ? manualCoords.lat.toString()
           : coords
@@ -122,10 +147,6 @@ export function registerHostProfileRoutes(app: Express) {
             console.error("Failed to convert host location claim:", error);
           });
       }
-
-      // Hosts should keep their existing user type (typically "customer").
-      // We no longer auto-upgrade hosts into restaurant_owner accounts so
-      // they don't see restaurant dashboards or deal creation flows.
 
       res.status(201).json({
         ...host,

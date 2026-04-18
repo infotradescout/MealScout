@@ -34,6 +34,7 @@ import {
   computeFillRate,
 } from "../services/interestDecision";
 import { forwardGeocode } from "../utils/geocoding";
+import { validateUsAddress } from "../utils/addressValidation";
 import {
   PARKING_PASS_BOOKING_DAYS,
   PARKING_PASS_MEAL_WINDOWS,
@@ -293,7 +294,32 @@ export function registerHostRoutes(app: Express) {
       const nextAddress = parsed.address ?? host.address;
       const nextCity = parsed.city ?? host.city;
       const nextState = parsed.state ?? host.state;
-      const nextKey = buildLocationKey(nextAddress, nextCity, nextState);
+
+      const validation = await validateUsAddress({
+        address: nextAddress,
+        city: nextCity ?? null,
+        state: nextState ?? null,
+      }).catch(() => null);
+
+      if (validation && !validation.ok) {
+        return res.status(422).json({
+          code: "ADDRESS_VALIDATION_REQUIRED",
+          message:
+            "Please confirm or correct this address before saving the host location.",
+          reason: validation.reason,
+          missingComponentTypes: validation.missingComponentTypes,
+          suggested: validation.suggested,
+        });
+      }
+
+      const validatedAddress = validation?.suggested?.address || nextAddress;
+      const validatedCity = validation?.suggested?.city || nextCity;
+      const validatedState = validation?.suggested?.state || nextState;
+      const nextKey = buildLocationKey(
+        validatedAddress,
+        validatedCity,
+        validatedState,
+      );
 
       const siblingHosts = await db
         .select({
@@ -322,9 +348,9 @@ export function registerHostRoutes(app: Express) {
       const shouldGeocode =
         !manualCoords && (addressChanged || !host.latitude || !host.longitude);
       const geocodeAddress = buildGeocodeAddress(
-        nextAddress,
-        nextCity ?? null,
-        nextState ?? null,
+        validatedAddress,
+        validatedCity ?? null,
+        validatedState ?? null,
       );
       let coords: { lat: number; lng: number } | null = null;
       if (shouldGeocode && geocodeAddress) {
@@ -339,9 +365,9 @@ export function registerHostRoutes(app: Express) {
         .update(hosts)
         .set({
           businessName: parsed.businessName ?? host.businessName,
-          address: nextAddress,
-          city: nextCity,
-          state: nextState,
+          address: validatedAddress,
+          city: validatedCity,
+          state: validatedState,
           locationType: parsed.locationType ?? host.locationType,
           contactPhone: parsed.contactPhone ?? host.contactPhone,
           notes: parsed.notes ?? host.notes,

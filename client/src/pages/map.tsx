@@ -413,6 +413,13 @@ type MapRuntimeResponse = {
   googleMapsApiKey?: string | null;
 };
 
+type MapRouteSummaryResponse = {
+  distanceMeters: number;
+  durationSeconds: number;
+  travelMode: "DRIVE" | "WALK" | "BICYCLE";
+  source: "google_routes";
+};
+
 type BusinessPopularityEntry = {
   tier: "hot" | "rising" | "steady" | "new";
   label: string;
@@ -477,6 +484,22 @@ const buildFullAddress = (
     parts.push("USA");
     return parts.join(", ");
   })();
+
+const formatDurationLabel = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  if (seconds < 60) return "<1 min";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  return remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`;
+};
+
+const formatRoadDistance = (meters: number) => {
+  if (!Number.isFinite(meters) || meters <= 0) return null;
+  if (meters < 1000) return `${Math.round(meters)} m road`;
+  return `${(meters / 1000).toFixed(1)} km road`;
+};
 
 const haversineKm = (a: GeoPoint, b: GeoPoint) => {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -2497,6 +2520,56 @@ export default function MapPage() {
     staleTime: 60_000,
   });
 
+  const {
+    data: selectedParkingRouteSummary,
+    isLoading: isLoadingSelectedParkingRouteSummary,
+  } = useQuery<MapRouteSummaryResponse>({
+    queryKey: [
+      "/api/map/route-summary",
+      userLocation?.lat,
+      userLocation?.lng,
+      selectedParkingHost?.coords.lat,
+      selectedParkingHost?.coords.lng,
+      "DRIVE",
+    ],
+    enabled: Boolean(userLocation && selectedParkingHost),
+    queryFn: async () => {
+      if (!userLocation || !selectedParkingHost) {
+        throw new Error("Route summary missing origin/destination");
+      }
+      const params = new URLSearchParams({
+        originLat: String(userLocation.lat),
+        originLng: String(userLocation.lng),
+        destLat: String(selectedParkingHost.coords.lat),
+        destLng: String(selectedParkingHost.coords.lng),
+        travelMode: "DRIVE",
+      });
+      const res = await fetch(apiUrl(`/api/map/route-summary?${params.toString()}`));
+      if (!res.ok) {
+        throw new Error("Failed to load route summary");
+      }
+      return res.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const selectedParkingEtaLabel = useMemo(
+    () =>
+      selectedParkingRouteSummary
+        ? formatDurationLabel(selectedParkingRouteSummary.durationSeconds)
+        : null,
+    [selectedParkingRouteSummary],
+  );
+
+  const selectedParkingRoadDistanceLabel = useMemo(
+    () =>
+      selectedParkingRouteSummary
+        ? formatRoadDistance(selectedParkingRouteSummary.distanceMeters)
+        : null,
+    [selectedParkingRouteSummary],
+  );
+
   const mapSchemaData = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -3250,6 +3323,15 @@ export default function MapPage() {
               {selectedParkingHost.distanceLabel && (
                 <p className="mb-2 text-xs text-muted-foreground">
                   {selectedParkingHost.distanceLabel} away
+                </p>
+              )}
+              {userLocation && (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  {isLoadingSelectedParkingRouteSummary
+                    ? "Estimating drive time..."
+                    : [selectedParkingRoadDistanceLabel, selectedParkingEtaLabel]
+                        .filter(Boolean)
+                        .join(" • ") || "Drive ETA unavailable"}
                 </p>
               )}
               {selectedParkingHost.nearbyTruck && (

@@ -69,6 +69,19 @@ const mapFootTrafficCache = new Map<
   }
 >();
 
+const mapRouteSummaryCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    payload: {
+      distanceMeters: number;
+      durationSeconds: number;
+      travelMode: "DRIVE" | "WALK" | "BICYCLE";
+      source: "google_routes";
+    };
+  }
+>();
+
 type BoundsLike = {
   north: number;
   south: number;
@@ -145,6 +158,14 @@ const cellId = (
 const roundCell = (value: number) => Math.round(value * 1000) / 1000;
 
 const normalizeBoundForKey = (value: number) => Number(value.toFixed(3));
+
+const parseDurationSeconds = (value: unknown) => {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^(\d+(?:\.\d+)?)s$/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : null;
+};
 
 const isMissingRelationError = (error: unknown, relationName?: string) => {
   const err = error as { code?: string; message?: string } | null;
@@ -820,6 +841,130 @@ export function registerPublicMapRoutes(app: Express) {
         return res.json(mapLocationsLastGood.payload);
       }
       res.status(200).json({ hostLocations: [], eventLocations: [] });
+    }
+  });
+
+  app.get("/api/map/route-summary", async (req, res) => {
+    const originLat = toFiniteNumber(req.query.originLat);
+    const originLng = toFiniteNumber(req.query.originLng);
+    const destLat = toFiniteNumber(req.query.destLat);
+    const destLng = toFiniteNumber(req.query.destLng);
+    const travelModeRaw = String(req.query.travelMode || "DRIVE")
+      .trim()
+      .toUpperCase();
+    const travelMode: "DRIVE" | "WALK" | "BICYCLE" =
+      travelModeRaw === "WALK" || travelModeRaw === "BICYCLE"
+        ? (travelModeRaw as "WALK" | "BICYCLE")
+        : "DRIVE";
+
+    if (
+      originLat === null ||
+      originLng === null ||
+      destLat === null ||
+      destLng === null
+    ) {
+      return res.status(400).json({ message: "origin/destination is required" });
+    }
+
+    const withinBounds =
+      originLat >= -90 &&
+      originLat <= 90 &&
+      destLat >= -90 &&
+      destLat <= 90 &&
+      originLng >= -180 &&
+      originLng <= 180 &&
+      destLng >= -180 &&
+      destLng <= 180;
+    if (!withinBounds) {
+      return res.status(400).json({ message: "Invalid coordinates" });
+    }
+
+    const cacheKey = [
+      Number(originLat.toFixed(3)),
+      Number(originLng.toFixed(3)),
+      Number(destLat.toFixed(3)),
+      Number(destLng.toFixed(3)),
+      travelMode,
+    ].join(":");
+    const cached = mapRouteSummaryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json(cached.payload);
+    }
+
+    const apiKey = getGoogleMapsApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ message: "Google Maps key not configured" });
+    }
+
+    try {
+      const response = await fetch(
+        "https://routes.googleapis.com/directions/v2:computeRoutes",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+          },
+          body: JSON.stringify({
+            origin: {
+              location: {
+                latLng: {
+                  latitude: originLat,
+                  longitude: originLng,
+                },
+              },
+            },
+            destination: {
+              location: {
+                latLng: {
+                  latitude: destLat,
+                  longitude: destLng,
+                },
+              },
+            },
+            travelMode,
+            routingPreference:
+              travelMode === "DRIVE" ? "TRAFFIC_AWARE_OPTIMAL" : undefined,
+            computeAlternativeRoutes: false,
+            languageCode: "en-US",
+            units: "METRIC",
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        return res.status(502).json({
+          message: text || "Unable to compute route",
+        });
+      }
+
+      const data = (await response.json().catch(() => ({}))) as any;
+      const route = Array.isArray(data?.routes) ? data.routes[0] : null;
+      const distanceMeters = Number(route?.distanceMeters);
+      const durationSeconds = parseDurationSeconds(route?.duration);
+      if (!Number.isFinite(distanceMeters) || durationSeconds === null) {
+        return res.status(404).json({ message: "Route not available" });
+      }
+
+      const payload = {
+        distanceMeters: Math.max(0, Math.round(distanceMeters)),
+        durationSeconds,
+        travelMode,
+        source: "google_routes" as const,
+      };
+      mapRouteSummaryCache.set(cacheKey, {
+        expiresAt: Date.now() + 60_000,
+        payload,
+      });
+
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json(payload);
+    } catch (error) {
+      console.error("[map.route-summary] failed", error);
+      return res.status(500).json({ message: "Unable to compute route" });
     }
   });
 
