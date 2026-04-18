@@ -30,6 +30,7 @@ type GoogleMapsWindow = Window & {
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
 };
+const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim();
 
 const createBoundsLike = (
   north: number,
@@ -118,17 +119,6 @@ const buildAdvancedMarkerContent = (googleMaps: any, marker: MapAdapterMarker) =
     img.style.width = "34px";
     img.style.height = "34px";
     return img;
-  }
-
-  const pinElCtor = googleMaps?.marker?.PinElement;
-  if (pinElCtor) {
-    const pin = new pinElCtor({
-      background: markerColor(marker.kind),
-      borderColor: "#111827",
-      glyphColor: "#ffffff",
-      scale: marker.kind === "user" ? 1.2 : 1,
-    });
-    return pin.element;
   }
 
   const dot = document.createElement("div");
@@ -302,6 +292,7 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
+            ...(GOOGLE_MAP_ID ? { mapId: GOOGLE_MAP_ID } : {}),
             // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
             // Touch devices: keep native cooperative behavior.
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
@@ -389,7 +380,8 @@ export function GoogleMapSurface({
       }
 
       const AdvancedMarkerElement = googleMaps?.marker?.AdvancedMarkerElement;
-      const instance = AdvancedMarkerElement
+      const useAdvancedMarkers = Boolean(AdvancedMarkerElement && GOOGLE_MAP_ID);
+      const instance = useAdvancedMarkers
         ? new AdvancedMarkerElement({
             map: mapRef.current,
             position: { lat: marker.lat, lng: marker.lng },
@@ -402,10 +394,17 @@ export function GoogleMapSurface({
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildMarkerIcon(googleMaps, marker),
           });
-      instance.addListener("click", () => {
-        const tapped = markerIndex.get(marker.id);
-        if (tapped) onMarkerTap(tapped);
-      });
+      if (typeof instance.addEventListener === "function") {
+        instance.addEventListener("gmp-click", () => {
+          const tapped = markerIndex.get(marker.id);
+          if (tapped) onMarkerTap(tapped);
+        });
+      } else {
+        instance.addListener("click", () => {
+          const tapped = markerIndex.get(marker.id);
+          if (tapped) onMarkerTap(tapped);
+        });
+      }
       markerRefs.current.set(marker.id, instance);
     });
 
