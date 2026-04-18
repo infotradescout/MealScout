@@ -309,6 +309,28 @@ export default function SearchPage() {
     staleTime: 30_000,
   });
 
+  const { data: restaurantSearchResults = [] } = useQuery<any[]>({
+    queryKey: [
+      "/api/restaurants/search",
+      debouncedSearchQuery,
+      userLocation?.lat ?? null,
+      userLocation?.lng ?? null,
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({ q: debouncedSearchQuery });
+      if (userLocation) {
+        params.set("lat", String(userLocation.lat));
+        params.set("lng", String(userLocation.lng));
+        params.set("radius", "20");
+      }
+      const res = await fetch(`/api/restaurants/search?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to search restaurants");
+      return res.json();
+    },
+    enabled: debouncedSearchQuery.length >= 2,
+    staleTime: 30_000,
+  });
+
   const isLoading =
     nearbyLoading || featuredLoading || unifiedLoading || isLocating;
 
@@ -394,6 +416,28 @@ export default function SearchPage() {
   )
     ? (unifiedResults as any).restaurants
     : [];
+  const mergedRestaurants = useMemo(() => {
+    const byId = new Map<string, any>();
+    searchedRestaurants.forEach((restaurant: any) => {
+      const id = String(restaurant?.id || "").trim();
+      if (!id) return;
+      byId.set(id, restaurant);
+    });
+    restaurantSearchResults.forEach((restaurant: any) => {
+      const id = String(restaurant?.id || "").trim();
+      if (!id) return;
+      if (byId.has(id)) return;
+      byId.set(id, {
+        id,
+        name: restaurant?.name,
+        cuisineType: restaurant?.cuisineType,
+        address: restaurant?.address,
+        isFoodTruck: Boolean(restaurant?.isFoodTruck),
+        isVerified: Boolean(restaurant?.isVerified),
+      });
+    });
+    return Array.from(byId.values()).slice(0, 24);
+  }, [searchedRestaurants, restaurantSearchResults]);
   const searchedParkingPassHosts = Array.isArray(
     (unifiedResults as any)?.parkingPassHosts,
   )
@@ -405,6 +449,12 @@ export default function SearchPage() {
   const searchedEvents = Array.isArray((unifiedResults as any)?.events)
     ? (unifiedResults as any).events
     : [];
+  const totalStructuredMatches =
+    mergedRestaurants.length +
+    searchedParkingPassHosts.length +
+    searchedVideos.length +
+    searchedEvents.length +
+    searchedDeals.length;
 
   const dealsForPage = searchQuery ? searchedDeals : allDeals;
   const queryGroups = buildQueryGroups(searchQuery);
@@ -484,10 +534,10 @@ export default function SearchPage() {
       category.keywords.map(normalizeSearchText),
     );
     const fromSynonyms = synonymGroups.flat().map(normalizeSearchText);
-    const fromRestaurants = searchedRestaurants
+    const fromRestaurants = mergedRestaurants
       .map((restaurant: any) => normalizeSearchText(restaurant.name || ""))
       .filter((value: string) => value.length >= 3);
-    const fromCuisine = searchedRestaurants
+    const fromCuisine = mergedRestaurants
       .map((restaurant: any) =>
         normalizeSearchText(restaurant.cuisineType || ""),
       )
@@ -500,7 +550,7 @@ export default function SearchPage() {
         ...fromCuisine,
       ]),
     ).filter((value) => value.length >= 3);
-  }, [searchedRestaurants]);
+  }, [mergedRestaurants]);
 
   const didYouMean = useMemo(() => {
     const query = normalizeSearchText(searchQuery);
@@ -664,8 +714,8 @@ export default function SearchPage() {
                 ? "Finding your location..."
                 : userLocation && !searchQuery
                   ? "Popular deals near you"
-                  : filteredDeals.length > 0
-                    ? "Showing results that match your search"
+                  : searchQuery && totalStructuredMatches > 0
+                    ? "Showing restaurants, trucks, and deals that match your search"
                     : searchQuery
                       ? "No matches yet"
                       : "Use location for nearby results or browse featured deals"}
@@ -873,18 +923,18 @@ export default function SearchPage() {
       {/* Results */}
       <div className="px-4 sm:px-6 py-6">
         {/* Restaurants Section (when searching) */}
-        {searchQuery && searchedRestaurants.length > 0 && (
+        {searchQuery && mergedRestaurants.length > 0 && (
           <div className="mb-8">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-foreground">
                 Restaurants & Food Trucks
               </h2>
               <span className="text-sm text-muted-foreground">
-                {searchedRestaurants.length} found
+                {mergedRestaurants.length} found
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {searchedRestaurants.map((restaurant: any) => (
+              {mergedRestaurants.map((restaurant: any) => (
                 <Link
                   key={restaurant.id}
                   href={`/restaurant/${restaurant.id}`}
@@ -1050,7 +1100,7 @@ export default function SearchPage() {
         {/* Deals Section */}
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-foreground">
-            {searchQuery ? `Deals for "${searchQuery}"` : "Popular Deals"}
+            {searchQuery ? `Deals matching "${searchQuery}"` : "Popular Deals"}
           </h2>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
@@ -1092,17 +1142,17 @@ export default function SearchPage() {
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
               {searchQuery &&
-              searchedRestaurants &&
-              searchedRestaurants.length > 0
-                ? "No deals found, but restaurants are listed above"
-                : "No deals found"}
+              mergedRestaurants &&
+              mergedRestaurants.length > 0
+                ? "No deals found yet"
+                : "No matches found"}
             </h3>
             <p className="text-muted-foreground">
               {searchQuery &&
-              searchedRestaurants &&
-              searchedRestaurants.length > 0
-                ? "Check out the restaurants above to see when they post new deals"
-                : "Try adjusting your search or browse all deals"}
+              mergedRestaurants &&
+              mergedRestaurants.length > 0
+                ? "Restaurants and trucks are listed above even without active deals."
+                : "Try adjusting your search terms to find restaurants, trucks, or deals."}
             </p>
             {didYouMean && (
               <div className="mt-3">
