@@ -68,7 +68,9 @@ const mapStyleDark = [
   },
 ];
 
-const markerColor = (kind: MapAdapterMarker["kind"]) => {
+const markerColor = (marker: MapAdapterMarker) => {
+  if (marker.color) return marker.color;
+  const kind = marker.kind;
   switch (kind) {
     case "user":
       return "#2563EB";
@@ -106,7 +108,7 @@ const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   return {
     path: googleMaps.SymbolPath.CIRCLE,
     scale: marker.kind === "user" ? 8 : 7,
-    fillColor: markerColor(marker.kind),
+    fillColor: markerColor(marker),
     fillOpacity: 0.95,
     strokeColor: "#111827",
     strokeWeight: 1,
@@ -130,7 +132,7 @@ const buildAdvancedMarkerContent = (googleMaps: any, marker: MapAdapterMarker) =
   dot.style.width = `${size}px`;
   dot.style.height = `${size}px`;
   dot.style.borderRadius = "50%";
-  dot.style.background = markerColor(marker.kind);
+  dot.style.background = markerColor(marker);
   dot.style.border = "1px solid #111827";
   return dot;
 };

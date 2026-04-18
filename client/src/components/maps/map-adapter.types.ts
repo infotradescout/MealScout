@@ -16,6 +16,7 @@ export interface MapAdapterMarker {
   lng: number;
   title?: string;
   subtitle?: string;
+  color?: string;
 }
 
 export interface MapBoundsLike {

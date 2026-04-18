@@ -569,30 +569,44 @@ const hostPinBookableIcon = hostPinIcon;
 const hostPinFullIcon = hostPinIcon;
 const hostPinUnpricedIcon = hostPinIcon;
 
-const foodPinIcon = new L.Icon({
-  iconUrl: svgToDataUrl(`
-    <svg width="34" height="42" viewBox="0 0 34 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17 1C10.373 1 5 6.373 5 13c0 9.5 12 27 12 27s12-17.5 12-27C29 6.373 23.627 1 17 1z" fill="#F59E0B" stroke="#B45309" stroke-width="2"/>
-      <circle cx="17" cy="13" r="7" fill="#FFFBEB"/>
-    </svg>
-  `),
-  iconSize: [34, 42],
-  iconAnchor: [17, 40],
-  popupAnchor: [0, -34],
-});
-
-const truckPinIcon = new L.Icon({
-  iconUrl: svgToDataUrl(`
-    <svg width="34" height="42" viewBox="0 0 34 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17 1C10.373 1 5 6.373 5 13c0 9.5 12 27 12 27s12-17.5 12-27C29 6.373 23.627 1 17 1z" fill="#F59E0B" stroke="#B45309" stroke-width="2"/>
-      <circle cx="17" cy="13" r="7" fill="#FFFBEB"/>
-      <text x="17" y="17" text-anchor="middle" font-size="9" font-weight="800" fill="#7C2D12">T</text>
-    </svg>
-  `),
-  iconSize: [34, 42],
-  iconAnchor: [17, 40],
-  popupAnchor: [0, -34],
-});
+const DEFAULT_BUSINESS_PIN_COLOR = "#F59E0B";
+const BUSINESS_PIN_STROKE = "#7C2D12";
+const BUSINESS_PIN_CENTER = "#FFFBEB";
+const buildBusinessPinIcon = (fillColor: string, markerText?: string) =>
+  new L.Icon({
+    iconUrl: svgToDataUrl(`
+      <svg width="34" height="42" viewBox="0 0 34 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 1C10.373 1 5 6.373 5 13c0 9.5 12 27 12 27s12-17.5 12-27C29 6.373 23.627 1 17 1z" fill="${fillColor}" stroke="${BUSINESS_PIN_STROKE}" stroke-width="2"/>
+        <circle cx="17" cy="13" r="7" fill="${BUSINESS_PIN_CENTER}"/>
+        ${
+          markerText
+            ? `<text x="17" y="17" text-anchor="middle" font-size="9" font-weight="800" fill="${BUSINESS_PIN_STROKE}">${markerText}</text>`
+            : ""
+        }
+      </svg>
+    `),
+    iconSize: [34, 42],
+    iconAnchor: [17, 40],
+    popupAnchor: [0, -34],
+  });
+const dealPinIconCache = new Map<string, L.Icon>();
+const truckPinIconCache = new Map<string, L.Icon>();
+const getDealPinIcon = (color?: string | null) => {
+  const key = String(color || DEFAULT_BUSINESS_PIN_COLOR);
+  const cached = dealPinIconCache.get(key);
+  if (cached) return cached;
+  const created = buildBusinessPinIcon(key);
+  dealPinIconCache.set(key, created);
+  return created;
+};
+const getTruckPinIcon = (color?: string | null) => {
+  const key = String(color || DEFAULT_BUSINESS_PIN_COLOR);
+  const cached = truckPinIconCache.get(key);
+  if (cached) return cached;
+  const created = buildBusinessPinIcon(key, "T");
+  truckPinIconCache.set(key, created);
+  return created;
+};
 
 const eventPinIcon = new L.Icon({
   iconUrl: svgToDataUrl(`
@@ -1434,7 +1448,7 @@ export default function MapPage() {
       const id = String(truck.id || "").trim();
       if (id) ids.add(id);
     });
-    return Array.from(ids);
+    return Array.from(ids).sort();
   }, [deals, visibleLiveTrucks]);
 
   const { data: businessPopularityData } = useQuery<BusinessPopularityResponse>({
@@ -2284,6 +2298,8 @@ export default function MapPage() {
       const lat = toNumberOrNull(deal.restaurant?.latitude);
       const lng = toNumberOrNull(deal.restaurant?.longitude);
       if (lat == null || lng == null) return;
+      const popularity =
+        businessPopularityByRestaurant[String(deal.restaurantId || "")];
       next.push({
         id: `deal:${deal.id}`,
         sourceId: deal.id,
@@ -2292,6 +2308,7 @@ export default function MapPage() {
         lng,
         title: deal.title,
         subtitle: deal.restaurant?.name,
+        color: popularity?.color || undefined,
       });
     });
 
@@ -2299,6 +2316,7 @@ export default function MapPage() {
       const lat = toNumberOrNull(truck.currentLatitude);
       const lng = toNumberOrNull(truck.currentLongitude);
       if (lat == null || lng == null) return;
+      const popularity = businessPopularityByRestaurant[String(truck.id || "")];
       next.push({
         id: `truck:${truck.id}`,
         sourceId: truck.id,
@@ -2306,6 +2324,7 @@ export default function MapPage() {
         lat,
         lng,
         title: truck.name,
+        color: popularity?.color || undefined,
       });
     });
 
@@ -2348,6 +2367,7 @@ export default function MapPage() {
     hostMarkerCoordsById,
     resolveHostCoords,
     resolveEventCoords,
+    businessPopularityByRestaurant,
   ]);
 
   const handleAdapterMarkerTap = useCallback(
@@ -2895,6 +2915,10 @@ export default function MapPage() {
                 {/* Deal Markers */}
                 {visibleDeals.map((deal: Deal) => {
                   if (!deal.restaurant) return null;
+                  const popularity =
+                    businessPopularityByRestaurant[
+                      String(deal.restaurantId || "")
+                    ];
                   return (
                     <Marker
                       key={deal.id}
@@ -2902,7 +2926,7 @@ export default function MapPage() {
                         deal.restaurant.latitude,
                         deal.restaurant.longitude,
                       ]}
-                      icon={foodPinIcon}
+                      icon={getDealPinIcon(popularity?.color)}
                       eventHandlers={{
                         click: () => handleDealClick(deal),
                       }}
@@ -2914,6 +2938,7 @@ export default function MapPage() {
                           </div>
                           <div className="text-xs text-[color:var(--text-muted)]">
                             Deal available
+                            {popularity?.label ? ` | ${popularity.label}` : ""}
                           </div>
                           <div className="flex items-center justify-between pt-1 text-xs">
                             <span className="font-semibold text-[color:var(--status-warning)]">
@@ -2941,12 +2966,14 @@ export default function MapPage() {
                   const lat = toNumberOrNull(truck.currentLatitude);
                   const lng = toNumberOrNull(truck.currentLongitude);
                   if (lat == null || lng == null) return null;
+                  const popularity =
+                    businessPopularityByRestaurant[String(truck.id || "")];
                   const distanceLabel = formatDistance({ lat, lng });
                   return (
                     <Marker
                       key={`live-${truck.id}`}
                       position={[lat, lng]}
-                      icon={truckPinIcon}
+                      icon={getTruckPinIcon(popularity?.color)}
                     >
                       <Popup>
                         <div className="min-w-52 rounded-xl bg-[var(--bg-card)] text-[color:var(--text-primary)] p-3 shadow-clean-lg space-y-1">
@@ -2957,6 +2984,7 @@ export default function MapPage() {
                             {truck.isVerified
                               ? "Food Truck | Verified | Live now"
                               : "Food Truck | Live now"}
+                            {popularity?.label ? ` | ${popularity.label}` : ""}
                           </div>
                           {distanceLabel && (
                             <div className="text-xs text-[color:var(--text-muted)]">
