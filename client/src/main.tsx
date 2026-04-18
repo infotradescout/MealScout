@@ -109,16 +109,37 @@ if (import.meta.env.PROD) {
   });
 }
 
-// Register a minimal Service Worker for PWA installability and "Add to Home Screen" UX.
+// Keep manifest for installability, but disable SW runtime caching to prevent
+// stale chunk and MIME-type failures after deploys.
 if (import.meta.env.PROD && shouldEnablePwaRuntime()) {
   ensureManifestLink();
 }
 
-if (import.meta.env.PROD && shouldEnablePwaRuntime() && "serviceWorker" in navigator) {
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // ignore; app should still work without SW
-    });
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister())),
+      )
+      .catch(() => {
+        // ignore
+      });
+
+    if ("caches" in window) {
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((key) => key.startsWith("mealscout-sw-"))
+              .map((key) => caches.delete(key)),
+          ),
+        )
+        .catch(() => {
+          // ignore
+        });
+    }
   });
 }
 
