@@ -108,6 +108,50 @@ const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   };
 };
 
+const buildAdvancedMarkerContent = (googleMaps: any, marker: MapAdapterMarker) => {
+  if (marker.kind === "parking") {
+    const img = document.createElement("img");
+    img.src = mealScoutIcon;
+    img.alt = marker.title || "Parking";
+    img.width = 34;
+    img.height = 34;
+    img.style.width = "34px";
+    img.style.height = "34px";
+    return img;
+  }
+
+  const pinElCtor = googleMaps?.marker?.PinElement;
+  if (pinElCtor) {
+    const pin = new pinElCtor({
+      background: markerColor(marker.kind),
+      borderColor: "#111827",
+      glyphColor: "#ffffff",
+      scale: marker.kind === "user" ? 1.2 : 1,
+    });
+    return pin.element;
+  }
+
+  const dot = document.createElement("div");
+  const size = marker.kind === "user" ? 16 : 14;
+  dot.style.width = `${size}px`;
+  dot.style.height = `${size}px`;
+  dot.style.borderRadius = "50%";
+  dot.style.background = markerColor(marker.kind);
+  dot.style.border = "1px solid #111827";
+  return dot;
+};
+
+const removeMarkerFromMap = (instance: any) => {
+  if (!instance) return;
+  if (typeof instance.setMap === "function") {
+    instance.setMap(null);
+    return;
+  }
+  if ("map" in instance) {
+    instance.map = null;
+  }
+};
+
 const loadGoogleMaps = async (apiKey: string) => {
   if (!apiKey) {
     throw new Error("Missing Google Maps API key");
@@ -148,7 +192,7 @@ const loadGoogleMaps = async (apiKey: string) => {
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
       apiKey,
-    )}&v=weekly&loading=async`;
+    )}&v=weekly&loading=async&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
@@ -331,17 +375,33 @@ export function GoogleMapSurface({
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
       if (existing) {
-        existing.setPosition({ lat: marker.lat, lng: marker.lng });
-        existing.setIcon(buildMarkerIcon(googleMaps, marker));
+        if (typeof existing.setPosition === "function") {
+          existing.setPosition({ lat: marker.lat, lng: marker.lng });
+        } else {
+          existing.position = { lat: marker.lat, lng: marker.lng };
+        }
+        if (typeof existing.setIcon === "function") {
+          existing.setIcon(buildMarkerIcon(googleMaps, marker));
+        } else if ("content" in existing) {
+          existing.content = buildAdvancedMarkerContent(googleMaps, marker);
+        }
         return;
       }
 
-      const instance = new googleMaps.Marker({
-        map: mapRef.current,
-        position: { lat: marker.lat, lng: marker.lng },
-        title: marker.title || marker.subtitle || marker.kind,
-        icon: buildMarkerIcon(googleMaps, marker),
-      });
+      const AdvancedMarkerElement = googleMaps?.marker?.AdvancedMarkerElement;
+      const instance = AdvancedMarkerElement
+        ? new AdvancedMarkerElement({
+            map: mapRef.current,
+            position: { lat: marker.lat, lng: marker.lng },
+            title: marker.title || marker.subtitle || marker.kind,
+            content: buildAdvancedMarkerContent(googleMaps, marker),
+          })
+        : new googleMaps.Marker({
+            map: mapRef.current,
+            position: { lat: marker.lat, lng: marker.lng },
+            title: marker.title || marker.subtitle || marker.kind,
+            icon: buildMarkerIcon(googleMaps, marker),
+          });
       instance.addListener("click", () => {
         const tapped = markerIndex.get(marker.id);
         if (tapped) onMarkerTap(tapped);
@@ -351,7 +411,7 @@ export function GoogleMapSurface({
 
     Array.from(markerRefs.current.entries()).forEach(([id, instance]) => {
       if (usedIds.has(id)) return;
-      instance.setMap(null);
+      removeMarkerFromMap(instance);
       markerRefs.current.delete(id);
     });
   }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
