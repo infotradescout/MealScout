@@ -68,16 +68,25 @@ export default function CustomerSignup() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const role = searchParams.get("role");
-  const initialAccountType: "diner" | "host" | "business" | "supplier" =
+  const initialAccountType:
+    | "diner"
+    | "host"
+    | "event_organizer"
+    | "business"
+    | "supplier" =
     role === "business"
       ? "business"
       : role === "host"
         ? "host"
+        : role === "event"
+          ? "event_organizer"
+          : role === "event_coordinator"
+            ? "event_organizer"
         : role === "supplier"
           ? "supplier"
           : "diner";
   const [accountType, setAccountType] = useState<
-    "diner" | "host" | "business" | "supplier"
+    "diner" | "host" | "event_organizer" | "business" | "supplier"
   >(
     initialAccountType
   );
@@ -164,6 +173,8 @@ export default function CustomerSignup() {
       const redirectAfterLogin =
         accountType === "host"
           ? "/host-signup"
+          : accountType === "event_organizer"
+            ? "/event-signup"
           : accountType === "business"
             ? "/restaurant-signup"
             : "/";
@@ -343,6 +354,10 @@ export default function CustomerSignup() {
       setLocation("/host-signup");
       return;
     }
+    if (accountType === "event_organizer") {
+      setLocation("/event-signup");
+      return;
+    }
 
     if (accountType === "business") {
       const businessRedirect =
@@ -470,6 +485,8 @@ export default function CustomerSignup() {
   const existingAccountActionLabel =
     accountType === "host"
       ? "Create host profile"
+      : accountType === "event_organizer"
+        ? "Create event organizer profile"
       : accountType === "business"
         ? businessSubType === "food_truck"
           ? "Create food truck profile"
@@ -507,8 +524,19 @@ export default function CustomerSignup() {
             <div className="inline-flex rounded-full bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] shadow-clean text-[11px] font-medium text-[color:var(--text-secondary)] overflow-hidden w-full">
               <button
                 type="button"
+                onClick={() => setAccountType("business")}
+                className={`flex-1 px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
+                  accountType === "business"
+                    ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                    : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
+                }`}
+              >
+                Business
+              </button>
+              <button
+                type="button"
                 onClick={() => setAccountType("diner")}
-                className={`flex-1 px-3 py-1 transition-colors ${
+                className={`flex-1 px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
                   accountType === "diner"
                     ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                     : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
@@ -529,14 +557,14 @@ export default function CustomerSignup() {
               </button>
               <button
                 type="button"
-                onClick={() => setAccountType("business")}
+                onClick={() => setAccountType("event_organizer")}
                 className={`flex-1 px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                  accountType === "business"
+                  accountType === "event_organizer"
                     ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                     : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                 }`}
               >
-                Business
+                Event Organizer
               </button>
               <button
                 type="button"
@@ -624,7 +652,9 @@ export default function CustomerSignup() {
               {accountType === "business"
                 ? "Create your login so we can connect your restaurant or truck, list your deals, and pass savings directly to your regulars."
                 : accountType === "host"
-                ? "Organize events and invite food trucks to your location. Free forever to unlock local food truck supply."
+                ? "Post and manage parking-host locations for trucks and local diners."
+                : accountType === "event_organizer"
+                ? "Publish events, coordinate vendor attendance, and manage event demand."
                 : accountType === "supplier"
                 ? "Set up your supplier profile, publish products, and accept orders from food trucks and restaurants."
                 : "Save favorite deals and never miss new drops from local spots."}
@@ -638,8 +668,19 @@ export default function CustomerSignup() {
               <div className="inline-flex rounded-full bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] shadow-clean text-[11px] font-medium text-[color:var(--text-secondary)] overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => setAccountType("diner")}
+                  onClick={() => setAccountType("business")}
                   className={`px-3 py-1 transition-colors ${
+                    accountType === "business"
+                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                >
+                  Restaurant / Food Truck
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountType("diner")}
+                  className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
                     accountType === "diner"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                       : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
@@ -656,18 +697,18 @@ export default function CustomerSignup() {
                       : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                   }`}
                 >
-                  Host / Event Organizer
+                  Host
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAccountType("business")}
+                  onClick={() => setAccountType("event_organizer")}
                   className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                    accountType === "business"
+                    accountType === "event_organizer"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                       : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
                   }`}
                 >
-                  Restaurant / Food Truck
+                  Event Organizer
                 </button>
                 <button
                   type="button"
@@ -731,7 +772,9 @@ export default function CustomerSignup() {
                 {accountType === "business"
                   ? "This login powers your business dashboard. Pricing stays transparent and your discounts go straight to your guests."
                   : accountType === "host"
-                  ? "This login lets you post events and connect with food trucks. No monthly fees, just bring food to your spot."
+                  ? "This login lets you manage host locations and parking availability."
+                  : accountType === "event_organizer"
+                  ? "This login gives you event coordinator tools and vendor scheduling access."
                   : accountType === "supplier"
                   ? "This login powers your supplier dashboard, products, and incoming orders."
                   : "Create your account to get started with local food deals."}
