@@ -409,6 +409,26 @@ type MapRuntimeResponse = {
   googleMapsApiKey?: string | null;
 };
 
+type HostUpcomingBooking = {
+  eventId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  truck: {
+    id: string;
+    name: string;
+    cuisineType?: string | null;
+  };
+};
+
+type HostUpcomingBookingsResponse = {
+  hostId: string;
+  generatedAt: string;
+  rangeDays: number;
+  count: number;
+  bookings: HostUpcomingBooking[];
+};
+
 type GeoPoint = { lat: number; lng: number };
 type GeocodeCacheEntry = { lat: number; lng: number; ts: number };
 type GeocodeFailureEntry = { ts: number };
@@ -468,6 +488,23 @@ const areBoundsEqual = (a: MapBoundsLike | null, b: MapBoundsLike | null) => {
 
 const overlapKey = (coords: GeoPoint) =>
   `${coords.lat.toFixed(6)}:${coords.lng.toFixed(6)}`;
+
+const formatBookingDate = (isoDate: string) => {
+  const value = new Date(isoDate);
+  if (Number.isNaN(value.getTime())) return "Upcoming";
+  return value.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatBookingTimeRange = (startTime?: string, endTime?: string) => {
+  const start = String(startTime || "").trim();
+  const end = String(endTime || "").trim();
+  if (start && end) return `${start} - ${end}`;
+  return start || end || "Time TBD";
+};
 
 const trafficCellColor = (source: MapTrafficCell["source"]) =>
   source === "google_places" ? "#60A5FA" : "#F97316";
@@ -2348,6 +2385,35 @@ export default function MapPage() {
     getParkingPassHrefForHost,
   ]);
 
+  const selectedParkingHostId = useMemo(() => {
+    if (!selectedParkingHost) return "";
+    return String(selectedParkingHost.host.hostId || "").trim();
+  }, [selectedParkingHost]);
+
+  const {
+    data: selectedHostUpcomingBookings,
+    isLoading: isLoadingSelectedHostUpcomingBookings,
+  } = useQuery<HostUpcomingBookingsResponse>({
+    queryKey: [
+      "/api/map/hosts",
+      selectedParkingHostId,
+      "upcoming-bookings",
+    ],
+    enabled: Boolean(selectedParkingHostId),
+    queryFn: async () => {
+      const res = await fetch(
+        apiUrl(
+          `/api/map/hosts/${encodeURIComponent(selectedParkingHostId)}/upcoming-bookings`,
+        ),
+      );
+      if (!res.ok) {
+        throw new Error("Failed to load upcoming host bookings");
+      }
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+
   const mapSchemaData = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -3082,6 +3148,49 @@ export default function MapPage() {
                   </div>
                 </div>
               )}
+              <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Upcoming bookings
+                </div>
+                {isLoadingSelectedHostUpcomingBookings ? (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Loading schedule...
+                  </div>
+                ) : selectedParkingHostId ? (
+                  Array.isArray(selectedHostUpcomingBookings?.bookings) &&
+                  selectedHostUpcomingBookings.bookings.length > 0 ? (
+                    <div className="mt-1 space-y-1">
+                      {selectedHostUpcomingBookings.bookings
+                        .slice(0, 3)
+                        .map((booking) => (
+                          <div
+                            key={booking.eventId}
+                            className="rounded border border-[color:var(--border-subtle)] px-2 py-1"
+                          >
+                            <div className="text-xs font-semibold text-foreground">
+                              {formatBookingDate(booking.date)} ·{" "}
+                              {formatBookingTimeRange(
+                                booking.startTime,
+                                booking.endTime,
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {booking.truck?.name || "Food truck"}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      No upcoming bookings yet.
+                    </div>
+                  )
+                ) : (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Upcoming bookings show after this host profile is connected.
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   size="sm"

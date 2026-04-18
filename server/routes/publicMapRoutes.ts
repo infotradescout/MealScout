@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -13,7 +13,14 @@ import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
-import { geoLocationPings, locationRequests, users } from "@shared/schema";
+import {
+  events,
+  geoLocationPings,
+  hosts,
+  locationRequests,
+  restaurants,
+  users,
+} from "@shared/schema";
 
 let mapLocationsCache: {
   expiresAt: number;
@@ -697,6 +704,78 @@ export function registerPublicMapRoutes(app: Express) {
         return res.json(mapLocationsLastGood.payload);
       }
       res.status(200).json({ hostLocations: [], eventLocations: [] });
+    }
+  });
+
+  app.get("/api/map/hosts/:hostId/upcoming-bookings", async (req, res) => {
+    try {
+      const hostId = String(req.params.hostId || "").trim();
+      if (!hostId) {
+        return res.status(400).json({ message: "Host id is required" });
+      }
+
+      const [hostRow] = await db
+        .select({
+          id: hosts.id,
+        })
+        .from(hosts)
+        .where(eq(hosts.id, hostId))
+        .limit(1);
+
+      if (!hostRow) {
+        return res.status(404).json({ message: "Host not found" });
+      }
+
+      const now = new Date();
+      const rangeEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+      const rows = await db
+        .select({
+          eventId: events.id,
+          date: events.date,
+          startTime: events.startTime,
+          endTime: events.endTime,
+          truckId: restaurants.id,
+          truckName: restaurants.name,
+          truckCuisine: restaurants.cuisineType,
+        })
+        .from(events)
+        .innerJoin(restaurants, eq(events.bookedRestaurantId, restaurants.id))
+        .where(
+          and(
+            eq(events.hostId, hostId),
+            ne(events.status, "cancelled"),
+            isNotNull(events.bookedRestaurantId),
+            gte(events.date, now),
+            lte(events.date, rangeEnd),
+          ),
+        )
+        .orderBy(asc(events.date), asc(events.startTime))
+        .limit(12);
+
+      const bookings = rows.map((row: (typeof rows)[number]) => ({
+        eventId: String(row.eventId),
+        date: row.date instanceof Date ? row.date.toISOString() : String(row.date),
+        startTime: String(row.startTime || ""),
+        endTime: String(row.endTime || ""),
+        truck: {
+          id: String(row.truckId),
+          name: String(row.truckName || "Food truck"),
+          cuisineType: row.truckCuisine ? String(row.truckCuisine) : null,
+        },
+      }));
+
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json({
+        hostId,
+        generatedAt: new Date().toISOString(),
+        rangeDays: 14,
+        count: bookings.length,
+        bookings,
+      });
+    } catch (error) {
+      console.error("[map] host upcoming bookings failed:", error);
+      return res.status(500).json({ message: "Failed to load upcoming bookings" });
     }
   });
 
