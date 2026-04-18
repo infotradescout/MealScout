@@ -61,6 +61,7 @@ import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
+import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 interface Host {
@@ -221,6 +222,17 @@ interface TruckParkingReport {
 }
 
 type GeoPoint = { lat: number; lng: number };
+
+type PlaceDetailsResponse = {
+  place?: {
+    placeId: string;
+    formattedAddress: string;
+    city: string;
+    state: string;
+    latitude: number | null;
+    longitude: number | null;
+  };
+};
 
 type SocialAutopostSettings = {
   platforms: {
@@ -1437,6 +1449,63 @@ export default function ParkingPassPage() {
       ...current,
       [field]: value,
     }));
+  };
+
+  const hydrateFromPlaceDetails = async (placeId: string) => {
+    const res = await fetch(`/api/map/place-details/${encodeURIComponent(placeId)}`, {
+      credentials: "include",
+    });
+    if (!res.ok) {
+      throw new Error("Unable to load place details");
+    }
+    const payload = (await res.json()) as PlaceDetailsResponse;
+    return payload.place;
+  };
+
+  const handleNewLocationAddressSelect = async (suggestion: {
+    placeId: string;
+    text: string;
+  }) => {
+    try {
+      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      if (!place) return;
+      setNewLocationForm((current) => ({
+        ...current,
+        address: place.formattedAddress || suggestion.text,
+        city: place.city || current.city,
+        state: place.state || current.state,
+      }));
+
+      if (
+        typeof place.latitude === "number" &&
+        typeof place.longitude === "number"
+      ) {
+        setNewLocationPinPosition({
+          lat: place.latitude,
+          lng: place.longitude,
+        });
+      }
+    } catch {
+      // Fall back to manual address entry when place details are unavailable.
+    }
+  };
+
+  const handleScheduleAddressSelect = async (suggestion: {
+    placeId: string;
+    text: string;
+  }) => {
+    try {
+      const place = await hydrateFromPlaceDetails(suggestion.placeId);
+      if (!place) return;
+      setScheduleForm((current) => ({
+        ...current,
+        address: place.formattedAddress || suggestion.text,
+        city: place.city || current.city,
+        state: place.state || current.state,
+      }));
+    } catch {
+      // Fall back to manual address entry when place details are unavailable.
+    }
   };
 
   const handleCreateSchedule = async () => {
@@ -4066,15 +4135,17 @@ export default function ParkingPassPage() {
                           </div>
                           <div className="space-y-2 md:col-span-2">
                             <Label htmlFor="newHostAddress">Address</Label>
-                            <Input
+                            <PlaceAutocompleteInput
                               id="newHostAddress"
                               value={newLocationForm.address}
-                              onChange={(event) =>
+                              onChange={(value) =>
                                 setNewLocationForm((current) => ({
                                   ...current,
-                                  address: event.target.value,
+                                  address: value,
                                 }))
                               }
+                              onSelect={handleNewLocationAddressSelect}
+                              placeholder="123 Main St, City, State"
                             />
                           </div>
                           <div className="space-y-2">
@@ -5195,14 +5266,15 @@ export default function ParkingPassPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="schedule-address">Address</Label>
-                    <Input
+                    <PlaceAutocompleteInput
                       id="schedule-address"
                       placeholder="123 Main St, City"
                       value={scheduleForm.address}
                       disabled={!hasPremiumTruckTools}
-                      onChange={(event) =>
-                        handleScheduleFieldChange("address", event.target.value)
+                      onChange={(value) =>
+                        handleScheduleFieldChange("address", value)
                       }
+                      onSelect={handleScheduleAddressSelect}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">

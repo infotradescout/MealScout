@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,13 @@ interface SearchSuggestion {
     | "event";
   subtitle?: string;
   icon?: string;
+}
+
+interface PlaceSuggestion {
+  placeId: string;
+  text: string;
+  mainText: string;
+  secondaryText: string;
 }
 
 interface SmartSearchProps {
@@ -74,6 +81,45 @@ export default function SmartSearch({
     enabled: debouncedValue.length >= 2,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  const { data: placeSuggestions } = useQuery<PlaceSuggestion[]>({
+    queryKey: ["/api/map/place-autocomplete", debouncedValue],
+    enabled: debouncedValue.length >= 2,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/map/place-autocomplete?input=${encodeURIComponent(debouncedValue)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      const data = (await res.json()) as {
+        suggestions?: PlaceSuggestion[];
+      };
+      return Array.isArray(data?.suggestions) ? data.suggestions : [];
+    },
+  });
+
+  const mergedSuggestions = useMemo(() => {
+    const base = Array.isArray(suggestions) ? suggestions : [];
+    const placeMapped: SearchSuggestion[] = Array.isArray(placeSuggestions)
+      ? placeSuggestions.map((place) => ({
+          id: `place:${place.placeId}`,
+          text: place.text,
+          type: "location",
+          subtitle: place.secondaryText || place.mainText,
+        }))
+      : [];
+
+    const seen = new Set<string>();
+    const merged: SearchSuggestion[] = [];
+    for (const item of [...base, ...placeMapped]) {
+      const key = item.text.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+    return merged;
+  }, [placeSuggestions, suggestions]);
 
   // Popular/trending searches - could be dynamic from API
   const popularSearches = [
@@ -138,8 +184,8 @@ export default function SmartSearch({
   };
 
   const keyboardOptions =
-    value.length >= 2 && suggestions && suggestions.length > 0
-      ? suggestions.map((item) => item.text)
+    value.length >= 2 && mergedSuggestions.length > 0
+      ? mergedSuggestions.map((item) => item.text)
       : value.length === 0
       ? popularSearches
       : recentSearches;
@@ -257,12 +303,12 @@ export default function SmartSearch({
         >
           <CardContent className="p-0">
             {/* Current search results */}
-            {value.length >= 2 && suggestions && suggestions.length > 0 && (
+            {value.length >= 2 && mergedSuggestions.length > 0 && (
               <div className="border-b border-border">
                 <div className="px-4 py-2 text-sm font-medium text-muted-foreground bg-muted/30">
                   Suggestions
                 </div>
-                {suggestions.map((suggestion, index) => (
+                {mergedSuggestions.map((suggestion, index) => (
                   <button
                     key={suggestion.id}
                     onClick={() => {
@@ -302,8 +348,8 @@ export default function SmartSearch({
                 </div>
                 {recentSearches.map((search, index) => {
                   const optionIndex =
-                    value.length >= 2 && suggestions && suggestions.length > 0
-                      ? suggestions.length + index
+                    value.length >= 2 && mergedSuggestions.length > 0
+                      ? mergedSuggestions.length + index
                       : index;
                   return (
                   <div
@@ -369,7 +415,7 @@ export default function SmartSearch({
 
             {/* No results state */}
             {value.length >= 2 &&
-              (!suggestions || suggestions.length === 0) && (
+              mergedSuggestions.length === 0 && (
                 <div className="px-4 py-8 text-center text-muted-foreground">
                   <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No suggestions found</p>

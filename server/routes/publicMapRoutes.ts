@@ -160,6 +160,78 @@ const getGoogleMapsApiKey = () =>
       "",
   ).trim();
 
+type PlaceAutocompletePrediction = {
+  placeId: string;
+  text: string;
+  mainText: string;
+  secondaryText: string;
+};
+
+type PlaceDetailsResult = {
+  placeId: string;
+  formattedAddress: string;
+  city: string;
+  state: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+
+const buildPlacesHeaders = (apiKey: string, fieldMask: string) => ({
+  "Content-Type": "application/json",
+  "X-Goog-Api-Key": apiKey,
+  "X-Goog-FieldMask": fieldMask,
+});
+
+const extractAddressComponent = (
+  components: Array<{ longText?: string; shortText?: string; types?: string[] }> | undefined,
+  type: string,
+  preference: "long" | "short" = "long",
+) => {
+  if (!Array.isArray(components)) return "";
+  const match = components.find((component) =>
+    Array.isArray(component.types) ? component.types.includes(type) : false,
+  );
+  if (!match) return "";
+  if (preference === "short") {
+    return String(match.shortText || match.longText || "").trim();
+  }
+  return String(match.longText || match.shortText || "").trim();
+};
+
+const normalizePlaceDetails = (raw: any): PlaceDetailsResult => {
+  const idFromName = String(raw?.name || "").replace(/^places\//, "");
+  const placeId = String(raw?.id || idFromName || "").trim();
+  const formattedAddress = String(raw?.formattedAddress || "").trim();
+  const components = Array.isArray(raw?.addressComponents)
+    ? raw.addressComponents
+    : [];
+  const city =
+    extractAddressComponent(components, "locality", "long") ||
+    extractAddressComponent(components, "postal_town", "long") ||
+    extractAddressComponent(components, "administrative_area_level_2", "long");
+  const state =
+    extractAddressComponent(
+      components,
+      "administrative_area_level_1",
+      "short",
+    ) || "";
+  const latitude =
+    typeof raw?.location?.latitude === "number" ? raw.location.latitude : null;
+  const longitude =
+    typeof raw?.location?.longitude === "number"
+      ? raw.location.longitude
+      : null;
+
+  return {
+    placeId,
+    formattedAddress,
+    city,
+    state,
+    latitude,
+    longitude,
+  };
+};
+
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/runtime", async (_req, res) => {
     try {
@@ -748,6 +820,126 @@ export function registerPublicMapRoutes(app: Express) {
         return res.json(mapLocationsLastGood.payload);
       }
       res.status(200).json({ hostLocations: [], eventLocations: [] });
+    }
+  });
+
+  app.get("/api/map/place-autocomplete", async (req, res) => {
+    const input = String(req.query.input || "").trim();
+    if (input.length < 2) {
+      return res.json({ suggestions: [] as PlaceAutocompletePrediction[] });
+    }
+
+    const apiKey = getGoogleMapsApiKey();
+    if (!apiKey) {
+      return res.json({ suggestions: [] as PlaceAutocompletePrediction[] });
+    }
+
+    const sessionToken = String(req.query.sessionToken || "").trim();
+    const payload: Record<string, unknown> = {
+      input,
+      includedRegionCodes: ["us"],
+      languageCode: "en",
+    };
+    if (sessionToken) {
+      payload.sessionToken = sessionToken;
+    }
+
+    try {
+      const response = await fetch(
+        "https://places.googleapis.com/v1/places:autocomplete",
+        {
+          method: "POST",
+          headers: buildPlacesHeaders(
+            apiKey,
+            [
+              "suggestions.placePrediction.placeId",
+              "suggestions.placePrediction.text.text",
+              "suggestions.placePrediction.structuredFormat.mainText.text",
+              "suggestions.placePrediction.structuredFormat.secondaryText.text",
+            ].join(","),
+          ),
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        return res.status(200).json({
+          suggestions: [] as PlaceAutocompletePrediction[],
+          error: text || "Autocomplete unavailable",
+        });
+      }
+
+      const data = (await response.json().catch(() => ({}))) as any;
+      const suggestions = Array.isArray(data?.suggestions)
+        ? data.suggestions
+            .map((item: any) => {
+              const prediction = item?.placePrediction;
+              if (!prediction?.placeId) return null;
+              const text = String(prediction?.text?.text || "").trim();
+              return {
+                placeId: String(prediction.placeId),
+                text,
+                mainText: String(
+                  prediction?.structuredFormat?.mainText?.text || text,
+                ).trim(),
+                secondaryText: String(
+                  prediction?.structuredFormat?.secondaryText?.text || "",
+                ).trim(),
+              };
+            })
+            .filter(Boolean)
+        : [];
+
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.json({ suggestions });
+    } catch (error) {
+      console.warn("[map.place-autocomplete] failed", error);
+      res.status(200).json({ suggestions: [] as PlaceAutocompletePrediction[] });
+    }
+  });
+
+  app.get("/api/map/place-details/:placeId", async (req, res) => {
+    const placeId = String(req.params.placeId || "").trim();
+    if (!placeId) {
+      return res.status(400).json({ message: "placeId is required" });
+    }
+
+    const apiKey = getGoogleMapsApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ message: "Google Maps key not configured" });
+    }
+
+    try {
+      const response = await fetch(
+        `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+        {
+          headers: buildPlacesHeaders(
+            apiKey,
+            [
+              "id",
+              "name",
+              "formattedAddress",
+              "location",
+              "addressComponents",
+            ].join(","),
+          ),
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        return res.status(502).json({
+          message: text || "Unable to fetch place details",
+        });
+      }
+
+      const data = (await response.json().catch(() => ({}))) as any;
+      res.setHeader("Cache-Control", "public, max-age=300");
+      res.json({ place: normalizePlaceDetails(data) });
+    } catch (error) {
+      console.error("[map.place-details] failed", error);
+      res.status(500).json({ message: "Unable to fetch place details" });
     }
   });
 
