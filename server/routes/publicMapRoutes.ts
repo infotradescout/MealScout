@@ -106,6 +106,22 @@ const getGoogleMapsApiKey = () =>
   ).trim();
 
 export function registerPublicMapRoutes(app: Express) {
+  app.get("/api/map/runtime", async (_req, res) => {
+    try {
+      const googleMapsApiKey = getGoogleMapsApiKey();
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.json({
+        hasGoogleMapsKey: googleMapsApiKey.length > 0,
+        googleMapsApiKey: googleMapsApiKey || null,
+      });
+    } catch {
+      res.status(500).json({
+        hasGoogleMapsKey: false,
+        googleMapsApiKey: null,
+      });
+    }
+  });
+
   app.get("/api/map/locations", async (_req, res) => {
     try {
       res.setHeader("Cache-Control", "public, max-age=60");

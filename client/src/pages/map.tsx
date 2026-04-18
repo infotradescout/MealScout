@@ -23,8 +23,6 @@ import type {
 } from "@/components/maps/map-adapter.types";
 import {
   GOOGLE_MAPS_WEB_API_KEY,
-  MAP_PROVIDER,
-  isGoogleMapsEnabled,
 } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
 import {
@@ -343,6 +341,11 @@ type MapFootTrafficResponse = {
     error?: string | null;
     cells?: MapTrafficCell[];
   };
+};
+
+type MapRuntimeResponse = {
+  hasGoogleMapsKey?: boolean;
+  googleMapsApiKey?: string | null;
 };
 
 type GeoPoint = { lat: number; lng: number };
@@ -1387,6 +1390,18 @@ export default function MapPage() {
     }
   }, [mapLocationsData]);
 
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const res = await fetch(apiUrl("/api/map/runtime"));
+      if (!res.ok) throw new Error("Failed to load map runtime config");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
   const mapLocations: MapLocationsResponse = useMemo(() => {
     return (
       mapLocationsData ??
@@ -1978,17 +1993,19 @@ export default function MapPage() {
     }
   }, [zoomLevel, selectedHostCluster]);
 
-  const isGoogleProviderRequested = MAP_PROVIDER === "google";
-  const isGoogleProviderMissingKey =
-    isGoogleProviderRequested && !isGoogleMapsEnabled;
-  const isUsingGoogleMap = isGoogleMapsEnabled && !forceLegacyMap;
+  const runtimeGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const effectiveGoogleMapsApiKey =
+    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+  const isGoogleProviderRequested = effectiveGoogleMapsApiKey.length > 0;
+  const isGoogleProviderMissingKey = !isGoogleProviderRequested;
+  const isUsingGoogleMap = isGoogleProviderRequested && !forceLegacyMap;
   const mapProviderLabel = isUsingGoogleMap
     ? "Google Maps"
     : isGoogleProviderMissingKey
       ? "Legacy map (Google key missing)"
-      : isGoogleProviderRequested
-        ? "Legacy map (Google unavailable)"
-        : "Legacy map";
+      : "Legacy map (Google unavailable)";
 
   const handleGoogleMapsFatalError = useCallback((message: string) => {
     setGoogleMapsRuntimeError(
@@ -2423,7 +2440,7 @@ export default function MapPage() {
           {mapCenter &&
             (isUsingGoogleMap ? (
               <GoogleMapSurface
-                apiKey={GOOGLE_MAPS_WEB_API_KEY}
+                apiKey={effectiveGoogleMapsApiKey}
                 center={mapCenter}
                 zoom={zoomLevel}
                 markers={adapterMarkers}
