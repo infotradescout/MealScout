@@ -52,6 +52,61 @@ type DiscoveryCity = {
   cuisines: Array<{ slug: string; count: number }>;
 };
 
+type MapBranding = {
+  appName: string;
+  mapName: string;
+  canonicalBaseUrl: string;
+  seoTitle: string;
+  seoDescription: string;
+  seoKeywords: string;
+  mapSchemaDescription: string;
+  exploreHeading: string;
+  exploreDescription: string;
+};
+
+const resolveMapBranding = (): MapBranding => {
+  const host =
+    typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://www.mealscout.us";
+  const isTradeScoutHost = host.includes("tradescout");
+  if (isTradeScoutHost) {
+    return {
+      appName: "TradeScout",
+      mapName: "TradeScout Map",
+      canonicalBaseUrl: origin,
+      seoTitle: "Map View - TradeScout | Live Local Marketplace",
+      seoDescription:
+        "Explore live trucks, hosts, events, and local demand signals on an interactive TradeScout map.",
+      seoKeywords:
+        "local marketplace map, live truck map, host location map, event map, TradeScout map",
+      mapSchemaDescription:
+        "Interactive map of live trucks, hosts, events, and local demand signals.",
+      exploreHeading: "Explore TradeScout Pages",
+      exploreDescription:
+        "Continue browsing local trucks, hosts, restaurants, and active opportunities.",
+    };
+  }
+
+  return {
+    appName: "MealScout",
+    mapName: "MealScout Map",
+    canonicalBaseUrl: "https://www.mealscout.us",
+    seoTitle: "Map View - MealScout | Find Deals Near You",
+    seoDescription:
+      "Explore food deals on an interactive map. See nearby restaurants, view deal locations, and discover dining discounts in your area. Find the perfect meal deal near you!",
+    seoKeywords:
+      "food truck map near me, restaurant deals map, local food map, nearby food trucks, meal deals near me, interactive food map, food truck parking map, local dining map",
+    mapSchemaDescription:
+      "Interactive map of food trucks, nearby deals, host parking spots, and event locations.",
+    exploreHeading: "Explore MealScout Pages",
+    exploreDescription:
+      "Continue browsing local food trucks, restaurants, and active deals.",
+  };
+};
+
 const titleCaseSlug = (value: string) =>
   value
     .split("-")
@@ -852,6 +907,7 @@ async function geocodeAddress(address: string): Promise<GeoPoint | null> {
 }
 
 export default function MapPage() {
+  const mapBranding = useMemo(resolveMapBranding, []);
   const queryClient = useQueryClient();
   const isStandalone = useIsStandalone();
   const { user } = useAuth();
@@ -2220,10 +2276,9 @@ export default function MapPage() {
       "@graph": [
         {
           "@type": "Map",
-          name: "MealScout Live Food Map",
-          description:
-            "Interactive map of food trucks, nearby deals, host parking spots, and event locations.",
-          url: "https://www.mealscout.us/map",
+          name: `${mapBranding.appName} Live Map`,
+          description: mapBranding.mapSchemaDescription,
+          url: `${mapBranding.canonicalBaseUrl}/map`,
         },
         {
           "@type": "ItemList",
@@ -2235,12 +2290,12 @@ export default function MapPage() {
               "@type": "ListItem",
               position: index + 1,
               name: deal.title,
-              url: `https://www.mealscout.us/deal/${deal.id}`,
+              url: `${mapBranding.canonicalBaseUrl}/deal/${deal.id}`,
             })),
         },
       ],
     }),
-    [visibleDeals],
+    [visibleDeals, mapBranding],
   );
   type TrendingSearchRow = { query: string; count: number };
   const { data: trendingSearches = [] } = useQuery<TrendingSearchRow[]>({
@@ -2257,7 +2312,7 @@ export default function MapPage() {
       href: "/search",
       title: "Search Food Deals",
       description:
-        "Search by cuisine, restaurant, and deal type across MealScout.",
+        `Search by cuisine, restaurant, and deal type across ${mapBranding.appName}.`,
     },
     {
       href: "/events/public",
@@ -2298,10 +2353,10 @@ export default function MapPage() {
   return (
     <div className="max-w-md mx-auto bg-background min-h-screen relative pb-20">
       <SEOHead
-        title="Map View - MealScout | Find Deals Near You"
-        description="Explore food deals on an interactive map. See nearby restaurants, view deal locations, and discover dining discounts in your area. Find the perfect meal deal near you!"
-        keywords="food truck map near me, restaurant deals map, local food map, nearby food trucks, meal deals near me, interactive food map, food truck parking map, local dining map"
-        canonicalUrl="https://www.mealscout.us/map"
+        title={mapBranding.seoTitle}
+        description={mapBranding.seoDescription}
+        keywords={mapBranding.seoKeywords}
+        canonicalUrl={`${mapBranding.canonicalBaseUrl}/map`}
         schemaData={mapSchemaData}
       />
       <BackHeader title="Map" fallbackHref="/" />
@@ -2316,11 +2371,15 @@ export default function MapPage() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-[var(--bg-card)] shadow-clean flex items-center justify-center">
-              <img src={mealScoutIcon} alt="MealScout" className="w-7 h-7" />
+              <img
+                src={mealScoutIcon}
+                alt={mapBranding.appName}
+                className="w-7 h-7"
+              />
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
-                MealScout Map
+                {mapBranding.mapName}
               </h1>
               <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
             </div>
@@ -2581,7 +2640,7 @@ export default function MapPage() {
                     <Popup>
                       <div className="text-center rounded-xl bg-[var(--bg-card)] text-[color:var(--text-primary)] px-3 py-2 shadow-clean-lg">
                         <div className="text-xs uppercase tracking-wide text-[color:var(--text-muted)]">
-                          MealScout
+                          {mapBranding.appName}
                         </div>
                         <div className="font-semibold text-sm">
                           You are here
@@ -3046,10 +3105,10 @@ export default function MapPage() {
       <section className="px-4 sm:px-6 pb-4">
         <div className="mx-auto rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
           <h2 className="text-base font-semibold text-foreground">
-            Explore MealScout Pages
+            {mapBranding.exploreHeading}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Continue browsing local food trucks, restaurants, and active deals.
+            {mapBranding.exploreDescription}
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {mapExploreLinks.map((link) => (
