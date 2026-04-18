@@ -3711,7 +3711,10 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date(),
         })
         .where(eq(verificationRequests.id, id))
-        .returning();
+        .returning({
+          id: verificationRequests.id,
+          restaurantId: verificationRequests.restaurantId,
+        });
 
       if (!request) {
         throw new Error("Verification request not found");
@@ -3746,7 +3749,10 @@ export class DatabaseStorage implements IStorage {
           updatedAt: new Date(),
         })
         .where(eq(verificationRequests.id, id))
-        .returning();
+        .returning({
+          id: verificationRequests.id,
+          restaurantId: verificationRequests.restaurantId,
+        });
 
       if (!request) {
         throw new Error("Verification request not found");

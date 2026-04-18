@@ -241,7 +241,21 @@ export function createUsersRepository() {
           updatedAt: new Date(),
         })
         .where(eq(users.id, id))
-        .returning();
+        .returning({
+          id: users.id,
+          userType: users.userType,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          phone: users.phone,
+          emailVerified: users.emailVerified,
+          isDisabled: users.isDisabled,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+          stripeCustomerId: users.stripeCustomerId,
+          stripeSubscriptionId: users.stripeSubscriptionId,
+          affiliatePercent: users.affiliatePercent,
+        });
       void syncUserToBrevo(updatedUser).catch(() => {});
       return updatedUser;
     },

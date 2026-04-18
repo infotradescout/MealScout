@@ -269,9 +269,16 @@ export async function setupUnifiedAuth(app: Express) {
   const superAdminEmail =
     process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
   if (superAdminEmail) {
-    const existing = await storage.getUserByEmail(superAdminEmail);
-    if (existing && existing.userType !== "super_admin") {
-      await storage.updateUserType(existing.id, "super_admin");
+    try {
+      const existing = await storage.getUserByEmail(superAdminEmail);
+      if (existing && existing.userType !== "super_admin") {
+        await storage.updateUserType(existing.id, "super_admin");
+      }
+    } catch (err) {
+      console.warn(
+        "⚠️  Failed startup super admin auto-upgrade:",
+        err,
+      );
     }
   }
 

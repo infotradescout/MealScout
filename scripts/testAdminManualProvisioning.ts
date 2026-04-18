@@ -15,6 +15,7 @@ type TestCase = {
 };
 
 const BASE_URL = (process.env.ADMIN_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
+const ORIGIN = String(process.env.ADMIN_SMOKE_ORIGIN || "http://localhost:5000").trim();
 const ADMIN_EMAIL = String(process.env.ADMIN_SMOKE_EMAIL || "").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_SMOKE_PASSWORD || "").trim();
 
@@ -39,6 +40,7 @@ async function loginAsAdmin(): Promise<string> {
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      Origin: ORIGIN,
     },
     body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
   });
@@ -67,6 +69,7 @@ async function callAdmin(
       "Content-Type": "application/json",
       Accept: "application/json",
       Cookie: cookie,
+      Origin: ORIGIN,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

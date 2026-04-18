@@ -1270,29 +1270,44 @@ export function registerAdminManagementRoutes(app: Express) {
 
         let createdHostId: string | null = null;
         const [user] = await db.transaction(async (tx: any) => {
-          const affiliatePercent =
-            userType === "staff"
-              ? 25
-              : userType === "admin" || userType === "super_admin"
-                ? 0
-                : undefined;
-
-          const [insertedUser] = await tx
-            .insert(users)
-            .values({
-              email: normalizedEmail,
-              firstName: firstName?.trim() || null,
-              lastName: lastName?.trim() || null,
-              phone: phone?.trim() || null,
-              userType,
-              passwordHash: null,
-              mustResetPassword: false,
-              emailVerified: userIsInternalTeam,
-              ...(affiliatePercent !== undefined
-                ? { affiliatePercent }
-                : {}),
-            })
-            .returning();
+          const insertedUserResult = await tx.execute(sql`
+            insert into users (
+              email,
+              first_name,
+              last_name,
+              phone,
+              user_type,
+              password_hash,
+              must_reset_password,
+              email_verified,
+              created_at,
+              updated_at
+            )
+            values (
+              ${normalizedEmail},
+              ${firstName?.trim() || null},
+              ${lastName?.trim() || null},
+              ${phone?.trim() || null},
+              ${userType},
+              ${null},
+              ${false},
+              ${userIsInternalTeam},
+              now(),
+              now()
+            )
+            returning
+              id,
+              email,
+              first_name as "firstName",
+              last_name as "lastName",
+              phone,
+              user_type as "userType",
+              email_verified as "emailVerified"
+          `);
+          const insertedUser = (insertedUserResult as any)?.rows?.[0];
+          if (!insertedUser?.id) {
+            throw new Error("Failed to create admin-provisioned user");
+          }
 
           if (isRestaurantProvisionType) {
             await tx.insert(restaurants).values({
