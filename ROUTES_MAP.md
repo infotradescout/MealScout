@@ -15,15 +15,27 @@
 
 ## Host & Open Calls
 - server/routes/hostRoutes.ts
+  - Orchestrator / delegator for all `/api/hosts*` routes
+  - Registers subroutes and retains any remaining inline endpoints not yet extracted
+  - Auth: `isAuthenticated` + host ownership checks via services/hostOwnership
+
+- server/routes/hosts/profileRoutes.ts _(extracted PR-4)_
   - Paths:
     - `POST /api/hosts`
     - `GET /api/hosts/me`
+  - Auth: `isAuthenticated` + host ownership
+
+- server/routes/hosts/eventsRoutes.ts _(extracted PR-5)_
+  - Paths:
     - `POST /api/hosts/events`
     - `GET /api/hosts/events`
     - `PATCH /api/hosts/events/:eventId`
     - `PATCH /api/hosts/interests/:interestId/status`
     - `GET /api/hosts/events/:eventId/interests`
-  - Auth: `isAuthenticated` + host ownership checks via services/hostOwnership
+  - Auth: `isAuthenticated` + host ownership
+
+- server/routes/hosts/shared.ts
+  - Utilities: `buildLocationKey`, `buildGeocodeAddress`, `normalizeLocationValue`
 
 - server/routes/openCallSeriesRoutes.ts
   - Paths (event series / Open Calls):
@@ -45,29 +57,50 @@
 
 ## Admin
 - server/routes/adminManagementRoutes.ts
-  - Paths:
+  - Orchestrator for classic admin management; sub-domains extracted to `server/routes/admin/`
+  - Remaining paths:
     - `GET /api/auth/admin/verify`
-    - `GET /api/admin/stats`
     - `POST /api/admin/subscriptions/sync`
     - `GET /api/admin/restaurants/pending`
     - `POST /api/admin/restaurants/:id/approve`
     - `DELETE /api/admin/restaurants/:id`
+    - `GET /api/admin/oauth/status`
+  - Auth:
+    - `GET /api/auth/admin/verify`: `isAuthenticated`, then `userType === 'admin'`
+    - All `/api/admin/*`: `isAuthenticated` + `isAdmin`
+
+- server/routes/admin/userAdminRoutes.ts
+  - Paths:
     - `GET /api/admin/users`
     - `PATCH /api/admin/users/:id/status`
     - `GET /api/admin/users/:userId/addresses`
+  - Auth: `isAuthenticated` + `isAdmin`
+
+- server/routes/admin/adminCoreOpsRoutes.ts _(extracted PR-3)_
+  - Paths:
+    - `GET /api/admin/stats`
+    - `GET /api/admin/dashboard-totals`
+  - Auth: `isAuthenticated` + `isAdmin`
+
+- server/routes/admin/dealsRoutes.ts _(extracted PR-1)_
+  - Paths:
     - `GET /api/admin/deals`
     - `GET /api/admin/deals/:dealId/stats`
     - `DELETE /api/admin/deals/:dealId`
     - `POST /api/admin/deals/:dealId/clone`
     - `PATCH /api/admin/deals/:dealId/status`
     - `PATCH /api/admin/deals/:dealId/extend`
+  - Auth: `isAuthenticated` + `isAdmin`
+
+- server/routes/admin/verificationRoutes.ts _(extracted PR-2)_
+  - Paths:
     - `GET /api/admin/verifications`
     - `POST /api/admin/verifications/:id/approve`
     - `POST /api/admin/verifications/:id/reject`
-    - `GET /api/admin/oauth/status`
-  - Auth:
-    - `GET /api/auth/admin/verify`: `isAuthenticated`, then `userType === 'admin'`
-    - All `/api/admin/*`: `isAuthenticated` + `isAdmin`
+  - Auth: `isAuthenticated` + `isAdmin`
+
+- server/routes/admin/shared.ts
+  - Utilities: `buildLocationKey`, `buildCanonicalPath`, `toCountDeltaLine`, `formatDealValueLabel`
 
 - server/telemetryRoutes.ts
   - Mounted in server/routes.ts as: `app.use('/api/admin/telemetry', telemetryRoutes)`
@@ -97,6 +130,103 @@
     - `/api/admin/reported-videos`
     - `/api/admin/review-report/:reportId`
   - Auth: `isAdmin`
+
+## Supplier Marketplace
+- server/routes/supplierMarketplaceRoutes.ts
+  - Orchestrator / residual monolith (768 lines remaining after extractions)
+  - Registers all `suppliers/*` subroutes
+
+- server/routes/suppliers/catalogRoutes.ts _(extracted PR-6)_
+  - Paths:
+    - `GET /api/suppliers`
+    - `GET /api/suppliers/:supplierId`
+    - `GET /api/suppliers/:supplierId/products`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/onboardingRoutes.ts _(extracted PR-11)_
+  - Paths:
+    - `POST /api/supplier/profile/activate`
+    - `POST /api/supplier/stripe/onboard`
+    - `GET /api/supplier/stripe/status`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/profileRoutes.ts _(extracted PR-11, PR-19)_
+  - Paths:
+    - `GET /api/supplier/me`
+    - `PATCH /api/supplier/me`
+    - `GET /api/suppliers/dashboard`
+    - `GET /api/supplier/products`
+    - `POST /api/supplier/products`
+    - `PATCH /api/supplier/products/:productId`
+    - `POST /api/supplier/products/import`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/ordersRoutes.ts _(extracted PR-7)_
+  - Paths:
+    - `POST /api/supplier-orders`
+    - `GET /api/supplier/orders`
+    - `GET /api/supplier-orders/mine`
+    - `GET /api/supplier-orders/:orderId`
+    - `PATCH /api/supplier/orders/:orderId/status`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/paymentsRoutes.ts _(extracted PR-7)_
+  - Paths:
+    - `POST /api/supplier-orders/:orderId/pay-intent`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/requestsRoutes.ts _(extracted PR-16, PR-17)_
+  - Paths:
+    - `POST /api/supplier-requests`
+    - `GET /api/supplier-requests/mine`
+    - `GET /api/supplier/requests`
+    - `POST /api/supplier/requests/:requestId/accept`
+    - `PATCH /api/supplier/requests/:requestId/delivery`
+    - `POST /api/supplier-requests/import`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/supplyIntelRoutes.ts _(extracted PR-12)_
+  - Paths:
+    - `GET /api/supply/preferences`
+    - `POST /api/supply/preferences`
+    - `GET /api/supply/price-watches`
+    - `POST /api/supply/price-watches`
+    - `DELETE /api/supply/price-watches/:watchId`
+    - `GET /api/supply/price-watches/alerts`
+    - `GET /api/supply/price-watches/:watchId/history`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/shoppingListsRoutes.ts _(extracted PR-13)_
+  - Paths:
+    - `GET /api/supply/lists`
+    - `POST /api/supply/lists`
+    - `PATCH /api/supply/lists/:listId`
+    - `DELETE /api/supply/lists/:listId`
+    - `GET /api/supply/lists/:listId/items`
+    - `POST /api/supply/lists/:listId/items`
+    - `PATCH /api/supply/lists/:listId/items/:itemId`
+    - `DELETE /api/supply/lists/:listId/items/:itemId`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/shoppingListOptimizeRoutes.ts _(extracted PR-14, PR-18)_
+  - Paths:
+    - `POST /api/supply/lists/:listId/optimize`
+    - `POST /api/supply/order-list/import`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/searchDemandRoutes.ts _(extracted PR-15)_
+  - Paths:
+    - `GET /api/supply/search`
+    - `POST /api/supply/demand`
+  - Auth: `isAuthenticated`
+
+- server/routes/suppliers/adminOrdersRoutes.ts _(extracted PR-20)_
+  - Paths:
+    - `GET /api/admin/supplier-orders`
+  - Auth: `isAuthenticated` + `isAdmin`
+
+- server/routes/suppliers/shared.ts
+  - Supplier route dependency contract and shared utilities
 
 ## Other Mounted Route Modules
 - server/incidentRoutes.ts
@@ -148,16 +278,34 @@ These are intentionally kept inline in the orchestrator for now:
 
 ## Summary Table (Key Modules)
 
-| Module                                   | Mount / Paths Prefix           | Auth                              | Notes                                |
-|------------------------------------------|--------------------------------|-----------------------------------|--------------------------------------|
-| server/routes.ts                         | (orchestrator)                 | n/a                               | Wires middleware and route modules   |
-| server/routes/hostRoutes.ts              | /api/hosts*                    | isAuthenticated + host checks     | Host profiles and host events        |
-| server/routes/openCallSeriesRoutes.ts    | /api/hosts/event-series*       | isAuthenticated + host checks     | Open Calls series lifecycle          |
-| server/routes/eventRoutes.ts             | /api/events*                   | isAuthenticated / isRestaurantOwner | Discovery + truck interest          |
-| server/routes/adminManagementRoutes.ts   | /api/auth/admin, /api/admin*   | isAuthenticated + isAdmin         | Classic admin management             |
-| server/telemetryRoutes.ts                | /api/admin/telemetry*          | isAdmin                           | Read-only telemetry                  |
-| server/evidenceExportRoutes.ts           | /api/admin/export-evidence*    | isAdmin                           | Evidence PDF export                  |
-| server/adminRoutes.ts                    | /api/admin/*                   | isAdmin                           | Control center, moderation, lifetime |
+| Module                                              | Mount / Paths Prefix             | Auth                                | Notes                                          |
+|-----------------------------------------------------|----------------------------------|-------------------------------------|------------------------------------------------|
+| server/routes.ts                                    | (orchestrator)                   | n/a                                 | Wires middleware and route modules             |
+| server/routes/hostRoutes.ts                         | /api/hosts*                      | isAuthenticated + host checks       | Delegator; subroutes below                     |
+| server/routes/hosts/profileRoutes.ts                | /api/hosts (profile)             | isAuthenticated + host checks       | POST /api/hosts, GET /api/hosts/me (PR-4)      |
+| server/routes/hosts/eventsRoutes.ts                 | /api/hosts/events*, interests*   | isAuthenticated + host checks       | Events and interests lifecycle (PR-5)          |
+| server/routes/openCallSeriesRoutes.ts               | /api/hosts/event-series*         | isAuthenticated + host checks       | Open Calls series lifecycle                    |
+| server/routes/eventRoutes.ts                        | /api/events*                     | isAuthenticated / isRestaurantOwner | Discovery + truck interest                     |
+| server/routes/adminManagementRoutes.ts              | /api/auth/admin, /api/admin*     | isAuthenticated + isAdmin           | Residual admin orchestrator; subroutes below   |
+| server/routes/admin/userAdminRoutes.ts              | /api/admin/users*                | isAuthenticated + isAdmin           | User management                                |
+| server/routes/admin/adminCoreOpsRoutes.ts           | /api/admin/stats, /dashboard-totals | isAuthenticated + isAdmin        | Stats + core ops (PR-3)                        |
+| server/routes/admin/dealsRoutes.ts                  | /api/admin/deals*                | isAuthenticated + isAdmin           | Deal admin CRUD (PR-1)                         |
+| server/routes/admin/verificationRoutes.ts           | /api/admin/verifications*        | isAuthenticated + isAdmin           | Verification approve/reject (PR-2)             |
+| server/routes/supplierMarketplaceRoutes.ts          | /api/supplier*, /api/supply*     | isAuthenticated                     | Residual orchestrator; subroutes below         |
+| server/routes/suppliers/catalogRoutes.ts            | /api/suppliers*                  | isAuthenticated                     | Supplier browse/detail/products (PR-6)         |
+| server/routes/suppliers/onboardingRoutes.ts         | /api/supplier (onboard/stripe)   | isAuthenticated                     | Supplier activation + Stripe (PR-11)           |
+| server/routes/suppliers/profileRoutes.ts            | /api/supplier/me, /products*     | isAuthenticated                     | Self-management + products (PR-11, PR-19)      |
+| server/routes/suppliers/ordersRoutes.ts             | /api/supplier-orders*            | isAuthenticated                     | Order CRUD + status (PR-7)                     |
+| server/routes/suppliers/paymentsRoutes.ts           | /api/supplier-orders/pay-intent  | isAuthenticated                     | Payment intent flow (PR-7)                     |
+| server/routes/suppliers/requestsRoutes.ts           | /api/supplier-requests*          | isAuthenticated                     | Request lifecycle + import (PR-16, PR-17)      |
+| server/routes/suppliers/supplyIntelRoutes.ts        | /api/supply/preferences*, /price-watches* | isAuthenticated            | Preferences + price watch (PR-12)              |
+| server/routes/suppliers/shoppingListsRoutes.ts      | /api/supply/lists*               | isAuthenticated                     | Shopping list CRUD (PR-13)                     |
+| server/routes/suppliers/shoppingListOptimizeRoutes.ts | /api/supply/lists/optimize, /order-list/import | isAuthenticated  | Optimize + import (PR-14, PR-18)               |
+| server/routes/suppliers/searchDemandRoutes.ts       | /api/supply/search, /demand      | isAuthenticated                     | Supply search + manual demand (PR-15)          |
+| server/routes/suppliers/adminOrdersRoutes.ts        | /api/admin/supplier-orders       | isAuthenticated + isAdmin           | Admin order view (PR-20)                       |
+| server/telemetryRoutes.ts                           | /api/admin/telemetry*            | isAdmin                             | Read-only telemetry                            |
+| server/evidenceExportRoutes.ts                      | /api/admin/export-evidence*      | isAdmin                             | Evidence PDF export                            |
+| server/adminRoutes.ts                               | /api/admin/*                     | isAdmin                             | Control center, moderation, lifetime           |
 
 ## Adding a New Route Module (Required Process)
 
