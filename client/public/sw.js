@@ -1,7 +1,7 @@
 /* Lightweight service worker for installability + basic offline fallback.
-   Uses network-first for navigations to avoid stale HTML, and cache-first for hashed assets. */
+   Uses network-first for navigations and hashed assets to avoid chunk/version mismatches after deploys. */
 
-const VERSION = "2026-02-20-2";
+const VERSION = "2026-04-18-1";
 const CACHE_NAME = `mealscout-sw-${VERSION}`;
 const APP_SHELL_URLS = [
   "/",
@@ -48,6 +48,19 @@ const isSameOrigin = (url) => {
 const isHashedAsset = (pathname) =>
   pathname.includes("/assets/") && /-[A-Za-z0-9_]{8,}\.(js|css|png|jpg|jpeg|webp|svg)$/.test(pathname);
 
+const isCacheableAssetResponse = (res) => {
+  if (!res || !res.ok) return false;
+  const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+  // Never cache HTML for asset requests; that's how chunk mismatches poison cache.
+  if (contentType.includes("text/html")) return false;
+  return (
+    contentType.includes("javascript") ||
+    contentType.includes("ecmascript") ||
+    contentType.includes("css") ||
+    contentType.startsWith("image/")
+  );
+};
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -74,16 +87,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for immutable, hashed assets.
+  // Network-first for hashed assets. Fallback to cache only if offline/network fails.
+  // This prevents stale chunk graphs after a new deploy.
   if (isHashedAsset(url.pathname)) {
     event.respondWith(
       (async () => {
-        const cached = await caches.match(req);
-        if (cached) return cached;
-        const res = await fetch(req);
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(req, res.clone()).catch(() => undefined);
-        return res;
+        try {
+          const res = await fetch(req);
+          if (isCacheableAssetResponse(res)) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(req, res.clone()).catch(() => undefined);
+          }
+          return res;
+        } catch {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          throw new Error("asset_fetch_failed");
+        }
       })(),
     );
     return;
