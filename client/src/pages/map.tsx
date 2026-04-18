@@ -6,7 +6,7 @@ import {
   TileLayer,
   Marker,
   Popup,
-  CircleMarker,
+  Circle,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -396,6 +396,9 @@ type MapFootTrafficResponse = {
     totalUniqueActors?: number;
     cells?: MapTrafficCell[];
   };
+  supplySignals?: {
+    cells?: MapTrafficCell[];
+  };
   googlePlaces?: {
     enabled?: boolean;
     used?: boolean;
@@ -507,7 +510,18 @@ const formatBookingTimeRange = (startTime?: string, endTime?: string) => {
 };
 
 const trafficCellColor = (source: MapTrafficCell["source"]) =>
-  source === "google_places" ? "#60A5FA" : "#F97316";
+  source === "google_places"
+    ? "#60A5FA"
+    : source === "supply_signal"
+      ? "#EF4444"
+      : "#F97316";
+
+const trafficCellFillOpacity = (source: MapTrafficCell["source"]) =>
+  source === "google_places"
+    ? 0.14
+    : source === "supply_signal"
+      ? 0.22
+      : 0.18;
 
 const offsetOverlappingCoords = (
   coords: GeoPoint,
@@ -2727,21 +2741,21 @@ export default function MapPage() {
 
                 {showFootTraffic &&
                   visibleTrafficCells.map((cell) => {
-                    const radius = Math.max(
-                      6,
-                      Math.min(26, Math.round((cell.weight || 1) / 2.8)),
+                    const radiusMeters = Math.max(
+                      140,
+                      Math.min(1800, Math.round((cell.weight || 1) * 15)),
                     );
                     return (
-                      <CircleMarker
+                      <Circle
                         key={cell.id}
                         center={[cell.lat, cell.lng]}
-                        radius={radius}
+                        radius={radiusMeters}
                         pathOptions={{
                           color: trafficCellColor(cell.source),
                           fillColor: trafficCellColor(cell.source),
-                          fillOpacity: cell.source === "google_places" ? 0.2 : 0.3,
-                          weight: 1,
-                          opacity: 0.65,
+                          fillOpacity: trafficCellFillOpacity(cell.source),
+                          weight: 0,
+                          opacity: 0,
                         }}
                       >
                         <Popup>
@@ -2749,6 +2763,8 @@ export default function MapPage() {
                             <div className="font-semibold text-sm">
                               {cell.source === "google_places"
                                 ? "Google demand proxy"
+                                : cell.source === "supply_signal"
+                                  ? "Truck + host schedule heat"
                                 : "Fresh local foot traffic"}
                             </div>
                             <div className="text-xs text-[color:var(--text-muted)]">
@@ -2771,7 +2787,7 @@ export default function MapPage() {
                             )}
                           </div>
                         </Popup>
-                      </CircleMarker>
+                      </Circle>
                     );
                   })}
 

@@ -88,7 +88,11 @@ const markerColor = (kind: MapAdapterMarker["kind"]) => {
 };
 
 const trafficCellColor = (source: MapTrafficCell["source"]) =>
-  source === "google_places" ? "#60A5FA" : "#F97316";
+  source === "google_places"
+    ? "#60A5FA"
+    : source === "supply_signal"
+      ? "#EF4444"
+      : "#F97316";
 
 const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   if (marker.kind === "parking") {
@@ -423,13 +427,17 @@ export function GoogleMapSurface({
     trafficCells.forEach((cell) => {
       usedIds.add(cell.id);
       const existing = trafficCircleRefs.current.get(cell.id);
-      const radius = Math.max(80, Math.min(550, (cell.weight || 1) * 7));
+      const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
       const style = {
-        strokeColor: trafficCellColor(cell.source),
-        strokeOpacity: 0.45,
-        strokeWeight: 1,
+        strokeOpacity: 0,
+        strokeWeight: 0,
         fillColor: trafficCellColor(cell.source),
-        fillOpacity: cell.source === "google_places" ? 0.14 : 0.24,
+        fillOpacity:
+          cell.source === "google_places"
+            ? 0.14
+            : cell.source === "supply_signal"
+              ? 0.22
+              : 0.18,
       };
       if (existing) {
         existing.setCenter({ lat: cell.lat, lng: cell.lng });

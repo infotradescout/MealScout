@@ -31,7 +31,7 @@ export interface MapTrafficCell {
   lat: number;
   lng: number;
   weight: number;
-  source: "first_party" | "google_places";
+  source: "first_party" | "google_places" | "supply_signal";
   count?: number;
   uniqueActors?: number;
   freshnessMinutes?: number;

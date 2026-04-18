@@ -43,7 +43,7 @@ type TrafficCell = {
   lat: number;
   lng: number;
   weight: number;
-  source: "first_party" | "google_places";
+  source: "first_party" | "google_places" | "supply_signal";
   count?: number;
   uniqueActors?: number;
   freshnessMinutes?: number;
@@ -97,7 +97,11 @@ const estimateRadiusMetersFromBounds = (bounds: BoundsLike) => {
   return Math.max(100, Math.round(Math.sqrt(latMeters * latMeters + lngMeters * lngMeters)));
 };
 
-const cellId = (source: "first_party" | "google_places", lat: number, lng: number) =>
+const cellId = (
+  source: "first_party" | "google_places" | "supply_signal",
+  lat: number,
+  lng: number,
+) =>
   `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
 
 const roundCell = (value: number) => Math.round(value * 1000) / 1000;
@@ -970,6 +974,132 @@ export function registerPublicMapRoutes(app: Express) {
           ? "emerging"
           : "sparse";
 
+    const supplyBuckets = new Map<
+      string,
+      {
+        lat: number;
+        lng: number;
+        hostCount: number;
+        truckCount: number;
+        bookingCount: number;
+      }
+    >();
+    const countedHostIds = new Set<string>();
+    const upsertSupplyBucket = (
+      lat: number,
+      lng: number,
+      options?: { hostId?: string; truckDelta?: number; bookingDelta?: number },
+    ) => {
+      if (!pointInBounds(bounds, lat, lng)) return;
+      const bucketLat = roundCell(lat);
+      const bucketLng = roundCell(lng);
+      const key = `${bucketLat}:${bucketLng}`;
+      const bucket = supplyBuckets.get(key) || {
+        lat: bucketLat,
+        lng: bucketLng,
+        hostCount: 0,
+        truckCount: 0,
+        bookingCount: 0,
+      };
+
+      const hostId = String(options?.hostId || "").trim();
+      if (hostId && !countedHostIds.has(hostId)) {
+        bucket.hostCount += 1;
+        countedHostIds.add(hostId);
+      }
+      bucket.truckCount += Math.max(0, Number(options?.truckDelta || 0));
+      bucket.bookingCount += Math.max(0, Number(options?.bookingDelta || 0));
+      supplyBuckets.set(key, bucket);
+    };
+
+    try {
+      const centerLat = (bounds.north + bounds.south) / 2;
+      const centerLng = (bounds.east + bounds.west) / 2;
+      const radiusKm = Math.max(
+        2,
+        Math.min(120, estimateRadiusMetersFromBounds(bounds) / 1000),
+      );
+      const liveTrucks = await storage.getLiveTrucksNearby(
+        centerLat,
+        centerLng,
+        radiusKm,
+      );
+      for (const truck of liveTrucks) {
+        const lat = toFiniteNumber((truck as any).currentLatitude);
+        const lng = toFiniteNumber((truck as any).currentLongitude);
+        if (lat === null || lng === null) continue;
+        upsertSupplyBucket(lat, lng, { truckDelta: 1 });
+      }
+    } catch (error) {
+      console.error("Error loading map supply truck signals:", error);
+    }
+
+    try {
+      const now = new Date();
+      const bookingWindowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const upcomingHostBookings = await db
+        .select({
+          hostId: hosts.id,
+          lat: hosts.latitude,
+          lng: hosts.longitude,
+        })
+        .from(events)
+        .innerJoin(hosts, eq(events.hostId, hosts.id))
+        .where(
+          and(
+            ne(events.status, "cancelled"),
+            gte(events.date, now),
+            lte(events.date, bookingWindowEnd),
+          ),
+        )
+        .limit(6000);
+
+      for (const row of upcomingHostBookings) {
+        const lat = toFiniteNumber(row.lat);
+        const lng = toFiniteNumber(row.lng);
+        if (lat === null || lng === null) continue;
+        upsertSupplyBucket(lat, lng, {
+          hostId: String(row.hostId || ""),
+          bookingDelta: 1,
+        });
+      }
+    } catch (error) {
+      console.error("Error loading map supply host signals:", error);
+    }
+
+    const rawSupplyCells = Array.from(supplyBuckets.values())
+      .map((bucket) => {
+        const hostScore = bucket.hostCount * 18;
+        const truckScore = bucket.truckCount * 24;
+        const bookingScore = Math.min(10, bucket.bookingCount) * 6;
+        const rawWeight = hostScore + truckScore + bookingScore;
+        return { ...bucket, rawWeight };
+      })
+      .filter((bucket) => bucket.rawWeight > 0);
+
+    const supplyWeightDenominator = Math.max(
+      1,
+      ...rawSupplyCells.map((bucket) => bucket.rawWeight),
+    );
+    const supplyCells: TrafficCell[] = rawSupplyCells
+      .map((bucket) => {
+        const normalized = Math.round(
+          (bucket.rawWeight / supplyWeightDenominator) * 100,
+        );
+        const weight = Math.max(12, Math.min(100, normalized));
+        return {
+          id: cellId("supply_signal", bucket.lat, bucket.lng),
+          lat: bucket.lat,
+          lng: bucket.lng,
+          weight,
+          source: "supply_signal" as const,
+          count: bucket.bookingCount + bucket.truckCount,
+          uniqueActors: bucket.hostCount + bucket.truckCount,
+        };
+      })
+      .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+      .slice(0, 160);
+
     let googlePlaces = {
       enabled: false,
       used: false,
@@ -1061,7 +1191,7 @@ export function registerPublicMapRoutes(app: Express) {
       }
     }
 
-    const combinedCells = [...firstPartyCells, ...googlePlaces.cells].sort(
+    const combinedCells = [...firstPartyCells, ...supplyCells, ...googlePlaces.cells].sort(
       (a, b) => (b.weight || 0) - (a.weight || 0),
     );
 
@@ -1079,6 +1209,9 @@ export function registerPublicMapRoutes(app: Express) {
         totalPings,
         totalUniqueActors,
         cells: firstPartyCells,
+      },
+      supplySignals: {
+        cells: supplyCells,
       },
       googlePlaces,
       cells: combinedCells,
