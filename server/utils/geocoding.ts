@@ -11,6 +11,7 @@ type ForwardGeocodeResult = {
 const cache = new Map<string, ReverseGeocodeResult>();
 type ForwardCacheEntry = { value: ForwardGeocodeResult | null; ts: number };
 const forwardCache = new Map<string, ForwardCacheEntry>();
+const forwardGoogleCache = new Map<string, ForwardCacheEntry>();
 const FORWARD_FAILURE_TTL_MS = 10 * 60 * 1000;
 const FORWARD_QUEUE_INTERVAL_MS = 250;
 const GEOCODE_MAX_ATTEMPTS = 3;
@@ -261,6 +262,35 @@ export async function forwardGeocode(
     }
 
     forwardCache.set(key, { value: null, ts: Date.now() });
+    return null;
+  });
+}
+
+export async function forwardGeocodeGoogle(
+  address: string,
+  options?: { force?: boolean },
+): Promise<ForwardGeocodeResult | null> {
+  return enqueueForwardTask(async () => {
+    const key = normalizeAddressKey(address);
+    if (!key) return null;
+    const force = options?.force === true;
+    const entry = forwardGoogleCache.get(key);
+    if (!force && entry) {
+      if (entry.value) return entry.value;
+      if (Date.now() - entry.ts < FORWARD_FAILURE_TTL_MS) return null;
+      forwardGoogleCache.delete(key);
+    }
+    if (force && entry) {
+      forwardGoogleCache.delete(key);
+    }
+
+    const googleResult = await forwardWithGoogle(address);
+    if (googleResult) {
+      forwardGoogleCache.set(key, { value: googleResult, ts: Date.now() });
+      return googleResult;
+    }
+
+    forwardGoogleCache.set(key, { value: null, ts: Date.now() });
     return null;
   });
 }

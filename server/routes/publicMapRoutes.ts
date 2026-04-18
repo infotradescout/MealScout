@@ -4,7 +4,11 @@ import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
-import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
+import {
+  forwardGeocode,
+  forwardGeocodeGoogle,
+  reverseGeocode,
+} from "../utils/geocoding";
 import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
@@ -260,6 +264,17 @@ export function registerPublicMapRoutes(app: Express) {
           0,
           Number(process.env.MAP_LOCATIONS_MAX_REVERSE_GEOCODE || 0) || 0,
         ) || (process.env.NODE_ENV === "production" ? 2 : 10);
+      const MAX_COORD_CALIBRATIONS_PER_REQUEST =
+        Math.max(
+          0,
+          Number(process.env.MAP_LOCATIONS_MAX_COORD_CALIBRATIONS || 0) || 0,
+        ) || (process.env.NODE_ENV === "production" ? 10 : 30);
+      const COORD_CALIBRATION_THRESHOLD_METERS =
+        Math.max(
+          0,
+          Number(process.env.MAP_LOCATIONS_COORD_CALIBRATION_METERS || 0) || 0,
+        ) || 120;
+      const useGoogleCalibration = getGoogleMapsApiKey().length > 0;
 
       const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
         if (timeoutMs <= 0) return promise;
@@ -279,6 +294,23 @@ export function registerPublicMapRoutes(app: Express) {
 
       const pendingByAddress = new Map<string, PendingGeocode>();
       const normalizeAddressKey = (value: string) => value.trim().toLowerCase();
+      const haversineMeters = (
+        lat1: number,
+        lng1: number,
+        lat2: number,
+        lng2: number,
+      ) => {
+        const toRad = (v: number) => (v * Math.PI) / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+        return 2 * 6371000 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
       const queueGeocode = (
         address: string,
         onResolved: (coords: { lat: number; lng: number }) => void,
@@ -465,12 +497,58 @@ export function registerPublicMapRoutes(app: Express) {
         ) || (process.env.NODE_ENV === "production" ? 0 : 10);
       let mismatchFixes = 0;
       let reverseGeocodeChecks = 0;
+      let coordCalibrations = 0;
       const deadline = Date.now() + GEOCODE_BUDGET_MS;
 
       for (const host of hostLocations) {
         const lat = parseCoord(host.latitude);
         const lng = parseCoord(host.longitude);
         const expectedState = expectedStateAbbrFor(host);
+        const address = buildFullAddress(host.address, host.city, host.state);
+        if (
+          lat !== null &&
+          lng !== null &&
+          address &&
+          Date.now() <= deadline &&
+          coordCalibrations < MAX_COORD_CALIBRATIONS_PER_REQUEST
+        ) {
+          coordCalibrations += 1;
+          const calibrated = await withTimeout(
+            (
+              useGoogleCalibration ? forwardGeocodeGoogle : forwardGeocode
+            )(address),
+            GEOCODE_TIMEOUT_MS,
+          ).catch(() => null);
+          if (calibrated) {
+            const driftMeters = haversineMeters(
+              lat,
+              lng,
+              calibrated.lat,
+              calibrated.lng,
+            );
+            if (driftMeters > COORD_CALIBRATION_THRESHOLD_METERS) {
+              applyCoords(host, calibrated);
+              if (host.hostId) {
+                await storage
+                  .updateHostCoordinates(
+                    host.hostId,
+                    calibrated.lat,
+                    calibrated.lng,
+                  )
+                  .catch(() => undefined);
+              } else if (host.locationRequestId) {
+                await db
+                  .update(locationRequests)
+                  .set({
+                    latitude: calibrated.lat.toString(),
+                    longitude: calibrated.lng.toString(),
+                  })
+                  .where(eq(locationRequests.id, host.locationRequestId))
+                  .catch(() => undefined);
+              }
+            }
+          }
+        }
         if (
           lat !== null &&
           lng !== null &&
@@ -495,11 +573,6 @@ export function registerPublicMapRoutes(app: Express) {
 
             host.latitude = null;
             host.longitude = null;
-            const address = buildFullAddress(
-              host.address,
-              host.city,
-              host.state,
-            );
             if (address) {
               const coords = await withTimeout(
                 forwardGeocode(address, {
@@ -546,7 +619,6 @@ export function registerPublicMapRoutes(app: Express) {
         ) {
           continue;
         }
-        const address = buildFullAddress(host.address, host.city, host.state);
         if (!address) continue;
         queueGeocode(
           address,
