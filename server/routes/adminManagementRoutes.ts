@@ -1208,6 +1208,56 @@ export function registerAdminManagementRoutes(app: Express) {
           });
         }
 
+        const isRestaurantProvisionType =
+          userType === "restaurant_owner" || userType === "food_truck";
+        const isHostProvisionType =
+          userType === "host" || userType === "event_coordinator";
+        const normalizedBusinessName = String(businessName || "").trim();
+        const normalizedAddress = String(address || "").trim();
+
+        if (
+          (isRestaurantProvisionType || isHostProvisionType) &&
+          (!normalizedBusinessName || !normalizedAddress)
+        ) {
+          return res.status(400).json({
+            message:
+              "businessName and address are required to provision this account type",
+          });
+        }
+
+        const hasLatitude =
+          latitude !== undefined && latitude !== null && `${latitude}`.trim() !== "";
+        const hasLongitude =
+          longitude !== undefined && longitude !== null && `${longitude}`.trim() !== "";
+
+        let parsedLatitude: number | null = null;
+        let parsedLongitude: number | null = null;
+        if (hasLatitude || hasLongitude) {
+          if (!hasLatitude || !hasLongitude) {
+            return res.status(400).json({
+              message: "Both latitude and longitude are required together",
+            });
+          }
+
+          parsedLatitude = Number(latitude);
+          parsedLongitude = Number(longitude);
+          if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+            return res.status(400).json({
+              message: "Latitude and longitude must be valid numbers",
+            });
+          }
+          if (parsedLatitude < -90 || parsedLatitude > 90) {
+            return res.status(400).json({
+              message: "Latitude must be between -90 and 90",
+            });
+          }
+          if (parsedLongitude < -180 || parsedLongitude > 180) {
+            return res.status(400).json({
+              message: "Longitude must be between -180 and 180",
+            });
+          }
+        }
+
         // Create user account (invite link flow)
         const user = await storage.createUserInvite({
           email: normalizedEmail,
@@ -1228,23 +1278,19 @@ export function registerAdminManagementRoutes(app: Express) {
 
         // Handle restaurant owner and food truck creation
         if (
-          (userType === "restaurant_owner" || userType === "food_truck") &&
-          businessName &&
-          address
+          (userType === "restaurant_owner" || userType === "food_truck")
         ) {
           await storage.createRestaurantForUser({
             userId: user.id,
-            name: businessName,
-            address,
+            name: normalizedBusinessName,
+            address: normalizedAddress,
             cuisineType: cuisineType || "Various",
           });
         }
 
         // Handle host and event coordinator creation
         if (
-          (userType === "host" || userType === "event_coordinator") &&
-          businessName &&
-          address
+          (userType === "host" || userType === "event_coordinator")
         ) {
           // Convert footTraffic string to expected integer
           const footTrafficMap: Record<string, number> = {
@@ -1263,8 +1309,8 @@ export function registerAdminManagementRoutes(app: Express) {
 
           const hostData: any = {
             userId: user.id,
-            businessName,
-            address,
+            businessName: normalizedBusinessName,
+            address: normalizedAddress,
             locationType:
               userType === "event_coordinator"
                 ? "event_coordinator"
@@ -1276,9 +1322,9 @@ export function registerAdminManagementRoutes(app: Express) {
             adminCreated: true,
           };
 
-          if (latitude && longitude) {
-            hostData.latitude = latitude.toString();
-            hostData.longitude = longitude.toString();
+          if (parsedLatitude !== null && parsedLongitude !== null) {
+            hostData.latitude = parsedLatitude.toString();
+            hostData.longitude = parsedLongitude.toString();
           }
 
           await storage.createHost(hostData);
@@ -1297,6 +1343,11 @@ export function registerAdminManagementRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error creating user manually:", error);
+        if (error?.code === "23505") {
+          return res.status(409).json({
+            message: "Email or phone already in use",
+          });
+        }
         res.status(500).json({
           message: error.message || "Failed to create user",
         });

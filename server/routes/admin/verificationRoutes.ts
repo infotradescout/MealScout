@@ -22,6 +22,8 @@ export function registerVerificationAdminRoutes(
   deps: VerificationDeps,
 ) {
   const { storage } = deps;
+  const isAdminUser = (req: any) =>
+    req.user?.userType === "admin" || req.user?.userType === "super_admin";
 
   // GET /api/admin/verifications - List all verification requests (with optional status filter)
   app.get(
@@ -58,6 +60,12 @@ export function registerVerificationAdminRoutes(
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
+        if (!isAdminUser(req)) {
+          return res.status(403).json({
+            message: "Admin access required to approve verification requests",
+          });
+        }
+
         const user = req.user;
         const { id } = req.params;
         await storage.approveVerificationRequest(id, user.id);
@@ -122,28 +130,48 @@ export function registerVerificationAdminRoutes(
 
           const notificationEmail = "notifications@mealscout.us";
           if (claimContext.ownerEmail) {
+            try {
+              await emailService.sendBasicEmail(
+                claimContext.ownerEmail,
+                "Your food truck claim was approved",
+                `
+                  <p>Your food truck claim has been approved.</p>
+                  <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
+                `,
+              );
+            } catch (emailError) {
+              console.warn(
+                "Failed to send owner approval notification email:",
+                emailError,
+              );
+            }
+          }
+          try {
             await emailService.sendBasicEmail(
-              claimContext.ownerEmail,
-              "Your food truck claim was approved",
+              notificationEmail,
+              "Food Truck Claim Approved",
               `
-                <p>Your food truck claim has been approved.</p>
+                <p>A food truck claim was approved.</p>
                 <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
+                <p><strong>Owner ID:</strong> ${claimContext.ownerId}</p>
               `,
             );
+          } catch (emailError) {
+            console.warn(
+              "Failed to send internal approval notification email:",
+              emailError,
+            );
           }
-          await emailService.sendBasicEmail(
-            notificationEmail,
-            "Food Truck Claim Approved",
-            `
-              <p>A food truck claim was approved.</p>
-              <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
-              <p><strong>Owner ID:</strong> ${claimContext.ownerId}</p>
-            `,
-          );
         }
 
         res.json({ success: true, message: "Verification request approved" });
       } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "Verification request not found"
+        ) {
+          return res.status(404).json({ message: error.message });
+        }
         console.error("Error approving verification request:", error);
         res
           .status(500)
@@ -159,6 +187,12 @@ export function registerVerificationAdminRoutes(
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
+        if (!isAdminUser(req)) {
+          return res.status(403).json({
+            message: "Admin access required to reject verification requests",
+          });
+        }
+
         const user = req.user;
         const { id } = req.params;
         const { reason } = req.body;
@@ -213,30 +247,50 @@ export function registerVerificationAdminRoutes(
 
           const notificationEmail = "notifications@mealscout.us";
           if (claimContext.ownerEmail) {
+            try {
+              await emailService.sendBasicEmail(
+                claimContext.ownerEmail,
+                "Your food truck claim was rejected",
+                `
+                  <p>Your food truck claim was rejected.</p>
+                  <p><strong>Reason:</strong> ${reason}</p>
+                  <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
+                `,
+              );
+            } catch (emailError) {
+              console.warn(
+                "Failed to send owner rejection notification email:",
+                emailError,
+              );
+            }
+          }
+          try {
             await emailService.sendBasicEmail(
-              claimContext.ownerEmail,
-              "Your food truck claim was rejected",
+              notificationEmail,
+              "Food Truck Claim Rejected",
               `
-                <p>Your food truck claim was rejected.</p>
-                <p><strong>Reason:</strong> ${reason}</p>
+                <p>A food truck claim was rejected.</p>
                 <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
+                <p><strong>Owner ID:</strong> ${claimContext.ownerId}</p>
+                <p><strong>Reason:</strong> ${reason}</p>
               `,
             );
+          } catch (emailError) {
+            console.warn(
+              "Failed to send internal rejection notification email:",
+              emailError,
+            );
           }
-          await emailService.sendBasicEmail(
-            notificationEmail,
-            "Food Truck Claim Rejected",
-            `
-              <p>A food truck claim was rejected.</p>
-              <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
-              <p><strong>Owner ID:</strong> ${claimContext.ownerId}</p>
-              <p><strong>Reason:</strong> ${reason}</p>
-            `,
-          );
         }
 
         res.json({ success: true, message: "Verification request rejected" });
       } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "Verification request not found"
+        ) {
+          return res.status(404).json({ message: error.message });
+        }
         console.error("Error rejecting verification request:", error);
         res
           .status(500)
