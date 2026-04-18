@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import type { Deal } from "@shared/schema";
+import { authUrl } from "@/lib/api";
 
 const dealEditSchema = z.object({
   title: z.string().min(1, "Special title is required"),
@@ -157,7 +158,7 @@ export default function DealEdit() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/restaurant";
+          window.location.href = authUrl("/api/auth/google/restaurant");
         }, 500);
         return;
       }
@@ -291,7 +292,7 @@ export default function DealEdit() {
         <Card>
           <CardContent className="p-6">
             <p className="text-center text-muted-foreground mb-4">Please log in to edit deals</p>
-            <Button onClick={() => window.location.href = "/api/auth/google/restaurant"} className="w-full">
+            <Button onClick={() => window.location.href = authUrl("/api/auth/google/restaurant")} className="w-full">
               Log In
             </Button>
           </CardContent>

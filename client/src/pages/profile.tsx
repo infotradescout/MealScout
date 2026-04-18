@@ -27,7 +27,7 @@ import {
   Flag,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, authUrl } from "@/lib/api";
 import { getOptimizedImageUrl } from "@/lib/images";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 
@@ -102,7 +102,7 @@ export default function ProfilePage() {
           <p className="text-muted-foreground mb-6">
             Log in to access your profile, settings, and deal history
           </p>
-          <Button onClick={() => (window.location.href = "/api/auth/facebook")}>
+          <Button onClick={() => (window.location.href = authUrl("/api/auth/facebook"))}>
             Sign In with Facebook
           </Button>
         </div>

@@ -48,6 +48,7 @@ import {
   PASSWORD_REGEX,
   PASSWORD_REQUIREMENTS,
 } from "@/utils/passwordPolicy";
+import { authUrl } from "@/lib/api";
 
 /**
  * Host Onboarding v1  COPY LOCK
@@ -537,7 +538,7 @@ export default function RestaurantSignup() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/restaurant";
+          window.location.href = authUrl("/api/auth/google/restaurant");
         }, 500);
         return;
       }
@@ -838,7 +839,7 @@ export default function RestaurantSignup() {
                   type="button"
                   data-testid="button-google-signin"
                   variant="outline"
-                  onClick={() => (window.location.href = "/api/auth/google/restaurant")}
+                  onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">

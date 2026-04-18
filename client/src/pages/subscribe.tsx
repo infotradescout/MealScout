@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authUrl } from "@/lib/api";
 
 // Make sure to call `loadStripe` outside of a component's render to avoid
 // recreating the `Stripe` object on every render.
@@ -817,7 +818,7 @@ export default function Subscribe() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/restaurant";
+          window.location.href = authUrl("/api/auth/google/restaurant");
         }, 500);
         return;
       }
@@ -863,9 +864,7 @@ export default function Subscribe() {
               Please log in to manage your subscription
             </p>
             <Button
-              onClick={() =>
-                (window.location.href = "/api/auth/google/restaurant")
-              }
+              onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
               className="w-full"
             >
               Log In

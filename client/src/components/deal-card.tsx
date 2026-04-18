@@ -11,6 +11,7 @@ import RestaurantDealsDrawer from "./restaurant-deals-drawer";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { authUrl } from "@/lib/api";
 
 const SAVED_DEALS_KEY = "mealscout_saved_deals";
 let followSnapshotPromise: Promise<Set<string>> | null = null;
@@ -450,7 +451,7 @@ export default function DealCard({ deal }: DealCardProps) {
     nextSelected: boolean
   ): Promise<boolean> => {
     if (!user) {
-      window.location.href = "/api/auth/facebook";
+      window.location.href = authUrl("/api/auth/facebook");
       return false;
     }
 
@@ -509,7 +510,7 @@ export default function DealCard({ deal }: DealCardProps) {
     nextSelected: boolean
   ): Promise<boolean> => {
     if (!user) {
-      window.location.href = "/api/auth/facebook";
+      window.location.href = authUrl("/api/auth/facebook");
       return false;
     }
 
@@ -556,7 +557,7 @@ export default function DealCard({ deal }: DealCardProps) {
 
   const handleRecommendSubmit = async () => {
     if (!user) {
-      window.location.href = "/api/auth/facebook";
+      window.location.href = authUrl("/api/auth/facebook");
       return;
     }
 

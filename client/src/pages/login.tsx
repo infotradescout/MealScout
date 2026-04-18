@@ -7,6 +7,7 @@ import { BackHeader } from "@/components/back-header";
 import { UserCheck, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { authUrl } from "@/lib/api";
 import { SEOHead } from "@/components/seo-head";
 import {
   FUNNEL_EVENTS,
@@ -74,21 +75,23 @@ export default function Login() {
   }, [email]);
 
   const handleGoogleLogin = () => {
+    const googleLoginUrl = authUrl("/api/auth/google/customer");
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "google_login",
-      destination: "/api/auth/google/customer",
+      destination: googleLoginUrl,
     });
-    window.location.href = "/api/auth/google/customer";
+    window.location.href = googleLoginUrl;
   };
 
   const handleFacebookLogin = () => {
+    const facebookLoginUrl = authUrl("/api/auth/facebook?userType=customer");
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "facebook_login",
-      destination: "/api/auth/facebook?userType=customer",
+      destination: facebookLoginUrl,
     });
-    window.location.href = "/api/auth/facebook?userType=customer";
+    window.location.href = facebookLoginUrl;
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -119,11 +122,11 @@ export default function Login() {
               payload?.error ||
               "This email is linked to Google. Redirecting now...",
           });
-          const authUrl =
+          const nextAuthPath =
             typeof payload?.authUrl === "string" && payload.authUrl.startsWith("/")
               ? payload.authUrl
               : "/api/auth/google/customer";
-          window.location.href = authUrl;
+          window.location.href = authUrl(nextAuthPath);
           return;
         }
         if (payload?.code === "email_not_verified") {

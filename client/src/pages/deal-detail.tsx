@@ -15,6 +15,7 @@ import { BackHeader } from "@/components/back-header";
 import { Tag, ArrowLeft, Share2 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
+import { authUrl } from "@/lib/api";
 
 interface Deal {
   id: string;
@@ -153,7 +154,7 @@ export default function DealDetail() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/customer";
+          window.location.href = authUrl("/api/auth/google/customer");
         }, 500);
         return;
       }

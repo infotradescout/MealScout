@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { authUrl } from "@/lib/api";
 import type { UserAddress } from "@shared/schema";
 
 const addAddressFormSchema = z.object({
@@ -79,7 +80,7 @@ export default function AddressesPage() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/customer";
+          window.location.href = authUrl("/api/auth/google/customer");
         }, 500);
         return;
       }
@@ -103,7 +104,7 @@ export default function AddressesPage() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/customer";
+          window.location.href = authUrl("/api/auth/google/customer");
         }, 500);
         return;
       }
@@ -132,7 +133,7 @@ export default function AddressesPage() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/customer";
+          window.location.href = authUrl("/api/auth/google/customer");
         }, 500);
         return;
       }

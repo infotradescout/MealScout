@@ -32,6 +32,7 @@ import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagServic
 declare module "express-session" {
   interface SessionData {
     fbAppContext?: "mealscout" | "tradescout";
+    googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
   }
 }
@@ -168,6 +169,16 @@ export async function setupUnifiedAuth(app: Express) {
     );
   };
   const baseUrl = getBaseUrl().replace(/\/+$/, ""); // Remove trailing slashes to prevent double slashes in callback URLs
+  const tradeScoutBaseUrl =
+    resolveConfiguredBaseUrl(process.env.TRADESCOUT_PUBLIC_BASE_URL) ||
+    "https://www.thetradescout.com";
+  const getOAuthAppContext = (
+    req: any,
+    fallback: "mealscout" | "tradescout" = "mealscout",
+  ) => {
+    const appContext = String(req?.query?.app || fallback).toLowerCase();
+    return appContext === "tradescout" ? "tradescout" : "mealscout";
+  };
 
   const createEmailVerificationUrl = async (user: User, req: any) => {
     if (!user.email) return null;
@@ -542,6 +553,7 @@ export async function setupUnifiedAuth(app: Express) {
 
     // Google OAuth routes for customers
     app.get("/api/auth/google/customer", (req, res, next) => {
+      req.session.googleAppContext = getOAuthAppContext(req);
       req.session.oauthUserType = "customer";
       passport.authenticate("google-customer", {
         scope: ["profile", "email"],
@@ -562,6 +574,9 @@ export async function setupUnifiedAuth(app: Express) {
         failureRedirect: "/?error=auth_failed",
       }),
       (req, res) => {
+        const appContext = req.session.googleAppContext || "mealscout";
+        const redirectBase =
+          appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
         // Ensure session is saved before redirecting
         req.session.save((err) => {
           if (err) {
@@ -571,13 +586,14 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google customer OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${baseUrl}/`);
+          res.redirect(`${redirectBase}/?auth=success&t=${Date.now()}`);
         });
       },
     );
 
     // Google OAuth routes for restaurant owners
     app.get("/api/auth/google/restaurant", (req, res, next) => {
+      req.session.googleAppContext = getOAuthAppContext(req);
       const desiredType =
         typeof req.query.userType === "string"
           ? req.query.userType
@@ -606,6 +622,9 @@ export async function setupUnifiedAuth(app: Express) {
         failureRedirect: "/restaurant-signup?error=auth_failed",
       }),
       (req, res) => {
+        const appContext = req.session.googleAppContext || "mealscout";
+        const redirectBase =
+          appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
         // Ensure session is saved before redirecting
         req.session.save((err) => {
           if (err) {
@@ -615,7 +634,7 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google restaurant OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${baseUrl}/restaurant-signup`);
+          res.redirect(`${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`);
         });
       },
     );

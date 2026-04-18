@@ -44,6 +44,7 @@ import {
 import { BackHeader } from "@/components/back-header";
 import Navigation from "@/components/navigation";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
+import { authUrl } from "@/lib/api";
 
 const dealSchema = z
   .object({
@@ -410,7 +411,7 @@ export default function DealCreation() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/auth/google/restaurant";
+          window.location.href = authUrl("/api/auth/google/restaurant");
         }, 500);
         return;
       }
@@ -522,9 +523,7 @@ export default function DealCreation() {
               Please log in to create specials
             </p>
             <Button
-              onClick={() =>
-                (window.location.href = "/api/auth/google/restaurant")
-              }
+              onClick={() => (window.location.href = authUrl("/api/auth/google/restaurant"))}
               className="w-full"
             >
               Log In

@@ -38,3 +38,24 @@ export function apiUrl(path: string): string {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return API_BASE_URL ? `${API_BASE_URL}/${cleanPath}` : `/${cleanPath}`;
 }
+
+/**
+ * Build auth redirect URL.
+ * On TradeScout hosts, force Facebook OAuth app context to "tradescout".
+ */
+export function authUrl(path: string): string {
+  const url = apiUrl(path);
+  if (typeof window === "undefined") return url;
+
+  const host = window.location.hostname.toLowerCase();
+  const isTradeScoutHost = host.includes("tradescout");
+  if (!isTradeScoutHost || !path.startsWith("/api/auth/")) {
+    return url;
+  }
+
+  const normalized = new URL(url, window.location.origin);
+  if (!normalized.searchParams.get("app")) {
+    normalized.searchParams.set("app", "tradescout");
+  }
+  return normalized.toString();
+}

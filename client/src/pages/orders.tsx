@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Receipt, Clock, CheckCircle, XCircle } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
+import { authUrl } from "@/lib/api";
 
 type ClaimedDeal = {
   id: string;
@@ -103,7 +104,7 @@ export default function OrdersPage() {
           <p className="text-muted-foreground mb-6">
             Log in to see your claimed deals and deal history
           </p>
-          <Button onClick={() => (window.location.href = "/api/auth/facebook")}>
+          <Button onClick={() => (window.location.href = authUrl("/api/auth/facebook"))}>
             Sign In
           </Button>
         </div>
