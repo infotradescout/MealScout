@@ -247,12 +247,20 @@ export function GoogleMapSurface({
         }
 
         if (!mapRef.current) {
+          const prefersFinePointer =
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(pointer: fine)").matches;
+
           mapRef.current = new googleMaps.Map(mapContainerRef.current, {
             center,
             zoom,
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
+            // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
+            // Touch devices: keep native cooperative behavior.
+            gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
             styles: isNightTheme ? mapStyleDark : null,
           });
 
