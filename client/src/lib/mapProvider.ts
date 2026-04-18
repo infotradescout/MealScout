@@ -9,7 +9,7 @@ const rawProvider = String(import.meta.env.VITE_MAP_PROVIDER || "auto")
   .toLowerCase();
 
 export const MAP_PROVIDER: MapProvider =
-  rawProvider === "legacy"
+  rawProvider === "legacy-force"
     ? "legacy"
     : GOOGLE_MAPS_WEB_API_KEY.length > 0
       ? "google"
