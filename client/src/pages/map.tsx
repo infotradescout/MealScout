@@ -52,6 +52,12 @@ type DiscoveryCity = {
   cuisines: Array<{ slug: string; count: number }>;
 };
 
+type ParkingPreviewSelection = {
+  hostId: string;
+  markerLat: number;
+  markerLng: number;
+};
+
 type MapBranding = {
   appName: string;
   mapName: string;
@@ -922,6 +928,8 @@ export default function MapPage() {
   });
   const [showList, setShowList] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [selectedParkingPreview, setSelectedParkingPreview] =
+    useState<ParkingPreviewSelection | null>(null);
   const [selectedHostCluster, setSelectedHostCluster] =
     useState<HostCluster | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -1350,6 +1358,8 @@ export default function MapPage() {
   }, [showFootTraffic, footTrafficData, appliedMapBounds]);
 
   const hostedRadiusKm = 0.12;
+  const isTruckOwnerUser =
+    user?.userType === "food_truck" || user?.userType === "restaurant_owner";
 
   const liveTruckById = useMemo(() => {
     return new Map(liveTrucks.map((truck) => [truck.id, truck]));
@@ -1368,6 +1378,13 @@ export default function MapPage() {
     }
     return nearest;
   };
+
+  const getParkingPassHrefForHost = useCallback((host: HostLocation) => {
+    const hostId = String(host.hostId || "").trim();
+    return hostId
+      ? `/parking-pass?hostId=${encodeURIComponent(hostId)}`
+      : "/parking-pass";
+  }, []);
 
   const resolveHostCoords = (host: HostLocation) => {
     const lat = toNumberOrNull(host.latitude);
@@ -1762,6 +1779,23 @@ export default function MapPage() {
     return fallbackBookableHostIds;
   }, [bookableHostIds, fallbackBookableHostIds]);
 
+  const getHostAvailabilityLabel = useCallback(
+    (host: HostLocation) => {
+      const hostId = String(host.hostId || "").trim();
+      const status = hostId ? cachedHostStatusById[hostId] : undefined;
+      const isBookable = hostId ? effectiveBookableHostIds.has(hostId) : false;
+      const label = !isBookable
+        ? "No parking pass listing yet"
+        : status
+          ? status.isFull
+            ? "Fully booked today"
+            : `${status.availableCount}/${status.spotCount} spots open today`
+          : "Availability updating...";
+      return { isBookable, label };
+    },
+    [cachedHostStatusById, effectiveBookableHostIds],
+  );
+
   const visibleEventLocations = useMemo(() => {
     if (!mapLocations?.eventLocations?.length) return [];
     return mapLocations.eventLocations.filter((event) => {
@@ -1985,6 +2019,7 @@ export default function MapPage() {
 
   const handleDealClick = (deal: Deal) => {
     setSelectedDeal(deal);
+    setSelectedParkingPreview(null);
     setSelectedHostCluster(null);
     if (deal.restaurant) {
       setMapCenter({
@@ -2059,6 +2094,7 @@ export default function MapPage() {
       setMapCenter(pendingMapCenter);
     }
     setSelectedDeal(null);
+    setSelectedParkingPreview(null);
     setSelectedHostCluster(null);
     setHasPendingAreaSearch(false);
   };
@@ -2241,10 +2277,18 @@ export default function MapPage() {
         const host = visibleHostLocations.find(
           (item) => item.id === marker.sourceId,
         );
-        const coords = host ? resolveHostCoords(host) : null;
-        const lat = coords?.lat ?? marker.lat;
-        const lng = coords?.lng ?? marker.lng;
-        window.open(`https://maps.google.com/?q=${lat},${lng}`, "_blank");
+        if (!host) return;
+        if (isTruckOwnerUser) {
+          window.location.href = getParkingPassHrefForHost(host);
+          return;
+        }
+        setSelectedDeal(null);
+        setSelectedHostCluster(null);
+        setSelectedParkingPreview({
+          hostId: host.id,
+          markerLat: marker.lat,
+          markerLng: marker.lng,
+        });
         return;
       }
 
@@ -2267,8 +2311,42 @@ export default function MapPage() {
       visibleEventLocations,
       resolveHostCoords,
       resolveEventCoords,
+      isTruckOwnerUser,
+      getParkingPassHrefForHost,
     ],
   );
+
+  const selectedParkingHost = useMemo(() => {
+    if (!selectedParkingPreview) return null;
+    const host =
+      visibleHostLocations.find((item) => item.id === selectedParkingPreview.hostId) ||
+      mapLocations.hostLocations.find(
+        (item) => item.id === selectedParkingPreview.hostId,
+      );
+    if (!host) return null;
+    const coords = resolveHostCoords(host);
+    if (!coords) return null;
+    const nearby = findNearbyTruck(coords);
+    const { isBookable, label } = getHostAvailabilityLabel(host);
+    return {
+      host,
+      coords,
+      nearbyTruck: nearby?.truck || null,
+      distanceLabel: formatDistance(coords),
+      parkingPassHref: getParkingPassHrefForHost(host),
+      availabilityLabel: label,
+      isBookable,
+    };
+  }, [
+    selectedParkingPreview,
+    visibleHostLocations,
+    mapLocations.hostLocations,
+    resolveHostCoords,
+    findNearbyTruck,
+    getHostAvailabilityLabel,
+    formatDistance,
+    getParkingPassHrefForHost,
+  ]);
 
   const mapSchemaData = useMemo(
     () => ({
@@ -2800,6 +2878,7 @@ export default function MapPage() {
                       zoomLevel,
                     });
                     setSelectedDeal(null);
+                    setSelectedParkingPreview(null);
                     setSelectedHostCluster(cluster);
                     setMapCenter({ lat: cluster.lat, lng: cluster.lng });
                   }}
@@ -2962,7 +3041,74 @@ export default function MapPage() {
           </Card>
         )}
 
-        {!selectedDeal && selectedHostCluster && (
+        {!selectedDeal && selectedParkingHost && (
+          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-semibold text-foreground">
+                    {selectedParkingHost.host.name}
+                  </h3>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {selectedParkingHost.host.address}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setSelectedParkingPreview(null)}
+                  data-testid="button-close-selected-parking-preview"
+                  aria-label="Close parking preview"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="mb-3 inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border border-[color:var(--border-subtle)]">
+                {selectedParkingHost.availabilityLabel}
+              </div>
+              {selectedParkingHost.distanceLabel && (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  {selectedParkingHost.distanceLabel} away
+                </p>
+              )}
+              {selectedParkingHost.nearbyTruck && (
+                <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Live truck at this location
+                  </div>
+                  <div className="text-sm font-medium text-foreground">
+                    {selectedParkingHost.nearbyTruck.name}
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    window.open(
+                      `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
+                      "_blank",
+                    )
+                  }
+                >
+                  Directions
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    window.location.href = selectedParkingHost.parkingPassHref;
+                  }}
+                >
+                  {selectedParkingHost.isBookable ? "Open parking pass" : "View spot"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!selectedDeal && !selectedParkingHost && selectedHostCluster && (
           <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
             <CardContent className="p-4">
               <div className="mb-2 flex items-center justify-between">
