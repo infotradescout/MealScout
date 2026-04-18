@@ -115,8 +115,13 @@ const loadGoogleMaps = async (apiKey: string) => {
   const w = window as GoogleMapsWindow;
   if (w.google?.maps) return;
   if (w.__mealScoutGoogleMapsPromise) {
-    await w.__mealScoutGoogleMapsPromise;
-    return;
+    try {
+      await w.__mealScoutGoogleMapsPromise;
+      if (w.google?.maps) return;
+    } catch {
+      // Retry from a clean state instead of pinning the app to a rejected promise.
+      w.__mealScoutGoogleMapsPromise = undefined;
+    }
   }
 
   w.__mealScoutGoogleMapsPromise = new Promise<void>((resolve, reject) => {
@@ -124,10 +129,17 @@ const loadGoogleMaps = async (apiKey: string) => {
       'script[data-mealscout-google-maps="1"]',
     );
     if (existing) {
+      if ((window as GoogleMapsWindow).google?.maps) {
+        resolve();
+        return;
+      }
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Failed to load Google Maps script")),
+        () => {
+          existing.remove();
+          reject(new Error("Failed to load Google Maps script"));
+        },
         { once: true },
       );
       return;
@@ -140,13 +152,27 @@ const loadGoogleMaps = async (apiKey: string) => {
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
-    script.onload = () => resolve();
-    script.onerror = () =>
+    script.onload = () => {
+      if ((window as GoogleMapsWindow).google?.maps) {
+        resolve();
+      } else {
+        script.remove();
+        reject(new Error("Google Maps API unavailable after script load"));
+      }
+    };
+    script.onerror = () => {
+      script.remove();
       reject(new Error("Failed to load Google Maps script"));
+    };
     document.head.appendChild(script);
   });
 
-  await w.__mealScoutGoogleMapsPromise;
+  try {
+    await w.__mealScoutGoogleMapsPromise;
+  } catch (error) {
+    w.__mealScoutGoogleMapsPromise = undefined;
+    throw error;
+  }
 };
 
 export function GoogleMapSurface({
