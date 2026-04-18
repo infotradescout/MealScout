@@ -1039,6 +1039,13 @@ export default function MapPage() {
     user?.userType === "super_admin";
   const showMapDiagnostics = isStaffOrAdmin;
 
+  useEffect(() => {
+    if (isStaffOrAdmin) return;
+    setShowFootTraffic(false);
+    setShowGoogleTrafficData(false);
+    setShowGoogleRoadTrafficLayer(false);
+  }, [isStaffOrAdmin]);
+
   const getLocalDateKey = () => {
     const now = new Date();
     const localMidnightIso = new Date(
@@ -2309,12 +2316,12 @@ export default function MapPage() {
             <div>Using backup map mode while enhanced map services recover.</div>
           </div>
         )}
-        {(usingCachedBookableHosts || usingCachedHostStatus) && (
+        {showMapDiagnostics && (usingCachedBookableHosts || usingCachedHostStatus) && (
           <div className="text-xs mb-4 bg-amber-50 border border-amber-200 rounded p-2 text-amber-900">
             Using cached Parking Pass map data. Refresh may fix this.
           </div>
         )}
-        {userLocation && (
+        {showMapDiagnostics && userLocation && (
           <div className="text-xs text-muted-foreground mb-4">
             Located: {userLocation.lat.toFixed(4)},{" "}
             {userLocation.lng.toFixed(4)}
@@ -2328,97 +2335,103 @@ export default function MapPage() {
               } nearby`}
           </div>
         )}
-        <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            Host parking locations:{" "}
-            <span className="font-semibold text-foreground">
-              {mapHostParkingLocations}
-            </span>
-            {totalHostParkingLocations !== mapHostParkingLocations ? (
-              <span> | {totalHostParkingLocations} active total</span>
-            ) : null}
-            {lastHostIdsUpdatedLabel ? (
-              <span> | Updated {lastHostIdsUpdatedLabel}</span>
-            ) : null}
-            {showMapDiagnostics ? <span> | {mapProviderLabel}</span> : null}
-            {showMapDiagnostics && isGoogleProviderMissingKey ? (
-              <span className="text-[color:var(--status-warning)]">
-                {" "}
-                | Set `VITE_GOOGLE_MAPS_WEB_API_KEY` to enable Google Maps
-              </span>
-            ) : null}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={handleRefreshHostParking}
-            data-testid="button-refresh-paid-parking"
-          >
-            Refresh
-          </Button>
-          {showMapDiagnostics &&
-            forceLegacyMap &&
-            isGoogleProviderRequested &&
-            !isGoogleProviderMissingKey && (
+        {showMapDiagnostics && (
+          <>
+            <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                Host parking locations:{" "}
+                <span className="font-semibold text-foreground">
+                  {mapHostParkingLocations}
+                </span>
+                {totalHostParkingLocations !== mapHostParkingLocations ? (
+                  <span> | {totalHostParkingLocations} active total</span>
+                ) : null}
+                {lastHostIdsUpdatedLabel ? (
+                  <span> | Updated {lastHostIdsUpdatedLabel}</span>
+                ) : null}
+                {showMapDiagnostics ? <span> | {mapProviderLabel}</span> : null}
+                {showMapDiagnostics && isGoogleProviderMissingKey ? (
+                  <span className="text-[color:var(--status-warning)]">
+                    {" "}
+                    | Set `VITE_GOOGLE_MAPS_WEB_API_KEY` to enable Google Maps
+                  </span>
+                ) : null}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full sm:w-auto"
-                onClick={() => {
-                  setGoogleMapsRuntimeError(null);
-                  setForceLegacyMap(false);
-                }}
-                data-testid="button-retry-google-map"
+                onClick={handleRefreshHostParking}
+                data-testid="button-refresh-paid-parking"
               >
-                Retry Google Map
+                Refresh
               </Button>
-            )}
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <Button
-            variant={showFootTraffic ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowFootTraffic((prev) => !prev)}
-            data-testid="button-toggle-foot-traffic"
-          >
-            {showFootTraffic ? "Foot traffic on" : "Foot traffic off"}
-          </Button>
-          <Button
-            variant={showGoogleTrafficData ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setShowGoogleTrafficData((prev) => !prev)}
-            data-testid="button-toggle-google-traffic-data"
-          >
-            {showGoogleTrafficData ? "Google Places on" : "Google Places off"}
-          </Button>
-          {isUsingGoogleMap && (
-            <Button
-              variant={showGoogleRoadTrafficLayer ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowGoogleRoadTrafficLayer((prev) => !prev)}
-              data-testid="button-toggle-google-road-traffic"
-            >
-              {showGoogleRoadTrafficLayer
-                ? "Road traffic layer on"
-                : "Road traffic layer off"}
-            </Button>
-          )}
-          {showFootTraffic && (
-            <span className="text-muted-foreground">
-              {visibleTrafficCells.length} traffic cells in view
-            </span>
-          )}
-          {showFootTraffic && footTrafficData?.signalQuality?.tier && (
-            <span className="text-muted-foreground">
-              signal: {footTrafficData.signalQuality.tier}
-              {typeof footTrafficData.windowMinutes === "number"
-                ? ` | window ${footTrafficData.windowMinutes}m`
-                : ""}
-            </span>
-          )}
-        </div>
-        {showFootTraffic &&
+              {forceLegacyMap &&
+                isGoogleProviderRequested &&
+                !isGoogleProviderMissingKey && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => {
+                      setGoogleMapsRuntimeError(null);
+                      setForceLegacyMap(false);
+                    }}
+                    data-testid="button-retry-google-map"
+                  >
+                    Retry Google Map
+                  </Button>
+                )}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <Button
+                variant={showFootTraffic ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowFootTraffic((prev) => !prev)}
+                data-testid="button-toggle-foot-traffic"
+              >
+                {showFootTraffic ? "Foot traffic on" : "Foot traffic off"}
+              </Button>
+              <Button
+                variant={showGoogleTrafficData ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setShowGoogleTrafficData((prev) => !prev)}
+                data-testid="button-toggle-google-traffic-data"
+              >
+                {showGoogleTrafficData
+                  ? "Google Places on"
+                  : "Google Places off"}
+              </Button>
+              {isUsingGoogleMap && (
+                <Button
+                  variant={showGoogleRoadTrafficLayer ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => setShowGoogleRoadTrafficLayer((prev) => !prev)}
+                  data-testid="button-toggle-google-road-traffic"
+                >
+                  {showGoogleRoadTrafficLayer
+                    ? "Road traffic layer on"
+                    : "Road traffic layer off"}
+                </Button>
+              )}
+              {showFootTraffic && (
+                <span className="text-muted-foreground">
+                  {visibleTrafficCells.length} traffic cells in view
+                </span>
+              )}
+              {showFootTraffic && footTrafficData?.signalQuality?.tier && (
+                <span className="text-muted-foreground">
+                  signal: {footTrafficData.signalQuality.tier}
+                  {typeof footTrafficData.windowMinutes === "number"
+                    ? ` | window ${footTrafficData.windowMinutes}m`
+                    : ""}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+        {showMapDiagnostics &&
+          showFootTraffic &&
           showGoogleTrafficData &&
           footTrafficData?.googlePlaces?.enabled &&
           footTrafficData?.googlePlaces?.error && (
