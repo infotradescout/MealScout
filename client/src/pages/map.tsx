@@ -866,6 +866,9 @@ export default function MapPage() {
   const [selectedHostCluster, setSelectedHostCluster] =
     useState<HostCluster | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [locationAccuracyM, setLocationAccuracyM] = useState<number | null>(
+    null,
+  );
   const [zoomLevel, setZoomLevel] = useState(16);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
   const [appliedMapBounds, setAppliedMapBounds] =
@@ -892,13 +895,37 @@ export default function MapPage() {
   const [geocodeFailures, setGeocodeFailures] = useState<
     Record<string, GeocodeFailureEntry>
   >({});
+  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const locationWatchIdRef = useRef<number | null>(null);
+  const locationWatchStopTimerRef = useRef<number | null>(null);
+  const bestLocationAccuracyRef = useRef<number | null>(null);
+  const hasCenteredFromLiveLocationRef = useRef(false);
   const enableClientGeocode = false;
+
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
 
   const locationStorageKey = useMemo(() => {
     return user?.id
       ? `mealscout_last_location:${user.id}`
       : "mealscout_last_location:anon";
   }, [user?.id]);
+
+  const stopLocationWatch = useCallback(() => {
+    if (
+      locationWatchIdRef.current !== null &&
+      navigator.geolocation &&
+      typeof navigator.geolocation.clearWatch === "function"
+    ) {
+      navigator.geolocation.clearWatch(locationWatchIdRef.current);
+      locationWatchIdRef.current = null;
+    }
+    if (locationWatchStopTimerRef.current !== null) {
+      window.clearTimeout(locationWatchStopTimerRef.current);
+      locationWatchStopTimerRef.current = null;
+    }
+  }, []);
 
   const requestUserLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -907,36 +934,104 @@ export default function MapPage() {
       return;
     }
 
+    stopLocationWatch();
+    bestLocationAccuracyRef.current = null;
+    hasCenteredFromLiveLocationRef.current = false;
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
+    setLocationError(null);
+
+    const applyLocation = (
+      position: GeolocationPosition,
+      options?: { centerMap?: boolean },
+    ) => {
+      const accuracy = Number(position.coords.accuracy || 0);
+      if (Number.isFinite(accuracy) && accuracy > 0) {
+        const previous = bestLocationAccuracyRef.current;
+        if (previous == null || accuracy < previous) {
+          bestLocationAccuracyRef.current = accuracy;
+          setLocationAccuracyM(accuracy);
+        }
+      }
+
+      const previousUserLocation = userLocationRef.current;
+      const currentLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const movedEnough =
+        previousUserLocation == null
+          ? true
+          : haversineKm(previousUserLocation, currentLocation) > 0.03;
+
+      if (previousUserLocation == null || movedEnough) {
         const currentLocation = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
         setUserLocation(currentLocation);
-        setMapCenter(currentLocation);
+        const shouldCenter =
+          options?.centerMap === true ||
+          !hasCenteredFromLiveLocationRef.current ||
+          previousUserLocation == null;
+        if (shouldCenter) {
+          setMapCenter(currentLocation);
+          hasCenteredFromLiveLocationRef.current = true;
+        }
         try {
           localStorage.setItem(
             locationStorageKey,
-            JSON.stringify({ ...currentLocation, timestamp: Date.now() }),
+            JSON.stringify({
+              ...currentLocation,
+              accuracy: Number.isFinite(accuracy) ? accuracy : null,
+              timestamp: Date.now(),
+            }),
           );
         } catch {
           // ignore localStorage issues
         }
-        setLocationError(null);
-        setIsLocating(false);
+      }
+      setLocationError(null);
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        applyLocation(position, { centerMap: true });
       },
-      async (error) => {
+      (error) => {
         console.log("Location error:", error);
         setLocationError(
-          "Location is off. Enable location to see what's nearby.",
+          "Location is off or imprecise. Enable precise location to see what's nearby.",
         );
-        setIsLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     );
-  }, [locationStorageKey]);
+
+    // Desktop geolocation is often coarse on first read; watch briefly to refine.
+    locationWatchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        applyLocation(position, { centerMap: false });
+        const best = bestLocationAccuracyRef.current;
+        if (typeof best === "number" && best <= 75) {
+          setIsLocating(false);
+          stopLocationWatch();
+        }
+      },
+      (error) => {
+        console.log("Location watch error:", error);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+
+    locationWatchStopTimerRef.current = window.setTimeout(() => {
+      setIsLocating(false);
+      stopLocationWatch();
+      if (!userLocationRef.current) {
+        setLocationError(
+          "Could not lock exact location. Check browser location permission and precision settings.",
+        );
+      }
+    }, 25000);
+  }, [locationStorageKey, stopLocationWatch]);
 
   const isStaffOrAdmin =
     user?.userType === "staff" ||
@@ -1024,7 +1119,10 @@ export default function MapPage() {
     }
 
     requestUserLocation();
-  }, [locationStorageKey, requestUserLocation]);
+    return () => {
+      stopLocationWatch();
+    };
+  }, [locationStorageKey, requestUserLocation, stopLocationWatch]);
 
   // Fetch nearby deals based on user location
   const { data: dealsData = [], isLoading } = useQuery({
@@ -2220,6 +2318,10 @@ export default function MapPage() {
           <div className="text-xs text-muted-foreground mb-4">
             Located: {userLocation.lat.toFixed(4)},{" "}
             {userLocation.lng.toFixed(4)}
+            {typeof locationAccuracyM === "number" &&
+              Number.isFinite(locationAccuracyM) && (
+                <span> | ±{Math.round(locationAccuracyM)}m</span>
+              )}
             {liveTruckPins > 0 &&
               ` | ${liveTruckPins} truck${
                 liveTruckPins === 1 ? "" : "s"
