@@ -20,6 +20,8 @@ import { emailService } from "../emailService";
 import { emailDeliveryAudit, getEmailConfigSummary } from "../emailService";
 import { db } from "../db";
 import { logAudit } from "../auditLogger";
+import { ensureAffiliateTag } from "../affiliateTagService";
+import { syncUserToBrevo } from "../brevoCrm";
 import multer from "multer";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { forwardGeocode } from "../utils/geocoding";
@@ -102,6 +104,9 @@ const buildLisaLane = (claim: {
 
 const buildSignalLane = (parts: Array<string | null | undefined>) =>
   parts.map((part) => String(part || "unknown")).join(":");
+
+const shouldAssignAffiliateTag = (candidateUserType?: string | null) =>
+  candidateUserType !== "admin" && candidateUserType !== "super_admin";
 
 const toCountDeltaLine = (
   label: string,
@@ -1258,77 +1263,106 @@ export function registerAdminManagementRoutes(app: Express) {
           }
         }
 
-        // Create user account (invite link flow)
-        const user = await storage.createUserInvite({
-          email: normalizedEmail,
-          firstName: firstName?.trim() || null,
-          lastName: lastName?.trim() || null,
-          phone: phone?.trim() || null,
-          userType,
-        });
-
-        // Internal team accounts should not be blocked on email verification.
-        if (
+        const userIsInternalTeam =
           userType === "staff" ||
           userType === "admin" ||
-          userType === "super_admin"
-        ) {
-          await storage.updateUser(user.id, { emailVerified: true });
-        }
+          userType === "super_admin";
 
-        // Handle restaurant owner and food truck creation
-        if (
-          (userType === "restaurant_owner" || userType === "food_truck")
-        ) {
-          await storage.createRestaurantForUser({
-            userId: user.id,
-            name: normalizedBusinessName,
-            address: normalizedAddress,
-            cuisineType: cuisineType || "Various",
-          });
-        }
+        let createdHostId: string | null = null;
+        const [user] = await db.transaction(async (tx: any) => {
+          const affiliatePercent =
+            userType === "staff"
+              ? 25
+              : userType === "admin" || userType === "super_admin"
+                ? 0
+                : undefined;
 
-        // Handle host and event coordinator creation
-        if (
-          (userType === "host" || userType === "event_coordinator")
-        ) {
-          // Convert footTraffic string to expected integer
-          const footTrafficMap: Record<string, number> = {
-            low: 50,
-            medium: 150,
-            high: 300,
-          };
+          const [insertedUser] = await tx
+            .insert(users)
+            .values({
+              email: normalizedEmail,
+              firstName: firstName?.trim() || null,
+              lastName: lastName?.trim() || null,
+              phone: phone?.trim() || null,
+              userType,
+              passwordHash: null,
+              mustResetPassword: false,
+              emailVerified: userIsInternalTeam,
+              ...(affiliatePercent !== undefined
+                ? { affiliatePercent }
+                : {}),
+            })
+            .returning();
 
-          // Convert amenities array to object
-          const amenitiesObj: Record<string, boolean> = {};
-          if (Array.isArray(amenities)) {
-            amenities.forEach((amenity: string) => {
-              amenitiesObj[amenity] = true;
+          if (isRestaurantProvisionType) {
+            await tx.insert(restaurants).values({
+              ownerId: insertedUser.id,
+              name: normalizedBusinessName,
+              address: normalizedAddress,
+              cuisineType: cuisineType || "Various",
+              isActive: true,
+              isVerified: true,
             });
           }
 
-          const hostData: any = {
-            userId: user.id,
-            businessName: normalizedBusinessName,
-            address: normalizedAddress,
-            locationType:
-              userType === "event_coordinator"
-                ? "event_coordinator"
-                : locationType || "other",
-            expectedFootTraffic: footTrafficMap[footTraffic] || 100,
-            amenities:
-              Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
-            isVerified: true, // Admin-created hosts are pre-verified
-            adminCreated: true,
-          };
+          if (isHostProvisionType) {
+            const footTrafficMap: Record<string, number> = {
+              low: 50,
+              medium: 150,
+              high: 300,
+            };
+            const amenitiesObj: Record<string, boolean> = {};
+            if (Array.isArray(amenities)) {
+              amenities.forEach((amenity: string) => {
+                amenitiesObj[amenity] = true;
+              });
+            }
 
-          if (parsedLatitude !== null && parsedLongitude !== null) {
-            hostData.latitude = parsedLatitude.toString();
-            hostData.longitude = parsedLongitude.toString();
+            const [insertedHost] = await tx
+              .insert(hosts)
+              .values({
+                userId: insertedUser.id,
+                businessName: normalizedBusinessName,
+                address: normalizedAddress,
+                locationType:
+                  userType === "event_coordinator"
+                    ? "event_coordinator"
+                    : locationType || "other",
+                expectedFootTraffic: footTrafficMap[footTraffic] || 100,
+                amenities:
+                  Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
+                isVerified: true,
+                adminCreated: true,
+                ...(parsedLatitude !== null && parsedLongitude !== null
+                  ? {
+                      latitude: parsedLatitude.toString(),
+                      longitude: parsedLongitude.toString(),
+                    }
+                  : {}),
+              })
+              .returning({ id: hosts.id });
+
+            createdHostId = insertedHost?.id || null;
           }
 
-          await storage.createHost(hostData);
+          return [insertedUser];
+        });
+
+        if (createdHostId) {
+          storage.ensureDraftParkingPassForHost(createdHostId).catch((e) => {
+            console.warn(
+              "ensureDraftParkingPassForHost failed for admin-created host",
+              e,
+            );
+          });
         }
+
+        if (shouldAssignAffiliateTag(user.userType)) {
+          ensureAffiliateTag(user.id).catch((error) =>
+            console.error("[affiliate] Failed to assign tag:", error),
+          );
+        }
+        void syncUserToBrevo(user).catch(() => {});
 
         const emailSent = await sendAccountSetupInvite({
           user,
