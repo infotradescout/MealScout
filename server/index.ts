@@ -202,17 +202,24 @@ const defaultOrigins = [
   "https://mealscout.us",
   "https://mealscout.onrender.com",
   "https://meal-scout.vercel.app",
+  "https://www.thetradescout.com",
+  "https://thetradescout.com",
+  "https://tradescout.onrender.com",
   "http://localhost:5174",
+  "http://localhost:5173",
   "http://localhost:5200",
   "http://localhost:5000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
   "http://127.0.0.1:5200",
   "http://127.0.0.1:5000",
 ];
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || defaultOrigins.join(","))
+const extraOrigins = String(process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...extraOrigins]));
 
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;

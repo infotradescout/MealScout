@@ -4,6 +4,7 @@
  * In production, allow optional VITE_API_BASE_URL; otherwise same-origin.
  */
 const IS_DEV = import.meta.env.DEV;
+const SHARED_API_FALLBACK = "https://www.mealscout.us";
 function resolveApiBaseUrl() {
   if (IS_DEV) return "";
 
@@ -17,6 +18,11 @@ function resolveApiBaseUrl() {
   // can proxy /api/* without cross-origin/CORS failures.
   if (host.endsWith(".vercel.app")) {
     return "";
+  }
+
+  // TradeScout is a separate frontend platform but should reuse the same API.
+  if (!fromEnv && host.includes("tradescout")) {
+    return SHARED_API_FALLBACK;
   }
 
   return fromEnv.replace(/\/+$/, "");
