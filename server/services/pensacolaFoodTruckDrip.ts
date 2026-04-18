@@ -7,6 +7,16 @@ import { normalizeUsStateAbbr } from "./parkingPassQuality";
 
 const SEQUENCE = "pensacola_food_truck_onboarding_v1";
 
+const dripUserColumns = {
+  id: users.id,
+  email: users.email,
+  firstName: users.firstName,
+  userType: users.userType,
+  emailVerified: users.emailVerified,
+  isDisabled: users.isDisabled,
+  createdAt: users.createdAt,
+};
+
 const nowIso = () => new Date().toISOString();
 
 function envEnabled(name: string): boolean {
@@ -185,7 +195,7 @@ export async function maybeTriggerPensacolaFoodTruckDrip(opts: {
   if (!isPensacolaRestaurant(opts.restaurant)) return;
 
   const user = await db
-    .select()
+    .select(dripUserColumns)
     .from(users)
     .where(eq(users.id, opts.userId))
     .limit(1)
@@ -208,7 +218,7 @@ export async function runPensacolaFoodTruckDripCron() {
   // Candidates: verified food_truck users who own a Pensacola food_truck restaurant.
   const rows = await db
     .select({
-      user: users,
+      user: dripUserColumns,
       restaurant: restaurants,
       step1SentAt: sql<Date | null>`(
         select min(sent_at) from email_sequence_sends s

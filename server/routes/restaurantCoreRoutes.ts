@@ -264,6 +264,19 @@ export function registerRestaurantCoreRoutes(
         .map((restaurant: any) => String(restaurant?.id || "").trim())
         .filter(Boolean);
 
+      const safeQuery = async <T>(
+        label: string,
+        run: () => Promise<T>,
+        fallback: T,
+      ): Promise<T> => {
+        try {
+          return await run();
+        } catch (error) {
+          console.warn(`[restaurants/public] ${label} query failed`, error);
+          return fallback;
+        }
+      };
+
       const [
         favoriteRows,
         followRows,
@@ -276,100 +289,140 @@ export function registerRestaurantCoreRoutes(
       ] =
         restaurantIds.length > 0
           ? await Promise.all([
-              db
-                .select({
-                  restaurantId: restaurantFavorites.restaurantId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(restaurantFavorites)
-                .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
-                .groupBy(restaurantFavorites.restaurantId),
-              db
-                .select({
-                  restaurantId: restaurantFollows.restaurantId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(restaurantFollows)
-                .where(inArray(restaurantFollows.restaurantId, restaurantIds))
-                .groupBy(restaurantFollows.restaurantId),
-              db
-                .select({
-                  restaurantId: restaurantUserRecommendations.restaurantId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(restaurantUserRecommendations)
-                .where(
-                  inArray(
-                    restaurantUserRecommendations.restaurantId,
-                    restaurantIds,
-                  ),
-                )
-                .groupBy(restaurantUserRecommendations.restaurantId),
-              db
-                .select({
-                  restaurantId: deals.restaurantId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(deals)
-                .where(
-                  and(
-                    eq(deals.isActive, true),
-                    inArray(deals.restaurantId, restaurantIds),
-                  ),
-                )
-                .groupBy(deals.restaurantId),
-              db
-                .select({
-                  restaurantId: videoStories.restaurantId,
-                  count: sql<number>`cast(count(*) as integer)`,
-                })
-                .from(videoStories)
-                .where(
-                  and(
-                    inArray(videoStories.restaurantId, restaurantIds),
-                    eq(videoStories.status, "ready"),
-                    isNull(videoStories.deletedAt),
-                  ),
-                )
-                .groupBy(videoStories.restaurantId),
-              db.execute(sql<{
-                restaurant_id: string;
-                score: number;
-              }>`
-                select
-                  rur.restaurant_id,
-                  cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
-                from recommendation_reactions rr
-                inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
-                where rur.restaurant_id = any(${restaurantIds}::text[])
-                group by rur.restaurant_id
-              `),
-              db.execute(sql<{
-                restaurant_id: string;
-                count: number;
-              }>`
-                select
-                  rur.restaurant_id,
-                  cast(count(*) as integer) as count
-                from recommendation_shares rs
-                inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
-                where rur.restaurant_id = any(${restaurantIds}::text[])
-                group by rur.restaurant_id
-              `),
-              db.execute(sql<{
-                restaurant_id: string;
-                score: number;
-              }>`
-                select
-                  vs.restaurant_id,
-                  cast(sum(coalesce(vs.like_count, 0) + coalesce(vs.comment_count, 0) + coalesce(vs.share_count, 0)) as integer) as score
-                from video_stories vs
-                where
-                  vs.restaurant_id = any(${restaurantIds}::text[])
-                  and vs.status = 'ready'
-                  and vs.deleted_at is null
-                group by vs.restaurant_id
-              `),
+              safeQuery(
+                "favorites",
+                () =>
+                  db
+                    .select({
+                      restaurantId: restaurantFavorites.restaurantId,
+                      count: sql<number>`cast(count(*) as integer)`,
+                    })
+                    .from(restaurantFavorites)
+                    .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
+                    .groupBy(restaurantFavorites.restaurantId),
+                [],
+              ),
+              safeQuery(
+                "follows",
+                () =>
+                  db
+                    .select({
+                      restaurantId: restaurantFollows.restaurantId,
+                      count: sql<number>`cast(count(*) as integer)`,
+                    })
+                    .from(restaurantFollows)
+                    .where(inArray(restaurantFollows.restaurantId, restaurantIds))
+                    .groupBy(restaurantFollows.restaurantId),
+                [],
+              ),
+              safeQuery(
+                "recommendations",
+                () =>
+                  db
+                    .select({
+                      restaurantId: restaurantUserRecommendations.restaurantId,
+                      count: sql<number>`cast(count(*) as integer)`,
+                    })
+                    .from(restaurantUserRecommendations)
+                    .where(
+                      inArray(
+                        restaurantUserRecommendations.restaurantId,
+                        restaurantIds,
+                      ),
+                    )
+                    .groupBy(restaurantUserRecommendations.restaurantId),
+                [],
+              ),
+              safeQuery(
+                "active-deals",
+                () =>
+                  db
+                    .select({
+                      restaurantId: deals.restaurantId,
+                      count: sql<number>`cast(count(*) as integer)`,
+                    })
+                    .from(deals)
+                    .where(
+                      and(
+                        eq(deals.isActive, true),
+                        inArray(deals.restaurantId, restaurantIds),
+                      ),
+                    )
+                    .groupBy(deals.restaurantId),
+                [],
+              ),
+              safeQuery(
+                "video-recommendations",
+                () =>
+                  db
+                    .select({
+                      restaurantId: videoStories.restaurantId,
+                      count: sql<number>`cast(count(*) as integer)`,
+                    })
+                    .from(videoStories)
+                    .where(
+                      and(
+                        inArray(videoStories.restaurantId, restaurantIds),
+                        eq(videoStories.status, "ready"),
+                        isNull(videoStories.deletedAt),
+                      ),
+                    )
+                    .groupBy(videoStories.restaurantId),
+                [],
+              ),
+              safeQuery(
+                "recommendation-reactions",
+                () =>
+                  db.execute(sql<{
+                    restaurant_id: string;
+                    score: number;
+                  }>`
+                    select
+                      rur.restaurant_id,
+                      cast(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end) as integer) as score
+                    from recommendation_reactions rr
+                    inner join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
+                    where rur.restaurant_id = any(${restaurantIds}::text[])
+                    group by rur.restaurant_id
+                  `),
+                { rows: [] } as any,
+              ),
+              safeQuery(
+                "recommendation-shares",
+                () =>
+                  db.execute(sql<{
+                    restaurant_id: string;
+                    count: number;
+                  }>`
+                    select
+                      rur.restaurant_id,
+                      cast(count(*) as integer) as count
+                    from recommendation_shares rs
+                    inner join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
+                    where rur.restaurant_id = any(${restaurantIds}::text[])
+                    group by rur.restaurant_id
+                  `),
+                { rows: [] } as any,
+              ),
+              safeQuery(
+                "video-engagement",
+                () =>
+                  db.execute(sql<{
+                    restaurant_id: string;
+                    score: number;
+                  }>`
+                    select
+                      vs.restaurant_id,
+                      cast(sum(coalesce(vs.like_count, 0) + coalesce(vs.comment_count, 0) + coalesce(vs.share_count, 0)) as integer) as score
+                    from video_stories vs
+                    where
+                      vs.restaurant_id = any(${restaurantIds}::text[])
+                      and vs.status = 'ready'
+                      and vs.deleted_at is null
+                    group by vs.restaurant_id
+                  `),
+                { rows: [] } as any,
+              ),
             ])
           : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }];
 
