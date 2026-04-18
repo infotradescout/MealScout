@@ -271,20 +271,20 @@ export default function AdminTelemetry() {
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">New Users</CardTitle>
+                <CardTitle className="text-sm font-medium">New Activated Users</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{Number(heartbeatUsers.newUsers30d || 0)}</div>
-                <p className="text-xs text-muted-foreground">7d: {Number(heartbeatUsers.newUsers7d || 0)} · total: {Number(heartbeatUsers.totalUsers || 0)}</p>
+                <p className="text-xs text-muted-foreground">7d: {Number(heartbeatUsers.newUsers7d || 0)} · activated total: {Number(heartbeatUsers.totalActivatedUsers || 0)}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">New Food Trucks</CardTitle>
+                <CardTitle className="text-sm font-medium">New Real Trucks</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{Number(heartbeatMarketplace.newFoodTrucks30d || 0)}</div>
-                <p className="text-xs text-muted-foreground">Total trucks: {Number(heartbeatMarketplace.totalFoodTrucks || 0)}</p>
+                <p className="text-xs text-muted-foreground">Real total: {Number(heartbeatMarketplace.totalRealFoodTrucks || 0)} · claimable imported: {Number(heartbeatMarketplace.importedClaimableTruckProfiles || 0)}</p>
               </CardContent>
             </Card>
             <Card>

@@ -55,6 +55,9 @@ const TRACTION_FUNNEL_EVENT_NAMES = [
   "funnel_activation_started",
 ] as const;
 
+const IMPORT_SYSTEM_EMAIL =
+  process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us";
+
 /**
  * GET /api/admin/telemetry/velocity
  * Interest creation velocity (last 7/30/90 days)
@@ -732,15 +735,60 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
     const now = new Date();
     const fourteenDaysOut = new Date(now);
     fourteenDaysOut.setDate(fourteenDaysOut.getDate() + 14);
+    const importSystemEmail = String(IMPORT_SYSTEM_EMAIL || "").trim().toLowerCase();
 
     const [userCountsRows, newUsersByTypeRows, restaurantRows, eventRows, interestRows, valueRows] =
       await Promise.all([
         db.execute(sql`
           select
             count(*)::int as total_users,
-            count(*) filter (where created_at >= ${startDate})::int as new_users_window,
-            count(*) filter (where created_at >= ${sevenDayStart})::int as new_users_7d,
-            count(*) filter (where created_at >= ${thirtyDayStart})::int as new_users_30d,
+            count(*) filter (
+              where coalesce(is_disabled, false) = false
+              and user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                email_verified = true
+                or google_id is not null
+                or facebook_id is not null
+                or tradescout_id is not null
+                or (password_hash is not null and coalesce(must_reset_password, false) = false)
+              )
+            )::int as total_activated_users,
+            count(*) filter (
+              where created_at >= ${startDate}
+              and coalesce(is_disabled, false) = false
+              and user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                email_verified = true
+                or google_id is not null
+                or facebook_id is not null
+                or tradescout_id is not null
+                or (password_hash is not null and coalesce(must_reset_password, false) = false)
+              )
+            )::int as new_activated_users_window,
+            count(*) filter (
+              where created_at >= ${sevenDayStart}
+              and coalesce(is_disabled, false) = false
+              and user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                email_verified = true
+                or google_id is not null
+                or facebook_id is not null
+                or tradescout_id is not null
+                or (password_hash is not null and coalesce(must_reset_password, false) = false)
+              )
+            )::int as new_activated_users_7d,
+            count(*) filter (
+              where created_at >= ${thirtyDayStart}
+              and coalesce(is_disabled, false) = false
+              and user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                email_verified = true
+                or google_id is not null
+                or facebook_id is not null
+                or tradescout_id is not null
+                or (password_hash is not null and coalesce(must_reset_password, false) = false)
+              )
+            )::int as new_activated_users_30d,
             count(*) filter (
               where user_type in ('restaurant_owner', 'food_truck', 'host', 'event_coordinator', 'supplier')
             )::int as total_supply_side_users
@@ -752,16 +800,86 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
             count: sql<number>`count(*)`,
           })
           .from(users)
-          .where(gte(users.createdAt, startDate))
+          .where(
+            and(
+              gte(users.createdAt, startDate),
+              sql`coalesce(${users.isDisabled}, false) = false`,
+              sql`${users.userType} not in ('admin', 'super_admin', 'staff')`,
+              sql`(
+                ${users.emailVerified} = true
+                or ${users.googleId} is not null
+                or ${users.facebookId} is not null
+                or ${users.tradescoutId} is not null
+                or (${users.passwordHash} is not null and coalesce(${users.mustResetPassword}, false) = false)
+              )`,
+            ),
+          )
           .groupBy(users.userType),
         db.execute(sql`
           select
             count(*)::int as total_restaurants,
             count(*) filter (where is_food_truck = true)::int as total_food_trucks,
-            count(*) filter (where is_food_truck = true and created_at >= ${thirtyDayStart})::int as new_food_trucks_30d,
-            count(*) filter (where is_food_truck = true and is_verified = true)::int as verified_food_trucks,
-            count(*) filter (where is_food_truck = true and mobile_online = true)::int as trucks_currently_online
-          from restaurants
+            count(*) filter (
+              where r.is_food_truck = true
+              and lower(coalesce(owner.email, '')) = ${importSystemEmail}
+            )::int as imported_claimable_truck_profiles,
+            count(*) filter (
+              where r.is_food_truck = true
+              and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
+              and coalesce(owner.is_disabled, false) = false
+              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                owner.email_verified = true
+                or owner.google_id is not null
+                or owner.facebook_id is not null
+                or owner.tradescout_id is not null
+                or (owner.password_hash is not null and coalesce(owner.must_reset_password, false) = false)
+              )
+            )::int as total_real_food_trucks,
+            count(*) filter (
+              where r.is_food_truck = true
+              and r.created_at >= ${thirtyDayStart}
+              and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
+              and coalesce(owner.is_disabled, false) = false
+              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                owner.email_verified = true
+                or owner.google_id is not null
+                or owner.facebook_id is not null
+                or owner.tradescout_id is not null
+                or (owner.password_hash is not null and coalesce(owner.must_reset_password, false) = false)
+              )
+            )::int as new_real_food_trucks_30d,
+            count(*) filter (
+              where r.is_food_truck = true
+              and r.is_verified = true
+              and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
+              and coalesce(owner.is_disabled, false) = false
+              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                owner.email_verified = true
+                or owner.google_id is not null
+                or owner.facebook_id is not null
+                or owner.tradescout_id is not null
+                or (owner.password_hash is not null and coalesce(owner.must_reset_password, false) = false)
+              )
+            )::int as verified_real_food_trucks,
+            count(*) filter (
+              where r.is_food_truck = true
+              and r.mobile_online = true
+              and lower(coalesce(owner.email, '')) <> ${importSystemEmail}
+              and coalesce(owner.is_disabled, false) = false
+              and owner.user_type not in ('admin', 'super_admin', 'staff')
+              and (
+                owner.email_verified = true
+                or owner.google_id is not null
+                or owner.facebook_id is not null
+                or owner.tradescout_id is not null
+                or (owner.password_hash is not null and coalesce(owner.must_reset_password, false) = false)
+              )
+            )::int as real_trucks_currently_online
+          from restaurants r
+          left join users owner on owner.id = r.owner_id
         `),
         db.execute(sql`
           select
@@ -808,10 +926,11 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
       generatedAt: new Date().toISOString(),
       users: {
         totalUsers: Number(userCounts?.total_users || 0),
+        totalActivatedUsers: Number(userCounts?.total_activated_users || 0),
         totalSupplySideUsers: Number(userCounts?.total_supply_side_users || 0),
-        newUsersWindow: Number(userCounts?.new_users_window || 0),
-        newUsers7d: Number(userCounts?.new_users_7d || 0),
-        newUsers30d: Number(userCounts?.new_users_30d || 0),
+        newUsersWindow: Number(userCounts?.new_activated_users_window || 0),
+        newUsers7d: Number(userCounts?.new_activated_users_7d || 0),
+        newUsers30d: Number(userCounts?.new_activated_users_30d || 0),
         newUsersByTypeWindow: (newUsersByTypeRows as Array<{ userType: string | null; count: number }>).map((row) => ({
           userType: String(row.userType || "unknown"),
           count: Number(row.count || 0),
@@ -820,9 +939,11 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
       marketplace: {
         totalRestaurants: Number(restaurantCounts?.total_restaurants || 0),
         totalFoodTrucks: Number(restaurantCounts?.total_food_trucks || 0),
-        newFoodTrucks30d: Number(restaurantCounts?.new_food_trucks_30d || 0),
-        verifiedFoodTrucks: Number(restaurantCounts?.verified_food_trucks || 0),
-        trucksCurrentlyOnline: Number(restaurantCounts?.trucks_currently_online || 0),
+        totalRealFoodTrucks: Number(restaurantCounts?.total_real_food_trucks || 0),
+        importedClaimableTruckProfiles: Number(restaurantCounts?.imported_claimable_truck_profiles || 0),
+        newFoodTrucks30d: Number(restaurantCounts?.new_real_food_trucks_30d || 0),
+        verifiedFoodTrucks: Number(restaurantCounts?.verified_real_food_trucks || 0),
+        trucksCurrentlyOnline: Number(restaurantCounts?.real_trucks_currently_online || 0),
         activeTrucksWindow: Number(interestCounts?.active_trucks_window || 0),
         activeHostsWindow: Number(eventCounts?.active_hosts_window || 0),
         eventsUpcoming14d: Number(eventCounts?.events_upcoming_14d || 0),
