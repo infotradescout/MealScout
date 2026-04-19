@@ -4,6 +4,26 @@ Date: 2026-04-15
 Window: 10 working days (2 weeks)
 Primary objective: Continue active refactor cycle with low blast radius while preserving sacred flows.
 
+Status update: 2026-04-18 (continuation checkpoint)
+
+Current cycle status:
+- Planned sequence is completed and superseded by additional delivered slices through PR-20.
+- Route extraction pattern is operational and verified repeatedly (`npm run check`, `npm run build:server`, `npm run test:flows:with-server` with known env-gated admin credentials in local runs).
+- SLO stabilization pass (PR-9/PR-10) is logged in `docs/refactor/REFACTOR_METRICS_LOG.md`.
+
+Current file-size snapshot (2026-04-18):
+- `server/routes/adminManagementRoutes.ts`: 3914 lines
+- `server/routes/admin/userAdminRoutes.ts`: 1943 lines
+- `server/routes/hostRoutes.ts`: 1680 lines
+- `server/routes/supplierMarketplaceRoutes.ts`: 683 lines
+- `server/storage.ts`: 4924 lines
+- `server/storage/usersRepository.ts`: 637 lines
+- `server/storage/paymentsSubscriptionsRepository.ts`: 39 lines
+
+Operational note:
+- Keep this document as historical execution map for the 2026-04-15 window.
+- Treat `docs/refactor/REFACTOR_BOARD.md` + `docs/refactor/REFACTOR_METRICS_LOG.md` as source of truth for completion evidence.
+
 ## Scope and Constraints
 
 This plan is constrained by:
@@ -21,12 +41,12 @@ No schema redesign and no new major feature streams during this window.
 
 ## Success Criteria (End of Week 2)
 
-1. `server/routes/adminManagementRoutes.ts` reduced via subroute extraction with stable behavior.
-2. `server/routes/hostRoutes.ts` reduced via subroute extraction with stable behavior.
-3. `server/routes/supplierMarketplaceRoutes.ts` reduced via subroute extraction with stable behavior.
-4. `server/storage.ts` reduced by extracting payments/subscription persistence module.
-5. Sacred flows remain stable (auth, booking, payments, ordering gate, mobile core).
-6. Each merged PR has before/after entries in `docs/refactor/REFACTOR_METRICS_LOG.md`.
+1. Completed: `server/routes/adminManagementRoutes.ts` and related admin slices reduced via subroute extraction with stable behavior.
+2. Completed: `server/routes/hostRoutes.ts` reduced via subroute extraction with stable behavior.
+3. Completed: `server/routes/supplierMarketplaceRoutes.ts` reduced via staged subroute extraction with stable behavior.
+4. Completed (targeted scope): payment/subscription persistence extracted to `server/storage/paymentsSubscriptionsRepository.ts` with delegation from storage layer.
+5. Completed: sacred flows remained stable in cycle verification runs (auth, booking, payments, ordering gate, mobile core) with unchanged known local env gates.
+6. Completed: merged slices have before/after entries in `docs/refactor/REFACTOR_METRICS_LOG.md`.
 
 ## Workstream Overview
 
@@ -37,7 +57,7 @@ No schema redesign and no new major feature streams during this window.
 ## PR Sequence (File-by-File)
 
 ### Baseline Note
-User admin routes already extracted into `server/routes/admin/userAdminRoutes.ts` (2249 lines). Starting with deals extraction.
+Historical baseline for this map started at user admin route extraction prep (`server/routes/admin/userAdminRoutes.ts` at 2249 lines) and proceeded from deals extraction.
 
 ### PR-1 (Day 1): Admin Routes Scaffold + Non-Behavioral Move (Deals)
 Lane: `phase-5-oversized-route-splits`
@@ -326,4 +346,8 @@ Rollback mechanism:
 
 ## Immediate Next Step (Today)
 
-Start PR-1 from this map and keep scope to users endpoints only. Do not begin PR-2 until PR-1 is merged and metrics are recorded.
+Begin next-cycle planning from current hotspots instead of replaying PR-1..PR-10:
+
+1. Open a new execution map (2026-04-18) with only remaining high-line modules (`server/storage.ts`, `server/routes/adminManagementRoutes.ts`).
+2. Define PR-21+ slices as micro-extractions (<250 lines each), preserving route contracts and `IStorage` public surface.
+3. Keep the existing cadence: metrics before/after, board transition, and sacred-flow verification on each slice.
