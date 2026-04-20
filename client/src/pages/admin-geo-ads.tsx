@@ -1,14 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  MapContainer,
-  Marker,
-  TileLayer,
-  Circle,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
-import L from "leaflet";
+import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
+import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,16 +16,6 @@ import { Loader2, MapPin, Target } from "lucide-react";
 import Navigation from "@/components/navigation";
 
 const defaultCenter = { lat: 39.8283, lng: -98.5795 };
-
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.3.1/images/marker-shadow.png",
-});
 
 type GeoAdForm = {
   name: string;
@@ -101,48 +84,23 @@ function GeoAdMap({
   radius: number;
   onCenterChange: (lat: number, lng: number) => void;
 }) {
-  function MapCenterer() {
-    const map = useMap();
-    useEffect(() => {
-      if (!map) return;
-      map.setView([center.lat, center.lng]);
-    }, [map, center.lat, center.lng]);
-    return null;
-  }
-
-  function MapClickHandler() {
-    useMapEvents({
-      click: (event) => onCenterChange(event.latlng.lat, event.latlng.lng),
-    });
-    return null;
-  }
-
+  const pins: MapPickerPin[] = [
+    {
+      key: "geofence-center",
+      position: center,
+      draggable: true,
+    },
+  ];
   return (
-    <MapContainer
-      center={[center.lat, center.lng]}
+    <GoogleMapPicker
+      center={center}
       zoom={13}
-      style={{ height: "100%", width: "100%" }}
+      pins={pins}
+      circleRadiusMetres={radius}
+      onMapClick={(p) => onCenterChange(p.lat, p.lng)}
+      onPinDrag={(_key, p) => onCenterChange(p.lat, p.lng)}
       className="rounded-xl overflow-hidden"
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-      />
-      <MapCenterer />
-      <MapClickHandler />
-      <Marker
-        position={[center.lat, center.lng]}
-        draggable
-        eventHandlers={{
-          dragend: (event) => {
-            const marker = event.target;
-            const { lat, lng } = marker.getLatLng();
-            onCenterChange(lat, lng);
-          },
-        }}
-      />
-      <Circle center={[center.lat, center.lng]} radius={radius} />
-    </MapContainer>
+    />
   );
 }
 

@@ -21,14 +21,9 @@ import {
 } from "lucide-react";
 import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
 import {
-  MapContainer,
-  Marker,
-  Popup,
-  TileLayer,
-  useMap,
-  useMapEvents,
-} from "react-leaflet";
-import L from "leaflet";
+  GoogleMapPicker,
+} from "@/components/maps/GoogleMapPicker";
+import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
 import { Button } from "@/components/ui/button";
@@ -62,7 +57,6 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { PlaceAutocompleteInput } from "@/components/maps/place-autocomplete-input";
-import mealScoutIcon from "@assets/meal-scout-icon.png";
 
 interface Host {
   id: string;
@@ -456,50 +450,9 @@ const getLocationKey = (listing: ParkingPassListing) => {
   return listing.host?.id || listing.id;
 };
 
-const parkingPassPinIcon = new L.Icon({
-  iconUrl: mealScoutIcon,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
-const parkingPassPinIconOccupied = new L.DivIcon({
-  className: "pp-pin",
-  html: `<div class="pp-pin__wrap"><img class="pp-pin__img" src="${mealScoutIcon}" alt="" /><span class="pp-pin__dot" aria-hidden="true"></span></div>`,
-  iconSize: [36, 36],
-  iconAnchor: [18, 36],
-  popupAnchor: [0, -30],
-});
-
 const defaultMapCenter = {
   lat: 39.8283,
   lng: -98.5795,
-};
-
-const MapCenterer = ({
-  center,
-  zoom,
-}: {
-  center: { lat: number; lng: number } | null;
-  zoom?: number;
-}) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!center) return;
-    map.setView([center.lat, center.lng], zoom ?? map.getZoom(), {
-      animate: true,
-    });
-  }, [center?.lat, center?.lng, map, zoom]);
-
-  return null;
-};
-
-const MapPinPicker = ({ onPick }: { onPick: (point: GeoPoint) => void }) => {
-  useMapEvents({
-    click: (event) => onPick({ lat: event.latlng.lat, lng: event.latlng.lng }),
-  });
-  return null;
 };
 
 export default function ParkingPassPage() {
@@ -3252,14 +3205,6 @@ export default function ParkingPassPage() {
 
   const cartTotals = getCartTotals();
   const hasCartTotal = cartItems.length > 0 && cartTotals.totalCents > 0;
-  const isNightTheme =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("theme-night");
-  const parkingMapTileUrl = isNightTheme
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-  const parkingMapAttribution =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
   const todayDateKey = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
   // Trucks pay MealScout (platform payments). Hosts can optionally enable Stripe Connect payouts (cashout).
@@ -4049,45 +3994,24 @@ export default function ParkingPassPage() {
                             </div>
                           </div>
                           <div className="relative h-64 w-full overflow-hidden rounded-xl border border-[color:var(--status-warning)]/30 bg-orange-100/20">
-                            <MapContainer
-                              center={[
-                                settingsMapCenter.lat,
-                                settingsMapCenter.lng,
-                              ]}
+                            <GoogleMapPicker
+                              center={settingsMapCenter}
                               zoom={settingsMapZoom}
-                              zoomControl={false}
-                              scrollWheelZoom
+                              onMapClick={(point) => setPinPosition(point)}
+                              pins={
+                                pinPosition
+                                  ? [
+                                      {
+                                        key: "settings-pin",
+                                        position: pinPosition,
+                                        draggable: true,
+                                      } satisfies MapPickerPin,
+                                    ]
+                                  : []
+                              }
+                              onPinDrag={(_key, point) => setPinPosition(point)}
                               className="h-full w-full"
-                            >
-                              <TileLayer
-                                attribution={parkingMapAttribution}
-                                url={parkingMapTileUrl}
-                              />
-                              <MapCenterer
-                                center={settingsMapCenter}
-                                zoom={settingsMapZoom}
-                              />
-                              <MapPinPicker
-                                onPick={(point) => setPinPosition(point)}
-                              />
-                              {pinPosition && (
-                                <Marker
-                                  position={[pinPosition.lat, pinPosition.lng]}
-                                  icon={parkingPassPinIcon}
-                                  draggable
-                                  eventHandlers={{
-                                    dragend: (event) => {
-                                      const marker = event.target as L.Marker;
-                                      const next = marker.getLatLng();
-                                      setPinPosition({
-                                        lat: next.lat,
-                                        lng: next.lng,
-                                      });
-                                    },
-                                  }}
-                                />
-                              )}
-                            </MapContainer>
+                            />
                             {!pinPosition && (
                               <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
                                 {addressNeedsPin
@@ -4236,50 +4160,24 @@ export default function ParkingPassPage() {
                             </Button>
                           </div>
                           <div className="relative h-56 w-full overflow-hidden rounded-lg border border-[color:var(--status-warning)]/30 bg-orange-100/20">
-                            <MapContainer
-                              center={[
-                                newLocationMapCenter.lat,
-                                newLocationMapCenter.lng,
-                              ]}
+                            <GoogleMapPicker
+                              center={newLocationMapCenter}
                               zoom={newLocationMapZoom}
-                              zoomControl={false}
-                              scrollWheelZoom
+                              onMapClick={(point) => setNewLocationPinPosition(point)}
+                              pins={
+                                newLocationPinPosition
+                                  ? [
+                                      {
+                                        key: "new-location-pin",
+                                        position: newLocationPinPosition,
+                                        draggable: true,
+                                      } satisfies MapPickerPin,
+                                    ]
+                                  : []
+                              }
+                              onPinDrag={(_key, point) => setNewLocationPinPosition(point)}
                               className="h-full w-full"
-                            >
-                              <TileLayer
-                                attribution={parkingMapAttribution}
-                                url={parkingMapTileUrl}
-                              />
-                              <MapCenterer
-                                center={newLocationMapCenter}
-                                zoom={newLocationMapZoom}
-                              />
-                              <MapPinPicker
-                                onPick={(point) =>
-                                  setNewLocationPinPosition(point)
-                                }
-                              />
-                              {newLocationPinPosition && (
-                                <Marker
-                                  position={[
-                                    newLocationPinPosition.lat,
-                                    newLocationPinPosition.lng,
-                                  ]}
-                                  icon={parkingPassPinIcon}
-                                  draggable
-                                  eventHandlers={{
-                                    dragend: (event) => {
-                                      const marker = event.target as L.Marker;
-                                      const next = marker.getLatLng();
-                                      setNewLocationPinPosition({
-                                        lat: next.lat,
-                                        lng: next.lng,
-                                      });
-                                    },
-                                  }}
-                                />
-                              )}
-                            </MapContainer>
+                            />
                             {!newLocationPinPosition && (
                               <div className="absolute inset-0 flex items-center justify-center text-xs text-orange-700 pointer-events-none">
                                 Click the map or use the address to set a pin.
@@ -5676,82 +5574,33 @@ export default function ParkingPassPage() {
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                           <div className="relative h-72 w-full bg-slate-100/60">
-                            <MapContainer
-                              center={[
-                                fallbackMapCenter.lat,
-                                fallbackMapCenter.lng,
-                              ]}
+                            <GoogleMapPicker
+                              center={fallbackMapCenter}
                               zoom={13}
-                              zoomControl={false}
-                              scrollWheelZoom={mapInteractionsEnabled}
-                              dragging={mapInteractionsEnabled}
-                              touchZoom={mapInteractionsEnabled}
-                              doubleClickZoom={mapInteractionsEnabled}
-                              boxZoom={mapInteractionsEnabled}
-                              keyboard={mapInteractionsEnabled}
-                              className={`h-full w-full ${
-                                mapInteractionsEnabled
-                                  ? "touch-none"
-                                  : "touch-pan-y"
-                              }`}
-                            >
-                              <MapCenterer center={fallbackMapCenter} />
-                              <TileLayer
-                                attribution={parkingMapAttribution}
-                                url={parkingMapTileUrl}
-                              />
-                              {fallbackHostPins.map(
-                                ({
-                                  key,
-                                  hostId,
-                                  name,
-                                  coords,
-                                  addressLabel,
-                                  spotImageUrl,
-                                }) => (
-                                  <Marker
-                                    key={key}
-                                    position={[coords.lat, coords.lng]}
-                                    icon={parkingPassPinIcon}
-                                    eventHandlers={{
-                                      click: () => setRequestedHostId(hostId),
-                                      popupopen: () => setMapPopupOpen(true),
-                                      popupclose: () => setMapPopupOpen(false),
-                                    }}
-                                  >
-                                    <Popup
-                                      maxWidth={320}
-                                      minWidth={240}
-                                      maxHeight={260}
-                                      keepInView
-                                      autoPan
-                                      autoPanPadding={[16, 16]}
-                                    >
-                                      <div className="space-y-2 text-xs">
-                                        <p className="font-semibold text-orange-600">
-                                          {name}
-                                        </p>
-                                        <p className="text-[color:var(--text-muted)]">
-                                          {addressLabel}
-                                        </p>
-                                        {spotImageUrl && (
-                                          <img
-                                            src={spotImageUrl}
-                                            alt={`${name} parking spot`}
-                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                                          No active parking pass listing is open
-                                          here right now.
-                                        </p>
-                                      </div>
-                                    </Popup>
-                                  </Marker>
+                              interactionsEnabled={mapInteractionsEnabled}
+                              pins={fallbackHostPins.map(({ key, hostId, name, coords, addressLabel, spotImageUrl }) => ({
+                                key,
+                                position: coords,
+                                popup: (
+                                  <div className="space-y-2 text-xs">
+                                    <p className="font-semibold text-orange-600">{name}</p>
+                                    <p className="text-[color:var(--text-muted)]">{addressLabel}</p>
+                                    {spotImageUrl && (
+                                      <img
+                                        src={spotImageUrl}
+                                        alt={`${name} parking spot`}
+                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      No active parking pass listing is open here right now.
+                                    </p>
+                                  </div>
                                 ),
-                              )}
-                            </MapContainer>
+                              } satisfies MapPickerPin))}
+                              className="h-full w-full"
+                            />
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                             {requestedHostId
@@ -5772,28 +5621,15 @@ export default function ParkingPassPage() {
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                         <div className="relative h-72 w-full bg-slate-100/60">
-                          <MapContainer
-                            center={[mapCenter.lat, mapCenter.lng]}
+                          <GoogleMapPicker
+                            center={mapCenter}
                             zoom={13}
-                            zoomControl={false}
-                            scrollWheelZoom={mapInteractionsEnabled}
-                            dragging={mapInteractionsEnabled}
-                            touchZoom={mapInteractionsEnabled}
-                            doubleClickZoom={mapInteractionsEnabled}
-                            boxZoom={mapInteractionsEnabled}
-                            keyboard={mapInteractionsEnabled}
-                            className={`h-full w-full ${
-                              mapInteractionsEnabled
-                                ? "touch-none"
-                                : "touch-pan-y"
-                            }`}
-                          >
-                            <MapCenterer center={mapCenter} />
-                            <TileLayer
-                              attribution={parkingMapAttribution}
-                              url={parkingMapTileUrl}
-                            />
-                            {mapPins.map(
+                            interactionsEnabled={mapInteractionsEnabled}
+                            onPinClick={(pinKey) => {
+                              const hit = mapPins.find((p) => p.key === pinKey);
+                              if (hit) setActiveLocationKey(hit.group.key);
+                            }}
+                            pins={mapPins.map(
                               ({ key, group, coords, addressLabel }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
@@ -5870,31 +5706,8 @@ export default function ParkingPassPage() {
                                   paymentsReady && hasAvailability,
                                 );
 
-                                return (
-                                  <Marker
-                                    key={key}
-                                    position={[coords.lat, coords.lng]}
-                                    icon={
-                                      bookings.length > 0
-                                        ? parkingPassPinIconOccupied
-                                        : parkingPassPinIcon
-                                    }
-                                    eventHandlers={{
-                                      click: () =>
-                                        setActiveLocationKey(group.key),
-                                      popupopen: () => setMapPopupOpen(true),
-                                      popupclose: () => setMapPopupOpen(false),
-                                    }}
-                                  >
-                                    <Popup
-                                      maxWidth={320}
-                                      minWidth={240}
-                                      maxHeight={260}
-                                      keepInView
-                                      autoPan
-                                      autoPanPadding={[16, 16]}
-                                    >
-                                      <div className="space-y-2 text-xs">
+                                const pinPopup = (
+                                    <div className="space-y-2 text-xs">
                                         <p className="font-semibold text-orange-600">
                                           {group.host.businessName}
                                         </p>
@@ -6068,12 +5881,17 @@ export default function ParkingPassPage() {
                                           </p>
                                         )}
                                       </div>
-                                    </Popup>
-                                  </Marker>
                                 );
-                              },
+                                return {
+                                  key,
+                                  position: coords,
+                                  occupied: bookings.length > 0,
+                                  popup: pinPopup,
+                                } satisfies MapPickerPin;
+                              }
                             )}
-                          </MapContainer>
+                            className="h-full w-full"
+                          />
                           {mapPins.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.

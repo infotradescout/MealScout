@@ -10,12 +10,14 @@
  *
  * Optional env vars:
  *   SMOKE_BASE_URL           - Base URL to test against (default: http://127.0.0.1:5000)
- *   STRIPE_SECRET_KEY        - Checked for presence (not used for API calls)
- *   VITE_STRIPE_PUBLIC_KEY   - Checked for presence
- *   STRIPE_WEBHOOK_SECRET    - Checked for presence
- *   BREVO_API_KEY            - Checked for presence
- *   DATABASE_URL             - Checked for presence
- *   SESSION_SECRET           - Checked for presence
+ *   STRIPE_SECRET_KEY              - Checked for presence (not used for API calls)
+ *   VITE_STRIPE_PUBLIC_KEY         - Checked for presence
+ *   STRIPE_WEBHOOK_SECRET          - Checked for presence
+ *   BREVO_API_KEY                  - Checked for presence
+ *   DATABASE_URL                   - Checked for presence
+ *   SESSION_SECRET                 - Checked for presence
+ *   GOOGLE_MAPS_API_KEY            - Warned if absent (server-side maps features)
+ *   VITE_GOOGLE_MAPS_WEB_API_KEY   - Warned if absent (all in-app map rendering)
  */
 
 import { execSync } from "child_process";
@@ -84,6 +86,23 @@ for (const { name, desc } of requiredEnvVars) {
   } else {
     pass(`${name} is set.`);
   }
+}
+
+// ─────────────────────────────────────────────
+// STEP 1b: Google Maps key warnings (non-blocking)
+// ─────────────────────────────────────────────
+section("Step 1b: Google Maps API Keys");
+const serverMapsKey = String(process.env.GOOGLE_MAPS_API_KEY || "").trim();
+const webMapsKey = String(process.env.VITE_GOOGLE_MAPS_WEB_API_KEY || "").trim();
+if (!serverMapsKey) {
+  warn("GOOGLE_MAPS_API_KEY is not set — geocoding, Places autocomplete, Routes, Address Validation, and foot-traffic heatmap will be disabled.");
+} else {
+  pass("GOOGLE_MAPS_API_KEY is set.");
+}
+if (!webMapsKey) {
+  warn("VITE_GOOGLE_MAPS_WEB_API_KEY is not set — all in-app maps will fall back to Leaflet/OpenStreetMap.");
+} else {
+  pass("VITE_GOOGLE_MAPS_WEB_API_KEY is set.");
 }
 
 // ─────────────────────────────────────────────
