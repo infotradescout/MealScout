@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   MapContainer,
   TileLayer,
@@ -57,6 +58,8 @@ export interface GoogleMapPickerProps {
   className?: string;
   /** Disable scroll/drag interactions (e.g. when a popup is open) */
   interactionsEnabled?: boolean;
+  /** Google Maps Map ID — required for Advanced Markers; from VITE_GOOGLE_MAPS_MAP_ID */
+  mapId?: string;
 }
 
 // ─── Shared assets ────────────────────────────────────────────────────────────
@@ -146,7 +149,7 @@ async function loadGoogleMaps(apiKey: string): Promise<void> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
@@ -176,6 +179,7 @@ async function loadGoogleMaps(apiKey: string): Promise<void> {
 
 function GoogleMapRenderer({
   apiKey,
+  mapId,
   center,
   zoom = 13,
   pins = [],
@@ -186,6 +190,7 @@ function GoogleMapRenderer({
   interactionsEnabled = true,
 }: {
   apiKey: string;
+  mapId?: string;
   center: GeoPoint;
   zoom?: number;
   pins?: MapPickerPin[];
@@ -201,6 +206,9 @@ function GoogleMapRenderer({
   const circleRef = useRef<any>(null);
   const infoWindowRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
+  const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
+  const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
 
   // Load SDK + initialise map
   useEffect(() => {
@@ -217,9 +225,16 @@ function GoogleMapRenderer({
           zoomControl: true,
           gestureHandling: interactionsEnabled ? "auto" : "none",
           mapTypeId: "roadmap",
+          ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
-        infoWindowRef.current = new g.maps.InfoWindow();
+        const iw = new g.maps.InfoWindow();
+        infoWindowRef.current = iw;
+        // Create a persistent DOM node that React will portal into
+        const portalDiv = document.createElement("div");
+        portalDiv.className = "gmp-infowindow-portal";
+        iw.setContent(portalDiv);
+        if (!cancelled) setInfoPortalContainer(portalDiv);
 
         if (onMapClick) {
           map.addListener("click", (e: any) => {
@@ -269,35 +284,54 @@ function GoogleMapRenderer({
       if (existing.has(pin.key)) {
         existing.get(pin.key).setPosition({ lat: pin.position.lat, lng: pin.position.lng });
       } else {
-        const marker = new g.maps.Marker({
-          position: { lat: pin.position.lat, lng: pin.position.lng },
-          map,
-          draggable: pin.draggable ?? false,
-          icon: {
-            url: mealScoutIcon,
-            scaledSize: new g.maps.Size(36, 36),
-            anchor: new g.maps.Point(18, 36),
-          },
-        });
+        const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
+        const useAdvanced = Boolean(AdvancedMarkerElement && mapId);
+        let marker: any;
+        if (useAdvanced) {
+          const img = document.createElement("img");
+          img.src = mealScoutIcon;
+          img.style.width = "36px";
+          img.style.height = "36px";
+          img.style.display = "block";
+          marker = new AdvancedMarkerElement({
+            position: { lat: pin.position.lat, lng: pin.position.lng },
+            map,
+            content: img,
+            gmpDraggable: pin.draggable ?? false,
+          });
+        } else {
+          marker = new g.maps.Marker({
+            position: { lat: pin.position.lat, lng: pin.position.lng },
+            map,
+            draggable: pin.draggable ?? false,
+            icon: {
+              url: mealScoutIcon,
+              scaledSize: new g.maps.Size(36, 36),
+              anchor: new g.maps.Point(18, 36),
+            },
+          });
+        }
         marker.addListener("click", () => {
           if (onPinClick) onPinClick(pin.key);
-          if (pin.popup && infoWindow) {
-            // We can only pass HTML strings to InfoWindow; render simple text fallback
-            const div = document.createElement("div");
-            div.className = "text-xs space-y-1 p-1";
-            const textContent =
-              typeof pin.popup === "string"
-                ? pin.popup
-                : "Tap to select";
-            div.textContent = textContent;
-            infoWindow.setContent(div);
+          if (infoWindow) {
+            // Render the React popup node into the persistent portal container,
+            // then open the InfoWindow anchored to this marker.
+            setInfoPortalContent(pin.popup ?? null);
             infoWindow.open(map, marker);
           }
         });
         if (pin.draggable && onPinDrag) {
-          marker.addListener("dragend", (e: any) => {
-            onPinDrag(pin.key, { lat: e.latLng.lat(), lng: e.latLng.lng() });
-          });
+          if (useAdvanced) {
+            // AdvancedMarkerElement uses 'gmp-dragend' and exposes position directly
+            marker.addListener("gmp-dragend", () => {
+              const pos = marker.position;
+              if (pos) onPinDrag(pin.key, { lat: pos.lat, lng: pos.lng });
+            });
+          } else {
+            marker.addListener("dragend", (e: any) => {
+              onPinDrag(pin.key, { lat: e.latLng.lat(), lng: e.latLng.lng() });
+            });
+          }
         }
         existing.set(pin.key, marker);
       }
@@ -328,7 +362,15 @@ function GoogleMapRenderer({
 
   if (loadError) return null; // caller falls back to Leaflet
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <>
+      <div ref={containerRef} className="h-full w-full" />
+      {/* Portal: renders the React popup node into the Google Maps InfoWindow DOM node */}
+      {infoPortalContainer && infoPortalContent
+        ? createPortal(infoPortalContent, infoPortalContainer)
+        : null}
+    </>
+  );
 }
 
 // ─── Leaflet fallback renderer ────────────────────────────────────────────────
@@ -428,6 +470,7 @@ export function GoogleMapPicker({
   circleRadiusMetres,
   className = "",
   interactionsEnabled = true,
+  mapId: mapIdProp,
 }: GoogleMapPickerProps) {
   const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
     queryKey: ["/api/map/runtime"],
@@ -447,6 +490,12 @@ export function GoogleMapPicker({
   const runtimeKey = String(mapRuntime?.googleMapsApiKey || "").trim();
   const apiKey = buildTimeKey || runtimeKey;
 
+  // Map ID: caller-provided prop takes priority, then build-time env var
+  const envMapId = String(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+  ).trim();
+  const mapId = mapIdProp || envMapId || undefined;
+
   const [googleFailed, setGoogleFailed] = useState(false);
   const useGoogle = apiKey.length > 0 && !googleFailed;
 
@@ -455,6 +504,7 @@ export function GoogleMapPicker({
       {useGoogle ? (
         <GoogleMapRenderer
           apiKey={apiKey}
+          mapId={mapId}
           center={center}
           zoom={zoom}
           pins={pins}

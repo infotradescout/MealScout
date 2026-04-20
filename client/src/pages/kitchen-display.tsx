@@ -78,7 +78,8 @@ function useRestaurantId(): string | null {
   return (user as any)?.restaurantId ?? null;
 }
 
-const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS === "true";
+// Sockets are ON by default; set VITE_ENABLE_SOCKETS=false to disable
+const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 
 export default function KitchenDisplayPage() {
   const restaurantId = useRestaurantId();

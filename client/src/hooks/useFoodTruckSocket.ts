@@ -3,7 +3,8 @@ import { useAuth } from './useAuth';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from "@/lib/api";
 
-const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS === "true";
+// Sockets are ON by default; set VITE_ENABLE_SOCKETS=false to disable
+const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 
 interface FoodTruckLocation {
   restaurantId: string;

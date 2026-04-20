@@ -377,7 +377,8 @@ type BriefActionLogResponse = {
   latest: BriefActionLogItem[];
 };
 
-const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS === "true";
+// Sockets are ON by default; set VITE_ENABLE_SOCKETS=false to disable
+const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 const LISA_FEED_LIMIT = 40;
 
 function formatSignalTime(value: string) {

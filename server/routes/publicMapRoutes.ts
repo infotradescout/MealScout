@@ -956,11 +956,10 @@ export function registerPublicMapRoutes(app: Express) {
         source: "google_routes" as const,
       };
       mapRouteSummaryCache.set(cacheKey, {
-        expiresAt: Date.now() + 60_000,
+        expiresAt: Date.now() + 10 * 60_000, // 10-minute TTL
         payload,
       });
-
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "public, max-age=600");
       return res.json(payload);
     } catch (error) {
       console.error("[map.route-summary] failed", error);
@@ -1737,42 +1736,57 @@ export function registerPublicMapRoutes(app: Express) {
             50_000,
             estimateRadiusMetersFromBounds(bounds),
           );
+          // Places API (New) — Nearby Search (POST)
+          // https://developers.google.com/maps/documentation/places/web-service/nearby-search
           const nearbyUrl =
-            "https://maps.googleapis.com/maps/api/place/nearbysearch/json";
-          const params = new URLSearchParams({
-            key: googleApiKey,
-            location: `${centerLat},${centerLng}`,
-            radius: String(radius),
-            type: "restaurant",
+            "https://places.googleapis.com/v1/places:searchNearby";
+          const nearbyBody = {
+            includedTypes: ["restaurant"],
+            maxResultCount: 20,
+            locationRestriction: {
+              circle: {
+                center: { latitude: centerLat, longitude: centerLng },
+                radius,
+              },
+            },
+          };
+          const response = await fetch(nearbyUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Goog-Api-Key": googleApiKey,
+              // Request only the fields we need to minimise billing SKU
+              "X-Goog-FieldMask":
+                "places.location,places.userRatingCount",
+            },
+            body: JSON.stringify(nearbyBody),
           });
-          const response = await fetch(`${nearbyUrl}?${params.toString()}`);
           const payload = (await response.json().catch(() => null)) as
             | {
-                status?: string;
-                error_message?: string;
-                results?: Array<{
-                  geometry?: { location?: { lat?: number; lng?: number } };
-                  user_ratings_total?: number;
+                error?: { message?: string; status?: string };
+                places?: Array<{
+                  location?: { latitude?: number; longitude?: number };
+                  userRatingCount?: number;
                 }>;
               }
             | null;
 
-          if (!response.ok || !payload || payload.status === "REQUEST_DENIED") {
+          if (!response.ok || !payload || payload.error) {
             googlePlaces.error =
-              payload?.error_message ||
-              payload?.status ||
+              payload?.error?.message ||
+              payload?.error?.status ||
               `http_${response.status}`;
           } else {
             const buckets = new Map<
               string,
               { lat: number; lng: number; weight: number; count: number }
             >();
-            const results = Array.isArray(payload?.results)
-              ? payload.results
+            const results = Array.isArray(payload?.places)
+              ? payload.places
               : [];
             for (const place of results) {
-              const lat = toFiniteNumber(place.geometry?.location?.lat);
-              const lng = toFiniteNumber(place.geometry?.location?.lng);
+              const lat = toFiniteNumber(place.location?.latitude);
+              const lng = toFiniteNumber(place.location?.longitude);
               if (lat === null || lng === null) continue;
               if (!pointInBounds(bounds, lat, lng)) continue;
               const bucketLat = roundCell(lat);
@@ -1780,7 +1794,7 @@ export function registerPublicMapRoutes(app: Express) {
               const key = `${bucketLat}:${bucketLng}`;
               const ratingWeight = Math.max(
                 1,
-                Math.min(24, Number(place.user_ratings_total || 1)),
+                Math.min(24, Number(place.userRatingCount || 1)),
               );
               const existing = buckets.get(key) || {
                 lat: bucketLat,
