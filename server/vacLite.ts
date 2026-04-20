@@ -135,7 +135,11 @@ export async function vacEvaluateRestaurantSignup({
   restaurant: VacRestaurantInput;
   req?: Request;
 }): Promise<VacEvaluationResult> {
-  const threshold = Number(process.env.VAC_AUTO_VERIFY_THRESHOLD || "70");
+  // Default threshold of 60 allows trucks with a resolving website + business email MX
+  // + social media + geo + address to auto-verify without requiring phone match or
+  // email-domain match (which most real food trucks won't have). Override with
+  // VAC_AUTO_VERIFY_THRESHOLD env var if needed.
+  const threshold = Number(process.env.VAC_AUTO_VERIFY_THRESHOLD || "60");
 
   const email = user?.email || "";
   const userPhone10 = vacNormalizePhone(user?.phone || undefined);

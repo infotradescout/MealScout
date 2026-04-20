@@ -254,12 +254,13 @@ export function registerOpenCallSeriesRoutes(app: Express) {
     },
   );
 
-  // List all event series for a host
+  // List all event series for a host (supports multi-location: any host profile owned by this user)
   app.get("/api/hosts/event-series", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const host = await getHostByUserId(userId);
-      if (!host) {
+      // Use getHostsByUserId (plural) so multi-location hosts can see series for all their locations.
+      const hostList = await storage.getHostsByUserId(userId);
+      if (!hostList || hostList.length === 0) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 

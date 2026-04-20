@@ -6,7 +6,7 @@ import {
   PARKING_PASS_SLOT_TYPES,
   isSlotWithinHours,
 } from "@shared/parkingPassSlots";
-import { hosts, suppliers, lisaClaims, LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from "@shared/schema";
+import { hosts, suppliers, lisaClaims, LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES, restaurantSubscriptions } from "@shared/schema";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
@@ -128,6 +128,73 @@ export function registerStripeWebhookRoutes(
                 } else {
                   console.log(
                     `[WEBHOOK] User ${user.id} subscription already properly configured`,
+                  );
+                }
+
+                // Sync restaurantSubscriptions table so assertHasOrderingSubscription
+                // works reliably even when Stripe is unreachable (eliminates split-brain
+                // access gate where trucks with active paid subscriptions get 403s).
+                try {
+                  const periodStart = (subscription as any).current_period_start
+                    ? new Date((subscription as any).current_period_start * 1000)
+                    : new Date();
+                  const periodEnd = (subscription as any).current_period_end
+                    ? new Date((subscription as any).current_period_end * 1000)
+                    : null;
+                  const userRestaurants = await storage.getRestaurantsByOwner(user.id);
+                  for (const restaurant of userRestaurants) {
+                    const [existing] = await db
+                      .select({ id: restaurantSubscriptions.id })
+                      .from(restaurantSubscriptions)
+                      .where(eq(restaurantSubscriptions.restaurantId, restaurant.id))
+                      .limit(1);
+                    if (existing) {
+                      await db
+                        .update(restaurantSubscriptions)
+                        .set({
+                          status: "active",
+                          tier: "monthly",
+                          stripeSubscriptionId: subscription.id,
+                          stripeCustomerId: subscription.customer as string,
+                          currentPeriodStart: periodStart,
+                          currentPeriodEnd: periodEnd,
+                          canceledAt: null,
+                          canPostVideos: true,
+                          canPostDeals: true,
+                          canUseFeaturedSlots: true,
+                          maxFeaturedSlots: 3,
+                          hasAnalytics: true,
+                          hasDealScheduling: true,
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(restaurantSubscriptions.id, existing.id));
+                    } else {
+                      await db.insert(restaurantSubscriptions).values({
+                        restaurantId: restaurant.id,
+                        tier: "monthly",
+                        status: "active",
+                        priceCents: 2500,
+                        billingInterval: "monthly",
+                        stripeSubscriptionId: subscription.id,
+                        stripeCustomerId: subscription.customer as string,
+                        currentPeriodStart: periodStart,
+                        currentPeriodEnd: periodEnd,
+                        canPostVideos: true,
+                        canPostDeals: true,
+                        canUseFeaturedSlots: true,
+                        maxFeaturedSlots: 3,
+                        hasAnalytics: true,
+                        hasDealScheduling: true,
+                      });
+                    }
+                    console.log(
+                      `[WEBHOOK] Synced restaurantSubscriptions for restaurant ${restaurant.id} (user ${user.id})`,
+                    );
+                  }
+                } catch (syncError) {
+                  console.error(
+                    "[WEBHOOK] Error syncing restaurantSubscriptions:",
+                    syncError,
                   );
                 }
               } else {
@@ -1340,6 +1407,37 @@ export function registerStripeWebhookRoutes(
             await storage.updateUser(userForDeletion.id, {
               stripeSubscriptionId: null,
             });
+            // Deactivate restaurantSubscriptions rows so access gates immediately
+            // reflect the cancellation without waiting for the next Stripe API call.
+            try {
+              await db
+                .update(restaurantSubscriptions)
+                .set({
+                  status: "canceled",
+                  canceledAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(
+                  eq(
+                    restaurantSubscriptions.stripeSubscriptionId,
+                    subscriptionDeleted.id,
+                  ),
+                );
+            } catch (deactivateError) {
+              console.error(
+                "[WEBHOOK] Error deactivating restaurantSubscriptions on deletion:",
+                deactivateError,
+              );
+            }
+            // Deactivate any active deals for this user.
+            try {
+              await storage.deactivateUserDeals(userForDeletion.id);
+            } catch (dealsError) {
+              console.error(
+                "[WEBHOOK] Error deactivating deals on subscription deletion:",
+                dealsError,
+              );
+            }
             console.log(
               `[WEBHOOK] Subscription cleared for user ${userForDeletion.id} (${userForDeletion.email})`,
             );

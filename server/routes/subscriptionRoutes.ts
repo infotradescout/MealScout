@@ -579,20 +579,18 @@ export function registerSubscriptionRoutes(
         return res.status(400).json({ message: "No active subscription" });
       }
 
-      const subscription = await stripe.subscriptions.cancel(
+      // Cancel at period end so the user keeps access until their paid period expires.
+      // The customer.subscription.deleted webhook will clear stripeSubscriptionId,
+      // deactivate restaurantSubscriptions, and deactivate deals when Stripe fires it.
+      const subscription = await stripe.subscriptions.update(
         user.stripeSubscriptionId,
+        { cancel_at_period_end: true },
       );
 
-      await storage.updateUser(user.id, {
-        stripeSubscriptionId: null,
-        subscriptionBillingInterval: null,
-      });
-
-      await storage.deactivateUserDeals(user.id);
-
       res.json({
-        message: "Subscription cancelled immediately.",
-        cancelAt: subscription.cancel_at,
+        message: "Subscription will cancel at the end of the current billing period. You keep full access until then.",
+        cancelAt: (subscription as any).cancel_at ?? null,
+        currentPeriodEnd: (subscription as any).current_period_end ?? null,
       });
     } catch (error: any) {
       console.error("Cancel subscription error:", error);

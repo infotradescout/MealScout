@@ -97,6 +97,33 @@ export function registerVerificationAdminRoutes(
           }
         }
 
+        // Always send an approval email to the truck owner, regardless of whether
+        // the truck was a claimed import or a fresh self-signup. Without this,
+        // fresh-signup trucks that require manual review have no idea they've been
+        // approved and can now book parking passes.
+        if (claimContext?.ownerEmail) {
+          const isClaim = !!claimContext.claimedFromImportId;
+          const subject = isClaim
+            ? "Your food truck claim was approved — welcome to MealScout!"
+            : "Your MealScout account has been verified — you're ready to book!";
+          const body = isClaim
+            ? `
+              <p>Great news — your food truck claim has been approved on MealScout!</p>
+              <p>You can now log in and start booking parking pass slots at local host locations.</p>
+              <p>Head to <a href="https://mealscout.us/parking-pass">mealscout.us/parking-pass</a> to find available spots near you.</p>
+            `
+            : `
+              <p>Great news — your MealScout account has been verified!</p>
+              <p>You can now book parking pass slots at host locations in your area.</p>
+              <p>Head to <a href="https://mealscout.us/parking-pass">mealscout.us/parking-pass</a> to find available spots near you.</p>
+            `;
+          try {
+            await emailService.sendBasicEmail(claimContext.ownerEmail, subject, body);
+          } catch (emailError) {
+            console.warn("Failed to send owner approval notification email:", emailError);
+          }
+        }
+
         if (claimContext?.claimedFromImportId) {
           await db
             .update(truckImportListings)
@@ -127,41 +154,22 @@ export function registerVerificationAdminRoutes(
               updatedAt: new Date(),
             })
             .where(eq(restaurants.id, claimContext.restaurantId));
+        }
 
-          const notificationEmail = "notifications@mealscout.us";
-          if (claimContext.ownerEmail) {
-            try {
-              await emailService.sendBasicEmail(
-                claimContext.ownerEmail,
-                "Your food truck claim was approved",
-                `
-                  <p>Your food truck claim has been approved.</p>
-                  <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
-                `,
-              );
-            } catch (emailError) {
-              console.warn(
-                "Failed to send owner approval notification email:",
-                emailError,
-              );
-            }
-          }
-          try {
-            await emailService.sendBasicEmail(
-              notificationEmail,
-              "Food Truck Claim Approved",
-              `
-                <p>A food truck claim was approved.</p>
-                <p><strong>Restaurant ID:</strong> ${claimContext.restaurantId}</p>
-                <p><strong>Owner ID:</strong> ${claimContext.ownerId}</p>
-              `,
-            );
-          } catch (emailError) {
-            console.warn(
-              "Failed to send internal approval notification email:",
-              emailError,
-            );
-          }
+        // Internal notification for all approvals.
+        try {
+          await emailService.sendBasicEmail(
+            "notifications@mealscout.us",
+            "Verification Approved",
+            `
+              <p>A verification request was approved.</p>
+              <p><strong>Restaurant ID:</strong> ${claimContext?.restaurantId ?? id}</p>
+              <p><strong>Owner ID:</strong> ${claimContext?.ownerId ?? "unknown"}</p>
+              <p><strong>Type:</strong> ${claimContext?.claimedFromImportId ? "Claim" : "Fresh signup"}</p>
+            `,
+          );
+        } catch (emailError) {
+          console.warn("Failed to send internal approval notification email:", emailError);
         }
 
         res.json({ success: true, message: "Verification request approved" });

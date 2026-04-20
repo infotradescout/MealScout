@@ -366,8 +366,8 @@ const SubscriptionManagement = () => {
     },
     onSuccess: () => {
       toast({
-        title: "Subscription Cancelled",
-        description: "Your subscription has been cancelled.",
+        title: "Subscription Cancellation Scheduled",
+        description: "Your subscription will cancel at the end of the current billing period. You keep full access until then.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/subscription/status"] });
       setShowCancelDialog(false);
@@ -549,7 +549,7 @@ const SubscriptionManagement = () => {
                     <DialogHeader>
                       <DialogTitle>Cancel Subscription</DialogTitle>
                       <DialogDescription>
-                        This will cancel your subscription immediately.
+                        Your subscription will be cancelled at the end of the current billing period. You keep full access to all premium features until then — no immediate interruption.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -566,7 +566,7 @@ const SubscriptionManagement = () => {
                       >
                         {cancelMutation.isPending
                           ? "Cancelling..."
-                          : "Yes, Cancel Now"}
+                          : "Cancel at Period End"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
