@@ -6,7 +6,6 @@ import { db } from "../../db";
 import { insertHostSchema, hosts } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { forwardGeocode } from "../../utils/geocoding";
-import { getHostByUserId } from "../../services/hostOwnership";
 import { validateUsAddress } from "../../utils/addressValidation";
 import {
   buildLocationKey,
@@ -21,11 +20,6 @@ export function registerHostProfileRoutes(app: Express) {
       const locationRequestClaimId = String(
         req.body?.locationRequestClaimId || "",
       ).trim();
-
-      const existing = await getHostByUserId(userId);
-      if (existing) {
-        return res.status(400).json({ message: "Host profile already exists" });
-      }
 
       const parsed = insertHostSchema.parse({
         ...req.body,
@@ -170,11 +164,8 @@ export function registerHostProfileRoutes(app: Express) {
   app.get("/api/hosts/me", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      let host = await getHostByUserId(userId);
-      if (!host) {
-        const hostProfiles = await storage.getHostsByUserId(userId);
-        host = hostProfiles[0];
-      }
+      const hostProfiles = await storage.getHostsByUserId(userId);
+      let host = hostProfiles[0] ?? null;
       if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }

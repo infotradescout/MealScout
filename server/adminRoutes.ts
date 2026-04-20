@@ -320,6 +320,88 @@ router.get("/audit-logs", isAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/vac-logs
+ * Dedicated VAC-lite (Verification Assurance Check) audit log viewer.
+ * Returns all `vac:evaluate` entries from the security audit log, enriched
+ * with a human-readable summary of each signal so admins can quickly see
+ * why a truck was auto-verified or held for manual review.
+ */
+router.get("/vac-logs", isAdmin, async (req, res) => {
+  try {
+    const { days = "30", outcome } = req.query;
+    const daysNum = Math.min(parseInt(String(days)) || 30, 90);
+    const cutoffDate = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
+
+    const logs = await db
+      .select()
+      .from(securityAuditLog)
+      .where(
+        and(
+          eq(securityAuditLog.action, "vac:evaluate"),
+          gte(securityAuditLog.timestamp, cutoffDate),
+        ),
+      )
+      .orderBy(desc(securityAuditLog.timestamp))
+      .limit(500);
+
+    // Enrich each log with a flat summary for the UI
+    const enriched = logs.map((log: any) => {
+      const meta = log.metadata ?? {};
+      const signals = meta.signals ?? {};
+      const autoVerified = meta.shouldAutoVerify === true;
+      const score = meta.score ?? null;
+      const threshold = meta.threshold ?? null;
+
+      // Build a plain-English signal summary
+      const signalSummary: string[] = [];
+      if (signals.emailDomainHasMx) signalSummary.push("email MX ✓");
+      else signalSummary.push("email MX ✗");
+      if (signals.websiteDomainResolves) signalSummary.push("website DNS ✓");
+      else signalSummary.push("website DNS ✗");
+      if (signals.emailMatchesWebsite) signalSummary.push("email↔website ✓");
+      if (signals.hasSocial) signalSummary.push("social ✓");
+      if (signals.hasGeo) signalSummary.push("geo ✓");
+      if (signals.hasAddress) signalSummary.push("address ✓");
+      if (signals.phoneMatches) signalSummary.push("phone match ✓");
+      if (signals.freeEmailDomain) signalSummary.push("free email (-10)");
+
+      return {
+        id: log.id,
+        userId: log.userId,
+        restaurantId: log.resourceId,
+        timestamp: log.timestamp,
+        score,
+        threshold,
+        autoVerified,
+        outcome: autoVerified ? "auto_verified" : "manual_review",
+        emailDomain: signals.emailDomain ?? null,
+        websiteHost: signals.websiteHost ?? null,
+        signalSummary: signalSummary.join(" | "),
+        rawMetadata: meta,
+      };
+    });
+
+    // Filter by outcome if requested
+    let result = enriched;
+    if (outcome === "auto_verified") {
+      result = enriched.filter((e) => e.autoVerified);
+    } else if (outcome === "manual_review") {
+      result = enriched.filter((e) => !e.autoVerified);
+    }
+
+    res.json({
+      total: result.length,
+      autoVerifiedCount: enriched.filter((e) => e.autoVerified).length,
+      manualReviewCount: enriched.filter((e) => !e.autoVerified).length,
+      logs: result.slice(0, 200),
+    });
+  } catch (error) {
+    console.error("Failed to fetch VAC logs:", error);
+    res.status(500).json({ error: "Failed to fetch VAC logs" });
+  }
+});
+
+/**
  * GET /api/admin/support-tickets
  * List support tickets with filtering
  */

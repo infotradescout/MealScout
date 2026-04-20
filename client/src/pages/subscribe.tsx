@@ -290,6 +290,11 @@ const PlanSelector = ({
                 Promo code: {promoCode}
               </div>
             )}
+            <p className="text-xs text-[color:var(--text-muted)] mb-4">
+              Parking pass bookings and menu browsing are always free for
+              verified trucks. Premium unlocks online ordering, schedule
+              management, live location, and more.
+            </p>
             <Button
               onClick={onContinue}
               className="w-full py-3 font-semibold text-sm"
@@ -477,26 +482,49 @@ const SubscriptionManagement = () => {
                 </div>
               )}
 
-              <div className="pt-4 border-t">
-                <h4 className="font-medium mb-2">Subscription Features</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Post and distribute specials
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Off-platform schedule management
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    One-click live location updates
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
-                    Social auto-post controls and premium analytics
-                  </li>
-                </ul>
+              <div className="pt-4 border-t space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Always free (no subscription needed)</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Book parking pass spots at host locations
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Public online menu browsing for customers
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Appear on the MealScout map
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Premium features ($25/mo)</h4>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Online ordering for customers (card &amp; cash)
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Post and distribute specials
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Off-platform schedule management
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      One-click live location updates
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-[color:var(--status-success)]" />
+                      Social auto-post controls and premium analytics
+                    </li>
+                  </ul>
+                </div>
               </div>
             </>
           )}

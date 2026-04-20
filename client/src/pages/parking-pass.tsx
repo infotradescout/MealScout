@@ -1512,7 +1512,7 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Upgrade to add off-platform schedule stops.",
+        description: "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -1623,7 +1623,7 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Upgrade to manage off-platform schedule stops.",
+        description: "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -2653,7 +2653,7 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Upgrade to use social auto-post settings.",
+        description: "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -2762,7 +2762,7 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Upgrade to use one-click live location sharing.",
+        description: "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -4935,9 +4935,10 @@ export default function ParkingPassPage() {
               <CardContent className="p-5 space-y-4">
                 {!hasPremiumTruckTools && (
                   <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                    Premium unlocks off-platform schedule, one-tap live
-                    location, and social auto-post controls. Host-location
-                    bookings still appear in your calendar on free.
+                    Parking pass bookings and your booking calendar are always
+                    free. Upgrade to Premium to unlock off-platform schedule
+                    stops, one-tap live location sharing, and social auto-post
+                    controls.
                   </div>
                 )}
                 {hasPremiumTruckTools && !canManageTruckProfile && (

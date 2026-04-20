@@ -51,6 +51,9 @@ const ACTION_TYPES = [
   'incident_acknowledged',
   'incident_resolved',
   'incident_closed',
+  'vac:evaluate',
+  'parking_pass:book',
+  'parking_pass:create',
 ];
 
 const RESOURCE_TYPES = [

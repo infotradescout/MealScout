@@ -170,7 +170,7 @@ export default function CheckoutPage() {
       const message = String(err?.message || "Failed to create order");
       if (message.toLowerCase().includes("subscription")) {
         setOrderError(
-          "Online ordering is not active for this restaurant yet. You can still browse the menu and order in person.",
+          "Online ordering requires the restaurant to have an active MealScout subscription. Menu browsing is always free — you can still view the menu and order in person.",
         );
       } else {
         setOrderError(message);
@@ -232,8 +232,8 @@ export default function CheckoutPage() {
         {!orderingEnabled && (
           <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            Online ordering is currently unavailable for this restaurant. Please
-            order in person.
+            Menu browsing is always free. Online ordering is not yet active
+            for this restaurant — please order in person.
           </div>
         )}
 

@@ -275,8 +275,9 @@ export default function MenuPage() {
               <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>
-                  Online ordering is not available for this restaurant yet.
-                  Browse the menu and order in person.
+                  Menu browsing is always free. Online ordering is not yet
+                  active for this restaurant — browse the menu and place your
+                  order in person.
                 </span>
               </div>
             )}

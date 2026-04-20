@@ -475,6 +475,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       labelKey: "nav.affiliates",
       fallbackLabel: "Affiliates",
     },
+    {
+      path: "/admin/vac-logs",
+      icon: Shield,
+      fallbackLabel: "VAC Logs",
+    },
     { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
     { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
     ...restaurantOwnerExtras,

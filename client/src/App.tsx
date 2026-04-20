@@ -55,6 +55,7 @@ const ReporterReputationPage = lazy(
 );
 const ModerationPolicy = lazy(() => import("@/pages/public/ModerationPolicy"));
 const AdminAuditLogs = lazy(() => import("@/pages/AdminAuditLogs"));
+const AdminVacLogs = lazy(() => import("@/pages/AdminVacLogs"));
 const AdminTelemetry = lazy(() => import("@/pages/admin-telemetry"));
 const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
@@ -492,6 +493,7 @@ function Router() {
               component={AdminModerationAppeals}
             />
             <Route path="/admin/audit-logs" component={AdminAuditLogs} />
+            <Route path="/admin/vac-logs" component={AdminVacLogs} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
             <Route
