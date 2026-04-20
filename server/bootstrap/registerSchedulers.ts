@@ -67,6 +67,105 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
+  // Premium Weekly Summary — Monday 8:30 AM (subscribed trucks)
+  cron.schedule("30 8 * * 1", async () => {
+    console.log("⏰ Triggering Premium Weekly Summary Cron");
+    try {
+      const { users, restaurantSubscriptions } = await import("@shared/schema");
+      const { eq, isNotNull, inArray } = await import("drizzle-orm");
+      const { emailService } = await import("../emailService");
+      const { telemetryEvents } = await import("@shared/schema");
+      // Find all users with an active restaurantSubscriptions row
+      const activeSubs = await db
+        .selectDistinct({ userId: restaurantSubscriptions.userId })
+        .from(restaurantSubscriptions)
+        .where(eq(restaurantSubscriptions.status, "active"));
+      const activeUserIds = activeSubs.map((r: { userId: string }) => r.userId);
+      if (activeUserIds.length === 0) {
+        console.log("[premium-weekly] No active subscribers — skipping");
+        return;
+      }
+      const activeUsers = await db
+        .select({ id: users.id, email: users.email, firstName: users.firstName, accountSettings: users.accountSettings })
+        .from(users)
+        .where(inArray(users.id, activeUserIds));
+      const now = new Date();
+      const weekNumber = Math.ceil(
+        ((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000 + 1) / 7,
+      );
+      const idempotencyKey = `${now.getFullYear()}-W${weekNumber}`;
+      let sentCount = 0;
+      let skippedCount = 0;
+      for (const user of activeUsers) {
+        const email = String(user.email || "").trim();
+        if (!email) { skippedCount++; continue; }
+        // Respect opt-out
+        const settings = user.accountSettings as any;
+        if (settings?.notifications?.channels?.email === false ||
+            settings?.notifications?.topics?.weeklyDigest === false) {
+          skippedCount++; continue;
+        }
+        // Idempotency check
+        const alreadySent = await db.query.telemetryEvents.findFirst({
+          where: and(
+            eq(telemetryEvents.eventName, "premium_summary_auto_emailed"),
+            eq(telemetryEvents.userId, user.id),
+            sql`properties->>'week' = ${idempotencyKey}`,
+          ),
+        });
+        if (alreadySent) { skippedCount++; continue; }
+        // Build summary inline (same logic as buildPremiumWeeklySummary)
+        try {
+          const { restaurants: restaurantsTable, truckManualSchedules, truckParkingReports } = await import("@shared/schema");
+          const windowStart = new Date(now);
+          windowStart.setDate(windowStart.getDate() - 6);
+          windowStart.setHours(0, 0, 0, 0);
+          const ownedRestaurants = await db
+            .select({ id: restaurantsTable.id })
+            .from(restaurantsTable)
+            .where(eq(restaurantsTable.ownerId, user.id));
+          const restaurantIds = ownedRestaurants.map((r: { id: string }) => r.id);
+          if (restaurantIds.length === 0) { skippedCount++; continue; }
+          const [manualSchedules, parkingReports, liveLocEvents] = await Promise.all([
+            db.select({ id: truckManualSchedules.id, date: truckManualSchedules.date, address: truckManualSchedules.address })
+              .from(truckManualSchedules)
+              .where(and(inArray(truckManualSchedules.truckId, restaurantIds), gte(truckManualSchedules.createdAt, windowStart))),
+            db.select({ id: truckParkingReports.id, date: truckParkingReports.date, address: truckParkingReports.address, locationName: truckParkingReports.locationName })
+              .from(truckParkingReports)
+              .where(and(inArray(truckParkingReports.truckId, restaurantIds), gte(truckParkingReports.createdAt, windowStart))),
+            db.select({ id: telemetryEvents.id })
+              .from(telemetryEvents)
+              .where(and(eq(telemetryEvents.eventName, "premium_live_location_used"), eq(telemetryEvents.userId, user.id), gte(telemetryEvents.createdAt, windowStart))),
+          ]);
+          const stopKeys = new Set<string>();
+          for (const s of manualSchedules) stopKeys.add(`${s.date?.toISOString().split("T")[0]}:${s.address}`);
+          for (const r of parkingReports) stopKeys.add(`${r.date?.toISOString().split("T")[0]}:${r.address || r.locationName}`);
+          const operatorName = String(user.firstName || "").trim() || "MealScout operator";
+          await emailService.sendPremiumWeeklySummaryEmail(email, operatorName, {
+            weekStart: windowStart.toLocaleDateString(),
+            weekEnd: now.toLocaleDateString(),
+            stopsCovered: stopKeys.size,
+            liveLocationActivations: liveLocEvents.length,
+            manualScheduleUsage: manualSchedules.length,
+            parkingReportsCompleted: parkingReports.length,
+          });
+          await db.insert(telemetryEvents).values({
+            eventName: "premium_summary_auto_emailed",
+            userId: user.id,
+            properties: { week: idempotencyKey, stopsCovered: stopKeys.size },
+          });
+          sentCount++;
+        } catch (userError) {
+          console.error(`[premium-weekly] Failed for user ${user.id}:`, userError);
+          skippedCount++;
+        }
+      }
+      console.log(`✅ Premium Weekly Summary: sent=${sentCount} skipped=${skippedCount}`);
+    } catch (error) {
+      console.error("❌ Premium Weekly Summary Cron Failed:", error);
+    }
+  });
+
   // Diner Deals Digest — Wednesday 9:00 AM
   cron.schedule("0 9 * * 3", async () => {
     console.log("⏰ Triggering Diner Deals Digest");
@@ -484,6 +583,75 @@ export async function registerSchedulers(app: Express): Promise<void> {
       }
     });
   }
+
+  // VAC Pending Review Digest — daily 9:00 AM (only when there are pending reviews)
+  cron.schedule("0 9 * * *", async () => {
+    try {
+      const { securityAuditLog, restaurants, users } = await import("@shared/schema");
+      const { eq, and, isNull } = await import("drizzle-orm");
+      const { emailService } = await import("../emailService");
+
+      // Find all trucks that have a vac:evaluate log entry with outcome = 'manual_review'
+      // and are still unverified (isVerified = false)
+      const pendingRows = await db
+        .select({
+          restaurantId: restaurants.id,
+          restaurantName: restaurants.name,
+          ownerEmail: users.email,
+          vacScore: securityAuditLog.metadata,
+          createdAt: restaurants.createdAt,
+        })
+        .from(restaurants)
+        .innerJoin(users, eq(restaurants.ownerId, users.id))
+        .innerJoin(
+          securityAuditLog,
+          and(
+            eq(securityAuditLog.resourceId, restaurants.id),
+            eq(securityAuditLog.action, "vac:evaluate"),
+            eq(securityAuditLog.outcome, "manual_review"),
+          ),
+        )
+        .where(
+          and(
+            eq(restaurants.isVerified, false),
+            isNull(restaurants.deletedAt),
+          ),
+        )
+        .orderBy(restaurants.createdAt)
+        .limit(100);
+
+      if (pendingRows.length === 0) {
+        console.log("[vac-digest] No pending manual reviews — skipping digest");
+        return;
+      }
+
+      const entries = pendingRows.map((row) => {
+        const meta = (row.vacScore as any) || {};
+        const score = Number(meta.score ?? 0);
+        const threshold = Number(meta.threshold ?? 60);
+        const signals = String(meta.signalSummary || meta.signals || "");
+        return {
+          restaurantId: String(row.restaurantId || ""),
+          restaurantName: String(row.restaurantName || "Unknown"),
+          ownerEmail: String(row.ownerEmail || ""),
+          vacScore: score,
+          threshold,
+          signals,
+          createdAt: row.createdAt
+            ? new Date(row.createdAt).toLocaleDateString()
+            : "unknown",
+        };
+      });
+
+      await emailService.sendVacPendingDigest({
+        pendingCount: entries.length,
+        entries,
+      });
+      console.log(`✅ [vac-digest] Sent digest for ${entries.length} pending review(s)`);
+    } catch (error) {
+      console.error("❌ [vac-digest] Daily digest failed:", error);
+    }
+  });
 
   console.log("✅ All schedulers registered");
 }

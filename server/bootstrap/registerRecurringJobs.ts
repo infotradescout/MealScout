@@ -9,6 +9,7 @@ import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { runOpsDataCleanup } from "../opsCleanup";
 import { runMarketplaceHealthAudit } from "../marketplaceHealth";
+import { createIncident } from "../incidentManager";
 
 export function registerRecurringJobs(): void {
   const enableSessionCleanup =
@@ -90,9 +91,27 @@ export function registerRecurringJobs(): void {
         Number(r.staleCollecting || 0) > 0 ||
         Number(r.stalePending || 0) > 0
       ) {
-        console.warn(
-          `[marketplace-health] stuck_threshold=${r.stuckThreshold} stale_collecting=${r.staleCollecting} stale_pending_bookings=${r.stalePending}`,
-        );
+        const msg = `stuck_threshold=${r.stuckThreshold} stale_collecting=${r.staleCollecting} stale_pending_bookings=${r.stalePending}`;
+        console.warn(`[marketplace-health] ${msg}`);
+        // Fire an incident so ops gets an email + Slack alert
+        try {
+          await createIncident({
+            ruleId: "marketplace_health_degraded",
+            severity:
+              Number(r.stalePending || 0) > 0 ? "high" : "medium",
+            metadata: {
+              stuckThreshold: r.stuckThreshold,
+              staleCollecting: r.staleCollecting,
+              stalePending: r.stalePending,
+              checkedAt: r.checkedAt,
+            },
+          });
+        } catch (incidentErr) {
+          console.warn(
+            "[marketplace-health] Failed to create incident (non-blocking):",
+            incidentErr instanceof Error ? incidentErr.message : String(incidentErr),
+          );
+        }
       }
     };
 

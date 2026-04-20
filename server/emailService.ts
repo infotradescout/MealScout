@@ -1915,6 +1915,67 @@ View other available events: https://mealscout.io/truck/dashboard`;
       text,
     });
   }
+
+  /**
+   * Send daily VAC monitoring digest to admin.
+   * Lists trucks pending manual review with their score, signals, and signup time.
+   */
+  async sendVacPendingDigest(params: {
+    pendingCount: number;
+    entries: Array<{
+      restaurantId: string;
+      restaurantName: string;
+      ownerEmail: string;
+      vacScore: number;
+      threshold: number;
+      signals: string;
+      createdAt: string;
+    }>;
+  }): Promise<boolean> {
+    const { pendingCount, entries } = params;
+    const subject = `[MealScout] VAC Review Queue: ${pendingCount} truck${pendingCount === 1 ? "" : "s"} pending manual verification`;
+    const rows = entries
+      .map(
+        (e) =>
+          `<tr style="border-bottom:1px solid #eee">
+            <td style="padding:8px 12px">${e.restaurantName}</td>
+            <td style="padding:8px 12px">${e.ownerEmail}</td>
+            <td style="padding:8px 12px;text-align:center"><strong>${e.vacScore}</strong> / ${e.threshold}</td>
+            <td style="padding:8px 12px;font-size:12px;color:#555">${e.signals}</td>
+            <td style="padding:8px 12px;font-size:12px;color:#888">${e.createdAt}</td>
+          </tr>`,
+      )
+      .join("");
+    const appUrl = process.env.VITE_APP_URL || process.env.PUBLIC_BASE_URL || "https://mealscout.us";
+    const html = `
+      <div style="font-family:sans-serif;max-width:800px;margin:0 auto">
+        <h2 style="color:#1a1a1a">VAC Manual Review Queue &#8212; ${new Date().toLocaleDateString()}</h2>
+        <p style="color:#555">${pendingCount} truck${pendingCount === 1 ? "" : "s"} scored below the auto-verify threshold and require manual review.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead>
+            <tr style="background:#f5f5f5">
+              <th style="padding:8px 12px;text-align:left">Truck Name</th>
+              <th style="padding:8px 12px;text-align:left">Owner Email</th>
+              <th style="padding:8px 12px;text-align:center">VAC Score</th>
+              <th style="padding:8px 12px;text-align:left">Signals</th>
+              <th style="padding:8px 12px;text-align:left">Signed Up</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="margin-top:24px">
+          <a href="${appUrl}/admin/verifications" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Review in Admin Dashboard</a>
+        </p>
+        <p style="color:#999;font-size:12px;margin-top:16px">This digest is sent daily at 9 AM when there are pending manual reviews.</p>
+      </div>`;
+    const text = `VAC Manual Review Queue - ${new Date().toLocaleDateString()}\n\n${pendingCount} truck(s) pending manual verification:\n\n${entries.map((e) => `- ${e.restaurantName} (${e.ownerEmail}) | Score: ${e.vacScore}/${e.threshold} | ${e.signals} | Signed up: ${e.createdAt}`).join("\n")}\n\nReview at: ${appUrl}/admin/verifications`;
+    return await this.sendEmail({
+      to: EMAIL_CONFIG.adminEmail,
+      subject,
+      html,
+      text,
+    });
+  }
 }
 
 export function renderAdminSignupEmail(

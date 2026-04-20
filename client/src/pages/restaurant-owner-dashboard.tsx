@@ -1305,6 +1305,59 @@ export default function RestaurantOwnerDashboard() {
         </div>
       )}
 
+      {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
+      {subscription?.hasAccess && currentRestaurant && (() => {
+        const hasPhoto = Boolean((currentRestaurant as any).imageUrl || (currentRestaurant as any).logoUrl);
+        const hasMenu = Boolean((currentRestaurant as any).menuUrl || (currentRestaurant as any).hasMenu);
+        const hasAddress = Boolean((currentRestaurant as any).address || (currentRestaurant as any).city);
+        const hasPhone = Boolean((currentRestaurant as any).phone || (currentRestaurant as any).contactPhone);
+        const hasDeal = (stats?.activeDeals || 0) > 0;
+        const checklistItems = [
+          { label: "Profile photo or logo uploaded", done: hasPhoto, href: `/edit-restaurant/${selectedRestaurant}` },
+          { label: "Address or service area set", done: hasAddress, href: `/edit-restaurant/${selectedRestaurant}` },
+          { label: "Phone number added", done: hasPhone, href: `/edit-restaurant/${selectedRestaurant}` },
+          { label: "Online menu linked or built", done: hasMenu, href: `/menu-builder/${selectedRestaurant}` },
+          { label: "First special or deal created", done: hasDeal, href: "/deal-creation" },
+        ];
+        const completedCount = checklistItems.filter((i) => i.done).length;
+        if (completedCount === checklistItems.length) return null;
+        return (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-blue-900">Get the most out of your subscription</h2>
+                <p className="text-xs text-blue-700 mt-0.5">{completedCount} of {checklistItems.length} steps complete</p>
+              </div>
+              <span className="text-xs font-medium text-blue-600">{Math.round((completedCount / checklistItems.length) * 100)}%</span>
+            </div>
+            <div className="mb-3 h-1.5 w-full rounded-full bg-blue-200">
+              <div
+                className="h-1.5 rounded-full bg-blue-500 transition-all"
+                style={{ width: `${Math.round((completedCount / checklistItems.length) * 100)}%` }}
+              />
+            </div>
+            <ul className="space-y-2">
+              {checklistItems.map((item) => (
+                <li key={item.label} className="flex items-center gap-3">
+                  {item.done ? (
+                    <CheckCircle className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                  ) : (
+                    <div className="h-4 w-4 flex-shrink-0 rounded-full border-2 border-blue-400" />
+                  )}
+                  {item.done ? (
+                    <span className="text-sm text-blue-700 line-through opacity-60">{item.label}</span>
+                  ) : (
+                    <Link href={item.href}>
+                      <span className="text-sm font-medium text-blue-800 underline underline-offset-2 hover:text-blue-600 cursor-pointer">{item.label}</span>
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
+
       {/* Stats Cards */}
       {(canManageDeals || canViewAnalytics) && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

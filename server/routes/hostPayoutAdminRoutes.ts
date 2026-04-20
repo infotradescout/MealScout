@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { and, desc, eq, gte, like, lt, or, sql } from "drizzle-orm";
+import Stripe from "stripe";
 
 import { db } from "../db";
 import { isAdmin, isAuthenticated } from "../unifiedAuth";
@@ -9,6 +10,10 @@ import {
   hosts,
   users,
 } from "@shared/schema";
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 const VALID_STATUSES = [
   "all",
@@ -278,16 +283,80 @@ export function registerHostPayoutAdminRoutes(app: Express) {
           .returning();
 
         if (nextStatus === "paid") {
+          // Attempt Stripe Connect transfer if the host has a connected account
+          let stripeTransferId: string | null = null;
+          let stripeTransferError: string | null = null;
+          if (stripe) {
+            const [hostRow] = await db
+              .select({
+                stripeConnectAccountId: hosts.stripeConnectAccountId,
+                stripePayoutsEnabled: hosts.stripePayoutsEnabled,
+                stripeChargesEnabled: hosts.stripeChargesEnabled,
+              })
+              .from(hosts)
+              .where(eq(hosts.id, existing.hostId))
+              .limit(1);
+
+            const connectAccountId = hostRow?.stripeConnectAccountId;
+            const payoutsEnabled = Boolean(hostRow?.stripePayoutsEnabled);
+
+            if (connectAccountId && payoutsEnabled) {
+              try {
+                const transfer = await stripe.transfers.create({
+                  amount: Math.abs(Number(existing.amountCents || 0)),
+                  currency: "usd",
+                  destination: connectAccountId,
+                  description: `MealScout host payout — request ${existing.id}`,
+                  metadata: {
+                    payoutRequestId: existing.id,
+                    hostId: existing.hostId,
+                    adminUserId: String((req as any).user?.id || ""),
+                  },
+                });
+                stripeTransferId = transfer.id;
+                console.log(
+                  `[host-payout] Stripe transfer ${transfer.id} created for request ${existing.id} → ${connectAccountId}`,
+                );
+              } catch (transferErr: unknown) {
+                // Log but do not block the status update — admin can retry manually
+                stripeTransferError =
+                  transferErr instanceof Error
+                    ? transferErr.message
+                    : String(transferErr);
+                console.error(
+                  `[host-payout] Stripe transfer failed for request ${existing.id}:`,
+                  stripeTransferError,
+                );
+              }
+            } else {
+              console.log(
+                `[host-payout] Host ${existing.hostId} has no Connect account or payouts not enabled — skipping transfer, manual payout required`,
+              );
+            }
+          }
+
           await db.insert(hostEarningsLedger).values({
             hostId: existing.hostId,
             bookingId: null,
-            stripePaymentIntentId: null,
+            stripePaymentIntentId: stripeTransferId,
             entryType: "payout",
             sourceType: "host_payout_request",
             amountCents: -Math.abs(Number(existing.amountCents || 0)),
-            description: `Host payout processed (${existing.id})`,
+            description: stripeTransferId
+              ? `Host payout via Stripe Connect transfer ${stripeTransferId} (${existing.id})`
+              : stripeTransferError
+                ? `Host payout processed manually — Stripe transfer failed: ${stripeTransferError} (${existing.id})`
+                : `Host payout processed manually — no Connect account (${existing.id})`,
             createdAt: now,
           });
+
+          // Update the payout request with the transfer ID for audit trail
+          if (stripeTransferId) {
+            await db
+              .update(hostPayoutRequests)
+              .set({ notes: `stripe_transfer:${stripeTransferId}` })
+              .where(eq(hostPayoutRequests.id, existing.id));
+          }
         }
 
         const { getHostEarningsSummary } =

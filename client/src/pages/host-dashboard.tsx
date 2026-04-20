@@ -37,6 +37,16 @@ interface HostEarningsSummary {
   canRequestPayout: boolean;
 }
 
+interface HostPayoutRequest {
+  id: string;
+  amountCents: number;
+  status: "pending" | "approved" | "paid" | "rejected" | "cancelled";
+  notes?: string | null;
+  createdAt: string;
+  paidAt?: string | null;
+  reviewedAt?: string | null;
+}
+
 interface LocationDemandItem {
   id: string;
   businessName: string;
@@ -62,6 +72,8 @@ function HostDashboard() {
     useState<HostEarningsSummary | null>(null);
   const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
   const [isRequestingPayout, setIsRequestingPayout] = useState(false);
+  const [payoutRequests, setPayoutRequests] = useState<HostPayoutRequest[]>([]);
+  const [isLoadingPayoutRequests, setIsLoadingPayoutRequests] = useState(false);
   const [seriesList, setSeriesList] = useState<any[]>([]);
   const [seriesError, setSeriesError] = useState("");
   const [seriesLoading, setSeriesLoading] = useState(false);
@@ -191,6 +203,25 @@ function HostDashboard() {
     }
   };
 
+  const loadPayoutRequests = async () => {
+    setIsLoadingPayoutRequests(true);
+    try {
+      const hostId = selectedHostId || host?.id;
+      const url = hostId
+        ? `/api/hosts/earnings/payout-requests?hostId=${encodeURIComponent(hostId)}`
+        : "/api/hosts/earnings/payout-requests";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load payout requests");
+      const data = await res.json();
+      setPayoutRequests(Array.isArray(data?.requests) ? data.requests : []);
+    } catch (error) {
+      console.error("Payout request history error:", error);
+      setPayoutRequests([]);
+    } finally {
+      setIsLoadingPayoutRequests(false);
+    }
+  };
+
   const loadDemandQueue = async () => {
     setIsLoadingDemand(true);
     try {
@@ -227,9 +258,10 @@ function HostDashboard() {
       }
 
       setEarningsSummary(data.summary || null);
+      void loadPayoutRequests();
       toast({
         title: "Payout requested",
-        description: "Your payout request has been submitted for review.",
+        description: "Your payout request has been submitted for review. You can track its status in the Payout History section below.",
       });
     } catch (error: any) {
       toast({
@@ -246,6 +278,7 @@ function HostDashboard() {
     if (!host) return;
     loadSeries();
     void loadHostEarnings();
+    void loadPayoutRequests();
     void loadDemandQueue();
   }, [host?.id]);
 
@@ -725,6 +758,73 @@ function HostDashboard() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Payout Request History */}
+      <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
+            Payout History
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void loadPayoutRequests()}
+            disabled={isLoadingPayoutRequests}
+          >
+            {isLoadingPayoutRequests ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
+        {isLoadingPayoutRequests ? (
+          <p className="text-sm text-[color:var(--text-muted)]">Loading...</p>
+        ) : payoutRequests.length === 0 ? (
+          <p className="text-sm text-[color:var(--text-muted)]">
+            No payout requests yet. Once you have available earnings and complete Stripe setup, you can request a payout above.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--border-subtle)] text-left text-xs text-[color:var(--text-muted)]">
+                  <th className="pb-2 pr-4">Date</th>
+                  <th className="pb-2 pr-4">Amount</th>
+                  <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2">Paid At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payoutRequests.map((req) => (
+                  <tr key={req.id} className="border-b border-[color:var(--border-subtle)] last:border-0">
+                    <td className="py-2 pr-4 text-[color:var(--text-secondary)]">
+                      {new Date(req.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="py-2 pr-4 font-medium text-[color:var(--text-primary)]">
+                      ${(req.amountCents / 100).toFixed(2)}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          req.status === "paid"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : req.status === "approved"
+                              ? "bg-blue-100 text-blue-800"
+                              : req.status === "rejected" || req.status === "cancelled"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="py-2 text-[color:var(--text-muted)]">
+                      {req.paidAt ? new Date(req.paidAt).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mb-6 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">

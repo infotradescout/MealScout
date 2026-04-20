@@ -1012,6 +1012,30 @@ export function registerHostRoutes(app: Express) {
     },
   );
 
+  // GET payout request history for the authenticated host
+  app.get(
+    "/api/hosts/earnings/payout-requests",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const host = await getOwnedHostForRequest(req);
+        if (!host) {
+          return res.status(404).json({ message: "Host profile not found" });
+        }
+        const requests = await db
+          .select()
+          .from(hostPayoutRequests)
+          .where(eq(hostPayoutRequests.hostId, host.id))
+          .orderBy(sql`${hostPayoutRequests.createdAt} desc`)
+          .limit(50);
+        res.json({ requests });
+      } catch (error: unknown) {
+        console.error("Error loading payout request history:", error);
+        res.status(500).json({ message: "Failed to load payout request history" });
+      }
+    },
+  );
+
   // Book a Parking Pass (creates payment intent with $10/day platform fee auto-added)
   app.post(
     "/api/parking-pass/:passId/book",
