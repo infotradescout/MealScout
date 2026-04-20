@@ -3512,9 +3512,10 @@ export default function ParkingPassPage() {
                       { ok: hasSpotPhoto, label: "Spot photo uploaded" },
                       {
                         ok: payoutsEnabled,
-                        label: "Host payouts enabled (optional)",
+                        label: "Host payouts enabled (optional — bookings work without this)",
+                        optional: true,
                       },
-                    ];
+                    ] as { ok: boolean; label: string; optional?: boolean }[];
                     const total = checklist.length;
                     const done = checklist.filter((item) => item.ok).length;
                     const pct = Math.round((done / Math.max(1, total)) * 100);
@@ -3581,14 +3582,20 @@ export default function ParkingPassPage() {
                                 className={`inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold ${
                                   item.ok
                                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : item.optional
+                                    ? "border-blue-200 bg-blue-50 text-blue-700"
                                     : "border-amber-200 bg-amber-50 text-amber-800"
                                 }`}
                               >
-                                {item.ok ? "OK" : "!"}
+                                {item.ok ? "OK" : item.optional ? "–" : "!"}
                               </span>
                               <span
                                 className={
-                                  item.ok ? "text-slate-700" : "text-amber-900"
+                                  item.ok
+                                    ? "text-slate-700"
+                                    : item.optional
+                                    ? "text-blue-800"
+                                    : "text-amber-900"
                                 }
                               >
                                 {item.label}
@@ -5570,6 +5577,21 @@ export default function ParkingPassPage() {
             <div
               className={`space-y-4 pb-24${isTruckViewUser ? " order-first" : ""}`}
             >
+              {isTruckViewUser && truck && truck.isVerified === false && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
+                  <p className="font-semibold">⚠️ Verification required to book parking passes</p>
+                  <p className="text-xs">
+                    Your business is pending verification. Booking is locked until your account is approved — most reviews complete within 1 business day.
+                    You can still browse available spots below.
+                  </p>
+                  <a
+                    href="/restaurant-signup"
+                    className="inline-block rounded-md bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800"
+                  >
+                    Submit verification documents
+                  </a>
+                </div>
+              )}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-[color:var(--text-primary)]">

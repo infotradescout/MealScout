@@ -5,11 +5,11 @@ import type { User } from "@shared/schema";
 import { logAudit } from "./auditLogger";
 import type { Request } from "express";
 
-function vacNormalizePhone(input: any): string {
+function vacNormalizePhone(input: unknown): string {
   return String(input || "").replace(/\D/g, "").slice(-10);
 }
 
-function vacSafeLower(input: any): string {
+function vacSafeLower(input: unknown): string {
   return String(input || "").trim().toLowerCase();
 }
 
@@ -20,7 +20,7 @@ function vacGetEmailDomain(email: string): string {
   return e.slice(at + 1);
 }
 
-function vacGetHostnameFromUrl(url: any): string {
+function vacGetHostnameFromUrl(url: unknown): string {
   try {
     if (!url) return "";
     let u = String(url).trim();

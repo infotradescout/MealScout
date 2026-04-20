@@ -61,9 +61,10 @@ export function registerStripeWebhookRoutes(
         }
         event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
       }
-    } catch (err: any) {
-      console.error(`Webhook signature verification failed:`, err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`Webhook signature verification failed:`, errMsg);
+      return res.status(400).send(`Webhook Error: ${errMsg}`);
     }
 
     console.log(`[WEBHOOK] Received event: ${event.type}`);
@@ -365,14 +366,14 @@ export function registerStripeWebhookRoutes(
                 // Send confirmation email to truck owner
                 try {
                   const [truck] = await db
-                    .select({ ownerId: restaurants.ownerId })
+                    .select({ ownerId: restaurants.ownerId, name: restaurants.name })
                     .from(restaurants)
                     .where(eq(restaurants.id, booking.truckId));
                   const owner = truck
                     ? await storage.getUser(truck.ownerId)
                     : null;
                   const [hostRow] = await db
-                    .select({ businessName: hosts.businessName })
+                    .select({ businessName: hosts.businessName, userId: hosts.userId })
                     .from(hosts)
                     .where(eq(hosts.id, booking.hostId))
                     .limit(1);
@@ -388,6 +389,21 @@ export function registerStripeWebhookRoutes(
                       slotSummary: eventRow.name || "Event",
                       totalCents: booking.totalCents,
                     });
+                    // Also notify the host
+                    if (hostRow?.userId) {
+                      const hostUser = await storage.getUser(hostRow.userId);
+                      if (hostUser?.email) {
+                        await emailService.sendHostBookingNotification({
+                          to: hostUser.email,
+                          hostName: hostRow.businessName || "Your location",
+                          truckName: truck?.name || "A food truck",
+                          startDate: dateKey,
+                          endDate: dateKey,
+                          slotSummary: eventRow.name || undefined,
+                          totalCents: booking.totalCents,
+                        });
+                      }
+                    }
                   }
                 } catch (emailErr) {
                   console.error(
@@ -966,10 +982,10 @@ export function registerStripeWebhookRoutes(
                 const owner = truck
                   ? await storage.getUser(truck.ownerId)
                   : null;
+                const endDateKey =
+                  expectedDateKeys[expectedDateKeys.length - 1] ||
+                  startDateKey;
                 if (owner?.email) {
-                  const endDateKey =
-                    expectedDateKeys[expectedDateKeys.length - 1] ||
-                    startDateKey;
                   await emailService.sendBookingConfirmationEmail({
                     to: owner.email,
                     hostName: host?.businessName || "Host location",
@@ -978,6 +994,21 @@ export function registerStripeWebhookRoutes(
                     slotSummary: normalizedSlotTypes.join(", "),
                     totalCents: amountCents,
                   });
+                }
+                // Also notify the host
+                if (host?.userId) {
+                  const hostUser = await storage.getUser(host.userId);
+                  if (hostUser?.email) {
+                    await emailService.sendHostBookingNotification({
+                      to: hostUser.email,
+                      hostName: host.businessName || "Your location",
+                      truckName: truck?.name || "A food truck",
+                      startDate: startDateKey,
+                      endDate: endDateKey,
+                      slotSummary: normalizedSlotTypes.length > 0 ? normalizedSlotTypes.join(", ") : undefined,
+                      totalCents: amountCents,
+                    });
+                  }
                 }
 
                 // Best-effort: mark one-time booking-fee promo as redeemed.
@@ -1224,18 +1255,20 @@ export function registerStripeWebhookRoutes(
             `[WEBHOOK] Subscription ${subscriptionUpdated.id} updated to status: ${subscriptionUpdated.status}`,
           );
 
-          // Find user by subscription ID
-          const userForUpdate = await storage.getUserByStripeSubscriptionId(
+          // Find user by subscription ID; fall back to customer ID for reactivations
+          let userForUpdate = await storage.getUserByStripeSubscriptionId(
             subscriptionUpdated.id,
           );
+          if (!userForUpdate && subscriptionUpdated.customer) {
+            const customerId = String(subscriptionUpdated.customer);
+            userForUpdate = await storage.getUserByStripeCustomerId(customerId);
+          }
 
           if (userForUpdate) {
             console.log(
               `[WEBHOOK] Found user ${userForUpdate.id} for subscription ${subscriptionUpdated.id}`,
             );
 
-            // If subscription becomes inactive or canceled, we might want to handle it
-            // For now, we rely on real-time checks in validateSubscriptionLimits
             if (
               subscriptionUpdated.status === "canceled" ||
               subscriptionUpdated.status === "incomplete_expired"
@@ -1243,7 +1276,12 @@ export function registerStripeWebhookRoutes(
               console.log(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is now ${subscriptionUpdated.status} for user ${userForUpdate.id}`,
               );
-              // The validateSubscriptionLimits function will catch this on next deal creation attempt
+              // Clear the subscription ID so access checks fail immediately
+              await storage.updateUser(userForUpdate.id, {
+                stripeSubscriptionId: null,
+              }).catch((err: unknown) => {
+                console.error("[WEBHOOK] Failed to clear stripeSubscriptionId:", err);
+              });
               db.insert(lisaClaims).values({
                 app: "mealscout",
                 claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_CANCELLED,
@@ -1258,6 +1296,14 @@ export function registerStripeWebhookRoutes(
               console.log(
                 `[WEBHOOK] Subscription ${subscriptionUpdated.id} is active for user ${userForUpdate.id}`,
               );
+              // Ensure user record reflects the active subscription (handles reactivations)
+              if (userForUpdate.stripeSubscriptionId !== subscriptionUpdated.id) {
+                await storage.updateUser(userForUpdate.id, {
+                  stripeSubscriptionId: subscriptionUpdated.id,
+                }).catch((err: unknown) => {
+                  console.error("[WEBHOOK] Failed to sync stripeSubscriptionId on reactivation:", err);
+                });
+              }
               db.insert(lisaClaims).values({
                 app: "mealscout",
                 claimType: LISA_CLAIM_TYPES.SUBSCRIPTION_STARTED,
@@ -1319,7 +1365,7 @@ export function registerStripeWebhookRoutes(
             stripeOnboardingCompleted: Boolean(account.details_submitted),
             stripeConnectStatus: status,
             updatedAt: new Date(),
-          } as any;
+          };
 
           const hostUpdate = await db
             .update(hosts)
@@ -1331,8 +1377,8 @@ export function registerStripeWebhookRoutes(
             .set(updateValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
-          const hostRows = Number((hostUpdate as any)?.rowCount || 0);
-          const supplierRows = Number((supplierUpdate as any)?.rowCount || 0);
+          const hostRows = Number((hostUpdate as { rowCount?: number })?.rowCount || 0);
+          const supplierRows = Number((supplierUpdate as { rowCount?: number })?.rowCount || 0);
           console.log(
             `[WEBHOOK] Synced Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
           );
@@ -1340,7 +1386,7 @@ export function registerStripeWebhookRoutes(
         }
 
         case "account.application.deauthorized": {
-          const deauth = event.data.object as any;
+          const deauth = event.data.object as { account?: string };
           const accountId = String(deauth?.account || "").trim();
           if (!accountId) break;
 
@@ -1350,7 +1396,7 @@ export function registerStripeWebhookRoutes(
             stripeChargesEnabled: false,
             stripePayoutsEnabled: false,
             updatedAt: new Date(),
-          } as any;
+          };
 
           const hostUpdate = await db
             .update(hosts)
@@ -1362,8 +1408,8 @@ export function registerStripeWebhookRoutes(
             .set(revokedValues)
             .where(eq(suppliers.stripeConnectAccountId, accountId));
 
-          const hostRows = Number((hostUpdate as any)?.rowCount || 0);
-          const supplierRows = Number((supplierUpdate as any)?.rowCount || 0);
+          const hostRows = Number((hostUpdate as { rowCount?: number })?.rowCount || 0);
+          const supplierRows = Number((supplierUpdate as { rowCount?: number })?.rowCount || 0);
           console.log(
             `[WEBHOOK] Deauthorized Stripe account ${accountId} (hosts: ${hostRows}, suppliers: ${supplierRows})`,
           );

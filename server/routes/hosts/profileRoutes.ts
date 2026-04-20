@@ -1,4 +1,5 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
+import type { User } from "@shared/schema";
 import { z } from "zod";
 import { isAuthenticated } from "../../unifiedAuth";
 import { storage } from "../../storage";
@@ -14,9 +15,9 @@ import {
 
 export function registerHostProfileRoutes(app: Express) {
   // POST /api/hosts - Create a new host profile
-  app.post("/api/hosts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/hosts", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as User).id;
       const locationRequestClaimId = String(
         req.body?.locationRequestClaimId || "",
       ).trim();
@@ -137,7 +138,7 @@ export function registerHostProfileRoutes(app: Express) {
       if (locationRequestClaimId) {
         await storage
           .convertHostLocationClaim(locationRequestClaimId, host.id, userId)
-          .catch((error: any) => {
+          .catch((error: unknown) => {
             console.error("Failed to convert host location claim:", error);
           });
       }
@@ -147,30 +148,29 @@ export function registerHostProfileRoutes(app: Express) {
         parkingPassSeriesReady,
         locationRequestClaimId: locationRequestClaimId || null,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating host:", error);
       if (error instanceof z.ZodError) {
         return res
           .status(400)
           .json({ message: "Invalid host data", errors: error.errors });
       }
-      res
-        .status(400)
-        .json({ message: error.message || "Failed to create host profile" });
+      const msg = error instanceof Error ? error.message : "Failed to create host profile";
+      res.status(400).json({ message: msg });
     }
   });
 
   // GET /api/hosts/me - Get the current user's host profile
-  app.get("/api/hosts/me", isAuthenticated, async (req: any, res) => {
+  app.get("/api/hosts/me", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const userId = req.user.id;
+      const userId = (req.user as User).id;
       const hostProfiles = await storage.getHostsByUserId(userId);
       let host = hostProfiles[0] ?? null;
       if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }
       res.json(host);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching host profile:", error);
       res.status(404).json({ message: "Host profile not found" });
     }

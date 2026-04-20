@@ -1326,6 +1326,50 @@ export class EmailService {
     });
   }
 
+  async sendHostBookingNotification(params: {
+    to: string;
+    hostName: string;
+    truckName: string;
+    startDate: string;
+    endDate: string;
+    slotSummary?: string;
+    totalCents: number;
+  }): Promise<boolean> {
+    const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
+    const dashboardUrl = `${baseUrl.replace(/\/+$/, "")}/host/dashboard`;
+    const dateLabel =
+      params.startDate === params.endDate
+        ? params.startDate
+        : `${params.startDate} \u2013 ${params.endDate}`;
+    const slotLine = params.slotSummary
+      ? `<p><strong>Slots:</strong> ${params.slotSummary}</p>`
+      : "";
+    const content = `
+      <h2>New booking at ${params.hostName}</h2>
+      <p><strong>${params.truckName}</strong> has booked a spot at your location.</p>
+      <p><strong>Dates:</strong> ${dateLabel}</p>
+      ${slotLine}
+      <p><strong>Booking total:</strong> $${(params.totalCents / 100).toFixed(2)}</p>
+      <p style="margin: 18px 0;">
+        <a href="${dashboardUrl}" class="cta-button">View Host Dashboard</a>
+      </p>
+      <p>If the button doesn't work, paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #f97316;">${dashboardUrl}</p>
+    `;
+    const html = EmailTemplates.getBaseTemplate(
+      `New booking: ${params.truckName}`,
+      content,
+    );
+    const text = `${params.truckName} has booked a spot at ${params.hostName} for ${dateLabel}. Total: $${(params.totalCents / 100).toFixed(2)}. View your dashboard: ${dashboardUrl}`;
+    return this.sendEmail({
+      to: params.to,
+      subject: `\uD83D\uDE9A New booking: ${params.truckName} at ${params.hostName}`,
+      html,
+      text,
+      category: "general",
+    });
+  }
+
   async sendParkingPassCompletionReminder(
     params: ParkingPassCompletionReminderParams,
   ): Promise<boolean> {

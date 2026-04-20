@@ -244,6 +244,8 @@ export function BookingPaymentModal({
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [creditsToApply, setCreditsToApply] = useState("");
   const [promoCode, setPromoCode] = useState("");
+  // true = host has Stripe Connect ready; false = payment held on platform, host payout deferred
+  const [hostPaymentsReady, setHostPaymentsReady] = useState<boolean | null>(null);
   const cancelOnInitiateRef = useRef(false);
   const idempotencyKeyRef = useRef<string | null>(null);
   const stage: "review" | "pay" = clientSecret ? "pay" : "review";
@@ -332,6 +334,7 @@ export function BookingPaymentModal({
       }
       setClientSecret(data.clientSecret);
       setPaymentIntentId(data.paymentIntentId || null);
+      setHostPaymentsReady(data.hostPaymentsReady !== false);
       setBookingData({
         totalCents: data.totalCents,
         breakdown: data.breakdown,
@@ -518,6 +521,14 @@ export function BookingPaymentModal({
         {clientSecret ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
             Pricing locked. Complete payment to confirm your booking.
+          </div>
+        ) : null}
+
+        {clientSecret && hostPaymentsReady === false ? (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+            <strong>Note:</strong> This host is still setting up their payout account. Your payment
+            will be held securely by MealScout and released to the host once they complete setup.
+            Your booking is fully guaranteed.
           </div>
         ) : null}
 

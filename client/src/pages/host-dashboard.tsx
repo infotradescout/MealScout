@@ -565,27 +565,39 @@ function HostDashboard() {
         <Alert className="mb-6 border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10">
           <AlertCircle className="h-4 w-4 text-[color:var(--status-warning)]" />
           <AlertTitle className="text-[color:var(--text-primary)]">
-            Complete Stripe Setup to Cash Out Earnings
+            Your parking pass is live and accepting bookings
           </AlertTitle>
           <AlertDescription className="text-[color:var(--text-secondary)]">
-            <p className="mb-3">
-              Trucks can still book your paid parking pass slots now. Booking
-              earnings accrue to your host balance, and payouts unlock once
-              Stripe onboarding is complete.
+            <p className="mb-1">
+              Trucks can book your spots right now — MealScout holds your earnings securely until you complete Stripe setup.
             </p>
+            {earningsSummary && earningsSummary.accruedCents > 0 && (
+              <p className="mb-3 font-semibold text-[color:var(--text-primary)]">
+                💰 You have{" "}
+                <span className="text-emerald-700">
+                  ${(earningsSummary.accruedCents / 100).toFixed(2)}
+                </span>{" "}
+                in accrued earnings waiting to be unlocked. Complete Stripe setup to cash out.
+              </p>
+            )}
+            {(!earningsSummary || earningsSummary.accruedCents === 0) && (
+              <p className="mb-3">
+                Complete Stripe onboarding now so your first payout is ready the moment a truck books your spot.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 onClick={handleEnablePayments}
                 className="bg-[color:var(--accent-text)] hover:bg-[color:var(--action-hover)]"
               >
-                Complete Stripe Setup
+                {host.stripeConnectAccountId ? "Resume Stripe Setup" : "Set Up Payouts (Free)"}
               </Button>
               <Button
                 variant="outline"
                 onClick={refreshStripeStatus}
                 disabled={isCheckingStripe}
               >
-                {isCheckingStripe ? "Checking..." : "Refresh Stripe Status"}
+                {isCheckingStripe ? "Checking..." : "Refresh Status"}
               </Button>
             </div>
           </AlertDescription>

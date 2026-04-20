@@ -1288,14 +1288,19 @@ export default function RestaurantSignup() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isAutoBusinessVerified && (
-                <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 text-sm text-[color:var(--text-secondary)]">
-                  <div className="font-semibold text-[color:var(--text-primary)]">
-                    Business Verified
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+                  <div className="font-semibold">
+                    ✓ Business Verified
                   </div>
                   <div className="mt-1 text-xs">
-                    This business was matched from a registry list, so business verification is automatic.
-                    You still need email verification to log in.
+                    Your business was automatically verified. You can now book parking passes and access all features.
+                    You still need to confirm your email to log in.
                   </div>
+                </div>
+              )}
+              {!isAutoBusinessVerified && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <strong>Verification required</strong> — {COPY.verification.pendingBanner}
                 </div>
               )}
               <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">

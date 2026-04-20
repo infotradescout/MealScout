@@ -1788,6 +1788,11 @@ export function registerHostRoutes(app: Express) {
           clientSecret: paymentIntent.client_secret,
           paymentIntentId: paymentIntent.id,
           totalCents,
+          // hostPaymentsReady: true means the host has a fully-onboarded Stripe Connect
+          // account and will receive their payout immediately after the booking is confirmed.
+          // false means the payment is charged to the MealScout platform account and the
+          // host payout will be processed once they complete Stripe Connect onboarding.
+          hostPaymentsReady: hostPaymentsEnabled,
           breakdown: {
             hostPrice: adjustedHostPriceCents,
             platformFee: adjustedPlatformFeeCents,

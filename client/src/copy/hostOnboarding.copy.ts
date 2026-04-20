@@ -197,9 +197,11 @@ export const HOST_ONBOARDING_COPY = {
   },
 
   verification: {
-    title: "Upload business documents",
+    title: "Verify your business to unlock bookings",
     intro:
-      "Add one or more recent documents so we can quickly confirm this is a real, operating business.",
+      "Your account is pending verification. You cannot book parking passes or access premium features until your business is verified. Upload one or more documents below to start the review — most reviews complete within 1 business day.",
+    pendingBanner:
+      "Verification pending — parking pass bookings are locked until your business is approved.",
     claimRequiredNote:
       "Claims require verification. You can submit documents now to complete your request.",
     bullets: [
@@ -208,9 +210,9 @@ export const HOST_ONBOARDING_COPY = {
       "Updated insurance or health department certificates",
     ],
     whyVerify:
-      "Verified businesses get a visible trust badge and priority placement when diners search for nearby food trucks and restaurants.",
-    backButton: "Back to Restaurant Details",
-    skipButton: "Skip for Now",
+      "Verified businesses get a visible trust badge, priority placement on the map, and the ability to book parking pass spots.",
+    backButton: "Back to Business Details",
+    skipButton: "Skip — I'll verify later",
     submitIdle: "Submit for Review",
     submitPending: "Submitting...",
   },
