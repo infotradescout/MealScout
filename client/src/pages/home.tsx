@@ -900,14 +900,16 @@ export default function Home() {
           <div className="home-hero-panel">
             <div className="mb-3">
               <h1 className="hero-title text-xl mb-1">
-                {firstName ? `Hey ${firstName}, hungry?` : "Hungry?"}
+                {firstName
+                  ? `Hey ${firstName}, your local food scene is live`
+                  : "Your Local Food Scene Dashboard"}
               </h1>
               <p className="hero-subtitle text-sm">
-                See what's happening{" "}
+                Live trucks, nearby deals, and local spots by category{" "}
                 {shortLocation === "Your Location"
                   ? "near you"
                   : `in ${shortLocation}`}
-                . Fresh deals and local favorites.
+                .
               </p>
             </div>
 
@@ -966,7 +968,7 @@ export default function Home() {
                   }}
                 >
                   <Sparkles className="w-4 h-4 mr-1" />
-                  Featured
+                  Deals now
                 </Button>
               </Link>
             </div>
@@ -1051,117 +1053,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Filter Chips */}
-            <div className="flex space-x-2 overflow-x-auto pb-1">
-              <Link href="/deals/featured">
-                <Button
-                  className="filter-pill filter-pill--active flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-semibold shadow-clean hover:shadow-clean-lg transition-all"
-                  size="sm"
-                >
-                  <Sparkles className="w-4 h-4 mr-1.5" />  Hot Deals
-                </Button>
-              </Link>
-              <Link href="/category/pizza">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Pizza
-                </Button>
-              </Link>
-              <Link href="/category/burgers">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Burgers
-                </Button>
-              </Link>
-              <Link href="/category/sushi">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Sushi
-                </Button>
-              </Link>
-              <Link href="/category/chinese">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Chinese
-                </Button>
-              </Link>
-              <Link href="/category/mexican">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Tacos
-                </Button>
-              </Link>
-              <Link href="/category/breakfast">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Breakfast
-                </Button>
-              </Link>
-              <Link href="/category/seafood">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Seafood
-                </Button>
-              </Link>
-              <Link href="/category/bbq">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   BBQ
-                </Button>
-              </Link>
-              <Link href="/category/dessert">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Desserts
-                </Button>
-              </Link>
-              <Link href="/category/coffee">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Coffee
-                </Button>
-              </Link>
-              <Link href="/category/healthy">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
-                >
-                   Healthy
-                </Button>
-              </Link>
-            </div>
-
             {/* Manual location input (only when we don't have a location) */}
             {!location && !showWelcomeModal && (
               <div className="mt-4 w-full max-w-md">
@@ -1210,7 +1101,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
               <h3 className="text-sm font-bold text-foreground">
-                Live Trucks:{" "}
+                Live Food Trucks:{" "}
                 {shortLocation === "Your Location" ? "Nearby" : shortLocation}
               </h3>
             </div>
@@ -1328,13 +1219,13 @@ export default function Home() {
           <div className="mb-3">
             <h2 className="text-base font-bold text-foreground flex items-center">
               <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-              Food Spots in{" "}
+              Restaurants, Bars & Trucks With Deals in{" "}
               {shortLocation === "Your Location"
                 ? "Your Neighborhood"
                 : shortLocation}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Public truck, restaurant, and bar profiles. Video recommendations carry extra weight.
+              Deal-active local spots ranked by live demand, recommendations, and proximity.
             </p>
             <Link href="/deals/featured">
               <Button
@@ -1382,6 +1273,130 @@ export default function Home() {
         </div>
       </section>
       )}
+
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="mb-3">
+            <h2 className="text-base font-bold text-foreground flex items-center">
+              <UtensilsCrossed className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+              Explore Local Spots by Category
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Jump straight to neighborhood favorites by cuisine and vibe.
+            </p>
+          </div>
+
+          <div className="flex space-x-2 overflow-x-auto pb-1">
+            <Link href="/deals/featured">
+              <Button
+                className="filter-pill filter-pill--active flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-semibold shadow-clean hover:shadow-clean-lg transition-all"
+                size="sm"
+              >
+                <Sparkles className="w-4 h-4 mr-1.5" /> Hot Deals
+              </Button>
+            </Link>
+            <Link href="/category/pizza">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Pizza
+              </Button>
+            </Link>
+            <Link href="/category/burgers">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Burgers
+              </Button>
+            </Link>
+            <Link href="/category/sushi">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Sushi
+              </Button>
+            </Link>
+            <Link href="/category/chinese">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Chinese
+              </Button>
+            </Link>
+            <Link href="/category/mexican">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Tacos
+              </Button>
+            </Link>
+            <Link href="/category/breakfast">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Breakfast
+              </Button>
+            </Link>
+            <Link href="/category/seafood">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Seafood
+              </Button>
+            </Link>
+            <Link href="/category/bbq">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                BBQ
+              </Button>
+            </Link>
+            <Link href="/category/dessert">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Desserts
+              </Button>
+            </Link>
+            <Link href="/category/coffee">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Coffee
+              </Button>
+            </Link>
+            <Link href="/category/healthy">
+              <Button
+                variant="outline"
+                size="sm"
+                className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+              >
+                Healthy
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {weeklyTrendingVideos.length > 0 && (
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
