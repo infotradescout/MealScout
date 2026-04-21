@@ -5,6 +5,7 @@ import {
   insertHostSchema,
   eventInterests,
   events,
+  hosts,
   restaurants,
   socialPostQueue,
 } from "@shared/schema";
@@ -361,6 +362,40 @@ export function registerEventCoordinatorRoutes(
             locationType: "event_coordinator",
           });
           host = await storage.createHost(hostData);
+        } else {
+          const submittedHost = {
+            businessName: parsed.businessName,
+            address: parsed.address,
+            city: parsed.city,
+            state: parsed.state,
+            contactPhone: parsed.contactPhone,
+            locationType: "event_coordinator",
+          };
+          const hasHostDiff =
+            String(host.businessName || "") !== submittedHost.businessName ||
+            String(host.address || "") !== submittedHost.address ||
+            String(host.city || "") !== submittedHost.city ||
+            String(host.state || "") !== submittedHost.state ||
+            String(host.contactPhone || "") !== submittedHost.contactPhone ||
+            String(host.locationType || "") !== submittedHost.locationType;
+
+          // Keep manual admin posting in sync with entered organizer details.
+          if (hasHostDiff) {
+            const [updatedHost] = await db
+              .update(hosts)
+              .set({ ...submittedHost, updatedAt: new Date() })
+              .where(eq(hosts.id, host.id))
+              .returning();
+            if (updatedHost) {
+              host = updatedHost as any;
+            }
+          }
+        }
+
+        if (!host) {
+          return res
+            .status(500)
+            .json({ message: "Failed to prepare host details for event" });
         }
 
         const eventPayload = insertEventSchema.parse({
