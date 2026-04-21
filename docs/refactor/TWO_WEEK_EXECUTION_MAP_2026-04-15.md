@@ -23,6 +23,7 @@ Current file-size snapshot (2026-04-18):
 Operational note:
 - Keep this document as historical execution map for the 2026-04-15 window.
 - Treat `docs/refactor/REFACTOR_BOARD.md` + `docs/refactor/REFACTOR_METRICS_LOG.md` as source of truth for completion evidence.
+ - Contation execution map: `docs/refactor/TWO_WEEK_EXECUTION_MAP_2026-04-18.md` (PR-21 and PR-22 complete; next active slice: PR-23).
 
 ## Scope and Constraints
 

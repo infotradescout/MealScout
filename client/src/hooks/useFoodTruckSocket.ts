@@ -5,6 +5,7 @@ import { API_BASE_URL } from "@/lib/api";
 
 // Sockets are ON by default; set VITE_ENABLE_SOCKETS=false to disable
 const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
+const DEBUG_SOCKETS = import.meta.env.VITE_DEBUG_SOCKETS === "true";
 
 interface FoodTruckLocation {
   restaurantId: string;
@@ -164,7 +165,9 @@ export function useFoodTruckSocket({
 
       // Handle errors
       socket.on('error', (error) => {
-        console.error('Socket.IO server error:', error.message || error);
+        if (DEBUG_SOCKETS) {
+          console.debug('Socket.IO server error:', error.message || error);
+        }
         setConnectionError(error.message || 'Server error');
       });
 
@@ -190,12 +193,16 @@ export function useFoodTruckSocket({
       });
 
       socket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error);
+        if (DEBUG_SOCKETS) {
+          console.debug('Socket.IO connection error:', error);
+        }
         setConnectionError('Socket connection failed');
       });
 
     } catch (error) {
-      console.error('Failed to create Socket.IO connection:', error);
+      if (DEBUG_SOCKETS) {
+        console.debug('Failed to create Socket.IO connection:', error);
+      }
       setConnectionError('Failed to establish connection');
     }
   }, [user, onLocationUpdate, onStatusUpdate, autoConnect, reconnectAttempts]);
