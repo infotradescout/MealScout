@@ -712,9 +712,9 @@ export default function Home() {
 
       {/* Header with Logo and Navigation */}
       <header className="section section--full bg-[var(--bg-card)] border-b border-[color:var(--border-subtle)] sticky top-0 z-10 shadow-clean">
-        <div className="content flex items-center justify-between py-3">
+        <div className="content flex items-center justify-between py-2">
           <div className="flex items-center space-x-2 flex-shrink-0">
-            <div className="w-14 h-14 flex items-center justify-center overflow-hidden">
+            <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
               <img
                 src={mealScoutLogo}
                 alt="MealScout Logo"
@@ -731,7 +731,7 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Install app"
                   aria-label="Install app"
                 >
@@ -752,7 +752,7 @@ export default function Home() {
                     });
                     setNavigateTo("/login");
                   }}
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Login"
                   aria-label="Log in"
                 >
@@ -770,7 +770,7 @@ export default function Home() {
                     });
                     setNavigateTo("/customer-signup");
                   }}
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Customer Sign Up"
                   aria-label="Customer sign up"
                 >
@@ -788,7 +788,7 @@ export default function Home() {
                     });
                     setNavigateTo("/customer-signup?role=business");
                   }}
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Restaurant/Bar/Food Truck Sign Up"
                   aria-label="Business sign up"
                 >
@@ -799,7 +799,7 @@ export default function Home() {
                   size="icon"
                   onClick={retryLocation}
                   disabled={isLoadingLocation}
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Refresh Location"
                   aria-label="Refresh location"
                 >
@@ -824,7 +824,7 @@ export default function Home() {
                   size="icon"
                   onClick={retryLocation}
                   disabled={isLoadingLocation}
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
                   title="Refresh Location"
                   aria-label="Refresh location"
                 >
@@ -900,16 +900,14 @@ export default function Home() {
           <div className="home-hero-panel">
             <div className="mb-3">
               <h1 className="hero-title text-xl mb-1">
-                {firstName
-                  ? `Hey ${firstName}, your local food scene is live`
-                  : "Your Local Food Scene Dashboard"}
+                {firstName ? `Hey ${firstName}, hungry?` : "Hungry?"}
               </h1>
               <p className="hero-subtitle text-sm">
-                Live trucks, nearby deals, and local spots by category{" "}
+                See what's happening{" "}
                 {shortLocation === "Your Location"
                   ? "near you"
                   : `in ${shortLocation}`}
-                .
+                . Fresh deals and local favorites.
               </p>
             </div>
 
@@ -971,49 +969,6 @@ export default function Home() {
                   Deals now
                 </Button>
               </Link>
-            </div>
-
-            <div className="mb-5 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
-                Private + Hosted Requests
-              </p>
-              <h2 className="mt-1 text-base font-semibold text-foreground">
-                Book trucks for parties, catering, schools, offices, and community events
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use Requests for private or hosted opportunities, then use the
-                Events portal for public calls and open placements.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href="/request-truck">
-                  <Button
-                    size="sm"
-                    className="action-primary"
-                    onPointerDown={() => {
-                      trackUxEvent("home_private_truck_request_click", {
-                        surface: "home_hero",
-                      });
-                    }}
-                  >
-                    <Truck className="w-4 h-4 mr-1" />
-                    Start a request
-                  </Button>
-                </Link>
-                <Link href="/events">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onPointerDown={() => {
-                      trackUxEvent("home_events_portal_click", {
-                        surface: "home_hero",
-                      });
-                    }}
-                  >
-                    <Sparkles className="w-4 h-4 mr-1" />
-                    Open Events Portal
-                  </Button>
-                </Link>
-              </div>
             </div>
 
             {geoAds.length > 0 && (
@@ -1475,35 +1430,6 @@ export default function Home() {
         </div>
       </section>
 
-      {location && featuredBusinesses.length > 0 && (
-      <section className="section section--full section--surface py-3">
-        <div className="content">
-          <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
-            <h2 className="text-lg font-semibold text-foreground">
-              {`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Local businesses based on your current location.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {featuredBusinesses.slice(0, 8).map((business) => (
-                <Link key={business.id} href={`/restaurant/${business.id}`}>
-                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 hover:shadow-clean transition-shadow">
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">
-                      {business.name}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                      {business.cuisineType || "Local Food Spot"}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-      )}
-
       {/* Owner Section - MOVED UP FOR LOGGED OUT USERS */}
       {!user && (
         <section className="section section--full section--surface-2 py-2 text-foreground">
@@ -1540,6 +1466,45 @@ export default function Home() {
       {/* TWO-COLUMN SECTIONS - SIDE BY SIDE */}
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-4">
         <div className="content">
+          <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+              Requests + Events
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Private and hosted requests live alongside public event opportunities.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Link href="/request-truck">
+                <Button
+                  size="sm"
+                  className="action-primary"
+                  onPointerDown={() => {
+                    trackUxEvent("home_private_truck_request_click", {
+                      surface: "home_events_showcase",
+                    });
+                  }}
+                >
+                  <Truck className="w-4 h-4 mr-1" />
+                  Start a request
+                </Button>
+              </Link>
+              <Link href="/events">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPointerDown={() => {
+                    trackUxEvent("home_events_portal_click", {
+                      surface: "home_events_showcase",
+                    });
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  Open Events Portal
+                </Button>
+              </Link>
+            </div>
+          </div>
+
           {!user ? (
             /* LOGGED OUT - TWO SECTIONS SIDE BY SIDE */
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1746,6 +1711,35 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {location && featuredBusinesses.length > 0 && (
+      <section className="section section--full section--surface py-2">
+        <div className="content">
+          <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+            <h2 className="text-base font-semibold text-foreground">
+              {`What's Poppin ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Quick pulse of popular spots right now.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {featuredBusinesses.slice(0, 6).map((business) => (
+                <Link key={business.id} href={`/restaurant/${business.id}`}>
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-2.5 hover:shadow-clean transition-shadow">
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                      {business.name}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                      {business.cuisineType || "Local Food Spot"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
 
       {/* Footer */}
       <footer className="section section--full border-t border-[color:var(--border-subtle)] py-4">
