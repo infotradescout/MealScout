@@ -283,9 +283,9 @@ export default function EventsPage() {
           {isStaffOrAdmin && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader>
-                <CardTitle className="text-lg">Event Intake Requests</CardTitle>
+                <CardTitle className="text-lg">Incoming Opportunity Requests</CardTitle>
                 <p className="text-sm text-[color:var(--text-secondary)]">
-                  Review incoming requests and filter by public/private visibility.
+                  Review and triage organizer requests, truck leads, and private opportunities. Use filters to route requests by visibility and type.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-3 pt-2">
                   <div>
@@ -317,9 +317,9 @@ export default function EventsPage() {
                         )
                       }
                     >
-                      <option value="all">All request types</option>
-                      <option value="event">Organizer requests</option>
-                      <option value="food_truck">Truck requests</option>
+                      <option value="all">All opportunity types</option>
+                      <option value="event">Organizer/event intake</option>
+                      <option value="food_truck">Truck/catering intake</option>
                     </select>
                   </div>
                 </div>
@@ -339,8 +339,8 @@ export default function EventsPage() {
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant="outline">
                             {item.claimType === "event"
-                              ? "Organizer"
-                              : "Truck request"}
+                              ? "Organizer intake"
+                              : "Truck/catering intake"}
                           </Badge>
                           <Badge
                             variant={
