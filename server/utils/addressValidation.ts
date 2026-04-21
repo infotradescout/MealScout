@@ -1,3 +1,18 @@
+import { getCached, setCached } from "./googleApiCache";
+
+// Cache address validation results for 30 days — addresses rarely change and
+// validation is expensive ($0.005/call on the Address Validation API).
+const ADDRESS_VALIDATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const normalizeAddressKey = (input: AddressValidationInput): string =>
+  [
+    String(input.address || "").trim().toLowerCase(),
+    String(input.city || "").trim().toLowerCase(),
+    String(input.state || "").trim().toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join("|");
+
 type AddressValidationInput = {
   address?: string | null;
   city?: string | null;
@@ -82,6 +97,11 @@ export async function validateUsAddress(
   const state = String(input.state || "").trim();
   if (!address) return null;
 
+  // ── Cache check (L1+L2 via googleApiCache) ──────────────────────────────────
+  const cacheKey = normalizeAddressKey(input);
+  const cached = await getCached<AddressValidationResult>("address_validation", cacheKey);
+  if (cached) return cached;
+
   const payload = {
     address: {
       regionCode: "US",
@@ -116,31 +136,35 @@ export async function validateUsAddress(
 
   const suggested = parseUsAddress(data, { address, city, state });
 
+  let result: AddressValidationResult;
   if (missing.length > 0) {
-    return {
+    result = {
       ok: false,
       reason: "missing_components",
       message: "Address is missing required components.",
       missingComponentTypes: missing,
       suggested,
     };
-  }
-
-  if (hasUnconfirmed || hasInferred) {
-    return {
+  } else if (hasUnconfirmed || hasInferred) {
+    result = {
       ok: false,
       reason: "unconfirmed",
       message: "Address could not be fully confirmed.",
       missingComponentTypes: [],
       suggested,
     };
+  } else {
+    result = {
+      ok: true,
+      reason: "unconfirmed",
+      message: "Address validated.",
+      missingComponentTypes: [],
+      suggested,
+    };
   }
 
-  return {
-    ok: true,
-    reason: "unconfirmed",
-    message: "Address validated.",
-    missingComponentTypes: [],
-    suggested,
-  };
+  // Persist for 30 days — re-validating the same address repeatedly wastes quota
+  setCached("address_validation", cacheKey, result, ADDRESS_VALIDATION_TTL_MS);
+
+  return result;
 }

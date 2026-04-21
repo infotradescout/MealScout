@@ -28,6 +28,25 @@ type PlaceAutocompleteInputProps = {
   dataTestId?: string;
 };
 
+/**
+ * Generates a UUID v4-compatible session token.
+ * A new token is created when the component mounts and is reused for the
+ * lifetime of the autocomplete session (all keystrokes until the user selects
+ * a suggestion). The same token must be sent with the subsequent place-details
+ * request so Google bills the entire session as a single "Autocomplete
+ * (included with Place Details)" call instead of charging per keystroke.
+ */
+function generateSessionToken(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 export function PlaceAutocompleteInput({
   id,
   value,
@@ -46,10 +65,16 @@ export function PlaceAutocompleteInput({
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Session token: created once per component mount, rotated after a selection.
+  // Sending this token groups all autocomplete requests + the final place-details
+  // request into a single billable session on Google's side.
+  const sessionTokenRef = useRef<string>(generateSessionToken());
+
+  // Debounce: 300ms — slightly longer than before to reduce API calls further
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setDebouncedValue(value);
-    }, 220);
+    }, 300);
     return () => window.clearTimeout(timeout);
   }, [value]);
 
@@ -80,10 +105,11 @@ export function PlaceAutocompleteInput({
 
       setIsLoading(true);
       try {
-        const res = await fetch(
-          `/api/map/place-autocomplete?input=${encodeURIComponent(trimmed)}`,
-          { credentials: "include" },
-        );
+        const url = new URL("/api/map/place-autocomplete", window.location.origin);
+        url.searchParams.set("input", trimmed);
+        url.searchParams.set("sessionToken", sessionTokenRef.current);
+
+        const res = await fetch(url.toString(), { credentials: "include" });
         if (!res.ok) {
           if (!cancelled) setSuggestions([]);
           return;
@@ -120,9 +146,13 @@ export function PlaceAutocompleteInput({
 
   const selectSuggestion = (suggestion: PlaceSuggestion) => {
     onChange(suggestion.text);
-    onSelect(suggestion);
+    // Pass the current session token to the caller so they can include it in
+    // the subsequent place-details request for billing grouping.
+    onSelect({ ...suggestion, _sessionToken: sessionTokenRef.current } as any);
     setIsOpen(false);
     setActiveIndex(-1);
+    // Rotate the session token — the next autocomplete session is a new billing unit
+    sessionTokenRef.current = generateSessionToken();
   };
 
   return (

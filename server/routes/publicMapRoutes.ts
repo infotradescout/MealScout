@@ -197,6 +197,28 @@ type PlaceDetailsResult = {
   longitude: number | null;
 };
 
+// Autocomplete: cache by normalised query string, 5-minute TTL.
+// Suggestions for the same query are identical regardless of who asks.
+const placeAutocompleteCache = new Map<
+  string,
+  { expiresAt: number; suggestions: PlaceAutocompletePrediction[] }
+>();
+const PLACE_AUTOCOMPLETE_TTL_MS = 5 * 60_000;
+
+// Place details: cache by placeId, 24-hour TTL.
+// A placeId maps to a fixed address — it never changes.
+const placeDetailsCache = new Map<
+  string,
+  { expiresAt: number; place: any }
+>();
+const PLACE_DETAILS_TTL_MS = 24 * 60 * 60_000;
+
+// In-flight deduplication: if two requests arrive for the same query/placeId
+// before the first one resolves, they share the same Promise instead of making
+// two separate Google API calls.
+const autocompleteInflight = new Map<string, Promise<PlaceAutocompletePrediction[]>>();
+const placeDetailsInflight = new Map<string, Promise<any>>();
+
 const buildPlacesHeaders = (apiKey: string, fieldMask: string) => ({
   "Content-Type": "application/json",
   "X-Goog-Api-Key": apiKey,
@@ -978,64 +1000,80 @@ export function registerPublicMapRoutes(app: Express) {
       return res.json({ suggestions: [] as PlaceAutocompletePrediction[] });
     }
 
+    // ── Server-side cache check (5-minute TTL) ──────────────────────────────────
+    // Cache key excludes sessionToken so the same query always hits the same entry.
+    // sessionToken is only used for billing grouping, not for result differentiation.
+    const autocompleteCacheKey = input.toLowerCase();
+    const acCached = placeAutocompleteCache.get(autocompleteCacheKey);
+    if (acCached && acCached.expiresAt > Date.now()) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.json({ suggestions: acCached.suggestions });
+    }
+
     const sessionToken = String(req.query.sessionToken || "").trim();
-    const payload: Record<string, unknown> = {
-      input,
-      includedRegionCodes: ["us"],
-      languageCode: "en",
-    };
-    if (sessionToken) {
-      payload.sessionToken = sessionToken;
+
+    // ── In-flight deduplication ────────────────────────────────────────────
+    // If another request for the same query is already in-flight, wait for it.
+    let inflightPromise = autocompleteInflight.get(autocompleteCacheKey);
+    if (!inflightPromise) {
+      inflightPromise = (async (): Promise<PlaceAutocompletePrediction[]> => {
+        const payload: Record<string, unknown> = {
+          input,
+          includedRegionCodes: ["us"],
+          languageCode: "en",
+        };
+        if (sessionToken) payload.sessionToken = sessionToken;
+        const response = await fetch(
+          "https://places.googleapis.com/v1/places:autocomplete",
+          {
+            method: "POST",
+            headers: buildPlacesHeaders(
+              apiKey,
+              [
+                "suggestions.placePrediction.placeId",
+                "suggestions.placePrediction.text.text",
+                "suggestions.placePrediction.structuredFormat.mainText.text",
+                "suggestions.placePrediction.structuredFormat.secondaryText.text",
+              ].join(","),
+            ),
+            body: JSON.stringify(payload),
+          },
+        );
+        if (!response.ok) return [];
+        const data = (await response.json().catch(() => ({}))) as any;
+        const suggestions: PlaceAutocompletePrediction[] = Array.isArray(data?.suggestions)
+          ? data.suggestions
+              .map((item: any) => {
+                const prediction = item?.placePrediction;
+                if (!prediction?.placeId) return null;
+                const text = String(prediction?.text?.text || "").trim();
+                return {
+                  placeId: String(prediction.placeId),
+                  text,
+                  mainText: String(
+                    prediction?.structuredFormat?.mainText?.text || text,
+                  ).trim(),
+                  secondaryText: String(
+                    prediction?.structuredFormat?.secondaryText?.text || "",
+                  ).trim(),
+                };
+              })
+              .filter(Boolean) as PlaceAutocompletePrediction[]
+          : [];
+        // Store in server-side cache
+        placeAutocompleteCache.set(autocompleteCacheKey, {
+          expiresAt: Date.now() + PLACE_AUTOCOMPLETE_TTL_MS,
+          suggestions,
+        });
+        return suggestions;
+      })();
+      autocompleteInflight.set(autocompleteCacheKey, inflightPromise);
+      inflightPromise.finally(() => autocompleteInflight.delete(autocompleteCacheKey));
     }
 
     try {
-      const response = await fetch(
-        "https://places.googleapis.com/v1/places:autocomplete",
-        {
-          method: "POST",
-          headers: buildPlacesHeaders(
-            apiKey,
-            [
-              "suggestions.placePrediction.placeId",
-              "suggestions.placePrediction.text.text",
-              "suggestions.placePrediction.structuredFormat.mainText.text",
-              "suggestions.placePrediction.structuredFormat.secondaryText.text",
-            ].join(","),
-          ),
-          body: JSON.stringify(payload),
-        },
-      );
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        return res.status(200).json({
-          suggestions: [] as PlaceAutocompletePrediction[],
-          error: text || "Autocomplete unavailable",
-        });
-      }
-
-      const data = (await response.json().catch(() => ({}))) as any;
-      const suggestions = Array.isArray(data?.suggestions)
-        ? data.suggestions
-            .map((item: any) => {
-              const prediction = item?.placePrediction;
-              if (!prediction?.placeId) return null;
-              const text = String(prediction?.text?.text || "").trim();
-              return {
-                placeId: String(prediction.placeId),
-                text,
-                mainText: String(
-                  prediction?.structuredFormat?.mainText?.text || text,
-                ).trim(),
-                secondaryText: String(
-                  prediction?.structuredFormat?.secondaryText?.text || "",
-                ).trim(),
-              };
-            })
-            .filter(Boolean)
-        : [];
-
-      res.setHeader("Cache-Control", "public, max-age=60");
+      const suggestions = await inflightPromise;
+      res.setHeader("Cache-Control", "public, max-age=300");
       res.json({ suggestions });
     } catch (error) {
       console.warn("[map.place-autocomplete] failed", error);
@@ -1054,33 +1092,53 @@ export function registerPublicMapRoutes(app: Express) {
       return res.status(503).json({ message: "Google Maps key not configured" });
     }
 
-    try {
-      const response = await fetch(
-        `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
-        {
-          headers: buildPlacesHeaders(
-            apiKey,
-            [
-              "id",
-              "name",
-              "formattedAddress",
-              "location",
-              "addressComponents",
-            ].join(","),
-          ),
-        },
-      );
+    // ── Server-side cache check (24-hour TTL) ─────────────────────────────────
+    // placeId is a permanent identifier — the address it points to never changes.
+    const pdCached = placeDetailsCache.get(placeId);
+    if (pdCached && pdCached.expiresAt > Date.now()) {
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.json({ place: pdCached.place });
+    }
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        return res.status(502).json({
-          message: text || "Unable to fetch place details",
+    // ── In-flight deduplication ────────────────────────────────────────────
+    let pdInflight = placeDetailsInflight.get(placeId);
+    if (!pdInflight) {
+      pdInflight = (async () => {
+        const response = await fetch(
+          `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+          {
+            headers: buildPlacesHeaders(
+              apiKey,
+              [
+                "id",
+                "name",
+                "formattedAddress",
+                "location",
+                "addressComponents",
+              ].join(","),
+            ),
+          },
+        );
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          throw new Error(text || "Unable to fetch place details");
+        }
+        const data = (await response.json().catch(() => ({}))) as any;
+        const normalized = normalizePlaceDetails(data);
+        placeDetailsCache.set(placeId, {
+          expiresAt: Date.now() + PLACE_DETAILS_TTL_MS,
+          place: normalized,
         });
-      }
+        return normalized;
+      })();
+      placeDetailsInflight.set(placeId, pdInflight);
+      pdInflight.finally(() => placeDetailsInflight.delete(placeId));
+    }
 
-      const data = (await response.json().catch(() => ({}))) as any;
-      res.setHeader("Cache-Control", "public, max-age=300");
-      res.json({ place: normalizePlaceDetails(data) });
+    try {
+      const place = await pdInflight;
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.json({ place });
     } catch (error) {
       console.error("[map.place-details] failed", error);
       res.status(500).json({ message: "Unable to fetch place details" });

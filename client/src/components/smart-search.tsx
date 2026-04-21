@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Search, Clock, TrendingUp, X, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Stable session token for the lifetime of the page — rotated on full navigation.
+// Sending this groups all autocomplete requests in a session into a single
+// billable unit on Google's side.
+const _smartSearchSessionToken: string =
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
 interface SearchSuggestion {
   id: string;
   text: string;
@@ -85,12 +93,12 @@ export default function SmartSearch({
   const { data: placeSuggestions } = useQuery<PlaceSuggestion[]>({
     queryKey: ["/api/map/place-autocomplete", debouncedValue],
     enabled: debouncedValue.length >= 2,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // match server-side cache TTL
     queryFn: async () => {
-      const res = await fetch(
-        `/api/map/place-autocomplete?input=${encodeURIComponent(debouncedValue)}`,
-        { credentials: "include" },
-      );
+      const url = new URL("/api/map/place-autocomplete", window.location.origin);
+      url.searchParams.set("input", debouncedValue);
+      url.searchParams.set("sessionToken", _smartSearchSessionToken);
+      const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) return [];
       const data = (await res.json()) as {
         suggestions?: PlaceSuggestion[];

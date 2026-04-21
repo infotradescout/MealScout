@@ -1,3 +1,5 @@
+import { getCached, setCached } from "./googleApiCache";
+
 type ReverseGeocodeResult = {
   city?: string;
   state?: string;
@@ -8,10 +10,12 @@ type ForwardGeocodeResult = {
   lng: number;
 };
 
-const cache = new Map<string, ReverseGeocodeResult>();
+// ─── L1 in-process caches (hot path) ─────────────────────────────────────────
+const reverseL1 = new Map<string, ReverseGeocodeResult>();
 type ForwardCacheEntry = { value: ForwardGeocodeResult | null; ts: number };
-const forwardCache = new Map<string, ForwardCacheEntry>();
-const forwardGoogleCache = new Map<string, ForwardCacheEntry>();
+const forwardL1 = new Map<string, ForwardCacheEntry>();
+const forwardGoogleL1 = new Map<string, ForwardCacheEntry>();
+
 const FORWARD_FAILURE_TTL_MS = 10 * 60 * 1000;
 const FORWARD_QUEUE_INTERVAL_MS = 250;
 const GEOCODE_MAX_ATTEMPTS = 3;
@@ -19,6 +23,7 @@ const GEOCODE_BASE_BACKOFF_MS = 250;
 let forwardQueue: Promise<void> = Promise.resolve();
 let lastForwardRunAt = 0;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const roundCoord = (value: number, digits = 3) => {
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
@@ -91,6 +96,7 @@ async function enqueueForwardTask<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// ─── Provider implementations ─────────────────────────────────────────────────
 const extractCityState = (data: any): ReverseGeocodeResult => {
   const address = data?.address || {};
   const city =
@@ -200,31 +206,56 @@ async function forwardWithGoogle(
   return { lat, lng };
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Reverse geocode a lat/lng to city + state.
+ * Cache hierarchy: L1 (in-process Map) → L2 (Postgres) → live API call.
+ * Successful results are stored permanently (geocoding facts don't change).
+ */
 export async function reverseGeocode(
   lat: number,
   lng: number,
 ): Promise<ReverseGeocodeResult> {
   const key = getCacheKey(lat, lng);
-  const cached = cache.get(key);
-  if (cached) return cached;
 
+  // L1
+  const l1Hit = reverseL1.get(key);
+  if (l1Hit) return l1Hit;
+
+  // L2 (DB)
+  const dbHit = await getCached<ReverseGeocodeResult>("reverse_geocode", key);
+  if (dbHit) {
+    reverseL1.set(key, dbHit);
+    return dbHit;
+  }
+
+  // Live: try Nominatim first (free), fall back to Google
   const nominatimResult = await reverseWithNominatim(lat, lng);
   if (nominatimResult?.city || nominatimResult?.state) {
-    cache.set(key, nominatimResult);
+    reverseL1.set(key, nominatimResult);
+    setCached("reverse_geocode", key, nominatimResult, null); // permanent
     return nominatimResult;
   }
 
   const googleResult = await reverseWithGoogle(lat, lng);
   if (googleResult?.city || googleResult?.state) {
-    cache.set(key, googleResult);
+    reverseL1.set(key, googleResult);
+    setCached("reverse_geocode", key, googleResult, null); // permanent
     return googleResult;
   }
 
   const fallback: ReverseGeocodeResult = {};
-  cache.set(key, fallback);
+  reverseL1.set(key, fallback);
+  // Don't persist empty fallbacks to DB — let them retry next time
   return fallback;
 }
 
+/**
+ * Forward geocode an address string to lat/lng.
+ * Cache hierarchy: L1 → L2 (DB) → live API call.
+ * Successful results are stored permanently; failures are cached for 10 min (L1 only).
+ */
 export async function forwardGeocode(
   address: string,
   options?: { force?: boolean },
@@ -233,64 +264,99 @@ export async function forwardGeocode(
     const key = normalizeAddressKey(address);
     if (!key) return null;
     const force = options?.force === true;
-    const entry = forwardCache.get(key);
-    if (!force && entry) {
-      if (entry.value) return entry.value;
-      if (Date.now() - entry.ts < FORWARD_FAILURE_TTL_MS) return null;
-      forwardCache.delete(key);
-    }
-    if (force && entry) {
-      forwardCache.delete(key);
+
+    // L1
+    if (!force) {
+      const entry = forwardL1.get(key);
+      if (entry) {
+        if (entry.value) return entry.value;
+        if (Date.now() - entry.ts < FORWARD_FAILURE_TTL_MS) return null;
+        forwardL1.delete(key);
+      }
+    } else {
+      forwardL1.delete(key);
     }
 
+    // L2 (DB) — only for successful hits; failures are not persisted
+    if (!force) {
+      const dbHit = await getCached<ForwardGeocodeResult>("forward_geocode", key);
+      if (dbHit) {
+        forwardL1.set(key, { value: dbHit, ts: Date.now() });
+        return dbHit;
+      }
+    }
+
+    // Live
     const googleResult = await forwardWithGoogle(address);
     if (googleResult) {
-      forwardCache.set(key, { value: googleResult, ts: Date.now() });
+      forwardL1.set(key, { value: googleResult, ts: Date.now() });
+      setCached("forward_geocode", key, googleResult, null); // permanent
       return googleResult;
     }
 
     const nominatimResult = await forwardWithNominatim(address);
     if (nominatimResult) {
-      forwardCache.set(key, { value: nominatimResult, ts: Date.now() });
+      forwardL1.set(key, { value: nominatimResult, ts: Date.now() });
+      setCached("forward_geocode", key, nominatimResult, null); // permanent
       return nominatimResult;
     }
 
     const censusResult = await forwardWithCensus(address);
     if (censusResult) {
-      forwardCache.set(key, { value: censusResult, ts: Date.now() });
+      forwardL1.set(key, { value: censusResult, ts: Date.now() });
+      setCached("forward_geocode", key, censusResult, null); // permanent
       return censusResult;
     }
 
-    forwardCache.set(key, { value: null, ts: Date.now() });
+    // Failure — cache in L1 only, not DB
+    forwardL1.set(key, { value: null, ts: Date.now() });
     return null;
   });
 }
 
+/**
+ * Forward geocode using Google only (used when Nominatim/Census fallback is not desired).
+ * Cache hierarchy: L1 → L2 (DB) → live Google API call.
+ */
 export async function forwardGeocodeGoogle(
   address: string,
   options?: { force?: boolean },
 ): Promise<ForwardGeocodeResult | null> {
   return enqueueForwardTask(async () => {
-    const key = normalizeAddressKey(address);
+    const key = `google:${normalizeAddressKey(address)}`;
     if (!key) return null;
     const force = options?.force === true;
-    const entry = forwardGoogleCache.get(key);
-    if (!force && entry) {
-      if (entry.value) return entry.value;
-      if (Date.now() - entry.ts < FORWARD_FAILURE_TTL_MS) return null;
-      forwardGoogleCache.delete(key);
-    }
-    if (force && entry) {
-      forwardGoogleCache.delete(key);
+
+    // L1
+    if (!force) {
+      const entry = forwardGoogleL1.get(key);
+      if (entry) {
+        if (entry.value) return entry.value;
+        if (Date.now() - entry.ts < FORWARD_FAILURE_TTL_MS) return null;
+        forwardGoogleL1.delete(key);
+      }
+    } else {
+      forwardGoogleL1.delete(key);
     }
 
+    // L2 (DB)
+    if (!force) {
+      const dbHit = await getCached<ForwardGeocodeResult>("forward_geocode", key);
+      if (dbHit) {
+        forwardGoogleL1.set(key, { value: dbHit, ts: Date.now() });
+        return dbHit;
+      }
+    }
+
+    // Live
     const googleResult = await forwardWithGoogle(address);
     if (googleResult) {
-      forwardGoogleCache.set(key, { value: googleResult, ts: Date.now() });
+      forwardGoogleL1.set(key, { value: googleResult, ts: Date.now() });
+      setCached("forward_geocode", key, googleResult, null); // permanent
       return googleResult;
     }
 
-    forwardGoogleCache.set(key, { value: null, ts: Date.now() });
+    forwardGoogleL1.set(key, { value: null, ts: Date.now() });
     return null;
   });
 }
