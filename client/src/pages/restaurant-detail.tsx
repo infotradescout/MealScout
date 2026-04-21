@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -106,12 +107,13 @@ export default function RestaurantDetailPage() {
     useQuery<PublicRecommendation[]>({
       queryKey: ["/api/restaurants", restaurantId, "recommendations-public"],
       enabled: !!restaurantId,
+      retry: false,
       queryFn: async () => {
         const response = await fetch(
           `/api/restaurants/${restaurantId}/recommendations/public?limit=16`,
           { credentials: "include" },
         );
-        if (!response.ok) throw new Error("Failed to fetch recommendations");
+        if (!response.ok) return [];
         const data = await response.json();
         return Array.isArray(data) ? data : [];
       },
@@ -120,11 +122,10 @@ export default function RestaurantDetailPage() {
   const { data: canonical } = useQuery({
     queryKey: ["/api/public/canonical", "restaurant", restaurantId],
     enabled: !!restaurantId,
+    retry: false,
     queryFn: async () => {
       const res = await fetch(`/api/public/canonical/restaurant/${restaurantId}`);
-      if (!res.ok) {
-        throw new Error("Failed to load canonical restaurant data");
-      }
+      if (!res.ok) return null;
       return res.json();
     },
   });
@@ -132,11 +133,10 @@ export default function RestaurantDetailPage() {
   const { data: evidence } = useQuery({
     queryKey: ["/api/public/evidence", "restaurant", restaurantId],
     enabled: !!restaurantId,
+    retry: false,
     queryFn: async () => {
       const res = await fetch(`/api/public/evidence/restaurant/${restaurantId}`);
-      if (!res.ok) {
-        throw new Error("Failed to load restaurant evidence");
-      }
+      if (!res.ok) return null;
       return res.json();
     },
   });
@@ -712,6 +712,9 @@ export default function RestaurantDetailPage() {
                 <DialogContent className="sm:max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Book {restaurantName}</DialogTitle>
+                    <DialogDescription>
+                      Share your event details and the truck owner will follow up.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-2">
                     <div className="grid gap-2">

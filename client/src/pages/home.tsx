@@ -44,7 +44,6 @@ import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
-import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import {
   FUNNEL_EVENTS,
@@ -1212,6 +1211,7 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
+      {(liveTrucksLoading || liveTrucksError || (location && liveTrucks.length > 0)) && (
       <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="flex items-center justify-between mb-2">
@@ -1252,10 +1252,6 @@ export default function Home() {
                 Retry Live Trucks
               </Button>
             </div>
-          ) : !location ? (
-            <p className="text-xs text-muted-foreground py-3">
-              Use your location to see live trucks nearby.
-            </p>
           ) : liveTrucks.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
               {liveTrucks.map((truck) => {
@@ -1328,15 +1324,13 @@ export default function Home() {
                 );
               })}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground py-3">
-              No live trucks nearby right now.
-            </p>
-          )}
+          ) : null}
         </div>
       </section>
+      )}
 
       {/* Public Profiles Section */}
+      {(publicProfilesLoading || publicProfilesError || (location && featuredBusinesses.length > 0)) && (
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="mb-3">
@@ -1384,20 +1378,6 @@ export default function Home() {
                 Retry Profiles
               </Button>
             </div>
-          ) : !location ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="mb-3">
-                Turn on location to see nearby public profiles.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void handleLocationDetection()}
-                disabled={isLoadingLocation}
-              >
-                {isLoadingLocation ? "Locating..." : "Use location"}
-              </Button>
-            </div>
           ) : featuredBusinesses.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
               {featuredBusinesses.map((business) => (
@@ -1406,31 +1386,12 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="mb-3">No public profiles to show yet.</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                <Link href="/map">
-                  <Button size="sm" variant="outline">
-                    Open Map
-                  </Button>
-                </Link>
-                <Link href="/deals/featured">
-                  <Button size="sm" variant="outline">
-                    View Featured
-                  </Button>
-                </Link>
-                <Link href="/contact">
-                  <Button size="sm" variant="outline">
-                    Recommend a Spot
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
       </section>
+      )}
 
+      {weeklyTrendingVideos.length > 0 && (
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
           <div className="mb-3 flex items-end justify-between gap-3">
@@ -1450,41 +1411,91 @@ export default function Home() {
             </Link>
           </div>
 
-          {weeklyTrendingVideos.length > 0 ? (
-            <div className="grid grid-cols-1 gap-2.5">
-              {weeklyTrendingVideos.map((story) => (
-                <Link key={story.id} href={`/video/${story.id}`}>
-                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
+          <div className="grid grid-cols-1 gap-2.5">
+            {weeklyTrendingVideos.map((story) => (
+              <Link key={story.id} href={`/video/${story.id}`}>
+                <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
+                  <p className="text-sm font-semibold text-foreground line-clamp-1">
+                    {story.title || "Food recommendation"}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    <span>{story.creatorName || "MealScout User"}</span>
+                    <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
+                    <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+      )}
+
+      <section className="section section--full section--surface py-3">
+        <div className="content">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link href="/events">
+              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                  Event Organizers
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  Post public events
+                </p>
+              </div>
+            </Link>
+            <Link href="/request-truck">
+              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                  Private Requests
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  Request a food truck
+                </p>
+              </div>
+            </Link>
+            <Link href="/map">
+              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                  Event Viewers
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">
+                  View events on the map
+                </p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {location && featuredBusinesses.length > 0 && (
+      <section className="section section--full section--surface py-3">
+        <div className="content">
+          <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+            <h2 className="text-lg font-semibold text-foreground">
+              {`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Local businesses based on your current location.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {featuredBusinesses.slice(0, 8).map((business) => (
+                <Link key={business.id} href={`/restaurant/${business.id}`}>
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 hover:shadow-clean transition-shadow">
                     <p className="text-sm font-semibold text-foreground line-clamp-1">
-                      {story.title || "Food recommendation"}
+                      {business.name}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                      <span>{story.creatorName || "MealScout User"}</span>
-                      <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
-                      <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
-                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                      {business.cuisineType || "Local Food Spot"}
+                    </p>
                   </div>
                 </Link>
               ))}
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] p-4 text-center text-sm text-muted-foreground">
-              No trending recommendation videos yet.
-            </div>
-          )}
+          </div>
         </div>
       </section>
-
-      <section className="section section--full section--surface py-3">
-        <div className="content">
-          <SEOInternalLinks
-            title={`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
-            description="Popular food spots and cuisines people are checking out in your area."
-            maxCities={8}
-            maxCuisineLinksPerCity={2}
-          />
-        </div>
-      </section>
+      )}
 
       {/* Owner Section - MOVED UP FOR LOGGED OUT USERS */}
       {!user && (
@@ -1723,23 +1734,7 @@ export default function Home() {
                     />
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-8 text-muted bg-surface-muted rounded-lg border border-dashed border-subtle">
-                  <p className="text-sm">No deals nearby yet.</p>
-                  <div className="mt-3 flex flex-wrap justify-center gap-2">
-                    <Link href="/map">
-                      <Button size="sm" variant="outline">
-                        Open Map
-                      </Button>
-                    </Link>
-                    <Link href="/deals/featured">
-                      <Button size="sm" variant="outline">
-                        Featured Deals
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>
