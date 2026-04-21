@@ -77,7 +77,7 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
   ];
   const featureShortcuts = [
     { label: "Host", href: "/host/dashboard", icon: Users },
-    { label: "Coordinator", href: "/event-coordinator/dashboard", icon: Calendar },
+    { label: "Events", href: "/admin/events", icon: Calendar },
     { label: "Supplier", href: "/supplier/dashboard", icon: Store },
     { label: "Open Calls", href: "/truck-discovery?city=Pensacola%2C%20FL", icon: Truck },
     { label: "Parking Truck", href: "/parking-pass?adminMode=truck", icon: ParkingSquare },

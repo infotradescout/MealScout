@@ -53,15 +53,15 @@ export default function ProfilePage() {
   const showEventCta = user?.userType === "customer" || isEventCoordinator;
   const eventCta = isEventCoordinator
     ? {
-        href: "/event-coordinator/dashboard",
+        href: "/events",
         title: "Manage Your Events",
-        description: "View and update your upcoming events ->",
+        description: "Open the events portal to post and manage events ->",
         Icon: Calendar,
       }
     : {
-        href: "/event-signup",
-        title: "Book Trucks for Your Event",
-        description: "Festivals, concerts, markets - connect with vendors ->",
+        href: "/request-truck",
+        title: "Request a Truck",
+        description: "Birthdays, private parties, and neighborhood gatherings ->",
         Icon: PartyPopper,
       };
 

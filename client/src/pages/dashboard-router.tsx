@@ -37,7 +37,7 @@ export default function DashboardRouter() {
     }
 
     if (primaryType === "event_coordinator") {
-      setLocation("/event-coordinator/dashboard");
+      setLocation("/events");
       return;
     }
 
@@ -73,7 +73,7 @@ export default function DashboardRouter() {
     }
 
     if (roles.has("event_coordinator")) {
-      setLocation("/event-coordinator/dashboard");
+      setLocation("/events");
       return;
     }
 

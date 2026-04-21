@@ -44,19 +44,8 @@ export function registerEventCoordinatorRoutes(
   app: Express,
   { hasBusinessDistributionAccess }: EventCoordinatorRouteDependencies,
 ) {
-  const ensurePaidEventAccess = async (req: any, res: any) => {
-    if (["admin", "super_admin", "staff"].includes(req.user?.userType)) {
-      return true;
-    }
-
-    const hasAccess = await hasBusinessDistributionAccess(req.user.id);
-    if (!hasAccess) {
-      res.status(402).json({
-        message: "Premium subscription required for event access.",
-      });
-      return false;
-    }
-
+  void hasBusinessDistributionAccess;
+  const ensurePaidEventAccess = async (_req: any, _res: any) => {
     return true;
   };
 

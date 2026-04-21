@@ -897,7 +897,7 @@ function TruckDiscovery() {
         </div>
         <Button
           variant="outline"
-          onClick={() => setLocation("/event-coordinator/dashboard")}
+          onClick={() => setLocation("/events")}
           className="shrink-0"
         >
           Post an Event

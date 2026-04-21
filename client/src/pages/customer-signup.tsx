@@ -773,8 +773,8 @@ export default function CustomerSignup() {
                   ? "This login powers your business dashboard. Pricing stays transparent and your discounts go straight to your guests."
                   : accountType === "host"
                   ? "This login lets you manage host locations and parking availability."
-                  : accountType === "event_organizer"
-                  ? "This login gives you event coordinator tools and vendor scheduling access."
+                : accountType === "event_organizer"
+                  ? "This login gives you event organizer tools and vendor scheduling access."
                   : accountType === "supplier"
                   ? "This login powers your supplier dashboard, products, and incoming orders."
                   : "Create your account to get started with local food deals."}

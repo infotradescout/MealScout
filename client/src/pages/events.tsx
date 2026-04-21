@@ -16,19 +16,12 @@ export default function EventsPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const isEventCoordinator =
-    isAuthenticated && user?.userType === "event_coordinator";
-  const { data: subscription } = useQuery<{
-    status: string;
-    hasAccess: boolean;
-  }>({
-    queryKey: ["/api/subscription/status"],
-    enabled: isEventCoordinator,
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const canUsePaidEvents =
-    !isEventCoordinator || Boolean(subscription?.hasAccess);
+  const isEventCoordinator = Boolean(
+    isAuthenticated &&
+      ["event_coordinator", "admin", "super_admin", "staff"].includes(
+        String(user?.userType || ""),
+      ),
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState({
     organizationName: "",
@@ -47,6 +40,21 @@ export default function EventsPage() {
   const { data: events = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/events/upcoming"],
   });
+  const { data: businesses = [] } = useQuery<any[]>({
+    queryKey: ["/api/restaurants/public", "events-directory"],
+    queryFn: async () => {
+      const res = await fetch("/api/restaurants/public?limit=120");
+      if (!res.ok) {
+        return [];
+      }
+      return await res.json();
+    },
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const truckDirectory = (Array.isArray(businesses) ? businesses : []).filter(
+    (business) => Boolean(business?.isFoodTruck),
+  );
 
   const createEvent = useMutation({
     mutationFn: async () => {
@@ -156,11 +164,11 @@ export default function EventsPage() {
             </p>
           </div>
 
-          {isEventCoordinator && canUsePaidEvents && (
+          {isEventCoordinator && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-lg">Event Coordinator</CardTitle>
+                  <CardTitle className="text-lg">Event Organizer</CardTitle>
                   <Button
                     variant={showCreateForm ? "outline" : "default"}
                     onClick={() => setShowCreateForm((value) => !value)}
@@ -363,23 +371,6 @@ export default function EventsPage() {
               )}
             </Card>
           )}
-
-          {isEventCoordinator && !canUsePaidEvents && (
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 space-y-3">
-                <h2 className="text-lg font-semibold">Premium Required</h2>
-                <p className="text-sm text-[color:var(--text-secondary)]">
-                  Upgrade to post events, manage truck interest, and run event
-                  workflows.
-                </p>
-                <Button
-                  onClick={() => (window.location.href = "/subscription")}
-                >
-                  View subscription
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Events Grid */}
@@ -478,6 +469,44 @@ export default function EventsPage() {
             ))}
           </div>
         )}
+
+        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <CardHeader>
+            <CardTitle className="text-lg">Food Truck Directory</CardTitle>
+            <p className="text-sm text-[color:var(--text-secondary)]">
+              Reach out directly to trucks for private parties, birthdays, and
+              neighborhood events.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {truckDirectory.length === 0 ? (
+              <p className="text-sm text-[color:var(--text-muted)]">
+                No truck profiles available yet.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {truckDirectory.slice(0, 18).map((truck) => (
+                  <a
+                    key={truck.id}
+                    href={`/restaurant/${truck.id}`}
+                    className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 hover:shadow-clean transition-shadow"
+                  >
+                    <p className="font-semibold text-[color:var(--text-primary)] line-clamp-1">
+                      {truck.name}
+                    </p>
+                    <p className="text-xs text-[color:var(--text-secondary)] mt-1 line-clamp-1">
+                      {truck.cuisineType || "Food Truck"}
+                    </p>
+                    <p className="text-xs text-[color:var(--text-muted)] mt-1 line-clamp-1">
+                      {[truck.city, truck.state].filter(Boolean).join(", ") ||
+                        "Location on profile"}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

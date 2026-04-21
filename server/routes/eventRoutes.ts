@@ -397,13 +397,6 @@ export function registerEventRoutes(
   // Truck Discovery (authenticated)
   app.get("/api/events", isAuthenticated, async (req: any, res) => {
     try {
-      const hasAccess = await hasBusinessDistributionAccess(req.user.id);
-      if (!hasAccess) {
-        return res.status(402).json({
-          message: "Premium subscription required for event access.",
-        });
-      }
-
       const hostIdFilter = String(req.query?.hostId || "").trim();
       const upcomingEvents = await storage.getAllUpcomingEvents();
       let filtered = Array.isArray(upcomingEvents) ? upcomingEvents : [];
@@ -1559,13 +1552,6 @@ export function registerEventRoutes(
     isRestaurantOwner,
     async (req: any, res) => {
       try {
-        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
-        if (!hasAccess) {
-          return res.status(402).json({
-            message: "Premium subscription required for event access.",
-          });
-        }
-
         const { eventId } = req.params;
         const { restaurantId, message } = req.body;
 
@@ -1746,6 +1732,80 @@ export function registerEventRoutes(
       res.json({ message: "Request submitted", userType: updatedUserType });
     } catch (error: any) {
       console.error("Error submitting event coordinator request:", error);
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to submit request" });
+    }
+  });
+
+  app.post("/api/events/private-truck-request", async (req: any, res) => {
+    try {
+      const schema = z.object({
+        requesterName: z.string().min(1),
+        contactEmail: z.string().email(),
+        contactPhone: z.string().optional(),
+        city: z.string().min(1),
+        date: z.string().min(1),
+        occasion: z.string().min(1),
+        guestCount: z.string().min(1),
+        details: z.string().optional(),
+      });
+
+      const parsed = schema.parse(req.body);
+      const adminEmail =
+        process.env.ADMIN_ALERT_EMAIL || "info.mealscout@gmail.com";
+      const subject = `New private truck request: ${parsed.occasion} (${parsed.city})`;
+      const html = `
+        <h2>New private truck request</h2>
+        <p><strong>Name:</strong> ${parsed.requesterName}</p>
+        <p><strong>Email:</strong> ${parsed.contactEmail}</p>
+        ${parsed.contactPhone ? `<p><strong>Phone:</strong> ${parsed.contactPhone}</p>` : ""}
+        <p><strong>City:</strong> ${parsed.city}</p>
+        <p><strong>Date:</strong> ${parsed.date}</p>
+        <p><strong>Occasion:</strong> ${parsed.occasion}</p>
+        <p><strong>Guest Count:</strong> ${parsed.guestCount}</p>
+        ${parsed.details ? `<p><strong>Details:</strong> ${parsed.details}</p>` : ""}
+      `;
+
+      await emailService.sendBasicEmail(adminEmail, subject, html);
+
+      await storage.createTelemetryEvent({
+        eventName: "private_truck_request_created",
+        userId: req.user?.id || null,
+        properties: {
+          city: parsed.city,
+          occasion: parsed.occasion,
+          guestCount: parsed.guestCount,
+        },
+      });
+
+      if (req.user?.id) {
+        await storage.createUnifiedClaim({
+          personId: req.user.id,
+          claimType: CLAIM_TYPES.FOOD_TRUCK,
+          status: CLAIM_STATUS.PROVISIONAL,
+          claimData: {
+            requesterName: parsed.requesterName,
+            contactEmail: parsed.contactEmail,
+            contactPhone: parsed.contactPhone ?? null,
+            city: parsed.city,
+            date: parsed.date,
+            occasion: parsed.occasion,
+            guestCount: parsed.guestCount,
+            details: parsed.details ?? null,
+          },
+          metadata: {
+            source: "private_truck_request",
+          },
+        });
+      }
+
+      res.status(201).json({ message: "Request submitted" });
+    } catch (error: any) {
+      console.error("Error submitting private truck request:", error);
       if (error instanceof z.ZodError) {
         return res
           .status(400)

@@ -979,6 +979,50 @@ export default function Home() {
               </Link>
             </div>
 
+            <div className="mb-5 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                Private Parties
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-foreground">
+                Request a food truck for birthdays and neighborhood events
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Public festivals and open calls live in the Events portal. For
+                private celebrations, send a truck request and browse truck
+                profiles directly.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href="/request-truck">
+                  <Button
+                    size="sm"
+                    className="action-primary"
+                    onPointerDown={() => {
+                      trackUxEvent("home_private_truck_request_click", {
+                        surface: "home_hero",
+                      });
+                    }}
+                  >
+                    <Truck className="w-4 h-4 mr-1" />
+                    Request a truck
+                  </Button>
+                </Link>
+                <Link href="/events">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onPointerDown={() => {
+                      trackUxEvent("home_events_portal_click", {
+                        surface: "home_hero",
+                      });
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    Open Events Portal
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
             {geoAds.length > 0 && (
               <div className="mb-5">
                 {geoAds.map((ad) => (

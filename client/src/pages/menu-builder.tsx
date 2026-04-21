@@ -120,6 +120,13 @@ interface FullMenu extends Menu {
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(): string | null {
   const { user } = useAuth();
+  const role = String((user as any)?.userType || "");
+  const isAdminMode = ["admin", "super_admin", "staff"].includes(role);
+  if (isAdminMode && typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const override = String(params.get("adminRestaurantId") || "").trim();
+    if (override) return override;
+  }
   return (user as any)?.restaurantId ?? null;
 }
 

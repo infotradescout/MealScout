@@ -57,28 +57,39 @@ const upload = multer({
 });
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
-async function assertOwnsRestaurant(userId: string, restaurantId: string) {
+async function assertOwnsRestaurant(
+  userId: string,
+  restaurantId: string,
+  userType?: string,
+) {
+  if (["admin", "super_admin", "staff"].includes(String(userType || ""))) {
+    return;
+  }
   const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
 
-async function assertOwnsMenu(userId: string, menuId: string) {
+async function assertOwnsMenu(userId: string, menuId: string, userType?: string) {
   const [menu] = await db.select().from(menus).where(eq(menus.id, menuId));
   if (!menu)
     throw Object.assign(new Error("Menu not found"), { statusCode: 404 });
-  await assertOwnsRestaurant(userId, menu.restaurantId);
+  await assertOwnsRestaurant(userId, menu.restaurantId, userType);
   return menu;
 }
 
-async function assertOwnsMenuItem(userId: string, itemId: string) {
+async function assertOwnsMenuItem(
+  userId: string,
+  itemId: string,
+  userType?: string,
+) {
   const [item] = await db
     .select()
     .from(menuItems)
     .where(eq(menuItems.id, itemId));
   if (!item)
     throw Object.assign(new Error("Item not found"), { statusCode: 404 });
-  await assertOwnsRestaurant(userId, item.restaurantId);
+  await assertOwnsRestaurant(userId, item.restaurantId, userType);
   return item;
 }
 
@@ -259,7 +270,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId);
+      await assertOwnsRestaurant(req.user.id, restaurantId, req.user?.userType);
 
       const restaurantMenus = await db
         .select()
@@ -281,7 +292,11 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuSchema.parse(req.body);
-      await assertOwnsRestaurant(req.user.id, body.restaurantId);
+      await assertOwnsRestaurant(
+        req.user.id,
+        body.restaurantId,
+        req.user?.userType,
+      );
 
       const [menu] = await db.insert(menus).values(body).returning();
 
@@ -311,7 +326,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      await assertOwnsMenu(req.user.id, menuId);
+      await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       const updateSchema = insertMenuSchema
         .partial()
@@ -337,7 +352,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      await assertOwnsMenu(req.user.id, menuId);
+      await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       await db
         .update(menus)
@@ -358,7 +373,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuCategorySchema.parse(req.body);
-      await assertOwnsMenu(req.user.id, body.menuId);
+      await assertOwnsMenu(req.user.id, body.menuId, req.user?.userType);
 
       const [cat] = await db.insert(menuCategories).values(body).returning();
       res.status(201).json({ category: cat });
@@ -379,7 +394,7 @@ export function registerMenuRoutes(app: Express) {
         .from(menuCategories)
         .where(eq(menuCategories.id, categoryId));
       if (!cat) return res.status(404).json({ message: "Category not found" });
-      await assertOwnsRestaurant(req.user.id, cat.restaurantId);
+      await assertOwnsRestaurant(req.user.id, cat.restaurantId, req.user?.userType);
 
       const updateSchema = insertMenuCategorySchema
         .partial()
@@ -409,7 +424,7 @@ export function registerMenuRoutes(app: Express) {
         .from(menuCategories)
         .where(eq(menuCategories.id, categoryId));
       if (!cat) return res.status(404).json({ message: "Category not found" });
-      await assertOwnsRestaurant(req.user.id, cat.restaurantId);
+      await assertOwnsRestaurant(req.user.id, cat.restaurantId, req.user?.userType);
 
       await db
         .update(menuCategories)
@@ -430,7 +445,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuItemSchema.parse(req.body);
-      await assertOwnsMenu(req.user.id, body.menuId);
+      await assertOwnsMenu(req.user.id, body.menuId, req.user?.userType);
 
       const [item] = await db.insert(menuItems).values(body).returning();
       res.status(201).json({ item });
@@ -446,7 +461,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
 
       const updateSchema = insertMenuItemSchema
         .partial()
@@ -472,7 +487,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
 
       await db
         .update(menuItems)
@@ -494,7 +509,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
 
       const { inventoryQty } = z
         .object({ inventoryQty: z.number().int().min(0) })
@@ -525,7 +540,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
 
       const variantList = z
         .array(insertMenuItemVariantSchema)
@@ -559,7 +574,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
-      await assertOwnsMenuItem(req.user.id, itemId);
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
 
       const modList = z
         .array(insertMenuItemModifierSchema)
@@ -596,7 +611,7 @@ export function registerMenuRoutes(app: Express) {
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -654,7 +669,7 @@ export function registerMenuRoutes(app: Express) {
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -709,7 +724,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       const bodySchema = z.object({
         source: z.enum([
@@ -772,7 +787,7 @@ export function registerMenuRoutes(app: Express) {
     isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
-      const menu = await assertOwnsMenu(req.user.id, menuId);
+      const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       const logs = await db
         .select()

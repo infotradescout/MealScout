@@ -60,9 +60,9 @@ export default function EventSignup() {
         await refetch();
         toast({
           title: "Request submitted",
-          description: "You can now post events from your dashboard.",
+          description: "You can now post events from the Events portal.",
         });
-        setLocation("/event-coordinator/dashboard");
+        setLocation("/events");
         return;
       }
 
@@ -115,7 +115,7 @@ export default function EventSignup() {
               Log In to Request Event Access
             </h1>
             <p className="text-[color:var(--text-secondary)] mb-6">
-              Submit a request to become an event coordinator and start posting events.
+              Submit a request to become an event organizer and start posting events.
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
@@ -130,16 +130,16 @@ export default function EventSignup() {
               <ShieldCheck className="h-7 w-7 text-[color:var(--accent-text)]" />
             </span>
             <h1 className="text-3xl font-black tracking-tight text-[color:var(--text-primary)] mb-3">
-              You Already Have Coordinator Access
+              You Already Have Organizer Access
             </h1>
             <p className="text-[color:var(--text-secondary)] mb-6">
-              Open your dashboard to create and manage events.
+              Open the events portal to create and manage events.
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
-              onClick={() => setLocation("/event-coordinator/dashboard")}
+              onClick={() => setLocation("/events")}
             >
-              Open dashboard
+              Open events portal
             </Button>
           </section>
         ) : (
@@ -149,7 +149,7 @@ export default function EventSignup() {
                 <Megaphone className="h-6 w-6 text-[color:var(--action-primary)]" />
               </span>
               <h1 className="text-3xl font-black tracking-tight text-[color:var(--text-primary)] mb-3">
-                Request Event Coordinator Access
+                Request Event Organizer Access
               </h1>
               <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mb-5">
                 Share your event details and operations context so we can enable posting access on your account.
@@ -279,7 +279,7 @@ export default function EventSignup() {
                       Submitting...
                     </span>
                   ) : (
-                    "Request Coordinator Access"
+                    "Request Organizer Access"
                   )}
                 </Button>
               </form>

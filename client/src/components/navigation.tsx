@@ -444,9 +444,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       fallbackLabel: "Host",
     },
     {
-      path: "/event-coordinator/dashboard",
+      path: "/events",
       icon: Calendar,
-      fallbackLabel: "Coordinator",
+      fallbackLabel: "Events",
     },
     {
       path: "/supplier/dashboard",

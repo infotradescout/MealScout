@@ -39,6 +39,7 @@ import {
   hosts,
   insertHostSchema,
   restaurants,
+  suppliers,
   requestLogs,
   searchQueryEvents,
   socialPostQueue,
@@ -1133,6 +1134,7 @@ export function registerAdminManagementRoutes(app: Express) {
           "customer",
           "restaurant_owner",
           "food_truck",
+          "supplier",
           "host",
           "event_coordinator",
           "staff",
@@ -1154,11 +1156,14 @@ export function registerAdminManagementRoutes(app: Express) {
           userType === "restaurant_owner" || userType === "food_truck";
         const isHostProvisionType =
           userType === "host" || userType === "event_coordinator";
+        const isSupplierProvisionType = userType === "supplier";
         const normalizedBusinessName = String(businessName || "").trim();
         const normalizedAddress = String(address || "").trim();
 
         if (
-          (isRestaurantProvisionType || isHostProvisionType) &&
+          (isRestaurantProvisionType ||
+            isHostProvisionType ||
+            isSupplierProvisionType) &&
           (!normalizedBusinessName || !normalizedAddress)
         ) {
           return res.status(400).json({
@@ -1215,6 +1220,8 @@ export function registerAdminManagementRoutes(app: Express) {
           userType === "super_admin";
 
         let createdHostId: string | null = null;
+        let createdRestaurantId: string | null = null;
+        let createdSupplierId: string | null = null;
         const [user] = await db.transaction(async (tx: any) => {
           const insertedUserResult = await tx.execute(sql`
             insert into users (
@@ -1256,14 +1263,18 @@ export function registerAdminManagementRoutes(app: Express) {
           }
 
           if (isRestaurantProvisionType) {
-            await tx.insert(restaurants).values({
-              ownerId: insertedUser.id,
-              name: normalizedBusinessName,
-              address: normalizedAddress,
-              cuisineType: cuisineType || "Various",
-              isActive: true,
-              isVerified: true,
-            });
+            const [insertedRestaurant] = await tx
+              .insert(restaurants)
+              .values({
+                ownerId: insertedUser.id,
+                name: normalizedBusinessName,
+                address: normalizedAddress,
+                cuisineType: cuisineType || "Various",
+                isActive: true,
+                isVerified: true,
+              })
+              .returning({ id: restaurants.id });
+            createdRestaurantId = insertedRestaurant?.id || null;
           }
 
           if (isHostProvisionType) {
@@ -1306,6 +1317,21 @@ export function registerAdminManagementRoutes(app: Express) {
             createdHostId = insertedHost?.id || null;
           }
 
+          if (isSupplierProvisionType) {
+            const [insertedSupplier] = await tx
+              .insert(suppliers)
+              .values({
+                userId: insertedUser.id,
+                businessName: normalizedBusinessName,
+                address: normalizedAddress,
+                contactEmail: normalizedEmail,
+                contactPhone: phone?.trim() || null,
+                isActive: true,
+              })
+              .returning({ id: suppliers.id });
+            createdSupplierId = insertedSupplier?.id || null;
+          }
+
           return [insertedUser];
         });
 
@@ -1335,6 +1361,14 @@ export function registerAdminManagementRoutes(app: Express) {
           success: true,
           setupEmailSent: emailSent,
           message: `${userType} account created successfully. Setup link emailed to ${email}.`,
+          user: {
+            id: user.id,
+            email: user.email,
+            userType: user.userType,
+          },
+          createdRestaurantId,
+          createdHostId,
+          createdSupplierId,
         });
       } catch (error: any) {
         console.error("Error creating user manually:", error);

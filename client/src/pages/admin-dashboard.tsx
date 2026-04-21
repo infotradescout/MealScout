@@ -1302,12 +1302,19 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       | "customer"
       | "food_truck"
       | "restaurant_owner"
+      | "supplier"
       | "staff"
       | "event_coordinator"
-      | "host",
+      | "host"
+      | "admin"
+      | "super_admin",
   });
   const [geocoding, setGeocoding] = useState(false);
   const [inviteSentEmail, setInviteSentEmail] = useState("");
+  const [inviteUserType, setInviteUserType] = useState("");
+  const [inviteRestaurantId, setInviteRestaurantId] = useState("");
+  const [inviteHostId, setInviteHostId] = useState("");
+  const [inviteSupplierId, setInviteSupplierId] = useState("");
 
   const createUser = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -1316,6 +1323,10 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setInviteSentEmail(formData.email);
+      setInviteUserType(formData.userType);
+      setInviteRestaurantId(String(data?.createdRestaurantId || ""));
+      setInviteHostId(String(data?.createdHostId || ""));
+      setInviteSupplierId(String(data?.createdSupplierId || ""));
       toast({
         title: "Account Created",
         description:
@@ -1447,10 +1458,75 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             Invite sent to {inviteSentEmail}. The user will finish their profile
             and set a password from the link.
           </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin/events">
+              <Button size="sm" variant="outline">
+                Event Organizer Flow
+              </Button>
+            </Link>
+            <Link href="/user-dashboard">
+              <Button size="sm" variant="outline">
+                Diner Flow
+              </Button>
+            </Link>
+            <Link href="/restaurant-owner-dashboard">
+              <Button size="sm" variant="outline">
+                Restaurant/Truck Flow
+              </Button>
+            </Link>
+            <Link href="/parking-pass?adminMode=truck">
+              <Button size="sm" variant="outline">
+                Parking Pass (Truck)
+              </Button>
+            </Link>
+            <Link href="/parking-pass?adminMode=host">
+              <Button size="sm" variant="outline">
+                Parking Pass (Host)
+              </Button>
+            </Link>
+            <Link
+              href={
+                inviteRestaurantId
+                  ? `/menu-builder?adminRestaurantId=${encodeURIComponent(inviteRestaurantId)}`
+                  : "/menu-builder"
+              }
+            >
+              <Button size="sm" variant="outline">
+                Menu Builder Flow
+              </Button>
+            </Link>
+            <Link href="/supplier/dashboard">
+              <Button size="sm" variant="outline">
+                Supplier Flow
+              </Button>
+            </Link>
+          </div>
+          {inviteUserType === "supplier" && (
+            <p className="text-xs text-[color:var(--status-success)]">
+              Supplier account created. Open Supplier Flow to work in the same
+              dashboard they use.
+            </p>
+          )}
+          {inviteHostId && (
+            <p className="text-xs text-[color:var(--status-success)]">
+              Host profile created: {inviteHostId}
+            </p>
+          )}
+          {inviteSupplierId && (
+            <p className="text-xs text-[color:var(--status-success)]">
+              Supplier profile created: {inviteSupplierId}
+            </p>
+          )}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setInviteSentEmail("")}
+            onClick={() => {
+              setInviteSentEmail("");
+              setInviteUserType("");
+              setInviteRestaurantId("");
+              setInviteHostId("");
+              setInviteSupplierId("");
+            }}
           >
             Dismiss
           </Button>
@@ -1471,6 +1547,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="customer">Customer</option>
             <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
+            <option value="supplier">Supplier</option>
             <option value="staff">Staff</option>
             {(adminUser?.userType === "admin" ||
               adminUser?.userType === "super_admin") && (
@@ -1490,7 +1567,9 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             {formData.userType === "staff" &&
               "Staff member - help manage restaurant operations"}
             {formData.userType === "event_coordinator" &&
-              "Event coordinator - organize events (NO PAYMENTS through us)"}
+              "Event organizer - create and manage public event postings"}
+            {formData.userType === "supplier" &&
+              "Supplier - manage catalog, requests, orders, and delivery settings"}
             {formData.userType === "host" &&
               "Host - rent parking spots/lots to food trucks (hourly/daily/weekly/monthly)"}
           </p>
@@ -1552,11 +1631,14 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
         {/* Restaurant Owner & Food Truck Specific Fields */}
         {(formData.userType === "restaurant_owner" ||
-          formData.userType === "food_truck") && (
+          formData.userType === "food_truck" ||
+          formData.userType === "supplier") && (
           <>
             <div className="pt-3 border-t">
               <h4 className="text-sm font-semibold mb-3">
-                Restaurant Information
+                {formData.userType === "supplier"
+                  ? "Supplier Information"
+                  : "Restaurant Information"}
               </h4>
 
               <div className="space-y-3">
@@ -1570,7 +1652,11 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                       setFormData({ ...formData, businessName: e.target.value })
                     }
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Joe's Pizza"
+                    placeholder={
+                      formData.userType === "supplier"
+                        ? "Bayou Wholesale Foods"
+                        : "Joe's Pizza"
+                    }
                   />
                 </div>
 
@@ -1589,26 +1675,34 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Cuisine Type</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.cuisineType}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cuisineType: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Italian, Mexican, American, etc."
-                  />
+                  {formData.userType !== "supplier" ? (
+                    <>
+                      <label className="text-sm font-medium">Cuisine Type</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.cuisineType}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            cuisineType: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border rounded-md"
+                        placeholder="Italian, Mexican, American, etc."
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>
 
             <div className="p-3 bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-md">
               <p className="text-xs text-[color:var(--accent-text)]">
-                <strong>Note:</strong> Restaurant will be created as verified
-                and active. No document verification required for manual
-                onboarding.
+                <strong>Note:</strong>{" "}
+                {formData.userType === "supplier"
+                  ? "Supplier profile is provisioned and active so you can work the same supplier dashboard flow immediately."
+                  : "Restaurant will be created as verified and active. No document verification required for manual onboarding."}
               </p>
             </div>
           </>
@@ -8014,7 +8108,7 @@ export default function AdminDashboard() {
 
           {/* Manual Onboarding Tab */}
           <TabsContent value="onboarding" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {/* Create User Card */}
               <Card>
                 <CardHeader>
@@ -8023,13 +8117,35 @@ export default function AdminDashboard() {
                     Create Account
                   </CardTitle>
                   <CardDescription>
-                    Manually onboard a new user, host, event coordinator,
-                    restaurant owner, or staff member. We'll email a setup link
+                    Manually onboard a new diner, truck, restaurant, supplier,
+                    host, or event organizer account. We'll email a setup link
                     so they can finish their profile and set a password.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ManualUserCreation adminUser={adminUser} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5" />
+                    Post Event As Organizer
+                  </CardTitle>
+                  <CardDescription>
+                    Use the same event organizer flow users get. This is the
+                    shared posting path for phone support and manual posting.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Link href="/admin/events">
+                    <Button className="w-full">Open Events Portal</Button>
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    Admin posting uses the same form, validations, and event
+                    lifecycle as event organizers.
+                  </p>
                 </CardContent>
               </Card>
 

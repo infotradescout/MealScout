@@ -113,12 +113,10 @@ const ParkingPassManage = lazy(() => import("@/pages/parking-pass-manage"));
 const StatusPage = lazy(() => import("@/pages/status"));
 const HostSignup = lazy(() => import("@/pages/host-signup"));
 const HostDashboard = lazy(() => import("@/pages/host-dashboard"));
-const EventCoordinatorDashboard = lazy(
-  () => import("@/pages/event-coordinator-dashboard"),
-);
 const DashboardRouter = lazy(() => import("@/pages/dashboard-router"));
 const TruckDiscovery = lazy(() => import("@/pages/truck-discovery"));
 const EventSignup = lazy(() => import("@/pages/event-signup"));
+const RequestTruck = lazy(() => import("@/pages/request-truck"));
 const EventsPage = lazy(() => import("@/pages/events"));
 const EventsRouter = lazy(() => import("@/pages/events-router"));
 const EventDetailPage = lazy(() => import("@/pages/event-detail"));
@@ -364,7 +362,9 @@ function Router() {
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
             <Route path="/event-signup" component={EventSignup} />
+            <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
+            <Route path="/admin/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/dashboard" component={DashboardRouter} />
@@ -438,7 +438,7 @@ function Router() {
             <Route path="/host/dashboard" component={HostDashboard} />
             <Route
               path="/event-coordinator/dashboard"
-              component={EventCoordinatorDashboard}
+              component={EventsRouter}
             />
             <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route path="/for-restaurants" component={ForRestaurants} />
@@ -551,7 +551,9 @@ function Router() {
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
             <Route path="/event-signup" component={EventSignup} />
+            <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
+            <Route path="/admin/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/pensacola/spots" component={PensacolaSpots} />

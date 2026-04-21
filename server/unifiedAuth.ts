@@ -1853,7 +1853,7 @@ export async function setupUnifiedAuth(app: Express) {
           case "host":
             return "/host/dashboard";
           case "event_coordinator":
-            return "/event-coordinator/dashboard";
+            return "/events";
           case "restaurant_owner":
           case "food_truck":
             return "/restaurant-owner-dashboard";

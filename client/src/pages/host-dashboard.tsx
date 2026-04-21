@@ -127,7 +127,7 @@ function HostDashboard() {
     }
 
     if (user?.userType === "event_coordinator") {
-      setLocation("/event-coordinator/dashboard");
+      setLocation("/events");
       return;
     }
 
