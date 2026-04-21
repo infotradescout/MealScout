@@ -623,6 +623,7 @@ export default function Home() {
 
   const { data: weeklyTrendingVideos = [] } = useQuery<TrendingStory[]>({
     queryKey: ["/api/stories/leaderboards/trending", "week"],
+    enabled: false,
     queryFn: async () => {
       const response = await fetch(
         "/api/stories/leaderboards/trending?timeframe=week",
