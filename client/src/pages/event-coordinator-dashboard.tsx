@@ -572,7 +572,27 @@ export default function EventCoordinatorDashboard() {
     endTime: "",
     maxTrucks: 1,
     hardCapEnabled: false,
+    eventCadence: "one_time" as "one_time" | "recurring",
+    recurringDaysOfWeek: [] as number[],
+    recurrenceEndDate: "",
+    requiresPayment: false,
+    amenities: [] as string[],
+    hostPriceDollars: "",
+    breakfastPriceDollars: "",
+    lunchPriceDollars: "",
+    dinnerPriceDollars: "",
+    dailyPriceDollars: "",
+    weeklyPriceDollars: "",
+    monthlyPriceDollars: "",
   });
+
+  const parseDollarsToCents = (value: string) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return undefined;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+    return Math.round(parsed * 100);
+  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -643,6 +663,23 @@ export default function EventCoordinatorDashboard() {
           endTime: formData.endTime,
           maxTrucks: Number(formData.maxTrucks),
           hardCapEnabled: formData.hardCapEnabled,
+          eventCadence: formData.eventCadence,
+          recurringDaysOfWeek: formData.recurringDaysOfWeek,
+          recurrenceEndDate:
+            formData.eventCadence === "recurring"
+              ? formData.recurrenceEndDate
+              : undefined,
+          requiresPayment: formData.requiresPayment,
+          amenities: formData.amenities,
+          hostPriceCents: parseDollarsToCents(formData.hostPriceDollars),
+          breakfastPriceCents: parseDollarsToCents(
+            formData.breakfastPriceDollars,
+          ),
+          lunchPriceCents: parseDollarsToCents(formData.lunchPriceDollars),
+          dinnerPriceCents: parseDollarsToCents(formData.dinnerPriceDollars),
+          dailyPriceCents: parseDollarsToCents(formData.dailyPriceDollars),
+          weeklyPriceCents: parseDollarsToCents(formData.weeklyPriceDollars),
+          monthlyPriceCents: parseDollarsToCents(formData.monthlyPriceDollars),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -662,6 +699,18 @@ export default function EventCoordinatorDashboard() {
         endTime: "",
         maxTrucks: 1,
         hardCapEnabled: false,
+        eventCadence: "one_time",
+        recurringDaysOfWeek: [],
+        recurrenceEndDate: "",
+        requiresPayment: false,
+        amenities: [],
+        hostPriceDollars: "",
+        breakfastPriceDollars: "",
+        lunchPriceDollars: "",
+        dinnerPriceDollars: "",
+        dailyPriceDollars: "",
+        weeklyPriceDollars: "",
+        monthlyPriceDollars: "",
       });
       toast({
         title: "Event Published!",
@@ -845,7 +894,33 @@ export default function EventCoordinatorDashboard() {
                 />
               </div>
             </div>
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="eventCadence">Event Type</Label>
+                <select
+                  id="eventCadence"
+                  value={formData.eventCadence}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      eventCadence: e.target.value as "one_time" | "recurring",
+                      recurringDaysOfWeek:
+                        e.target.value === "recurring"
+                          ? formData.recurringDaysOfWeek
+                          : [],
+                      recurrenceEndDate:
+                        e.target.value === "recurring"
+                          ? formData.recurrenceEndDate
+                          : "",
+                    })
+                  }
+                  className={`${inputClassName} w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm`}
+                  required
+                >
+                  <option value="one_time">One-time</option>
+                  <option value="recurring">Recurring</option>
+                </select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
                 <Input
@@ -886,6 +961,78 @@ export default function EventCoordinatorDashboard() {
                 />
               </div>
             </div>
+            {formData.eventCadence === "recurring" && (
+              <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] p-3">
+                <div className="space-y-2">
+                  <Label>Recurring Days</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { day: 0, label: "Sun" },
+                      { day: 1, label: "Mon" },
+                      { day: 2, label: "Tue" },
+                      { day: 3, label: "Wed" },
+                      { day: 4, label: "Thu" },
+                      { day: 5, label: "Fri" },
+                      { day: 6, label: "Sat" },
+                    ].map((item) => (
+                      <label
+                        key={item.day}
+                        className="inline-flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.recurringDaysOfWeek.includes(
+                            item.day,
+                          )}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              recurringDaysOfWeek: e.target.checked
+                                ? [...formData.recurringDaysOfWeek, item.day]
+                                : formData.recurringDaysOfWeek.filter(
+                                    (day) => day !== item.day,
+                                  ),
+                            })
+                          }
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="recurrenceEndDate">Recurring End Date</Label>
+                  <Input
+                    id="recurrenceEndDate"
+                    type="date"
+                    value={formData.recurrenceEndDate}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        recurrenceEndDate: e.target.value,
+                      })
+                    }
+                    className={inputClassName}
+                    required={formData.eventCadence === "recurring"}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] p-3">
+              <label className="inline-flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={formData.requiresPayment}
+                  onChange={(e) =>
+                    setFormData({ ...formData, requiresPayment: e.target.checked })
+                  }
+                />
+                Paid Event / Parking Pass
+              </label>
+              <p className="text-xs text-[color:var(--text-muted)]">
+                Recurring or paid events route through the parking pass flow.
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               <input
                 id="hardCapEnabled"
@@ -899,6 +1046,64 @@ export default function EventCoordinatorDashboard() {
               <Label htmlFor="hardCapEnabled" className="cursor-pointer">
                 Enforce strict capacity cap (block acceptances once full)
               </Label>
+            </div>
+            <div className="space-y-2">
+              <Label>Amenities</Label>
+              <div className="flex flex-wrap gap-2">
+                {["power", "water", "restrooms", "wifi", "seating"].map(
+                  (amenity) => (
+                    <label
+                      key={amenity}
+                      className="inline-flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-sm capitalize"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.amenities.includes(amenity)}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            amenities: e.target.checked
+                              ? [...formData.amenities, amenity]
+                              : formData.amenities.filter(
+                                  (item) => item !== amenity,
+                                ),
+                          })
+                        }
+                      />
+                      {amenity}
+                    </label>
+                  ),
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Pricing (USD)</Label>
+              <div className="grid md:grid-cols-3 gap-3">
+                {[
+                  ["hostPriceDollars", "Host Fee"],
+                  ["breakfastPriceDollars", "Breakfast"],
+                  ["lunchPriceDollars", "Lunch"],
+                  ["dinnerPriceDollars", "Dinner"],
+                  ["dailyPriceDollars", "Daily"],
+                  ["weeklyPriceDollars", "Weekly"],
+                  ["monthlyPriceDollars", "Monthly"],
+                ].map(([field, label]) => (
+                  <div key={field} className="space-y-1">
+                    <Label htmlFor={field}>{label}</Label>
+                    <Input
+                      id={field}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={(formData as any)[field] || ""}
+                      onChange={(e) =>
+                        setFormData({ ...formData, [field]: e.target.value })
+                      }
+                      className={inputClassName}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>

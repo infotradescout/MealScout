@@ -2,9 +2,11 @@ import type { Express } from "express";
 import { z } from "zod";
 import {
   insertEventSchema,
+  insertEventSeriesSchema,
   insertHostSchema,
   eventInterests,
   events,
+  eventSeries,
   hosts,
   restaurants,
   socialPostQueue,
@@ -17,6 +19,11 @@ import {
   shouldBlockAcceptance,
   buildCapacityFullError,
 } from "../services/interestDecision";
+import { assertMaxSpan180Days, generateOccurrences } from "../services/openCallSeries";
+import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
+import { isParkingPassPublicReady } from "../services/parkingPassQuality";
+import { notifyNearbyTrucksOfNewEvent, notifyNearbyTrucksOfNewSeries } from "../truckEventMatchService";
+import { forwardGeocode } from "../utils/geocoding";
 
 type EventCoordinatorRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
@@ -346,9 +353,71 @@ export function registerEventCoordinatorRoutes(
           startTime: z.string().min(1),
           endTime: z.string().min(1),
           maxTrucks: z.number().int().min(1).max(50),
+          hardCapEnabled: z.boolean().optional(),
+          eventCadence: z.enum(["one_time", "recurring"]),
+          recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+          recurrenceEndDate: z.string().optional(),
+          amenities: z.array(z.string().min(1)).optional(),
+          requiresPayment: z.boolean().optional(),
+          hostPriceCents: z.number().int().min(0).optional(),
+          breakfastPriceCents: z.number().int().min(0).optional(),
+          lunchPriceCents: z.number().int().min(0).optional(),
+          dinnerPriceCents: z.number().int().min(0).optional(),
+          dailyPriceCents: z.number().int().min(0).optional(),
+          weeklyPriceCents: z.number().int().min(0).optional(),
+          monthlyPriceCents: z.number().int().min(0).optional(),
         });
 
         const parsed = schema.parse(req.body);
+        const amenitiesMap =
+          Array.isArray(parsed.amenities) && parsed.amenities.length > 0
+            ? parsed.amenities.reduce(
+                (acc, amenity) => {
+                  acc[amenity] = true;
+                  return acc;
+                },
+                {} as Record<string, boolean>,
+              )
+            : null;
+
+        const breakfastPriceCents = Number(parsed.breakfastPriceCents ?? 0);
+        const lunchPriceCents = Number(parsed.lunchPriceCents ?? 0);
+        const dinnerPriceCents = Number(parsed.dinnerPriceCents ?? 0);
+        const dailyPriceCents = Number(parsed.dailyPriceCents ?? 0);
+        const weeklyPriceCents = Number(parsed.weeklyPriceCents ?? 0);
+        const monthlyPriceCents = Number(parsed.monthlyPriceCents ?? 0);
+        const hostPriceCents = Number(parsed.hostPriceCents ?? 0);
+        const hasAnyPricing =
+          breakfastPriceCents > 0 ||
+          lunchPriceCents > 0 ||
+          dinnerPriceCents > 0 ||
+          dailyPriceCents > 0 ||
+          weeklyPriceCents > 0 ||
+          monthlyPriceCents > 0 ||
+          hostPriceCents > 0;
+        const isRecurring = parsed.eventCadence === "recurring";
+        const requiresParkingPassFlow = isRecurring || Boolean(parsed.requiresPayment) || hasAnyPricing;
+
+        if (requiresParkingPassFlow && !hasAnyPricing) {
+          return res.status(400).json({
+            message:
+              "Recurring or paid events require at least one pricing value.",
+          });
+        }
+
+        if (isRecurring) {
+          if (!parsed.recurrenceEndDate) {
+            return res.status(400).json({
+              message: "Recurring events require an end date.",
+            });
+          }
+          const recurringDays = parsed.recurringDaysOfWeek ?? [];
+          if (recurringDays.length === 0) {
+            return res.status(400).json({
+              message: "Select at least one recurring day of week.",
+            });
+          }
+        }
 
         let host = await storage.getHostByUserId(req.user.id);
         if (!host) {
@@ -360,6 +429,7 @@ export function registerEventCoordinatorRoutes(
             state: parsed.state,
             contactPhone: parsed.contactPhone,
             locationType: "event_coordinator",
+            amenities: amenitiesMap,
           });
           host = await storage.createHost(hostData);
         } else {
@@ -370,6 +440,7 @@ export function registerEventCoordinatorRoutes(
             state: parsed.state,
             contactPhone: parsed.contactPhone,
             locationType: "event_coordinator",
+            amenities: amenitiesMap,
           };
           const hasHostDiff =
             String(host.businessName || "") !== submittedHost.businessName ||
@@ -377,7 +448,9 @@ export function registerEventCoordinatorRoutes(
             String(host.city || "") !== submittedHost.city ||
             String(host.state || "") !== submittedHost.state ||
             String(host.contactPhone || "") !== submittedHost.contactPhone ||
-            String(host.locationType || "") !== submittedHost.locationType;
+            String(host.locationType || "") !== submittedHost.locationType ||
+            JSON.stringify(host.amenities || null) !==
+              JSON.stringify(submittedHost.amenities || null);
 
           // Keep manual admin posting in sync with entered organizer details.
           if (hasHostDiff) {
@@ -397,20 +470,60 @@ export function registerEventCoordinatorRoutes(
             .status(500)
             .json({ message: "Failed to prepare host details for event" });
         }
+        const ensuredHost = host;
 
-        const eventPayload = insertEventSchema.parse({
-          hostId: host.id,
-          coordinatorUserId: req.user.id,
-          name: parsed.name,
-          description: parsed.description || null,
-          date: parsed.date,
-          startTime: parsed.startTime,
-          endTime: parsed.endTime,
-          maxTrucks: parsed.maxTrucks,
-          requiresPayment: false,
-        });
+        const fullAddress = [parsed.address, parsed.city, parsed.state, "USA"]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+          .join(", ");
+        if (
+          fullAddress &&
+          (!host.latitude || !host.longitude ||
+            String(host.address || "") !== parsed.address ||
+            String(host.city || "") !== parsed.city ||
+            String(host.state || "") !== parsed.state)
+        ) {
+          const coords = await forwardGeocode(fullAddress).catch(() => null);
+          if (coords) {
+            const [updatedHost] = await db
+              .update(hosts)
+              .set({
+                latitude: String(coords.lat),
+                longitude: String(coords.lng),
+                updatedAt: new Date(),
+              })
+              .where(eq(hosts.id, host.id))
+              .returning();
+            if (updatedHost) {
+              host = updatedHost as any;
+            }
+          }
+        }
 
-        const eventDate = new Date(eventPayload.date);
+        const resolvedHostPriceCents =
+          hostPriceCents > 0
+            ? hostPriceCents
+            : breakfastPriceCents + lunchPriceCents + dinnerPriceCents;
+        const resolvedDailyPriceCents =
+          dailyPriceCents > 0
+            ? dailyPriceCents
+            : resolvedHostPriceCents > 0
+              ? resolvedHostPriceCents
+              : null;
+        const resolvedWeeklyPriceCents =
+          weeklyPriceCents > 0
+            ? weeklyPriceCents
+            : resolvedDailyPriceCents
+              ? resolvedDailyPriceCents * 7
+              : null;
+        const resolvedMonthlyPriceCents =
+          monthlyPriceCents > 0
+            ? monthlyPriceCents
+            : resolvedDailyPriceCents
+              ? resolvedDailyPriceCents * 30
+              : null;
+
+        const eventDate = new Date(parsed.date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         if (eventDate < today) {
@@ -419,10 +532,10 @@ export function registerEventCoordinatorRoutes(
             .json({ message: "Event date must be in the future" });
         }
 
-        const [startHour, startMinute] = eventPayload.startTime
+        const [startHour, startMinute] = parsed.startTime
           .split(":")
           .map(Number);
-        const [endHour, endMinute] = eventPayload.endTime
+        const [endHour, endMinute] = parsed.endTime
           .split(":")
           .map(Number);
         const startMinutes = startHour * 60 + startMinute;
@@ -434,24 +547,230 @@ export function registerEventCoordinatorRoutes(
             .json({ message: "End time must be after start time" });
         }
 
-        const created = await storage.createEvent(eventPayload);
+        if (!isRecurring) {
+          const eventPayload = insertEventSchema.parse({
+            hostId: ensuredHost.id,
+            coordinatorUserId: req.user.id,
+            name: parsed.name,
+            description: parsed.description || null,
+            date: parsed.date,
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+            maxTrucks: parsed.maxTrucks,
+            hardCapEnabled: Boolean(parsed.hardCapEnabled),
+            eventType: requiresParkingPassFlow ? "parking_pass" : "event",
+            requiresPayment: requiresParkingPassFlow,
+            hostPriceCents:
+              resolvedHostPriceCents > 0 ? resolvedHostPriceCents : null,
+            breakfastPriceCents:
+              breakfastPriceCents > 0 ? breakfastPriceCents : null,
+            lunchPriceCents: lunchPriceCents > 0 ? lunchPriceCents : null,
+            dinnerPriceCents: dinnerPriceCents > 0 ? dinnerPriceCents : null,
+            dailyPriceCents: resolvedDailyPriceCents,
+            weeklyPriceCents: resolvedWeeklyPriceCents,
+            monthlyPriceCents: resolvedMonthlyPriceCents,
+          });
 
-        // Auto-enqueue social post for new event
-        db.insert(socialPostQueue).values({
-          platform: "facebook",
-          target: null,
-          message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
-          link: null,
-          status: "pending",
-          errorMessage: null,
-          updatedAt: new Date(),
-        }).catch(() => {});
+          const created = await storage.createEvent(eventPayload);
 
-        res.status(201).json({
-          ...created,
+          // Auto-enqueue social post for new event
+          db.insert(socialPostQueue)
+            .values({
+              platform: "facebook",
+              target: null,
+              message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
+              link: null,
+              status: "pending",
+              errorMessage: null,
+              updatedAt: new Date(),
+            })
+            .catch(() => {});
+
+          void notifyNearbyTrucksOfNewEvent(
+            {
+              id: created.id,
+              name: created.name || parsed.name,
+              description: created.description || null,
+              date: new Date(created.date),
+              startTime: created.startTime,
+              endTime: created.endTime,
+              requiresPayment: Boolean(created.requiresPayment),
+              hostPriceCents: created.hostPriceCents ?? null,
+            },
+            {
+              businessName: ensuredHost.businessName,
+              city: ensuredHost.city,
+              state: ensuredHost.state,
+              address: ensuredHost.address,
+              latitude: ensuredHost.latitude,
+              longitude: ensuredHost.longitude,
+              amenities:
+                (ensuredHost.amenities as Record<string, boolean> | null) ??
+                null,
+            },
+            { radiusMiles: 50 },
+          );
+
+          return res.status(201).json({
+            ...created,
+            host: {
+              businessName: ensuredHost.businessName,
+              address: ensuredHost.address,
+            },
+          });
+        }
+
+        const recurrenceStartDate = new Date(parsed.date);
+        const recurrenceEndDate = new Date(parsed.recurrenceEndDate as string);
+        if (
+          Number.isNaN(recurrenceStartDate.getTime()) ||
+          Number.isNaN(recurrenceEndDate.getTime())
+        ) {
+          return res.status(400).json({
+            message: "Recurring events require valid start and end dates.",
+          });
+        }
+        if (recurrenceEndDate <= recurrenceStartDate) {
+          return res.status(400).json({
+            message: "Recurring end date must be after the start date.",
+          });
+        }
+        assertMaxSpan180Days(recurrenceStartDate, recurrenceEndDate);
+
+        const dayTokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+        const selectedDays = Array.from(new Set(parsed.recurringDaysOfWeek || []))
+          .filter((day) => day >= 0 && day <= 6)
+          .sort((a, b) => a - b);
+        const recurrenceRule = `WEEKLY:${selectedDays
+          .map((day) => dayTokens[day])
+          .join(",")}`;
+        const timezone = resolveCityTimeZoneSync({
+          city: parsed.city,
+          state: parsed.state,
+        });
+
+        const publicReady = requiresParkingPassFlow
+          ? isParkingPassPublicReady({
+              host: ensuredHost as any,
+              startTime: parsed.startTime,
+              endTime: parsed.endTime,
+              maxTrucks: parsed.maxTrucks,
+              breakfastPriceCents,
+              lunchPriceCents,
+              dinnerPriceCents,
+              dailyPriceCents: resolvedDailyPriceCents,
+              weeklyPriceCents: resolvedWeeklyPriceCents,
+              monthlyPriceCents: resolvedMonthlyPriceCents,
+            })
+          : true;
+
+        const seriesPayload = insertEventSeriesSchema.parse({
+          hostId: ensuredHost.id,
+          coordinatorUserId: req.user.id,
+          name: parsed.name,
+          description: parsed.description || null,
+          timezone,
+          recurrenceRule,
+          startDate: recurrenceStartDate,
+          endDate: recurrenceEndDate,
+          defaultStartTime: parsed.startTime,
+          defaultEndTime: parsed.endTime,
+          defaultMaxTrucks: parsed.maxTrucks,
+          defaultHardCapEnabled: Boolean(parsed.hardCapEnabled),
+          seriesType: requiresParkingPassFlow ? "parking_pass" : "event",
+          defaultBreakfastPriceCents:
+            breakfastPriceCents > 0 ? breakfastPriceCents : 0,
+          defaultLunchPriceCents: lunchPriceCents > 0 ? lunchPriceCents : 0,
+          defaultDinnerPriceCents: dinnerPriceCents > 0 ? dinnerPriceCents : 0,
+          defaultDailyPriceCents: resolvedDailyPriceCents ?? 0,
+          defaultWeeklyPriceCents: resolvedWeeklyPriceCents ?? 0,
+          defaultMonthlyPriceCents: resolvedMonthlyPriceCents ?? 0,
+          defaultHostPriceCents:
+            resolvedHostPriceCents > 0 ? resolvedHostPriceCents : 0,
+        });
+
+        const [createdSeries] = await db
+          .insert(eventSeries)
+          .values({
+            ...seriesPayload,
+            status: publicReady ? "published" : "draft",
+            publishedAt: publicReady ? new Date() : null,
+            updatedAt: new Date(),
+          } as any)
+          .returning();
+
+        const occurrences = generateOccurrences({
+          startDate: recurrenceStartDate,
+          endDate: recurrenceEndDate,
+          recurrenceRule,
+          defaults: {
+            hostId: ensuredHost.id,
+            coordinatorUserId: req.user.id,
+            seriesId: createdSeries.id,
+            name: parsed.name,
+            description: parsed.description || null,
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+            maxTrucks: parsed.maxTrucks,
+            hardCapEnabled: Boolean(parsed.hardCapEnabled),
+          },
+        });
+
+        const createdOccurrences: any[] = [];
+        for (const occurrence of occurrences) {
+          const createdOccurrence = await storage.createEvent({
+            ...occurrence,
+            eventType: requiresParkingPassFlow ? "parking_pass" : "event",
+            requiresPayment: requiresParkingPassFlow,
+            hostPriceCents:
+              resolvedHostPriceCents > 0 ? resolvedHostPriceCents : null,
+            breakfastPriceCents:
+              breakfastPriceCents > 0 ? breakfastPriceCents : null,
+            lunchPriceCents: lunchPriceCents > 0 ? lunchPriceCents : null,
+            dinnerPriceCents: dinnerPriceCents > 0 ? dinnerPriceCents : null,
+            dailyPriceCents: resolvedDailyPriceCents,
+            weeklyPriceCents: resolvedWeeklyPriceCents,
+            monthlyPriceCents: resolvedMonthlyPriceCents,
+          } as any);
+          createdOccurrences.push(createdOccurrence);
+        }
+
+        void notifyNearbyTrucksOfNewSeries(
+          {
+            id: createdSeries.id,
+            name: createdSeries.name,
+            description: createdSeries.description,
+            startDate: new Date(createdSeries.startDate),
+            endDate: new Date(createdSeries.endDate),
+            defaultStartTime: createdSeries.defaultStartTime,
+            defaultEndTime: createdSeries.defaultEndTime,
+          },
+          {
+            businessName: ensuredHost.businessName,
+            city: ensuredHost.city,
+            state: ensuredHost.state,
+            address: ensuredHost.address,
+            latitude: ensuredHost.latitude,
+            longitude: ensuredHost.longitude,
+            amenities:
+              (ensuredHost.amenities as Record<string, boolean> | null) ??
+              null,
+          },
+          { radiusMiles: 50 },
+        );
+
+        const latestOccurrence =
+          createdOccurrences.length > 0
+            ? createdOccurrences[createdOccurrences.length - 1]
+            : null;
+        return res.status(201).json({
+          ...(latestOccurrence || {}),
+          seriesId: createdSeries.id,
+          occurrencesGenerated: createdOccurrences.length,
+          recurring: true,
           host: {
-            businessName: host.businessName,
-            address: host.address,
+            businessName: ensuredHost.businessName,
+            address: ensuredHost.address,
           },
         });
       } catch (error: any) {
