@@ -921,7 +921,7 @@ export default function Home() {
               placeholder="Search deals, restaurants..."
             />
 
-            <div className="mb-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="mb-5 grid grid-cols-3 gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -966,7 +966,7 @@ export default function Home() {
                   }}
                 >
                   <Sparkles className="w-4 h-4 mr-1" />
-                  Deals now
+                  Deals
                 </Button>
               </Link>
             </div>
