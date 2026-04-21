@@ -164,11 +164,10 @@ export function registerEventRoutes(
       includeDraft: true,
     });
 
-    const payoutsEnabled = (event: any) =>
-      Boolean(
-        event?.host?.stripeConnectAccountId &&
-        event?.host?.stripeChargesEnabled,
-      );
+    // Decoupled: host Stripe Connect status no longer gates booking availability.
+    // Payments are always enabled at the platform level; host payouts are deferred
+    // until the host completes Stripe Connect onboarding.
+    const payoutsEnabled = (_event: any) => true;
     const isPublicHostProfile = (host: any, event?: any) =>
       isHostProfileMapEligible({
         businessName: host?.businessName || event?.host?.businessName,
@@ -1832,11 +1831,16 @@ export function registerEventRoutes(
         if (!host) {
           return res.status(500).json({ message: "Host not found" });
         }
-        if (!host.stripeConnectAccountId || !host.stripeChargesEnabled) {
-          return res
-            .status(422)
-            .json({ message: "Host has not completed payment setup" });
-        }
+        // Decoupled: allow bookings even when the host hasn't completed Stripe
+        // Connect onboarding. When the host has a connected account we use a direct
+        // charge; otherwise we charge on the platform account and defer the host
+        // payout until they eventually onboard.
+        const hostPaymentsEnabled = Boolean(
+          host.stripeConnectAccountId && host.stripeChargesEnabled,
+        );
+        const hostStripeAccountId = hostPaymentsEnabled
+          ? host.stripeConnectAccountId
+          : null;
         if (!stripe) {
           return res
             .status(503)
@@ -1892,30 +1896,41 @@ export function registerEventRoutes(
             platformFeeCents: PLATFORM_FEE,
             totalCents,
             status: "pending",
-            stripeApplicationFeeAmount: PLATFORM_FEE,
-            stripeTransferDestination: host.stripeConnectAccountId,
+            stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
+            stripeTransferDestination: hostStripeAccountId,
           })
           .returning();
 
-        // Create Stripe PaymentIntent (direct charge on host's Connect account)
+        // Create Stripe PaymentIntent.
+        // If the host has a connected Stripe account, use a direct charge on that
+        // account with an application fee. Otherwise, charge on the platform
+        // account and defer the host payout.
         let paymentIntent: Stripe.PaymentIntent;
         try {
-          paymentIntent = await stripe.paymentIntents.create(
-            {
-              amount: totalCents,
-              currency: "usd",
-              application_fee_amount: PLATFORM_FEE,
-              metadata: {
-                bookingId: booking.id,
-                eventId,
-                truckId,
-                userId: req.user.id,
-                hostPriceCents: hostPriceCents.toString(),
-                platformFeeCents: PLATFORM_FEE.toString(),
-                totalCents: totalCents.toString(),
-              },
+          const intentParams: Stripe.PaymentIntentCreateParams = {
+            amount: totalCents,
+            currency: "usd",
+            metadata: {
+              bookingId: booking.id,
+              eventId,
+              truckId,
+              userId: req.user.id,
+              hostPriceCents: hostPriceCents.toString(),
+              platformFeeCents: PLATFORM_FEE.toString(),
+              totalCents: totalCents.toString(),
             },
-            { stripeAccount: host.stripeConnectAccountId },
+          };
+
+          // Only set application_fee_amount for Connect direct charges
+          if (hostStripeAccountId) {
+            intentParams.application_fee_amount = PLATFORM_FEE;
+          }
+
+          paymentIntent = await stripe.paymentIntents.create(
+            intentParams,
+            hostStripeAccountId
+              ? { stripeAccount: hostStripeAccountId }
+              : undefined,
           );
         } catch (stripeError: any) {
           // Roll back the pending booking if Stripe fails
@@ -1947,6 +1962,7 @@ export function registerEventRoutes(
           bookingId: booking.id,
           clientSecret: paymentIntent.client_secret,
           totalCents,
+          hostPaymentsReady: hostPaymentsEnabled,
           breakdown: {
             hostPrice: hostPriceCents,
             platformFee: PLATFORM_FEE,
