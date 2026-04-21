@@ -20,11 +20,13 @@ export default function RequestTruckPage() {
     date: "",
     occasion: "",
     guestCount: "",
+    requestedTruckCount: "1",
+    eventVisibility: "private",
     details: "",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -81,7 +83,8 @@ export default function RequestTruckPage() {
             </h1>
             <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
               Birthdays, private parties, school events, and neighborhood
-              gatherings. Public open calls belong in the Events portal.
+              gatherings. Tell us whether this should be private or public so we
+              can match the right workflow for your event.
             </p>
           </div>
 
@@ -166,6 +169,44 @@ export default function RequestTruckPage() {
                   required
                 />
               </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="requestedTruckCount">How many food trucks do you need? *</Label>
+                <Input
+                  id="requestedTruckCount"
+                  name="requestedTruckCount"
+                  type="number"
+                  min={1}
+                  max={25}
+                  value={formData.requestedTruckCount}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="eventVisibility">Event visibility *</Label>
+                <select
+                  id="eventVisibility"
+                  name="eventVisibility"
+                  value={formData.eventVisibility}
+                  onChange={handleChange}
+                  className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
+                  required
+                >
+                  <option value="private">Private event (not discoverable in public event feeds)</option>
+                  <option value="public">Public event (discoverable by all users)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
+              <p className="text-xs text-[color:var(--text-secondary)]">
+                Public events can be surfaced across event discovery pages.
+                Private events are handled as direct requests and are not shown
+                in public browsing feeds.
+              </p>
             </div>
 
             <div className="grid gap-2">

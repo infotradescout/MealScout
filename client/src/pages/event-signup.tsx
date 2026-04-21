@@ -21,13 +21,15 @@ export default function EventSignup() {
     date: "",
     city: "",
     expectedCrowd: "",
+    requestedTruckCount: "1",
+    eventVisibility: "public",
     contactEmail: user?.email || "",
     contactPhone: "",
     notes: "",
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData({
       ...formData,
@@ -203,7 +205,7 @@ export default function EventSignup() {
                   </div>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-3 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="expectedCrowd" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Expected Crowd *</Label>
                     <Input
@@ -214,6 +216,20 @@ export default function EventSignup() {
                       onChange={handleChange}
                       required
                       placeholder="200"
+                      className="h-11 rounded-xl border-[color:var(--border-subtle)] bg-[var(--field-bg)]"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="requestedTruckCount" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">How Many Trucks? *</Label>
+                    <Input
+                      id="requestedTruckCount"
+                      name="requestedTruckCount"
+                      type="number"
+                      min={1}
+                      max={25}
+                      value={formData.requestedTruckCount}
+                      onChange={handleChange}
+                      required
                       className="h-11 rounded-xl border-[color:var(--border-subtle)] bg-[var(--field-bg)]"
                     />
                   </div>
@@ -229,6 +245,21 @@ export default function EventSignup() {
                       className="h-11 rounded-xl border-[color:var(--border-subtle)] bg-[var(--field-bg)]"
                     />
                   </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="eventVisibility" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Event Visibility *</Label>
+                  <select
+                    id="eventVisibility"
+                    name="eventVisibility"
+                    value={formData.eventVisibility}
+                    onChange={handleChange}
+                    className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
+                    required
+                  >
+                    <option value="public">Public event (discoverable by all users)</option>
+                    <option value="private">Private event (not discoverable in public event feeds)</option>
+                  </select>
                 </div>
 
                 <div className="grid gap-2">
@@ -265,6 +296,8 @@ export default function EventSignup() {
                     - No hidden fees, now or later
                     <br />
                     - Booking fees apply only to trucks
+                    <br />
+                    - Only public events are discoverable by all users
                   </p>
                 </div>
 

@@ -1669,6 +1669,8 @@ export function registerEventRoutes(
         date: z.string().min(1),
         city: z.string().min(1),
         expectedCrowd: z.string().min(1),
+        requestedTruckCount: z.coerce.number().int().min(1).max(25).default(1),
+        eventVisibility: z.enum(["private", "public"]).default("public"),
         contactEmail: z.string().email(),
         contactPhone: z.string().optional(),
         notes: z.string().optional(),
@@ -1694,6 +1696,8 @@ export function registerEventRoutes(
         <p><strong>Date:</strong> ${parsed.date}</p>
         <p><strong>City:</strong> ${parsed.city}</p>
         <p><strong>Expected Crowd:</strong> ${parsed.expectedCrowd}</p>
+        <p><strong>Requested Trucks:</strong> ${parsed.requestedTruckCount}</p>
+        <p><strong>Visibility:</strong> ${parsed.eventVisibility}</p>
         <p><strong>Contact Email:</strong> ${parsed.contactEmail}</p>
         ${parsed.contactPhone ? `<p><strong>Phone:</strong> ${parsed.contactPhone}</p>` : ""}
         ${parsed.notes ? `<p><strong>Notes:</strong> ${parsed.notes}</p>` : ""}
@@ -1708,6 +1712,8 @@ export function registerEventRoutes(
           eventName: parsed.eventName,
           city: parsed.city,
           expectedCrowd: parsed.expectedCrowd,
+          requestedTruckCount: parsed.requestedTruckCount,
+          eventVisibility: parsed.eventVisibility,
         },
       });
 
@@ -1720,12 +1726,15 @@ export function registerEventRoutes(
           date: parsed.date,
           city: parsed.city,
           expectedCrowd: parsed.expectedCrowd,
+          requestedTruckCount: parsed.requestedTruckCount,
+          eventVisibility: parsed.eventVisibility,
           contactEmail: parsed.contactEmail,
           contactPhone: parsed.contactPhone ?? null,
           notes: parsed.notes ?? null,
         },
         metadata: {
           source: "event_signup",
+          discoverableByAllUsers: parsed.eventVisibility === "public",
         },
       });
 
@@ -1751,6 +1760,8 @@ export function registerEventRoutes(
         date: z.string().min(1),
         occasion: z.string().min(1),
         guestCount: z.string().min(1),
+        requestedTruckCount: z.coerce.number().int().min(1).max(25).default(1),
+        eventVisibility: z.enum(["private", "public"]).default("private"),
         details: z.string().optional(),
       });
 
@@ -1767,6 +1778,8 @@ export function registerEventRoutes(
         <p><strong>Date:</strong> ${parsed.date}</p>
         <p><strong>Occasion:</strong> ${parsed.occasion}</p>
         <p><strong>Guest Count:</strong> ${parsed.guestCount}</p>
+        <p><strong>Requested Trucks:</strong> ${parsed.requestedTruckCount}</p>
+        <p><strong>Visibility:</strong> ${parsed.eventVisibility}</p>
         ${parsed.details ? `<p><strong>Details:</strong> ${parsed.details}</p>` : ""}
       `;
 
@@ -1779,6 +1792,8 @@ export function registerEventRoutes(
           city: parsed.city,
           occasion: parsed.occasion,
           guestCount: parsed.guestCount,
+          requestedTruckCount: parsed.requestedTruckCount,
+          eventVisibility: parsed.eventVisibility,
         },
       });
 
@@ -1795,15 +1810,21 @@ export function registerEventRoutes(
             date: parsed.date,
             occasion: parsed.occasion,
             guestCount: parsed.guestCount,
+            requestedTruckCount: parsed.requestedTruckCount,
+            eventVisibility: parsed.eventVisibility,
             details: parsed.details ?? null,
           },
           metadata: {
             source: "private_truck_request",
+            discoverableByAllUsers: parsed.eventVisibility === "public",
           },
         });
       }
 
-      res.status(201).json({ message: "Request submitted" });
+      res.status(201).json({
+        message: "Request submitted",
+        discoverableByAllUsers: parsed.eventVisibility === "public",
+      });
     } catch (error: any) {
       console.error("Error submitting private truck request:", error);
       if (error instanceof z.ZodError) {
