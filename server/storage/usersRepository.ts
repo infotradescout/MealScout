@@ -8,7 +8,7 @@ import {
   type TradeScoutUserData,
 } from "@shared/schema";
 import { db, pool } from "../db";
-import { eq, and, or, isNull, desc } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "../brevoCrm";
 import { ensureAffiliateTag } from "../affiliateTagService";
@@ -100,6 +100,11 @@ function shouldAssignAffiliateTag(userType?: string | null): boolean {
   return userType !== "admin" && userType !== "super_admin";
 }
 
+function normalizeEmail(value?: string | null): string | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized || null;
+}
+
 // ── Repository factory ────────────────────────────────────────────────────────
 
 export function createUsersRepository() {
@@ -131,9 +136,13 @@ export function createUsersRepository() {
         >
       >,
     ): Promise<User> {
+      const normalizedUpdates = { ...updates } as any;
+      if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "email")) {
+        normalizedUpdates.email = normalizeEmail(normalizedUpdates.email);
+      }
       const [user] = await db
         .update(users)
-        .set({ ...updates, updatedAt: new Date() })
+        .set({ ...normalizedUpdates, updatedAt: new Date() })
         .where(eq(users.id, id))
         .returning();
       return user;
@@ -168,10 +177,10 @@ export function createUsersRepository() {
     },
 
     async getUserByEmail(email: string): Promise<User | undefined> {
-      const normalizedEmail = String(email || "").trim();
+      const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "email" = $1 limit 1`, [normalizedEmail]);
+        const rows = await selectUsersSafe(`where lower("email") = lower($1) limit 1`, [normalizedEmail]);
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
@@ -181,7 +190,7 @@ export function createUsersRepository() {
         const [user] = await db
           .select()
           .from(users)
-          .where(and(eq(users.email, normalizedEmail), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(and(sql`lower(${users.email}) = ${normalizedEmail}`, or(eq(users.isDisabled, false), isNull(users.isDisabled))));
         return user;
       }
     },
@@ -596,6 +605,19 @@ export function createUsersRepository() {
       userType: string;
       tempPassword: string;
     }): Promise<User> {
+      const normalizedEmail = normalizeEmail(userData.email);
+      if (!normalizedEmail) throw new Error("Valid email is required");
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .limit(1);
+      if (existing) {
+        const err: any = new Error("Email already in use");
+        err.code = "23505";
+        throw err;
+      }
+
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
       const affiliatePercent =
         userData.userType === "staff" ? 25
@@ -605,7 +627,7 @@ export function createUsersRepository() {
       const [user] = await db
         .insert(users)
         .values({
-          email: userData.email,
+          email: normalizedEmail,
           firstName: userData.firstName,
           lastName: userData.lastName,
           phone: userData.phone,
@@ -642,6 +664,19 @@ export function createUsersRepository() {
         | "admin"
         | "super_admin";
     }): Promise<User> {
+      const normalizedEmail = normalizeEmail(data.email);
+      if (!normalizedEmail) throw new Error("Valid email is required");
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .limit(1);
+      if (existing) {
+        const err: any = new Error("Email already in use");
+        err.code = "23505";
+        throw err;
+      }
+
       const affiliatePercent =
         data.userType === "staff" ? 25
         : data.userType === "admin" || data.userType === "super_admin" ? 0
@@ -651,7 +686,7 @@ export function createUsersRepository() {
       const [user] = await db
         .insert(users)
         .values({
-          email: data.email,
+          email: normalizedEmail,
           firstName: data.firstName,
           lastName: data.lastName,
           phone: data.phone,

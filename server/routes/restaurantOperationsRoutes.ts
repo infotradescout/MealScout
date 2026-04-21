@@ -177,6 +177,124 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
+    "/api/restaurants/:id/onboarding/completion",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params?.id || "").trim();
+        if (!restaurantId) {
+          return res.status(400).json({ message: "Restaurant ID is required" });
+        }
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const isAdminOrStaff =
+          req.user?.userType === "admin" ||
+          req.user?.userType === "super_admin" ||
+          req.user?.userType === "staff";
+        if (!isAdminOrStaff && String((restaurant as any).ownerId) !== String(req.user.id)) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const text = (value: unknown) => String(value || "").trim();
+        const requiredChecks = [
+          { key: "name", label: "Business name", ok: Boolean(text((restaurant as any).name)) },
+          { key: "address", label: "Address", ok: Boolean(text((restaurant as any).address)) },
+          { key: "city", label: "City", ok: Boolean(text((restaurant as any).city)) },
+          { key: "state", label: "State", ok: Boolean(text((restaurant as any).state)) },
+          { key: "phone", label: "Phone", ok: Boolean(text((restaurant as any).phone)) },
+          {
+            key: "businessType",
+            label: "Business type",
+            ok: Boolean(text((restaurant as any).businessType)),
+          },
+        ];
+
+        const recommendedChecks = [
+          {
+            key: "cuisineType",
+            label: "Cuisine/category",
+            ok: Boolean(text((restaurant as any).cuisineType)),
+          },
+          {
+            key: "description",
+            label: "Business description",
+            ok: Boolean(text((restaurant as any).description)),
+          },
+          {
+            key: "websiteUrl",
+            label: "Website or social link",
+            ok: Boolean(
+              text((restaurant as any).websiteUrl) ||
+                text((restaurant as any).instagramUrl) ||
+                text((restaurant as any).facebookPageUrl),
+            ),
+          },
+          {
+            key: "amenities",
+            label: "Amenities",
+            ok:
+              String((restaurant as any).businessType || "").toLowerCase() === "food_truck"
+                ? true
+                : Boolean(
+                    (restaurant as any).amenities &&
+                      typeof (restaurant as any).amenities === "object" &&
+                      ((restaurant as any).amenities.parking ||
+                        (restaurant as any).amenities.wifi ||
+                        (restaurant as any).amenities.outdoor_seating),
+                  ),
+          },
+        ];
+
+        const requiredDone = requiredChecks.filter((item) => item.ok).length;
+        const recommendedDone = recommendedChecks.filter((item) => item.ok).length;
+        const requiredTotal = requiredChecks.length;
+        const recommendedTotal = recommendedChecks.length;
+        const overallDone = requiredDone + recommendedDone;
+        const overallTotal = requiredTotal + recommendedTotal;
+        const overallPct =
+          overallTotal > 0 ? Math.round((overallDone / overallTotal) * 100) : 100;
+
+        let verificationStatus: "verified" | "pending" | "not_submitted" = "not_submitted";
+        if (Boolean((restaurant as any).isVerified)) {
+          verificationStatus = "verified";
+        } else {
+          const pending = await storage.hasPendingVerificationRequest(restaurantId);
+          verificationStatus = pending ? "pending" : "not_submitted";
+        }
+
+        res.json({
+          restaurantId,
+          overallPct,
+          required: {
+            done: requiredDone,
+            total: requiredTotal,
+            missing: requiredChecks.filter((item) => !item.ok),
+          },
+          recommended: {
+            done: recommendedDone,
+            total: recommendedTotal,
+            missing: recommendedChecks.filter((item) => !item.ok),
+          },
+          verification: {
+            status: verificationStatus,
+            isVerified: Boolean((restaurant as any).isVerified),
+            needsSubmission: verificationStatus === "not_submitted",
+          },
+        });
+      } catch (error) {
+        console.error("Error computing onboarding completion:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to compute onboarding completion" });
+      }
+    },
+  );
+
+  app.get(
     "/api/business/premium-weekly-summary",
     isAuthenticated,
     async (req: any, res) => {

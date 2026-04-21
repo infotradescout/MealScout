@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import type { Express } from "express";
-import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { registerDealAdminRoutes } from "./dealsRoutes";
@@ -260,6 +260,22 @@ export function registerUserAdminRoutes(
             }
           }
           await storage.updateUserType(userId, userType);
+        }
+
+        if (updates.email) {
+          const [existingByEmail] = await db
+            .select({ id: users.id })
+            .from(users)
+            .where(
+              and(
+                sql`lower(${users.email}) = ${updates.email}`,
+                ne(users.id, userId),
+              ),
+            )
+            .limit(1);
+          if (existingByEmail) {
+            return res.status(409).json({ message: "Email already in use" });
+          }
         }
 
         const updated = Object.keys(updates).length

@@ -5172,10 +5172,23 @@ export class DatabaseStorage implements IStorage {
     passwordHash: string;
     mustResetPassword: boolean;
   }): Promise<{ userId: string }> {
+    const normalizedEmail = String(data.email || "").trim().toLowerCase();
+    if (!normalizedEmail) throw new Error("Valid email is required");
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+      .limit(1);
+    if (existing) {
+      const err: any = new Error("Email already in use");
+      err.code = "23505";
+      throw err;
+    }
+
     const [user] = await db
       .insert(users)
       .values({
-        email: data.email,
+        email: normalizedEmail,
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,

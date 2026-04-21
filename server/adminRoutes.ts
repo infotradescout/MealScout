@@ -344,8 +344,23 @@ router.get("/vac-logs", isAdmin, async (req, res) => {
       .orderBy(desc(securityAuditLog.timestamp))
       .limit(500);
 
+    type VacLogEnriched = {
+      id: string;
+      userId: string | null;
+      restaurantId: string | null;
+      timestamp: Date | null;
+      score: number | null;
+      threshold: number | null;
+      autoVerified: boolean;
+      outcome: "auto_verified" | "manual_review";
+      emailDomain: string | null;
+      websiteHost: string | null;
+      signalSummary: string;
+      rawMetadata: any;
+    };
+
     // Enrich each log with a flat summary for the UI
-    const enriched = logs.map((log: any) => {
+    const enriched: VacLogEnriched[] = logs.map((log: any) => {
       const meta = log.metadata ?? {};
       const signals = meta.signals ?? {};
       const autoVerified = meta.shouldAutoVerify === true;
@@ -382,17 +397,17 @@ router.get("/vac-logs", isAdmin, async (req, res) => {
     });
 
     // Filter by outcome if requested
-    let result = enriched;
+    let result: VacLogEnriched[] = enriched;
     if (outcome === "auto_verified") {
-      result = enriched.filter((e) => e.autoVerified);
+      result = enriched.filter((e: VacLogEnriched) => e.autoVerified);
     } else if (outcome === "manual_review") {
-      result = enriched.filter((e) => !e.autoVerified);
+      result = enriched.filter((e: VacLogEnriched) => !e.autoVerified);
     }
 
     res.json({
       total: result.length,
-      autoVerifiedCount: enriched.filter((e) => e.autoVerified).length,
-      manualReviewCount: enriched.filter((e) => !e.autoVerified).length,
+      autoVerifiedCount: enriched.filter((e: VacLogEnriched) => e.autoVerified).length,
+      manualReviewCount: enriched.filter((e: VacLogEnriched) => !e.autoVerified).length,
       logs: result.slice(0, 200),
     });
   } catch (error) {

@@ -71,14 +71,15 @@ export async function registerSchedulers(app: Express): Promise<void> {
   cron.schedule("30 8 * * 1", async () => {
     console.log("⏰ Triggering Premium Weekly Summary Cron");
     try {
-      const { users, restaurantSubscriptions } = await import("@shared/schema");
+      const { users, restaurants, restaurantSubscriptions } = await import("@shared/schema");
       const { eq, isNotNull, inArray } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
       const { telemetryEvents } = await import("@shared/schema");
       // Find all users with an active restaurantSubscriptions row
       const activeSubs = await db
-        .selectDistinct({ userId: restaurantSubscriptions.userId })
+        .selectDistinct({ userId: restaurants.ownerId })
         .from(restaurantSubscriptions)
+        .innerJoin(restaurants, eq(restaurantSubscriptions.restaurantId, restaurants.id))
         .where(eq(restaurantSubscriptions.status, "active"));
       const activeUserIds = activeSubs.map((r: { userId: string }) => r.userId);
       if (activeUserIds.length === 0) {
@@ -588,11 +589,10 @@ export async function registerSchedulers(app: Express): Promise<void> {
   cron.schedule("0 9 * * *", async () => {
     try {
       const { securityAuditLog, restaurants, users } = await import("@shared/schema");
-      const { eq, and, isNull } = await import("drizzle-orm");
+      const { eq, and } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
 
-      // Find all trucks that have a vac:evaluate log entry with outcome = 'manual_review'
-      // and are still unverified (isVerified = false)
+      // Find unverified trucks with a recent VAC evaluation entry.
       const pendingRows = await db
         .select({
           restaurantId: restaurants.id,
@@ -608,28 +608,41 @@ export async function registerSchedulers(app: Express): Promise<void> {
           and(
             eq(securityAuditLog.resourceId, restaurants.id),
             eq(securityAuditLog.action, "vac:evaluate"),
-            eq(securityAuditLog.outcome, "manual_review"),
           ),
         )
-        .where(
-          and(
-            eq(restaurants.isVerified, false),
-            isNull(restaurants.deletedAt),
-          ),
-        )
+        .where(eq(restaurants.isVerified, false))
         .orderBy(restaurants.createdAt)
         .limit(100);
 
-      if (pendingRows.length === 0) {
+      const manualReviewRows = pendingRows.filter((row: { vacScore: unknown }) => {
+        const meta = (row.vacScore as any) || {};
+        if (meta.shouldAutoVerify === true) return false;
+        if (typeof meta.outcome === "string") return meta.outcome === "manual_review";
+        return true;
+      });
+
+      if (manualReviewRows.length === 0) {
         console.log("[vac-digest] No pending manual reviews — skipping digest");
         return;
       }
 
-      const entries = pendingRows.map((row) => {
+      const entries = manualReviewRows.map((row: {
+        restaurantId: unknown;
+        restaurantName: unknown;
+        ownerEmail: unknown;
+        vacScore: unknown;
+        createdAt: unknown;
+      }) => {
         const meta = (row.vacScore as any) || {};
         const score = Number(meta.score ?? 0);
         const threshold = Number(meta.threshold ?? 60);
         const signals = String(meta.signalSummary || meta.signals || "");
+        const createdAtValue =
+          row.createdAt instanceof Date
+            ? row.createdAt
+            : typeof row.createdAt === "string" || typeof row.createdAt === "number"
+              ? new Date(row.createdAt)
+              : null;
         return {
           restaurantId: String(row.restaurantId || ""),
           restaurantName: String(row.restaurantName || "Unknown"),
@@ -637,9 +650,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
           vacScore: score,
           threshold,
           signals,
-          createdAt: row.createdAt
-            ? new Date(row.createdAt).toLocaleDateString()
-            : "unknown",
+          createdAt: createdAtValue ? createdAtValue.toLocaleDateString() : "unknown",
         };
       });
 

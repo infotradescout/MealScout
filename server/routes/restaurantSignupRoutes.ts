@@ -112,10 +112,55 @@ export function registerRestaurantSignupRoutes(
       const validatedRestaurantData = insertRestaurantSchema
         .omit({ ownerId: true })
         .parse(restaurantData);
-      const restaurant = await storage.createRestaurant({
-        ...validatedRestaurantData,
+      const minimalRestaurantPayload: any = {
+        name: String((validatedRestaurantData as any).name || "").trim(),
+        address: String((validatedRestaurantData as any).address || "").trim(),
+        city: String((validatedRestaurantData as any).city || "").trim(),
+        state: String((validatedRestaurantData as any).state || "").trim(),
+        businessType: String(
+          (validatedRestaurantData as any).businessType || "restaurant",
+        ),
         ownerId: user.id,
-      });
+      };
+      const normalizedPhone = String(
+        (validatedRestaurantData as any).phone || user.phone || "",
+      ).trim();
+      if (normalizedPhone) {
+        minimalRestaurantPayload.phone = normalizedPhone;
+      }
+
+      const cuisineType = String(
+        (validatedRestaurantData as any).cuisineType || "",
+      ).trim();
+      const description = String(
+        (validatedRestaurantData as any).description || "",
+      ).trim();
+      const websiteUrl = String(
+        (validatedRestaurantData as any).websiteUrl || "",
+      ).trim();
+      const instagramUrl = String(
+        (validatedRestaurantData as any).instagramUrl || "",
+      ).trim();
+      const facebookPageUrl = String(
+        (validatedRestaurantData as any).facebookPageUrl || "",
+      ).trim();
+
+      if (cuisineType) minimalRestaurantPayload.cuisineType = cuisineType;
+      if (description) minimalRestaurantPayload.description = description;
+      if (websiteUrl) minimalRestaurantPayload.websiteUrl = websiteUrl;
+      if (instagramUrl) minimalRestaurantPayload.instagramUrl = instagramUrl;
+      if (facebookPageUrl)
+        minimalRestaurantPayload.facebookPageUrl = facebookPageUrl;
+
+      const amenities = (validatedRestaurantData as any).amenities;
+      const hasAmenities =
+        amenities &&
+        (amenities.parking || amenities.wifi || amenities.outdoor_seating);
+      if (hasAmenities && minimalRestaurantPayload.businessType !== "food_truck") {
+        minimalRestaurantPayload.amenities = amenities;
+      }
+
+      const restaurant = await storage.createRestaurant(minimalRestaurantPayload);
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
         const currentType = String((user as any)?.userType || "");

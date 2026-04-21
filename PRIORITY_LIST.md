@@ -9,3 +9,12 @@ This checklist tracks the highest-leverage improvements for making the repo easi
 - [x] 3. Add a reliable repo health command path for verification (`check`, linting, and a documented baseline workflow).
 - [x] 4. Clean up tracked temp/generated artifacts and document which build outputs are intentional.
 - [x] 5. Identify and carve safer seams around backend hotspot files such as `server/routes.ts` and `server/storage.ts`.
+
+## Current Laser Focus (2026-04-19)
+
+- Focus brief: [`docs/FOCUS_DIRECT_CONNECT_ONBOARDING_ROUTING_MESSAGING_2026-04-19.md`](./docs/FOCUS_DIRECT_CONNECT_ONBOARDING_ROUTING_MESSAGING_2026-04-19.md)
+- Active lanes:
+  - direct connect flows
+  - onboarding flow reliability
+  - role/request routing correctness
+  - connect-flow messaging and notifications

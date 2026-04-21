@@ -3,6 +3,8 @@ import { registerAffiliateAdminRoutes } from "./admin/affiliateAdminRoutes";
 import { registerTruckImportAdminRoutes } from "./admin/truckImportAdminRoutes";
 import { registerUserAdminRoutes } from "./admin/userAdminRoutes";
 import { registerAdminCoreOpsRoutes } from "./admin/adminCoreOpsRoutes";
+import { registerAdminEmailRoutes } from "./admin/adminEmailRoutes";
+import { registerAdminLisaActionsRoutes } from "./admin/adminLisaActionsRoutes";
 import {
   getHostPricingColumnsCheck,
   hasHostSpotImageColumn,
@@ -16,8 +18,6 @@ import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
 import { sendAccountSetupInvite } from "../utils/accountSetup";
-import { emailService } from "../emailService";
-import { emailDeliveryAudit, getEmailConfigSummary } from "../emailService";
 import { db } from "../db";
 import { logAudit } from "../auditLogger";
 import { ensureAffiliateTag } from "../affiliateTagService";
@@ -1087,69 +1087,6 @@ export function registerAdminManagementRoutes(app: Express) {
     },
   );
 
-  app.get(
-    "/api/admin/email/status",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      res.json(getEmailConfigSummary());
-    },
-  );
-
-  app.post(
-    "/api/admin/email/test",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const to = String(req.body?.to || "").trim() || req.user?.email;
-        const categoryRaw = String(req.body?.category || "general").trim();
-        const category =
-          categoryRaw === "account" ? "account" : ("general" as const);
-        if (!to) {
-          return res.status(400).json({ message: "Recipient email required" });
-        }
-        const summary = getEmailConfigSummary();
-        if (!summary.configured) {
-          return res.status(400).json({
-            message:
-              "Email provider is not configured (missing/invalid BREVO_API_KEY).",
-          });
-        }
-
-        const ok = await emailService.sendBasicEmail(
-          to,
-          "MealScout test email",
-          "<p>This is a test email from MealScout admin.</p>",
-          "This is a test email from MealScout admin.",
-          category,
-        );
-        res.json({
-          success: ok,
-          configured: summary.configured,
-          mode: summary.mode,
-          category,
-          latestAttempt: emailDeliveryAudit.latest(),
-        });
-      } catch (error: any) {
-        console.error("Error sending test email:", error);
-        res.status(500).json({ message: "Failed to send test email" });
-      }
-    },
-  );
-
-  app.get(
-    "/api/admin/email/attempts",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      const rawLimit =
-        typeof req.query?.limit === "string" ? req.query.limit : "";
-      const limit = Number(rawLimit || 25);
-      res.json({ rows: emailDeliveryAudit.list(limit) });
-    },
-  );
-
   // Manual User/Host Creation
   app.post(
     "/api/admin/users/create",
@@ -1228,6 +1165,15 @@ export function registerAdminManagementRoutes(app: Express) {
             message:
               "businessName and address are required to provision this account type",
           });
+        }
+
+        const [existingUserByEmail] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+          .limit(1);
+        if (existingUserByEmail) {
+          return res.status(409).json({ message: "Email already in use" });
         }
 
         const hasLatitude =
@@ -3774,329 +3720,10 @@ export function registerAdminManagementRoutes(app: Express) {
     },
   );
 
-  app.get(
-    "/api/admin/lisa/remediations",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const hoursRaw = Number(req.query.hours ?? 24 * 30);
-        const hours = Number.isFinite(hoursRaw)
-          ? Math.max(24, Math.min(24 * 120, Math.trunc(hoursRaw)))
-          : 24 * 30;
-        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-        const entityType = String(req.query.entityType || "").trim();
-        const entityId = String(req.query.entityId || "").trim();
-
-        const rows = await db
-          .select({
-            id: telemetryEvents.id,
-            userId: telemetryEvents.userId,
-            createdAt: telemetryEvents.createdAt,
-            properties: telemetryEvents.properties,
-          })
-          .from(telemetryEvents)
-          .where(
-            and(
-              eq(telemetryEvents.eventName, "lisa_remediation_action"),
-              gte(telemetryEvents.createdAt, since),
-            ),
-          )
-          .orderBy(desc(telemetryEvents.createdAt))
-          .limit(1000);
-
-        const items = rows
-          .map((row: any) => {
-            const properties =
-              row.properties && typeof row.properties === "object"
-                ? (row.properties as Record<string, any>)
-                : {};
-            return {
-              id: row.id,
-              userId: row.userId,
-              createdAt: row.createdAt,
-              entityType: String(properties.entityType || ""),
-              entityId: String(properties.entityId || ""),
-              actionId: String(properties.actionId || ""),
-              actionLabel: String(properties.actionLabel || ""),
-              actionHref: String(properties.actionHref || ""),
-              actionKind: String(properties.actionKind || "admin"),
-              status: String(properties.status || "started"),
-              notes: String(properties.notes || ""),
-            };
-          })
-          .filter((item: any) => {
-            if (entityType && item.entityType !== entityType) return false;
-            if (entityId && item.entityId !== entityId) return false;
-            return Boolean(item.entityType && item.entityId && item.actionId);
-          });
-
-        const latestByAction = new Map<string, (typeof items)[number]>();
-        for (const item of items) {
-          const key = `${item.entityType}:${item.entityId}:${item.actionId}`;
-          if (!latestByAction.has(key)) {
-            latestByAction.set(key, item);
-          }
-        }
-
-        res.json({
-          ok: true,
-          generatedAt: new Date().toISOString(),
-          windowHours: hours,
-          items,
-          latest: Array.from(latestByAction.values()),
-        });
-      } catch (error) {
-        console.error("Error fetching LISA remediations:", error);
-        res.status(500).json({ message: "Failed to fetch remediations" });
-      }
-    },
-  );
-
-  app.post(
-    "/api/admin/lisa/remediations",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const entityType = String(req.body?.entityType || "").trim();
-        const entityId = String(req.body?.entityId || "").trim();
-        const actionId = String(req.body?.actionId || "").trim();
-        const actionLabel = String(req.body?.actionLabel || "").trim();
-        const actionHref = String(req.body?.actionHref || "").trim();
-        const actionKind =
-          String(req.body?.actionKind || "admin").trim() === "public"
-            ? "public"
-            : "admin";
-        const status =
-          String(req.body?.status || "started").trim() === "completed"
-            ? "completed"
-            : "started";
-        const notes = String(req.body?.notes || "").trim().slice(0, 500);
-
-        if (!entityType || !entityId || !actionId || !actionLabel) {
-          return res.status(400).json({ message: "Missing remediation fields" });
-        }
-
-        const [eventRow] = await db
-          .insert(telemetryEvents)
-          .values({
-            eventName: "lisa_remediation_action",
-            userId: req.user?.id || null,
-            properties: {
-              entityType,
-              entityId,
-              actionId,
-              actionLabel,
-              actionHref,
-              actionKind,
-              status,
-              notes: notes || null,
-            },
-          })
-          .returning({
-            id: telemetryEvents.id,
-            createdAt: telemetryEvents.createdAt,
-          });
-
-        logAudit(
-          req.user?.id || "",
-          "lisa_remediation_action",
-          "lisa_entity",
-          `${entityType}:${entityId}`,
-          req.ip || "",
-          String(req.get("user-agent") || ""),
-          {
-            actionId,
-            actionLabel,
-            actionHref,
-            actionKind,
-            status,
-          },
-        ).catch((err) =>
-          console.error("Failed to write LISA remediation audit log:", err),
-        );
-
-        storage
-          .emitClaim({
-            subjectType: entityType,
-            subjectId: entityId,
-            actorType: "user",
-            actorId: req.user?.id || null,
-            app: "mealscout",
-            claimType: "remediation_action_logged",
-            claimValue: {
-              actionId,
-              actionLabel,
-              actionHref,
-              actionKind,
-              status,
-              notes: notes || null,
-            },
-            source: "admin_control_center",
-          })
-          .catch((err) =>
-            console.error("Failed to emit remediation LISA claim:", err),
-          );
-
-        res.json({
-          ok: true,
-          item: {
-            id: eventRow?.id || null,
-            createdAt: eventRow?.createdAt || new Date().toISOString(),
-            entityType,
-            entityId,
-            actionId,
-            actionLabel,
-            actionHref,
-            actionKind,
-            status,
-            notes,
-          },
-        });
-      } catch (error) {
-        console.error("Error logging LISA remediation:", error);
-        res.status(500).json({ message: "Failed to log remediation" });
-      }
-    },
-  );
-
-  app.get(
-    "/api/admin/lisa/brief-actions",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const hoursRaw = Number(req.query.hours ?? 24 * 30);
-        const hours = Number.isFinite(hoursRaw)
-          ? Math.max(24, Math.min(24 * 120, Math.trunc(hoursRaw)))
-          : 24 * 30;
-        const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-
-        const rows = await db
-          .select({
-            id: telemetryEvents.id,
-            userId: telemetryEvents.userId,
-            createdAt: telemetryEvents.createdAt,
-            properties: telemetryEvents.properties,
-          })
-          .from(telemetryEvents)
-          .where(
-            and(
-              eq(telemetryEvents.eventName, "lisa_brief_action"),
-              gte(telemetryEvents.createdAt, since),
-            ),
-          )
-          .orderBy(desc(telemetryEvents.createdAt))
-          .limit(1000);
-
-        const items = rows
-          .map((row: any) => {
-            const properties =
-              row.properties && typeof row.properties === "object"
-                ? (row.properties as Record<string, any>)
-                : {};
-            return {
-              id: row.id,
-              userId: row.userId,
-              createdAt: row.createdAt,
-              briefKey: String(properties.briefKey || ""),
-              action: String(properties.action || ""),
-              title: String(properties.title || ""),
-              href: String(properties.href || ""),
-            };
-          })
-          .filter((item: any) => Boolean(item.briefKey && item.action));
-
-        const latestByBrief = new Map<string, (typeof items)[number]>();
-        for (const item of items) {
-          if (!latestByBrief.has(item.briefKey)) {
-            latestByBrief.set(item.briefKey, item);
-          }
-        }
-
-        res.json({
-          ok: true,
-          generatedAt: new Date().toISOString(),
-          windowHours: hours,
-          items,
-          latest: Array.from(latestByBrief.values()),
-        });
-      } catch (error) {
-        console.error("Error fetching LISA brief actions:", error);
-        res.status(500).json({ message: "Failed to fetch brief actions" });
-      }
-    },
-  );
-
-  app.post(
-    "/api/admin/lisa/brief-actions",
-    isAuthenticated,
-    isStaffOrAdmin,
-    async (req: any, res) => {
-      try {
-        const briefKey = String(req.body?.briefKey || "").trim();
-        const actionRaw = String(req.body?.action || "").trim().toLowerCase();
-        const title = String(req.body?.title || "").trim();
-        const href = String(req.body?.href || "").trim();
-        const action =
-          actionRaw === "done" || actionRaw === "snooze" || actionRaw === "dismiss"
-            ? actionRaw
-            : "";
-
-        if (!briefKey || !action) {
-          return res.status(400).json({ message: "Missing brief action fields" });
-        }
-
-        const [eventRow] = await db
-          .insert(telemetryEvents)
-          .values({
-            eventName: "lisa_brief_action",
-            userId: req.user?.id || null,
-            properties: {
-              briefKey,
-              action,
-              title: title || null,
-              href: href || null,
-            },
-          })
-          .returning({
-            id: telemetryEvents.id,
-            createdAt: telemetryEvents.createdAt,
-          });
-
-        logAudit(
-          req.user?.id || "",
-          "lisa_brief_action",
-          "lisa_brief",
-          briefKey,
-          req.ip || "",
-          String(req.get("user-agent") || ""),
-          { briefKey, action, title, href },
-        ).catch((err) =>
-          console.error("Failed to write LISA brief audit log:", err),
-        );
-
-        res.json({
-          ok: true,
-          item: {
-            id: eventRow?.id || null,
-            createdAt: eventRow?.createdAt || new Date().toISOString(),
-            briefKey,
-            action,
-            title,
-            href,
-          },
-        });
-      } catch (error) {
-        console.error("Error logging LISA brief action:", error);
-        res.status(500).json({ message: "Failed to log brief action" });
-      }
-    },
-  );
-
   registerGeoAuditRoutes(app);
   registerAdminCoreOpsRoutes(app);
+  registerAdminEmailRoutes(app);
+  registerAdminLisaActionsRoutes(app);
 
   registerTruckImportAdminRoutes(app, {
     requireAdminUser,

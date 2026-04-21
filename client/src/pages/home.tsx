@@ -468,6 +468,7 @@ export default function Home() {
       ? ["/api/restaurants/public", location.lat, location.lng]
       : ["/api/restaurants/public", "all"],
     queryFn: async () => {
+      if (!location) return [];
       const base = "/api/restaurants/public";
       const url = location
         ? `${base}?lat=${location.lat}&lng=${location.lng}&radius=12&limit=120`
@@ -1337,6 +1338,20 @@ export default function Home() {
                 }}
               >
                 Retry Profiles
+              </Button>
+            </div>
+          ) : !location ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="mb-3">
+                Turn on location to see nearby public profiles.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleLocationDetection()}
+                disabled={isLoadingLocation}
+              >
+                {isLoadingLocation ? "Locating..." : "Use location"}
               </Button>
             </div>
           ) : featuredBusinesses.length > 0 ? (

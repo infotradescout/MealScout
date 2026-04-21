@@ -3315,6 +3315,56 @@ export default function AdminDashboard() {
     });
   }, [sortedUsers, userSearch, userTypeFilter]);
 
+  const duplicateEmailGroups = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const user of users) {
+      const normalizedEmail = String(user?.email || "").trim().toLowerCase();
+      if (!normalizedEmail) continue;
+      const existing = groups.get(normalizedEmail) || [];
+      existing.push(user);
+      groups.set(normalizedEmail, existing);
+    }
+
+    const roleRank = (userType?: string) => {
+      const value = String(userType || "").trim().toLowerCase();
+      if (value === "super_admin") return 100;
+      if (value === "admin") return 90;
+      if (value === "staff") return 80;
+      if (value === "restaurant_owner") return 70;
+      if (value === "food_truck") return 60;
+      if (value === "host") return 50;
+      if (value === "event_coordinator") return 40;
+      return 10;
+    };
+
+    return Array.from(groups.entries())
+      .map(([normalizedEmail, members]) => {
+        if (members.length < 2) return null;
+        const sortedMembers = [...members].sort((a: any, b: any) => {
+          const aVerified = a?.emailVerified ? 1 : 0;
+          const bVerified = b?.emailVerified ? 1 : 0;
+          if (aVerified !== bVerified) return bVerified - aVerified;
+
+          const aRank = roleRank(a?.userType);
+          const bRank = roleRank(b?.userType);
+          if (aRank !== bRank) return bRank - aRank;
+
+          const aCreated = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return aCreated - bCreated;
+        });
+
+        return {
+          normalizedEmail,
+          primary: sortedMembers[0],
+          duplicates: sortedMembers.slice(1),
+          members: sortedMembers,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.members.length - a.members.length);
+  }, [users]);
+
   const renderHostLocationsEditor = () => {
     if (!selectedUser) return null;
     if (!(selectedUser?.userType === "host" || userHosts.length > 0))
@@ -7414,6 +7464,102 @@ export default function AdminDashboard() {
                     })}
                   </TabsList>
                 </Tabs>
+                {duplicateEmailGroups.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-[color:var(--status-error)]/40 bg-[color:var(--status-error)]/5 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Duplicate Email Audit
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {duplicateEmailGroups.length} duplicate email group
+                          {duplicateEmailGroups.length === 1 ? "" : "s"} found.
+                          Keep the primary account and remove duplicate rows.
+                        </p>
+                      </div>
+                      <Badge variant="destructive">
+                        {duplicateEmailGroups.reduce(
+                          (sum: number, group: any) => sum + group.duplicates.length,
+                          0,
+                        )}{" "}
+                        duplicates
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {duplicateEmailGroups.slice(0, 20).map((group: any) => (
+                        <div
+                          key={group.normalizedEmail}
+                          className="rounded-md border border-[color:var(--border-subtle)] bg-background p-2.5"
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {group.normalizedEmail}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Primary: {group.primary?.firstName || ""}{" "}
+                                {group.primary?.lastName || ""} (
+                                {group.primary?.userType || "customer"}) · ID{" "}
+                                {group.primary?.id}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedUser(group.primary);
+                                setUserDetailsOpen(true);
+                              }}
+                            >
+                              Details
+                            </Button>
+                          </div>
+                          <div className="space-y-1.5">
+                            {group.duplicates.map((dup: any) => (
+                              <div
+                                key={dup.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded border border-[color:var(--border-subtle)] p-2"
+                              >
+                                <p className="text-xs text-muted-foreground">
+                                  {dup.firstName || ""} {dup.lastName || ""} ·{" "}
+                                  {dup.userType || "customer"} · ID {dup.id}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedUser(dup);
+                                      setUserDetailsOpen(true);
+                                    }}
+                                  >
+                                    Details
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={deleteUser.isPending}
+                                    onClick={() => {
+                                      if (
+                                        confirm(
+                                          `Delete duplicate account ${dup.id} (${group.normalizedEmail})?`,
+                                        )
+                                      ) {
+                                        deleteUser.mutate(dup.id);
+                                      }
+                                    }}
+                                  >
+                                    Delete Duplicate
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3 mt-3">
                   {filteredUsers.map((user: any) => (
                     <div

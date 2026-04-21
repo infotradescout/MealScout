@@ -68,20 +68,29 @@ Run each once:
 2. Parking Pass booking + Stripe host onboarding smoke:
    - Set env vars:
      - `API_BASE=https://<your-origin>`
-     - `TEST_PARKING_PASS_ID=<existing open paid pass>`
-     - `TEST_TRUCK_ID=<truck that owns the authenticated session>`
-     - `TEST_TRUCK_AUTH_COOKIE=<authenticated truck cookie>`
-     - `TEST_HOST_AUTH_COOKIE=<authenticated host cookie>` (optional but recommended)
+     - `TEST_TRUCK_AUTH_COOKIE=<authenticated truck cookie>` (optional if using truck email/password)
+     - `TEST_TRUCK_EMAIL=<truck login email>` (optional alternative to cookie)
+     - `TEST_TRUCK_PASSWORD=<truck login password>` (optional alternative to cookie)
+     - `TEST_TRUCK_ID=<truck that owns the authenticated session>` (optional; auto-discovered from `/api/restaurants/my` when omitted)
+     - `TEST_HOST_AUTH_COOKIE=<authenticated host cookie>` (optional; for host checks)
+     - `TEST_HOST_EMAIL=<host login email>` (optional alternative to host cookie)
+     - `TEST_HOST_PASSWORD=<host login password>` (optional alternative to host cookie)
+     - `TEST_HOST_ID=<host id tied to TEST_HOST_AUTH_COOKIE>` (optional; auto-discovered from `/api/hosts/me` when omitted)
+     - `TEST_PARKING_PASS_ID=<existing open paid pass>` (optional; auto-discovered from host/public parking-pass feeds when omitted)
+     - `TEST_SESSION_COOKIE_NAME=connect.sid` (optional; change if your session cookie name differs)
      - `EXPECT_HOST_CONNECTED=true` (optional)
      - `EXPECT_HOST_CHARGES_ENABLED=true` (optional)
      - `EXPECT_HOST_ONBOARDING_COMPLETED=true` (optional)
+     - `TEST_BOOKING_DATE=YYYY-MM-DD` (optional; if omitted and pass id is virtual, date is inferred)
      - `CANCEL_PENDING_AFTER_CHECK=true` (recommended)
    - Run:
-     - `npm run smoke:parking-pass-stripe`
+     - `npm run smoke:parking-pass-full`
    - Verify:
      - Host Stripe status endpoint returns expected flags.
+     - Host parking-pass list/update endpoints succeed.
      - Booking intent is created (`paymentIntentId` returned).
      - Duplicate booking attempt is blocked (`400` or `409`).
+     - Truck + host booking list endpoints return successfully.
      - Cancel endpoint clears pending hold when cancel flag is enabled.
 
 ## 6. Rate limit verification

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import DocumentUpload from "@/components/document-upload";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -135,6 +136,26 @@ interface TruckBookingItem {
   } | null;
 }
 
+interface OnboardingCompletion {
+  restaurantId: string;
+  overallPct: number;
+  required: {
+    done: number;
+    total: number;
+    missing: Array<{ key: string; label: string; ok: boolean }>;
+  };
+  recommended: {
+    done: number;
+    total: number;
+    missing: Array<{ key: string; label: string; ok: boolean }>;
+  };
+  verification: {
+    status: "verified" | "pending" | "not_submitted";
+    isVerified: boolean;
+    needsSubmission: boolean;
+  };
+}
+
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -147,6 +168,8 @@ export default function RestaurantOwnerDashboard() {
   const [comparisonPeriod, setComparisonPeriod] = useState<
     "week" | "month" | "quarter"
   >("month");
+  const [onboardingDocuments, setOnboardingDocuments] = useState<string[]>([]);
+  const [onboardingLicenseNumber, setOnboardingLicenseNumber] = useState("");
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -274,6 +297,14 @@ export default function RestaurantOwnerDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+
+  const { data: onboardingCompletion, isLoading: loadingOnboardingCompletion } =
+    useQuery<OnboardingCompletion>({
+      queryKey: [`/api/restaurants/${selectedRestaurant}/onboarding/completion`],
+      enabled: !!selectedRestaurant,
+      retry: false,
+      refetchOnWindowFocus: false,
+    });
   const hasPremiumLocationTools =
     canManageParkingPass && (isAdmin || isStaff || Boolean(subscription?.hasAccess));
   const hasAnalyticsAccess =
@@ -477,6 +508,11 @@ export default function RestaurantOwnerDashboard() {
   // Get current restaurant data
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
+  );
+  const showOnboardingPrompt = Boolean(
+    onboardingCompletion &&
+      (onboardingCompletion.overallPct < 100 ||
+        onboardingCompletion.verification.status !== "verified"),
   );
   const visibleTruckBookings = truckBookings.filter(
     (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
@@ -1137,6 +1173,54 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
+  const submitVerificationMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRestaurant) {
+        throw new Error("Select a restaurant first");
+      }
+      if (onboardingDocuments.length === 0) {
+        throw new Error("Upload at least one verification document");
+      }
+      if (
+        Boolean((currentRestaurant as any)?.claimedFromImportId) &&
+        !onboardingLicenseNumber.trim()
+      ) {
+        throw new Error(
+          "License number is required for imported food truck verification",
+        );
+      }
+      return await apiRequest(
+        "POST",
+        `/api/restaurants/${selectedRestaurant}/verification/request`,
+        {
+          documents: onboardingDocuments,
+          licenseNumber: (currentRestaurant as any)?.claimedFromImportId
+            ? onboardingLicenseNumber.trim()
+            : undefined,
+        },
+      );
+    },
+    onSuccess: async () => {
+      setOnboardingDocuments([]);
+      setOnboardingLicenseNumber("");
+      await queryClient.invalidateQueries({
+        queryKey: [`/api/restaurants/${selectedRestaurant}/onboarding/completion`],
+      });
+      toast({
+        title: "Verification submitted",
+        description:
+          "Your documents were submitted. We will review your business shortly.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Verification failed",
+        description: error?.message || "Unable to submit verification request",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
     const hour = parseInt(hours);
@@ -1198,6 +1282,38 @@ export default function RestaurantOwnerDashboard() {
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
   ];
   const defaultTab = availableTabs[0] ?? "analytics";
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
+
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab as any)) {
+      setActiveTab(defaultTab);
+    }
+  }, [activeTab, availableTabs, defaultTab]);
+
+  const prioritizedMissingKey =
+    onboardingCompletion?.required?.missing?.[0]?.key ||
+    onboardingCompletion?.recommended?.missing?.[0]?.key ||
+    null;
+
+  const handleQuickFixMissingField = () => {
+    if (
+      prioritizedMissingKey &&
+      ["address", "city", "state", "phone"].includes(prioritizedMissingKey) &&
+      availableTabs.includes("foodtruck" as any)
+    ) {
+      setActiveTab("foodtruck");
+      return;
+    }
+    if (
+      prioritizedMissingKey &&
+      ["name", "businessType"].includes(prioritizedMissingKey)
+    ) {
+      setLocation("/restaurant-signup");
+      return;
+    }
+    const focus = encodeURIComponent(prioritizedMissingKey || "profile");
+    setLocation(`/profile/settings?src=onboarding&focus=${focus}`);
+  };
 
   if (loadingRestaurants) {
     return (
@@ -1305,6 +1421,133 @@ export default function RestaurantOwnerDashboard() {
         </div>
       )}
 
+      {(loadingOnboardingCompletion || showOnboardingPrompt) && (
+        <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Onboarding Progress</CardTitle>
+            <CardDescription>
+              Complete only what is missing so your business can go live faster.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loadingOnboardingCompletion && (
+              <div className="text-sm text-[color:var(--text-secondary)]">
+                Loading onboarding status...
+              </div>
+            )}
+            {!loadingOnboardingCompletion && onboardingCompletion && (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    {onboardingCompletion.overallPct}% complete
+                  </Badge>
+                  <Badge variant="outline">
+                    Required {onboardingCompletion.required.done}/
+                    {onboardingCompletion.required.total}
+                  </Badge>
+                  <Badge variant="outline">
+                    Recommended {onboardingCompletion.recommended.done}/
+                    {onboardingCompletion.recommended.total}
+                  </Badge>
+                  <Badge
+                    variant={
+                      onboardingCompletion.verification.status === "verified"
+                        ? "default"
+                        : "outline"
+                    }
+                  >
+                    Verification:{" "}
+                    {onboardingCompletion.verification.status.replace("_", " ")}
+                  </Badge>
+                </div>
+
+                {onboardingCompletion.required.missing.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Missing required fields</p>
+                    <div className="flex flex-wrap gap-2">
+                      {onboardingCompletion.required.missing.map((item) => (
+                        <Badge key={item.key} variant="outline">
+                          {item.label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQuickFixMissingField}
+                    data-testid="button-onboarding-quick-fix"
+                  >
+                    Fix next missing field
+                  </Button>
+                </div>
+
+                {onboardingCompletion.recommended.missing.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Recommended improvements</p>
+                    <div className="flex flex-wrap gap-2">
+                      {onboardingCompletion.recommended.missing
+                        .slice(0, 4)
+                        .map((item) => (
+                          <Badge key={item.key} variant="secondary">
+                            {item.label}
+                          </Badge>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {onboardingCompletion.verification.status === "not_submitted" && (
+                  <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] p-4">
+                    <p className="text-sm font-medium">Submit verification documents</p>
+                    {Boolean((currentRestaurant as any)?.claimedFromImportId) && (
+                      <Input
+                        value={onboardingLicenseNumber}
+                        onChange={(e) => setOnboardingLicenseNumber(e.target.value)}
+                        placeholder="License number"
+                        data-testid="input-dashboard-license-number"
+                      />
+                    )}
+                    <DocumentUpload
+                      onDocumentsChange={setOnboardingDocuments}
+                      maxFiles={5}
+                      maxFileSize={10 * 1024 * 1024}
+                      acceptedTypes={[
+                        "image/jpeg",
+                        "image/jpg",
+                        "image/png",
+                        "application/pdf",
+                      ]}
+                    />
+                    <Button
+                      onClick={() => submitVerificationMutation.mutate()}
+                      disabled={
+                        submitVerificationMutation.isPending ||
+                        onboardingDocuments.length === 0
+                      }
+                      data-testid="button-submit-dashboard-verification"
+                    >
+                      {submitVerificationMutation.isPending
+                        ? "Submitting..."
+                        : "Submit Verification"}
+                    </Button>
+                  </div>
+                )}
+
+                {onboardingCompletion.verification.status === "pending" && (
+                  <p className="text-sm text-[color:var(--text-secondary)]">
+                    Verification is pending review. No action needed right now.
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
       {subscription?.hasAccess && currentRestaurant && (() => {
         const hasPhoto = Boolean((currentRestaurant as any).imageUrl || (currentRestaurant as any).logoUrl);
@@ -1410,7 +1653,7 @@ export default function RestaurantOwnerDashboard() {
       )}
 
       {/* Deals Management */}
-      <Tabs defaultValue={defaultTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full">
           {canManageDeals ? <TabsTrigger value="active">Active Specials</TabsTrigger> : null}
           {canManageDeals ? <TabsTrigger value="inactive">Inactive Specials</TabsTrigger> : null}

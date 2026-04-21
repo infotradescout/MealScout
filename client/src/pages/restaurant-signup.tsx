@@ -1,4 +1,4 @@
-import { useReducer, useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -31,11 +31,8 @@ import {
   Mail,
   Eye,
   EyeOff,
-  ArrowLeft,
-  ArrowRight,
   Store,
 } from "lucide-react";
-import DocumentUpload from "@/components/document-upload";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -62,12 +59,11 @@ const restaurantSchema = z
     address: z.string().min(1, COPY.validation.restaurant.addressRequired),
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
-    phone: z.string().min(10, COPY.validation.restaurant.phoneInvalid),
+    phone: z.string().optional().or(z.literal("")),
     businessType: z.enum(["restaurant", "bar", "food_truck"], {
       required_error: COPY.validation.restaurant.businessTypeRequired,
     }),
-    confirmNotFoodTruck: z.boolean().default(false),
-    cuisineType: z.string().min(1, COPY.validation.restaurant.cuisineRequired),
+    cuisineType: z.string().optional(),
     description: z
       .string()
       .max(500, "Description must be less than 500 characters")
@@ -96,18 +92,6 @@ const restaurantSchema = z
         (val) => val === true,
         COPY.validation.restaurant.acceptTermsRequired
       ),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      data.businessType !== "food_truck" &&
-      data.confirmNotFoodTruck !== true
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["confirmNotFoodTruck"],
-        message: COPY.validation.restaurant.confirmNotFoodTruckRequired,
-      });
-    }
   });
 
 const signupSchema = z
@@ -139,42 +123,8 @@ type SignupFormData = z.infer<typeof signupSchema>;
 type LoginFormData = z.infer<typeof loginSchema>;
 type RestaurantSubmissionData = Omit<
   RestaurantFormData,
-  "acceptTerms" | "confirmNotFoodTruck"
+  "acceptTerms"
 >;
-
-type HostOnboardingStep = "restaurant" | "verification";
-
-interface HostOnboardingState {
-  step: HostOnboardingStep;
-}
-
-type HostOnboardingEvent =
-  | { type: "GO_TO_VERIFICATION" }
-  | { type: "BACK_TO_RESTAURANT" };
-
-function assertNever(x: never): never {
-  throw new Error(`Unhandled case: ${JSON.stringify(x)}`);
-}
-
-function hostOnboardingTransition(
-  state: HostOnboardingState,
-  event: HostOnboardingEvent
-): HostOnboardingState {
-  switch (state.step) {
-    case "restaurant":
-      if (event.type === "GO_TO_VERIFICATION") {
-        return { step: "verification" };
-      }
-      return state;
-    case "verification":
-      if (event.type === "BACK_TO_RESTAURANT") {
-        return { step: "restaurant" };
-      }
-      return state;
-    default:
-      return assertNever(state as never);
-  }
-}
 
 export default function RestaurantSignup() {
   const [, setLocation] = useLocation();
@@ -201,18 +151,7 @@ export default function RestaurantSignup() {
   const [claimError, setClaimError] = useState("");
   const [claimRequestingId, setClaimRequestingId] = useState<string | null>(null);
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
-  const [licenseNumber, setLicenseNumber] = useState("");
-  const [onboardingState, dispatchOnboarding] = useReducer(
-    hostOnboardingTransition,
-    {
-      step: "restaurant",
-    } as HostOnboardingState
-  );
-  const [createdRestaurant, setCreatedRestaurant] = useState<any>(null);
-  const [verificationDocuments, setVerificationDocuments] = useState<string[]>(
-    []
-  );
-  const currentStep: HostOnboardingStep = onboardingState.step;
+  const [showOptionalDetails, setShowOptionalDetails] = useState(false);
 
   const RESTAURANT_DRAFT_KEY = "mealscout:restaurant-signup-draft";
 
@@ -224,7 +163,6 @@ export default function RestaurantSignup() {
       state: "",
       phone: "",
       businessType: "food_truck",
-      confirmNotFoodTruck: false,
       cuisineType: "",
       description: "",
       websiteUrl: "",
@@ -327,7 +265,6 @@ export default function RestaurantSignup() {
 
   useEffect(() => {
     if (selectedBusinessType === "food_truck") {
-      form.setValue("confirmNotFoodTruck", false);
       form.setValue("hasParking", false);
       form.setValue("hasWifi", false);
       form.setValue("hasOutdoorSeating", false);
@@ -410,10 +347,48 @@ export default function RestaurantSignup() {
 
   const createRestaurantMutation = useMutation({
     mutationFn: async (data: RestaurantSubmissionData) => {
+      const restaurantDataPayload: Record<string, any> = {
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        businessType: data.businessType,
+      };
+      const normalizedPhone = String(
+        data.phone ||
+          (isAuthenticated
+            ? String(user?.phone || "")
+            : String(signupForm.getValues("phone") || "")),
+      ).trim();
+      if (normalizedPhone) restaurantDataPayload.phone = normalizedPhone;
+
+      const cuisineType = String(data.cuisineType || "").trim();
+      const description = String(data.description || "").trim();
+      const websiteUrl = String(data.websiteUrl || "").trim();
+      const instagramUrl = String(data.instagramUrl || "").trim();
+      const facebookPageUrl = String(data.facebookPageUrl || "").trim();
+
+      if (cuisineType) restaurantDataPayload.cuisineType = cuisineType;
+      if (description) restaurantDataPayload.description = description;
+      if (websiteUrl) restaurantDataPayload.websiteUrl = websiteUrl;
+      if (instagramUrl) restaurantDataPayload.instagramUrl = instagramUrl;
+      if (facebookPageUrl) restaurantDataPayload.facebookPageUrl = facebookPageUrl;
+
+      if (
+        data.businessType !== "food_truck" &&
+        (data.hasParking || data.hasWifi || data.hasOutdoorSeating)
+      ) {
+        restaurantDataPayload.amenities = {
+          parking: data.hasParking,
+          wifi: data.hasWifi,
+          outdoor_seating: data.hasOutdoorSeating,
+        };
+      }
+
       if (claimSelection && data.businessType === "food_truck") {
         const res = await apiRequest("POST", "/api/truck-claims", {
           listingId: claimSelection.id,
-          restaurantData: data,
+          restaurantData: restaurantDataPayload,
         });
         const payload = await res.json();
         return payload?.restaurant || payload;
@@ -429,24 +404,7 @@ export default function RestaurantSignup() {
             phone: user.phone || data.phone, // Use restaurant phone if user doesn't have one
             // No password needed for authenticated users
           },
-          restaurantData: {
-            name: data.name,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            phone: data.phone,
-            businessType: data.businessType,
-            cuisineType: data.cuisineType,
-            description: data.description,
-            websiteUrl: data.websiteUrl,
-            instagramUrl: data.instagramUrl,
-            facebookPageUrl: data.facebookPageUrl,
-            amenities: {
-              parking: data.hasParking,
-              wifi: data.hasWifi,
-              outdoor_seating: data.hasOutdoorSeating,
-            },
-          },
+          restaurantData: restaurantDataPayload,
         };
         const res = await apiRequest(
           "POST",
@@ -467,24 +425,7 @@ export default function RestaurantSignup() {
             phone: signupData.phone,
             password: signupData.password,
           },
-          restaurantData: {
-            name: data.name,
-            address: data.address,
-            city: data.city,
-            state: data.state,
-            phone: data.phone,
-            businessType: data.businessType,
-            cuisineType: data.cuisineType,
-            description: data.description,
-            websiteUrl: data.websiteUrl,
-            instagramUrl: data.instagramUrl,
-            facebookPageUrl: data.facebookPageUrl,
-            amenities: {
-              parking: data.hasParking,
-              wifi: data.hasWifi,
-              outdoor_seating: data.hasOutdoorSeating,
-            },
-          },
+          restaurantData: restaurantDataPayload,
         };
         const res = await apiRequest(
           "POST",
@@ -521,12 +462,11 @@ export default function RestaurantSignup() {
         businessType: selectedBusinessType,
       });
 
-      setCreatedRestaurant(restaurant);
-      dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
       toast({
         title: COPY.notifications.restaurant.successTitle,
         description: COPY.notifications.restaurant.successDescription,
       });
+      setLocation("/restaurant-owner-dashboard?src=onboarding&showOnboardingPrompt=1");
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -551,52 +491,8 @@ export default function RestaurantSignup() {
     },
   });
 
-  const createVerificationRequestMutation = useMutation({
-    mutationFn: async () => {
-      if (!createdRestaurant || verificationDocuments.length === 0) {
-        throw new Error("Restaurant or documents missing");
-      }
-      return await apiRequest(
-        "POST",
-        `/api/restaurants/${createdRestaurant.id}/verification/request`,
-        {
-          documents: verificationDocuments,
-          licenseNumber:
-            selectedBusinessType === "food_truck" &&
-            (createdRestaurant as any)?.claimedFromImportId
-              ? licenseNumber.trim()
-              : undefined,
-        }
-      );
-    },
-    onSuccess: () => {
-      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
-        page: "restaurant-signup",
-        stage: "verification_submitted",
-        businessType: selectedBusinessType,
-      });
-      toast({
-        title: COPY.notifications.verification.successTitle,
-        description: COPY.notifications.verification.successDescription,
-      });
-      setLocation(
-        selectedBusinessType === "food_truck"
-          ? "/parking-pass?src=onboarding"
-          : "/restaurant-owner-dashboard?src=onboarding",
-      );
-    },
-    onError: (error) => {
-      toast({
-        title: COPY.notifications.verification.errorTitle,
-        description:
-          error.message || COPY.notifications.verification.errorDescription,
-        variant: "destructive",
-      });
-    },
-  });
-
   const onSubmit = async (data: RestaurantFormData) => {
-    const { acceptTerms, confirmNotFoodTruck, ...restaurantData } = data;
+    const { acceptTerms, ...restaurantData } = data;
 
     trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
       page: "restaurant-signup",
@@ -608,13 +504,7 @@ export default function RestaurantSignup() {
 
     try {
       // Create restaurant first
-      const restaurant = await createRestaurantMutation.mutateAsync(
-        restaurantData
-      );
-
-      // Normal flow continues to verification step
-      setCreatedRestaurant(restaurant);
-      dispatchOnboarding({ type: "GO_TO_VERIFICATION" });
+      await createRestaurantMutation.mutateAsync(restaurantData);
     } catch (error: any) {
       console.error("Error in restaurant signup:", error);
       // Error handling is already done in the mutation
@@ -629,49 +519,6 @@ export default function RestaurantSignup() {
       variant: "destructive",
     });
   };
-
-  const handleVerificationSubmit = () => {
-    if (verificationDocuments.length === 0) {
-      toast({
-        title: COPY.notifications.verification.missingDocsTitle,
-        description: COPY.notifications.verification.missingDocsDescription,
-        variant: "destructive",
-      });
-      return;
-    }
-    if (
-      selectedBusinessType === "food_truck" &&
-      (createdRestaurant as any)?.claimedFromImportId &&
-      !licenseNumber.trim()
-    ) {
-      toast({
-        title: "License number required",
-        description:
-          "Enter the license number from your document to verify this imported truck.",
-        variant: "destructive",
-      });
-      return;
-    }
-    createVerificationRequestMutation.mutate();
-  };
-
-  const handleSkipVerification = () => {
-    toast({
-      title: COPY.notifications.verification.skippedTitle,
-      description: COPY.notifications.verification.skippedDescription,
-    });
-    setLocation(
-      selectedBusinessType === "food_truck"
-        ? "/parking-pass?src=onboarding"
-        : "/restaurant-owner-dashboard?src=onboarding",
-    );
-  };
-
-  const isAutoBusinessVerified = Boolean(
-    createdRestaurant?.isVerified &&
-      (createdRestaurant as any)?.claimedFromImportId &&
-      selectedBusinessType === "food_truck",
-  );
 
   const handleRequestTruck = async (listingId: string) => {
     setClaimRequestingId(listingId);
@@ -1035,19 +882,13 @@ export default function RestaurantSignup() {
         </Card>
 
         <div className="mb-5 flex items-center justify-center gap-4">
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "restaurant" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}>
+          <div className="flex items-center gap-2 rounded-full border border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] px-3 py-1 text-sm text-[color:var(--action-primary)]">
             <span className="font-bold">1</span>
-            <span>{COPY.steps.businessDetails}</span>
-          </div>
-          <div className="h-px w-8 bg-[color:var(--border-subtle)]" />
-          <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${currentStep === "verification" ? "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)] text-[color:var(--action-primary)]" : "border-[color:var(--border-subtle)] text-[color:var(--text-secondary)]"}`}>
-            <span className="font-bold">2</span>
-            <span>{COPY.steps.businessVerification}</span>
+            <span>{COPY.steps.businessDetails} (Minimal)</span>
           </div>
         </div>
 
-        {currentStep === "restaurant" && (
-          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
+        <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
             <CardContent className="p-6">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit, handleRestaurantInvalid)} className="space-y-6">
@@ -1077,32 +918,6 @@ export default function RestaurantSignup() {
                       </FormItem>
                     )} />
                   </div>
-
-                  {selectedBusinessType !== "food_truck" && (
-                    <FormField
-                      control={form.control}
-                      name="confirmNotFoodTruck"
-                      render={({ field }) => (
-                        <FormItem>
-                          <label className="flex items-start gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 text-sm text-[color:var(--text-primary)]">
-                            <FormControl>
-                              <Checkbox
-                                checked={Boolean(field.value)}
-                                onCheckedChange={(checked) =>
-                                  field.onChange(Boolean(checked))
-                                }
-                              />
-                            </FormControl>
-                            <span>{COPY.forms.restaurant.stationaryConfirmLabel}</span>
-                          </label>
-                          <p className="text-xs text-[color:var(--text-secondary)]">
-                            {COPY.forms.restaurant.stationaryWarning}
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
 
                   {selectedBusinessType === "food_truck" && (
                     <div className="space-y-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
@@ -1189,51 +1004,75 @@ export default function RestaurantSignup() {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <FormField control={form.control} name="cuisineType" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel data-testid="label-cuisine-type">{COPY.forms.restaurant.cuisineLabel}</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger data-testid="select-cuisine"><SelectValue placeholder={COPY.forms.restaurant.cuisinePlaceholder} /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="american">American</SelectItem>
-                            <SelectItem value="bbq">BBQ</SelectItem>
-                            <SelectItem value="breakfast">Breakfast</SelectItem>
-                            <SelectItem value="burgers">Burgers</SelectItem>
-                            <SelectItem value="cajun">Cajun</SelectItem>
-                            <SelectItem value="caribbean">Caribbean</SelectItem>
-                            <SelectItem value="coffee">Coffee & Café</SelectItem>
-                            <SelectItem value="dessert">Dessert</SelectItem>
-                            <SelectItem value="healthy">Healthy & Bowls</SelectItem>
-                            <SelectItem value="keto">Keto & Low-Carb</SelectItem>
-                            <SelectItem value="paleo">Paleo</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
                   </div>
 
-                  <div className="space-y-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
-                    <FormField control={form.control} name="description" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>About Your Business <span className="font-normal text-[color:var(--text-secondary)]">(Optional)</span></FormLabel>
-                        <FormControl>
-                          <textarea placeholder="Tell customers what makes your restaurant unique..." rows={4} maxLength={500} className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <FormField control={form.control} name="websiteUrl" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="instagramUrl" render={({ field }) => (<FormItem><FormLabel>Instagram</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                      <FormField control={form.control} name="facebookPageUrl" render={({ field }) => (<FormItem><FormLabel>Facebook</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-[color:var(--text-primary)]">
+                          Optional profile details
+                        </p>
+                        <p className="text-xs text-[color:var(--text-secondary)]">
+                          Skip for now to finish onboarding faster.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowOptionalDetails((prev) => !prev)}
+                        data-testid="button-toggle-optional-details"
+                      >
+                        {showOptionalDetails ? "Hide" : "Add details"}
+                      </Button>
                     </div>
-                    {selectedBusinessType !== "food_truck" && (
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <FormField control={form.control} name="hasParking" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Parking Available</FormLabel></FormItem>)} />
-                        <FormField control={form.control} name="hasWifi" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Free Wi-Fi</FormLabel></FormItem>)} />
-                        <FormField control={form.control} name="hasOutdoorSeating" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Outdoor Seating</FormLabel></FormItem>)} />
+
+                    {showOptionalDetails && (
+                      <div className="mt-4 space-y-4">
+                        <FormField control={form.control} name="cuisineType" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel data-testid="label-cuisine-type">{COPY.forms.restaurant.cuisineLabel}</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl><SelectTrigger data-testid="select-cuisine"><SelectValue placeholder={COPY.forms.restaurant.cuisinePlaceholder} /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="american">American</SelectItem>
+                                <SelectItem value="bbq">BBQ</SelectItem>
+                                <SelectItem value="breakfast">Breakfast</SelectItem>
+                                <SelectItem value="burgers">Burgers</SelectItem>
+                                <SelectItem value="cajun">Cajun</SelectItem>
+                                <SelectItem value="caribbean">Caribbean</SelectItem>
+                                <SelectItem value="coffee">Coffee & Café</SelectItem>
+                                <SelectItem value="dessert">Dessert</SelectItem>
+                                <SelectItem value="healthy">Healthy & Bowls</SelectItem>
+                                <SelectItem value="keto">Keto & Low-Carb</SelectItem>
+                                <SelectItem value="paleo">Paleo</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="description" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>About Your Business</FormLabel>
+                            <FormControl>
+                              <textarea placeholder="Tell customers what makes your restaurant unique..." rows={4} maxLength={500} className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <div className="grid gap-4 sm:grid-cols-3">
+                          <FormField control={form.control} name="websiteUrl" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="instagramUrl" render={({ field }) => (<FormItem><FormLabel>Instagram</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                          <FormField control={form.control} name="facebookPageUrl" render={({ field }) => (<FormItem><FormLabel>Facebook</FormLabel><FormControl><Input type="url" placeholder="https://..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        </div>
+                        {selectedBusinessType !== "food_truck" && (
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <FormField control={form.control} name="hasParking" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Parking Available</FormLabel></FormItem>)} />
+                            <FormField control={form.control} name="hasWifi" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Free Wi-Fi</FormLabel></FormItem>)} />
+                            <FormField control={form.control} name="hasOutdoorSeating" render={({ field }) => (<FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Outdoor Seating</FormLabel></FormItem>)} />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1278,95 +1117,6 @@ export default function RestaurantSignup() {
               </Form>
             </CardContent>
           </Card>
-        )}
-
-        {currentStep === "verification" && createdRestaurant && (
-          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-[color:var(--text-primary)]">{COPY.verification.title}</CardTitle>
-              <p className="text-xs text-[color:var(--text-secondary)]">{COPY.verification.intro}</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isAutoBusinessVerified && (
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-                  <div className="font-semibold">
-                    ✓ Business Verified
-                  </div>
-                  <div className="mt-1 text-xs">
-                    Your business was automatically verified. You can now book parking passes and access all features.
-                    You still need to confirm your email to log in.
-                  </div>
-                </div>
-              )}
-              {!isAutoBusinessVerified && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <strong>Verification required</strong> — {COPY.verification.pendingBanner}
-                </div>
-              )}
-              <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
-                <ul className="list-disc space-y-1 pl-4 text-xs text-[color:var(--text-secondary)]">
-                  {COPY.verification.bullets.map((item) => (<li key={item}>{item}</li>))}
-                </ul>
-              </div>
-              {!isAutoBusinessVerified && (
-                <>
-                  {selectedBusinessType === "food_truck" &&
-                    (createdRestaurant as any)?.claimedFromImportId && (
-                      <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
-                        <div className="text-xs font-semibold text-[color:var(--text-primary)]">
-                          License number (required)
-                        </div>
-                        <div className="mt-1 text-xs text-[color:var(--text-secondary)]">
-                          Enter the license number exactly as it appears on your document.
-                        </div>
-                        <Input
-                          className="mt-3"
-                          value={licenseNumber}
-                          onChange={(e) => setLicenseNumber(e.target.value)}
-                          placeholder="License #"
-                          data-testid="input-license-number"
-                        />
-                      </div>
-                    )}
-                <DocumentUpload
-                  onDocumentsChange={setVerificationDocuments}
-                  maxFiles={5}
-                  maxFileSize={10 * 1024 * 1024}
-                  acceptedTypes={["image/jpeg", "image/jpg", "image/png", "application/pdf"]}
-                />
-                </>
-              )}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Button type="button" variant="outline" onClick={() => dispatchOnboarding({ type: "BACK_TO_RESTAURANT" })} data-testid="button-back-to-restaurant">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  {COPY.verification.backButton}
-                </Button>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {(!claimSelection || isAutoBusinessVerified) && (
-                    <Button type="button" variant="outline" onClick={handleSkipVerification} data-testid="button-skip-verification">
-                      {isAutoBusinessVerified ? "Continue" : COPY.verification.skipButton}
-                    </Button>
-                  )}
-                  {!isAutoBusinessVerified ? (
-                    <Button type="button" onClick={handleVerificationSubmit} disabled={createVerificationRequestMutation.isPending || verificationDocuments.length === 0} className="action-primary hover:bg-[color:var(--action-hover)]" data-testid="button-submit-verification">
-                      {createVerificationRequestMutation.isPending ? (
-                        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      ) : (
-                        <ArrowRight className="mr-2 h-4 w-4" />
-                      )}
-                      {createVerificationRequestMutation.isPending ? COPY.verification.submitPending : COPY.verification.submitIdle}
-                    </Button>
-                  ) : (
-                    <Button type="button" onClick={handleSkipVerification} className="action-primary hover:bg-[color:var(--action-hover)]" data-testid="button-continue-verified">
-                      <ArrowRight className="mr-2 h-4 w-4" />
-                      Continue to setup
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
