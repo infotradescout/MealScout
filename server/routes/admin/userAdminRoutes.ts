@@ -18,6 +18,8 @@ import { listParkingPassOccurrences } from "../../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {
+  CLAIM_TYPES,
+  claims,
   deals,
   eventBookings,
   eventSeries,
@@ -68,6 +70,129 @@ export function registerUserAdminRoutes(
     resetHostPricingColumnsCache,
     isMissingColumnError,
   } = deps;
+
+  app.get(
+    "/api/admin/event-intake-requests",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit = Number(req.query?.limit ?? 100);
+        const limit = Number.isFinite(rawLimit)
+          ? Math.max(1, Math.min(300, Math.trunc(rawLimit)))
+          : 100;
+        const claimTypeFilter = String(req.query?.claimType || "all").trim();
+        const visibilityFilter = String(req.query?.visibility || "all").trim();
+
+        const claimTypes =
+          claimTypeFilter === CLAIM_TYPES.EVENT
+            ? [CLAIM_TYPES.EVENT]
+            : claimTypeFilter === CLAIM_TYPES.FOOD_TRUCK
+              ? [CLAIM_TYPES.FOOD_TRUCK]
+              : [CLAIM_TYPES.EVENT, CLAIM_TYPES.FOOD_TRUCK];
+
+        const rows = await db
+          .select({
+            id: claims.id,
+            personId: claims.personId,
+            claimType: claims.claimType,
+            status: claims.status,
+            claimData: claims.claimData,
+            metadata: claims.metadata,
+            createdAt: claims.createdAt,
+            requesterEmail: users.email,
+            requesterFirstName: users.firstName,
+            requesterLastName: users.lastName,
+          })
+          .from(claims)
+          .leftJoin(users, eq(users.id, claims.personId))
+          .where(
+            and(inArray(claims.claimType, claimTypes as string[]), eq(claims.status, "provisional")),
+          )
+          .orderBy(desc(claims.createdAt))
+          .limit(limit);
+
+        const shaped = rows
+          .map((row: any) => {
+            const claimData =
+              row.claimData && typeof row.claimData === "object"
+                ? (row.claimData as Record<string, any>)
+                : {};
+            const metadata =
+              row.metadata && typeof row.metadata === "object"
+                ? (row.metadata as Record<string, any>)
+                : {};
+
+            const eventVisibilityRaw = String(
+              claimData.eventVisibility || "",
+            ).toLowerCase();
+            const eventVisibility =
+              eventVisibilityRaw === "private" || eventVisibilityRaw === "public"
+                ? eventVisibilityRaw
+                : metadata.discoverableByAllUsers === true
+                  ? "public"
+                  : metadata.discoverableByAllUsers === false
+                    ? "private"
+                    : "unknown";
+
+            const requestedTruckCount = Number(
+              claimData.requestedTruckCount || claimData.maxTrucks || 0,
+            );
+
+            return {
+              id: row.id,
+              claimType: row.claimType,
+              status: row.status,
+              createdAt: row.createdAt,
+              personId: row.personId,
+              requester: {
+                email: row.requesterEmail || null,
+                name:
+                  [row.requesterFirstName, row.requesterLastName]
+                    .filter(Boolean)
+                    .join(" ") || null,
+              },
+              eventVisibility,
+              discoverableByAllUsers:
+                eventVisibility === "public"
+                  ? true
+                  : eventVisibility === "private"
+                    ? false
+                    : null,
+              requestedTruckCount:
+                Number.isFinite(requestedTruckCount) && requestedTruckCount > 0
+                  ? requestedTruckCount
+                  : null,
+              summary: {
+                title:
+                  String(
+                    claimData.eventName || claimData.occasion || "Event request",
+                  ) || "Event request",
+                city: String(claimData.city || "") || null,
+                date: String(claimData.date || "") || null,
+                expectedCrowd: String(claimData.expectedCrowd || "") || null,
+                guestCount: String(claimData.guestCount || "") || null,
+              },
+              claimData,
+              metadata,
+            };
+          })
+          .filter((item: any) => {
+            if (visibilityFilter === "all") return true;
+            return item.eventVisibility === visibilityFilter;
+          });
+
+        res.json({
+          ok: true,
+          total: shaped.length,
+          items: shaped,
+        });
+      } catch (error: any) {
+        console.error("Error fetching event intake requests:", error);
+        res.status(500).json({ message: "Failed to fetch event intake requests" });
+      }
+    },
+  );
 
   app.post(
     "/api/admin/users/:id/resend-verification",

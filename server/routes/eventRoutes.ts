@@ -384,7 +384,9 @@ export function registerEventRoutes(
       const upcomingEvents = await storage.getAllUpcomingEvents();
       res.json(
         (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
-          (event: any) => !Boolean(event?.requiresPayment),
+          (event: any) =>
+            !Boolean(event?.requiresPayment) &&
+            String(event?.eventType || "") !== "private_event",
         ),
       );
     } catch (error: any) {
@@ -398,17 +400,22 @@ export function registerEventRoutes(
   app.get("/api/events", isAuthenticated, async (req: any, res) => {
     try {
       const hostIdFilter = String(req.query?.hostId || "").trim();
+      const includePrivate =
+        req.user?.userType === "admin" ||
+        req.user?.userType === "super_admin" ||
+        req.user?.userType === "staff";
       const upcomingEvents = await storage.getAllUpcomingEvents();
       let filtered = Array.isArray(upcomingEvents) ? upcomingEvents : [];
       if (hostIdFilter) {
         filtered = filtered.filter(
           (event: any) => String(event?.hostId || "") === hostIdFilter,
         );
-      } else {
-        filtered = filtered.filter(
-          (event: any) => !Boolean(event?.requiresPayment),
-        );
       }
+      filtered = filtered.filter(
+        (event: any) =>
+          !Boolean(event?.requiresPayment) &&
+          (includePrivate || String(event?.eventType || "") !== "private_event"),
+      );
       res.json(filtered);
     } catch (error: any) {
       console.error("Error fetching all events:", error);
@@ -625,7 +632,9 @@ export function registerEventRoutes(
         .where(eq(events.id, eventId))
         .limit(1);
 
-      if (!row) return res.status(404).json({ message: "Event not found" });
+      if (!row || String(row.eventType || "") === "private_event") {
+        return res.status(404).json({ message: "Event not found" });
+      }
 
       const toSlug = (value: string | null | undefined) =>
         String(value || "")

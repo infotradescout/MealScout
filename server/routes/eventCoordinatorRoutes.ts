@@ -353,6 +353,7 @@ export function registerEventCoordinatorRoutes(
           startTime: z.string().min(1),
           endTime: z.string().min(1),
           maxTrucks: z.number().int().min(1).max(50),
+          eventVisibility: z.enum(["public", "private"]).default("public"),
           hardCapEnabled: z.boolean().optional(),
           eventCadence: z.enum(["one_time", "recurring"]),
           recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
@@ -369,6 +370,7 @@ export function registerEventCoordinatorRoutes(
         });
 
         const parsed = schema.parse(req.body);
+        const isPrivateEvent = parsed.eventVisibility === "private";
         const amenitiesMap =
           Array.isArray(parsed.amenities) && parsed.amenities.length > 0
             ? parsed.amenities.reduce(
@@ -397,6 +399,13 @@ export function registerEventCoordinatorRoutes(
           hostPriceCents > 0;
         const isRecurring = parsed.eventCadence === "recurring";
         const requiresParkingPassFlow = isRecurring || Boolean(parsed.requiresPayment) || hasAnyPricing;
+
+        if (isPrivateEvent && requiresParkingPassFlow) {
+          return res.status(400).json({
+            message:
+              "Private events cannot use the paid Parking Pass flow. Switch visibility to public or disable paid/recurring settings.",
+          });
+        }
 
         if (requiresParkingPassFlow && !hasAnyPricing) {
           return res.status(400).json({
@@ -548,6 +557,11 @@ export function registerEventCoordinatorRoutes(
         }
 
         if (!isRecurring) {
+          const resolvedEventType = isPrivateEvent
+            ? "private_event"
+            : requiresParkingPassFlow
+              ? "parking_pass"
+              : "event";
           const eventPayload = insertEventSchema.parse({
             hostId: ensuredHost.id,
             coordinatorUserId: req.user.id,
@@ -558,7 +572,7 @@ export function registerEventCoordinatorRoutes(
             endTime: parsed.endTime,
             maxTrucks: parsed.maxTrucks,
             hardCapEnabled: Boolean(parsed.hardCapEnabled),
-            eventType: requiresParkingPassFlow ? "parking_pass" : "event",
+            eventType: resolvedEventType,
             requiresPayment: requiresParkingPassFlow,
             hostPriceCents:
               resolvedHostPriceCents > 0 ? resolvedHostPriceCents : null,
@@ -573,46 +587,50 @@ export function registerEventCoordinatorRoutes(
 
           const created = await storage.createEvent(eventPayload);
 
-          // Auto-enqueue social post for new event
-          db.insert(socialPostQueue)
-            .values({
-              platform: "facebook",
-              target: null,
-              message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
-              link: null,
-              status: "pending",
-              errorMessage: null,
-              updatedAt: new Date(),
-            })
-            .catch(() => {});
+          if (!isPrivateEvent) {
+            // Auto-enqueue social post for new public event.
+            db.insert(socialPostQueue)
+              .values({
+                platform: "facebook",
+                target: null,
+                message: `🍔 New food truck event in ${parsed.city}, ${parsed.state}: "${parsed.name}" on ${parsed.date} from ${parsed.startTime} to ${parsed.endTime}. Up to ${parsed.maxTrucks} trucks welcome!`,
+                link: null,
+                status: "pending",
+                errorMessage: null,
+                updatedAt: new Date(),
+              })
+              .catch(() => {});
 
-          void notifyNearbyTrucksOfNewEvent(
-            {
-              id: created.id,
-              name: created.name || parsed.name,
-              description: created.description || null,
-              date: new Date(created.date),
-              startTime: created.startTime,
-              endTime: created.endTime,
-              requiresPayment: Boolean(created.requiresPayment),
-              hostPriceCents: created.hostPriceCents ?? null,
-            },
-            {
-              businessName: ensuredHost.businessName,
-              city: ensuredHost.city,
-              state: ensuredHost.state,
-              address: ensuredHost.address,
-              latitude: ensuredHost.latitude,
-              longitude: ensuredHost.longitude,
-              amenities:
-                (ensuredHost.amenities as Record<string, boolean> | null) ??
-                null,
-            },
-            { radiusMiles: 50 },
-          );
+            void notifyNearbyTrucksOfNewEvent(
+              {
+                id: created.id,
+                name: created.name || parsed.name,
+                description: created.description || null,
+                date: new Date(created.date),
+                startTime: created.startTime,
+                endTime: created.endTime,
+                requiresPayment: Boolean(created.requiresPayment),
+                hostPriceCents: created.hostPriceCents ?? null,
+              },
+              {
+                businessName: ensuredHost.businessName,
+                city: ensuredHost.city,
+                state: ensuredHost.state,
+                address: ensuredHost.address,
+                latitude: ensuredHost.latitude,
+                longitude: ensuredHost.longitude,
+                amenities:
+                  (ensuredHost.amenities as Record<string, boolean> | null) ??
+                  null,
+              },
+              { radiusMiles: 50 },
+            );
+          }
 
           return res.status(201).json({
             ...created,
+            eventVisibility: isPrivateEvent ? "private" : "public",
+            discoverableByAllUsers: !isPrivateEvent,
             host: {
               businessName: ensuredHost.businessName,
               address: ensuredHost.address,
@@ -693,8 +711,8 @@ export function registerEventCoordinatorRoutes(
           .insert(eventSeries)
           .values({
             ...seriesPayload,
-            status: publicReady ? "published" : "draft",
-            publishedAt: publicReady ? new Date() : null,
+            status: publicReady && !isPrivateEvent ? "published" : "draft",
+            publishedAt: publicReady && !isPrivateEvent ? new Date() : null,
             updatedAt: new Date(),
           } as any)
           .returning();
@@ -720,7 +738,11 @@ export function registerEventCoordinatorRoutes(
         for (const occurrence of occurrences) {
           const createdOccurrence = await storage.createEvent({
             ...occurrence,
-            eventType: requiresParkingPassFlow ? "parking_pass" : "event",
+            eventType: isPrivateEvent
+              ? "private_event"
+              : requiresParkingPassFlow
+                ? "parking_pass"
+                : "event",
             requiresPayment: requiresParkingPassFlow,
             hostPriceCents:
               resolvedHostPriceCents > 0 ? resolvedHostPriceCents : null,
@@ -735,29 +757,31 @@ export function registerEventCoordinatorRoutes(
           createdOccurrences.push(createdOccurrence);
         }
 
-        void notifyNearbyTrucksOfNewSeries(
-          {
-            id: createdSeries.id,
-            name: createdSeries.name,
-            description: createdSeries.description,
-            startDate: new Date(createdSeries.startDate),
-            endDate: new Date(createdSeries.endDate),
-            defaultStartTime: createdSeries.defaultStartTime,
-            defaultEndTime: createdSeries.defaultEndTime,
-          },
-          {
-            businessName: ensuredHost.businessName,
-            city: ensuredHost.city,
-            state: ensuredHost.state,
-            address: ensuredHost.address,
-            latitude: ensuredHost.latitude,
-            longitude: ensuredHost.longitude,
-            amenities:
-              (ensuredHost.amenities as Record<string, boolean> | null) ??
-              null,
-          },
-          { radiusMiles: 50 },
-        );
+        if (!isPrivateEvent) {
+          void notifyNearbyTrucksOfNewSeries(
+            {
+              id: createdSeries.id,
+              name: createdSeries.name,
+              description: createdSeries.description,
+              startDate: new Date(createdSeries.startDate),
+              endDate: new Date(createdSeries.endDate),
+              defaultStartTime: createdSeries.defaultStartTime,
+              defaultEndTime: createdSeries.defaultEndTime,
+            },
+            {
+              businessName: ensuredHost.businessName,
+              city: ensuredHost.city,
+              state: ensuredHost.state,
+              address: ensuredHost.address,
+              latitude: ensuredHost.latitude,
+              longitude: ensuredHost.longitude,
+              amenities:
+                (ensuredHost.amenities as Record<string, boolean> | null) ??
+                null,
+            },
+            { radiusMiles: 50 },
+          );
+        }
 
         const latestOccurrence =
           createdOccurrences.length > 0
@@ -768,6 +792,8 @@ export function registerEventCoordinatorRoutes(
           seriesId: createdSeries.id,
           occurrencesGenerated: createdOccurrences.length,
           recurring: true,
+          eventVisibility: isPrivateEvent ? "private" : "public",
+          discoverableByAllUsers: !isPrivateEvent,
           host: {
             businessName: ensuredHost.businessName,
             address: ensuredHost.address,

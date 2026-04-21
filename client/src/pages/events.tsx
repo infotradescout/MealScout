@@ -12,6 +12,33 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+type EventIntakeRequest = {
+  id: string;
+  claimType: string;
+  status: string;
+  createdAt: string;
+  eventVisibility: "public" | "private" | "unknown";
+  discoverableByAllUsers: boolean | null;
+  requestedTruckCount: number | null;
+  requester: {
+    email: string | null;
+    name: string | null;
+  };
+  summary: {
+    title: string;
+    city: string | null;
+    date: string | null;
+    expectedCrowd: string | null;
+    guestCount: string | null;
+  };
+};
+
+type EventIntakeResponse = {
+  ok: boolean;
+  total: number;
+  items: EventIntakeRequest[];
+};
+
 export default function EventsPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -22,7 +49,17 @@ export default function EventsPage() {
         String(user?.userType || ""),
       ),
   );
+  const isStaffOrAdmin = Boolean(
+    isAuthenticated &&
+      ["admin", "super_admin", "staff"].includes(String(user?.userType || "")),
+  );
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [intakeVisibilityFilter, setIntakeVisibilityFilter] = useState<
+    "all" | "public" | "private"
+  >("all");
+  const [intakeTypeFilter, setIntakeTypeFilter] = useState<
+    "all" | "event" | "food_truck"
+  >("all");
   const [formData, setFormData] = useState({
     organizationName: "",
     address: "",
@@ -31,6 +68,7 @@ export default function EventsPage() {
     contactPhone: "",
     eventName: "",
     description: "",
+    eventVisibility: "public" as "public" | "private",
     date: "",
     startTime: "",
     endTime: "",
@@ -72,9 +110,36 @@ export default function EventsPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const { data: intakeData } = useQuery<EventIntakeResponse>({
+    queryKey: [
+      "/api/admin/event-intake-requests",
+      intakeVisibilityFilter,
+      intakeTypeFilter,
+    ],
+    enabled: isStaffOrAdmin,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: "120",
+        visibility: intakeVisibilityFilter,
+        claimType: intakeTypeFilter,
+      });
+      const res = await fetch(
+        `/api/admin/event-intake-requests?${params.toString()}`,
+        {
+          credentials: "include",
+        },
+      );
+      if (!res.ok) {
+        throw new Error("Failed to load intake requests");
+      }
+      return await res.json();
+    },
+    refetchOnWindowFocus: false,
+  });
   const truckDirectory = (Array.isArray(businesses) ? businesses : []).filter(
     (business) => Boolean(business?.isFoodTruck),
   );
+  const intakeItems = Array.isArray(intakeData?.items) ? intakeData.items : [];
 
   const createEvent = useMutation({
     mutationFn: async () => {
@@ -90,6 +155,7 @@ export default function EventsPage() {
           contactPhone: formData.contactPhone,
           name: formData.eventName,
           description: formData.description,
+          eventVisibility: formData.eventVisibility,
           date: formData.date,
           startTime: formData.startTime,
           endTime: formData.endTime,
@@ -132,6 +198,7 @@ export default function EventsPage() {
         contactPhone: "",
         eventName: "",
         description: "",
+        eventVisibility: "public",
         date: "",
         startTime: "",
         endTime: "",
@@ -212,6 +279,110 @@ export default function EventsPage() {
               trucks.
             </p>
           </div>
+
+          {isStaffOrAdmin && (
+            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+              <CardHeader>
+                <CardTitle className="text-lg">Event Intake Requests</CardTitle>
+                <p className="text-sm text-[color:var(--text-secondary)]">
+                  Review incoming requests and filter by public/private visibility.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <Label htmlFor="intakeVisibility">Visibility</Label>
+                    <select
+                      id="intakeVisibility"
+                      className="mt-1 w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm"
+                      value={intakeVisibilityFilter}
+                      onChange={(e) =>
+                        setIntakeVisibilityFilter(
+                          e.target.value as "all" | "public" | "private",
+                        )
+                      }
+                    >
+                      <option value="all">All visibility</option>
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="intakeType">Request type</Label>
+                    <select
+                      id="intakeType"
+                      className="mt-1 w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm"
+                      value={intakeTypeFilter}
+                      onChange={(e) =>
+                        setIntakeTypeFilter(
+                          e.target.value as "all" | "event" | "food_truck",
+                        )
+                      }
+                    >
+                      <option value="all">All request types</option>
+                      <option value="event">Organizer requests</option>
+                      <option value="food_truck">Truck requests</option>
+                    </select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {intakeItems.length === 0 ? (
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    No matching intake requests.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {intakeItems.slice(0, 12).map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline">
+                            {item.claimType === "event"
+                              ? "Organizer"
+                              : "Truck request"}
+                          </Badge>
+                          <Badge
+                            variant={
+                              item.eventVisibility === "public"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {item.eventVisibility === "public"
+                              ? "Public"
+                              : item.eventVisibility === "private"
+                                ? "Private"
+                                : "Unknown"}
+                          </Badge>
+                          {item.requestedTruckCount ? (
+                            <Badge variant="outline">
+                              {item.requestedTruckCount} truck
+                              {item.requestedTruckCount === 1 ? "" : "s"}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-[color:var(--text-primary)]">
+                          {item.summary.title}
+                        </p>
+                        <p className="text-xs text-[color:var(--text-muted)] mt-1">
+                          {[item.summary.city, item.summary.date]
+                            .filter(Boolean)
+                            .join(" • ") || "No location/date provided"}
+                        </p>
+                        <p className="text-xs text-[color:var(--text-muted)] mt-1">
+                          Requester: {item.requester.name || "Unknown"}
+                          {item.requester.email
+                            ? ` (${item.requester.email})`
+                            : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {isEventCoordinator && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
@@ -343,6 +514,25 @@ export default function EventsPage() {
                           }
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="eventVisibility">Event Visibility</Label>
+                      <select
+                        id="eventVisibility"
+                        className="w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm"
+                        value={formData.eventVisibility}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            eventVisibility: e.target.value as "public" | "private",
+                          }))
+                        }
+                        required
+                      >
+                        <option value="public">Public (discoverable by all users)</option>
+                        <option value="private">Private (not discoverable in public feeds)</option>
+                      </select>
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-4">

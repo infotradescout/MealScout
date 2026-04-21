@@ -567,6 +567,7 @@ export default function EventCoordinatorDashboard() {
     contactPhone: "",
     eventName: "",
     description: "",
+    eventVisibility: "public" as "public" | "private",
     date: "",
     startTime: "",
     endTime: "",
@@ -658,6 +659,7 @@ export default function EventCoordinatorDashboard() {
           contactPhone: formData.contactPhone,
           name: formData.eventName,
           description: formData.description,
+          eventVisibility: formData.eventVisibility,
           date: formData.date,
           startTime: formData.startTime,
           endTime: formData.endTime,
@@ -694,6 +696,7 @@ export default function EventCoordinatorDashboard() {
         contactPhone: "",
         eventName: "",
         description: "",
+        eventVisibility: "public",
         date: "",
         startTime: "",
         endTime: "",
@@ -893,6 +896,24 @@ export default function EventCoordinatorDashboard() {
                   required
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="eventVisibility">Event Visibility</Label>
+              <select
+                id="eventVisibility"
+                value={formData.eventVisibility}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    eventVisibility: e.target.value as "public" | "private",
+                  })
+                }
+                className={`${inputClassName} w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm`}
+                required
+              >
+                <option value="public">Public (discoverable by all users)</option>
+                <option value="private">Private (not discoverable in public feeds)</option>
+              </select>
             </div>
             <div className="grid md:grid-cols-4 gap-4">
               <div className="space-y-2">
