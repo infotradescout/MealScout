@@ -1074,7 +1074,7 @@ export default function SearchPage() {
               {searchedEvents.map((event: any) => (
                 <Link
                   key={event.id}
-                  href="/events/public"
+                  href="/events"
                   data-testid={`card-event-${event.id}`}
                 >
                   <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">

@@ -81,7 +81,7 @@ export default function Sitemap() {
         { title: "For Food Trucks", href: "/truck-landing", description: "Food truck growth with MealScout" },
         { title: "For Hosts", href: "/for-hosts", description: "Host truck-friendly locations and events" },
         { title: "Host Partnership", href: "/host-location-partner", description: "Non-food businesses with parking can qualify as hosts" },
-        { title: "Public Events", href: "/events/public", description: "Upcoming public food events and activity" },
+        { title: "Public Events", href: "/events", description: "Upcoming public food events and activity" },
       ],
     },
     {

@@ -115,9 +115,7 @@ const HostSignup = lazy(() => import("@/pages/host-signup"));
 const HostDashboard = lazy(() => import("@/pages/host-dashboard"));
 const DashboardRouter = lazy(() => import("@/pages/dashboard-router"));
 const TruckDiscovery = lazy(() => import("@/pages/truck-discovery"));
-const EventSignup = lazy(() => import("@/pages/event-signup"));
 const RequestTruck = lazy(() => import("@/pages/request-truck"));
-const EventsPage = lazy(() => import("@/pages/events"));
 const EventsRouter = lazy(() => import("@/pages/events-router"));
 const EventDetailPage = lazy(() => import("@/pages/event-detail"));
 const ForRestaurants = lazy(() => import("@/pages/for-restaurants"));
@@ -361,11 +359,11 @@ function Router() {
             />
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
-            <Route path="/event-signup" component={EventSignup} />
+            <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/admin/events" component={EventsRouter} />
-            <Route path="/events/public" component={EventsPage} />
+            <Route path="/events/public" component={EventsRouter} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/food-trucks/:citySlug" component={CityLanding} />
@@ -550,11 +548,11 @@ function Router() {
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
             <Route path="/host-signup" component={HostSignup} />
-            <Route path="/event-signup" component={EventSignup} />
+            <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/admin/events" component={EventsRouter} />
-            <Route path="/events/public" component={EventsPage} />
+            <Route path="/events/public" component={EventsRouter} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/pensacola/spots" component={PensacolaSpots} />
             <Route path="/pensacola/report" component={PensacolaReport} />

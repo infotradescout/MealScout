@@ -450,7 +450,7 @@ export default function EventDetailPage() {
                   </Button>
                 ) : null}
                 <Button asChild variant={canBook ? "outline" : "default"}>
-                  <a href="/events/public">Browse events</a>
+                  <a href="/events">Browse events</a>
                 </Button>
                 {data?.host?.path ? (
                   <Button variant="outline" asChild>

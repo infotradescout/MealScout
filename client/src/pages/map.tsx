@@ -2615,7 +2615,7 @@ export default function MapPage() {
         `Search by cuisine, restaurant, and deal type across ${mapBranding.appName}.`,
     },
     {
-      href: "/events/public",
+      href: "/events",
       title: "Food Truck Events",
       description:
         "Check upcoming public events with trucks and pop-up vendors.",

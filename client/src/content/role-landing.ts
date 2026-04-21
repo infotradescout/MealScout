@@ -469,7 +469,7 @@ export const roleLandingContent = {
     headline: "Run events without the chaos.",
     subhead:
       "Own the event flow, keep trucks informed, and stay organized with one dashboard.",
-    primaryCta: { label: "Create an event", href: "/event-signup" },
+    primaryCta: { label: "Create an event", href: "/events" },
     secondaryCta: { label: "Sign in", href: "/login" },
     bullets: ["Events are separate", "Coordinator-controlled", "Local first"],
     map: {
@@ -535,7 +535,7 @@ export const roleLandingContent = {
     finalCta: {
       title: "Ready to run a clean event?",
       copy: "Create the listing and let trucks reach you directly.",
-      primary: { label: "Create an event", href: "/event-signup" },
+      primary: { label: "Create an event", href: "/events" },
       secondary: { label: "Already have an account?", href: "/login" },
     },
   },

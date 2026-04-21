@@ -174,7 +174,7 @@ export default function CustomerSignup() {
         accountType === "host"
           ? "/host-signup"
           : accountType === "event_organizer"
-            ? "/event-signup"
+            ? "/events"
           : accountType === "business"
             ? "/restaurant-signup"
             : "/";
@@ -355,7 +355,7 @@ export default function CustomerSignup() {
       return;
     }
     if (accountType === "event_organizer") {
-      setLocation("/event-signup");
+      setLocation("/events");
       return;
     }
 

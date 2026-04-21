@@ -119,7 +119,7 @@ export default function EventSignup() {
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
-              onClick={() => setLocation("/login?redirect=/event-signup")}
+              onClick={() => setLocation("/login?redirect=/events")}
             >
               Log in to continue
             </Button>

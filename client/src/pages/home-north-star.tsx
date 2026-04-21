@@ -126,7 +126,7 @@ export default function Home() {
             </Card>
           </Link>
 
-          <Link href="/event-signup">
+          <Link href="/events">
             <Card className="hover:shadow-clean-lg transition-shadow cursor-pointer h-full border-2 hover:border-[color:var(--accent-text)]">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center text-center space-y-4">
