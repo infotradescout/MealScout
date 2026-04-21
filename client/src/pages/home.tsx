@@ -40,7 +40,6 @@ import {
   PlayCircle,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
-import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
@@ -249,7 +248,6 @@ export default function Home() {
   const [, setNavigateTo] = useLocation();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-  const { isConnected, subscribeToNearby } = useFoodTruckSocket();
 
   // Show welcome modal only for anonymous users.
   useEffect(() => {
@@ -302,9 +300,6 @@ export default function Home() {
 
         queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
 
-        if (isConnected) {
-          subscribeToNearby(newLocation.lat, newLocation.lng, 5000);
-        }
       } catch (error: any) {
         setLocationError(
           "Unable to detect location automatically. Please set your location."
@@ -380,9 +375,6 @@ export default function Home() {
     setShowWelcomeModal(false);
     queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
 
-    if (isConnected) {
-      subscribeToNearby(newLocation.lat, newLocation.lng, 5000);
-    }
   };
 
   const handleWelcomeSkip = () => {
