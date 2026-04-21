@@ -125,7 +125,7 @@ export function registerAcquisitionPrerenderRoutes(
       ctaLinks: [
         { label: "Host Partnership Signup", href: "/host-location-partner" },
         { label: "Host Program", href: "/for-hosts" },
-        { label: "Public Events", href: "/events/public" },
+        { label: "Public Events", href: "/events" },
         { label: "Sitemap", href: "/sitemap" },
       ],
       schemaType: "LocalBusiness",

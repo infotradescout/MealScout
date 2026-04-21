@@ -562,7 +562,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
           baseUrl,
           `${baseUrl}/find-food`,
           `${baseUrl}/deals/featured`,
-          `${baseUrl}/events/public`,
+          `${baseUrl}/events`,
           `${baseUrl}/for-restaurants`,
           `${baseUrl}/for-bars`,
           `${baseUrl}/for-events`,

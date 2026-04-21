@@ -39,7 +39,6 @@ const PRIVATE_NOINDEX_PREFIXES = [
   "/user-dashboard",
   "/restaurant-owner-dashboard",
   "/host/dashboard",
-  "/event-coordinator/dashboard",
   "/supplier/dashboard",
   "/account-setup",
 ];

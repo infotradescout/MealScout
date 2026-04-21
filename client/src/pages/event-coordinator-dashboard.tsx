@@ -577,7 +577,7 @@ export default function EventCoordinatorDashboard() {
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
-      setLocation("/login?redirect=/event-coordinator/dashboard");
+      setLocation("/login?redirect=/events");
       return;
     }
     if (user?.userType !== "event_coordinator") {

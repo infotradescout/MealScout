@@ -189,7 +189,6 @@ const publicRoutePrefixes = [
   "/host-location-partner",
   "/for-events",
   "/find-food",
-  "/event-signup",
   "/events",
   "/food-trucks/",
   "/truck-landing",
@@ -363,6 +362,10 @@ function Router() {
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/admin/events" component={EventsRouter} />
+            <Route
+              path="/event-coordinator/dashboard"
+              component={EventsRouter}
+            />
             <Route path="/events/public" component={EventsRouter} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/dashboard" component={DashboardRouter} />
