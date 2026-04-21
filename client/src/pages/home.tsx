@@ -973,15 +973,14 @@ export default function Home() {
 
             <div className="mb-5 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
-                Private Parties
+                Private + Hosted Requests
               </p>
               <h2 className="mt-1 text-base font-semibold text-foreground">
-                Request a food truck for birthdays and neighborhood events
+                Book trucks for parties, catering, schools, offices, and community events
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Public festivals and open calls live in the Events portal. For
-                private celebrations, send a truck request and browse truck
-                profiles directly.
+                Use Requests for private or hosted opportunities, then use the
+                Events portal for public calls and open placements.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href="/request-truck">
@@ -995,7 +994,7 @@ export default function Home() {
                     }}
                   >
                     <Truck className="w-4 h-4 mr-1" />
-                    Request a truck
+                    Start a request
                   </Button>
                 </Link>
                 <Link href="/events">
