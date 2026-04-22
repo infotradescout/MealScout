@@ -2230,49 +2230,35 @@ export default function MapPage() {
   const runtimeGoogleMapsApiKey = String(
     mapRuntime?.googleMapsApiKey || "",
   ).trim();
-  const currentHost =
-    typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
-  const shouldForceLegacyByHost = currentHost.endsWith(".vercel.app");
   const effectiveGoogleMapsApiKey =
-    shouldForceLegacyByHost
-      ? ""
-      : runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
   const shouldHoldMapProviderSelection =
-    !shouldForceLegacyByHost &&
     GOOGLE_MAPS_WEB_API_KEY.length === 0 &&
     runtimeGoogleMapsApiKey.length === 0 &&
     !mapProviderGraceExpired;
   const isGoogleProviderRequested = effectiveGoogleMapsApiKey.length > 0;
   const isGoogleProviderMissingKey = !isGoogleProviderRequested;
-  const isUsingGoogleMap =
-    !shouldHoldMapProviderSelection && isGoogleProviderRequested && !forceLegacyMap;
-  const mapProviderLabel = isUsingGoogleMap
-    ? "Google Maps"
-    : shouldForceLegacyByHost
-      ? "Legacy map (preview host)"
-    : isGoogleProviderMissingKey
-      ? "Legacy map (Google key missing)"
-      : "Legacy map (Google unavailable)";
+  const isUsingGoogleMap = true;
+  const mapProviderLabel = isGoogleProviderMissingKey
+    ? "Google Maps (key missing)"
+    : "Google Maps";
 
   const handleGoogleMapsFatalError = useCallback((message: string) => {
     setGoogleMapsRuntimeError(
       message || "Google Maps failed to load for this domain.",
     );
-    setForceLegacyMap(true);
   }, []);
 
   useEffect(() => {
     // If key provisioning completes after first render, allow Google map immediately.
-    if (shouldForceLegacyByHost) return;
     if (!isGoogleProviderRequested) return;
     setForceLegacyMap(false);
     setGoogleMapsRuntimeError(null);
     setGoogleMapAutoRetryCount(0);
-  }, [effectiveGoogleMapsApiKey, isGoogleProviderRequested, shouldForceLegacyByHost]);
+  }, [effectiveGoogleMapsApiKey, isGoogleProviderRequested]);
 
   useEffect(() => {
     // Recover from transient script/auth races without requiring user navigation.
-    if (shouldForceLegacyByHost) return;
     if (!forceLegacyMap || !isGoogleProviderRequested) return;
     if (googleMapAutoRetryCount >= 3) return;
     const timer = window.setTimeout(() => {
@@ -2282,7 +2268,7 @@ export default function MapPage() {
       setGoogleMapRetryNonce((prev) => prev + 1);
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [forceLegacyMap, isGoogleProviderRequested, googleMapAutoRetryCount, shouldForceLegacyByHost]);
+  }, [forceLegacyMap, isGoogleProviderRequested, googleMapAutoRetryCount]);
 
   const adapterMarkers = useMemo<MapAdapterMarker[]>(() => {
     const next: MapAdapterMarker[] = [];

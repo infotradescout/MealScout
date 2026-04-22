@@ -509,8 +509,8 @@ export function GoogleMapPicker({
   ).trim();
   const mapId = mapIdProp || envMapId || undefined;
 
-  const [googleFailed, setGoogleFailed] = useState(false);
-  const useGoogle = apiKey.length > 0 && !googleFailed;
+  const [googleFailureMessage, setGoogleFailureMessage] = useState<string | null>(null);
+  const useGoogle = apiKey.length > 0;
 
   return (
     <div className={`relative h-full w-full ${className}`}>
@@ -525,20 +525,22 @@ export function GoogleMapPicker({
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
-          onFatalError={() => setGoogleFailed(true)}
+          onFatalError={(message) =>
+            setGoogleFailureMessage(
+              message || "Google Maps failed to load in this environment.",
+            )
+          }
           interactionsEnabled={interactionsEnabled}
         />
       ) : (
-        <LeafletRenderer
-          center={center}
-          zoom={zoom}
-          pins={pins}
-          circleRadiusMetres={circleRadiusMetres}
-          onMapClick={onMapClick}
-          onPinDrag={onPinDrag}
-          onPinClick={onPinClick}
-          interactionsEnabled={interactionsEnabled}
-        />
+        <div className="flex h-full w-full items-center justify-center rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 text-center text-sm text-[color:var(--text-muted)]">
+          Google Maps key is required to load this map.
+        </div>
+      )}
+      {googleFailureMessage && (
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-20 rounded-md border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-900 shadow-clean">
+          {googleFailureMessage}
+        </div>
       )}
     </div>
   );
