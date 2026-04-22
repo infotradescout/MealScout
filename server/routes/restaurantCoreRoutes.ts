@@ -59,6 +59,18 @@ const consumeEngagementWindow = (key: string) => {
   return { allowed: true, retryAfterSeconds: 0 };
 };
 
+const toFiniteCoordinate = (value: unknown): number | null => {
+  const parsed =
+    typeof value === "number" ? value : Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isPublicRestaurantVisible = (restaurant: any): boolean => {
+  if (!restaurant?.isActive) return false;
+  if (!restaurant?.isVerified) return false;
+  return isPublicBusinessVisible(restaurant);
+};
+
 export function registerRestaurantCoreRoutes(
   app: Express,
   {
@@ -229,7 +241,7 @@ export function registerRestaurantCoreRoutes(
 
       const searchTerm = query.toLowerCase();
       const restaurants = (await storage.getAllRestaurants()).filter(
-        (restaurant: any) => isPublicBusinessVisible(restaurant),
+        (restaurant: any) => isPublicRestaurantVisible(restaurant),
       );
 
       let filteredRestaurants = restaurants.filter(
@@ -246,15 +258,17 @@ export function registerRestaurantCoreRoutes(
         const radiusKm = parseFloat(radius as string);
 
         filteredRestaurants = filteredRestaurants.filter((restaurant: any) => {
-          if (!restaurant.latitude || !restaurant.longitude) return false;
+          const targetLat = toFiniteCoordinate(restaurant.latitude);
+          const targetLng = toFiniteCoordinate(restaurant.longitude);
+          if (targetLat === null || targetLng === null) return false;
 
           const earthRadiusKm = 6371;
-          const dLat = ((restaurant.latitude - userLat) * Math.PI) / 180;
-          const dLng = ((restaurant.longitude - userLng) * Math.PI) / 180;
+          const dLat = ((targetLat - userLat) * Math.PI) / 180;
+          const dLng = ((targetLng - userLng) * Math.PI) / 180;
           const a =
             Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos((userLat * Math.PI) / 180) *
-              Math.cos((restaurant.latitude * Math.PI) / 180) *
+              Math.cos((targetLat * Math.PI) / 180) *
               Math.sin(dLng / 2) *
               Math.sin(dLng / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -292,11 +306,9 @@ export function registerRestaurantCoreRoutes(
       );
 
       const allRestaurants = (await storage.getAllRestaurants()).filter(
-        (restaurant: any) => isPublicBusinessVisible(restaurant),
+        (restaurant: any) => isPublicRestaurantVisible(restaurant),
       );
-      const activeRestaurants = allRestaurants.filter(
-        (restaurant: any) => restaurant?.isActive,
-      );
+      const activeRestaurants = allRestaurants;
 
       const ownerIds = Array.from(
         new Set(
@@ -561,19 +573,9 @@ export function registerRestaurantCoreRoutes(
             };
           }
 
-          const latRaw =
-            restaurant.currentLatitude ?? restaurant.latitude ?? null;
-          const lngRaw =
-            restaurant.currentLongitude ?? restaurant.longitude ?? null;
-          const targetLat =
-            typeof latRaw === "number"
-              ? latRaw
-              : Number.parseFloat(String(latRaw));
-          const targetLng =
-            typeof lngRaw === "number"
-              ? lngRaw
-              : Number.parseFloat(String(lngRaw));
-          if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
+          const targetLat = toFiniteCoordinate(restaurant.latitude);
+          const targetLng = toFiniteCoordinate(restaurant.longitude);
+          if (targetLat === null || targetLng === null) {
             return null;
           }
 
@@ -832,7 +834,11 @@ export function registerRestaurantCoreRoutes(
       const radius = parseFloat(req.query.radius as string) || 5;
 
       const restaurants = await storage.getNearbyRestaurants(lat, lng, radius);
-      res.json(restaurants);
+      res.json(
+        restaurants.filter((restaurant: any) =>
+          isPublicRestaurantVisible(restaurant),
+        ),
+      );
     } catch (error) {
       console.error("Error fetching nearby restaurants:", error);
       res.status(500).json({ message: "Failed to fetch nearby restaurants" });

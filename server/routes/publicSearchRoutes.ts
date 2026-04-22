@@ -13,6 +13,7 @@ import {
 import { db } from "../db";
 import { storage } from "../storage";
 import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   deals,
   eventSeries,
@@ -45,6 +46,7 @@ export function registerPublicSearchRoutes(app: Express) {
         .where(
           and(
             eq(restaurants.isActive, true),
+            eq(restaurants.isVerified, true),
             or(
               sql`lower(${restaurants.name}) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.cuisineType}, '')) like ${searchValue}`,
@@ -275,7 +277,8 @@ export function registerPublicSearchRoutes(app: Express) {
       const restaurantMatches = await storage.getAllRestaurants();
       const restaurantsOut = restaurantMatches
         .filter((restaurant: any) => {
-          if (!restaurant?.isActive) return false;
+          if (!restaurant?.isActive || !restaurant?.isVerified) return false;
+          if (!isPublicBusinessVisible(restaurant)) return false;
           const name = String(restaurant.name || "").toLowerCase();
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
           const address = String(restaurant.address || "").toLowerCase();

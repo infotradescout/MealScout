@@ -1779,6 +1779,7 @@ export function registerPublicMapRoutes(app: Express) {
         radiusKm,
       );
       for (const truck of liveTrucks) {
+        if (!(truck as any)?.isVerified) continue;
         const lat = toFiniteNumber((truck as any).currentLatitude);
         const lng = toFiniteNumber((truck as any).currentLongitude);
         if (lat === null || lng === null) continue;

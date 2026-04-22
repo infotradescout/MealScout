@@ -826,6 +826,7 @@ export function registerRestaurantOperationsRoutes(
       const visibleTrucks = (
         await Promise.all(
           trucks.map(async (truck: any) => {
+            if (!truck?.isVerified) return null;
             const ownerId = String(truck?.ownerId || "").trim();
             if (!ownerId) return null;
             const hasAccess = await hasBusinessDistributionAccess(ownerId);
