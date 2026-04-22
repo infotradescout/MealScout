@@ -417,6 +417,35 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
+    const syncMapSize = () => {
+      if (!mapRef.current) return;
+      googleMaps.event.trigger(mapRef.current, "resize");
+      mapRef.current.setCenter(center);
+    };
+
+    const visibilityHandler = () => {
+      if (document.visibilityState === "visible") {
+        syncMapSize();
+      }
+    };
+
+    const first = window.setTimeout(syncMapSize, 0);
+    const second = window.setTimeout(syncMapSize, 250);
+    window.addEventListener("resize", syncMapSize);
+    document.addEventListener("visibilitychange", visibilityHandler);
+
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+      window.removeEventListener("resize", syncMapSize);
+      document.removeEventListener("visibilitychange", visibilityHandler);
+    };
+  }, [center, mapReadyVersion]);
+
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+
     const usedIds = new Set<string>();
     markers.forEach((marker) => {
       usedIds.add(marker.id);
