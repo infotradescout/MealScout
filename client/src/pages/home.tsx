@@ -1078,11 +1078,8 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
-      {(liveTrucksLoading ||
-        liveTrucksError ||
-        (location && liveTrucks.length > 0)) && (
-        <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
-          <div className="content">
+      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
@@ -1197,10 +1194,28 @@ export default function Home() {
                   );
                 })}
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[color:var(--text-secondary)]">
+                <p>No live trucks in view yet.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={retryLocation}
+                    disabled={isLoadingLocation}
+                  >
+                    {isLoadingLocation ? "Locating..." : "Refresh location"}
+                  </Button>
+                  <Link href="/map">
+                    <Button size="sm" variant="outline">
+                      Open live map
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </section>
-      )}
 
       {/* Public Profiles Section */}
       {(publicProfilesLoading ||
