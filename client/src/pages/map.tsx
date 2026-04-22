@@ -77,7 +77,8 @@ const resolveMapBranding = (): MapBranding => {
     typeof window !== "undefined"
       ? window.location.origin
       : "https://www.mealscout.us";
-  const isTradeScoutHost = host.includes("tradescout");
+  const isTradeScoutHost =
+    host === "tradescout.us" || host === "www.tradescout.us";
   if (isTradeScoutHost) {
     return {
       appName: "TradeScout",
