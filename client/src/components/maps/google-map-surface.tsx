@@ -12,6 +12,7 @@ type GeoPoint = { lat: number; lng: number };
 
 type GoogleMapSurfaceProps = {
   apiKey: string;
+  mapId?: string;
   center: GeoPoint;
   zoom: number;
   markers: MapAdapterMarker[];
@@ -30,7 +31,7 @@ type GoogleMapsWindow = Window & {
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
 };
-const GOOGLE_MAP_ID = String(
+const BUILD_GOOGLE_MAP_ID = String(
   (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
 ).trim();
 
@@ -232,6 +233,7 @@ const loadGoogleMaps = async (apiKey: string) => {
 
 export function GoogleMapSurface({
   apiKey,
+  mapId,
   center,
   zoom,
   markers,
@@ -244,6 +246,7 @@ export function GoogleMapSurface({
   onMarkerTap,
   onFatalError,
 }: GoogleMapSurfaceProps) {
+  const effectiveMapId = String(mapId || BUILD_GOOGLE_MAP_ID || "").trim();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
@@ -316,11 +319,11 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
-            ...(GOOGLE_MAP_ID ? { mapId: GOOGLE_MAP_ID } : {}),
+            ...(effectiveMapId ? { mapId: effectiveMapId } : {}),
             // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
             // Touch devices: keep native cooperative behavior.
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
-            ...(!GOOGLE_MAP_ID
+            ...(!effectiveMapId
               ? {
                   styles: isNightTheme
                     ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
@@ -366,7 +369,7 @@ export function GoogleMapSurface({
           // Ensure marker sync runs after first map instance initialization.
           setMapReadyVersion((prev) => prev + 1);
         } else {
-          if (!GOOGLE_MAP_ID) {
+          if (!effectiveMapId) {
             mapRef.current.setOptions({
               styles: isNightTheme
                 ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
@@ -394,6 +397,7 @@ export function GoogleMapSurface({
     };
   }, [
     apiKey,
+    effectiveMapId,
     isNightTheme,
     onBoundsChanged,
     onZoomChanged,
@@ -479,7 +483,7 @@ export function GoogleMapSurface({
 
       const AdvancedMarkerElement = googleMaps?.marker?.AdvancedMarkerElement;
       const useAdvancedMarkers = Boolean(
-        AdvancedMarkerElement && GOOGLE_MAP_ID,
+        AdvancedMarkerElement && effectiveMapId,
       );
       const instance = useAdvancedMarkers
         ? new AdvancedMarkerElement({
@@ -515,7 +519,7 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
+  }, [markers, markerIndex, onMarkerTap, mapReadyVersion, effectiveMapId]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;

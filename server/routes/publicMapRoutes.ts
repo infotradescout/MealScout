@@ -279,15 +279,24 @@ export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/runtime", async (_req, res) => {
     try {
       const googleMapsApiKey = getGoogleMapsApiKey();
+      const googleMapsMapId = String(
+        process.env.GOOGLE_MAPS_MAP_ID ||
+          process.env.VITE_GOOGLE_MAPS_MAP_ID ||
+          "",
+      ).trim();
       res.setHeader("Cache-Control", "public, max-age=60");
       res.json({
         hasGoogleMapsKey: googleMapsApiKey.length > 0,
         googleMapsApiKey: googleMapsApiKey || null,
+        hasGoogleMapsMapId: googleMapsMapId.length > 0,
+        googleMapsMapId: googleMapsMapId || null,
       });
     } catch {
       res.status(500).json({
         hasGoogleMapsKey: false,
         googleMapsApiKey: null,
+        hasGoogleMapsMapId: false,
+        googleMapsMapId: null,
       });
     }
   });

@@ -393,6 +393,8 @@ type MapFootTrafficResponse = {
 type MapRuntimeResponse = {
   hasGoogleMapsKey?: boolean;
   googleMapsApiKey?: string | null;
+  hasGoogleMapsMapId?: boolean;
+  googleMapsMapId?: string | null;
 };
 
 type MapRouteSummaryResponse = {
@@ -2306,6 +2308,14 @@ export default function MapPage() {
   const runtimeGoogleMapsApiKey = String(
     mapRuntime?.googleMapsApiKey || "",
   ).trim();
+  const runtimeGoogleMapsMapId = String(
+    mapRuntime?.googleMapsMapId || "",
+  ).trim();
+  const buildGoogleMapsMapId = String(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+  ).trim();
+  const effectiveGoogleMapsMapId =
+    runtimeGoogleMapsMapId || buildGoogleMapsMapId;
   const effectiveGoogleMapsApiKey =
     runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
   const shouldHoldMapProviderSelection =
@@ -2910,6 +2920,7 @@ export default function MapPage() {
               <GoogleMapSurface
                 key={`google-map-${googleMapRetryNonce}`}
                 apiKey={effectiveGoogleMapsApiKey}
+                mapId={effectiveGoogleMapsMapId || undefined}
                 center={mapCenter}
                 zoom={zoomLevel}
                 markers={adapterMarkers}
