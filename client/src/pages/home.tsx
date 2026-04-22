@@ -1287,11 +1287,8 @@ export default function Home() {
           <div className="mb-3">
             <h2 className="text-base font-bold text-foreground flex items-center">
               <UtensilsCrossed className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-              Explore Local Spots by Category
+              Explore Locally
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Jump straight to neighborhood favorites by cuisine and vibe.
-            </p>
           </div>
 
           <div className="flex space-x-2 overflow-x-auto pb-1">
