@@ -100,7 +100,9 @@ export function registerAdminLisaMarketIntelRoutes(
               address: locationRequests.address,
               locationType: locationRequests.locationType,
               requestCount: sql<number>`count(*)`.mapWith(Number),
-              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(Number),
+              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(
+                Number,
+              ),
             })
             .from(locationRequests)
             .leftJoin(
@@ -113,13 +115,17 @@ export function registerAdminLisaMarketIntelRoutes(
               locationRequests.address,
               locationRequests.locationType,
             )
-            .orderBy(desc(sql`count(*)`), desc(sql`count(${truckInterests.id})`))
+            .orderBy(
+              desc(sql`count(*)`),
+              desc(sql`count(${truckInterests.id})`),
+            )
             .limit(10),
           db
             .select({
               cuisineType: restaurants.cuisineType,
               restaurantCount: sql<number>`count(*)`.mapWith(Number),
-              avgRankingScore: sql<number>`avg(${restaurants.rankingScore})`.mapWith(Number),
+              avgRankingScore:
+                sql<number>`avg(${restaurants.rankingScore})`.mapWith(Number),
             })
             .from(restaurants)
             .where(gte(restaurants.createdAt, new Date("2020-01-01")))
@@ -131,7 +137,10 @@ export function registerAdminLisaMarketIntelRoutes(
                 .select({
                   cuisineType: restaurants.cuisineType,
                   restaurantCount: sql<number>`count(*)`.mapWith(Number),
-                  avgRankingScore: sql<number>`avg(${restaurants.rankingScore})`.mapWith(Number),
+                  avgRankingScore:
+                    sql<number>`avg(${restaurants.rankingScore})`.mapWith(
+                      Number,
+                    ),
                 })
                 .from(restaurants)
                 .groupBy(restaurants.cuisineType)
@@ -149,14 +158,21 @@ export function registerAdminLisaMarketIntelRoutes(
             })
             .from(videoStories)
             .where(gte(videoStories.createdAt, since30d))
-            .orderBy(desc(videoStories.impressionCount), desc(videoStories.viewCount))
+            .orderBy(
+              desc(videoStories.impressionCount),
+              desc(videoStories.viewCount),
+            )
             .limit(8),
           db
             .select({
               impressions:
-                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(Number),
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(
+                  Number,
+                ),
               clicks:
-                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(Number),
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(
+                  Number,
+                ),
             })
             .from(geoAdEvents)
             .where(gte(geoAdEvents.createdAt, since30d)),
@@ -164,7 +180,9 @@ export function registerAdminLisaMarketIntelRoutes(
             .select({
               totalPings: sql<number>`count(*)`.mapWith(Number),
               uniqueVisitors:
-                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(Number),
+                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(
+                  Number,
+                ),
             })
             .from(geoLocationPings)
             .where(gte(geoLocationPings.createdAt, since7d)),
@@ -233,7 +251,12 @@ export function registerAdminLisaMarketIntelRoutes(
           db
             .select({ count: sql<number>`count(*)`.mapWith(Number) })
             .from(deals)
-            .where(and(gte(deals.createdAt, since48h), lt(deals.createdAt, since24h))),
+            .where(
+              and(
+                gte(deals.createdAt, since48h),
+                lt(deals.createdAt, since24h),
+              ),
+            ),
           db
             .select({
               dealId: deals.id,
@@ -387,7 +410,8 @@ export function registerAdminLisaMarketIntelRoutes(
             };
           })
           .sort((a, b) => {
-            if (b.valueScore !== a.valueScore) return b.valueScore - a.valueScore;
+            if (b.valueScore !== a.valueScore)
+              return b.valueScore - a.valueScore;
             return a.minOrderAmount - b.minOrderAmount;
           })
           .slice(0, 8);
@@ -447,13 +471,24 @@ export function registerAdminLisaMarketIntelRoutes(
           .map((entity) => {
             const crawlerHits = recentRequests.filter((request: any) => {
               const path = String(request.path || "");
-              return Boolean(botSignatureLabel(request.userAgent)) && path.includes(entity.entityId);
+              return (
+                Boolean(botSignatureLabel(request.userAgent)) &&
+                path.includes(entity.entityId)
+              );
             }).length;
 
             const advertiserScore =
               (entity.entityType === "restaurant" ? 3 : 1) +
-              (entity.machineReadiness === "blocked" ? 3 : entity.machineReadiness === "developing" ? 1 : 0) +
-              (entity.quality === "thin" ? 3 : entity.quality === "growing" ? 1 : 0) +
+              (entity.machineReadiness === "blocked"
+                ? 3
+                : entity.machineReadiness === "developing"
+                  ? 1
+                  : 0) +
+              (entity.quality === "thin"
+                ? 3
+                : entity.quality === "growing"
+                  ? 1
+                  : 0) +
               Math.min(5, crawlerHits);
 
             return {
@@ -478,9 +513,15 @@ export function registerAdminLisaMarketIntelRoutes(
 
         const humanRequestRows = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
-          const actorType = String(request.actorType || "").trim().toLowerCase();
-          const sourceType = String(request.sourceType || "").trim().toLowerCase();
-          const isHumanByType = actorType ? actorType === "human" : !botSignatureLabel(request.userAgent);
+          const actorType = String(request.actorType || "")
+            .trim()
+            .toLowerCase();
+          const sourceType = String(request.sourceType || "")
+            .trim()
+            .toLowerCase();
+          const isHumanByType = actorType
+            ? actorType === "human"
+            : !botSignatureLabel(request.userAgent);
           const isHumanBySource = sourceType ? sourceType === "human" : true;
           return (
             createdAt >= since24h.getTime() &&
@@ -501,7 +542,9 @@ export function registerAdminLisaMarketIntelRoutes(
             request.sessionId ||
               request.anonymousActorId ||
               request.userId ||
-              `${String(request.ip || "unknown").trim()}|${String(request.userAgent || "")
+              `${String(request.ip || "unknown").trim()}|${String(
+                request.userAgent || "",
+              )
                 .toLowerCase()
                 .slice(0, 120)}`,
           );
@@ -510,7 +553,10 @@ export function registerAdminLisaMarketIntelRoutes(
         for (const entity of entities as any[]) {
           if (String(entity.entityType || "") !== "restaurant") continue;
           if (!entity.entityId) continue;
-          restaurantTitleById.set(String(entity.entityId), String(entity.title || "Restaurant"));
+          restaurantTitleById.set(
+            String(entity.entityId),
+            String(entity.title || "Restaurant"),
+          );
         }
 
         const profileInterestByRestaurant = new Map<
@@ -535,7 +581,10 @@ export function registerAdminLisaMarketIntelRoutes(
 
           const visitorKey = buildVisitorKey(request);
           const profileKey = `${restaurantId}|${visitorKey}`;
-          visitorProfileCounts.set(profileKey, (visitorProfileCounts.get(profileKey) || 0) + 1);
+          visitorProfileCounts.set(
+            profileKey,
+            (visitorProfileCounts.get(profileKey) || 0) + 1,
+          );
 
           const bucket = profileInterestByRestaurant.get(restaurantId) || {
             views: 0,
@@ -558,20 +607,28 @@ export function registerAdminLisaMarketIntelRoutes(
             );
           }
 
-          if (createdAt >= recent1h.getTime() && visitorProfileCounts.get(profileKey)! >= 2) {
+          if (
+            createdAt >= recent1h.getTime() &&
+            visitorProfileCounts.get(profileKey)! >= 2
+          ) {
             bucket.repeatVisitors.add(visitorKey);
           }
         }
 
-        const topViewedBusinesses = Array.from(profileInterestByRestaurant.entries())
+        const topViewedBusinesses = Array.from(
+          profileInterestByRestaurant.entries(),
+        )
           .map(([restaurantId, data]) => ({
             restaurantId,
             title:
-              restaurantTitleById.get(restaurantId) || `Restaurant ${restaurantId.slice(0, 8)}`,
+              restaurantTitleById.get(restaurantId) ||
+              `Restaurant ${restaurantId.slice(0, 8)}`,
             views: data.views,
             uniqueVisitors: data.visitors.size,
             repeatVisitors: data.repeatVisitors.size,
-            intentActions: Number(profileIntentByRestaurant.get(restaurantId) || 0),
+            intentActions: Number(
+              profileIntentByRestaurant.get(restaurantId) || 0,
+            ),
             latestSeenAt: data.latestSeenAt,
           }))
           .sort((a, b) => {
@@ -582,7 +639,10 @@ export function registerAdminLisaMarketIntelRoutes(
 
         const humanSessionsNow = new Set(
           humanRequestRows
-            .filter((request: any) => new Date(request.createdAt).getTime() >= recent15m.getTime())
+            .filter(
+              (request: any) =>
+                new Date(request.createdAt).getTime() >= recent15m.getTime(),
+            )
             .map((request: any) => buildVisitorKey(request)),
         ).size;
 
@@ -599,9 +659,15 @@ export function registerAdminLisaMarketIntelRoutes(
 
         const machineDiscoveryNow = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
-          const actorType = String(request.actorType || "").trim().toLowerCase();
-          const sourceType = String(request.sourceType || "").trim().toLowerCase();
-          const isMachineByType = actorType ? actorType === "bot" || actorType === "llm_bot" : Boolean(botSignatureLabel(request.userAgent));
+          const actorType = String(request.actorType || "")
+            .trim()
+            .toLowerCase();
+          const sourceType = String(request.sourceType || "")
+            .trim()
+            .toLowerCase();
+          const isMachineByType = actorType
+            ? actorType === "bot" || actorType === "llm_bot"
+            : Boolean(botSignatureLabel(request.userAgent));
           const isMachineBySource = sourceType
             ? sourceType === "crawler" || sourceType === "llm_crawler"
             : true;
@@ -628,7 +694,10 @@ export function registerAdminLisaMarketIntelRoutes(
         const frictionCasesNow = frictionCases.length;
 
         const humanTruthSignalScore =
-          humanSessionsNow + intentActionsNow + repeatedBusinessInterestNow + frictionCasesNow;
+          humanSessionsNow +
+          intentActionsNow +
+          repeatedBusinessInterestNow +
+          frictionCasesNow;
         const machineSupportScore = machineDiscoveryNow;
         const hasRecommendationDensity =
           humanTruthSignalScore >= 10 &&
@@ -667,12 +736,23 @@ export function registerAdminLisaMarketIntelRoutes(
           .slice(0, 80)
           .map((request: any) => {
             const pathValue = String(request.path || "");
-            const actorType = String(request.actorType || "").trim().toLowerCase() ||
+            const actorType =
+              String(request.actorType || "")
+                .trim()
+                .toLowerCase() ||
               (botSignatureLabel(request.userAgent) ? "bot" : "human");
-            const restaurantMatch = pathValue.match(/^\/restaurant\/([^/?#]+)/i);
-            const eventType = String(request.eventType || "").trim() || classifyObservedEventType(pathValue);
-            const surface = String(request.surface || "").trim() || inferObservedSurface(pathValue);
-            const identitySeed = String(request.userId || request.ip || "anonymous");
+            const restaurantMatch = pathValue.match(
+              /^\/restaurant\/([^/?#]+)/i,
+            );
+            const eventType =
+              String(request.eventType || "").trim() ||
+              classifyObservedEventType(pathValue);
+            const surface =
+              String(request.surface || "").trim() ||
+              inferObservedSurface(pathValue);
+            const identitySeed = String(
+              request.userId || request.ip || "anonymous",
+            );
             const deviceSeed = String(request.userAgent || "").slice(0, 160);
             const anonymousActorId = crypto
               .createHash("sha256")
@@ -681,7 +761,9 @@ export function registerAdminLisaMarketIntelRoutes(
               .slice(0, 20);
             const sessionId =
               String(request.sessionId || "").trim() ||
-              (request.userId ? `user:${String(request.userId)}` : `anon:${anonymousActorId}`);
+              (request.userId
+                ? `user:${String(request.userId)}`
+                : `anon:${anonymousActorId}`);
             const sourceType =
               String(request.sourceType || "").trim() ||
               (actorType === "human" ? "human" : "crawler");
@@ -690,11 +772,17 @@ export function registerAdminLisaMarketIntelRoutes(
               occurredAt: new Date(request.createdAt).toISOString(),
               ingestedAt: new Date(request.createdAt).toISOString(),
               sessionId,
-              anonymousActorId: String(request.anonymousActorId || anonymousActorId),
+              anonymousActorId: String(
+                request.anonymousActorId || anonymousActorId,
+              ),
               actorType,
               eventType,
-              entityId: request.entityId || (restaurantMatch?.[1] ? String(restaurantMatch[1]) : null),
-              entityType: request.entityType || (restaurantMatch?.[1] ? "restaurant" : null),
+              entityId:
+                request.entityId ||
+                (restaurantMatch?.[1] ? String(restaurantMatch[1]) : null),
+              entityType:
+                request.entityType ||
+                (restaurantMatch?.[1] ? "restaurant" : null),
               route: pathValue,
               surface,
               category: null,
@@ -727,7 +815,8 @@ export function registerAdminLisaMarketIntelRoutes(
             family: "conversion_friction",
             summary: `${item.title} has ${item.views} views with no intent actions.`,
             evidence: `${item.uniqueVisitors} unique visitors in the current window.`,
-            actionHint: "Tighten value proposition, menu details, and outbound click paths.",
+            actionHint:
+              "Tighten value proposition, menu details, and outbound click paths.",
             occurredAt: item.latestSeenAt || now.toISOString(),
           })),
           ...acquisitionTargets
@@ -737,8 +826,12 @@ export function registerAdminLisaMarketIntelRoutes(
               const latestMachineHit = recentRequests
                 .filter((request: any) => {
                   const createdAt = new Date(request.createdAt).getTime();
-                  const actorType = String(request.actorType || "").trim().toLowerCase();
-                  const sourceType = String(request.sourceType || "").trim().toLowerCase();
+                  const actorType = String(request.actorType || "")
+                    .trim()
+                    .toLowerCase();
+                  const sourceType = String(request.sourceType || "")
+                    .trim()
+                    .toLowerCase();
                   const isMachineByType = actorType
                     ? actorType === "bot" || actorType === "llm_bot"
                     : Boolean(botSignatureLabel(request.userAgent));
@@ -748,18 +841,22 @@ export function registerAdminLisaMarketIntelRoutes(
                   if (createdAt < since24h.getTime()) return false;
                   if (!isMachineByType || !isMachineBySource) return false;
                   if (!isHighValueObservedPath(request.path)) return false;
-                  return String(request.path || "").includes(String(item.entityId || ""));
+                  return String(request.path || "").includes(
+                    String(item.entityId || ""),
+                  );
                 })
                 .sort(
                   (a: any, b: any) =>
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime(),
                 )[0];
               return {
                 id: `truth:machine:${item.id}`,
                 family: "machine_discovery",
                 summary: `${item.title} received ${item.crawlerHits} machine discovery hits in the last 24h.`,
                 evidence: `Quality=${item.quality}; readiness=${item.machineReadiness}.`,
-                actionHint: "Upgrade public page quality before pushing broader distribution.",
+                actionHint:
+                  "Upgrade public page quality before pushing broader distribution.",
                 occurredAt: latestMachineHit
                   ? new Date(latestMachineHit.createdAt).toISOString()
                   : now.toISOString(),
@@ -767,50 +864,63 @@ export function registerAdminLisaMarketIntelRoutes(
             }),
         ].slice(0, 8);
 
-        const recentHighValueMachineHits = recentRequests.filter((request: any) => {
-          const createdAt = new Date(request.createdAt).getTime();
-          const actorType = String(request.actorType || "").trim().toLowerCase();
-          const sourceType = String(request.sourceType || "").trim().toLowerCase();
-          const isMachineByType = actorType
-            ? actorType === "bot" || actorType === "llm_bot"
-            : Boolean(botSignatureLabel(request.userAgent));
-          const isMachineBySource = sourceType
-            ? sourceType === "crawler" || sourceType === "llm_crawler"
-            : true;
-          return (
-            createdAt >= since24h.getTime() &&
-            isMachineByType &&
-            isMachineBySource &&
-            isHighValueObservedPath(request.path) &&
-            !isMonitoringAgent(request.userAgent)
-          );
-        }).length;
-        const previousHighValueMachineHits = recentRequests.filter((request: any) => {
-          const createdAt = new Date(request.createdAt).getTime();
-          const actorType = String(request.actorType || "").trim().toLowerCase();
-          const sourceType = String(request.sourceType || "").trim().toLowerCase();
-          const isMachineByType = actorType
-            ? actorType === "bot" || actorType === "llm_bot"
-            : Boolean(botSignatureLabel(request.userAgent));
-          const isMachineBySource = sourceType
-            ? sourceType === "crawler" || sourceType === "llm_crawler"
-            : true;
-          return (
-            createdAt >= since48h.getTime() &&
-            createdAt < since24h.getTime() &&
-            isMachineByType &&
-            isMachineBySource &&
-            isHighValueObservedPath(request.path) &&
-            !isMonitoringAgent(request.userAgent)
-          );
-        }).length;
+        const recentHighValueMachineHits = recentRequests.filter(
+          (request: any) => {
+            const createdAt = new Date(request.createdAt).getTime();
+            const actorType = String(request.actorType || "")
+              .trim()
+              .toLowerCase();
+            const sourceType = String(request.sourceType || "")
+              .trim()
+              .toLowerCase();
+            const isMachineByType = actorType
+              ? actorType === "bot" || actorType === "llm_bot"
+              : Boolean(botSignatureLabel(request.userAgent));
+            const isMachineBySource = sourceType
+              ? sourceType === "crawler" || sourceType === "llm_crawler"
+              : true;
+            return (
+              createdAt >= since24h.getTime() &&
+              isMachineByType &&
+              isMachineBySource &&
+              isHighValueObservedPath(request.path) &&
+              !isMonitoringAgent(request.userAgent)
+            );
+          },
+        ).length;
+        const previousHighValueMachineHits = recentRequests.filter(
+          (request: any) => {
+            const createdAt = new Date(request.createdAt).getTime();
+            const actorType = String(request.actorType || "")
+              .trim()
+              .toLowerCase();
+            const sourceType = String(request.sourceType || "")
+              .trim()
+              .toLowerCase();
+            const isMachineByType = actorType
+              ? actorType === "bot" || actorType === "llm_bot"
+              : Boolean(botSignatureLabel(request.userAgent));
+            const isMachineBySource = sourceType
+              ? sourceType === "crawler" || sourceType === "llm_crawler"
+              : true;
+            return (
+              createdAt >= since48h.getTime() &&
+              createdAt < since24h.getTime() &&
+              isMachineByType &&
+              isMachineBySource &&
+              isHighValueObservedPath(request.path) &&
+              !isMonitoringAgent(request.userAgent)
+            );
+          },
+        ).length;
 
         const recentStoryCount = recentStoryCountRows[0]?.count ?? 0;
         const previousStoryCount = previousStoryCountRows[0]?.count ?? 0;
         const recentLocationCount = recentLocationCountRows[0]?.count ?? 0;
         const previousLocationCount = previousLocationCountRows[0]?.count ?? 0;
         const recentDealCreateCount = recentDealCreateCountRows[0]?.count ?? 0;
-        const previousDealCreateCount = previousDealCreateCountRows[0]?.count ?? 0;
+        const previousDealCreateCount =
+          previousDealCreateCountRows[0]?.count ?? 0;
         const recentSearchCount = typedRecentQueryRows.reduce(
           (sum, row) => sum + Number(row.count || 0),
           0,
@@ -830,10 +940,9 @@ export function registerAdminLisaMarketIntelRoutes(
               previousSearchCount,
             ),
             delta: recentSearchCount - previousSearchCount,
-            next:
-              topTrend?.label
-                ? `Double down on "${topTrend.label}" while it is drawing the strongest visible food demand.`
-                : "Strengthen the strongest food topics with better landing pages and fresh content.",
+            next: topTrend?.label
+              ? `Double down on "${topTrend.label}" while it is drawing the strongest visible food demand.`
+              : "Strengthen the strongest food topics with better landing pages and fresh content.",
           },
           {
             id: "fresh-content",
@@ -844,8 +953,7 @@ export function registerAdminLisaMarketIntelRoutes(
               previousStoryCount,
             ),
             delta: recentStoryCount - previousStoryCount,
-            next:
-              "Push the strongest new stories into sponsor, search, and discovery surfaces before they go stale.",
+            next: "Push the strongest new stories into sponsor, search, and discovery surfaces before they go stale.",
           },
           {
             id: "deal-supply",
@@ -856,8 +964,7 @@ export function registerAdminLisaMarketIntelRoutes(
               previousDealCreateCount,
             ),
             delta: recentDealCreateCount - previousDealCreateCount,
-            next:
-              "Use new deals to feed Price Scout, promotion slots, and machine-readable local value pages.",
+            next: "Use new deals to feed Price Scout, promotion slots, and machine-readable local value pages.",
           },
           {
             id: "machine-attention",
@@ -868,8 +975,7 @@ export function registerAdminLisaMarketIntelRoutes(
               previousHighValueMachineHits,
             ),
             delta: recentHighValueMachineHits - previousHighValueMachineHits,
-            next:
-              "Refresh the public pages machines are finding so MealScout becomes the easiest source to cite.",
+            next: "Refresh the public pages machines are finding so MealScout becomes the easiest source to cite.",
           },
           {
             id: "location-demand",
@@ -880,14 +986,17 @@ export function registerAdminLisaMarketIntelRoutes(
               previousLocationCount,
             ),
             delta: recentLocationCount - previousLocationCount,
-            next:
-              "Turn active locations into city pages, ad packages, and truck recruitment targets.",
+            next: "Turn active locations into city pages, ad packages, and truck recruitment targets.",
           },
         ].sort((a, b) => b.delta - a.delta);
 
         const geoAds = geoAdTotals[0] || { impressions: 0, clicks: 0 };
-        const geoPings = geoPingTotals[0] || { totalPings: 0, uniqueVisitors: 0 };
-        const topQuery = topTrend?.label || topQueriesRows[0]?.query || "local food trucks";
+        const geoPings = geoPingTotals[0] || {
+          totalPings: 0,
+          uniqueVisitors: 0,
+        };
+        const topQuery =
+          topTrend?.label || topQueriesRows[0]?.query || "local food trucks";
         const topLocation = cityDemandRows[0]
           ? cityDemandRows[0].businessName ||
             cityDemandRows[0].address ||
@@ -895,12 +1004,15 @@ export function registerAdminLisaMarketIntelRoutes(
             "high-demand location"
           : "high-demand location";
         const topCuisine =
-          cuisineValue[0]?.cuisineType || cuisineRows[0]?.cuisineType || "food truck";
+          cuisineValue[0]?.cuisineType ||
+          cuisineRows[0]?.cuisineType ||
+          "food truck";
         const topAcquisition = acquisitionTargets[0]?.title || "priority asset";
         const topPriceDeal = bestValueDeals[0];
-        const supplyLaneSpotlight = (Array.isArray((supplyMarketLaneFeed as any)?.lanes)
-          ? (supplyMarketLaneFeed as any).lanes
-          : []
+        const supplyLaneSpotlight = (
+          Array.isArray((supplyMarketLaneFeed as any)?.lanes)
+            ? (supplyMarketLaneFeed as any).lanes
+            : []
         )
           .filter((lane: any) => lane && lane.itemKey && lane.signalType)
           .slice(0, 8)
@@ -923,7 +1035,8 @@ export function registerAdminLisaMarketIntelRoutes(
           }));
 
         const supplyLaneCounts =
-          (supplyMarketLaneFeed as any)?.laneCounts || ({} as Record<string, number>);
+          (supplyMarketLaneFeed as any)?.laneCounts ||
+          ({} as Record<string, number>);
         const supplySnapshotCount = Number(
           supplyLaneCounts["mealscout:supply_market:price_snapshot:item"] || 0,
         );
@@ -948,7 +1061,8 @@ export function registerAdminLisaMarketIntelRoutes(
         const safeBrief = hasRecommendationDensity
           ? brief
           : {
-              headline: "Recommendation layer is paused while first-party signal density is still low.",
+              headline:
+                "Recommendation layer is paused while first-party signal density is still low.",
               audienceAngle:
                 "Track truth counters and repeated business interest before ranking promotion opportunities.",
               inventoryAngle: `Observed human truth score ${humanTruthSignalScore} (needs ${signalContract.thresholds.minHumanTruthSignalScore}) across ${topViewedBusinesses.length} top-viewed businesses; machine support score is ${machineSupportScore}.`,
@@ -1010,7 +1124,9 @@ export function registerAdminLisaMarketIntelRoutes(
             bestDeals: bestValueDeals,
             cuisineValue,
             supplyLaneSummary: {
-              totalRecentRecords: Number((supplyMarketLaneFeed as any)?.total || 0),
+              totalRecentRecords: Number(
+                (supplyMarketLaneFeed as any)?.total || 0,
+              ),
               snapshotCount: supplySnapshotCount,
               alertCount: supplyAlertCount,
               watchCount: supplyWatchCount,
@@ -1039,7 +1155,9 @@ export function registerAdminLisaMarketIntelRoutes(
             footTraffic: geoPings,
           },
           contentMomentum: hasRecommendationDensity ? videoRows : [],
-          acquisitionTargets: hasRecommendationDensity ? acquisitionTargets : [],
+          acquisitionTargets: hasRecommendationDensity
+            ? acquisitionTargets
+            : [],
         });
       } catch (error) {
         console.error("Error fetching LISA market intel:", error);
@@ -1085,7 +1203,9 @@ export function registerAdminLisaMarketIntelRoutes(
               address: locationRequests.address,
               locationType: locationRequests.locationType,
               requestCount: sql<number>`count(*)`.mapWith(Number),
-              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(Number),
+              interestCount: sql<number>`count(${truckInterests.id})`.mapWith(
+                Number,
+              ),
             })
             .from(locationRequests)
             .leftJoin(
@@ -1098,7 +1218,10 @@ export function registerAdminLisaMarketIntelRoutes(
               locationRequests.address,
               locationRequests.locationType,
             )
-            .orderBy(desc(sql`count(*)`), desc(sql`count(${truckInterests.id})`))
+            .orderBy(
+              desc(sql`count(*)`),
+              desc(sql`count(${truckInterests.id})`),
+            )
             .limit(10),
           db
             .select({
@@ -1120,14 +1243,21 @@ export function registerAdminLisaMarketIntelRoutes(
             })
             .from(videoStories)
             .where(gte(videoStories.createdAt, since30d))
-            .orderBy(desc(videoStories.impressionCount), desc(videoStories.viewCount))
+            .orderBy(
+              desc(videoStories.impressionCount),
+              desc(videoStories.viewCount),
+            )
             .limit(8),
           db
             .select({
               impressions:
-                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(Number),
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'impression')`.mapWith(
+                  Number,
+                ),
               clicks:
-                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(Number),
+                sql<number>`count(*) filter (where ${geoAdEvents.eventType} = 'click')`.mapWith(
+                  Number,
+                ),
             })
             .from(geoAdEvents)
             .where(gte(geoAdEvents.createdAt, since30d)),
@@ -1135,7 +1265,9 @@ export function registerAdminLisaMarketIntelRoutes(
             .select({
               totalPings: sql<number>`count(*)`.mapWith(Number),
               uniqueVisitors:
-                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(Number),
+                sql<number>`count(distinct coalesce(${geoLocationPings.visitorId}, ${geoLocationPings.userId}))`.mapWith(
+                  Number,
+                ),
             })
             .from(geoLocationPings)
             .where(gte(geoLocationPings.createdAt, since7d)),
@@ -1152,8 +1284,12 @@ export function registerAdminLisaMarketIntelRoutes(
           .map((entity) => {
             const crawlerHits = recentRequests.filter((request: any) => {
               const path = String(request.path || "");
-              const actorType = String(request.actorType || "").trim().toLowerCase();
-              const sourceType = String(request.sourceType || "").trim().toLowerCase();
+              const actorType = String(request.actorType || "")
+                .trim()
+                .toLowerCase();
+              const sourceType = String(request.sourceType || "")
+                .trim()
+                .toLowerCase();
               const isMachineByType = actorType
                 ? actorType === "bot" || actorType === "llm_bot"
                 : Boolean(botSignatureLabel(request.userAgent));
@@ -1174,7 +1310,11 @@ export function registerAdminLisaMarketIntelRoutes(
                 : entity.machineReadiness === "developing"
                   ? 1
                   : 0) +
-              (entity.quality === "thin" ? 3 : entity.quality === "growing" ? 1 : 0) +
+              (entity.quality === "thin"
+                ? 3
+                : entity.quality === "growing"
+                  ? 1
+                  : 0) +
               Math.min(5, crawlerHits);
 
             return {
@@ -1197,7 +1337,10 @@ export function registerAdminLisaMarketIntelRoutes(
           .slice(0, 8);
 
         const geoAds = geoAdTotals[0] || { impressions: 0, clicks: 0 };
-        const geoPings = geoPingTotals[0] || { totalPings: 0, uniqueVisitors: 0 };
+        const geoPings = geoPingTotals[0] || {
+          totalPings: 0,
+          uniqueVisitors: 0,
+        };
         const topQuery = topQueriesRows[0]?.query || "local food trucks";
         const topLocation =
           cityDemandRows[0]?.businessName ||
@@ -1216,8 +1359,12 @@ export function registerAdminLisaMarketIntelRoutes(
         );
         const machineDiscoveryCount = recentRequests.filter((request: any) => {
           const createdAt = new Date(request.createdAt).getTime();
-          const actorType = String(request.actorType || "").trim().toLowerCase();
-          const sourceType = String(request.sourceType || "").trim().toLowerCase();
+          const actorType = String(request.actorType || "")
+            .trim()
+            .toLowerCase();
+          const sourceType = String(request.sourceType || "")
+            .trim()
+            .toLowerCase();
           const isMachineByType = actorType
             ? actorType === "bot" || actorType === "llm_bot"
             : Boolean(botSignatureLabel(request.userAgent));
@@ -1244,7 +1391,9 @@ export function registerAdminLisaMarketIntelRoutes(
           type: exportType,
           generatedAt: new Date().toISOString(),
           signalContract: {
-            mode: hasExportRecommendationDensity ? "recommendations" : "truth_only",
+            mode: hasExportRecommendationDensity
+              ? "recommendations"
+              : "truth_only",
             reason: hasExportRecommendationDensity
               ? "First-party signal density is high enough for export recommendations."
               : "Not enough recent first-party signal to export recommendation packages safely.",
@@ -1275,7 +1424,9 @@ export function registerAdminLisaMarketIntelRoutes(
                 ]
               : [],
           },
-          acquisitionWatchlist: hasExportRecommendationDensity ? acquisitionTargets : [],
+          acquisitionWatchlist: hasExportRecommendationDensity
+            ? acquisitionTargets
+            : [],
           sponsorPackage: {
             geoAds,
             footTraffic: geoPings,
@@ -1313,9 +1464,11 @@ export function registerAdminLisaMarketIntelRoutes(
           `## Sponsor Package`,
           `- Geo ads: ${geoAds.impressions} impressions / ${geoAds.clicks} clicks`,
           `- Foot traffic: ${geoPings.totalPings} pings / ${geoPings.uniqueVisitors} unique visitors`,
-          ...topQueriesRows.slice(0, 5).map(
-            (item: any) => `- Query demand: ${item.query} (${item.count})`,
-          ),
+          ...topQueriesRows
+            .slice(0, 5)
+            .map(
+              (item: any) => `- Query demand: ${item.query} (${item.count})`,
+            ),
         ].join("\n");
 
         res.setHeader("Content-Type", "text/markdown; charset=utf-8");
@@ -1326,7 +1479,9 @@ export function registerAdminLisaMarketIntelRoutes(
         res.send(markdown);
       } catch (error) {
         console.error("Error exporting market intel package:", error);
-        res.status(500).json({ message: "Failed to export market intel package" });
+        res
+          .status(500)
+          .json({ message: "Failed to export market intel package" });
       }
     },
   );

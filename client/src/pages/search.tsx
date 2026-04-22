@@ -840,7 +840,9 @@ export default function SearchPage() {
             {categories.map((category) => (
               <Button
                 key={category.id}
-                variant={selectedCategory === category.id ? "default" : "outline"}
+                variant={
+                  selectedCategory === category.id ? "default" : "outline"
+                }
                 size="sm"
                 onClick={() => setSelectedCategory(category.id)}
                 className="flex-shrink-0 rounded-full px-4 py-2"
@@ -1170,16 +1172,12 @@ export default function SearchPage() {
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
-              {searchQuery &&
-              mergedRestaurants &&
-              mergedRestaurants.length > 0
+              {searchQuery && mergedRestaurants && mergedRestaurants.length > 0
                 ? "No deals found yet"
                 : "No matches found"}
             </h3>
             <p className="text-muted-foreground">
-              {searchQuery &&
-              mergedRestaurants &&
-              mergedRestaurants.length > 0
+              {searchQuery && mergedRestaurants && mergedRestaurants.length > 0
                 ? "Restaurants and trucks are listed above even without active deals."
                 : "Try adjusting your search terms to find restaurants, trucks, or deals."}
             </p>

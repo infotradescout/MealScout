@@ -911,8 +911,12 @@ export default function EventCoordinatorDashboard() {
                 className={`${inputClassName} w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm`}
                 required
               >
-                <option value="public">Public (discoverable by all users)</option>
-                <option value="private">Private (not discoverable in public feeds)</option>
+                <option value="public">
+                  Public (discoverable by all users)
+                </option>
+                <option value="private">
+                  Private (not discoverable in public feeds)
+                </option>
               </select>
             </div>
             <div className="grid md:grid-cols-4 gap-4">
@@ -1045,7 +1049,10 @@ export default function EventCoordinatorDashboard() {
                   type="checkbox"
                   checked={formData.requiresPayment}
                   onChange={(e) =>
-                    setFormData({ ...formData, requiresPayment: e.target.checked })
+                    setFormData({
+                      ...formData,
+                      requiresPayment: e.target.checked,
+                    })
                   }
                 />
                 Paid Event / Parking Pass

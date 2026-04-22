@@ -188,10 +188,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
   registerGrowthRoutes(app);
-  
+
   // Moderation and community trust
   registerModerationRoutes(app);
-  
+
   // Staff management and user creation endpoints
   registerStaffRoutes(app);
 

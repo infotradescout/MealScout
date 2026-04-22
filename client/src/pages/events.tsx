@@ -45,13 +45,13 @@ export default function EventsPage() {
   const queryClient = useQueryClient();
   const isEventCoordinator = Boolean(
     isAuthenticated &&
-      ["event_coordinator", "admin", "super_admin", "staff"].includes(
-        String(user?.userType || ""),
-      ),
+    ["event_coordinator", "admin", "super_admin", "staff"].includes(
+      String(user?.userType || ""),
+    ),
   );
   const isStaffOrAdmin = Boolean(
     isAuthenticated &&
-      ["admin", "super_admin", "staff"].includes(String(user?.userType || "")),
+    ["admin", "super_admin", "staff"].includes(String(user?.userType || "")),
   );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [intakeVisibilityFilter, setIntakeVisibilityFilter] = useState<
@@ -283,9 +283,13 @@ export default function EventsPage() {
           {isStaffOrAdmin && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader>
-                <CardTitle className="text-lg">Incoming Opportunity Requests</CardTitle>
+                <CardTitle className="text-lg">
+                  Incoming Opportunity Requests
+                </CardTitle>
                 <p className="text-sm text-[color:var(--text-secondary)]">
-                  Review and triage organizer requests, truck leads, and private opportunities. Use filters to route requests by visibility and type.
+                  Review and triage organizer requests, truck leads, and private
+                  opportunities. Use filters to route requests by visibility and
+                  type.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-3 pt-2">
                   <div>
@@ -525,13 +529,19 @@ export default function EventsPage() {
                         onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            eventVisibility: e.target.value as "public" | "private",
+                            eventVisibility: e.target.value as
+                              | "public"
+                              | "private",
                           }))
                         }
                         required
                       >
-                        <option value="public">Public (discoverable by all users)</option>
-                        <option value="private">Private (not discoverable in public feeds)</option>
+                        <option value="public">
+                          Public (discoverable by all users)
+                        </option>
+                        <option value="private">
+                          Private (not discoverable in public feeds)
+                        </option>
                       </select>
                     </div>
 
@@ -696,8 +706,8 @@ export default function EventsPage() {
                     <div className="space-y-2">
                       <Label>Amenities</Label>
                       <div className="flex flex-wrap gap-2">
-                        {["power", "water", "restrooms", "wifi", "seating"]
-                          .map((amenity) => (
+                        {["power", "water", "restrooms", "wifi", "seating"].map(
+                          (amenity) => (
                             <label
                               key={amenity}
                               className="inline-flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1 text-sm capitalize"
@@ -718,7 +728,8 @@ export default function EventsPage() {
                               />
                               {amenity}
                             </label>
-                          ))}
+                          ),
+                        )}
                       </div>
                     </div>
 

@@ -14,7 +14,18 @@ import {
 import type { Express } from "express";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import { eq, and, inArray, or, sql, desc, isNull, gte, lt, ne } from "drizzle-orm";
+import {
+  eq,
+  and,
+  inArray,
+  or,
+  sql,
+  desc,
+  isNull,
+  gte,
+  lt,
+  ne,
+} from "drizzle-orm";
 import { storage } from "../storage";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
@@ -314,7 +325,9 @@ const botSignatureLabel = (userAgent?: string | null) => {
 };
 
 const isOperationalNoisePath = (path?: string | null) => {
-  const value = String(path || "").trim().toLowerCase();
+  const value = String(path || "")
+    .trim()
+    .toLowerCase();
   if (!value) return true;
   return (
     value === "/api/health" ||
@@ -338,7 +351,9 @@ const isMonitoringAgent = (userAgent?: string | null) => {
 };
 
 const isHighValueObservedPath = (path?: string | null) => {
-  const value = String(path || "").trim().toLowerCase();
+  const value = String(path || "")
+    .trim()
+    .toLowerCase();
   if (!value) return false;
   if (value.startsWith("/restaurant/")) return true;
   if (value.startsWith("/truck/")) return true;
@@ -446,7 +461,12 @@ const buildRecommendedActions = (entity: {
     }
   };
 
-  add("review_public_page", "Review public page", entity.canonicalPath, "public");
+  add(
+    "review_public_page",
+    "Review public page",
+    entity.canonicalPath,
+    "public",
+  );
   add("open_admin", "Open admin workspace", "/admin/dashboard", "admin");
 
   for (const gap of entity.knowledgeGaps) {
@@ -484,7 +504,12 @@ const buildRecommendedActions = (entity: {
         add("fix_schedule", "Fix schedule/timing", "/admin/dashboard");
         break;
       case "no_usage_signals":
-        add("promote_usage", "Promote visibility", entity.canonicalPath, "public");
+        add(
+          "promote_usage",
+          "Promote visibility",
+          entity.canonicalPath,
+          "public",
+        );
         break;
       case "missing_host_link":
         add("link_host", "Link host", "/admin/dashboard");
@@ -505,7 +530,12 @@ const buildRecommendedActions = (entity: {
         add("go_live", "Activate live location", "/admin/dashboard");
         break;
       case "grow_authority_signals":
-        add("grow_authority", "Grow authority signals", entity.canonicalPath, "public");
+        add(
+          "grow_authority",
+          "Grow authority signals",
+          entity.canonicalPath,
+          "public",
+        );
         break;
       case "refresh_profile_data":
       case "refresh_host_record":
@@ -517,10 +547,20 @@ const buildRecommendedActions = (entity: {
         add("publish_ready", "Review for publish", "/admin/dashboard");
         break;
       case "promote_deal_visibility":
-        add("promote_deal", "Promote deal visibility", entity.canonicalPath, "public");
+        add(
+          "promote_deal",
+          "Promote deal visibility",
+          entity.canonicalPath,
+          "public",
+        );
         break;
       case "drive_truck_interest":
-        add("drive_interest", "Drive truck interest", entity.canonicalPath, "public");
+        add(
+          "drive_interest",
+          "Drive truck interest",
+          entity.canonicalPath,
+          "public",
+        );
         break;
       default:
         break;
@@ -530,7 +570,9 @@ const buildRecommendedActions = (entity: {
   return Array.from(actions.values()).slice(0, 4);
 };
 
-async function buildCanonicalEntities(limit: number): Promise<CanonicalEntitySummary[]> {
+async function buildCanonicalEntities(
+  limit: number,
+): Promise<CanonicalEntitySummary[]> {
   const [restaurantRows, hostRows, dealRows, eventRows] = await Promise.all([
     db
       .select({
@@ -1183,9 +1225,13 @@ export function registerAdminManagementRoutes(app: Express) {
         }
 
         const hasLatitude =
-          latitude !== undefined && latitude !== null && `${latitude}`.trim() !== "";
+          latitude !== undefined &&
+          latitude !== null &&
+          `${latitude}`.trim() !== "";
         const hasLongitude =
-          longitude !== undefined && longitude !== null && `${longitude}`.trim() !== "";
+          longitude !== undefined &&
+          longitude !== null &&
+          `${longitude}`.trim() !== "";
 
         let parsedLatitude: number | null = null;
         let parsedLongitude: number | null = null;
@@ -1198,7 +1244,10 @@ export function registerAdminManagementRoutes(app: Express) {
 
           parsedLatitude = Number(latitude);
           parsedLongitude = Number(longitude);
-          if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+          if (
+            !Number.isFinite(parsedLatitude) ||
+            !Number.isFinite(parsedLongitude)
+          ) {
             return res.status(400).json({
               message: "Latitude and longitude must be valid numbers",
             });
@@ -1665,7 +1714,11 @@ export function registerAdminManagementRoutes(app: Express) {
           ...locations.map((location: any) => ({
             id: `location:${location.id}`,
             streamType: "truck_location",
-            lane: buildSignalLane(["mobility", "truck", location.source || "gps"]),
+            lane: buildSignalLane([
+              "mobility",
+              "truck",
+              location.source || "gps",
+            ]),
             family: "mobility",
             source: location.source || "gps",
             subjectType: "restaurant",
@@ -1729,7 +1782,11 @@ export function registerAdminManagementRoutes(app: Express) {
           ...recentDeals.map((deal: any) => ({
             id: `deal:${deal.id}`,
             streamType: "deal_created",
-            lane: buildSignalLane(["commerce", "deal", deal.isActive ? "active" : "inactive"]),
+            lane: buildSignalLane([
+              "commerce",
+              "deal",
+              deal.isActive ? "active" : "inactive",
+            ]),
             family: "commerce",
             source: "deal",
             subjectType: "deal",
@@ -1746,7 +1803,11 @@ export function registerAdminManagementRoutes(app: Express) {
           ...recentEvents.map((event: any) => ({
             id: `event:${event.id}`,
             streamType: "event_created",
-            lane: buildSignalLane(["events", "host_event", event.status || "unknown"]),
+            lane: buildSignalLane([
+              "events",
+              "host_event",
+              event.status || "unknown",
+            ]),
             family: "events",
             source: "event",
             subjectType: "event",
@@ -1983,7 +2044,11 @@ export function registerAdminManagementRoutes(app: Express) {
                 : entity.freshness === "aging"
                   ? 1
                   : 0;
-            const authorityDelta = crawlerHits * 2 + gapPenalty + readinessPenalty + freshnessPenalty;
+            const authorityDelta =
+              crawlerHits * 2 +
+              gapPenalty +
+              readinessPenalty +
+              freshnessPenalty;
 
             return {
               ...entity,
@@ -1991,14 +2056,13 @@ export function registerAdminManagementRoutes(app: Express) {
               humanHits,
               authorityDelta,
               pressure:
-                crawlerHits >= 5
-                  ? "high"
-                  : crawlerHits >= 2
-                    ? "medium"
-                    : "low",
+                crawlerHits >= 5 ? "high" : crawlerHits >= 2 ? "medium" : "low",
             };
           })
-          .filter((entity) => entity.crawlerHits > 0 || entity.machineReadiness !== "ready")
+          .filter(
+            (entity) =>
+              entity.crawlerHits > 0 || entity.machineReadiness !== "ready",
+          )
           .sort((a, b) => b.authorityDelta - a.authorityDelta)
           .slice(0, limit);
 
@@ -2015,15 +2079,20 @@ export function registerAdminManagementRoutes(app: Express) {
     },
   );
 
-
   app.get(
     "/api/admin/lisa/observed-events",
     isAuthenticated,
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
-        const hours = Math.max(1, Math.min(24 * 30, Number(req.query?.hours || 24) || 24));
-        const limit = Math.max(20, Math.min(1000, Number(req.query?.limit || 200) || 200));
+        const hours = Math.max(
+          1,
+          Math.min(24 * 30, Number(req.query?.hours || 24) || 24),
+        );
+        const limit = Math.max(
+          20,
+          Math.min(1000, Number(req.query?.limit || 200) || 200),
+        );
         const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
         const parseCsvFilter = (value: unknown) =>
@@ -2051,12 +2120,16 @@ export function registerAdminManagementRoutes(app: Express) {
         const shapedRows = rows
           .map((row: any) => {
             const path = String(row.path || "");
-            const actorType = botSignatureLabel(row.userAgent) ? "bot" : "human";
+            const actorType = botSignatureLabel(row.userAgent)
+              ? "bot"
+              : "human";
             const sourceType = actorType === "bot" ? "crawler" : "human";
             const eventType = classifyObservedEventType(path);
             const surface = inferObservedSurface(path);
             const restaurantMatch = path.match(/^\/restaurant\/([^/?#]+)/i);
-            const resolvedEntityId = restaurantMatch?.[1] ? String(restaurantMatch[1]) : null;
+            const resolvedEntityId = restaurantMatch?.[1]
+              ? String(restaurantMatch[1])
+              : null;
             const resolvedEntityType = resolvedEntityId ? "restaurant" : null;
             return {
               ...row,
@@ -2076,11 +2149,27 @@ export function registerAdminManagementRoutes(app: Express) {
                 .slice(0, 20),
             };
           })
-          .filter((row: any) => (actorTypes.length ? actorTypes.includes(String(row.actorType)) : true))
-          .filter((row: any) => (sourceTypes.length ? sourceTypes.includes(String(row.sourceType)) : true))
-          .filter((row: any) => (eventTypes.length ? eventTypes.includes(String(row.eventType)) : true))
-          .filter((row: any) => (surfaces.length ? surfaces.includes(String(row.surface)) : true))
-          .filter((row: any) => (entityId ? String(row.entityId || "") === entityId : true))
+          .filter((row: any) =>
+            actorTypes.length
+              ? actorTypes.includes(String(row.actorType))
+              : true,
+          )
+          .filter((row: any) =>
+            sourceTypes.length
+              ? sourceTypes.includes(String(row.sourceType))
+              : true,
+          )
+          .filter((row: any) =>
+            eventTypes.length
+              ? eventTypes.includes(String(row.eventType))
+              : true,
+          )
+          .filter((row: any) =>
+            surfaces.length ? surfaces.includes(String(row.surface)) : true,
+          )
+          .filter((row: any) =>
+            entityId ? String(row.entityId || "") === entityId : true,
+          )
           .slice(0, limit);
 
         const summary = shapedRows.reduce(
@@ -2097,7 +2186,8 @@ export function registerAdminManagementRoutes(app: Express) {
             const sourceType = String(row.sourceType || "unknown");
             const eventType = String(row.eventType || "unknown");
             acc.byActorType[actorType] = (acc.byActorType[actorType] || 0) + 1;
-            acc.bySourceType[sourceType] = (acc.bySourceType[sourceType] || 0) + 1;
+            acc.bySourceType[sourceType] =
+              (acc.bySourceType[sourceType] || 0) + 1;
             acc.byEventType[eventType] = (acc.byEventType[eventType] || 0) + 1;
             return acc;
           },
@@ -2124,12 +2214,15 @@ export function registerAdminManagementRoutes(app: Express) {
           summary,
           events: shapedRows.map((row: (typeof shapedRows)[number]) => ({
             eventId: row.id,
-            occurredAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+            occurredAt: row.createdAt
+              ? new Date(row.createdAt).toISOString()
+              : null,
             sessionId: row.sessionId,
             anonymousActorId: row.anonymousActorId,
             actorType: row.actorType || "unknown",
             sourceType: row.sourceType || "unknown",
-            eventType: row.eventType || classifyObservedEventType(row.path || ""),
+            eventType:
+              row.eventType || classifyObservedEventType(row.path || ""),
             entityId: row.entityId,
             entityType: row.entityType,
             route: row.path,
@@ -2155,9 +2248,17 @@ export function registerAdminManagementRoutes(app: Express) {
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
-        const sinceHours = Math.max(1, Math.min(24 * 14, Number(req.query?.hours || 48) || 48));
-        const limit = Math.max(10, Math.min(5000, Number(req.query?.limit || 1000) || 1000));
-        const format = String(req.query?.format || "json").trim().toLowerCase();
+        const sinceHours = Math.max(
+          1,
+          Math.min(24 * 14, Number(req.query?.hours || 48) || 48),
+        );
+        const limit = Math.max(
+          10,
+          Math.min(5000, Number(req.query?.limit || 1000) || 1000),
+        );
+        const format = String(req.query?.format || "json")
+          .trim()
+          .toLowerCase();
 
         const feed = await getSupplyMarketDataLanes({ sinceHours, limit });
 
@@ -2225,14 +2326,15 @@ export function registerAdminManagementRoutes(app: Express) {
 
         if (!accessInfo && !userIsStaff) {
           return res.status(401).json({
-            message:
-              "Unauthorized. Use staff session auth or valid API token.",
+            message: "Unauthorized. Use staff session auth or valid API token.",
           });
         }
 
         const authMode = accessInfo ? "token" : "session";
         const tier = accessInfo?.tier || "staff";
-        const tokenFingerprint = bearerToken ? fingerprintToken(bearerToken) : null;
+        const tokenFingerprint = bearerToken
+          ? fingerprintToken(bearerToken)
+          : null;
 
         // Custom limits if configured in accessInfo
         const effectiveRateLimit = accessInfo?.rateLimitPerHour || 120;
@@ -2241,9 +2343,17 @@ export function registerAdminManagementRoutes(app: Express) {
           1,
           Math.min(24 * 14, Number(req.query?.hours || 48) || 48),
         );
-        const dealLimit = Math.max(5, Math.min(200, Number(req.query?.dealLimit || 40) || 40));
-        const laneLimit = Math.max(10, Math.min(5000, Number(req.query?.laneLimit || 1000) || 1000));
-        const format = String(req.query?.format || "json").trim().toLowerCase();
+        const dealLimit = Math.max(
+          5,
+          Math.min(200, Number(req.query?.dealLimit || 40) || 40),
+        );
+        const laneLimit = Math.max(
+          10,
+          Math.min(5000, Number(req.query?.laneLimit || 1000) || 1000),
+        );
+        const format = String(req.query?.format || "json")
+          .trim()
+          .toLowerCase();
 
         const [activeDealRows, supplyFeed] = await Promise.all([
           db
@@ -2318,7 +2428,8 @@ export function registerAdminManagementRoutes(app: Express) {
             };
           })
           .sort((a, b) => {
-            if (b.valueScore !== a.valueScore) return b.valueScore - a.valueScore;
+            if (b.valueScore !== a.valueScore)
+              return b.valueScore - a.valueScore;
             return a.minOrderAmount - b.minOrderAmount;
           })
           .slice(0, dealLimit);
@@ -2370,7 +2481,9 @@ export function registerAdminManagementRoutes(app: Express) {
         // Increment monthly usage if it's a tiered client
         if (accessInfo?.type === "tiered" && accessInfo.userId !== "system") {
           db.update(clientQuotas)
-            .set({ currentMonthlyUsage: sql`${clientQuotas.currentMonthlyUsage} + 1` })
+            .set({
+              currentMonthlyUsage: sql`${clientQuotas.currentMonthlyUsage} + 1`,
+            })
             .where(eq(clientQuotas.userId, accessInfo.userId))
             .catch((err: any) => console.error("Quota update failed:", err));
         }
@@ -2472,11 +2585,12 @@ export function registerAdminManagementRoutes(app: Express) {
         return res.json(payload);
       } catch (error) {
         console.error("Error fetching Price Scout feed:", error);
-        return res.status(500).json({ message: "Failed to fetch Price Scout feed" });
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch Price Scout feed" });
       }
     },
   );
-
 
   registerGeoAuditRoutes(app);
   registerAdminCoreOpsRoutes(app);
@@ -2515,5 +2629,4 @@ export function registerAdminManagementRoutes(app: Express) {
   registerAffiliateAdminRoutes(app, {
     requireAdminUser,
   });
-
 }

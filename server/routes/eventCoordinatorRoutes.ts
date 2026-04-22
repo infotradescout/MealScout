@@ -19,10 +19,16 @@ import {
   shouldBlockAcceptance,
   buildCapacityFullError,
 } from "../services/interestDecision";
-import { assertMaxSpan180Days, generateOccurrences } from "../services/openCallSeries";
+import {
+  assertMaxSpan180Days,
+  generateOccurrences,
+} from "../services/openCallSeries";
 import { resolveCityTimeZoneSync } from "../services/cityTimeZone";
 import { isParkingPassPublicReady } from "../services/parkingPassQuality";
-import { notifyNearbyTrucksOfNewEvent, notifyNearbyTrucksOfNewSeries } from "../truckEventMatchService";
+import {
+  notifyNearbyTrucksOfNewEvent,
+  notifyNearbyTrucksOfNewSeries,
+} from "../truckEventMatchService";
 import { forwardGeocode } from "../utils/geocoding";
 
 type EventCoordinatorRouteDependencies = {
@@ -356,7 +362,9 @@ export function registerEventCoordinatorRoutes(
           eventVisibility: z.enum(["public", "private"]).default("public"),
           hardCapEnabled: z.boolean().optional(),
           eventCadence: z.enum(["one_time", "recurring"]),
-          recurringDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+          recurringDaysOfWeek: z
+            .array(z.number().int().min(0).max(6))
+            .optional(),
           recurrenceEndDate: z.string().optional(),
           amenities: z.array(z.string().min(1)).optional(),
           requiresPayment: z.boolean().optional(),
@@ -398,7 +406,8 @@ export function registerEventCoordinatorRoutes(
           monthlyPriceCents > 0 ||
           hostPriceCents > 0;
         const isRecurring = parsed.eventCadence === "recurring";
-        const requiresParkingPassFlow = isRecurring || Boolean(parsed.requiresPayment) || hasAnyPricing;
+        const requiresParkingPassFlow =
+          isRecurring || Boolean(parsed.requiresPayment) || hasAnyPricing;
 
         if (isPrivateEvent && requiresParkingPassFlow) {
           return res.status(400).json({
@@ -487,7 +496,8 @@ export function registerEventCoordinatorRoutes(
           .join(", ");
         if (
           fullAddress &&
-          (!host.latitude || !host.longitude ||
+          (!host.latitude ||
+            !host.longitude ||
             String(host.address || "") !== parsed.address ||
             String(host.city || "") !== parsed.city ||
             String(host.state || "") !== parsed.state)
@@ -544,9 +554,7 @@ export function registerEventCoordinatorRoutes(
         const [startHour, startMinute] = parsed.startTime
           .split(":")
           .map(Number);
-        const [endHour, endMinute] = parsed.endTime
-          .split(":")
-          .map(Number);
+        const [endHour, endMinute] = parsed.endTime.split(":").map(Number);
         const startMinutes = startHour * 60 + startMinute;
         const endMinutes = endHour * 60 + endMinute;
 
@@ -656,7 +664,9 @@ export function registerEventCoordinatorRoutes(
         assertMaxSpan180Days(recurrenceStartDate, recurrenceEndDate);
 
         const dayTokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
-        const selectedDays = Array.from(new Set(parsed.recurringDaysOfWeek || []))
+        const selectedDays = Array.from(
+          new Set(parsed.recurringDaysOfWeek || []),
+        )
           .filter((day) => day >= 0 && day <= 6)
           .sort((a, b) => a - b);
         const recurrenceRule = `WEEKLY:${selectedDays
@@ -832,7 +842,8 @@ export function registerEventCoordinatorRoutes(
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
           ["admin", "super_admin", "staff"].includes(req.user.userType);
-        if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
+        if (!ownsEvent)
+          return res.status(403).json({ message: "Not authorized" });
         const schema = z.object({
           name: z.string().min(1).optional(),
           description: z.string().optional(),
@@ -854,8 +865,12 @@ export function registerEventCoordinatorRoutes(
       } catch (error: any) {
         console.error("Error updating event:", error);
         if (error instanceof z.ZodError)
-          return res.status(400).json({ message: error.errors[0]?.message || "Validation error" });
-        res.status(500).json({ message: error.message || "Failed to update event" });
+          return res
+            .status(400)
+            .json({ message: error.errors[0]?.message || "Validation error" });
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to update event" });
       }
     },
   );
@@ -879,15 +894,23 @@ export function registerEventCoordinatorRoutes(
           (host && event.hostId === host.id) ||
           event.coordinatorUserId === req.user.id ||
           ["admin", "super_admin", "staff"].includes(req.user.userType);
-        if (!ownsEvent) return res.status(403).json({ message: "Not authorized" });
+        if (!ownsEvent)
+          return res.status(403).json({ message: "Not authorized" });
         if ((event as any).status === "cancelled") {
-          return res.status(409).json({ message: "Event is already cancelled" });
+          return res
+            .status(409)
+            .json({ message: "Event is already cancelled" });
         }
         // Cancel all pending interests
         await db
           .update(eventInterests)
           .set({ status: "declined", updatedAt: new Date() } as any)
-          .where(and(eq(eventInterests.eventId, eventId), eq(eventInterests.status, "pending")));
+          .where(
+            and(
+              eq(eventInterests.eventId, eventId),
+              eq(eventInterests.status, "pending"),
+            ),
+          );
         // Mark event as cancelled
         const [cancelled] = await db
           .update(events)
@@ -897,7 +920,9 @@ export function registerEventCoordinatorRoutes(
         res.json({ event: cancelled, message: "Event cancelled" });
       } catch (error: any) {
         console.error("Error cancelling event:", error);
-        res.status(500).json({ message: error.message || "Failed to cancel event" });
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to cancel event" });
       }
     },
   );
@@ -933,8 +958,22 @@ export function registerEventCoordinatorRoutes(
           })
           .from(eventInterests)
           .where(inArray(eventInterests.eventId, eventIds));
-        const byEvent: Record<string, { pending: number; accepted: number; declined: number; cancelled: number }> = {};
-        for (const ev of eventsData) byEvent[ev.id] = { pending: 0, accepted: 0, declined: 0, cancelled: 0 };
+        const byEvent: Record<
+          string,
+          {
+            pending: number;
+            accepted: number;
+            declined: number;
+            cancelled: number;
+          }
+        > = {};
+        for (const ev of eventsData)
+          byEvent[ev.id] = {
+            pending: 0,
+            accepted: 0,
+            declined: 0,
+            cancelled: 0,
+          };
         for (const i of allInterests) {
           const bucket = byEvent[i.eventId];
           if (!bucket) continue;
@@ -943,29 +982,59 @@ export function registerEventCoordinatorRoutes(
           else if (i.status === "declined") bucket.declined++;
           else if (i.status === "cancelled") bucket.cancelled++;
         }
-        const totalCapacity = eventsData.reduce((s, e) => s + (e.maxTrucks || 0), 0);
-        const totalAccepted = Object.values(byEvent).reduce((s, b) => s + b.accepted, 0);
+        const totalCapacity = eventsData.reduce(
+          (s, e) => s + (e.maxTrucks || 0),
+          0,
+        );
+        const totalAccepted = Object.values(byEvent).reduce(
+          (s, b) => s + b.accepted,
+          0,
+        );
         const totalInterests = allInterests.length;
-        const totalDeclined = Object.values(byEvent).reduce((s, b) => s + b.declined, 0);
-        const totalCancelled = Object.values(byEvent).reduce((s, b) => s + b.cancelled, 0);
-        const overallFillRate = totalCapacity > 0 ? Math.round((totalAccepted / totalCapacity) * 100) : 0;
-        const acceptanceRate = totalInterests > 0 ? Math.round(((totalAccepted + totalDeclined) / totalInterests) * 100) : 0;
-        const cancellationRate = totalInterests > 0 ? Math.round((totalCancelled / totalInterests) * 100) : 0;
-        const avgFillRateByEvent = eventsData.map((ev) => {
-          const b = byEvent[ev.id];
-          const fillRate = ev.maxTrucks > 0 ? Math.round((b.accepted / ev.maxTrucks) * 100) : 0;
-          return {
-            eventId: ev.id,
-            eventName: ev.name,
-            date: ev.date,
-            maxTrucks: ev.maxTrucks,
-            accepted: b.accepted,
-            pending: b.pending,
-            declined: b.declined,
-            fillRate,
-            isFull: b.accepted >= ev.maxTrucks,
-          };
-        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const totalDeclined = Object.values(byEvent).reduce(
+          (s, b) => s + b.declined,
+          0,
+        );
+        const totalCancelled = Object.values(byEvent).reduce(
+          (s, b) => s + b.cancelled,
+          0,
+        );
+        const overallFillRate =
+          totalCapacity > 0
+            ? Math.round((totalAccepted / totalCapacity) * 100)
+            : 0;
+        const acceptanceRate =
+          totalInterests > 0
+            ? Math.round(
+                ((totalAccepted + totalDeclined) / totalInterests) * 100,
+              )
+            : 0;
+        const cancellationRate =
+          totalInterests > 0
+            ? Math.round((totalCancelled / totalInterests) * 100)
+            : 0;
+        const avgFillRateByEvent = eventsData
+          .map((ev) => {
+            const b = byEvent[ev.id];
+            const fillRate =
+              ev.maxTrucks > 0
+                ? Math.round((b.accepted / ev.maxTrucks) * 100)
+                : 0;
+            return {
+              eventId: ev.id,
+              eventName: ev.name,
+              date: ev.date,
+              maxTrucks: ev.maxTrucks,
+              accepted: b.accepted,
+              pending: b.pending,
+              declined: b.declined,
+              fillRate,
+              isFull: b.accepted >= ev.maxTrucks,
+            };
+          })
+          .sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+          );
         res.json({
           totalEvents: eventsData.length,
           totalCapacity,
@@ -978,7 +1047,9 @@ export function registerEventCoordinatorRoutes(
         });
       } catch (error: any) {
         console.error("Error fetching event coordinator metrics:", error);
-        res.status(500).json({ message: error.message || "Failed to fetch metrics" });
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to fetch metrics" });
       }
     },
   );

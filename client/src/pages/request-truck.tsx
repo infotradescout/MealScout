@@ -26,7 +26,9 @@ export default function RequestTruckPage() {
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -173,7 +175,9 @@ export default function RequestTruckPage() {
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="requestedTruckCount">How many food trucks do you need? *</Label>
+                <Label htmlFor="requestedTruckCount">
+                  How many food trucks do you need? *
+                </Label>
                 <Input
                   id="requestedTruckCount"
                   name="requestedTruckCount"
@@ -195,8 +199,12 @@ export default function RequestTruckPage() {
                   className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
                   required
                 >
-                  <option value="private">Private event (not discoverable in public event feeds)</option>
-                  <option value="public">Public event (discoverable by all users)</option>
+                  <option value="private">
+                    Private event (not discoverable in public event feeds)
+                  </option>
+                  <option value="public">
+                    Public event (discoverable by all users)
+                  </option>
                 </select>
               </div>
             </div>
@@ -221,7 +229,11 @@ export default function RequestTruckPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full h-11"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? "Submitting..." : "Submit Request"}
             </Button>
           </form>

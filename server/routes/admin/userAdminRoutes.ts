@@ -107,7 +107,10 @@ export function registerUserAdminRoutes(
           .from(claims)
           .leftJoin(users, eq(users.id, claims.personId))
           .where(
-            and(inArray(claims.claimType, claimTypes as string[]), eq(claims.status, "provisional")),
+            and(
+              inArray(claims.claimType, claimTypes as string[]),
+              eq(claims.status, "provisional"),
+            ),
           )
           .orderBy(desc(claims.createdAt))
           .limit(limit);
@@ -127,7 +130,8 @@ export function registerUserAdminRoutes(
               claimData.eventVisibility || "",
             ).toLowerCase();
             const eventVisibility =
-              eventVisibilityRaw === "private" || eventVisibilityRaw === "public"
+              eventVisibilityRaw === "private" ||
+              eventVisibilityRaw === "public"
                 ? eventVisibilityRaw
                 : metadata.discoverableByAllUsers === true
                   ? "public"
@@ -166,7 +170,9 @@ export function registerUserAdminRoutes(
               summary: {
                 title:
                   String(
-                    claimData.eventName || claimData.occasion || "Event request",
+                    claimData.eventName ||
+                      claimData.occasion ||
+                      "Event request",
                   ) || "Event request",
                 city: String(claimData.city || "") || null,
                 date: String(claimData.date || "") || null,
@@ -189,7 +195,9 @@ export function registerUserAdminRoutes(
         });
       } catch (error: any) {
         console.error("Error fetching event intake requests:", error);
-        res.status(500).json({ message: "Failed to fetch event intake requests" });
+        res
+          .status(500)
+          .json({ message: "Failed to fetch event intake requests" });
       }
     },
   );

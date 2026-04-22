@@ -61,7 +61,10 @@ const consumeEngagementWindow = (key: string) => {
 
 export function registerRestaurantCoreRoutes(
   app: Express,
-  { validateAnalyticsAccess, hasBusinessDistributionAccess }: RestaurantCoreRouteDependencies,
+  {
+    validateAnalyticsAccess,
+    hasBusinessDistributionAccess,
+  }: RestaurantCoreRouteDependencies,
 ) {
   const trackEngagement = async (
     eventName: string,
@@ -270,10 +273,12 @@ export function registerRestaurantCoreRoutes(
 
   app.get("/api/restaurants/public", async (req, res) => {
     try {
-      const { lat, lng, radius = 12, limit = 80 } = req.query as Record<
-        string,
-        string | undefined
-      >;
+      const {
+        lat,
+        lng,
+        radius = 12,
+        limit = 80,
+      } = req.query as Record<string, string | undefined>;
       const parsedLimit = Math.max(
         1,
         Math.min(200, Number.parseInt(String(limit || "80"), 10) || 80),
@@ -301,18 +306,20 @@ export function registerRestaurantCoreRoutes(
         ),
       );
       const ownerAccessEntries = await Promise.all(
-        ownerIds.map(async (ownerId) => [
-          ownerId,
-          await hasBusinessDistributionAccess(ownerId),
-        ] as const),
+        ownerIds.map(
+          async (ownerId) =>
+            [ownerId, await hasBusinessDistributionAccess(ownerId)] as const,
+        ),
       );
       const ownerHasAccess = new Map<string, boolean>(ownerAccessEntries);
 
-      const homeEligibleRestaurants = activeRestaurants.filter((restaurant: any) => {
-        const ownerId = String(restaurant?.ownerId || "").trim();
-        if (!ownerId) return false;
-        return ownerHasAccess.get(ownerId) === true;
-      });
+      const homeEligibleRestaurants = activeRestaurants.filter(
+        (restaurant: any) => {
+          const ownerId = String(restaurant?.ownerId || "").trim();
+          if (!ownerId) return false;
+          return ownerHasAccess.get(ownerId) === true;
+        },
+      );
 
       const restaurantIds = homeEligibleRestaurants
         .map((restaurant: any) => String(restaurant?.id || "").trim())
@@ -352,7 +359,9 @@ export function registerRestaurantCoreRoutes(
                       count: sql<number>`cast(count(*) as integer)`,
                     })
                     .from(restaurantFavorites)
-                    .where(inArray(restaurantFavorites.restaurantId, restaurantIds))
+                    .where(
+                      inArray(restaurantFavorites.restaurantId, restaurantIds),
+                    )
                     .groupBy(restaurantFavorites.restaurantId),
                 [],
               ),
@@ -365,7 +374,9 @@ export function registerRestaurantCoreRoutes(
                       count: sql<number>`cast(count(*) as integer)`,
                     })
                     .from(restaurantFollows)
-                    .where(inArray(restaurantFollows.restaurantId, restaurantIds))
+                    .where(
+                      inArray(restaurantFollows.restaurantId, restaurantIds),
+                    )
                     .groupBy(restaurantFollows.restaurantId),
                 [],
               ),
@@ -481,10 +492,16 @@ export function registerRestaurantCoreRoutes(
           : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }];
 
       const favoritesByRestaurant = new Map(
-        favoriteRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        favoriteRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const followsByRestaurant = new Map(
-        followRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        followRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const recommendationsByRestaurant = new Map(
         recommendationRows.map((row: any) => [
@@ -493,7 +510,10 @@ export function registerRestaurantCoreRoutes(
         ]),
       );
       const activeDealsByRestaurant = new Map(
-        activeDealRows.map((row: any) => [String(row.restaurantId), Number(row.count) || 0]),
+        activeDealRows.map((row: any) => [
+          String(row.restaurantId),
+          Number(row.count) || 0,
+        ]),
       );
       const videoRecommendationsByRestaurant = new Map(
         videoRecommendationRows.map((row: any) => [
@@ -546,9 +566,13 @@ export function registerRestaurantCoreRoutes(
           const lngRaw =
             restaurant.currentLongitude ?? restaurant.longitude ?? null;
           const targetLat =
-            typeof latRaw === "number" ? latRaw : Number.parseFloat(String(latRaw));
+            typeof latRaw === "number"
+              ? latRaw
+              : Number.parseFloat(String(latRaw));
           const targetLng =
-            typeof lngRaw === "number" ? lngRaw : Number.parseFloat(String(lngRaw));
+            typeof lngRaw === "number"
+              ? lngRaw
+              : Number.parseFloat(String(lngRaw));
           if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
             return null;
           }
@@ -564,7 +588,8 @@ export function registerRestaurantCoreRoutes(
               Math.sin(dLng / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           const distanceKm = earthRadiusKm * c;
-          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) return null;
+          if (!Number.isFinite(distanceKm) || distanceKm > radiusKm)
+            return null;
 
           const restaurantId = String(restaurant.id || "");
           return {
@@ -652,84 +677,99 @@ export function registerRestaurantCoreRoutes(
     }
   });
 
-  app.get("/api/public/canonical/restaurant/:restaurantId", async (req, res) => {
-    try {
-      const restaurantId = String(req.params.restaurantId || "").trim();
-      if (!restaurantId) {
-        return res.status(400).json({ message: "Invalid restaurant id" });
-      }
+  app.get(
+    "/api/public/canonical/restaurant/:restaurantId",
+    async (req, res) => {
+      try {
+        const restaurantId = String(req.params.restaurantId || "").trim();
+        if (!restaurantId) {
+          return res.status(400).json({ message: "Invalid restaurant id" });
+        }
 
-      const restaurant: any = await storage.getRestaurant(restaurantId);
-      if (!restaurant) {
-        return res.status(404).json({ message: "Restaurant not found" });
-      }
+        const restaurant: any = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
 
-      const activeDealsResult = await db.execute(sql<{ count: number }>`
+        const activeDealsResult = await db.execute(sql<{ count: number }>`
         select cast(count(*) as integer) as count
         from deals
         where restaurant_id = ${restaurantId} and is_active = true
       `);
-      const activeDealCount =
-        Number((activeDealsResult as any)?.rows?.[0]?.count || 0) || 0;
+        const activeDealCount =
+          Number((activeDealsResult as any)?.rows?.[0]?.count || 0) || 0;
 
-      const latRaw = restaurant.currentLatitude ?? restaurant.latitude ?? null;
-      const lngRaw = restaurant.currentLongitude ?? restaurant.longitude ?? null;
-      const lat =
-        typeof latRaw === "number" ? latRaw : Number.parseFloat(String(latRaw));
-      const lng =
-        typeof lngRaw === "number" ? lngRaw : Number.parseFloat(String(lngRaw));
-      const hasLiveLocation = Number.isFinite(lat) && Number.isFinite(lng);
+        const latRaw =
+          restaurant.currentLatitude ?? restaurant.latitude ?? null;
+        const lngRaw =
+          restaurant.currentLongitude ?? restaurant.longitude ?? null;
+        const lat =
+          typeof latRaw === "number"
+            ? latRaw
+            : Number.parseFloat(String(latRaw));
+        const lng =
+          typeof lngRaw === "number"
+            ? lngRaw
+            : Number.parseFloat(String(lngRaw));
+        const hasLiveLocation = Number.isFinite(lat) && Number.isFinite(lng);
 
-      const updatedAt = restaurant.updatedAt || restaurant.createdAt || null;
-      const freshnessHours = updatedAt
-        ? Math.max(
-            0,
-            Math.round((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60)),
-          )
-        : null;
+        const updatedAt = restaurant.updatedAt || restaurant.createdAt || null;
+        const freshnessHours = updatedAt
+          ? Math.max(
+              0,
+              Math.round(
+                (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60),
+              ),
+            )
+          : null;
 
-      const freshness =
-        freshnessHours == null
-          ? "unknown"
-          : freshnessHours <= 24
-            ? "fresh"
-            : freshnessHours <= 72
-              ? "recent"
-              : "stale";
+        const freshness =
+          freshnessHours == null
+            ? "unknown"
+            : freshnessHours <= 24
+              ? "fresh"
+              : freshnessHours <= 72
+                ? "recent"
+                : "stale";
 
-      const sourceTruthStatements = [
-        restaurant.name ? "Business profile includes a public name." : null,
-        restaurant.address ? "Business profile includes a street address." : null,
-        restaurant.phone ? "Business profile includes a phone number." : null,
-        hasLiveLocation ? "Live map coordinates are available." : null,
-      ].filter(Boolean);
+        const sourceTruthStatements = [
+          restaurant.name ? "Business profile includes a public name." : null,
+          restaurant.address
+            ? "Business profile includes a street address."
+            : null,
+          restaurant.phone ? "Business profile includes a phone number." : null,
+          hasLiveLocation ? "Live map coordinates are available." : null,
+        ].filter(Boolean);
 
-      const knowledgeGaps = [
-        restaurant.address ? null : "Missing address",
-        restaurant.phone ? null : "Missing phone number",
-        hasLiveLocation ? null : "Missing map coordinates",
-      ].filter(Boolean);
+        const knowledgeGaps = [
+          restaurant.address ? null : "Missing address",
+          restaurant.phone ? null : "Missing phone number",
+          hasLiveLocation ? null : "Missing map coordinates",
+        ].filter(Boolean);
 
-      res.json({
-        restaurantId,
-        updatedAt,
-        verified: Boolean(restaurant.isVerified),
-        machineReadiness:
-          hasLiveLocation && restaurant.isActive ? "ready" : "partial",
-        freshness,
-        freshnessHours,
-        sourceTruthStatements,
-        knowledgeGaps,
-        evidenceSummary: {
-          activeDealCount,
-          liveLocationActive: hasLiveLocation,
-        },
-      });
-    } catch (error) {
-      console.error("Error fetching canonical restaurant data:", error);
-      res.status(500).json({ message: "Failed to fetch canonical restaurant data" });
-    }
-  });
+        res.json({
+          restaurantId,
+          updatedAt,
+          verified: Boolean(restaurant.isVerified),
+          machineReadiness:
+            hasLiveLocation && restaurant.isActive ? "ready" : "partial",
+          freshness,
+          freshnessHours,
+          sourceTruthStatements,
+          knowledgeGaps,
+          evidenceSummary: {
+            activeDealCount,
+            liveLocationActive: hasLiveLocation,
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching canonical restaurant data:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to fetch canonical restaurant data" });
+      }
+    },
+  );
 
   app.get("/api/public/evidence/restaurant/:restaurantId", async (req, res) => {
     try {
@@ -836,12 +876,12 @@ export function registerRestaurantCoreRoutes(
         });
 
         const favorite = await storage.createRestaurantFavorite(favoriteData);
-        await ensureRestaurantFollowForEngagement(userId, restaurantId, "favorite");
-        void trackEngagement(
-          "restaurant_favorite_added",
+        await ensureRestaurantFollowForEngagement(
           userId,
           restaurantId,
+          "favorite",
         );
+        void trackEngagement("restaurant_favorite_added", userId, restaurantId);
         res.json(favorite);
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
@@ -1038,7 +1078,11 @@ export function registerRestaurantCoreRoutes(
 
         const recommendation =
           await storage.createRestaurantUserRecommendation(recommendationData);
-        await ensureRestaurantFollowForEngagement(userId, restaurantId, "recommend");
+        await ensureRestaurantFollowForEngagement(
+          userId,
+          restaurantId,
+          "recommend",
+        );
         void trackEngagement(
           "restaurant_recommend_added",
           userId,
@@ -1095,7 +1139,10 @@ export function registerRestaurantCoreRoutes(
         const viewerId = req.user?.id || null;
         const limit = Math.max(
           1,
-          Math.min(50, Number.parseInt(String(req.query.limit || "12"), 10) || 12),
+          Math.min(
+            50,
+            Number.parseInt(String(req.query.limit || "12"), 10) || 12,
+          ),
         );
 
         const rowsResult = await db.execute(sql<{
@@ -1137,8 +1184,9 @@ export function registerRestaurantCoreRoutes(
           userId: String(row.user_id || ""),
           createdAt: row.created_at,
           authorName:
-            String([row.first_name, row.last_name].filter(Boolean).join(" ").trim()) ||
-            "Community Member",
+            String(
+              [row.first_name, row.last_name].filter(Boolean).join(" ").trim(),
+            ) || "Community Member",
           likeCount: Number(row.like_count) || 0,
           dislikeCount: Number(row.dislike_count) || 0,
           shareCount: Number(row.share_count) || 0,
@@ -1150,7 +1198,10 @@ export function registerRestaurantCoreRoutes(
 
         res.json(payload);
       } catch (error) {
-        console.warn("Public recommendations unavailable, returning empty list:", error);
+        console.warn(
+          "Public recommendations unavailable, returning empty list:",
+          error,
+        );
         res.json([]);
       }
     },
@@ -1161,9 +1212,13 @@ export function registerRestaurantCoreRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const recommendationId = String(req.params.recommendationId || "").trim();
+        const recommendationId = String(
+          req.params.recommendationId || "",
+        ).trim();
         const userId = String(req.user.id || "").trim();
-        const reaction = String(req.body?.reaction || "").trim().toLowerCase();
+        const reaction = String(req.body?.reaction || "")
+          .trim()
+          .toLowerCase();
 
         if (!recommendationId) {
           return res.status(400).json({ message: "Invalid recommendation id" });
@@ -1174,7 +1229,10 @@ export function registerRestaurantCoreRoutes(
             .json({ message: "Reaction must be like, dislike, or clear" });
         }
 
-        const existing = await db.execute(sql<{ id: string; reaction_type: string }>`
+        const existing = await db.execute(sql<{
+          id: string;
+          reaction_type: string;
+        }>`
           select id, reaction_type
           from recommendation_reactions
           where recommendation_id = ${recommendationId} and user_id = ${userId}
@@ -1235,7 +1293,9 @@ export function registerRestaurantCoreRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const recommendationId = String(req.params.recommendationId || "").trim();
+        const recommendationId = String(
+          req.params.recommendationId || "",
+        ).trim();
         const userId = String(req.user.id || "").trim();
         if (!recommendationId) {
           return res.status(400).json({ message: "Invalid recommendation id" });

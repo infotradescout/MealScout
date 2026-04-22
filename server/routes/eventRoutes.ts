@@ -414,7 +414,8 @@ export function registerEventRoutes(
       filtered = filtered.filter(
         (event: any) =>
           !Boolean(event?.requiresPayment) &&
-          (includePrivate || String(event?.eventType || "") !== "private_event"),
+          (includePrivate ||
+            String(event?.eventType || "") !== "private_event"),
       );
       res.json(filtered);
     } catch (error: any) {
@@ -1986,7 +1987,9 @@ export function registerEventRoutes(
             platformFeeCents: PLATFORM_FEE,
             totalCents,
             status: "pending",
-            stripeApplicationFeeAmount: hostStripeAccountId ? PLATFORM_FEE : null,
+            stripeApplicationFeeAmount: hostStripeAccountId
+              ? PLATFORM_FEE
+              : null,
             stripeTransferDestination: hostStripeAccountId,
           })
           .returning();

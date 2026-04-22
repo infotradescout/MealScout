@@ -41,7 +41,11 @@ import {
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
-import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoAds";
+import {
+  sendGeoPing,
+  trackGeoAdEvent,
+  trackGeoAdImpression,
+} from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import {
@@ -50,9 +54,14 @@ import {
   trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
-import { computeHomeRankingScore, getHomeRankingReasons } from "@shared/rankingPolicy";
+import {
+  computeHomeRankingScore,
+  getHomeRankingReasons,
+} from "@shared/rankingPolicy";
 
-const WelcomeLocationModal = lazy(() => import("@/components/WelcomeLocationModal"));
+const WelcomeLocationModal = lazy(
+  () => import("@/components/WelcomeLocationModal"),
+);
 
 // Version marker for deployment verification
 console.log("MealScout Client Loaded - Build: " + new Date().toISOString());
@@ -204,7 +213,9 @@ function BusinessDealsCard({
           <span>Favorites {business.favoriteCount}</span>
           <span>Deals {business.activeDealCount}</span>
         </div>
-        <p className="mt-1 text-[11px] text-muted-foreground">{business.rankReason}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          {business.rankReason}
+        </p>
 
         <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -213,7 +224,10 @@ function BusinessDealsCard({
           {business.deals.length > 0 ? (
             <div className="mt-1 space-y-1.5">
               {business.deals.slice(0, compact ? 1 : 2).map((deal) => (
-                <p key={deal.id} className="text-xs text-foreground line-clamp-1">
+                <p
+                  key={deal.id}
+                  className="text-xs text-foreground line-clamp-1"
+                >
                   {deal.title}
                 </p>
               ))}
@@ -238,7 +252,7 @@ export default function Home() {
   const isStandalone = useIsStandalone();
   const { user } = useAuth();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
-    null
+    null,
   );
   const [locationName, setLocationName] = useState("Your Location");
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -247,7 +261,6 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, setNavigateTo] = useLocation();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-
 
   // Show welcome modal only for anonymous users.
   useEffect(() => {
@@ -265,10 +278,14 @@ export default function Home() {
 
   useEffect(() => {
     if (user) return;
-    trackFunnelEventOncePerSession(FUNNEL_EVENTS.landingView, "home_anonymous", {
-      page: "home",
-      audience: "anonymous",
-    });
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.landingView,
+      "home_anonymous",
+      {
+        page: "home",
+        audience: "anonymous",
+      },
+    );
   }, [user]);
 
   const handleLocationDetection = async () => {
@@ -281,7 +298,7 @@ export default function Home() {
               timeout: 8000,
               maximumAge: 0,
             });
-          }
+          },
         );
 
         const newLocation = {
@@ -295,14 +312,13 @@ export default function Home() {
         await getReverseGeocodedLocationName(
           newLocation.lat,
           newLocation.lng,
-          setLocationName
+          setLocationName,
         );
 
         queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
-
       } catch (error: any) {
         setLocationError(
-          "Unable to detect location automatically. Please set your location."
+          "Unable to detect location automatically. Please set your location.",
         );
       } finally {
         setIsLoadingLocation(false);
@@ -331,9 +347,7 @@ export default function Home() {
     setIsLoadingLocation(true);
     try {
       const response = await fetch(
-        `/api/location/search?q=${encodeURIComponent(
-          manualLocation
-        )}&limit=1`
+        `/api/location/search?q=${encodeURIComponent(manualLocation)}&limit=1`,
       );
       const data = await response.json();
 
@@ -348,7 +362,7 @@ export default function Home() {
         queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
       } else {
         setLocationError(
-          "Could not find that location. Please try a different city name."
+          "Could not find that location. Please try a different city name.",
         );
       }
     } catch (error) {
@@ -366,7 +380,7 @@ export default function Home() {
 
   const handleWelcomeLocationSet = (
     newLocation: { lat: number; lng: number },
-    name: string
+    name: string,
   ) => {
     setLocation(newLocation);
     setLocationName(name);
@@ -374,7 +388,6 @@ export default function Home() {
     sessionStorage.setItem("mealscout_welcome_seen", "true");
     setShowWelcomeModal(false);
     queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
-
   };
 
   const handleWelcomeSkip = () => {
@@ -406,10 +419,9 @@ export default function Home() {
     return Array.isArray(data) ? data : [];
   };
 
-  const {
-    data: featuredDeals,
-    refetch: refetchFeaturedDeals,
-  } = useQuery<Deal[]>({
+  const { data: featuredDeals, refetch: refetchFeaturedDeals } = useQuery<
+    Deal[]
+  >({
     queryKey: ["/api/deals/featured"],
     queryFn: fetchFeaturedDealsWithRetry,
     retry: (failureCount, error: any) => {
@@ -475,20 +487,26 @@ export default function Home() {
 
   const featuredBusinesses = useMemo(() => {
     const profiles = Array.isArray(publicProfiles) ? publicProfiles : [];
-    const computeFairnessScore = (profile: PublicBusinessProfile, dealCount: number) => {
+    const computeFairnessScore = (
+      profile: PublicBusinessProfile,
+      dealCount: number,
+    ) => {
       const recommendationCount = Number(profile.recommendationCount || 0);
       const videoRecommendationCount = Number(
         profile.videoRecommendationCount || 0,
       );
       const followCount = Number(profile.followCount || 0);
       const favoriteCount = Number(profile.favoriteCount || 0);
-      const communityActivityCount = Number(profile.communityActivityCount || 0);
+      const communityActivityCount = Number(
+        profile.communityActivityCount || 0,
+      );
       const activeDealCount = Math.max(
         Number(profile.activeDealCount || 0),
         dealCount,
       );
       const locationBoost =
-        typeof profile.distance === "number" && Number.isFinite(profile.distance)
+        typeof profile.distance === "number" &&
+        Number.isFinite(profile.distance)
           ? Math.max(0, 12 - Math.min(profile.distance, 12)) / 12
           : 0;
       const liveTruckBoost =
@@ -514,12 +532,17 @@ export default function Home() {
         );
         const followCount = Number(profile.followCount || 0);
         const favoriteCount = Number(profile.favoriteCount || 0);
-        const communityActivityCount = Number(profile.communityActivityCount || 0);
+        const communityActivityCount = Number(
+          profile.communityActivityCount || 0,
+        );
         const activeDealCount = Math.max(
           Number(profile.activeDealCount || 0),
           profileDeals.length,
         );
-        const fairnessScore = computeFairnessScore(profile, profileDeals.length);
+        const fairnessScore = computeFairnessScore(
+          profile,
+          profileDeals.length,
+        );
         const rankReason = getHomeRankingReasons({
           recommendationCount,
           videoRecommendationCount,
@@ -541,7 +564,8 @@ export default function Home() {
           isVerified: Boolean(profile.isVerified),
           mobileOnline: Boolean(profile.mobileOnline),
           distance:
-            typeof profile.distance === "number" && Number.isFinite(profile.distance)
+            typeof profile.distance === "number" &&
+            Number.isFinite(profile.distance)
               ? profile.distance
               : undefined,
           updatedAt: profile.updatedAt,
@@ -614,7 +638,7 @@ export default function Home() {
       if (!location) return [];
       const res = await fetch(
         `/api/geo-ads?placement=home&lat=${location.lat}&lng=${location.lng}&limit=1`,
-        { credentials: "include" }
+        { credentials: "include" },
       );
       if (!res.ok) return [];
       return res.json();
@@ -646,7 +670,7 @@ export default function Home() {
   useEffect(() => {
     if (!geoAds.length) return;
     geoAds.forEach((ad) =>
-      trackGeoAdImpression({ adId: ad.id, placement: "home" })
+      trackGeoAdImpression({ adId: ad.id, placement: "home" }),
     );
   }, [geoAds]);
 
@@ -682,20 +706,22 @@ export default function Home() {
           description:
             "Find food trucks near you, discover live locations, and browse local deals from restaurants, bars, and hosts with MealScout.",
           url: "https://www.mealscout.us/",
-            mainEntity: {
-              "@type": "ItemList",
-              name: "Public Local Food Profiles",
-              numberOfItems: featuredBusinesses.slice(0, 12).length,
-              itemListElement: featuredBusinesses.slice(0, 12).map((business, index: number) => ({
+          mainEntity: {
+            "@type": "ItemList",
+            name: "Public Local Food Profiles",
+            numberOfItems: featuredBusinesses.slice(0, 12).length,
+            itemListElement: featuredBusinesses
+              .slice(0, 12)
+              .map((business, index: number) => ({
                 "@type": "ListItem",
                 position: index + 1,
                 name: business.name,
                 url: `${typeof window !== "undefined" ? window.location.origin : "https://www.mealscout.us"}/restaurant/${business.id}`,
               })),
-            },
           },
-        ],
-      }),
+        },
+      ],
+    }),
     [featuredBusinesses],
   );
 
@@ -851,7 +877,8 @@ export default function Home() {
                 Get your restaurant or truck live in minutes
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Post deals, appear on discovery, and start converting nearby regulars.
+                Post deals, appear on discovery, and start converting nearby
+                regulars.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href="/customer-signup?role=business">
@@ -1040,7 +1067,9 @@ export default function Home() {
                   Use my location
                 </Button>
                 {locationError && (
-                  <p className="manual-location-error" role="alert">{locationError}</p>
+                  <p className="manual-location-error" role="alert">
+                    {locationError}
+                  </p>
                 )}
               </div>
             )}
@@ -1049,184 +1078,193 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
-      {(liveTrucksLoading || liveTrucksError || (location && liveTrucks.length > 0)) && (
-      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
-        <div className="content">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
-              <h3 className="text-sm font-bold text-foreground">
-                Live Food Trucks:{" "}
-                {shortLocation === "Your Location" ? "Nearby" : shortLocation}
-              </h3>
+      {(liveTrucksLoading ||
+        liveTrucksError ||
+        (location && liveTrucks.length > 0)) && (
+        <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
+          <div className="content">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
+                <h3 className="text-sm font-bold text-foreground">
+                  Live Food Trucks:{" "}
+                  {shortLocation === "Your Location" ? "Nearby" : shortLocation}
+                </h3>
+              </div>
+              <Link href="/map">
+                <Button
+                  variant="link"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto text-xs"
+                >
+                  View Map {"->"}
+                </Button>
+              </Link>
             </div>
-            <Link href="/map">
-              <Button
-                variant="link"
-                className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto text-xs"
-              >
-                View Map {"->"}
-              </Button>
-            </Link>
-          </div>
-          {liveTrucksLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : liveTrucksError ? (
-            <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
-              <p>We couldn't load live trucks right now.</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                onClick={() => refetchLiveTrucks()}
-              >
-                Retry Live Trucks
-              </Button>
-            </div>
-          ) : liveTrucks.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {liveTrucks.map((truck) => {
-                const truckDeals = dealsByRestaurant.get(String(truck.id)) || [];
-                const distanceMiles =
-                  typeof truck.distance === "number" && Number.isFinite(truck.distance)
-                    ? truck.distance * 0.621371
-                    : null;
-                const lastSeenLabel = truck.lastBroadcastAt
-                  ? `Updated ${new Date(truck.lastBroadcastAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}`
-                  : "Live location active";
+            {liveTrucksLoading ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : liveTrucksError ? (
+              <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
+                <p>We couldn't load live trucks right now.</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => refetchLiveTrucks()}
+                >
+                  Retry Live Trucks
+                </Button>
+              </div>
+            ) : liveTrucks.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+                {liveTrucks.map((truck) => {
+                  const truckDeals =
+                    dealsByRestaurant.get(String(truck.id)) || [];
+                  const distanceMiles =
+                    typeof truck.distance === "number" &&
+                    Number.isFinite(truck.distance)
+                      ? truck.distance * 0.621371
+                      : null;
+                  const lastSeenLabel = truck.lastBroadcastAt
+                    ? `Updated ${new Date(
+                        truck.lastBroadcastAt,
+                      ).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}`
+                    : "Live location active";
 
-                return (
-                  <Link key={truck.id} href={`/restaurant/${truck.id}`}>
-                    <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-semibold text-foreground truncate">
-                            {truck.name}
-                          </h4>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {truck.cuisineType || "Food Truck"}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
-                          Live
-                        </span>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        <span>
-                          {distanceMiles != null
-                            ? `${distanceMiles.toFixed(1)} mi away`
-                            : "Nearby"}
-                        </span>
-                        <span>{lastSeenLabel}</span>
-                      </div>
-
-                      <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Active Deals ({truckDeals.length})
-                        </p>
-                        {truckDeals.length > 0 ? (
-                          <div className="mt-1 space-y-1.5">
-                            {truckDeals.slice(0, 2).map((deal) => (
-                              <p
-                                key={deal.id}
-                                className="text-xs text-foreground line-clamp-1"
-                              >
-                                {deal.title}
-                              </p>
-                            ))}
-                            {truckDeals.length > 2 && (
-                              <p className="text-[11px] text-muted-foreground">
-                                +{truckDeals.length - 2} more
-                              </p>
-                            )}
+                  return (
+                    <Link key={truck.id} href={`/restaurant/${truck.id}`}>
+                      <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-semibold text-foreground truncate">
+                              {truck.name}
+                            </h4>
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                              {truck.cuisineType || "Food Truck"}
+                            </p>
                           </div>
-                        ) : (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            No active deals yet
+                          <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
+                            Live
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          <span>
+                            {distanceMiles != null
+                              ? `${distanceMiles.toFixed(1)} mi away`
+                              : "Nearby"}
+                          </span>
+                          <span>{lastSeenLabel}</span>
+                        </div>
+
+                        <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Active Deals ({truckDeals.length})
                           </p>
-                        )}
+                          {truckDeals.length > 0 ? (
+                            <div className="mt-1 space-y-1.5">
+                              {truckDeals.slice(0, 2).map((deal) => (
+                                <p
+                                  key={deal.id}
+                                  className="text-xs text-foreground line-clamp-1"
+                                >
+                                  {deal.title}
+                                </p>
+                              ))}
+                              {truckDeals.length > 2 && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  +{truckDeals.length - 2} more
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              No active deals yet
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-      </section>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </section>
       )}
 
       {/* Public Profiles Section */}
-      {(publicProfilesLoading || publicProfilesError || (location && featuredBusinesses.length > 0)) && (
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
-        <div className="content">
-          <div className="mb-3">
-            <h2 className="text-base font-bold text-foreground flex items-center">
-              <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-              Restaurants, Bars & Trucks With Deals in{" "}
-              {shortLocation === "Your Location"
-                ? "Your Neighborhood"
-                : shortLocation}
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Deal-active local spots ranked by live demand, recommendations, and proximity.
-            </p>
-            <Link href="/deals/featured">
-              <Button
-                variant="link"
-                className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto mt-1"
-              >
-                See all nearby deals {"->"}
-              </Button>
-            </Link>
-          </div>
+      {(publicProfilesLoading ||
+        publicProfilesError ||
+        (location && featuredBusinesses.length > 0)) && (
+        <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+          <div className="content">
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-foreground flex items-center">
+                <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+                Restaurants, Bars & Trucks With Deals in{" "}
+                {shortLocation === "Your Location"
+                  ? "Your Neighborhood"
+                  : shortLocation}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Deal-active local spots ranked by live demand, recommendations,
+                and proximity.
+              </p>
+              <Link href="/deals/featured">
+                <Button
+                  variant="link"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto mt-1"
+                >
+                  See all nearby deals {"->"}
+                </Button>
+              </Link>
+            </div>
 
-          {publicProfilesLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex-shrink-0 w-64 bg-[var(--bg-surface-muted)]/60 rounded-lg h-52 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : publicProfilesError ? (
-            <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-              <p>We couldn't load profiles right now. Try again in a bit.</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                onClick={() => {
-                  refetchPublicProfiles();
-                  refetchFeaturedDeals();
-                }}
-              >
-                Retry Profiles
-              </Button>
-            </div>
-          ) : featuredBusinesses.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {featuredBusinesses.map((business) => (
-                <div key={business.id} className="flex-shrink-0 w-64">
-                  <BusinessDealsCard business={business} />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </section>
+            {publicProfilesLoading ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 w-64 bg-[var(--bg-surface-muted)]/60 rounded-lg h-52 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : publicProfilesError ? (
+              <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
+                <p>We couldn't load profiles right now. Try again in a bit.</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => {
+                    refetchPublicProfiles();
+                    refetchFeaturedDeals();
+                  }}
+                >
+                  Retry Profiles
+                </Button>
+              </div>
+            ) : featuredBusinesses.length > 0 ? (
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+                {featuredBusinesses.map((business) => (
+                  <div key={business.id} className="flex-shrink-0 w-64">
+                    <BusinessDealsCard business={business} />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
       )}
 
       <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
@@ -1354,43 +1392,47 @@ export default function Home() {
       </section>
 
       {weeklyTrendingVideos.length > 0 && (
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
-        <div className="content">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-foreground flex items-center">
-                <PlayCircle className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-                Weekly Top Video Recommendations
-              </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Most shared and watched community food videos this week.
-              </p>
-            </div>
-            <Link href="/video">
-              <Button size="sm" variant="outline">
-                Post Video Recommendation
-              </Button>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2.5">
-            {weeklyTrendingVideos.map((story) => (
-              <Link key={story.id} href={`/video/${story.id}`}>
-                <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
-                  <p className="text-sm font-semibold text-foreground line-clamp-1">
-                    {story.title || "Food recommendation"}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                    <span>{story.creatorName || "MealScout User"}</span>
-                    <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
-                    <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
-                  </div>
-                </div>
+        <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+          <div className="content">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-foreground flex items-center">
+                  <PlayCircle className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+                  Weekly Top Video Recommendations
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Most shared and watched community food videos this week.
+                </p>
+              </div>
+              <Link href="/video">
+                <Button size="sm" variant="outline">
+                  Post Video Recommendation
+                </Button>
               </Link>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {weeklyTrendingVideos.map((story) => (
+                <Link key={story.id} href={`/video/${story.id}`}>
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
+                      {story.title || "Food recommendation"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                      <span>{story.creatorName || "MealScout User"}</span>
+                      <span>
+                        {Number(story.viewCount || 0).toLocaleString()} views
+                      </span>
+                      <span>
+                        {Number(story.likeCount || 0).toLocaleString()} likes
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       <section className="section section--full section--surface py-3">
@@ -1471,7 +1513,8 @@ export default function Home() {
               Requests + Events
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Private and hosted requests live alongside public event opportunities.
+              Private and hosted requests live alongside public event
+              opportunities.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Link href="/request-truck">
@@ -1511,18 +1554,18 @@ export default function Home() {
               {/* Stay Connected Section */}
               <div>
                 <div className="text-center mb-6">
-              <h3 className="text-lg font-bold text-foreground mb-2">
-                Unlock the{" "}
+                  <h3 className="text-lg font-bold text-foreground mb-2">
+                    Unlock the{" "}
                     {shortLocation === "Your Location"
                       ? "Local"
                       : shortLocation}{" "}
                     Scene
                   </h3>
-              <p className="text-sm text-muted-foreground">
-                Save go-tos, track trucks live, and get a heads-up when
-                spots reopen
-              </p>
-            </div>
+                  <p className="text-sm text-muted-foreground">
+                    Save go-tos, track trucks live, and get a heads-up when
+                    spots reopen
+                  </p>
+                </div>
 
                 <div className="space-y-2 mb-4">
                   <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-center gap-3">
@@ -1683,7 +1726,9 @@ export default function Home() {
                 </div>
               ) : publicProfilesError ? (
                 <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
-                  <p>We couldn't load profiles right now. Try again in a bit.</p>
+                  <p>
+                    We couldn't load profiles right now. Try again in a bit.
+                  </p>
                   <Button
                     size="sm"
                     variant="outline"
@@ -1713,32 +1758,32 @@ export default function Home() {
       </section>
 
       {location && featuredBusinesses.length > 0 && (
-      <section className="section section--full section--surface py-2">
-        <div className="content">
-          <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
-            <h2 className="text-base font-semibold text-foreground">
-              {`What's Poppin ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Quick pulse of popular spots right now.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {featuredBusinesses.slice(0, 6).map((business) => (
-                <Link key={business.id} href={`/restaurant/${business.id}`}>
-                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-2.5 hover:shadow-clean transition-shadow">
-                    <p className="text-sm font-semibold text-foreground line-clamp-1">
-                      {business.name}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                      {business.cuisineType || "Local Food Spot"}
-                    </p>
-                  </div>
-                </Link>
-              ))}
+        <section className="section section--full section--surface py-2">
+          <div className="content">
+            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+              <h2 className="text-base font-semibold text-foreground">
+                {`What's Poppin ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Quick pulse of popular spots right now.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {featuredBusinesses.slice(0, 6).map((business) => (
+                  <Link key={business.id} href={`/restaurant/${business.id}`}>
+                    <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-2.5 hover:shadow-clean transition-shadow">
+                      <p className="text-sm font-semibold text-foreground line-clamp-1">
+                        {business.name}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
+                        {business.cuisineType || "Local Food Spot"}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Footer */}
@@ -1890,9 +1935,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
-
-

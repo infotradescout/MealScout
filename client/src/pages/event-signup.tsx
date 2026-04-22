@@ -7,7 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import Navigation from "@/components/navigation";
-import { Calendar, ArrowLeft, Megaphone, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  Calendar,
+  ArrowLeft,
+  Megaphone,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 
 export default function EventSignup() {
   const { user, isAuthenticated, isLoading, refetch } = useAuth();
@@ -29,7 +35,9 @@ export default function EventSignup() {
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     setFormData({
       ...formData,
@@ -117,7 +125,8 @@ export default function EventSignup() {
               Log In to Request Event Access
             </h1>
             <p className="text-[color:var(--text-secondary)] mb-6">
-              Submit a request to become an event organizer and start posting events.
+              Submit a request to become an event organizer and start posting
+              events.
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
@@ -154,7 +163,8 @@ export default function EventSignup() {
                 Request Event Organizer Access
               </h1>
               <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mb-5">
-                Share your event details and operations context so we can enable posting access on your account.
+                Share your event details and operations context so we can enable
+                posting access on your account.
               </p>
               <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
                 <p className="text-xs font-medium text-[color:var(--text-secondary)]">
@@ -166,7 +176,12 @@ export default function EventSignup() {
             <section className="rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 backdrop-blur p-6 shadow-clean-lg">
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid gap-2">
-                  <Label htmlFor="eventName" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Event Name *</Label>
+                  <Label
+                    htmlFor="eventName"
+                    className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                  >
+                    Event Name *
+                  </Label>
                   <Input
                     id="eventName"
                     name="eventName"
@@ -180,7 +195,12 @@ export default function EventSignup() {
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="date" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Event Date *</Label>
+                    <Label
+                      htmlFor="date"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      Event Date *
+                    </Label>
                     <Input
                       id="date"
                       name="date"
@@ -192,7 +212,12 @@ export default function EventSignup() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="city" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">City *</Label>
+                    <Label
+                      htmlFor="city"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      City *
+                    </Label>
                     <Input
                       id="city"
                       name="city"
@@ -207,7 +232,12 @@ export default function EventSignup() {
 
                 <div className="grid sm:grid-cols-3 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="expectedCrowd" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Expected Crowd *</Label>
+                    <Label
+                      htmlFor="expectedCrowd"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      Expected Crowd *
+                    </Label>
                     <Input
                       id="expectedCrowd"
                       name="expectedCrowd"
@@ -220,7 +250,12 @@ export default function EventSignup() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="requestedTruckCount" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">How Many Trucks? *</Label>
+                    <Label
+                      htmlFor="requestedTruckCount"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      How Many Trucks? *
+                    </Label>
                     <Input
                       id="requestedTruckCount"
                       name="requestedTruckCount"
@@ -234,7 +269,12 @@ export default function EventSignup() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="contactPhone" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Contact Phone</Label>
+                    <Label
+                      htmlFor="contactPhone"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      Contact Phone
+                    </Label>
                     <Input
                       id="contactPhone"
                       name="contactPhone"
@@ -248,7 +288,12 @@ export default function EventSignup() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="eventVisibility" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Event Visibility *</Label>
+                  <Label
+                    htmlFor="eventVisibility"
+                    className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                  >
+                    Event Visibility *
+                  </Label>
                   <select
                     id="eventVisibility"
                     name="eventVisibility"
@@ -257,13 +302,22 @@ export default function EventSignup() {
                     className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
                     required
                   >
-                    <option value="public">Public event (discoverable by all users)</option>
-                    <option value="private">Private event (not discoverable in public event feeds)</option>
+                    <option value="public">
+                      Public event (discoverable by all users)
+                    </option>
+                    <option value="private">
+                      Private event (not discoverable in public event feeds)
+                    </option>
                   </select>
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="contactEmail" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Contact Email *</Label>
+                  <Label
+                    htmlFor="contactEmail"
+                    className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                  >
+                    Contact Email *
+                  </Label>
                   <Input
                     id="contactEmail"
                     name="contactEmail"
@@ -277,7 +331,12 @@ export default function EventSignup() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="notes" className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]">Additional Details</Label>
+                  <Label
+                    htmlFor="notes"
+                    className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                  >
+                    Additional Details
+                  </Label>
                   <Textarea
                     id="notes"
                     name="notes"
@@ -296,8 +355,7 @@ export default function EventSignup() {
                     - No hidden fees, now or later
                     <br />
                     - Booking fees apply only to trucks
-                    <br />
-                    - Only public events are discoverable by all users
+                    <br />- Only public events are discoverable by all users
                   </p>
                 </div>
 
@@ -323,6 +381,3 @@ export default function EventSignup() {
     </div>
   );
 }
-
-
-
