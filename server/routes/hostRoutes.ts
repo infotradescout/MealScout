@@ -87,6 +87,13 @@ export function registerHostRoutes(app: Express) {
     user?.userType === "admin" ||
     user?.userType === "super_admin";
 
+  const isAdminUser = (user: any) =>
+    user?.userType === "admin" || user?.userType === "super_admin";
+
+  const canManageHost = (user: any, host: any) =>
+    Boolean(host) &&
+    (isAdminUser(user) || String(host.userId) === String(user?.id || ""));
+
   const normalizeLocationValue = (value?: string | null) =>
     (value ?? "").trim().toLowerCase();
 
@@ -189,7 +196,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
         res.json(host);
@@ -237,7 +244,7 @@ export function registerHostRoutes(app: Express) {
       const { hostId } = req.params;
       const userId = req.user.id;
       const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      if (!host || !canManageHost(req.user, host)) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 
@@ -321,6 +328,9 @@ export function registerHostRoutes(app: Express) {
         validatedState,
       );
 
+      const locationOwnerUserId = isAdminUser(req.user)
+        ? String(host.userId)
+        : String(userId);
       const siblingHosts = await db
         .select({
           id: hosts.id,
@@ -329,7 +339,7 @@ export function registerHostRoutes(app: Express) {
           state: hosts.state,
         })
         .from(hosts)
-        .where(eq(hosts.userId, userId));
+        .where(eq(hosts.userId, locationOwnerUserId));
 
       const hasDuplicate = siblingHosts.some(
         (item: (typeof siblingHosts)[number]) =>
@@ -526,7 +536,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -563,7 +573,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -609,7 +619,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
         const seriesId = await getActiveParkingPassSeriesId(hostId);
@@ -643,7 +653,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -684,7 +694,7 @@ export function registerHostRoutes(app: Express) {
         const { hostId } = req.params;
         const userId = req.user.id;
         const host = await storage.getHost(hostId);
-        if (!host || host.userId !== userId) {
+        if (!host || !canManageHost(req.user, host)) {
           return res.status(404).json({ message: "Host profile not found" });
         }
 
@@ -725,7 +735,7 @@ export function registerHostRoutes(app: Express) {
       const { hostId } = req.params;
       const userId = req.user.id;
       const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      if (!host || !canManageHost(req.user, host)) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 

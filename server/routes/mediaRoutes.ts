@@ -13,6 +13,13 @@ import {
 import { imageUploads } from "@shared/schema";
 
 export function registerMediaRoutes(app: Express) {
+  const isAdminUser = (user: any) =>
+    user?.userType === "admin" || user?.userType === "super_admin";
+
+  const canManageRestaurant = (user: any, restaurant: any) =>
+    Boolean(restaurant) &&
+    (isAdminUser(user) || String(restaurant.ownerId) === String(user?.id || ""));
+
   app.post(
     "/api/upload/restaurant-logo",
     isAuthenticated,
@@ -35,7 +42,7 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!canManageRestaurant(req.user, restaurant)) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -96,7 +103,7 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!canManageRestaurant(req.user, restaurant)) {
           return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -162,7 +169,7 @@ export function registerMediaRoutes(app: Express) {
         }
 
         const restaurant = await storage.getRestaurant(deal.restaurantId);
-        if (!restaurant || restaurant.ownerId !== req.user.id) {
+        if (!canManageRestaurant(req.user, restaurant)) {
           return res.status(403).json({ message: "Not authorized" });
         }
 

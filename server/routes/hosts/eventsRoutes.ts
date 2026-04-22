@@ -42,6 +42,22 @@ import { dateKeyInZone } from "../../services/dateKeys";
 import { resolveCityTimeZoneSync } from "../../services/cityTimeZone";
 
 export function registerHostEventsRoutes(app: Express) {
+  const isAdminUser = (user: any) =>
+    user?.userType === "admin" || user?.userType === "super_admin";
+
+  const resolveHostForAccess = async (
+    hostId: string,
+    userId: string,
+    user: any,
+  ) => {
+    const host = await storage.getHost(hostId);
+    if (!host) return null;
+    if (isAdminUser(user) || String(host.userId) === String(userId)) {
+      return host;
+    }
+    return null;
+  };
+
   const createHostParkingPassListing = async (req: any, res: any) => {
     try {
       const userId = req.user.id;
@@ -49,8 +65,8 @@ export function registerHostEventsRoutes(app: Express) {
       if (!hostId) {
         return res.status(400).json({ message: "Host ID required" });
       }
-      const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      const host = await resolveHostForAccess(hostId, userId, req.user);
+      if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }
       if (
@@ -408,8 +424,8 @@ export function registerHostEventsRoutes(app: Express) {
       if (!hostId) {
         return res.status(400).json({ message: "Host ID required" });
       }
-      const host = await storage.getHost(hostId);
-      if (!host || host.userId !== userId) {
+      const host = await resolveHostForAccess(hostId, userId, req.user);
+      if (!host) {
         return res.status(404).json({ message: "Host profile not found" });
       }
 
@@ -462,7 +478,8 @@ export function registerHostEventsRoutes(app: Express) {
       await ensureParkingPassEventRow({ passId: eventId, requireFuture: true });
 
       // Verify event exists and host owns it
-      const { event, host } = await getEventAndHostForUser(eventId, userId);
+      const { event } = await getEventAndHostForUser(eventId, userId);
+      const host = event?.hostId ? await storage.getHost(event.hostId) : null;
 
       if (!event) {
         return res
@@ -474,7 +491,7 @@ export function registerHostEventsRoutes(app: Express) {
       }
 
       // Verify host owns the event
-      if (!userOwnsEvent(userId, host, event)) {
+      if (!isAdminUser(req.user) && !userOwnsEvent(userId, host, event)) {
         return res.status(403).json({
           message: "Not authorized to edit this parking pass listing",
         });
@@ -1136,10 +1153,11 @@ export function registerHostEventsRoutes(app: Express) {
         }
 
         // Verify host owns the event associated with this interest
-        const { interest, event, host } = await getInterestEventAndHostForUser(
+        const { interest, event } = await getInterestEventAndHostForUser(
           interestId,
           userId,
         );
+        const host = event?.hostId ? await storage.getHost(event.hostId) : null;
 
         if (!interest) {
           return res.status(404).json({ message: "Interest not found" });
@@ -1151,7 +1169,7 @@ export function registerHostEventsRoutes(app: Express) {
             .json({ message: "Parking pass listing not found" });
         }
 
-        if (!userOwnsEvent(userId, host, event)) {
+        if (!isAdminUser(req.user) && !userOwnsEvent(userId, host, event)) {
           return res.status(403).json({
             message: "Not authorized to manage this parking pass listing",
           });
@@ -1269,13 +1287,19 @@ export function registerHostEventsRoutes(app: Express) {
       const userId = req.user.id;
 
       // Verify host owns this parking pass listing (indirectly via host profile)
-      const host = await getHostByUserId(userId);
-      if (!host) {
-        return res.status(403).json({ message: "Not a host" });
-      }
-
       const { event } = await getEventAndHostForUser(eventId, userId);
-      if (!event || !userOwnsEvent(userId, host, event)) {
+      if (!event) {
+        return res
+          .status(404)
+          .json({ message: "Parking pass listing not found" });
+      }
+      const host = await storage.getHost(event.hostId);
+      if (!host) {
+        return res
+          .status(404)
+          .json({ message: "Parking pass listing not found" });
+      }
+      if (!isAdminUser(req.user) && !userOwnsEvent(userId, host, event)) {
         return res
           .status(404)
           .json({ message: "Parking pass listing not found" });
