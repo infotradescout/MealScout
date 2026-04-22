@@ -52,6 +52,7 @@ import { useAuth } from "@/hooks/useAuth";
 import ShareButton from "@/components/share-button";
 import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
@@ -226,6 +227,11 @@ type PlaceDetailsResponse = {
     latitude: number | null;
     longitude: number | null;
   };
+};
+
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
 };
 
 type SocialAutopostSettings = {
@@ -653,6 +659,23 @@ export default function ParkingPassPage() {
   const [parkingCoords, setParkingCoords] = useState<Record<string, GeoPoint>>(
     {},
   );
+
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const res = await fetch("/api/map/runtime");
+      if (!res.ok) return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const runtimeGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const effectiveGoogleMapsApiKey =
+    GOOGLE_MAPS_WEB_API_KEY || runtimeGoogleMapsApiKey;
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -2521,6 +2544,11 @@ export default function ParkingPassPage() {
     const lng = parseCoord(host.longitude);
     if (lat === null || lng === null) return null;
     return { lat, lng };
+  };
+
+  const buildGoogleLocationPhotoUrl = (coords: GeoPoint | null) => {
+    if (!coords || !effectiveGoogleMapsApiKey) return null;
+    return `https://maps.googleapis.com/maps/api/streetview?size=640x360&location=${encodeURIComponent(`${coords.lat},${coords.lng}`)}&fov=85&pitch=0&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
   };
 
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {
@@ -5996,6 +6024,18 @@ export default function ParkingPassPage() {
                           )
                             ? (bookingListing?.bookings ?? [])
                             : [];
+                          const hostLocations = hostLocationsByHostId.get(
+                            group.host.id,
+                          );
+                          const hostPreviewCoords =
+                            parkingCoords[group.key] ||
+                            getLocationCoords(group.host) ||
+                            (hostLocations && hostLocations.length > 0
+                              ? hostLocations[0].coords
+                              : null);
+                          const hostCardPhotoUrl =
+                            group.host.spotImageUrl ||
+                            buildGoogleLocationPhotoUrl(hostPreviewCoords);
                           const isActive = activeLocation?.key === group.key;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
@@ -6049,6 +6089,14 @@ export default function ParkingPassPage() {
                                   View
                                 </Button>
                               </div>
+                              {hostCardPhotoUrl && (
+                                <img
+                                  src={hostCardPhotoUrl}
+                                  alt={`${group.host.businessName} location`}
+                                  className="h-28 w-full rounded-xl border border-border/60 object-cover"
+                                  loading="lazy"
+                                />
+                              )}
                               {groupDateKeys.length > 1 && (
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] text-[color:var(--text-muted)]">
@@ -6291,6 +6339,18 @@ export default function ParkingPassPage() {
                         const bookings = Array.isArray(bookingListing?.bookings)
                           ? (bookingListing?.bookings ?? [])
                           : [];
+                        const hostLocations = hostLocationsByHostId.get(
+                          group.host.id,
+                        );
+                        const hostPreviewCoords =
+                          parkingCoords[group.key] ||
+                          getLocationCoords(group.host) ||
+                          (hostLocations && hostLocations.length > 0
+                            ? hostLocations[0].coords
+                            : null);
+                        const hostCardPhotoUrl =
+                          group.host.spotImageUrl ||
+                          buildGoogleLocationPhotoUrl(hostPreviewCoords);
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
@@ -6332,6 +6392,14 @@ export default function ParkingPassPage() {
                                   : "No dates listed"}
                               </span>
                             </div>
+                            {hostCardPhotoUrl && (
+                              <img
+                                src={hostCardPhotoUrl}
+                                alt={`${group.host.businessName} location`}
+                                className="h-28 w-full rounded-xl border border-border/60 object-cover"
+                                loading="lazy"
+                              />
+                            )}
                             {groupDateKeys.length > 1 && (
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <span className="text-[11px] text-[color:var(--text-muted)]">
