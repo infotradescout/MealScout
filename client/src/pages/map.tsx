@@ -996,6 +996,7 @@ async function geocodeAddress(address: string): Promise<GeoPoint | null> {
 }
 
 export default function MapPage() {
+  // Touch update to trigger deployment rebuild after map styling configuration changes.
   const mapBranding = useMemo(resolveMapBranding, []);
   const queryClient = useQueryClient();
   const isStandalone = useIsStandalone();
