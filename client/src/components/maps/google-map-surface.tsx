@@ -75,9 +75,9 @@ const mapStyleHideFoodPoiIcons: Array<{
   elementType?: string;
   stylers: Array<Record<string, string>>;
 }> = [
-  // Google Maps JS style rules do not reliably expose a food-only POI icon filter
-  // across map modes. Keep this empty to avoid invalid style errors and preserve
-  // all map icons; food-only suppression should be done via Cloud Map Styling (Map ID).
+  // Food-only POI suppression is not reliable with inline JS style rules.
+  // To hide only food spots while preserving other business familiarity,
+  // use Google Cloud Map Styling (Map ID) categories.
 ];
 
 const markerColor = (marker: MapAdapterMarker) => {
