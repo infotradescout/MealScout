@@ -1361,6 +1361,25 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const needsBusinessProfile =
+      formData.userType === "restaurant_owner" ||
+      formData.userType === "food_truck" ||
+      formData.userType === "supplier" ||
+      formData.userType === "host" ||
+      formData.userType === "event_coordinator";
+
+    if (
+      needsBusinessProfile &&
+      (!formData.businessName.trim() || !formData.address.trim())
+    ) {
+      toast({
+        title: "Missing required fields",
+        description: "Business/location name and address are required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Auto-geocode for hosts if address provided
     if (
       formData.userType === "host" &&
@@ -1760,6 +1779,38 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                     payments directly.
                   </strong>
                 </p>
+              </div>
+
+              <div className="space-y-3 mt-3">
+                <div>
+                  <label className="text-sm font-medium">
+                    Organization Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.businessName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, businessName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md"
+                    placeholder="Organization or coordinator business name"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Primary Address</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.address}
+                    onChange={(e) =>
+                      setFormData({ ...formData, address: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-md"
+                    placeholder="123 Main St, City, State 12345"
+                  />
+                </div>
               </div>
             </div>
           </>

@@ -1210,8 +1210,27 @@ export function registerAdminManagementRoutes(app: Express) {
           (!normalizedBusinessName || !normalizedAddress)
         ) {
           return res.status(400).json({
-            message:
-              "businessName and address are required to provision this account type",
+            message: `businessName and address are required for ${userType} provisioning`,
+          });
+        }
+
+        const allowedHostLocationTypes = new Set([
+          "private_residence",
+          "business",
+          "parking_lot",
+          "event_space",
+          "public_park",
+          "other",
+          "event_coordinator",
+        ]);
+        const normalizedLocationType = String(locationType || "").trim();
+        if (
+          userType === "host" &&
+          normalizedLocationType &&
+          !allowedHostLocationTypes.has(normalizedLocationType)
+        ) {
+          return res.status(400).json({
+            message: "Invalid host locationType value",
           });
         }
 
@@ -1349,8 +1368,9 @@ export function registerAdminManagementRoutes(app: Express) {
                 locationType:
                   userType === "event_coordinator"
                     ? "event_coordinator"
-                    : locationType || "other",
+                    : normalizedLocationType || "other",
                 expectedFootTraffic: footTrafficMap[footTraffic] || 100,
+                contactPhone: phone?.trim() || null,
                 amenities:
                   Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
                 isVerified: true,
