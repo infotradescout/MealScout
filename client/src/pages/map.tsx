@@ -357,6 +357,13 @@ type MapLocationsResponse = {
   eventLocations: EventLocation[];
 };
 
+type MapViewportOverlaysResponse = {
+  version: string;
+  zoom?: number;
+  hostLocations: HostLocation[];
+  eventLocations: EventLocation[];
+};
+
 type MapFootTrafficResponse = {
   generatedAt: string;
   windowMinutes: number;
@@ -1014,6 +1021,8 @@ export default function MapPage() {
   );
   const [zoomLevel, setZoomLevel] = useState(16);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
+  const [debouncedMapBounds, setDebouncedMapBounds] =
+    useState<MapBoundsLike | null>(null);
   const [appliedMapBounds, setAppliedMapBounds] =
     useState<MapBoundsLike | null>(null);
   const [hasPendingAreaSearch, setHasPendingAreaSearch] = useState(false);
@@ -1627,6 +1636,61 @@ export default function MapPage() {
     );
   }, [mapLocationsData, cachedMapLocations]);
 
+  const { data: viewportOverlaysData } = useQuery<MapViewportOverlaysResponse>({
+    queryKey: [
+      "/api/map/overlays",
+      debouncedMapBounds
+        ? [
+            Number(debouncedMapBounds.north.toFixed(4)),
+            Number(debouncedMapBounds.south.toFixed(4)),
+            Number(debouncedMapBounds.east.toFixed(4)),
+            Number(debouncedMapBounds.west.toFixed(4)),
+          ]
+        : null,
+      zoomLevel,
+    ],
+    enabled: Boolean(debouncedMapBounds),
+    queryFn: async () => {
+      const bounds = debouncedMapBounds;
+      if (!bounds) {
+        return {
+          version: "none",
+          zoom: zoomLevel,
+          hostLocations: [],
+          eventLocations: [],
+        };
+      }
+      const params = new URLSearchParams({
+        north: String(bounds.north),
+        south: String(bounds.south),
+        east: String(bounds.east),
+        west: String(bounds.west),
+        zoom: String(zoomLevel),
+      });
+      const res = await fetch(apiUrl(`/api/map/overlays?${params.toString()}`));
+      if (!res.ok) throw new Error("Failed to load map overlays");
+      return res.json();
+    },
+    staleTime: 20 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  const activeMapLocations: MapLocationsResponse = useMemo(() => {
+    if (
+      viewportOverlaysData &&
+      Array.isArray(viewportOverlaysData.hostLocations) &&
+      Array.isArray(viewportOverlaysData.eventLocations)
+    ) {
+      return {
+        hostLocations: viewportOverlaysData.hostLocations,
+        eventLocations: viewportOverlaysData.eventLocations,
+      };
+    }
+    return mapLocations;
+  }, [viewportOverlaysData, mapLocations]);
+
   // Hosts with unpriced/unbookable Parking Pass listings must not appear on maps.
   // Use a lightweight host-id endpoint + localStorage cache so the map can render immediately.
   const BOOKABLE_HOST_CACHE_KEY = "mealscout:map:bookableHostIds:v1";
@@ -1847,11 +1911,11 @@ export default function MapPage() {
   }, [adminHostStatusPayload]);
 
   const visibleHostLocations = useMemo(() => {
-    if (!mapLocations?.hostLocations?.length) return [];
+    if (!activeMapLocations?.hostLocations?.length) return [];
     // Host parking pins should follow the live viewport; don't require "Search this area"
     // (which is primarily for refreshing/filtering other content like deals).
     const boundsForPins = mapBounds ?? appliedMapBounds;
-    return mapLocations.hostLocations.filter((host) => {
+    return activeMapLocations.hostLocations.filter((host) => {
       const hostId = host.hostId ? String(host.hostId) : "";
       if (!hostId) return false;
       const coords = resolveHostCoords(host);
@@ -1861,7 +1925,7 @@ export default function MapPage() {
       }
       return true;
     });
-  }, [mapLocations, hostCoords, mapBounds, appliedMapBounds]);
+  }, [activeMapLocations, hostCoords, mapBounds, appliedMapBounds]);
 
   const lastHostIdsUpdatedLabel = (() => {
     const fromServer = bookableHostIdPayload?.generatedAt;
@@ -1919,14 +1983,14 @@ export default function MapPage() {
   );
 
   const visibleEventLocations = useMemo(() => {
-    if (!mapLocations?.eventLocations?.length) return [];
-    return mapLocations.eventLocations.filter((event) => {
+    if (!activeMapLocations?.eventLocations?.length) return [];
+    return activeMapLocations.eventLocations.filter((event) => {
       const coords = resolveEventCoords(event);
       if (!coords) return false;
       if (!appliedMapBounds) return true;
       return appliedMapBounds.contains([coords.lat, coords.lng]);
     });
-  }, [mapLocations, eventCoords, appliedMapBounds]);
+  }, [activeMapLocations, eventCoords, appliedMapBounds]);
 
   const hostMarkerCoordsById = useMemo(() => {
     const groups = new Map<string, Array<{ id: string; coords: GeoPoint }>>();
@@ -1981,14 +2045,14 @@ export default function MapPage() {
 
   useEffect(() => {
     if (
-      !mapLocations?.hostLocations?.length &&
-      !mapLocations?.eventLocations?.length
+      !activeMapLocations?.hostLocations?.length &&
+      !activeMapLocations?.eventLocations?.length
     ) {
       return;
     }
 
     const nextHosts: Record<string, GeoPoint> = {};
-    mapLocations?.hostLocations.forEach((host) => {
+    activeMapLocations?.hostLocations.forEach((host) => {
       const lat = toNumberOrNull(host.latitude);
       const lng = toNumberOrNull(host.longitude);
       if (lat !== null && lng !== null) {
@@ -1997,7 +2061,7 @@ export default function MapPage() {
     });
 
     const nextEvents: Record<string, GeoPoint> = {};
-    mapLocations?.eventLocations.forEach((event) => {
+    activeMapLocations?.eventLocations.forEach((event) => {
       const lat = toNumberOrNull(event.hostLatitude);
       const lng = toNumberOrNull(event.hostLongitude);
       if (lat !== null && lng !== null) {
@@ -2011,7 +2075,7 @@ export default function MapPage() {
     if (Object.keys(nextEvents).length) {
       setEventCoords((prev) => ({ ...prev, ...nextEvents }));
     }
-  }, [mapLocations]);
+  }, [activeMapLocations]);
 
   // Build a geocoding work list for any host/event without coordinates yet
   useEffect(() => {
@@ -2208,6 +2272,17 @@ export default function MapPage() {
       setHasPendingAreaSearch(true);
     }
   }, [mapBounds, appliedMapBounds]);
+
+  useEffect(() => {
+    if (!mapBounds) {
+      setDebouncedMapBounds(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedMapBounds(mapBounds);
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [mapBounds]);
 
   const applyCurrentArea = () => {
     if (!mapBounds) return;

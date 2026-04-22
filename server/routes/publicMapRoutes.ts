@@ -866,6 +866,77 @@ export function registerPublicMapRoutes(app: Express) {
     }
   });
 
+  app.get("/api/map/overlays", async (req, res) => {
+    try {
+      const bounds = parseBounds(req.query as Record<string, unknown>);
+      if (!bounds) {
+        return res.status(400).json({ message: "Valid bounds are required" });
+      }
+
+      const zoom = Math.max(1, Math.min(22, Number(req.query.zoom || 12) || 12));
+      const pad = zoom <= 9 ? 0.12 : zoom <= 12 ? 0.06 : zoom <= 15 ? 0.03 : 0.015;
+      const expandedBounds: BoundsLike = {
+        north: Math.min(90, bounds.north + pad),
+        south: Math.max(-90, bounds.south - pad),
+        east: bounds.east + pad,
+        west: bounds.west - pad,
+      };
+
+      const payloadSource =
+        mapLocationsCache?.payload || mapLocationsLastGood?.payload || {
+          hostLocations: [],
+          eventLocations: [],
+        };
+
+      const parseCoord = (value?: string | number | null) => {
+        if (value === null || value === undefined) return null;
+        const parsed = typeof value === "string" ? Number(value) : value;
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const hostLocations = (payloadSource.hostLocations || []).filter((host) => {
+        const lat = parseCoord(host?.latitude);
+        const lng = parseCoord(host?.longitude);
+        if (lat === null || lng === null) return false;
+        return pointInBounds(expandedBounds, lat, lng);
+      });
+
+      const eventLocations = (payloadSource.eventLocations || []).filter((event) => {
+        const lat = parseCoord(event?.hostLatitude);
+        const lng = parseCoord(event?.hostLongitude);
+        if (lat === null || lng === null) return false;
+        return pointInBounds(expandedBounds, lat, lng);
+      });
+
+      const maxPerLayer = zoom <= 9 ? 800 : zoom <= 12 ? 1200 : 2000;
+      const clippedHosts = hostLocations.slice(0, maxPerLayer);
+      const clippedEvents = eventLocations.slice(0, maxPerLayer);
+
+      const version = String(
+        mapLocationsCache?.expiresAt ||
+          mapLocationsLastGood?.payload?.hostLocations?.length ||
+          Date.now(),
+      );
+
+      res.setHeader("Cache-Control", "public, max-age=20");
+      res.json({
+        version,
+        zoom,
+        bounds,
+        hostLocations: clippedHosts,
+        eventLocations: clippedEvents,
+      });
+    } catch (error) {
+      console.error("Error building map overlays feed:", error);
+      res.status(200).json({
+        version: "fallback",
+        zoom: Number(req.query.zoom || 12) || 12,
+        hostLocations: [],
+        eventLocations: [],
+      });
+    }
+  });
+
   app.get("/api/map/route-summary", async (req, res) => {
     const originLat = toFiniteNumber(req.query.originLat);
     const originLng = toFiniteNumber(req.query.originLng);
