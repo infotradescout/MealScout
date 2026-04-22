@@ -71,37 +71,6 @@ type MapBranding = {
 };
 
 const resolveMapBranding = (): MapBranding => {
-  const host =
-    typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
-  const origin =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : "https://www.mealscout.us";
-  const enableTradeScoutBranding =
-    String(import.meta.env.VITE_ENABLE_TRADESCOUT_BRANDING || "")
-      .trim()
-      .toLowerCase() === "true";
-  const isTradeScoutHost =
-    enableTradeScoutBranding &&
-    (host === "tradescout.us" || host === "www.tradescout.us");
-  if (isTradeScoutHost) {
-    return {
-      appName: "TradeScout",
-      mapName: "TradeScout Map",
-      canonicalBaseUrl: origin,
-      seoTitle: "Map View - TradeScout | Live Local Marketplace",
-      seoDescription:
-        "Explore live trucks, hosts, events, and local demand signals on an interactive TradeScout map.",
-      seoKeywords:
-        "local marketplace map, live truck map, host location map, event map, TradeScout map",
-      mapSchemaDescription:
-        "Interactive map of live trucks, hosts, events, and local demand signals.",
-      exploreHeading: "Explore TradeScout Pages",
-      exploreDescription:
-        "Continue browsing local trucks, hosts, restaurants, and active opportunities.",
-    };
-  }
-
   return {
     appName: "MealScout",
     mapName: "MealScout Map",
