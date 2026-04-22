@@ -68,6 +68,14 @@ const mapStyleDark = [
   },
 ];
 
+const mapStyleHideFoodPoiIcons = [
+  {
+    featureType: "poi.business",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
+];
+
 const markerColor = (marker: MapAdapterMarker) => {
   if (marker.color) return marker.color;
   const kind = marker.kind;
@@ -302,7 +310,9 @@ export function GoogleMapSurface({
             // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
             // Touch devices: keep native cooperative behavior.
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
-            styles: isNightTheme ? mapStyleDark : null,
+            styles: isNightTheme
+              ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
+              : mapStyleHideFoodPoiIcons,
           });
 
           mapRef.current.addListener("idle", () => {
