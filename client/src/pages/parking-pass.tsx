@@ -229,11 +229,6 @@ type PlaceDetailsResponse = {
   };
 };
 
-type MapRuntimeResponse = {
-  hasGoogleMapsKey: boolean;
-  googleMapsApiKey?: string | null;
-};
-
 type SocialAutopostSettings = {
   platforms: {
     facebook: boolean;
@@ -659,23 +654,7 @@ export default function ParkingPassPage() {
   const [parkingCoords, setParkingCoords] = useState<Record<string, GeoPoint>>(
     {},
   );
-
-  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
-    queryKey: ["/api/map/runtime"],
-    queryFn: async () => {
-      const res = await fetch("/api/map/runtime");
-      if (!res.ok) return { hasGoogleMapsKey: false, googleMapsApiKey: null };
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
-
-  const runtimeGoogleMapsApiKey = String(
-    mapRuntime?.googleMapsApiKey || "",
-  ).trim();
-  const effectiveGoogleMapsApiKey =
-    GOOGLE_MAPS_WEB_API_KEY || runtimeGoogleMapsApiKey;
+  const effectiveGoogleMapsApiKey = GOOGLE_MAPS_WEB_API_KEY;
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -2548,7 +2527,8 @@ export default function ParkingPassPage() {
 
   const buildGoogleLocationPhotoUrl = (addressQuery: string | null) => {
     if (!addressQuery || !effectiveGoogleMapsApiKey) return null;
-    return `https://maps.googleapis.com/maps/api/streetview?size=640x360&location=${encodeURIComponent(addressQuery)}&fov=85&pitch=0&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+    const encodedAddress = encodeURIComponent(addressQuery);
+    return `https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddress}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encodedAddress}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
   };
 
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {
