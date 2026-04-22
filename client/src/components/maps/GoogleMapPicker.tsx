@@ -228,7 +228,10 @@ function GoogleMapRenderer({
           ...(mapId ? { mapId } : {}),
         });
         mapRef.current = map;
-        const iw = new g.maps.InfoWindow();
+        const iw = new g.maps.InfoWindow({
+          maxWidth: 340,
+          disableAutoPan: false,
+        });
         infoWindowRef.current = iw;
         // Create a persistent DOM node that React will portal into
         const portalDiv = document.createElement("div");
@@ -316,7 +319,9 @@ function GoogleMapRenderer({
           if (infoWindow) {
             // Render the React popup node into the persistent portal container,
             // then open the InfoWindow anchored to this marker.
-            setInfoPortalContent(pin.popup ?? null);
+            setInfoPortalContent(
+              pin.popup ? <div className="gmp-popup-card">{pin.popup}</div> : null,
+            );
             infoWindow.open(map, marker);
           }
         });
