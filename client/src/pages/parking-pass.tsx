@@ -661,6 +661,38 @@ export default function ParkingPassPage() {
   }, [viewMode]);
 
   const mapInteractionsEnabled = !mapPopupOpen;
+  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v2";
+  const MAP_LOCATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
+
+  const readCachedMapLocations = (): MapLocationsResponse | null => {
+    try {
+      const raw = localStorage.getItem(MAP_LOCATIONS_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as any;
+
+      // New cache shape: { cachedAt, data }. Keep backward compatibility for older raw payloads.
+      const maybeData = parsed?.data ?? parsed;
+      const cachedAt = Number(parsed?.cachedAt ?? 0);
+
+      if (
+        !maybeData ||
+        !Array.isArray(maybeData.hostLocations) ||
+        !Array.isArray(maybeData.eventLocations)
+      ) {
+        return null;
+      }
+
+      if (cachedAt > 0 && Date.now() - cachedAt > MAP_LOCATIONS_CACHE_TTL_MS) {
+        localStorage.removeItem(MAP_LOCATIONS_CACHE_KEY);
+        return null;
+      }
+
+      return maybeData as MapLocationsResponse;
+    } catch {
+      return null;
+    }
+  };
+
   const { data: mapLocationsData } = useQuery<MapLocationsResponse>({
     queryKey: ["/api/map/locations"],
     queryFn: async () => {
@@ -670,28 +702,14 @@ export default function ParkingPassPage() {
       }
       return res.json();
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+    refetchInterval: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
-  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v1";
   const [cachedMapLocations, setCachedMapLocations] =
     useState<MapLocationsResponse | null>(() => {
-      try {
-        const raw = localStorage.getItem(MAP_LOCATIONS_CACHE_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw) as any;
-        if (
-          parsed &&
-          Array.isArray(parsed.hostLocations) &&
-          Array.isArray(parsed.eventLocations)
-        ) {
-          return parsed as MapLocationsResponse;
-        }
-        return null;
-      } catch {
-        return null;
-      }
+      return readCachedMapLocations();
     });
 
   useEffect(() => {
@@ -700,7 +718,10 @@ export default function ParkingPassPage() {
     try {
       localStorage.setItem(
         MAP_LOCATIONS_CACHE_KEY,
-        JSON.stringify(mapLocationsData),
+        JSON.stringify({
+          cachedAt: Date.now(),
+          data: mapLocationsData,
+        }),
       );
     } catch {
       // ignore
@@ -746,7 +767,9 @@ export default function ParkingPassPage() {
     refetchOnWindowFocus: false,
   });
   useEffect(() => {
-    if (!bookableHostIdPayload?.hostIds?.length) return;
+    if (!bookableHostIdPayload || !Array.isArray(bookableHostIdPayload.hostIds)) {
+      return;
+    }
     const next = new Set(bookableHostIdPayload.hostIds.map((id) => String(id)));
     setCachedBookableHostIds(next);
     try {

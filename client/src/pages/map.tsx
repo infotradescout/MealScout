@@ -1556,20 +1556,27 @@ export default function MapPage() {
   };
 
   // Fetch host + event locations for map
-  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v1";
+  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v2";
+  const MAP_LOCATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
   const [cachedMapLocations, setCachedMapLocations] =
     useState<MapLocationsResponse | null>(() => {
       try {
         const raw = localStorage.getItem(MAP_LOCATIONS_CACHE_KEY);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
+        const maybeData = (parsed as any)?.data ?? parsed;
+        const cachedAt = Number((parsed as any)?.cachedAt ?? 0);
         if (
-          parsed &&
-          typeof parsed === "object" &&
-          Array.isArray((parsed as any).hostLocations) &&
-          Array.isArray((parsed as any).eventLocations)
+          maybeData &&
+          typeof maybeData === "object" &&
+          Array.isArray((maybeData as any).hostLocations) &&
+          Array.isArray((maybeData as any).eventLocations)
         ) {
-          return parsed as MapLocationsResponse;
+          if (cachedAt > 0 && Date.now() - cachedAt > MAP_LOCATIONS_CACHE_TTL_MS) {
+            localStorage.removeItem(MAP_LOCATIONS_CACHE_KEY);
+            return null;
+          }
+          return maybeData as MapLocationsResponse;
         }
         return null;
       } catch {
@@ -1596,7 +1603,10 @@ export default function MapPage() {
     try {
       localStorage.setItem(
         MAP_LOCATIONS_CACHE_KEY,
-        JSON.stringify(mapLocationsData),
+        JSON.stringify({
+          cachedAt: Date.now(),
+          data: mapLocationsData,
+        }),
       );
     } catch {
       // ignore localStorage issues
