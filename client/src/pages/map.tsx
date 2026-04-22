@@ -2230,9 +2230,15 @@ export default function MapPage() {
   const runtimeGoogleMapsApiKey = String(
     mapRuntime?.googleMapsApiKey || "",
   ).trim();
+  const currentHost =
+    typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+  const shouldForceLegacyByHost = currentHost.endsWith(".vercel.app");
   const effectiveGoogleMapsApiKey =
-    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
+    shouldForceLegacyByHost
+      ? ""
+      : runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
   const shouldHoldMapProviderSelection =
+    !shouldForceLegacyByHost &&
     GOOGLE_MAPS_WEB_API_KEY.length === 0 &&
     runtimeGoogleMapsApiKey.length === 0 &&
     !mapProviderGraceExpired;
@@ -2242,6 +2248,8 @@ export default function MapPage() {
     !shouldHoldMapProviderSelection && isGoogleProviderRequested && !forceLegacyMap;
   const mapProviderLabel = isUsingGoogleMap
     ? "Google Maps"
+    : shouldForceLegacyByHost
+      ? "Legacy map (preview host)"
     : isGoogleProviderMissingKey
       ? "Legacy map (Google key missing)"
       : "Legacy map (Google unavailable)";
@@ -2255,14 +2263,16 @@ export default function MapPage() {
 
   useEffect(() => {
     // If key provisioning completes after first render, allow Google map immediately.
+    if (shouldForceLegacyByHost) return;
     if (!isGoogleProviderRequested) return;
     setForceLegacyMap(false);
     setGoogleMapsRuntimeError(null);
     setGoogleMapAutoRetryCount(0);
-  }, [effectiveGoogleMapsApiKey, isGoogleProviderRequested]);
+  }, [effectiveGoogleMapsApiKey, isGoogleProviderRequested, shouldForceLegacyByHost]);
 
   useEffect(() => {
     // Recover from transient script/auth races without requiring user navigation.
+    if (shouldForceLegacyByHost) return;
     if (!forceLegacyMap || !isGoogleProviderRequested) return;
     if (googleMapAutoRetryCount >= 3) return;
     const timer = window.setTimeout(() => {
@@ -2272,7 +2282,7 @@ export default function MapPage() {
       setGoogleMapRetryNonce((prev) => prev + 1);
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [forceLegacyMap, isGoogleProviderRequested, googleMapAutoRetryCount]);
+  }, [forceLegacyMap, isGoogleProviderRequested, googleMapAutoRetryCount, shouldForceLegacyByHost]);
 
   const adapterMarkers = useMemo<MapAdapterMarker[]>(() => {
     const next: MapAdapterMarker[] = [];
@@ -2859,6 +2869,7 @@ export default function MapPage() {
                 preferCanvas
                 zoomAnimation={false}
                 markerZoomAnimation={false}
+                fadeAnimation={false}
                 style={{ height: "100%", width: "100%" }}
                 className="rounded-lg overflow-hidden"
               >
