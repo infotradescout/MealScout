@@ -2546,9 +2546,9 @@ export default function ParkingPassPage() {
     return { lat, lng };
   };
 
-  const buildGoogleLocationPhotoUrl = (coords: GeoPoint | null) => {
-    if (!coords || !effectiveGoogleMapsApiKey) return null;
-    return `https://maps.googleapis.com/maps/api/streetview?size=640x360&location=${encodeURIComponent(`${coords.lat},${coords.lng}`)}&fov=85&pitch=0&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+  const buildGoogleLocationPhotoUrl = (addressQuery: string | null) => {
+    if (!addressQuery || !effectiveGoogleMapsApiKey) return null;
+    return `https://maps.googleapis.com/maps/api/streetview?size=640x360&location=${encodeURIComponent(addressQuery)}&fov=85&pitch=0&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
   };
 
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {
@@ -6024,18 +6024,19 @@ export default function ParkingPassPage() {
                           )
                             ? (bookingListing?.bookings ?? [])
                             : [];
-                          const hostLocations = hostLocationsByHostId.get(
-                            group.host.id,
-                          );
-                          const hostPreviewCoords =
-                            parkingCoords[group.key] ||
-                            getLocationCoords(group.host) ||
+                          const hostLocations = hostLocationsByHostId.get(group.host.id);
+                          const hostPreviewAddress =
                             (hostLocations && hostLocations.length > 0
-                              ? hostLocations[0].coords
-                              : null);
+                              ? hostLocations[0].addressLabel
+                              : null) ||
+                            buildAddressLabel(
+                              group.host.address,
+                              group.host.city ?? "",
+                              group.host.state ?? "",
+                            );
                           const hostCardPhotoUrl =
                             group.host.spotImageUrl ||
-                            buildGoogleLocationPhotoUrl(hostPreviewCoords);
+                            buildGoogleLocationPhotoUrl(hostPreviewAddress || null);
                           const isActive = activeLocation?.key === group.key;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
@@ -6339,18 +6340,19 @@ export default function ParkingPassPage() {
                         const bookings = Array.isArray(bookingListing?.bookings)
                           ? (bookingListing?.bookings ?? [])
                           : [];
-                        const hostLocations = hostLocationsByHostId.get(
-                          group.host.id,
-                        );
-                        const hostPreviewCoords =
-                          parkingCoords[group.key] ||
-                          getLocationCoords(group.host) ||
+                        const hostLocations = hostLocationsByHostId.get(group.host.id);
+                        const hostPreviewAddress =
                           (hostLocations && hostLocations.length > 0
-                            ? hostLocations[0].coords
-                            : null);
+                            ? hostLocations[0].addressLabel
+                            : null) ||
+                          buildAddressLabel(
+                            group.host.address,
+                            group.host.city ?? "",
+                            group.host.state ?? "",
+                          );
                         const hostCardPhotoUrl =
                           group.host.spotImageUrl ||
-                          buildGoogleLocationPhotoUrl(hostPreviewCoords);
+                          buildGoogleLocationPhotoUrl(hostPreviewAddress || null);
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
