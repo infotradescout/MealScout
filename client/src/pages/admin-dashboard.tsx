@@ -1292,6 +1292,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     phone: "",
     businessName: "",
     address: "",
+    city: "",
+    state: "",
     cuisineType: "",
     latitude: "",
     longitude: "",
@@ -1340,6 +1342,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         phone: "",
         businessName: "",
         address: "",
+        city: "",
+        state: "",
         cuisineType: "",
         latitude: "",
         longitude: "",
@@ -1370,11 +1374,15 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
     if (
       needsBusinessProfile &&
-      (!formData.businessName.trim() || !formData.address.trim())
+      (!formData.businessName.trim() ||
+        !formData.address.trim() ||
+        !formData.city.trim() ||
+        !formData.state.trim())
     ) {
       toast({
         title: "Missing required fields",
-        description: "Business/location name and address are required.",
+        description:
+          "Business/location name, address, city, and state are required.",
         variant: "destructive",
       });
       return;
@@ -1388,9 +1396,13 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     ) {
       setGeocoding(true);
       try {
+        const geocodeQuery = [formData.address, formData.city, formData.state]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+          .join(", ");
         const response = await fetch(
           `/api/location/search?q=${encodeURIComponent(
-            formData.address,
+            geocodeQuery,
           )}&limit=1`,
         );
         const data = await response.json();
@@ -1416,6 +1428,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       userType: newType,
       businessName: "",
       address: "",
+      city: "",
+      state: "",
       cuisineType: "",
       latitude: "",
       longitude: "",
@@ -1430,9 +1444,13 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
     setGeocoding(true);
     try {
+      const geocodeQuery = [formData.address, formData.city, formData.state]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(", ");
       const response = await fetch(
         `/api/location/search?q=${encodeURIComponent(
-          formData.address,
+          geocodeQuery,
         )}&limit=1`,
       );
       const data = await response.json();
@@ -1693,6 +1711,35 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                   />
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">City</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="Houston"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">State</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.state}
+                      onChange={(e) =>
+                        setFormData({ ...formData, state: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="TX"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   {formData.userType !== "supplier" ? (
                     <>
@@ -1811,6 +1858,35 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                     placeholder="123 Main St, City, State 12345"
                   />
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">City</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="Austin"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">State</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.state}
+                      onChange={(e) =>
+                        setFormData({ ...formData, state: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="TX"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </>
@@ -1868,6 +1944,35 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                   <p className="text-xs text-[color:var(--text-muted)] mt-1">
                     Coordinates will be automatically geocoded from this address
                   </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">City</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="Dallas"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">State</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.state}
+                      onChange={(e) =>
+                        setFormData({ ...formData, state: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-md"
+                      placeholder="TX"
+                    />
+                  </div>
                 </div>
 
                 <div>

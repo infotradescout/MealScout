@@ -55,7 +55,7 @@ export default function EventsPage() {
   );
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [intakeVisibilityFilter, setIntakeVisibilityFilter] = useState<
-    "all" | "public" | "private"
+    "all" | "public" | "private" | "unknown"
   >("all");
   const [intakeTypeFilter, setIntakeTypeFilter] = useState<
     "all" | "event" | "food_truck"
@@ -232,6 +232,30 @@ export default function EventsPage() {
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
+    const isPrivateEvent = formData.eventVisibility === "private";
+    const hasAnyPricing = [
+      formData.hostPriceDollars,
+      formData.breakfastPriceDollars,
+      formData.lunchPriceDollars,
+      formData.dinnerPriceDollars,
+      formData.dailyPriceDollars,
+      formData.weeklyPriceDollars,
+      formData.monthlyPriceDollars,
+    ].some((value) => Number(String(value || "").trim() || 0) > 0);
+    if (
+      isPrivateEvent &&
+      (formData.eventCadence === "recurring" ||
+        formData.requiresPayment ||
+        hasAnyPricing)
+    ) {
+      toast({
+        title: "Private event rules",
+        description:
+          "Private events cannot be recurring or paid. Switch to Public to use Parking Pass settings.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!createEvent.isPending) {
       createEvent.mutate();
     }
@@ -300,13 +324,18 @@ export default function EventsPage() {
                       value={intakeVisibilityFilter}
                       onChange={(e) =>
                         setIntakeVisibilityFilter(
-                          e.target.value as "all" | "public" | "private",
+                          e.target.value as
+                            | "all"
+                            | "public"
+                            | "private"
+                            | "unknown",
                         )
                       }
                     >
                       <option value="all">All visibility</option>
                       <option value="public">Public</option>
                       <option value="private">Private</option>
+                      <option value="unknown">Unknown</option>
                     </select>
                   </div>
                   <div>
@@ -532,6 +561,21 @@ export default function EventsPage() {
                             eventVisibility: e.target.value as
                               | "public"
                               | "private",
+                            ...(e.target.value === "private"
+                              ? {
+                                  eventCadence: "one_time" as const,
+                                  recurringDaysOfWeek: [],
+                                  recurrenceEndDate: "",
+                                  requiresPayment: false,
+                                  hostPriceDollars: "",
+                                  breakfastPriceDollars: "",
+                                  lunchPriceDollars: "",
+                                  dinnerPriceDollars: "",
+                                  dailyPriceDollars: "",
+                                  weeklyPriceDollars: "",
+                                  monthlyPriceDollars: "",
+                                }
+                              : {}),
                           }))
                         }
                         required
@@ -553,6 +597,7 @@ export default function EventsPage() {
                           required
                           className="w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm"
                           value={formData.eventCadence}
+                          disabled={formData.eventVisibility === "private"}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
@@ -688,6 +733,7 @@ export default function EventsPage() {
                         <input
                           type="checkbox"
                           checked={formData.requiresPayment}
+                          disabled={formData.eventVisibility === "private"}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
@@ -698,8 +744,9 @@ export default function EventsPage() {
                         Paid Event / Parking Pass
                       </label>
                       <p className="text-xs text-[color:var(--text-muted)]">
-                        Recurring or paid events are posted through the parking
-                        pass flow.
+                        {formData.eventVisibility === "private"
+                          ? "Private events are always one-time and unpaid."
+                          : "Recurring or paid events are posted through the parking pass flow."}
                       </p>
                     </div>
 

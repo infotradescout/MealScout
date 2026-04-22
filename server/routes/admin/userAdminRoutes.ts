@@ -82,7 +82,15 @@ export function registerUserAdminRoutes(
           ? Math.max(1, Math.min(300, Math.trunc(rawLimit)))
           : 100;
         const claimTypeFilter = String(req.query?.claimType || "all").trim();
-        const visibilityFilter = String(req.query?.visibility || "all").trim();
+        const rawVisibilityFilter = String(
+          req.query?.visibility || "all",
+        ).trim();
+        const visibilityFilter =
+          rawVisibilityFilter === "public" ||
+          rawVisibilityFilter === "private" ||
+          rawVisibilityFilter === "unknown"
+            ? rawVisibilityFilter
+            : "all";
 
         const claimTypes =
           claimTypeFilter === CLAIM_TYPES.EVENT
@@ -185,6 +193,9 @@ export function registerUserAdminRoutes(
           })
           .filter((item: any) => {
             if (visibilityFilter === "all") return true;
+            if (visibilityFilter === "unknown") {
+              return item.eventVisibility !== "public" && item.eventVisibility !== "private";
+            }
             return item.eventVisibility === visibilityFilter;
           });
 
@@ -2048,6 +2059,16 @@ export function registerUserAdminRoutes(
         const dinner = Number(
           updates.dinnerPriceCents ?? event.dinnerPriceCents ?? 0,
         );
+        const finalRequiresPayment = Boolean(
+          updates.requiresPayment ?? event.requiresPayment,
+        );
+        const isPrivateEvent = String(event.eventType || "") === "private_event";
+        if (isPrivateEvent && (finalRequiresPayment || breakfast > 0 || lunch > 0 || dinner > 0)) {
+          return res.status(400).json({
+            message:
+              "Private events cannot use paid pricing. Change event type/visibility before adding Parking Pass pricing.",
+          });
+        }
         const finalStartTime = String(updates.startTime ?? event.startTime);
         const finalEndTime = String(updates.endTime ?? event.endTime);
         const invalidSlots: string[] = [];

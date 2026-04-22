@@ -1145,6 +1145,8 @@ export function registerAdminManagementRoutes(app: Express) {
           phone,
           businessName,
           address,
+          city,
+          state,
           cuisineType,
           latitude,
           longitude,
@@ -1202,15 +1204,20 @@ export function registerAdminManagementRoutes(app: Express) {
         const isSupplierProvisionType = userType === "supplier";
         const normalizedBusinessName = String(businessName || "").trim();
         const normalizedAddress = String(address || "").trim();
+        const normalizedCity = String(city || "").trim();
+        const normalizedState = String(state || "").trim();
 
         if (
           (isRestaurantProvisionType ||
             isHostProvisionType ||
             isSupplierProvisionType) &&
-          (!normalizedBusinessName || !normalizedAddress)
+          (!normalizedBusinessName ||
+            !normalizedAddress ||
+            !normalizedCity ||
+            !normalizedState)
         ) {
           return res.status(400).json({
-            message: `businessName and address are required for ${userType} provisioning`,
+            message: `businessName, address, city, and state are required for ${userType} provisioning`,
           });
         }
 
@@ -1283,6 +1290,32 @@ export function registerAdminManagementRoutes(app: Express) {
           }
         }
 
+        const shouldDeriveCoordinates =
+          (isRestaurantProvisionType || isHostProvisionType) &&
+          parsedLatitude === null &&
+          parsedLongitude === null;
+        if (shouldDeriveCoordinates) {
+          const fullAddress = [
+            normalizedAddress,
+            normalizedCity,
+            normalizedState,
+            "USA",
+          ]
+            .filter(Boolean)
+            .join(", ");
+          const coords = await forwardGeocode(fullAddress, { force: true }).catch(
+            () => null,
+          );
+          if (!coords) {
+            return res.status(400).json({
+              message:
+                "Could not geocode address. Provide a valid address/city/state before creating this account.",
+            });
+          }
+          parsedLatitude = Number(coords.lat);
+          parsedLongitude = Number(coords.lng);
+        }
+
         const userIsInternalTeam =
           userType === "staff" ||
           userType === "admin" ||
@@ -1338,9 +1371,17 @@ export function registerAdminManagementRoutes(app: Express) {
                 ownerId: insertedUser.id,
                 name: normalizedBusinessName,
                 address: normalizedAddress,
+                city: normalizedCity,
+                state: normalizedState,
                 cuisineType: cuisineType || "Various",
                 isActive: true,
                 isVerified: true,
+                ...(parsedLatitude !== null && parsedLongitude !== null
+                  ? {
+                      latitude: String(parsedLatitude),
+                      longitude: String(parsedLongitude),
+                    }
+                  : {}),
               })
               .returning({ id: restaurants.id });
             createdRestaurantId = insertedRestaurant?.id || null;
@@ -1365,6 +1406,8 @@ export function registerAdminManagementRoutes(app: Express) {
                 userId: insertedUser.id,
                 businessName: normalizedBusinessName,
                 address: normalizedAddress,
+                city: normalizedCity,
+                state: normalizedState,
                 locationType:
                   userType === "event_coordinator"
                     ? "event_coordinator"

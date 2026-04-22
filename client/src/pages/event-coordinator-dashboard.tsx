@@ -645,6 +645,27 @@ export default function EventCoordinatorDashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError("");
+    const isPrivateEvent = formData.eventVisibility === "private";
+    const hasAnyPricing = [
+      formData.hostPriceDollars,
+      formData.breakfastPriceDollars,
+      formData.lunchPriceDollars,
+      formData.dinnerPriceDollars,
+      formData.dailyPriceDollars,
+      formData.weeklyPriceDollars,
+      formData.monthlyPriceDollars,
+    ].some((value) => Number(String(value || "").trim() || 0) > 0);
+    if (
+      isPrivateEvent &&
+      (formData.eventCadence === "recurring" ||
+        formData.requiresPayment ||
+        hasAnyPricing)
+    ) {
+      setCreateError(
+        "Private events cannot be recurring or paid. Switch visibility to public to use Parking Pass settings.",
+      );
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/event-coordinator/events", {
@@ -906,6 +927,21 @@ export default function EventCoordinatorDashboard() {
                   setFormData({
                     ...formData,
                     eventVisibility: e.target.value as "public" | "private",
+                    ...(e.target.value === "private"
+                      ? {
+                          eventCadence: "one_time" as const,
+                          recurringDaysOfWeek: [],
+                          recurrenceEndDate: "",
+                          requiresPayment: false,
+                          hostPriceDollars: "",
+                          breakfastPriceDollars: "",
+                          lunchPriceDollars: "",
+                          dinnerPriceDollars: "",
+                          dailyPriceDollars: "",
+                          weeklyPriceDollars: "",
+                          monthlyPriceDollars: "",
+                        }
+                      : {}),
                   })
                 }
                 className={`${inputClassName} w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm`}
@@ -925,6 +961,7 @@ export default function EventCoordinatorDashboard() {
                 <select
                   id="eventCadence"
                   value={formData.eventCadence}
+                  disabled={formData.eventVisibility === "private"}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
@@ -1048,6 +1085,7 @@ export default function EventCoordinatorDashboard() {
                 <input
                   type="checkbox"
                   checked={formData.requiresPayment}
+                  disabled={formData.eventVisibility === "private"}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
@@ -1058,7 +1096,9 @@ export default function EventCoordinatorDashboard() {
                 Paid Event / Parking Pass
               </label>
               <p className="text-xs text-[color:var(--text-muted)]">
-                Recurring or paid events route through the parking pass flow.
+                {formData.eventVisibility === "private"
+                  ? "Private events are always one-time and unpaid."
+                  : "Recurring or paid events route through the parking pass flow."}
               </p>
             </div>
             <div className="flex items-center gap-3">
