@@ -187,6 +187,7 @@ function GoogleMapRenderer({
   onMapClick,
   onPinDrag,
   onPinClick,
+  onFatalError,
   interactionsEnabled = true,
 }: {
   apiKey: string;
@@ -198,6 +199,7 @@ function GoogleMapRenderer({
   onMapClick?: (p: GeoPoint) => void;
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
+  onFatalError?: (message: string) => void;
   interactionsEnabled?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -248,7 +250,11 @@ function GoogleMapRenderer({
         }
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(String(err?.message || "Map failed to load"));
+        if (!cancelled) {
+          const message = String(err?.message || "Map failed to load");
+          setLoadError(message);
+          onFatalError?.(message);
+        }
       });
     return () => {
       cancelled = true;
@@ -413,6 +419,8 @@ function LeafletRenderer({
       center={[center.lat, center.lng]}
       zoom={zoom}
       zoomControl={false}
+      zoomAnimation={false}
+      markerZoomAnimation={false}
       scrollWheelZoom={interactionsEnabled}
       dragging={interactionsEnabled}
       touchZoom={interactionsEnabled}
@@ -517,6 +525,7 @@ export function GoogleMapPicker({
           onMapClick={onMapClick}
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
+          onFatalError={() => setGoogleFailed(true)}
           interactionsEnabled={interactionsEnabled}
         />
       ) : (

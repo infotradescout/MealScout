@@ -2882,6 +2882,8 @@ export default function MapPage() {
                 zoom={zoomLevel}
                 zoomControl={false}
                 preferCanvas
+                zoomAnimation={false}
+                markerZoomAnimation={false}
                 style={{ height: "100%", width: "100%" }}
                 className="rounded-lg overflow-hidden"
               >
