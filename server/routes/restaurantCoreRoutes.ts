@@ -35,6 +35,7 @@ type AnalyticsAccessResult = {
 
 type RestaurantCoreRouteDependencies = {
   validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
+  hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
 };
 
 const ENGAGEMENT_ACTION_COOLDOWN_MS = 3000;
@@ -60,7 +61,7 @@ const consumeEngagementWindow = (key: string) => {
 
 export function registerRestaurantCoreRoutes(
   app: Express,
-  { validateAnalyticsAccess }: RestaurantCoreRouteDependencies,
+  { validateAnalyticsAccess, hasBusinessDistributionAccess }: RestaurantCoreRouteDependencies,
 ) {
   const trackEngagement = async (
     eventName: string,
@@ -83,6 +84,37 @@ export function registerRestaurantCoreRoutes(
       });
     } catch (error) {
       console.warn(`[telemetry] Failed to record ${eventName}:`, error);
+    }
+  };
+
+  const ensureRestaurantFollowForEngagement = async (
+    userId: string,
+    restaurantId: string,
+    source: "favorite" | "recommend",
+  ) => {
+    try {
+      const followData = insertRestaurantFollowSchema.parse({
+        restaurantId,
+        userId,
+      });
+      await storage.createRestaurantFollow(followData);
+      void trackEngagement(
+        "restaurant_follow_auto_added",
+        userId,
+        restaurantId,
+        { source },
+      );
+    } catch (error: any) {
+      if (error?.code === "23505") {
+        // Already following, no-op.
+        return;
+      }
+      console.warn("Failed to auto-follow after engagement", {
+        userId,
+        restaurantId,
+        source,
+        error: error?.message || error,
+      });
     }
   };
 
@@ -260,7 +292,29 @@ export function registerRestaurantCoreRoutes(
       const activeRestaurants = allRestaurants.filter(
         (restaurant: any) => restaurant?.isActive,
       );
-      const restaurantIds = activeRestaurants
+
+      const ownerIds = Array.from(
+        new Set(
+          activeRestaurants
+            .map((restaurant: any) => String(restaurant?.ownerId || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const ownerAccessEntries = await Promise.all(
+        ownerIds.map(async (ownerId) => [
+          ownerId,
+          await hasBusinessDistributionAccess(ownerId),
+        ] as const),
+      );
+      const ownerHasAccess = new Map<string, boolean>(ownerAccessEntries);
+
+      const homeEligibleRestaurants = activeRestaurants.filter((restaurant: any) => {
+        const ownerId = String(restaurant?.ownerId || "").trim();
+        if (!ownerId) return false;
+        return ownerHasAccess.get(ownerId) === true;
+      });
+
+      const restaurantIds = homeEligibleRestaurants
         .map((restaurant: any) => String(restaurant?.id || "").trim())
         .filter(Boolean);
 
@@ -466,7 +520,7 @@ export function registerRestaurantCoreRoutes(
         ]),
       );
 
-      const withDistance = activeRestaurants
+      const withDistance = homeEligibleRestaurants
         .map((restaurant: any) => {
           if (!hasLocation || Number.isNaN(userLat) || Number.isNaN(userLng)) {
             const restaurantId = String(restaurant.id || "");
@@ -782,6 +836,7 @@ export function registerRestaurantCoreRoutes(
         });
 
         const favorite = await storage.createRestaurantFavorite(favoriteData);
+        await ensureRestaurantFollowForEngagement(userId, restaurantId, "favorite");
         void trackEngagement(
           "restaurant_favorite_added",
           userId,
@@ -791,6 +846,11 @@ export function registerRestaurantCoreRoutes(
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
         if (error.code === "23505") {
+          await ensureRestaurantFollowForEngagement(
+            String(req.user?.id || ""),
+            String(req.params?.restaurantId || ""),
+            "favorite",
+          );
           void trackEngagement(
             "restaurant_favorite_duplicate",
             req.user?.id,
@@ -978,6 +1038,7 @@ export function registerRestaurantCoreRoutes(
 
         const recommendation =
           await storage.createRestaurantUserRecommendation(recommendationData);
+        await ensureRestaurantFollowForEngagement(userId, restaurantId, "recommend");
         void trackEngagement(
           "restaurant_recommend_added",
           userId,
@@ -987,6 +1048,11 @@ export function registerRestaurantCoreRoutes(
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
         if (error.code === "23505") {
+          await ensureRestaurantFollowForEngagement(
+            String(req.user?.id || ""),
+            String(req.params?.restaurantId || ""),
+            "recommend",
+          );
           void trackEngagement(
             "restaurant_recommend_duplicate",
             req.user?.id,

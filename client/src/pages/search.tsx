@@ -571,8 +571,8 @@ export default function SearchPage() {
     ? `${searchQuery} - Search Results`
     : "Search";
   const searchDescription = searchQuery
-    ? `Find nearby deals for "${searchQuery}". Browse local restaurants and discover limited-time discounts close to you.`
-    : "Search for deals, restaurants, parking pass spots, videos, and events.";
+    ? `Find restaurants, bars, trucks, deals, videos, and events for "${searchQuery}".`
+    : "Search for restaurants, trucks, deals, parking pass spots, videos, and events.";
   const searchKeywordVariants = searchQuery
     ? Array.from(new Set(queryGroups.flat()).values()).slice(0, 8).join(", ")
     : "food search";
@@ -759,17 +759,19 @@ export default function SearchPage() {
                 {isLocating ? "Locating..." : "Use location"}
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => setShowFilters(!showFilters)}
-              data-testid="button-filter"
-              aria-label={showFilters ? "Hide filters" : "Show filters"}
-              aria-expanded={showFilters}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </Button>
+            {!searchQuery && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setShowFilters(!showFilters)}
+                data-testid="button-filter"
+                aria-label={showFilters ? "Hide filters" : "Show filters"}
+                aria-expanded={showFilters}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
         {locationError && !searchQuery && (
@@ -833,24 +835,26 @@ export default function SearchPage() {
         />
 
         {/* Category Filters */}
-        <div className="flex space-x-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-6 lg:gap-3 lg:overflow-visible">
-          {categories.map((category) => (
-            <Button
-              key={category.id}
-              variant={selectedCategory === category.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory(category.id)}
-              className="flex-shrink-0 rounded-full px-4 py-2"
-              data-testid={`button-category-${category.id}`}
-            >
-              <category.icon className="w-4 h-4 mr-2" />
-              {category.label}
-            </Button>
-          ))}
-        </div>
+        {!searchQuery && (
+          <div className="flex space-x-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-6 lg:gap-3 lg:overflow-visible">
+            {categories.map((category) => (
+              <Button
+                key={category.id}
+                variant={selectedCategory === category.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(category.id)}
+                className="flex-shrink-0 rounded-full px-4 py-2"
+                data-testid={`button-category-${category.id}`}
+              >
+                <category.icon className="w-4 h-4 mr-2" />
+                {category.label}
+              </Button>
+            ))}
+          </div>
+        )}
 
         {/* Advanced Filters Panel */}
-        {showFilters && (
+        {!searchQuery && showFilters && (
           <Card className="mb-6 bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="p-4 space-y-4">
               {/* Sort By */}
@@ -922,6 +926,31 @@ export default function SearchPage() {
 
       {/* Results */}
       <div className="px-4 sm:px-6 py-6">
+        {searchQuery && (
+          <div className="mb-6 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+            <h2 className="text-base font-semibold text-foreground">
+              All Results for "{searchQuery}"
+            </h2>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
+                Restaurants/Trucks: {mergedRestaurants.length}
+              </span>
+              <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
+                Deals: {searchedDeals.length}
+              </span>
+              <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
+                Events: {searchedEvents.length}
+              </span>
+              <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
+                Videos: {searchedVideos.length}
+              </span>
+              <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
+                Parking: {searchedParkingPassHosts.length}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Restaurants Section (when searching) */}
         {searchQuery && mergedRestaurants.length > 0 && (
           <div className="mb-8">

@@ -133,7 +133,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerPublicDiscoveryRoutes(app);
 
-  registerRestaurantCoreRoutes(app, { validateAnalyticsAccess });
+  registerRestaurantCoreRoutes(app, {
+    validateAnalyticsAccess,
+    hasBusinessDistributionAccess,
+  });
 
   registerPublicSearchRoutes(app);
 
