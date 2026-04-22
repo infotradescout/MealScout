@@ -30,9 +30,9 @@ type GoogleMapsWindow = Window & {
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
 };
-// Intentionally avoid mapId here because Cloud Map styling can override local
-// style rules (including POI icon suppression).
-const GOOGLE_MAP_ID = "";
+const GOOGLE_MAP_ID = String(
+  (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+).trim();
 
 const createBoundsLike = (
   north: number,
@@ -320,9 +320,13 @@ export function GoogleMapSurface({
             // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
             // Touch devices: keep native cooperative behavior.
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
-            styles: isNightTheme
-              ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
-              : mapStyleHideFoodPoiIcons,
+            ...(!GOOGLE_MAP_ID
+              ? {
+                  styles: isNightTheme
+                    ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
+                    : mapStyleHideFoodPoiIcons,
+                }
+              : {}),
           });
 
           mapRef.current.addListener("idle", () => {
@@ -362,11 +366,13 @@ export function GoogleMapSurface({
           // Ensure marker sync runs after first map instance initialization.
           setMapReadyVersion((prev) => prev + 1);
         } else {
-          mapRef.current.setOptions({
-            styles: isNightTheme
-              ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
-              : mapStyleHideFoodPoiIcons,
-          });
+          if (!GOOGLE_MAP_ID) {
+            mapRef.current.setOptions({
+              styles: isNightTheme
+                ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
+                : mapStyleHideFoodPoiIcons,
+            });
+          }
         }
 
         setLoadError(null);
