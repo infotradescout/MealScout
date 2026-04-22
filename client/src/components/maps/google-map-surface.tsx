@@ -30,7 +30,9 @@ type GoogleMapsWindow = Window & {
   __mealScoutGoogleMapsPromise?: Promise<void>;
   gm_authFailure?: () => void;
 };
-const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim();
+// Intentionally avoid mapId here because Cloud Map styling can override local
+// style rules (including POI icon suppression).
+const GOOGLE_MAP_ID = "";
 
 const createBoundsLike = (
   north: number,
@@ -69,6 +71,11 @@ const mapStyleDark = [
 ];
 
 const mapStyleHideFoodPoiIcons = [
+  {
+    featureType: "poi",
+    elementType: "labels.icon",
+    stylers: [{ visibility: "off" }],
+  },
   {
     featureType: "poi.business",
     elementType: "labels.icon",
@@ -123,7 +130,10 @@ const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   };
 };
 
-const buildAdvancedMarkerContent = (googleMaps: any, marker: MapAdapterMarker) => {
+const buildAdvancedMarkerContent = (
+  googleMaps: any,
+  marker: MapAdapterMarker,
+) => {
   if (marker.kind === "parking") {
     const img = document.createElement("img");
     img.src = mealScoutIcon;
@@ -346,7 +356,8 @@ export function GoogleMapSurface({
       } catch (error: any) {
         if (!mounted) return;
         const message =
-          error?.message || "Unable to load Google Maps. Falling back to legacy map.";
+          error?.message ||
+          "Unable to load Google Maps. Falling back to legacy map.";
         setLoadError(message);
         if (!hasReportedFatalErrorRef.current) {
           hasReportedFatalErrorRef.current = true;
@@ -358,7 +369,15 @@ export function GoogleMapSurface({
     return () => {
       mounted = false;
     };
-  }, [apiKey, center, zoom, isNightTheme, onBoundsChanged, onZoomChanged, onFatalError]);
+  }, [
+    apiKey,
+    center,
+    zoom,
+    isNightTheme,
+    onBoundsChanged,
+    onZoomChanged,
+    onFatalError,
+  ]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -396,7 +415,9 @@ export function GoogleMapSurface({
       }
 
       const AdvancedMarkerElement = googleMaps?.marker?.AdvancedMarkerElement;
-      const useAdvancedMarkers = Boolean(AdvancedMarkerElement && GOOGLE_MAP_ID);
+      const useAdvancedMarkers = Boolean(
+        AdvancedMarkerElement && GOOGLE_MAP_ID,
+      );
       const instance = useAdvancedMarkers
         ? new AdvancedMarkerElement({
             map: mapRef.current,
@@ -466,11 +487,13 @@ export function GoogleMapSurface({
       trafficCircleRefs.current.set(cell.id, circle);
     });
 
-    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
-      if (usedIds.has(id)) return;
-      instance.setMap(null);
-      trafficCircleRefs.current.delete(id);
-    });
+    Array.from(trafficCircleRefs.current.entries()).forEach(
+      ([id, instance]) => {
+        if (usedIds.has(id)) return;
+        instance.setMap(null);
+        trafficCircleRefs.current.delete(id);
+      },
+    );
   }, [trafficCells, mapReadyVersion]);
 
   useEffect(() => {
@@ -508,13 +531,18 @@ export function GoogleMapSurface({
 
   return (
     <div className="h-full w-full relative">
-      <div ref={mapContainerRef} className="h-full w-full rounded-lg overflow-hidden" />
+      <div
+        ref={mapContainerRef}
+        className="h-full w-full rounded-lg overflow-hidden"
+      />
       <div className="absolute top-5 right-5 flex flex-col space-y-2 z-[1000]">
         <Button
           variant="secondary"
           size="sm"
           className={controlClassName}
-          onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) + 1)}
+          onClick={() =>
+            mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) + 1)
+          }
           title="Zoom in"
         >
           +
@@ -523,7 +551,9 @@ export function GoogleMapSurface({
           variant="secondary"
           size="sm"
           className={controlClassName}
-          onClick={() => mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) - 1)}
+          onClick={() =>
+            mapRef.current?.setZoom?.((mapRef.current?.getZoom?.() || zoom) - 1)
+          }
           title="Zoom out"
         >
           -
