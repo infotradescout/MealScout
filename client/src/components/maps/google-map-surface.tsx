@@ -250,8 +250,11 @@ export function GoogleMapSurface({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
+  const markerSignatureRefs = useRef<Map<string, string>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const roadTrafficLayerRef = useRef<any>(null);
+  const lastBoundsRef = useRef<MapBoundsLike | null>(null);
+  const lastZoomRef = useRef<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
@@ -328,27 +331,44 @@ export function GoogleMapSurface({
           mapRef.current.addListener("idle", () => {
             const currentBounds = mapRef.current?.getBounds?.();
             const currentZoom = Number(mapRef.current?.getZoom?.() || 0);
-            if (Number.isFinite(currentZoom) && currentZoom > 0) {
+            if (
+              Number.isFinite(currentZoom) &&
+              currentZoom > 0 &&
+              lastZoomRef.current !== currentZoom
+            ) {
+              lastZoomRef.current = currentZoom;
               onZoomChanged(currentZoom);
             }
             if (!currentBounds) return;
             const ne = currentBounds.getNorthEast();
             const sw = currentBounds.getSouthWest();
-            onBoundsChanged(
-              createBoundsLike(
-                Number(ne.lat()),
-                Number(sw.lat()),
-                Number(ne.lng()),
-                Number(sw.lng()),
-              ),
+            const nextBounds = createBoundsLike(
+              Number(ne.lat()),
+              Number(sw.lat()),
+              Number(ne.lng()),
+              Number(sw.lng()),
             );
+            const previousBounds = lastBoundsRef.current;
+            const epsilon = 0.0005;
+            const changed =
+              !previousBounds ||
+              Math.abs(previousBounds.north - nextBounds.north) >= epsilon ||
+              Math.abs(previousBounds.south - nextBounds.south) >= epsilon ||
+              Math.abs(previousBounds.east - nextBounds.east) >= epsilon ||
+              Math.abs(previousBounds.west - nextBounds.west) >= epsilon;
+            if (changed) {
+              lastBoundsRef.current = nextBounds;
+              onBoundsChanged(nextBounds);
+            }
           });
 
           // Ensure marker sync runs after first map instance initialization.
           setMapReadyVersion((prev) => prev + 1);
         } else {
           mapRef.current.setOptions({
-            styles: isNightTheme ? mapStyleDark : null,
+            styles: isNightTheme
+              ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
+              : mapStyleHideFoodPoiIcons,
           });
         }
 
@@ -371,8 +391,6 @@ export function GoogleMapSurface({
     };
   }, [
     apiKey,
-    center,
-    zoom,
     isNightTheme,
     onBoundsChanged,
     onZoomChanged,
@@ -400,7 +418,19 @@ export function GoogleMapSurface({
     markers.forEach((marker) => {
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
+      const signature = [
+        marker.kind,
+        marker.lat.toFixed(6),
+        marker.lng.toFixed(6),
+        marker.color || "",
+        marker.title || "",
+        marker.subtitle || "",
+      ].join("|");
+      const previousSignature = markerSignatureRefs.current.get(marker.id);
       if (existing) {
+        if (previousSignature === signature) {
+          return;
+        }
         if (typeof existing.setPosition === "function") {
           existing.setPosition({ lat: marker.lat, lng: marker.lng });
         } else {
@@ -411,6 +441,7 @@ export function GoogleMapSurface({
         } else if ("content" in existing) {
           existing.content = buildAdvancedMarkerContent(googleMaps, marker);
         }
+        markerSignatureRefs.current.set(marker.id, signature);
         return;
       }
 
@@ -443,12 +474,14 @@ export function GoogleMapSurface({
         });
       }
       markerRefs.current.set(marker.id, instance);
+      markerSignatureRefs.current.set(marker.id, signature);
     });
 
     Array.from(markerRefs.current.entries()).forEach(([id, instance]) => {
       if (usedIds.has(id)) return;
       removeMarkerFromMap(instance);
       markerRefs.current.delete(id);
+      markerSignatureRefs.current.delete(id);
     });
   }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
 
@@ -518,6 +551,7 @@ export function GoogleMapSurface({
         instance.setMap(null);
       });
       trafficCircleRefs.current.clear();
+      markerSignatureRefs.current.clear();
       if (roadTrafficLayerRef.current) {
         roadTrafficLayerRef.current.setMap(null);
         roadTrafficLayerRef.current = null;
