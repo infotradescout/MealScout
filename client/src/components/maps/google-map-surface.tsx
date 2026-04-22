@@ -72,12 +72,13 @@ const mapStyleDark = [
 
 const mapStyleHideFoodPoiIcons = [
   {
-    featureType: "poi",
+    // Hide food icons only; do not suppress all POI/business icons.
+    featureType: "poi.restaurant",
     elementType: "labels.icon",
     stylers: [{ visibility: "off" }],
   },
   {
-    featureType: "poi.business",
+    featureType: "poi.business.food_and_drink",
     elementType: "labels.icon",
     stylers: [{ visibility: "off" }],
   },
