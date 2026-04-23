@@ -18,7 +18,9 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, "dist"),
+    // Production server serves frontend from repoRoot/dist/public.
+    // Keep client build output aligned with runtime static directory.
+    outDir: path.resolve(__dirname, "..", "dist", "public"),
     emptyOutDir: true,
     rollupOptions: {
       output: {

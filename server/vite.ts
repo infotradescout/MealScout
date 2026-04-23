@@ -70,9 +70,9 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  // In production, server code is in dist/ and public assets are in dist/public
-  // server module resolves from dist/, so we look for public/ relative to it
-  const distPath = path.resolve(moduleDir, "public");
+  // Serve built frontend from the canonical production output path.
+  // This avoids runtime path drift between dist/server and dist/public.
+  const distPath = path.resolve(process.cwd(), "dist", "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
