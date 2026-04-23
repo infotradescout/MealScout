@@ -2,9 +2,18 @@
 // Uses verifiable DNS, email domain, and consistency checks to determine verification eligibility
 
 import type { User } from "@shared/schema";
+import {
+  restaurantFavorites,
+  restaurantFollows,
+  restaurantUserRecommendations,
+  restaurants,
+  videoStories,
+} from "@shared/schema";
+import { db } from "./db";
 import { logAudit } from "./auditLogger";
 import type { Request } from "express";
 import { computeExternalReviewAdjustment } from "./services/externalReviewScoring";
+import { eq, sql } from "drizzle-orm";
 
 function vacNormalizePhone(input: unknown): string {
   return String(input || "").replace(/\D/g, "").slice(-10);
@@ -109,6 +118,7 @@ interface VacRestaurantInput {
 interface VacEvaluationResult {
   version: string;
   score: number;
+  baseScore: number;
   threshold: number;
   shouldAutoVerify: boolean;
   signals: {
@@ -126,7 +136,106 @@ interface VacEvaluationResult {
     externalReviewAdjustment: number;
     externalReviewSourceCount: number;
     manualTrustScoreAdjustment: number;
+    liveBoost: number;
+    liveBoostPercentile: number | null;
+    goldenPlateBonus: number;
   };
+}
+
+async function vacComputeLiveBoost(
+  restaurantId: string,
+): Promise<{
+  liveBoost: number;
+  percentile: number | null;
+}> {
+  if (!restaurantId) return { liveBoost: 0, percentile: null };
+
+  try {
+    const rows = await db.execute(sql<{
+      id: string;
+      raw_activity: number;
+    }>`
+      with
+      fav as (
+        select restaurant_id, count(*)::int as c
+        from ${restaurantFavorites}
+        group by restaurant_id
+      ),
+      fol as (
+        select restaurant_id, count(*)::int as c
+        from ${restaurantFollows}
+        group by restaurant_id
+      ),
+      rec as (
+        select restaurant_id, count(*)::int as c
+        from ${restaurantUserRecommendations}
+        group by restaurant_id
+      ),
+      vid as (
+        select restaurant_id, count(*)::int as c
+        from ${videoStories}
+        where status = 'ready' and deleted_at is null and restaurant_id is not null
+        group by restaurant_id
+      )
+      select
+        r.id,
+        (
+          coalesce(fav.c, 0) +
+          coalesce(fol.c, 0) +
+          coalesce(rec.c, 0) +
+          coalesce(vid.c, 0)
+        )::int as raw_activity
+      from ${restaurants} r
+      left join fav on fav.restaurant_id = r.id
+      left join fol on fol.restaurant_id = r.id
+      left join rec on rec.restaurant_id = r.id
+      left join vid on vid.restaurant_id = r.id
+      where coalesce(r.is_active, true) = true
+    `);
+
+    const cohort = Array.isArray((rows as any)?.rows) ? (rows as any).rows : [];
+    if (!cohort.length) return { liveBoost: 1, percentile: 0 };
+
+    const target = cohort.find((row: any) => String(row.id) === restaurantId);
+    if (!target) return { liveBoost: 1, percentile: 0 };
+
+    const targetActivity = Number(target.raw_activity || 0);
+    const values: number[] = cohort.map((row: any) =>
+      Number(row.raw_activity || 0),
+    );
+    const n = values.length;
+    const less = values.filter((v: number) => v < targetActivity).length;
+    const equal = values.filter((v: number) => v === targetActivity).length;
+    const percentile = n > 0 ? (less + 0.5 * equal) / n : 0;
+    const liveBoost = Math.max(1, Math.min(10, Math.round(percentile * 9) + 1));
+
+    return { liveBoost, percentile };
+  } catch {
+    return { liveBoost: 1, percentile: 0 };
+  }
+}
+
+async function vacComputeGoldenPlateBonus(restaurantId: string): Promise<number> {
+  if (!restaurantId) return 0;
+  try {
+    const [row] = await db
+      .select({
+        hasGoldenPlate: restaurants.hasGoldenPlate,
+        goldenPlateEarnedAt: restaurants.goldenPlateEarnedAt,
+      })
+      .from(restaurants)
+      .where(eq(restaurants.id, restaurantId))
+      .limit(1);
+
+    if (!row?.hasGoldenPlate || !row.goldenPlateEarnedAt) return 0;
+    const earnedAt = new Date(row.goldenPlateEarnedAt);
+    if (!Number.isFinite(earnedAt.getTime())) return 0;
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    const isWithinYear = Date.now() - earnedAt.getTime() <= oneYearMs;
+    return isWithinYear ? 50 : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function vacGetStoredExternalReviewRating(
@@ -263,11 +372,15 @@ export async function vacEvaluateRestaurantSignup({
   score += manualTrustScoreAdjustment;
 
   if (score < 0) score = 0;
-  if (score > 100) score = 100;
+  const baseScore = Math.min(100, score);
+  const { liveBoost, percentile } = await vacComputeLiveBoost(restaurantId);
+  const goldenPlateBonus = await vacComputeGoldenPlateBonus(restaurantId);
+  score = baseScore + liveBoost + goldenPlateBonus;
 
   const result: VacEvaluationResult = {
     version: "vac-lite-v1",
     score,
+    baseScore,
     threshold,
     shouldAutoVerify: score >= threshold,
     signals: {
@@ -288,6 +401,10 @@ export async function vacEvaluateRestaurantSignup({
       externalReviewAdjustment,
       externalReviewSourceCount,
       manualTrustScoreAdjustment,
+      liveBoost,
+      liveBoostPercentile:
+        percentile != null ? Math.round(percentile * 1000) / 1000 : null,
+      goldenPlateBonus,
     }
   };
 
