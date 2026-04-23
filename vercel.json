@@ -10,26 +10,29 @@
       "permanent": true
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/assets/(.*)",
-      "destination": "/assets/$1"
+      "src": "/sitemap.xml",
+      "dest": "https://mealscout.onrender.com/sitemap.xml"
     },
     {
-      "source": "/sitemap.xml",
-      "destination": "https://mealscout.onrender.com/sitemap.xml"
+      "src": "/robots.txt",
+      "dest": "https://mealscout.onrender.com/robots.txt"
     },
     {
-      "source": "/robots.txt",
-      "destination": "https://mealscout.onrender.com/robots.txt"
+      "src": "/api/(.*)",
+      "dest": "https://mealscout.onrender.com/api/$1"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "https://mealscout.onrender.com/api/$1"
+      "handle": "filesystem"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/assets/(.*)",
+      "status": 404
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "headers": [
