@@ -800,7 +800,7 @@ function HostMarkerLayer({
         const isFullToday = Boolean(hostStatus?.isFull);
         const isBookable = hostId ? bookableHostIds.has(hostId) : false;
         const availableLabel = !isBookable
-          ? "No parking pass listing yet"
+          ? "No active spot listing yet"
           : hostStatus
             ? hostStatus.isFull
               ? "Fully booked today"
@@ -907,7 +907,7 @@ function HostMarkerLayer({
                         window.location.href = parkingPassHref;
                       }}
                     >
-                      {isBookable ? "View parking pass" : "View spot"}
+                      {isBookable ? "View details" : "View spot"}
                     </Button>
                   </div>
                 ) : (
@@ -932,7 +932,7 @@ function HostMarkerLayer({
                         window.location.href = parkingPassHref;
                       }}
                     >
-                      {isBookable ? "View parking pass" : "View spot"}
+                      {isBookable ? "View details" : "View spot"}
                     </Button>
                   </div>
                 )}
@@ -1894,7 +1894,7 @@ export default function MapPage() {
       const status = hostId ? cachedHostStatusById[hostId] : undefined;
       const isBookable = hostId ? effectiveBookableHostIds.has(hostId) : false;
       const label = !isBookable
-        ? "No parking pass listing yet"
+        ? "No active spot listing yet"
         : status
           ? status.isFull
             ? "Fully booked today"
@@ -3152,7 +3152,7 @@ export default function MapPage() {
                   }}
                 >
                   {selectedParkingHost.isBookable
-                    ? "Open parking pass"
+                    ? "Open details"
                     : "View spot"}
                 </Button>
               </div>

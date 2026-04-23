@@ -3128,6 +3128,7 @@ export default function ParkingPassPage() {
               group,
               coords: loc.coords,
               addressLabel: loc.addressLabel,
+              spotImageUrl: loc.spotImageUrl ?? group.host.spotImageUrl ?? null,
             }));
           }
 
@@ -3145,6 +3146,7 @@ export default function ParkingPassPage() {
                 group.host.city ?? "",
                 group.host.state ?? "",
               ),
+              spotImageUrl: group.host.spotImageUrl ?? null,
             },
           ];
         })
@@ -3156,6 +3158,7 @@ export default function ParkingPassPage() {
             group: ParkingPassLocationGroup;
             coords: GeoPoint;
             addressLabel: string;
+            spotImageUrl: string | null;
           } => item !== null,
         ),
     [filteredLocations, hostLocationsByHostId, parkingCoords],
@@ -5865,7 +5868,13 @@ export default function ParkingPassPage() {
                               }
                             }}
                             pins={mapPinsForRender.map(
-                              ({ key, group, coords, addressLabel }) => {
+                              ({
+                                key,
+                                group,
+                                coords,
+                                addressLabel,
+                                spotImageUrl,
+                              }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
                                     ? selectedDate
@@ -5949,9 +5958,9 @@ export default function ParkingPassPage() {
                                     <p className="text-[color:var(--text-muted)]">
                                       {addressLabel}
                                     </p>
-                                    {group.host.spotImageUrl && (
+                                    {spotImageUrl && (
                                       <img
-                                        src={group.host.spotImageUrl}
+                                        src={spotImageUrl}
                                         alt={`${group.host.businessName} parking spot`}
                                         className="h-24 w-full rounded-lg border border-border/50 object-cover"
                                         loading="lazy"
