@@ -23,7 +23,11 @@ import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
 import {
   GoogleMapPicker,
 } from "@/components/maps/GoogleMapPicker";
-import type { MapPickerPin } from "@/components/maps/GoogleMapPicker";
+import type {
+  MapPickerBounds,
+  MapPickerPin,
+} from "@/components/maps/GoogleMapPicker";
+import type { MapTrafficCell } from "@/components/maps/map-adapter.types";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
 import { Button } from "@/components/ui/button";
@@ -76,6 +80,12 @@ interface Host {
   stripeChargesEnabled?: boolean | null;
   stripePayoutsEnabled?: boolean | null;
   stripeOnboardingCompleted?: boolean | null;
+}
+
+interface FootTrafficResponse {
+  generatedAt: string;
+  windowMinutes: number;
+  cells: MapTrafficCell[];
 }
 
 interface HostPassListing {
@@ -638,6 +648,9 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [showFootTraffic, setShowFootTraffic] = useState(true);
+  const [parkingMapBounds, setParkingMapBounds] =
+    useState<MapPickerBounds | null>(null);
   const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
     null,
   );
@@ -3161,6 +3174,53 @@ export default function ParkingPassPage() {
     return activeCoords || mapPins[0]?.coords || defaultMapCenter;
   }, [activeLocation, hostLocationsByHostId, mapPins, parkingCoords]);
 
+  const parkingTrafficQueryKey = parkingMapBounds
+    ? [
+        "/api/map/foot-traffic",
+        Number(parkingMapBounds.north.toFixed(4)),
+        Number(parkingMapBounds.south.toFixed(4)),
+        Number(parkingMapBounds.east.toFixed(4)),
+        Number(parkingMapBounds.west.toFixed(4)),
+        "avg",
+      ]
+    : ["/api/map/foot-traffic", "none"];
+
+  const { data: parkingFootTrafficData } = useQuery<FootTrafficResponse>({
+    queryKey: parkingTrafficQueryKey,
+    enabled: Boolean(viewMode === "map" && showFootTraffic && parkingMapBounds),
+    queryFn: async () => {
+      if (!parkingMapBounds) {
+        return {
+          generatedAt: new Date().toISOString(),
+          windowMinutes: 720,
+          cells: [],
+        };
+      }
+      const params = new URLSearchParams({
+        north: String(parkingMapBounds.north),
+        south: String(parkingMapBounds.south),
+        east: String(parkingMapBounds.east),
+        west: String(parkingMapBounds.west),
+        windowMinutes: "720",
+        mode: "avg",
+        includeGoogle: "false",
+      });
+      const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load parking-pass foot traffic");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const parkingTrafficCells = useMemo(() => {
+    if (!showFootTraffic || viewMode !== "map") return [] as MapTrafficCell[];
+    return Array.isArray(parkingFootTrafficData?.cells)
+      ? parkingFootTrafficData.cells
+      : [];
+  }, [showFootTraffic, viewMode, parkingFootTrafficData]);
+
   useEffect(() => {
     if (geocodeInFlight.current) return;
     const queue = filteredLocations
@@ -5559,6 +5619,15 @@ export default function ParkingPassPage() {
                         >
                           List
                         </Button>
+                        <Button
+                          size="sm"
+                          variant={showFootTraffic ? "default" : "outline"}
+                          onClick={() => setShowFootTraffic((prev) => !prev)}
+                        >
+                          {showFootTraffic
+                            ? "Foot traffic on"
+                            : "Foot traffic off"}
+                        </Button>
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -5591,6 +5660,18 @@ export default function ParkingPassPage() {
                         List view
                       </Button>
                     </div>
+                    <div className="flex sm:hidden items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        variant={showFootTraffic ? "default" : "outline"}
+                        onClick={() => setShowFootTraffic((prev) => !prev)}
+                      >
+                        {showFootTraffic
+                          ? "Foot traffic on"
+                          : "Foot traffic off"}
+                      </Button>
+                    </div>
                   </div>
 
                   {isLoading ? (
@@ -5609,6 +5690,8 @@ export default function ParkingPassPage() {
                               center={fallbackMapCenter}
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
+                              onBoundsChanged={setParkingMapBounds}
+                              trafficCells={parkingTrafficCells}
                               pins={fallbackHostPins.map(({ key, hostId, name, coords, addressLabel, spotImageUrl }) => ({
                                 key,
                                 position: coords,
@@ -5656,6 +5739,8 @@ export default function ParkingPassPage() {
                             center={mapCenter}
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
+                            onBoundsChanged={setParkingMapBounds}
+                            trafficCells={parkingTrafficCells}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
