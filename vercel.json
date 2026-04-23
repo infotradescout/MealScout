@@ -1,7 +1,7 @@
 {
   "installCommand": "npm ci",
   "buildCommand": "npm run build:client",
-  "outputDirectory": "client/dist",
+  "outputDirectory": "dist/public",
   "redirects": [
     {
       "source": "/(.*)",
