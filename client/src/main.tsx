@@ -116,31 +116,54 @@ if (import.meta.env.PROD && shouldEnablePwaRuntime()) {
 }
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((registrations) =>
-        Promise.all(registrations.map((registration) => registration.unregister())),
-      )
-      .catch(() => {
-        // ignore
-      });
-
-    if ("caches" in window) {
-      caches
-        .keys()
-        .then((keys) =>
-          Promise.all(
-            keys
-              .filter((key) => key.startsWith("mealscout-sw-"))
-              .map((key) => caches.delete(key)),
-          ),
-        )
-        .catch(() => {
-          // ignore
-        });
+  const swResetKey = "mealscout_sw_reset_done";
+  const hasReset = (() => {
+    try {
+      return sessionStorage.getItem(swResetKey) === "1";
+    } catch {
+      return false;
     }
-  });
+  })();
+
+  const markReset = () => {
+    try {
+      sessionStorage.setItem(swResetKey, "1");
+    } catch {
+      // ignore
+    }
+  };
+
+  void (async () => {
+    try {
+      const hadController = Boolean(navigator.serviceWorker.controller);
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(
+        registrations.map((registration) => registration.unregister()),
+      );
+
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter(
+              (key) =>
+                key.startsWith("mealscout-sw-") ||
+                key.toLowerCase().includes("workbox"),
+            )
+            .map((key) => caches.delete(key)),
+        );
+      }
+
+      if (hadController && !hasReset) {
+        markReset();
+        const url = new URL(window.location.href);
+        url.searchParams.set("sw_reset", Date.now().toString());
+        window.location.replace(url.toString());
+      }
+    } catch {
+      // ignore
+    }
+  })();
 }
 
 createRoot(document.getElementById("root")!).render(
