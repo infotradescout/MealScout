@@ -2506,9 +2506,7 @@ export default function MapPage() {
     setSelectedParkingPreview(null);
   }, [pinZoomCardMode.showCards, selectedParkingPreview]);
 
-  const mapMarkersForRender = pinZoomCardMode.showPins
-    ? adapterMarkers
-    : adapterMarkers.filter((marker) => marker.kind === "user");
+  const mapMarkersForRender = adapterMarkers;
 
   const handleAdapterMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
