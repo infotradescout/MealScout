@@ -6091,7 +6091,7 @@ export default function ParkingPassPage() {
                                         variant={isActive ? "default" : "outline"}
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          focusLocation(group.key, true);
+                                          focusLocation(group.key);
                                         }}
                                       >
                                         {isActive ? "Selected" : "Select"}
@@ -6224,7 +6224,7 @@ export default function ParkingPassPage() {
                               role="button"
                               tabIndex={0}
                               aria-pressed={isActive}
-                              onClick={() => focusLocation(group.key, true)}
+                              onClick={() => focusLocation(group.key)}
                               onKeyDown={(keyboardEvent) => {
                                 if (
                                   keyboardEvent.key === "Enter" ||
@@ -6249,7 +6249,7 @@ export default function ParkingPassPage() {
                                   variant="outline"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    focusLocation(group.key, true);
+                                    focusLocation(group.key);
                                   }}
                                 >
                                   {isActive ? "Selected" : "Select spot"}
@@ -6267,7 +6267,7 @@ export default function ParkingPassPage() {
                                     onChange={(event) => {
                                       event.stopPropagation();
                                       setSelectedDate(event.target.value);
-                                      focusLocation(group.key, true);
+                                      focusLocation(group.key);
                                     }}
                                   >
                                     {groupDateKeys.slice(0, 14).map((key) => (
@@ -6554,14 +6554,14 @@ export default function ParkingPassPage() {
                             role="button"
                             tabIndex={0}
                             aria-pressed={isActive}
-                            onClick={() => focusLocation(group.key, true)}
+                            onClick={() => focusLocation(group.key)}
                             onKeyDown={(keyboardEvent) => {
                               if (
                                 keyboardEvent.key === "Enter" ||
                                 keyboardEvent.key === " "
                               ) {
                                 keyboardEvent.preventDefault();
-                                focusLocation(group.key, true);
+                                focusLocation(group.key);
                               }
                             }}
                             className={`w-full text-left rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
@@ -6579,7 +6579,7 @@ export default function ParkingPassPage() {
                                 variant="outline"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  focusLocation(group.key, true);
+                                  focusLocation(group.key);
                                 }}
                               >
                                 {isActive ? "Selected" : "Select spot"}
@@ -6597,7 +6597,7 @@ export default function ParkingPassPage() {
                                   onChange={(event) => {
                                     event.stopPropagation();
                                     setSelectedDate(event.target.value);
-                                    focusLocation(group.key, true);
+                                    focusLocation(group.key);
                                   }}
                                 >
                                   {groupDateKeys.slice(0, 14).map((key) => (
