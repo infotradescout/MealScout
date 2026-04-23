@@ -3187,7 +3187,7 @@ export default function ParkingPassPage() {
     dedupeKey: (marker) => marker.group.key,
     maxCards: 6,
   });
-  const mapPinsForRender = pinZoomCardMode.showPins ? mapPins : [];
+  const mapPinsForRender = mapPins;
   const fallbackHostPins = useMemo(
     () =>
       (paidMapLocations?.hostLocations ?? [])
@@ -3253,9 +3253,7 @@ export default function ParkingPassPage() {
     dedupeKey: (marker) => marker.hostId,
     maxCards: 6,
   });
-  const fallbackHostPinsForRender = fallbackPinZoomCardMode.showPins
-    ? fallbackHostPins
-    : [];
+  const fallbackHostPinsForRender = fallbackHostPins;
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -5830,45 +5828,10 @@ export default function ParkingPassPage() {
                               )}
                               className="h-full w-full"
                             />
-                            {fallbackPinZoomCardMode.showCards && (
-                              <div className="absolute inset-x-2 bottom-2 z-[1000] max-h-[62%] space-y-2 overflow-y-auto pr-1">
-                                {fallbackPinZoomCardMode.cards.map((pin) => {
-                                  const isActive =
-                                    fallbackPinZoomCardMode.activeCardId ===
-                                    pin.key;
-                                  return (
-                                    <button
-                                      key={`fallback-zoom-card-${pin.key}`}
-                                      type="button"
-                                      className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
-                                        isActive
-                                          ? "border-orange-300 pp-glass"
-                                          : "border-[color:var(--border-subtle)] pp-glass-muted"
-                                      }`}
-                                      onClick={() =>
-                                        fallbackPinZoomCardMode.setActiveCardId(
-                                          pin.key,
-                                        )
-                                      }
-                                    >
-                                      <p className="truncate text-sm font-semibold text-orange-600">
-                                        {pin.name}
-                                      </p>
-                                      <p className="truncate text-[11px] text-[color:var(--text-muted)]">
-                                        {pin.addressLabel}
-                                      </p>
-                                      <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
-                                        {isActive ? "Selected" : "Tap to open"}
-                                      </p>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                             {fallbackPinZoomCardMode.showCards
-                              ? "Zoom cards active. Tap a card to view host location details."
+                              ? "Zoom cards active. Tap a pin to open its card above the pin."
                               : requestedHostId
                                 ? "This host is visible on the map, but has no active parking pass listing yet."
                                 : "Host locations are visible, but no active parking pass listings are open right now."}
@@ -6155,43 +6118,10 @@ export default function ParkingPassPage() {
                               No mappable locations yet.
                             </div>
                           )}
-                          {pinZoomCardMode.showCards && (
-                            <div className="absolute inset-x-2 bottom-2 z-[1000] max-h-[62%] space-y-2 overflow-y-auto pr-1">
-                              {pinZoomCardMode.cards.map((pin) => {
-                                const isActive =
-                                  pinZoomCardMode.activeCardId === pin.key;
-                                return (
-                                  <button
-                                    key={`parking-zoom-card-${pin.key}`}
-                                    type="button"
-                                    className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
-                                      isActive
-                                        ? "border-orange-300 pp-glass"
-                                        : "border-[color:var(--border-subtle)] pp-glass-muted"
-                                    }`}
-                                    onClick={() => {
-                                      pinZoomCardMode.setActiveCardId(pin.key);
-                                      focusLocation(pin.group.key);
-                                    }}
-                                  >
-                                    <p className="truncate text-sm font-semibold text-orange-600">
-                                      {pin.group.host.businessName}
-                                    </p>
-                                    <p className="truncate text-[11px] text-[color:var(--text-muted)]">
-                                      {pin.addressLabel}
-                                    </p>
-                                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
-                                      {isActive ? "Selected" : "Tap to open"}
-                                    </p>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                         <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                           {pinZoomCardMode.showCards
-                            ? "Zoom cards active. Tap a card to open booking details."
+                            ? "Zoom cards active. Tap a pin to open booking details above the pin."
                             : "Tap a location below to update the map."}
                         </div>
                       </div>
