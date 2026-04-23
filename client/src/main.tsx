@@ -59,26 +59,30 @@ function ensureManifestLink() {
 }
 
 if (import.meta.env.PROD) {
-  const reloadOnceKey = "mealscout_chunk_reload";
-  const shouldReload = () => {
+  const reloadBudgetKey = "mealscout_chunk_reload_budget";
+  const maxReloadAttempts = 3;
+  const getReloadAttempts = () => {
     try {
-      return sessionStorage.getItem(reloadOnceKey) !== "1";
+      const raw = sessionStorage.getItem(reloadBudgetKey);
+      const parsed = Number(raw || "0");
+      return Number.isFinite(parsed) ? parsed : 0;
     } catch {
-      return true;
+      return 0;
     }
   };
-
-  const markReloaded = () => {
+  const canReload = () => getReloadAttempts() < maxReloadAttempts;
+  const consumeReloadAttempt = () => {
     try {
-      sessionStorage.setItem(reloadOnceKey, "1");
+      const next = getReloadAttempts() + 1;
+      sessionStorage.setItem(reloadBudgetKey, String(next));
     } catch {
       // ignore
     }
   };
 
   const reloadWithBust = () => {
-    if (!shouldReload()) return;
-    markReloaded();
+    if (!canReload()) return;
+    consumeReloadAttempt();
     const url = new URL(window.location.href);
     url.searchParams.set("reload", Date.now().toString());
     window.location.replace(url.toString());
