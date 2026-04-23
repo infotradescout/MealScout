@@ -685,6 +685,7 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [parkingMapZoom, setParkingMapZoom] = useState(13);
   const [showFootTraffic, setShowFootTraffic] = useState(true);
   const [parkingMapBounds, setParkingMapBounds] =
     useState<MapPickerBounds | null>(null);
@@ -3271,6 +3272,7 @@ export default function ParkingPassPage() {
       ? parkingFootTrafficData.cells
       : [];
   }, [showFootTraffic, viewMode, parkingFootTrafficData]);
+  const showZoomSpotCards = viewMode === "map" && parkingMapZoom >= 16;
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -5733,8 +5735,12 @@ export default function ParkingPassPage() {
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
                               onBoundsChanged={setParkingMapBounds}
+                              onZoomChanged={setParkingMapZoom}
                               trafficCells={parkingTrafficCells}
-                              pins={fallbackHostPins.map(
+                              pins={(showZoomSpotCards
+                                ? []
+                                : fallbackHostPins
+                              ).map(
                                 ({
                                   key,
                                   hostId,
@@ -5797,12 +5803,13 @@ export default function ParkingPassPage() {
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
                             onBoundsChanged={setParkingMapBounds}
+                            onZoomChanged={setParkingMapZoom}
                             trafficCells={parkingTrafficCells}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
                             }}
-                            pins={mapPins.map(
+                            pins={(showZoomSpotCards ? [] : mapPins).map(
                               ({ key, group, coords, addressLabel }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
@@ -6056,12 +6063,58 @@ export default function ParkingPassPage() {
                               No mappable locations yet.
                             </div>
                           )}
+                          {showZoomSpotCards && filteredLocations.length > 0 && (
+                            <div className="absolute inset-x-2 bottom-2 z-20 max-h-[72%] space-y-2 overflow-y-auto pr-1">
+                              {filteredLocations.slice(0, 6).map((group) => {
+                                const isActive = activeLocation?.key === group.key;
+                                const nextDate = nextBookableDateByGroup.get(group.key);
+                                return (
+                                  <div
+                                    key={`zoom-card-${group.key}`}
+                                    className={`rounded-xl border px-3 py-2 text-xs shadow-clean backdrop-blur ${
+                                      isActive
+                                        ? "border-orange-300 pp-glass"
+                                        : "border-[color:var(--border-subtle)] pp-glass-muted"
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate font-semibold text-orange-500">
+                                          {group.host.businessName}
+                                        </p>
+                                        <p className="truncate text-[10px] text-[color:var(--text-muted)]">
+                                          {group.host.address}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant={isActive ? "default" : "outline"}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          focusLocation(group.key, true);
+                                        }}
+                                      >
+                                        {isActive ? "Selected" : "Select"}
+                                      </Button>
+                                    </div>
+                                    {nextDate && (
+                                      <p className="mt-1 text-[10px] text-[color:var(--text-muted)]">
+                                        Next open {format(new Date(`${nextDate}T00:00:00`), "EEE, MMM d")}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                         <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                          Tap a location below to update the map.
+                          {showZoomSpotCards
+                            ? "Zoomed in: spot cards are shown on-map."
+                            : "Tap a location below to update the map."}
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      {!showZoomSpotCards && <div className="space-y-2">
                         {filteredLocations.map((group) => {
                           const effectiveDateKey =
                             group.key === activeLocationKey
@@ -6392,7 +6445,7 @@ export default function ParkingPassPage() {
                             No locations match that search.
                           </div>
                         )}
-                      </div>
+                      </div>}
                     </div>
                   ) : (
                     <div className="space-y-3">

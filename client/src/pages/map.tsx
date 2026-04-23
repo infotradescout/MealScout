@@ -20,9 +20,7 @@ import type {
   MapAdapterMarker,
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
-import {
-  GOOGLE_MAPS_WEB_API_KEY,
-} from "@/lib/mapProvider";
+import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
 import {
   MapPin,
@@ -1363,21 +1361,28 @@ export default function MapPage() {
     return Array.from(ids).sort();
   }, [deals, visibleLiveTrucks]);
 
-  const { data: businessPopularityData } = useQuery<BusinessPopularityResponse>({
-    queryKey: ["/api/map/business-popularity", popularityRestaurantIds.join(",")],
-    enabled: popularityRestaurantIds.length > 0,
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        restaurantIds: popularityRestaurantIds.join(","),
-      });
-      const res = await fetch(apiUrl(`/api/map/business-popularity?${params}`));
-      if (!res.ok) throw new Error("Failed to load business popularity");
-      return res.json();
+  const { data: businessPopularityData } = useQuery<BusinessPopularityResponse>(
+    {
+      queryKey: [
+        "/api/map/business-popularity",
+        popularityRestaurantIds.join(","),
+      ],
+      enabled: popularityRestaurantIds.length > 0,
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          restaurantIds: popularityRestaurantIds.join(","),
+        });
+        const res = await fetch(
+          apiUrl(`/api/map/business-popularity?${params}`),
+        );
+        if (!res.ok) throw new Error("Failed to load business popularity");
+        return res.json();
+      },
+      staleTime: 3 * 60 * 1000,
+      refetchInterval: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
     },
-    staleTime: 3 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  );
 
   const businessPopularityByRestaurant = useMemo(() => {
     return businessPopularityData?.restaurants || {};
@@ -1461,7 +1466,10 @@ export default function MapPage() {
           Array.isArray((maybeData as any).hostLocations) &&
           Array.isArray((maybeData as any).eventLocations)
         ) {
-          if (cachedAt > 0 && Date.now() - cachedAt > MAP_LOCATIONS_CACHE_TTL_MS) {
+          if (
+            cachedAt > 0 &&
+            Date.now() - cachedAt > MAP_LOCATIONS_CACHE_TTL_MS
+          ) {
             localStorage.removeItem(MAP_LOCATIONS_CACHE_KEY);
             return null;
           }
@@ -1502,27 +1510,28 @@ export default function MapPage() {
     }
   }, [mapLocationsData]);
 
-  const { data: mapRuntime, isLoading: mapRuntimeLoading } = useQuery<MapRuntimeResponse>({
-    queryKey: ["/api/map/runtime"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/map/runtime"));
-      if (!res.ok) throw new Error("Failed to load map runtime config");
-      return res.json();
-    },
-    retry: 4,
-    retryDelay: 800,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchInterval: (query) => {
-      const key = String(
-        (query.state.data as MapRuntimeResponse | undefined)?.googleMapsApiKey ||
-          "",
-      ).trim();
-      if (GOOGLE_MAPS_WEB_API_KEY.length > 0 || key.length > 0) return false;
-      return 2000;
-    },
-  });
+  const { data: mapRuntime, isLoading: mapRuntimeLoading } =
+    useQuery<MapRuntimeResponse>({
+      queryKey: ["/api/map/runtime"],
+      queryFn: async () => {
+        const res = await fetch(apiUrl("/api/map/runtime"));
+        if (!res.ok) throw new Error("Failed to load map runtime config");
+        return res.json();
+      },
+      retry: 4,
+      retryDelay: 800,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: true,
+      refetchInterval: (query) => {
+        const key = String(
+          (query.state.data as MapRuntimeResponse | undefined)
+            ?.googleMapsApiKey || "",
+        ).trim();
+        if (GOOGLE_MAPS_WEB_API_KEY.length > 0 || key.length > 0) return false;
+        return 2000;
+      },
+    });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2362,6 +2371,53 @@ export default function MapPage() {
     businessPopularityByRestaurant,
   ]);
 
+  const zoomCardMode = zoomLevel >= 16;
+
+  const mapMarkersForRender = useMemo(
+    () =>
+      zoomCardMode
+        ? adapterMarkers.filter((marker) => marker.kind === "user")
+        : adapterMarkers,
+    [zoomCardMode, adapterMarkers],
+  );
+
+  const zoomHostCards = useMemo(() => {
+    return visibleHostLocations
+      .slice(0, 6)
+      .map((host) => {
+        const coords = resolveHostCoords(host);
+        if (!coords) return null;
+        const nearbyTruck = findNearbyTruck(coords)?.truck ?? null;
+        return { host, coords, nearbyTruck };
+      })
+      .filter(
+        (
+          item,
+        ): item is { host: HostLocation; coords: GeoPoint; nearbyTruck: LiveTruck | null } =>
+          item !== null,
+      );
+  }, [visibleHostLocations, resolveHostCoords, findNearbyTruck]);
+
+  const zoomBusinessCards = useMemo(() => {
+    const seen = new Set<string>();
+    return visibleDeals
+      .filter((deal) => {
+        const id = String(deal.restaurantId || "").trim();
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .slice(0, 6)
+      .map((deal) => {
+        const cuisine = String(deal.restaurant?.cuisineType || "").toLowerCase();
+        const name = String(deal.restaurant?.name || "").toLowerCase();
+        const isBar =
+          /bar|pub|lounge|tap|brew/.test(cuisine) ||
+          /bar|pub|lounge|tap|brew/.test(name);
+        return { deal, isBar };
+      });
+  }, [visibleDeals]);
+
   const handleAdapterMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       if (marker.kind === "deal") {
@@ -2431,7 +2487,9 @@ export default function MapPage() {
   const selectedParkingHost = useMemo(() => {
     if (!selectedParkingPreview) return null;
     const host =
-      visibleHostLocations.find((item) => item.id === selectedParkingPreview.hostId) ||
+      visibleHostLocations.find(
+        (item) => item.id === selectedParkingPreview.hostId,
+      ) ||
       mapLocations.hostLocations.find(
         (item) => item.id === selectedParkingPreview.hostId,
       );
@@ -2469,11 +2527,7 @@ export default function MapPage() {
     data: selectedHostUpcomingBookings,
     isLoading: isLoadingSelectedHostUpcomingBookings,
   } = useQuery<HostUpcomingBookingsResponse>({
-    queryKey: [
-      "/api/map/hosts",
-      selectedParkingHostId,
-      "upcoming-bookings",
-    ],
+    queryKey: ["/api/map/hosts", selectedParkingHostId, "upcoming-bookings"],
     enabled: Boolean(selectedParkingHostId),
     queryFn: async () => {
       const res = await fetch(
@@ -2513,7 +2567,9 @@ export default function MapPage() {
         destLng: String(selectedParkingHost.coords.lng),
         travelMode: "DRIVE",
       });
-      const res = await fetch(apiUrl(`/api/map/route-summary?${params.toString()}`));
+      const res = await fetch(
+        apiUrl(`/api/map/route-summary?${params.toString()}`),
+      );
       if (!res.ok) {
         throw new Error("Failed to load route summary");
       }
@@ -2580,8 +2636,7 @@ export default function MapPage() {
     {
       href: "/search",
       title: "Search Food Deals",
-      description:
-        `Search by cuisine, restaurant, and deal type across ${mapBranding.appName}.`,
+      description: `Search by cuisine, restaurant, and deal type across ${mapBranding.appName}.`,
     },
     {
       href: "/events",
@@ -2699,14 +2754,17 @@ export default function MapPage() {
             className="mb-4 rounded border border-[color:var(--status-warning)]/40 bg-[color:var(--status-warning)]/10 p-2 text-xs text-[color:var(--text-primary)]"
             role="status"
           >
-            <div>Using backup map mode while enhanced map services recover.</div>
+            <div>
+              Using backup map mode while enhanced map services recover.
+            </div>
           </div>
         )}
-        {showMapDiagnostics && (usingCachedBookableHosts || usingCachedHostStatus) && (
-          <div className="text-xs mb-4 bg-amber-50 border border-amber-200 rounded p-2 text-amber-900">
-            Using cached Parking Pass map data. Refresh may fix this.
-          </div>
-        )}
+        {showMapDiagnostics &&
+          (usingCachedBookableHosts || usingCachedHostStatus) && (
+            <div className="text-xs mb-4 bg-amber-50 border border-amber-200 rounded p-2 text-amber-900">
+              Using cached Parking Pass map data. Refresh may fix this.
+            </div>
+          )}
         {showMapDiagnostics && userLocation && (
           <div className="text-xs text-muted-foreground mb-4">
             Located: {userLocation.lat.toFixed(4)},{" "}
@@ -2796,28 +2854,29 @@ export default function MapPage() {
             </div>
           )}
           {mapCenter && isUsingGoogleMap ? (
-              <GoogleMapSurface
-                key={`google-map-${googleMapRetryNonce}`}
-                apiKey={effectiveGoogleMapsApiKey}
-                mapId={effectiveGoogleMapsMapId || undefined}
-                center={mapCenter}
-                zoom={zoomLevel}
-                markers={adapterMarkers}
-                showRoadTrafficLayer={false}
-                userLocation={userLocation}
-                isNightTheme={isNightTheme}
-                onBoundsChanged={setMapBounds}
-                onZoomChanged={setZoomLevel}
-                onMarkerTap={handleAdapterMarkerTap}
-                onFatalError={handleGoogleMapsFatalError}
-              />
-            ) : (
-              <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-[hsl(var(--background))/0.75] backdrop-blur-sm">
-                <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[var(--bg-card)] px-4 py-3 text-sm text-[color:var(--text-muted)] shadow-clean max-w-xs text-center">
-                  Google Maps key is not ready yet. Map will appear automatically once available.
-                </div>
+            <GoogleMapSurface
+              key={`google-map-${googleMapRetryNonce}`}
+              apiKey={effectiveGoogleMapsApiKey}
+              mapId={effectiveGoogleMapsMapId || undefined}
+              center={mapCenter}
+              zoom={zoomLevel}
+              markers={mapMarkersForRender}
+              showRoadTrafficLayer={false}
+              userLocation={userLocation}
+              isNightTheme={isNightTheme}
+              onBoundsChanged={setMapBounds}
+              onZoomChanged={setZoomLevel}
+              onMarkerTap={handleAdapterMarkerTap}
+              onFatalError={handleGoogleMapsFatalError}
+            />
+          ) : (
+            <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-[hsl(var(--background))/0.75] backdrop-blur-sm">
+              <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[var(--bg-card)] px-4 py-3 text-sm text-[color:var(--text-muted)] shadow-clean max-w-xs text-center">
+                Google Maps key is not ready yet. Map will appear automatically
+                once available.
               </div>
-            )}
+            </div>
+          )}
 
           {/* Paid parking state overlay */}
           {!isBookableHostIdsLoading && totalHostParkingLocations === 0 && (
@@ -2838,6 +2897,136 @@ export default function MapPage() {
                   Add host location
                 </Button>
               </div>
+            </div>
+          )}
+
+          {zoomCardMode && !selectedDeal && !selectedParkingHost && (
+            <div className="absolute inset-x-2 bottom-2 z-20 max-h-[75%] overflow-y-auto space-y-2 pr-1">
+              {zoomHostCards.map(({ host, coords, nearbyTruck }) => {
+                const { label } = getHostAvailabilityLabel(host);
+                return (
+                  <div
+                    key={`zoom-host-${host.id}`}
+                    className="grid grid-cols-1 gap-2 md:grid-cols-2"
+                  >
+                    <Card className="shadow-clean-lg border-orange-300">
+                      <CardContent className="p-3 space-y-1">
+                        <p className="text-xs font-semibold text-orange-600 truncate">
+                          {host.name}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {host.address}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">{label}</p>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              window.open(
+                                `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
+                                "_blank",
+                              )
+                            }
+                          >
+                            Route
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              setSelectedParkingPreview({
+                                hostId: host.id,
+                                markerLat: coords.lat,
+                                markerLng: coords.lng,
+                              })
+                            }
+                          >
+                            Host details
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {nearbyTruck ? (
+                      <Card className="shadow-clean-lg border-emerald-300 bg-emerald-50/70">
+                        <CardContent className="p-3 space-y-1">
+                          <p className="text-xs font-semibold text-emerald-700 truncate">
+                            {nearbyTruck.name}
+                          </p>
+                          <p className="text-[11px] text-emerald-800/80">
+                            Live at this host now
+                          </p>
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                window.open(
+                                  `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
+                                  "_blank",
+                                )
+                              }
+                            >
+                              Route
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                window.location.href = `/restaurant/${nearbyTruck.id}`;
+                              }}
+                            >
+                              Truck card
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+                  </div>
+                );
+              })}
+
+              {zoomBusinessCards.map(({ deal, isBar }) => (
+                <Card
+                  key={`zoom-business-${deal.restaurantId}`}
+                  className={`shadow-clean-lg ${
+                    isBar ? "border-sky-300 bg-sky-50/70" : "border-amber-300 bg-amber-50/70"
+                  }`}
+                >
+                  <CardContent className="p-3 space-y-1">
+                    <p
+                      className={`text-xs font-semibold truncate ${
+                        isBar ? "text-sky-700" : "text-amber-700"
+                      }`}
+                    >
+                      {deal.restaurant?.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {deal.title}
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          window.location.href = `/deal/${deal.id}`;
+                        }}
+                      >
+                        More info
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            `https://maps.google.com/?q=${deal.restaurant?.latitude},${deal.restaurant?.longitude}`,
+                            "_blank",
+                          )
+                        }
+                      >
+                        Route
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>
@@ -2960,7 +3149,10 @@ export default function MapPage() {
                 <p className="mb-2 text-xs text-muted-foreground">
                   {isLoadingSelectedParkingRouteSummary
                     ? "Estimating drive time..."
-                    : [selectedParkingRoadDistanceLabel, selectedParkingEtaLabel]
+                    : [
+                        selectedParkingRoadDistanceLabel,
+                        selectedParkingEtaLabel,
+                      ]
                         .filter(Boolean)
                         .join(" • ") || "Drive ETA unavailable"}
                 </p>
@@ -3037,7 +3229,9 @@ export default function MapPage() {
                     window.location.href = selectedParkingHost.parkingPassHref;
                   }}
                 >
-                  {selectedParkingHost.isBookable ? "Open parking pass" : "View spot"}
+                  {selectedParkingHost.isBookable
+                    ? "Open parking pass"
+                    : "View spot"}
                 </Button>
               </div>
             </CardContent>

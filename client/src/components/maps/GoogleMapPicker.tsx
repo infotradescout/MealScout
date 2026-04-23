@@ -71,6 +71,8 @@ export interface GoogleMapPickerProps {
   trafficCells?: MapTrafficCell[];
   /** Viewport callback for map-bounds-aware overlays */
   onBoundsChanged?: (bounds: MapPickerBounds) => void;
+  /** Zoom callback used for zoom-threshold UI behaviors */
+  onZoomChanged?: (zoom: number) => void;
 }
 
 // ─── Shared assets ────────────────────────────────────────────────────────────
@@ -121,8 +123,10 @@ function LeafletClickHandler({
 
 function LeafletBoundsReporter({
   onBoundsChanged,
+  onZoomChanged,
 }: {
   onBoundsChanged?: (bounds: MapPickerBounds) => void;
+  onZoomChanged?: (zoom: number) => void;
 }) {
   useMapEvents({
     moveend: (event) => {
@@ -138,6 +142,7 @@ function LeafletBoundsReporter({
       });
     },
     zoomend: (event) => {
+      onZoomChanged?.(event.target.getZoom());
       if (!onBoundsChanged) return;
       const bounds = event.target.getBounds();
       const ne = bounds.getNorthEast();
@@ -161,11 +166,7 @@ const trafficCellColor = (source: MapTrafficCell["source"]) =>
       : "#F97316";
 
 const trafficCellFillOpacity = (source: MapTrafficCell["source"]) =>
-  source === "google_places"
-    ? 0.14
-    : source === "supply_signal"
-      ? 0.22
-      : 0.18;
+  source === "google_places" ? 0.14 : source === "supply_signal" ? 0.22 : 0.18;
 
 // ─── Google Maps loader (shared singleton) ────────────────────────────────────
 
@@ -248,6 +249,7 @@ function GoogleMapRenderer({
   onPinDrag,
   onPinClick,
   onBoundsChanged,
+  onZoomChanged,
   onFatalError,
   interactionsEnabled = true,
 }: {
@@ -262,6 +264,7 @@ function GoogleMapRenderer({
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
   onBoundsChanged?: (bounds: MapPickerBounds) => void;
+  onZoomChanged?: (zoom: number) => void;
   onFatalError?: (message: string) => void;
   interactionsEnabled?: boolean;
 }) {
@@ -273,8 +276,10 @@ function GoogleMapRenderer({
   const infoWindowRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
-  const [infoPortalContainer, setInfoPortalContainer] = useState<HTMLDivElement | null>(null);
-  const [infoPortalContent, setInfoPortalContent] = useState<React.ReactNode>(null);
+  const [infoPortalContainer, setInfoPortalContainer] =
+    useState<HTMLDivElement | null>(null);
+  const [infoPortalContent, setInfoPortalContent] =
+    useState<React.ReactNode>(null);
 
   // Load SDK + initialise map
   useEffect(() => {
@@ -339,6 +344,15 @@ function GoogleMapRenderer({
               east: Number(ne.lng()),
               west: Number(sw.lng()),
             });
+          });
+        }
+
+        if (onZoomChanged) {
+          map.addListener("zoom_changed", () => {
+            const nextZoom = Number(map.getZoom?.());
+            if (Number.isFinite(nextZoom)) {
+              onZoomChanged(nextZoom);
+            }
           });
         }
       })
@@ -431,7 +445,9 @@ function GoogleMapRenderer({
             // Render the React popup node into the persistent portal container,
             // then open the InfoWindow anchored to this marker.
             setInfoPortalContent(
-              pin.popup ? <div className="gmp-popup-card">{pin.popup}</div> : null,
+              pin.popup ? (
+                <div className="gmp-popup-card">{pin.popup}</div>
+              ) : null,
             );
             infoWindow.open(map, marker);
           }
@@ -484,11 +500,13 @@ function GoogleMapRenderer({
       trafficCircleRefs.current.set(cell.id, circle);
     });
 
-    Array.from(trafficCircleRefs.current.entries()).forEach(([id, instance]) => {
-      if (usedIds.has(id)) return;
-      instance.setMap(null);
-      trafficCircleRefs.current.delete(id);
-    });
+    Array.from(trafficCircleRefs.current.entries()).forEach(
+      ([id, instance]) => {
+        if (usedIds.has(id)) return;
+        instance.setMap(null);
+        trafficCircleRefs.current.delete(id);
+      },
+    );
   }, [trafficCells]);
 
   // Circle overlay
@@ -538,6 +556,7 @@ function LeafletRenderer({
   onPinDrag,
   onPinClick,
   onBoundsChanged,
+  onZoomChanged,
   interactionsEnabled = true,
 }: {
   center: GeoPoint;
@@ -549,6 +568,7 @@ function LeafletRenderer({
   onPinDrag?: (key: string, p: GeoPoint) => void;
   onPinClick?: (key: string) => void;
   onBoundsChanged?: (bounds: MapPickerBounds) => void;
+  onZoomChanged?: (zoom: number) => void;
   interactionsEnabled?: boolean;
 }) {
   const isNightTheme =
@@ -578,7 +598,12 @@ function LeafletRenderer({
       <TileLayer attribution={attribution} url={tileUrl} />
       <LeafletCenterer center={center} zoom={zoom} />
       {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
-      {onBoundsChanged && <LeafletBoundsReporter onBoundsChanged={onBoundsChanged} />}
+      {onBoundsChanged && (
+        <LeafletBoundsReporter
+          onBoundsChanged={onBoundsChanged}
+          onZoomChanged={onZoomChanged}
+        />
+      )}
       {trafficCells.map((cell) => {
         const radius = Math.max(140, Math.min(1800, (cell.weight || 1) * 15));
         const fillColor = trafficCellColor(cell.source);
@@ -605,7 +630,9 @@ function LeafletRenderer({
           icon={pin.occupied ? pinIconOccupied : pinIcon}
           draggable={pin.draggable ?? false}
           eventHandlers={{
-            click: () => { if (onPinClick) onPinClick(pin.key); },
+            click: () => {
+              if (onPinClick) onPinClick(pin.key);
+            },
             ...(pin.draggable && onPinDrag
               ? {
                   dragend: (e: any) => {
@@ -618,7 +645,13 @@ function LeafletRenderer({
           }}
         >
           {pin.popup && (
-            <Popup maxWidth={320} minWidth={240} keepInView autoPan autoPanPadding={[16, 16]}>
+            <Popup
+              maxWidth={320}
+              minWidth={240}
+              keepInView
+              autoPan
+              autoPanPadding={[16, 16]}
+            >
               {pin.popup}
             </Popup>
           )}
@@ -628,7 +661,11 @@ function LeafletRenderer({
         <Circle
           center={[center.lat, center.lng]}
           radius={circleRadiusMetres}
-          pathOptions={{ color: "#f97316", fillColor: "#f97316", fillOpacity: 0.15 }}
+          pathOptions={{
+            color: "#f97316",
+            fillColor: "#f97316",
+            fillOpacity: 0.15,
+          }}
         />
       )}
     </MapContainer>
@@ -637,7 +674,10 @@ function LeafletRenderer({
 
 // ─── Public component ─────────────────────────────────────────────────────────
 
-type MapRuntimeResponse = { hasGoogleMapsKey: boolean; googleMapsApiKey?: string | null };
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
+};
 
 export function GoogleMapPicker({
   center,
@@ -652,6 +692,7 @@ export function GoogleMapPicker({
   interactionsEnabled = true,
   mapId: mapIdProp,
   onBoundsChanged,
+  onZoomChanged,
 }: GoogleMapPickerProps) {
   const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
     queryKey: ["/api/map/runtime"],
@@ -677,7 +718,9 @@ export function GoogleMapPicker({
   ).trim();
   const mapId = mapIdProp || envMapId || undefined;
 
-  const [googleFailureMessage, setGoogleFailureMessage] = useState<string | null>(null);
+  const [googleFailureMessage, setGoogleFailureMessage] = useState<
+    string | null
+  >(null);
   const useGoogle = apiKey.length > 0;
 
   return (
@@ -695,6 +738,7 @@ export function GoogleMapPicker({
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
           onBoundsChanged={onBoundsChanged}
+          onZoomChanged={onZoomChanged}
           onFatalError={(message) =>
             setGoogleFailureMessage(
               message || "Google Maps failed to load in this environment.",
@@ -713,6 +757,7 @@ export function GoogleMapPicker({
           onPinDrag={onPinDrag}
           onPinClick={onPinClick}
           onBoundsChanged={onBoundsChanged}
+          onZoomChanged={onZoomChanged}
           interactionsEnabled={interactionsEnabled}
         />
       )}
