@@ -3015,11 +3015,6 @@ export default function ParkingPassPage() {
 
   const focusLocation = (key: string, scroll = false) => {
     setActiveLocationKey(key);
-    if (viewMode === "map") {
-      // Keep card-mode behavior consistent by ensuring we zoom into the
-      // card threshold when focusing a location from card/list interactions.
-      setParkingMapZoom((current) => Math.max(15, current));
-    }
     if (!scroll) return;
     requestAnimationFrame(() => {
       document
