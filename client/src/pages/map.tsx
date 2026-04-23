@@ -2658,7 +2658,9 @@ export default function MapPage() {
               <h1 className="text-xl font-bold text-foreground">
                 {mapBranding.mapName}
               </h1>
-              <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
+              {showMapDiagnostics ? (
+                <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
+              ) : null}
             </div>
           </div>
           <div className="flex space-x-2">
@@ -2694,7 +2696,7 @@ export default function MapPage() {
         </div>
 
         {/* Location Status */}
-        {locationError && (
+        {showMapDiagnostics && locationError && (
           <div
             className="text-xs text-[color:var(--status-error)] mb-4 bg-[color:var(--status-error)]/10 border border-[color:var(--status-error)]/30 rounded p-2"
             role="alert"
