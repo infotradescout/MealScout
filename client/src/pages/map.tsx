@@ -335,6 +335,23 @@ type HostCluster = {
   hosts: HostLocation[];
 };
 
+const resolveHostImageUrl = (host?: HostLocation | null): string | null => {
+  if (!host) return null;
+  const candidates = [
+    host.spotImageUrl,
+    (host as any).imageUrl,
+    (host as any).photoUrl,
+    (host as any).mediaUrl,
+    (host as any).coverImageUrl,
+    (host as any).thumbnailUrl,
+  ];
+  for (const value of candidates) {
+    const next = String(value || "").trim();
+    if (next) return next;
+  }
+  return null;
+};
+
 type EventLocation = {
   id: string;
   name: string;
@@ -810,6 +827,7 @@ function HostMarkerLayer({
           ? qualityFlagsByHostId.get(hostId) || []
           : [];
         const distanceLabel = formatDistance(coords);
+        const hostImageUrl = resolveHostImageUrl(host);
         const hostIsVerified =
           String(host.status || "").toLowerCase() === "verified";
         // Deep link to Parking Pass for this host. Do not fall back to the map pin id
@@ -860,9 +878,9 @@ function HostMarkerLayer({
                 <div className="text-xs text-[color:var(--text-muted)]">
                   {host.address}
                 </div>
-                {host.spotImageUrl && (
+                {hostImageUrl && (
                   <img
-                    src={host.spotImageUrl}
+                    src={hostImageUrl}
                     alt={`${host.name} parking spot`}
                     className="mt-2 h-28 w-full rounded-lg border border-border/50 object-cover"
                     loading="lazy"
@@ -982,6 +1000,9 @@ export default function MapPage() {
     null,
   );
   const [zoomLevel, setZoomLevel] = useState(16);
+  const lastZoomLevelRef = useRef(16);
+  const hasSeenInitialZoomRef = useRef(false);
+  const [shouldAutoOpenZoomCard, setShouldAutoOpenZoomCard] = useState(false);
   const [mapBounds, setMapBounds] = useState<MapBoundsLike | null>(null);
   const [debouncedMapBounds, setDebouncedMapBounds] =
     useState<MapBoundsLike | null>(null);
@@ -2426,7 +2447,28 @@ export default function MapPage() {
   }, [pinZoomCardMode.cards, pinZoomCardMode.activeCardId, mapCenter]);
 
   useEffect(() => {
+    const current = Number(zoomLevel);
+    if (!Number.isFinite(current)) return;
+    const previous = lastZoomLevelRef.current;
+    lastZoomLevelRef.current = current;
+
+    if (!hasSeenInitialZoomRef.current) {
+      hasSeenInitialZoomRef.current = true;
+      return;
+    }
+
+    if (previous < 15 && current >= 15) {
+      setShouldAutoOpenZoomCard(true);
+      return;
+    }
+    if (current < 15) {
+      setShouldAutoOpenZoomCard(false);
+    }
+  }, [zoomLevel]);
+
+  useEffect(() => {
     if (!pinZoomCardMode.showCards) return;
+    if (!shouldAutoOpenZoomCard) return;
     const target = preferredParkingZoomCard;
     if (!target || target.kind !== "parking") return;
     if (pinZoomCardMode.activeCardId !== target.id) {
@@ -2448,8 +2490,10 @@ export default function MapPage() {
       markerLng: target.lng,
       source: "zoom-card",
     });
+    setShouldAutoOpenZoomCard(false);
   }, [
     pinZoomCardMode.showCards,
+    shouldAutoOpenZoomCard,
     pinZoomCardMode.activeCardId,
     pinZoomCardMode.setActiveCardId,
     preferredParkingZoomCard,
@@ -2566,6 +2610,10 @@ export default function MapPage() {
     formatDistance,
     getParkingPassHrefForHost,
   ]);
+  const selectedParkingHostImageUrl = useMemo(
+    () => resolveHostImageUrl(selectedParkingHost?.host),
+    [selectedParkingHost],
+  );
 
   const selectedParkingHostId = useMemo(() => {
     if (!selectedParkingHost) return "";
@@ -3067,9 +3115,9 @@ export default function MapPage() {
                   {selectedParkingHost.distanceLabel} away
                 </p>
               )}
-              {selectedParkingHost.host.spotImageUrl && (
+              {selectedParkingHostImageUrl && (
                 <img
-                  src={selectedParkingHost.host.spotImageUrl}
+                  src={selectedParkingHostImageUrl}
                   alt={`${selectedParkingHost.host.name} place image`}
                   className="mb-3 h-28 w-full rounded-xl border border-border/60 object-cover"
                   loading="lazy"
