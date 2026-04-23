@@ -12,6 +12,7 @@ import {
   affiliateWithdrawals,
   creditLedger,
 } from "@shared/schema";
+import { setAffiliateTag } from "../../affiliateTagService";
 
 type RequireAdminUser = (req: any, res: any) => boolean;
 
@@ -189,6 +190,7 @@ export function registerAffiliateAdminRoutes(
         const targetUserId = req.params.id;
         const {
           affiliatePercent,
+          affiliateTag,
           affiliateCloserUserId,
           affiliateBookerUserId,
         } = req.body || {};
@@ -210,20 +212,6 @@ export function registerAffiliateAdminRoutes(
               ? null
               : String(affiliateCloserUserId);
           updates.affiliateCloserUserId = closerId;
-
-          if (closerId) {
-            const [closer] = await db
-              .select({ affiliatePercent: users.affiliatePercent })
-              .from(users)
-              .where(eq(users.id, closerId))
-              .limit(1);
-            updates.affiliateCloserPercent = Math.max(
-              Number(closer?.affiliatePercent ?? 5),
-              0,
-            );
-          } else {
-            updates.affiliateCloserPercent = null;
-          }
         }
 
         if (affiliateBookerUserId !== undefined) {
@@ -232,19 +220,22 @@ export function registerAffiliateAdminRoutes(
               ? null
               : String(affiliateBookerUserId);
           updates.affiliateBookerUserId = bookerId;
+        }
 
-          if (bookerId) {
-            const [booker] = await db
-              .select({ affiliatePercent: users.affiliatePercent })
-              .from(users)
-              .where(eq(users.id, bookerId))
-              .limit(1);
-            updates.affiliateBookerPercent = Math.max(
-              Number(booker?.affiliatePercent ?? 5),
-              0,
-            );
+        if (affiliateTag !== undefined) {
+          const rawTag = String(affiliateTag || "").trim();
+          if (!rawTag) {
+            updates.affiliateTag = null;
           } else {
-            updates.affiliateBookerPercent = null;
+            try {
+              await setAffiliateTag(targetUserId, rawTag);
+            } catch (error: any) {
+              const message = String(error?.message || "Invalid affiliate tag");
+              if (message.toLowerCase().includes("already taken")) {
+                return res.status(409).json({ message });
+              }
+              return res.status(400).json({ message });
+            }
           }
         }
 
@@ -268,11 +259,10 @@ export function registerAffiliateAdminRoutes(
 
         res.json({
           id: updated.id,
+          affiliateTag: updated.affiliateTag,
           affiliatePercent: updated.affiliatePercent,
           affiliateCloserUserId: updated.affiliateCloserUserId,
           affiliateBookerUserId: updated.affiliateBookerUserId,
-          affiliateCloserPercent: (updated as any).affiliateCloserPercent ?? null,
-          affiliateBookerPercent: (updated as any).affiliateBookerPercent ?? null,
         });
       } catch (error: any) {
         console.error("Error updating affiliate settings:", error);

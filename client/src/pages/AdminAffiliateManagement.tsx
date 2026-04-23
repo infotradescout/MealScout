@@ -55,6 +55,7 @@ export default function AdminAffiliateManagement() {
   const [userType, setUserType] = useState("all");
   const [editing, setEditing] = useState<AffiliateUser | null>(null);
   const [percent, setPercent] = useState("");
+  const [affiliateTag, setAffiliateTag] = useState("");
   const [closerId, setCloserId] = useState("");
   const [bookerId, setBookerId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -86,6 +87,7 @@ export default function AdminAffiliateManagement() {
   const startEdit = (user: AffiliateUser) => {
     setEditing(user);
     setPercent(String(user.affiliatePercent ?? 5));
+    setAffiliateTag(user.affiliateTag || "");
     setCloserId(user.affiliateCloserUserId || "");
     setBookerId(user.affiliateBookerUserId || "");
     setError(null);
@@ -101,6 +103,7 @@ export default function AdminAffiliateManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           affiliatePercent: Number(percent),
+          affiliateTag: affiliateTag.trim() || null,
           affiliateCloserUserId: closerId || null,
           affiliateBookerUserId: bookerId || null,
         }),
@@ -430,6 +433,16 @@ export default function AdminAffiliateManagement() {
                 value={percent}
                 onChange={(e) => setPercent(e.target.value)}
                 className="mt-2 w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Affiliate Tag</label>
+              <input
+                type="text"
+                value={affiliateTag}
+                onChange={(e) => setAffiliateTag(e.target.value)}
+                className="mt-2 w-full rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm"
+                placeholder="custom-tag"
               />
             </div>
             <div>
