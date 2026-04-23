@@ -472,6 +472,7 @@ const normalizeLocationPart = (value: string | null | undefined) =>
   (value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
 const getLocationKey = (listing: ParkingPassListing) => {
+  const hostIdKey = normalizeLocationPart(listing.host?.id);
   const addressKey = [
     normalizeLocationPart(listing.host?.address),
     normalizeLocationPart(listing.host?.city),
@@ -480,8 +481,20 @@ const getLocationKey = (listing: ParkingPassListing) => {
     .filter(Boolean)
     .join("|");
 
-  if (addressKey) return addressKey;
-  return listing.host?.id || listing.id;
+  const lat = parseCoord(listing.host?.latitude);
+  const lng = parseCoord(listing.host?.longitude);
+  const coordsKey =
+    lat !== null && lng !== null
+      ? `${lat.toFixed(5)},${lng.toFixed(5)}`
+      : "";
+
+  const composite = [hostIdKey, addressKey, coordsKey]
+    .filter(Boolean)
+    .join("|");
+  if (composite) return composite;
+
+  if (hostIdKey) return hostIdKey;
+  return listing.id;
 };
 
 const defaultMapCenter = {
@@ -2936,8 +2949,7 @@ export default function ParkingPassPage() {
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
     passListings.forEach((listing) => {
-      const hostKey = String(listing.host?.id || "").trim();
-      const key = hostKey || getLocationKey(listing);
+      const key = getLocationKey(listing);
       const existing = byHost.get(key);
       if (existing) {
         existing.listings.push(listing);
