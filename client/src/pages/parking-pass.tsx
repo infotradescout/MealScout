@@ -2589,6 +2589,12 @@ export default function ParkingPassPage() {
     return `https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddress}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encodedAddress}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
   };
 
+  const buildGooglePlaceImageUrl = (addressQuery: string | null) => {
+    if (!addressQuery || !effectiveGoogleMapsApiKey) return null;
+    const encodedAddress = encodeURIComponent(addressQuery);
+    return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encodedAddress}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+  };
+
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {
     if (
       !isSlotBookableByTime(
@@ -6150,7 +6156,9 @@ export default function ParkingPassPage() {
                             hostPreviewAddress || null,
                           );
                           const hostPlaceImageUrl =
-                            hostCardPhotoUrl || hostMapPreviewUrl;
+                            hostCardPhotoUrl ||
+                            buildGooglePlaceImageUrl(hostPreviewAddress || null) ||
+                            hostMapPreviewUrl;
                           const isActive = activeLocation?.key === group.key;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
@@ -6478,7 +6486,9 @@ export default function ParkingPassPage() {
                           hostPreviewAddress || null,
                         );
                         const hostPlaceImageUrl =
-                          hostCardPhotoUrl || hostMapPreviewUrl;
+                          hostCardPhotoUrl ||
+                          buildGooglePlaceImageUrl(hostPreviewAddress || null) ||
+                          hostMapPreviewUrl;
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
