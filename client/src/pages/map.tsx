@@ -3067,6 +3067,14 @@ export default function MapPage() {
                   {selectedParkingHost.distanceLabel} away
                 </p>
               )}
+              {selectedParkingHost.host.spotImageUrl && (
+                <img
+                  src={selectedParkingHost.host.spotImageUrl}
+                  alt={`${selectedParkingHost.host.name} place image`}
+                  className="mb-3 h-28 w-full rounded-xl border border-border/60 object-cover"
+                  loading="lazy"
+                />
+              )}
               {userLocation && (
                 <p className="mb-2 text-xs text-muted-foreground">
                   {isLoadingSelectedParkingRouteSummary
