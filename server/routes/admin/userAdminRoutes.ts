@@ -26,7 +26,9 @@ import {
   events,
   hosts,
   insertHostSchema,
+  insertRestaurantSchema,
   restaurants,
+  suppliers,
   truckClaimRequests,
   truckImportListings,
   users,
@@ -343,6 +345,10 @@ export function registerUserAdminRoutes(
       if (denyStaffEdits(req, res)) return;
       try {
         const userId = req.params.id;
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
         const {
           email,
           firstName,
@@ -354,6 +360,8 @@ export function registerUserAdminRoutes(
           isActive,
           emailVerified,
           userType,
+          profileVisibility,
+          customDomainHost,
         } = req.body || {};
 
         const updates: any = {};
@@ -383,6 +391,91 @@ export function registerUserAdminRoutes(
         }
         if (emailVerified !== undefined) {
           updates.emailVerified = Boolean(emailVerified);
+        }
+
+        const currentAccountSettings =
+          user.accountSettings && typeof user.accountSettings === "object"
+            ? ({ ...(user.accountSettings as any) } as Record<string, any>)
+            : {};
+        const accountSettingsUpdates: Record<string, any> = {};
+        if (profileVisibility !== undefined) {
+          const visibility = String(profileVisibility || "")
+            .trim()
+            .toLowerCase();
+          if (!["public", "private", "connections"].includes(visibility)) {
+            return res.status(400).json({
+              message:
+                "Invalid profile visibility. Use public, private, or connections.",
+            });
+          }
+          accountSettingsUpdates.privacy = {
+            ...(currentAccountSettings.privacy || {}),
+            profileVisibility: visibility,
+          };
+        }
+        if (customDomainHost !== undefined) {
+          const hostname = String(customDomainHost || "")
+            .trim()
+            .toLowerCase();
+          if (
+            hostname &&
+            !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(hostname)
+          ) {
+            return res.status(400).json({
+              message: "Invalid custom domain hostname.",
+            });
+          }
+
+          const [restaurantRow, hostRow, supplierRow] = await Promise.all([
+            db
+              .select({ id: restaurants.id })
+              .from(restaurants)
+              .where(eq(restaurants.ownerId, userId))
+              .limit(1),
+            db
+              .select({ id: hosts.id })
+              .from(hosts)
+              .where(eq(hosts.userId, userId))
+              .limit(1),
+            db
+              .select({ id: suppliers.id })
+              .from(suppliers)
+              .where(eq(suppliers.userId, userId))
+              .limit(1),
+          ]);
+          const hasBusinessProfile =
+            restaurantRow.length > 0 ||
+            hostRow.length > 0 ||
+            supplierRow.length > 0;
+          if (!hasBusinessProfile) {
+            return res.status(400).json({
+              message:
+                "Custom domain can only be set for users with a business profile.",
+            });
+          }
+
+          accountSettingsUpdates.customDomain = {
+            ...(currentAccountSettings.customDomain || {}),
+            hostname,
+            status: hostname
+              ? String(currentAccountSettings.customDomain?.status || "unverified")
+              : "unverified",
+            lastCheckedAt: hostname
+              ? currentAccountSettings.customDomain?.lastCheckedAt || null
+              : null,
+            expectedTarget: hostname
+              ? currentAccountSettings.customDomain?.expectedTarget || null
+              : null,
+            diagnostics: hostname
+              ? currentAccountSettings.customDomain?.diagnostics || null
+              : null,
+          };
+        }
+        if (Object.keys(accountSettingsUpdates).length > 0) {
+          updates.accountSettings = {
+            ...currentAccountSettings,
+            ...accountSettingsUpdates,
+          };
         }
 
         if (userType) {
@@ -1394,6 +1487,64 @@ export function registerUserAdminRoutes(
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/users/:id/restaurants",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      try {
+        const ownerId = req.params.id;
+        const owner = await storage.getUser(ownerId);
+        if (!owner) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const businessType = String(
+          req.body?.businessType || "restaurant",
+        ).toLowerCase();
+        if (!["restaurant", "bar", "food_truck"].includes(businessType)) {
+          return res.status(400).json({
+            message: "Invalid businessType",
+          });
+        }
+
+        const payload = insertRestaurantSchema.parse({
+          ownerId,
+          name: String(req.body?.name || "").trim(),
+          address: String(req.body?.address || "").trim(),
+          city: String(req.body?.city || "").trim(),
+          state: String(req.body?.state || "").trim(),
+          phone: req.body?.phone || null,
+          cuisineType: req.body?.cuisineType || null,
+          businessType,
+          isFoodTruck: businessType === "food_truck",
+          isActive: req.body?.isActive ?? true,
+          isVerified: req.body?.isVerified ?? true,
+          description: req.body?.description || null,
+          websiteUrl: req.body?.websiteUrl || null,
+          instagramUrl: req.body?.instagramUrl || null,
+          facebookPageUrl: req.body?.facebookPageUrl || null,
+        });
+
+        const created = await storage.createRestaurant(payload as any);
+
+        if (owner.userType === "customer") {
+          const nextType =
+            businessType === "food_truck" ? "food_truck" : "restaurant_owner";
+          await storage.updateUserType(ownerId, nextType as any);
+        }
+
+        res.status(201).json(created);
+      } catch (error: any) {
+        console.error("Error creating user restaurant profile:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to create business profile",
+        });
       }
     },
   );

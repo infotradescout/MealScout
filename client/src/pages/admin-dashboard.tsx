@@ -2360,6 +2360,15 @@ export default function AdminDashboard() {
     contactPhone: "",
     notes: "",
   });
+  const [newRestaurantProfile, setNewRestaurantProfile] = useState<any>({
+    name: "",
+    address: "",
+    city: "",
+    state: "",
+    phone: "",
+    cuisineType: "",
+    businessType: "restaurant",
+  });
 
   const formatDateInput = (date: Date) => {
     const year = date.getFullYear();
@@ -3650,8 +3659,6 @@ export default function AdminDashboard() {
 
   const renderHostLocationsEditor = () => {
     if (!selectedUser) return null;
-    if (!(selectedUser?.userType === "host" || userHosts.length > 0))
-      return null;
 
     const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -4624,6 +4631,19 @@ export default function AdminDashboard() {
       isActive: !selectedUser.isDisabled,
       emailVerified: !!selectedUser.emailVerified,
       userType: selectedUser.userType || "customer",
+      profileVisibility:
+        selectedUser?.accountSettings?.privacy?.profileVisibility || "public",
+      customDomainHost:
+        selectedUser?.accountSettings?.customDomain?.hostname || "",
+    });
+    setNewRestaurantProfile({
+      name: "",
+      address: "",
+      city: "",
+      state: "",
+      phone: "",
+      cuisineType: "",
+      businessType: "restaurant",
     });
   }, [selectedUser]);
 
@@ -5417,6 +5437,40 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to update restaurant.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createRestaurantProfile = useMutation({
+    mutationFn: async (payload: { userId: string; data: any }) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/users/${payload.userId}/restaurants`,
+        payload.data,
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/users", selectedUser?.id, "restaurants"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setNewRestaurantProfile({
+        name: "",
+        address: "",
+        city: "",
+        state: "",
+        phone: "",
+        cuisineType: "",
+        businessType: "restaurant",
+      });
+      toast({ title: "Business Profile Added" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create business profile.",
         variant: "destructive",
       });
     },
@@ -8726,6 +8780,44 @@ export default function AdminDashboard() {
                       />
                     </div>
                     <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Profile Visibility
+                      </p>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+                        value={userEdits.profileVisibility || "public"}
+                        onChange={(e) =>
+                          setUserEdits({
+                            ...userEdits,
+                            profileVisibility: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="public">Public</option>
+                        <option value="private">Private</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Custom Domain
+                      </p>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        placeholder="profile.yourdomain.com"
+                        value={userEdits.customDomainHost || ""}
+                        onChange={(e) =>
+                          setUserEdits({
+                            ...userEdits,
+                            customDomainHost: e.target.value,
+                          })
+                        }
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Works for users with at least one business profile.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">Phone</p>
                       <input
                         type="text"
@@ -9410,277 +9502,395 @@ export default function AdminDashboard() {
               )}
 
               {/* Restaurants */}
-              {userRestaurants.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
-                    <Store className="w-4 h-4 mr-2" />
-                    RESTAURANTS ({userRestaurants.length})
-                  </h3>
-                  <div className="space-y-4">
-                    {userRestaurants.map((restaurant: any) => {
-                      const edits = restaurantEdits[restaurant.id];
-                      if (!edits) return null;
-                      return (
-                        <div
-                          key={restaurant.id}
-                          className="border rounded-lg p-3 bg-muted/30 space-y-3"
-                        >
-                          <div className="text-sm font-medium">
-                            {restaurant.name}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              value={edits.name}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    name: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              value={edits.address}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    address: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Phone"
-                              value={edits.phone}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    phone: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Cuisine Type"
-                              value={edits.cuisineType}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    cuisineType: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <select
-                              className="w-full px-2 py-1 border rounded-md text-sm bg-background"
-                              value={edits.businessType}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    businessType: e.target.value,
-                                  },
-                                })
-                              }
-                            >
-                              <option value="restaurant">Restaurant</option>
-                              <option value="bar">Bar</option>
-                              <option value="food_truck">Food Truck</option>
-                            </select>
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Promo Code"
-                              value={edits.promoCode}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    promoCode: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="City"
-                              value={edits.city}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    city: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="State"
-                              value={edits.state}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    state: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <textarea
-                              className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"
-                              placeholder="Description"
-                              value={edits.description}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    description: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Website URL"
-                              value={edits.websiteUrl}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    websiteUrl: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Instagram URL"
-                              value={edits.instagramUrl}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    instagramUrl: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <input
-                              className="w-full px-2 py-1 border rounded-md text-sm"
-                              placeholder="Facebook Page URL"
-                              value={edits.facebookPageUrl}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    facebookPageUrl: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <textarea
-                              className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"
-                              placeholder="Amenities JSON"
-                              value={edits.amenitiesText}
-                              onChange={(e) =>
-                                setRestaurantEdits({
-                                  ...restaurantEdits,
-                                  [restaurant.id]: {
-                                    ...edits,
-                                    amenitiesText: e.target.value,
-                                  },
-                                })
-                              }
-                            />
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={edits.isActive}
-                                onChange={(e) =>
-                                  setRestaurantEdits({
-                                    ...restaurantEdits,
-                                    [restaurant.id]: {
-                                      ...edits,
-                                      isActive: e.target.checked,
-                                    },
-                                  })
-                                }
-                              />
-                              Active
-                            </label>
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={edits.isVerified}
-                                onChange={(e) =>
-                                  setRestaurantEdits({
-                                    ...restaurantEdits,
-                                    [restaurant.id]: {
-                                      ...edits,
-                                      isVerified: e.target.checked,
-                                    },
-                                  })
-                                }
-                              />
-                              Verified
-                            </label>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              let amenities: any = undefined;
-                              if (edits.amenitiesText) {
-                                try {
-                                  amenities = JSON.parse(edits.amenitiesText);
-                                } catch {
-                                  toast({
-                                    title: "Invalid JSON",
-                                    description:
-                                      "Amenities must be valid JSON.",
-                                    variant: "destructive",
-                                  });
-                                  return;
-                                }
-                              }
-                              updateRestaurant.mutate({
-                                restaurantId: restaurant.id,
-                                updates: {
-                                  ...edits,
-                                  amenities,
-                                },
-                              });
-                            }}
-                            disabled={isStaff}
-                          >
-                            Save Restaurant
-                          </Button>
+              <div>
+                <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
+                  <Store className="w-4 h-4 mr-2" />
+                  RESTAURANTS ({userRestaurants.length})
+                </h3>
+                {userRestaurants.length === 0 && (
+                  <div className="text-sm text-muted-foreground mb-3">
+                    No restaurant/food truck business profiles yet.
+                  </div>
+                )}
+                <div className="space-y-4">
+                  {userRestaurants.map((restaurant: any) => {
+                    const edits = restaurantEdits[restaurant.id];
+                    if (!edits) return null;
+                    return (
+                      <div
+                        key={restaurant.id}
+                        className="border rounded-lg p-3 bg-muted/30 space-y-3"
+                      >
+                        <div className="text-sm font-medium">
+                          {restaurant.name}
                         </div>
-                      );
-                    })}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            value={edits.name}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  name: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            value={edits.address}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  address: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Phone"
+                            value={edits.phone}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  phone: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Cuisine Type"
+                            value={edits.cuisineType}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  cuisineType: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <select
+                            className="w-full px-2 py-1 border rounded-md text-sm bg-background"
+                            value={edits.businessType}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  businessType: e.target.value,
+                                },
+                              })
+                            }
+                          >
+                            <option value="restaurant">Restaurant</option>
+                            <option value="bar">Bar</option>
+                            <option value="food_truck">Food Truck</option>
+                          </select>
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Promo Code"
+                            value={edits.promoCode}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  promoCode: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="City"
+                            value={edits.city}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  city: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="State"
+                            value={edits.state}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  state: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <textarea
+                            className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"
+                            placeholder="Description"
+                            value={edits.description}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  description: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Website URL"
+                            value={edits.websiteUrl}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  websiteUrl: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Instagram URL"
+                            value={edits.instagramUrl}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  instagramUrl: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <input
+                            className="w-full px-2 py-1 border rounded-md text-sm"
+                            placeholder="Facebook Page URL"
+                            value={edits.facebookPageUrl}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  facebookPageUrl: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <textarea
+                            className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"
+                            placeholder="Amenities JSON"
+                            value={edits.amenitiesText}
+                            onChange={(e) =>
+                              setRestaurantEdits({
+                                ...restaurantEdits,
+                                [restaurant.id]: {
+                                  ...edits,
+                                  amenitiesText: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={edits.isActive}
+                              onChange={(e) =>
+                                setRestaurantEdits({
+                                  ...restaurantEdits,
+                                  [restaurant.id]: {
+                                    ...edits,
+                                    isActive: e.target.checked,
+                                  },
+                                })
+                              }
+                            />
+                            Active
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={edits.isVerified}
+                              onChange={(e) =>
+                                setRestaurantEdits({
+                                  ...restaurantEdits,
+                                  [restaurant.id]: {
+                                    ...edits,
+                                    isVerified: e.target.checked,
+                                  },
+                                })
+                              }
+                            />
+                            Verified
+                          </label>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            let amenities: any = undefined;
+                            if (edits.amenitiesText) {
+                              try {
+                                amenities = JSON.parse(edits.amenitiesText);
+                              } catch {
+                                toast({
+                                  title: "Invalid JSON",
+                                  description:
+                                    "Amenities must be valid JSON.",
+                                  variant: "destructive",
+                                });
+                                return;
+                              }
+                            }
+                            updateRestaurant.mutate({
+                              restaurantId: restaurant.id,
+                              updates: {
+                                ...edits,
+                                amenities,
+                              },
+                            });
+                          }}
+                          disabled={isStaff}
+                        >
+                          Save Restaurant
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  <div className="border rounded-lg p-3 space-y-3">
+                    <div className="text-sm font-medium">
+                      Add Business Profile (Restaurant/Food Truck)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm"
+                        placeholder="Name"
+                        value={newRestaurantProfile.name}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            name: e.target.value,
+                          })
+                        }
+                      />
+                      <select
+                        className="w-full px-2 py-1 border rounded-md text-sm bg-background"
+                        value={newRestaurantProfile.businessType}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            businessType: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="restaurant">Restaurant</option>
+                        <option value="bar">Bar</option>
+                        <option value="food_truck">Food Truck</option>
+                      </select>
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"
+                        placeholder="Address"
+                        value={newRestaurantProfile.address}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            address: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm"
+                        placeholder="City"
+                        value={newRestaurantProfile.city}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            city: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm"
+                        placeholder="State"
+                        value={newRestaurantProfile.state}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            state: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm"
+                        placeholder="Phone"
+                        value={newRestaurantProfile.phone}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            phone: e.target.value,
+                          })
+                        }
+                      />
+                      <input
+                        className="w-full px-2 py-1 border rounded-md text-sm"
+                        placeholder="Cuisine Type"
+                        value={newRestaurantProfile.cuisineType}
+                        onChange={(e) =>
+                          setNewRestaurantProfile({
+                            ...newRestaurantProfile,
+                            cuisineType: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (
+                          !newRestaurantProfile.name.trim() ||
+                          !newRestaurantProfile.address.trim() ||
+                          !newRestaurantProfile.city.trim() ||
+                          !newRestaurantProfile.state.trim()
+                        ) {
+                          toast({
+                            title: "Missing fields",
+                            description:
+                              "Name, address, city, and state are required.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        createRestaurantProfile.mutate({
+                          userId: selectedUser.id,
+                          data: newRestaurantProfile,
+                        });
+                      }}
+                      disabled={createRestaurantProfile.isPending || isStaff}
+                    >
+                      {createRestaurantProfile.isPending
+                        ? "Creating..."
+                        : "Add Business Profile"}
+                    </Button>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Deals */}
               {userDeals.length > 0 && (
