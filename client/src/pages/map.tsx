@@ -2371,7 +2371,7 @@ export default function MapPage() {
     businessPopularityByRestaurant,
   ]);
 
-  const zoomCardMode = zoomLevel >= 16;
+  const zoomCardMode = false;
 
   const mapMarkersForRender = useMemo(
     () =>

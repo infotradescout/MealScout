@@ -3272,7 +3272,9 @@ export default function ParkingPassPage() {
       ? parkingFootTrafficData.cells
       : [];
   }, [showFootTraffic, viewMode, parkingFootTrafficData]);
-  const showZoomSpotCards = viewMode === "map" && parkingMapZoom >= 16;
+  const showZoomSpotCards = false;
+  const showZoomSpotCardsActive =
+    showZoomSpotCards && filteredLocations.length > 0;
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -5737,10 +5739,7 @@ export default function ParkingPassPage() {
                               onBoundsChanged={setParkingMapBounds}
                               onZoomChanged={setParkingMapZoom}
                               trafficCells={parkingTrafficCells}
-                              pins={(showZoomSpotCards
-                                ? []
-                                : fallbackHostPins
-                              ).map(
+                              pins={fallbackHostPins.map(
                                 ({
                                   key,
                                   hostId,
@@ -5809,7 +5808,7 @@ export default function ParkingPassPage() {
                               const hit = mapPins.find((p) => p.key === pinKey);
                               if (hit) setActiveLocationKey(hit.group.key);
                             }}
-                            pins={(showZoomSpotCards ? [] : mapPins).map(
+                            pins={(showZoomSpotCardsActive ? [] : mapPins).map(
                               ({ key, group, coords, addressLabel }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
@@ -6063,7 +6062,7 @@ export default function ParkingPassPage() {
                               No mappable locations yet.
                             </div>
                           )}
-                          {showZoomSpotCards && filteredLocations.length > 0 && (
+                          {showZoomSpotCardsActive && (
                             <div className="absolute inset-x-2 bottom-2 z-20 max-h-[72%] space-y-2 overflow-y-auto pr-1">
                               {filteredLocations.slice(0, 6).map((group) => {
                                 const isActive = activeLocation?.key === group.key;
@@ -6109,12 +6108,12 @@ export default function ParkingPassPage() {
                           )}
                         </div>
                         <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                          {showZoomSpotCards
+                          {showZoomSpotCardsActive
                             ? "Zoomed in: spot cards are shown on-map."
                             : "Tap a location below to update the map."}
                         </div>
                       </div>
-                      {!showZoomSpotCards && <div className="space-y-2">
+                      {!showZoomSpotCardsActive && <div className="space-y-2">
                         {filteredLocations.map((group) => {
                           const effectiveDateKey =
                             group.key === activeLocationKey
