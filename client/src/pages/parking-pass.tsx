@@ -5616,8 +5616,8 @@ export default function ParkingPassPage() {
                     Find parking pass spots
                   </p>
                   <p className="text-xs text-[color:var(--text-muted)]">
-                    Search by city or address. Pick a spot first, then choose
-                    from its open dates.
+                    Search by city or address. Pick a spot (space) first, then
+                    choose its date and time slot.
                   </p>
                 </div>
               </div>
@@ -5630,7 +5630,8 @@ export default function ParkingPassPage() {
                           Search + availability
                         </p>
                         <p className="text-[11px] text-slate-500">
-                          Choose a spot, then pick an open date and time slot.
+                          Choose a spot (space), then pick an open date and
+                          time slot.
                         </p>
                       </div>
                       <div className="hidden sm:flex items-center gap-2">
@@ -6188,7 +6189,7 @@ export default function ParkingPassPage() {
                               {isActive && groupDateKeys.length > 1 && (
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] text-[color:var(--text-muted)]">
-                                    Date
+                                    Booking date
                                   </span>
                                   <select
                                     className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
@@ -6507,7 +6508,7 @@ export default function ParkingPassPage() {
                             {isActive && groupDateKeys.length > 1 && (
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <span className="text-[11px] text-[color:var(--text-muted)]">
-                                  Date
+                                  Booking date
                                 </span>
                                 <select
                                   className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
@@ -6943,7 +6944,7 @@ export default function ParkingPassPage() {
                             <>
                               <div className="space-y-2">
                                 <p className="text-xs font-semibold text-[color:var(--text-secondary)]">
-                                  Slot pricing
+                                  Time slot pricing
                                 </p>
                                 <div className="grid grid-cols-2 gap-2">
                                   {buildSlotOptions(activeListingForDate).map(
