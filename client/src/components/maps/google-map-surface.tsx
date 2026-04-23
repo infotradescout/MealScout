@@ -231,6 +231,18 @@ const loadGoogleMaps = async (apiKey: string) => {
   }
 };
 
+const resolveMapConstructor = async (googleMaps: any) => {
+  let MapConstructor = googleMaps?.Map;
+  if (
+    typeof MapConstructor !== "function" &&
+    typeof googleMaps?.importLibrary === "function"
+  ) {
+    const mapsLibrary = await googleMaps.importLibrary("maps");
+    MapConstructor = mapsLibrary?.Map;
+  }
+  return MapConstructor;
+};
+
 export function GoogleMapSurface({
   apiKey,
   mapId,
@@ -308,12 +320,17 @@ export function GoogleMapSurface({
         }
 
         if (!mapRef.current) {
+          const MapConstructor = await resolveMapConstructor(googleMaps);
+          if (typeof MapConstructor !== "function") {
+            throw new Error("Google Maps constructor unavailable");
+          }
+
           const prefersFinePointer =
             typeof window !== "undefined" &&
             typeof window.matchMedia === "function" &&
             window.matchMedia("(pointer: fine)").matches;
 
-          mapRef.current = new googleMaps.Map(mapContainerRef.current, {
+          mapRef.current = new MapConstructor(mapContainerRef.current, {
             center,
             zoom,
             disableDefaultUI: true,

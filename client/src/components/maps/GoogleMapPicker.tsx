@@ -235,6 +235,17 @@ async function loadGoogleMaps(apiKey: string): Promise<void> {
   }
 }
 
+function removeMarkerFromMap(marker: any): void {
+  if (!marker) return;
+  if (typeof marker.setMap === "function") {
+    marker.setMap(null);
+    return;
+  }
+  if ("map" in marker) {
+    marker.map = null;
+  }
+}
+
 // ─── Google Maps renderer ─────────────────────────────────────────────────────
 
 function GoogleMapRenderer({
@@ -395,11 +406,19 @@ function GoogleMapRenderer({
       marker.position = next;
     };
 
+    const positionToGeoPoint = (pos: any): GeoPoint | null => {
+      if (!pos) return null;
+      const lat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+      const lng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat: Number(lat), lng: Number(lng) };
+    };
+
     // Remove stale markers
     const incomingKeys = new Set(pins.map((p) => p.key));
     for (const [key, marker] of existing) {
       if (!incomingKeys.has(key)) {
-        marker.setMap(null);
+        removeMarkerFromMap(marker);
         existing.delete(key);
       }
     }
@@ -439,7 +458,7 @@ function GoogleMapRenderer({
             },
           });
         }
-        marker.addListener("click", () => {
+        const handlePinClick = () => {
           if (onPinClick) onPinClick(pin.key);
           if (infoWindow) {
             // Render the React popup node into the persistent portal container,
@@ -451,14 +470,24 @@ function GoogleMapRenderer({
             );
             infoWindow.open(map, marker);
           }
-        });
+        };
+        if (typeof marker.addEventListener === "function") {
+          marker.addEventListener("gmp-click", handlePinClick);
+        } else if (typeof marker.addListener === "function") {
+          marker.addListener("click", handlePinClick);
+        }
         if (pin.draggable && onPinDrag) {
           if (useAdvanced) {
             // AdvancedMarkerElement uses 'gmp-dragend' and exposes position directly
-            marker.addListener("gmp-dragend", () => {
-              const pos = marker.position;
-              if (pos) onPinDrag(pin.key, { lat: pos.lat, lng: pos.lng });
-            });
+            const handleAdvancedDragEnd = () => {
+              const next = positionToGeoPoint(marker.position);
+              if (next) onPinDrag(pin.key, next);
+            };
+            if (typeof marker.addEventListener === "function") {
+              marker.addEventListener("gmp-dragend", handleAdvancedDragEnd);
+            } else if (typeof marker.addListener === "function") {
+              marker.addListener("gmp-dragend", handleAdvancedDragEnd);
+            }
           } else {
             marker.addListener("dragend", (e: any) => {
               onPinDrag(pin.key, { lat: e.latLng.lat(), lng: e.latLng.lng() });
@@ -468,7 +497,7 @@ function GoogleMapRenderer({
         existing.set(pin.key, marker);
       }
     }
-  }, [pins, onPinDrag]);
+  }, [pins, onPinDrag, onPinClick, mapId]);
 
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
