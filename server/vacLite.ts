@@ -103,6 +103,7 @@ interface VacRestaurantInput {
   address?: string;
   externalReviewRating?: number | null;
   externalReviewSourceCount?: number | null;
+  manualTrustScoreAdjustment?: number | null;
 }
 
 interface VacEvaluationResult {
@@ -124,7 +125,48 @@ interface VacEvaluationResult {
     externalReviewRating: number | null;
     externalReviewAdjustment: number;
     externalReviewSourceCount: number;
+    manualTrustScoreAdjustment: number;
   };
+}
+
+function vacGetStoredExternalReviewRating(
+  user: User | null,
+  restaurantId: string,
+): number | null {
+  try {
+    const accountSettings =
+      user?.accountSettings && typeof user.accountSettings === "object"
+        ? (user.accountSettings as any)
+        : null;
+    const value =
+      accountSettings?.externalReviews?.byRestaurant?.[restaurantId]
+        ?.averageRating;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(1, Math.min(5, parsed));
+  } catch {
+    return null;
+  }
+}
+
+function vacGetStoredManualAdjustment(
+  user: User | null,
+  restaurantId: string,
+): number {
+  try {
+    const accountSettings =
+      user?.accountSettings && typeof user.accountSettings === "object"
+        ? (user.accountSettings as any)
+        : null;
+    const value =
+      accountSettings?.vacOverrides?.byRestaurant?.[restaurantId]
+        ?.manualTrustScoreAdjustment;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.max(-50, Math.min(50, Math.round(parsed)));
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -148,6 +190,7 @@ export async function vacEvaluateRestaurantSignup({
   const threshold = Number(process.env.VAC_AUTO_VERIFY_THRESHOLD || "60");
 
   const email = user?.email || "";
+  const restaurantId = String(restaurant?.id || "").trim();
   const userPhone10 = vacNormalizePhone(user?.phone || undefined);
   const restaurantPhone10 = vacNormalizePhone(restaurant?.phone || undefined);
 
@@ -199,7 +242,9 @@ export async function vacEvaluateRestaurantSignup({
   const externalReviewRating =
     restaurant?.externalReviewRating != null
       ? Number(restaurant.externalReviewRating)
-      : null;
+      : restaurantId
+        ? vacGetStoredExternalReviewRating(user, restaurantId)
+        : null;
   const externalReviewAdjustment =
     externalReviewRating != null && Number.isFinite(externalReviewRating)
       ? computeExternalReviewAdjustment(externalReviewRating)
@@ -208,7 +253,14 @@ export async function vacEvaluateRestaurantSignup({
     0,
     Number(restaurant?.externalReviewSourceCount || 0),
   );
+  const manualTrustScoreAdjustment =
+    restaurant?.manualTrustScoreAdjustment != null
+      ? Math.max(-50, Math.min(50, Math.round(Number(restaurant.manualTrustScoreAdjustment))))
+      : restaurantId
+        ? vacGetStoredManualAdjustment(user, restaurantId)
+        : 0;
   score += externalReviewAdjustment;
+  score += manualTrustScoreAdjustment;
 
   if (score < 0) score = 0;
   if (score > 100) score = 100;
@@ -235,6 +287,7 @@ export async function vacEvaluateRestaurantSignup({
           : null,
       externalReviewAdjustment,
       externalReviewSourceCount,
+      manualTrustScoreAdjustment,
     }
   };
 
@@ -244,7 +297,7 @@ export async function vacEvaluateRestaurantSignup({
       user?.id || "",
       "vac:evaluate",
       "restaurant",
-      restaurant?.id || "",
+      restaurantId || "",
       req?.ip,
       req?.headers?.["user-agent"],
       result

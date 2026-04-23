@@ -2036,6 +2036,12 @@ export function registerUserAdminRoutes(
     async (req: any, res) => {
       if (denyStaffEdits(req, res)) return;
       try {
+        const restaurantId = req.params.id;
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
         const updates: any = {
           name: req.body?.name,
           address: req.body?.address,
@@ -2062,7 +2068,49 @@ export function registerUserAdminRoutes(
           }
         });
 
-        const updated = await storage.updateRestaurant(req.params.id, updates);
+        const updated = await storage.updateRestaurant(restaurantId, updates);
+
+        if (req.body?.manualTrustScoreAdjustment !== undefined) {
+          const parsed = Number(req.body.manualTrustScoreAdjustment);
+          if (!Number.isFinite(parsed)) {
+            return res.status(400).json({
+              message: "manualTrustScoreAdjustment must be a number",
+            });
+          }
+          const bounded = Math.max(-50, Math.min(50, Math.round(parsed)));
+          const owner = await storage.getUserById(restaurant.ownerId);
+          if (owner) {
+            const currentSettings =
+              owner.accountSettings && typeof owner.accountSettings === "object"
+                ? ({ ...(owner.accountSettings as any) } as Record<string, any>)
+                : {};
+            const currentOverrides =
+              currentSettings.vacOverrides &&
+              typeof currentSettings.vacOverrides === "object"
+                ? ({ ...(currentSettings.vacOverrides as any) } as Record<string, any>)
+                : {};
+            const byRestaurant =
+              currentOverrides.byRestaurant &&
+              typeof currentOverrides.byRestaurant === "object"
+                ? ({ ...(currentOverrides.byRestaurant as any) } as Record<string, any>)
+                : {};
+            byRestaurant[restaurantId] = {
+              ...(byRestaurant[restaurantId] || {}),
+              manualTrustScoreAdjustment: bounded,
+              updatedAt: new Date().toISOString(),
+              updatedBy: req.user?.id || null,
+            };
+            await storage.updateUser(owner.id, {
+              accountSettings: {
+                ...currentSettings,
+                vacOverrides: {
+                  ...currentOverrides,
+                  byRestaurant,
+                },
+              } as any,
+            });
+          }
+        }
         res.json(updated);
       } catch (error: any) {
         console.error("Error updating restaurant:", error);

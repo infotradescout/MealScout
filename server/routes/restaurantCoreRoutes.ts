@@ -1517,7 +1517,6 @@ export function registerRestaurantCoreRoutes(
             : {};
 
         byRestaurant[restaurantId] = {
-          reviews: normalized,
           averageRating: aggregate.averageRating,
           sourceCount: aggregate.sourceCount,
           totalReviewCount: aggregate.totalReviewCount,
@@ -1553,7 +1552,7 @@ export function registerRestaurantCoreRoutes(
 
         res.json({
           success: true,
-          externalReviews: byRestaurant[restaurantId],
+          externalReviewScore: byRestaurant[restaurantId],
           verification: {
             score: vac.score,
             threshold: vac.threshold,
@@ -1573,41 +1572,6 @@ export function registerRestaurantCoreRoutes(
         res.status(500).json({
           message: error?.message || "Failed to import external reviews",
         });
-      }
-    },
-  );
-
-  app.get(
-    "/api/restaurants/:id/verification/external-reviews",
-    isAuthenticated,
-    async (req: any, res) => {
-      try {
-        const restaurantId = req.params.id;
-        const userId = req.user.id;
-
-        const restaurant = await storage.getRestaurant(restaurantId);
-        if (!restaurant || restaurant.ownerId !== userId) {
-          return res.status(403).json({ message: "Unauthorized" });
-        }
-
-        const user = await storage.getUserById(userId);
-        if (!user) {
-          return res.status(404).json({ message: "User not found" });
-        }
-
-        const accountSettings =
-          user.accountSettings && typeof user.accountSettings === "object"
-            ? (user.accountSettings as any)
-            : {};
-        const imported =
-          accountSettings?.externalReviews?.byRestaurant?.[restaurantId] || null;
-
-        res.json({
-          externalReviews: imported,
-        });
-      } catch (error) {
-        console.error("Error loading external reviews:", error);
-        res.status(500).json({ message: "Failed to load external reviews" });
       }
     },
   );

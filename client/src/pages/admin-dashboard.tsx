@@ -4782,6 +4782,11 @@ export default function AdminDashboard() {
     }
     const nextEdits: Record<string, any> = {};
     userRestaurants.forEach((restaurant: any) => {
+      const manualTrustScoreAdjustment = Number(
+        selectedUser?.accountSettings?.vacOverrides?.byRestaurant?.[
+          restaurant.id
+        ]?.manualTrustScoreAdjustment ?? 0,
+      );
       nextEdits[restaurant.id] = {
         name: restaurant.name || "",
         address: restaurant.address || "",
@@ -4802,10 +4807,13 @@ export default function AdminDashboard() {
         amenitiesText: restaurant.amenities
           ? JSON.stringify(restaurant.amenities)
           : "",
+        manualTrustScoreAdjustment: Number.isFinite(manualTrustScoreAdjustment)
+          ? manualTrustScoreAdjustment
+          : 0,
       };
     });
     setRestaurantEdits(nextEdits);
-  }, [userRestaurants]);
+  }, [userRestaurants, selectedUser]);
 
   useEffect(() => {
     if (!userDeals.length) {
@@ -9708,6 +9716,29 @@ export default function AdminDashboard() {
                               })
                             }
                           />
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              Trust Score Override (-50 to 50)
+                            </p>
+                            <input
+                              type="number"
+                              min={-50}
+                              max={50}
+                              className="w-full px-2 py-1 border rounded-md text-sm"
+                              value={edits.manualTrustScoreAdjustment ?? 0}
+                              onChange={(e) =>
+                                setRestaurantEdits({
+                                  ...restaurantEdits,
+                                  [restaurant.id]: {
+                                    ...edits,
+                                    manualTrustScoreAdjustment: Number(
+                                      e.target.value,
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                          </div>
                           <label className="flex items-center gap-2 text-xs text-muted-foreground">
                             <input
                               type="checkbox"
@@ -9764,6 +9795,17 @@ export default function AdminDashboard() {
                               updates: {
                                 ...edits,
                                 amenities,
+                                manualTrustScoreAdjustment: Math.max(
+                                  -50,
+                                  Math.min(
+                                    50,
+                                    Math.round(
+                                      Number(
+                                        edits.manualTrustScoreAdjustment ?? 0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               },
                             });
                           }}
