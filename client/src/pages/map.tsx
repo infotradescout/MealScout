@@ -2382,9 +2382,13 @@ export default function MapPage() {
     cardsAtOrAboveZoom: 15,
     markers: adapterMarkers,
     markerId: (marker) => marker.id,
-    includeMarker: (marker) => marker.kind === "parking",
+    includeMarker: (marker) =>
+      marker.kind === "parking" ||
+      marker.kind === "truck" ||
+      marker.kind === "deal" ||
+      marker.kind === "event",
     dedupeKey: (marker) => `${marker.kind}:${marker.sourceId}`,
-    maxCards: 6,
+    maxCards: 8,
     hasBlockingSelection: Boolean(
       selectedDeal || selectedParkingPreview || selectedHostCluster,
     ),
