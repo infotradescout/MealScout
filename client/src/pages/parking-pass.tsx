@@ -2936,7 +2936,8 @@ export default function ParkingPassPage() {
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
     passListings.forEach((listing) => {
-      const key = getLocationKey(listing);
+      const hostKey = String(listing.host?.id || "").trim();
+      const key = hostKey || getLocationKey(listing);
       const existing = byHost.get(key);
       if (existing) {
         existing.listings.push(listing);
@@ -2946,7 +2947,8 @@ export default function ParkingPassPage() {
     });
     for (const group of byHost.values()) {
       group.listings.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        (a, b) =>
+          getListingDateKey(a.date).localeCompare(getListingDateKey(b.date)),
       );
     }
     return Array.from(byHost.values());
@@ -6160,7 +6162,7 @@ export default function ParkingPassPage() {
                                     focusLocation(group.key, true);
                                   }}
                                 >
-                                  View
+                                  {isActive ? "Selected" : "Select spot"}
                                 </Button>
                               </div>
                               {hostCardPhotoUrl && (
@@ -6171,7 +6173,7 @@ export default function ParkingPassPage() {
                                   loading="lazy"
                                 />
                               )}
-                              {groupDateKeys.length > 1 && (
+                              {isActive && groupDateKeys.length > 1 && (
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] text-[color:var(--text-muted)]">
                                     Date
@@ -6471,6 +6473,16 @@ export default function ParkingPassPage() {
                               <span className="text-[15px] font-semibold text-orange-500 font-display">
                                 {group.host.businessName}
                               </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  focusLocation(group.key, true);
+                                }}
+                              >
+                                {isActive ? "Selected" : "Select spot"}
+                              </Button>
                             </div>
                             {hostCardPhotoUrl && (
                               <img
@@ -6480,7 +6492,7 @@ export default function ParkingPassPage() {
                                 loading="lazy"
                               />
                             )}
-                            {groupDateKeys.length > 1 && (
+                            {isActive && groupDateKeys.length > 1 && (
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <span className="text-[11px] text-[color:var(--text-muted)]">
                                   Date
