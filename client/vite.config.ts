@@ -18,9 +18,9 @@ export default defineConfig({
     },
   },
   build: {
-    // Production server serves frontend from repoRoot/dist/public.
-    // Keep client build output aligned with runtime static directory.
-    outDir: path.resolve(__dirname, "..", "dist", "public"),
+    // Build client artifacts into client/dist for frontend-only deploy targets.
+    // Platform builds copy this output into dist/public for the Node server.
+    outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
     rollupOptions: {
       output: {
