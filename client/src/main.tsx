@@ -59,22 +59,43 @@ function ensureManifestLink() {
 }
 
 if (import.meta.env.PROD) {
-  const reloadBudgetKey = "mealscout_chunk_reload_budget";
-  const maxReloadAttempts = 3;
-  const getReloadAttempts = () => {
+  const routeBudgetKey = `mealscout_chunk_reload_budget:${encodeURIComponent(
+    window.location.pathname,
+  )}`;
+  const maxReloadAttempts = 6;
+  const reloadWindowMs = 5 * 60 * 1000;
+  const getReloadState = (): { attempts: number; firstAt: number } => {
     try {
-      const raw = sessionStorage.getItem(reloadBudgetKey);
-      const parsed = Number(raw || "0");
-      return Number.isFinite(parsed) ? parsed : 0;
+      const raw = sessionStorage.getItem(routeBudgetKey);
+      if (!raw) return { attempts: 0, firstAt: Date.now() };
+      const parsed = JSON.parse(raw) as {
+        attempts?: number;
+        firstAt?: number;
+      };
+      const attempts = Number(parsed?.attempts || 0);
+      const firstAt = Number(parsed?.firstAt || Date.now());
+      if (!Number.isFinite(attempts) || !Number.isFinite(firstAt)) {
+        return { attempts: 0, firstAt: Date.now() };
+      }
+      if (Date.now() - firstAt > reloadWindowMs) {
+        return { attempts: 0, firstAt: Date.now() };
+      }
+      return { attempts, firstAt };
     } catch {
-      return 0;
+      return { attempts: 0, firstAt: Date.now() };
     }
   };
-  const canReload = () => getReloadAttempts() < maxReloadAttempts;
+  const canReload = () => getReloadState().attempts < maxReloadAttempts;
   const consumeReloadAttempt = () => {
     try {
-      const next = getReloadAttempts() + 1;
-      sessionStorage.setItem(reloadBudgetKey, String(next));
+      const current = getReloadState();
+      sessionStorage.setItem(
+        routeBudgetKey,
+        JSON.stringify({
+          attempts: current.attempts + 1,
+          firstAt: current.firstAt,
+        }),
+      );
     } catch {
       // ignore
     }
