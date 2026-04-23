@@ -1825,23 +1825,6 @@ export default function MapPage() {
     return map;
   }, [adminHostStatusPayload]);
 
-  const visibleHostLocations = useMemo(() => {
-    if (!activeMapLocations?.hostLocations?.length) return [];
-    // Host parking pins should follow the live viewport; don't require "Search this area"
-    // (which is primarily for refreshing/filtering other content like deals).
-    const boundsForPins = mapBounds ?? appliedMapBounds;
-    return activeMapLocations.hostLocations.filter((host) => {
-      const hostId = host.hostId ? String(host.hostId) : "";
-      if (!hostId) return false;
-      const coords = resolveHostCoords(host);
-      if (!coords) return false;
-      if (boundsForPins && !boundsForPins.contains([coords.lat, coords.lng])) {
-        return false;
-      }
-      return true;
-    });
-  }, [activeMapLocations, hostCoords, mapBounds, appliedMapBounds]);
-
   const lastHostIdsUpdatedLabel = (() => {
     const fromServer = bookableHostIdPayload?.generatedAt;
     const fromCache = cachedBookableHostMeta?.generatedAt;
@@ -1879,6 +1862,30 @@ export default function MapPage() {
     if (bookableHostIds.size > 0) return bookableHostIds;
     return fallbackBookableHostIds;
   }, [bookableHostIds, fallbackBookableHostIds]);
+
+  const visibleHostLocations = useMemo(() => {
+    if (!activeMapLocations?.hostLocations?.length) return [];
+    if (effectiveBookableHostIds.size === 0) return [];
+    // Host parking pins should follow the live viewport; don't require "Search this area"
+    // (which is primarily for refreshing/filtering other content like deals).
+    const boundsForPins = mapBounds ?? appliedMapBounds;
+    return activeMapLocations.hostLocations.filter((host) => {
+      const hostId = host.hostId ? String(host.hostId) : "";
+      if (!hostId) return false;
+      if (
+        effectiveBookableHostIds.size > 0 &&
+        !effectiveBookableHostIds.has(hostId)
+      ) {
+        return false;
+      }
+      const coords = resolveHostCoords(host);
+      if (!coords) return false;
+      if (boundsForPins && !boundsForPins.contains([coords.lat, coords.lng])) {
+        return false;
+      }
+      return true;
+    });
+  }, [activeMapLocations, hostCoords, mapBounds, appliedMapBounds, effectiveBookableHostIds]);
 
   const getHostAvailabilityLabel = useCallback(
     (host: HostLocation) => {
@@ -2373,6 +2380,18 @@ export default function MapPage() {
     businessPopularityByRestaurant,
   ]);
 
+  const cardCandidateMarkers = useMemo(() => {
+    const candidateBounds = mapBounds ?? appliedMapBounds;
+    const base = adapterMarkers.filter(
+      (marker) => marker.kind === "parking",
+    );
+    if (!candidateBounds) return base;
+    const inView = base.filter((marker) =>
+      candidateBounds.contains([marker.lat, marker.lng]),
+    );
+    return inView.length > 0 ? inView : base;
+  }, [adapterMarkers, mapBounds, appliedMapBounds]);
+
   // Shared reusable pin->zoom->card controller.
   // Phase 2: enabled for parking markers only.
   const enablePinZoomCardMode = true;
@@ -2380,19 +2399,55 @@ export default function MapPage() {
     enabled: enablePinZoomCardMode,
     zoom: zoomLevel,
     cardsAtOrAboveZoom: 15,
-    markers: adapterMarkers,
+    markers: cardCandidateMarkers,
     markerId: (marker) => marker.id,
-    includeMarker: (marker) =>
-      marker.kind === "parking" ||
-      marker.kind === "truck" ||
-      marker.kind === "deal" ||
-      marker.kind === "event",
+    includeMarker: (marker) => marker.kind === "parking",
     dedupeKey: (marker) => `${marker.kind}:${marker.sourceId}`,
     maxCards: 8,
-    hasBlockingSelection: Boolean(
-      selectedDeal || selectedParkingPreview || selectedHostCluster,
-    ),
+    hasBlockingSelection: Boolean(selectedDeal || selectedHostCluster),
   });
+
+  const preferredParkingZoomCard = useMemo(() => {
+    const cards = pinZoomCardMode.cards.filter(
+      (marker) => marker.kind === "parking",
+    );
+    if (cards.length === 0) return null;
+    const current = pinZoomCardMode.activeCardId
+      ? cards.find((card) => card.id === pinZoomCardMode.activeCardId)
+      : null;
+    if (current) return current;
+    const score = (marker: MapAdapterMarker) => {
+      const dLat = marker.lat - mapCenter.lat;
+      const dLng = marker.lng - mapCenter.lng;
+      return dLat * dLat + dLng * dLng;
+    };
+    return [...cards].sort((a, b) => score(a) - score(b))[0] || null;
+  }, [pinZoomCardMode.cards, pinZoomCardMode.activeCardId, mapCenter]);
+
+  useEffect(() => {
+    if (!pinZoomCardMode.showCards) return;
+    const target = preferredParkingZoomCard;
+    if (!target || target.kind !== "parking") return;
+    if (pinZoomCardMode.activeCardId !== target.id) {
+      pinZoomCardMode.setActiveCardId(target.id);
+    }
+    const targetHostId = String(target.sourceId || "").trim();
+    if (!targetHostId) return;
+    if (selectedParkingPreview?.hostId === targetHostId) return;
+    setSelectedDeal(null);
+    setSelectedHostCluster(null);
+    setSelectedParkingPreview({
+      hostId: targetHostId,
+      markerLat: target.lat,
+      markerLng: target.lng,
+    });
+  }, [
+    pinZoomCardMode.showCards,
+    pinZoomCardMode.activeCardId,
+    pinZoomCardMode.setActiveCardId,
+    preferredParkingZoomCard,
+    selectedParkingPreview,
+  ]);
 
   const mapMarkersForRender = pinZoomCardMode.showPins
     ? adapterMarkers
@@ -2462,15 +2517,6 @@ export default function MapPage() {
       isTruckOwnerUser,
       getParkingPassHrefForHost,
     ],
-  );
-
-  const handlePinZoomCardTap = useCallback(
-    (marker: MapAdapterMarker) => {
-      pinZoomCardMode.setActiveCardId(marker.id);
-      setMapCenter({ lat: marker.lat, lng: marker.lng });
-      handleAdapterMarkerTap(marker);
-    },
-    [handleAdapterMarkerTap, pinZoomCardMode],
   );
 
   const selectedParkingHost = useMemo(() => {
@@ -2888,39 +2934,6 @@ export default function MapPage() {
                   Add host location
                 </Button>
               </div>
-            </div>
-          )}
-
-          {pinZoomCardMode.showCards && (
-            <div className="absolute inset-x-3 bottom-3 z-20 max-h-[62%] space-y-2 overflow-y-auto pr-1">
-              {pinZoomCardMode.cards.map((marker) => {
-                const isActive = pinZoomCardMode.activeCardId === marker.id;
-                return (
-                  <button
-                    key={`pin-zoom-card-${marker.id}`}
-                    type="button"
-                    className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
-                      isActive
-                        ? "border-orange-300 bg-[var(--bg-card)]"
-                        : "border-[color:var(--border-subtle)] bg-[var(--bg-card)]/90"
-                    }`}
-                    onClick={() => handlePinZoomCardTap(marker)}
-                    data-testid={`pin-zoom-card-${marker.id}`}
-                  >
-                    <p className="truncate text-sm font-semibold text-orange-600">
-                      {marker.title || "Parking location"}
-                    </p>
-                    {marker.subtitle && (
-                      <p className="truncate text-[11px] text-[color:var(--text-muted)]">
-                        {marker.subtitle}
-                      </p>
-                    )}
-                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
-                      {isActive ? "Selected" : "Tap to open"}
-                    </p>
-                  </button>
-                );
-              })}
             </div>
           )}
 

@@ -102,11 +102,38 @@ function LeafletCenterer({
   zoom?: number;
 }) {
   const map = useMap();
+  const lastCenterRef = useRef<GeoPoint | null>(null);
+  const lastZoomRef = useRef<number | null>(null);
+
   useEffect(() => {
-    map.setView([center.lat, center.lng], zoom ?? map.getZoom(), {
-      animate: true,
-    });
-  }, [center.lat, center.lng, map, zoom]);
+    const previous = lastCenterRef.current;
+    const centerChanged =
+      !previous ||
+      Math.abs(previous.lat - center.lat) > 0.000001 ||
+      Math.abs(previous.lng - center.lng) > 0.000001;
+    if (!centerChanged) return;
+    lastCenterRef.current = center;
+
+    const currentCenter = map.getCenter();
+    const shouldPan =
+      Math.abs(currentCenter.lat - center.lat) > 0.000001 ||
+      Math.abs(currentCenter.lng - center.lng) > 0.000001;
+    if (shouldPan) {
+      map.panTo([center.lat, center.lng], { animate: true });
+    }
+  }, [center, map]);
+
+  useEffect(() => {
+    if (typeof zoom !== "number" || !Number.isFinite(zoom)) return;
+    if (lastZoomRef.current === zoom) return;
+    lastZoomRef.current = zoom;
+
+    const currentZoom = map.getZoom();
+    if (currentZoom !== zoom) {
+      map.setZoom(zoom, { animate: false });
+    }
+  }, [map, zoom]);
+
   return null;
 }
 
@@ -329,6 +356,8 @@ function GoogleMapRenderer({
   const circleRef = useRef<any>(null);
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const infoWindowRef = useRef<any>(null);
+  const lastReportedZoomRef = useRef<number | null>(null);
+  const lastReportedBoundsRef = useRef<MapPickerBounds | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Portal state: the DOM node injected into the InfoWindow + the ReactNode to render there
   const [infoPortalContainer, setInfoPortalContainer] =
@@ -363,7 +392,9 @@ function GoogleMapRenderer({
           zoom,
           disableDefaultUI: true,
           zoomControl: true,
-          gestureHandling: interactionsEnabled ? "auto" : "none",
+          // Use greedy so touch users can pan with one finger instead of the
+          // cooperative two-finger requirement.
+          gestureHandling: interactionsEnabled ? "greedy" : "none",
           mapTypeId: "roadmap",
           ...(mapId ? { mapId } : {}),
         });
@@ -387,29 +418,41 @@ function GoogleMapRenderer({
           });
         }
 
-        if (onBoundsChanged) {
-          map.addListener("idle", () => {
-            const bounds = map.getBounds?.();
-            if (!bounds) return;
-            const ne = bounds.getNorthEast();
-            const sw = bounds.getSouthWest();
-            onBoundsChanged({
-              north: Number(ne.lat()),
-              south: Number(sw.lat()),
-              east: Number(ne.lng()),
-              west: Number(sw.lng()),
-            });
-          });
-        }
+        map.addListener("idle", () => {
+          const nextZoom = Number(map.getZoom?.());
+          if (
+            onZoomChanged &&
+            Number.isFinite(nextZoom) &&
+            lastReportedZoomRef.current !== nextZoom
+          ) {
+            lastReportedZoomRef.current = nextZoom;
+            onZoomChanged(nextZoom);
+          }
 
-        if (onZoomChanged) {
-          map.addListener("zoom_changed", () => {
-            const nextZoom = Number(map.getZoom?.());
-            if (Number.isFinite(nextZoom)) {
-              onZoomChanged(nextZoom);
-            }
-          });
-        }
+          if (!onBoundsChanged) return;
+          const bounds = map.getBounds?.();
+          if (!bounds) return;
+          const ne = bounds.getNorthEast();
+          const sw = bounds.getSouthWest();
+          const nextBounds: MapPickerBounds = {
+            north: Number(ne.lat()),
+            south: Number(sw.lat()),
+            east: Number(ne.lng()),
+            west: Number(sw.lng()),
+          };
+          const prev = lastReportedBoundsRef.current;
+          const epsilon = 0.0005;
+          const changed =
+            !prev ||
+            Math.abs(prev.north - nextBounds.north) >= epsilon ||
+            Math.abs(prev.south - nextBounds.south) >= epsilon ||
+            Math.abs(prev.east - nextBounds.east) >= epsilon ||
+            Math.abs(prev.west - nextBounds.west) >= epsilon;
+          if (changed) {
+            lastReportedBoundsRef.current = nextBounds;
+            onBoundsChanged(nextBounds);
+          }
+        });
       })
       .catch((err) => {
         if (!cancelled) {
@@ -424,14 +467,42 @@ function GoogleMapRenderer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  // Re-centre map when center/zoom props change
+  // Re-center only when center changes.
   useEffect(() => {
     if (!mapRef.current) return;
     const g = (window as GoogleMapsWindow).google;
     if (!g?.maps) return;
-    mapRef.current.panTo({ lat: center.lat, lng: center.lng });
-    mapRef.current.setZoom(zoom ?? 13);
-  }, [center.lat, center.lng, zoom]);
+    const currentCenter = mapRef.current.getCenter?.();
+    const currentLat =
+      currentCenter && typeof currentCenter.lat === "function"
+        ? Number(currentCenter.lat())
+        : NaN;
+    const currentLng =
+      currentCenter && typeof currentCenter.lng === "function"
+        ? Number(currentCenter.lng())
+        : NaN;
+    const epsilon = 0.000001;
+    const shouldPan =
+      !Number.isFinite(currentLat) ||
+      !Number.isFinite(currentLng) ||
+      Math.abs(currentLat - center.lat) > epsilon ||
+      Math.abs(currentLng - center.lng) > epsilon;
+    if (shouldPan) {
+      mapRef.current.panTo({ lat: center.lat, lng: center.lng });
+    }
+  }, [center.lat, center.lng]);
+
+  // Keep zoom in sync without forcing a center snap.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const g = (window as GoogleMapsWindow).google;
+    if (!g?.maps) return;
+    const targetZoom = zoom ?? 13;
+    const currentZoom = Number(mapRef.current.getZoom?.());
+    if (!Number.isFinite(currentZoom) || currentZoom !== targetZoom) {
+      mapRef.current.setZoom(targetZoom);
+    }
+  }, [zoom]);
 
   // Keep Google map tiles in sync with container size changes.
   useEffect(() => {

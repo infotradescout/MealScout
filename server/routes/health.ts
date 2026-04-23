@@ -6,6 +6,11 @@ import { getOpsCleanupSnapshot, runOpsDataCleanup } from "../opsCleanup";
 import { getJobQueueStats } from "../jobs/jobQueue";
 import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
+import {
+  clearLaunchDegradedModeOverride,
+  getLaunchModeState,
+  setLaunchDegradedMode,
+} from "../launchMode";
 
 export const healthRouter = Router();
 
@@ -47,6 +52,7 @@ function getConfigSnapshot() {
       maxAttempts: Number(process.env.JOB_QUEUE_MAX_ATTEMPTS || 3) || 3,
       timeoutMs: Number(process.env.JOB_QUEUE_TIMEOUT_MS || 30000) || 30000,
     },
+    launchMode: getLaunchModeState(),
   };
 }
 
@@ -151,6 +157,48 @@ healthRouter.get("/health/metrics", async (req, res) => {
     cleanup: getOpsCleanupSnapshot(),
     jobs: getJobQueueStats(),
     config: getConfigSnapshot(),
+  });
+});
+
+healthRouter.get("/health/launch-mode", (_req, res) => {
+  res.json({
+    status: "ok",
+    ts: Date.now(),
+    launchMode: getLaunchModeState(),
+  });
+});
+
+healthRouter.post("/health/launch-mode", async (req, res) => {
+  const expected = String(process.env.HEALTH_METRICS_TOKEN || "").trim();
+  const provided = String(req.headers["x-health-token"] || "").trim();
+  if (!expected || provided !== expected) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const enabledRaw = String(req.query.enabled || "").trim().toLowerCase();
+  const resetRaw = String(req.query.reset || "").trim().toLowerCase();
+  const reason = String(req.query.reason || "").trim();
+
+  if (resetRaw === "true" || resetRaw === "1") {
+    return res.json({
+      status: "ok",
+      ts: Date.now(),
+      launchMode: clearLaunchDegradedModeOverride(),
+    });
+  }
+
+  if (!["true", "false", "1", "0"].includes(enabledRaw)) {
+    return res.status(400).json({
+      message:
+        "Missing or invalid `enabled` query parameter. Use true/false (or set reset=true).",
+    });
+  }
+
+  const enabled = enabledRaw === "true" || enabledRaw === "1";
+  return res.json({
+    status: "ok",
+    ts: Date.now(),
+    launchMode: setLaunchDegradedMode(enabled, reason || null),
   });
 });
 

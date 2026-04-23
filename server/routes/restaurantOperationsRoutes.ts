@@ -144,7 +144,9 @@ export function registerRestaurantOperationsRoutes(
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
+        const restaurantsByOwner = await storage.getRestaurantsByOwner(
+          req.user.id,
+        );
         const context = await getBusinessAccessContext(req.user.id);
 
         const ownedIds = new Set(restaurantsByOwner.map((r: any) => r.id));
@@ -195,17 +197,40 @@ export function registerRestaurantOperationsRoutes(
           req.user?.userType === "admin" ||
           req.user?.userType === "super_admin" ||
           req.user?.userType === "staff";
-        if (!isAdminOrStaff && String((restaurant as any).ownerId) !== String(req.user.id)) {
+        if (
+          !isAdminOrStaff &&
+          String((restaurant as any).ownerId) !== String(req.user.id)
+        ) {
           return res.status(403).json({ message: "Unauthorized" });
         }
 
         const text = (value: unknown) => String(value || "").trim();
         const requiredChecks = [
-          { key: "name", label: "Business name", ok: Boolean(text((restaurant as any).name)) },
-          { key: "address", label: "Address", ok: Boolean(text((restaurant as any).address)) },
-          { key: "city", label: "City", ok: Boolean(text((restaurant as any).city)) },
-          { key: "state", label: "State", ok: Boolean(text((restaurant as any).state)) },
-          { key: "phone", label: "Phone", ok: Boolean(text((restaurant as any).phone)) },
+          {
+            key: "name",
+            label: "Business name",
+            ok: Boolean(text((restaurant as any).name)),
+          },
+          {
+            key: "address",
+            label: "Address",
+            ok: Boolean(text((restaurant as any).address)),
+          },
+          {
+            key: "city",
+            label: "City",
+            ok: Boolean(text((restaurant as any).city)),
+          },
+          {
+            key: "state",
+            label: "State",
+            ok: Boolean(text((restaurant as any).state)),
+          },
+          {
+            key: "phone",
+            label: "Phone",
+            ok: Boolean(text((restaurant as any).phone)),
+          },
           {
             key: "businessType",
             label: "Business type",
@@ -229,40 +254,47 @@ export function registerRestaurantOperationsRoutes(
             label: "Website or social link",
             ok: Boolean(
               text((restaurant as any).websiteUrl) ||
-                text((restaurant as any).instagramUrl) ||
-                text((restaurant as any).facebookPageUrl),
+              text((restaurant as any).instagramUrl) ||
+              text((restaurant as any).facebookPageUrl),
             ),
           },
           {
             key: "amenities",
             label: "Amenities",
             ok:
-              String((restaurant as any).businessType || "").toLowerCase() === "food_truck"
+              String((restaurant as any).businessType || "").toLowerCase() ===
+              "food_truck"
                 ? true
                 : Boolean(
                     (restaurant as any).amenities &&
-                      typeof (restaurant as any).amenities === "object" &&
-                      ((restaurant as any).amenities.parking ||
-                        (restaurant as any).amenities.wifi ||
-                        (restaurant as any).amenities.outdoor_seating),
+                    typeof (restaurant as any).amenities === "object" &&
+                    ((restaurant as any).amenities.parking ||
+                      (restaurant as any).amenities.wifi ||
+                      (restaurant as any).amenities.outdoor_seating),
                   ),
           },
         ];
 
         const requiredDone = requiredChecks.filter((item) => item.ok).length;
-        const recommendedDone = recommendedChecks.filter((item) => item.ok).length;
+        const recommendedDone = recommendedChecks.filter(
+          (item) => item.ok,
+        ).length;
         const requiredTotal = requiredChecks.length;
         const recommendedTotal = recommendedChecks.length;
         const overallDone = requiredDone + recommendedDone;
         const overallTotal = requiredTotal + recommendedTotal;
         const overallPct =
-          overallTotal > 0 ? Math.round((overallDone / overallTotal) * 100) : 100;
+          overallTotal > 0
+            ? Math.round((overallDone / overallTotal) * 100)
+            : 100;
 
-        let verificationStatus: "verified" | "pending" | "not_submitted" = "not_submitted";
+        let verificationStatus: "verified" | "pending" | "not_submitted" =
+          "not_submitted";
         if (Boolean((restaurant as any).isVerified)) {
           verificationStatus = "verified";
         } else {
-          const pending = await storage.hasPendingVerificationRequest(restaurantId);
+          const pending =
+            await storage.hasPendingVerificationRequest(restaurantId);
           verificationStatus = pending ? "pending" : "not_submitted";
         }
 

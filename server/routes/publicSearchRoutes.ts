@@ -1,14 +1,5 @@
 import type { Express } from "express";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -204,7 +195,9 @@ export function registerPublicSearchRoutes(app: Express) {
           id: `video-${row.id}`,
           text: row.title || "Video",
           type: "video",
-          subtitle: row.restaurantName ? `From ${row.restaurantName}` : "Video story",
+          subtitle: row.restaurantName
+            ? `From ${row.restaurantName}`
+            : "Video story",
         });
       }
 
@@ -241,10 +234,14 @@ export function registerPublicSearchRoutes(app: Express) {
       }
 
       const limitedSuggestionsV2 = suggestionsV2.slice(0, 10).sort((a, b) => {
-        const aExact = String(a.text || "").toLowerCase().startsWith(searchTerm)
+        const aExact = String(a.text || "")
+          .toLowerCase()
+          .startsWith(searchTerm)
           ? 1
           : 0;
-        const bExact = String(b.text || "").toLowerCase().startsWith(searchTerm)
+        const bExact = String(b.text || "")
+          .toLowerCase()
+          .startsWith(searchTerm)
           ? 1
           : 0;
         return bExact - aExact;

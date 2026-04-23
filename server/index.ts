@@ -603,6 +603,22 @@ const apiLimiter = distributedRateLimit({
   key: (req) => req.ip || "unknown",
 });
 
+// 7. Map reads (high traffic, read-heavy)
+const mapReadLimiter = distributedRateLimit({
+  scope: "map:reads",
+  windowMs: 60 * 1000, // 1 minute
+  limit: 1200,
+  key: (req) => req.ip || "unknown",
+});
+
+// 8. Parking pass reads (launch campaign protection)
+const parkingReadLimiter = distributedRateLimit({
+  scope: "parking:reads",
+  windowMs: 60 * 1000, // 1 minute
+  limit: 600,
+  key: (req) => req.ip || "unknown",
+});
+
 // Body parsing with size limits (keep Stripe webhook raw for signature verification)
 app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 app.use((req, res, next) => {
@@ -759,6 +775,11 @@ app.use((req, res, next) => {
 
   // 📞 MODERATE - General API and reports
   app.use("/api/bug-report", apiLimiter);
+
+  // 🗺️  HIGH-TRAFFIC READ PATHS - map + parking browse protection
+  app.use("/api/map", mapReadLimiter);
+  app.use("/api/parking-pass", parkingReadLimiter);
+  app.use("/api/hosts/parking-pass", parkingReadLimiter);
 
   // OAuth normalization middleware - DISABLED because it breaks OAuth flow
   // The redirect was interfering with the Passport.js OAuth flow by redirecting before authentication

@@ -6,10 +6,12 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-  --font-display: "Bebas Neue", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
+  --font-sans:
+    "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-display:
+    "Bebas Neue", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
 
   /* Day Mode Palette */
   --bg-app: #f7f5f1;
@@ -225,7 +227,9 @@
     color: hsl(var(--foreground));
     font-family: var(--font-sans);
     font-optical-sizing: auto;
-    font-feature-settings: "ss01" 1, "ss02" 1;
+    font-feature-settings:
+      "ss01" 1,
+      "ss02" 1;
     letter-spacing: 0;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -245,19 +249,19 @@
       radial-gradient(
         1100px circle at 20% 10%,
         rgba(255, 77, 46, 0.18),
-        rgba(255, 77, 46, 0.0) 55%
+        rgba(255, 77, 46, 0) 55%
       ),
       radial-gradient(
         900px circle at 80% 30%,
         rgba(255, 169, 64, 0.14),
-        rgba(255, 169, 64, 0.0) 60%
+        rgba(255, 169, 64, 0) 60%
       ),
       repeating-linear-gradient(
         0deg,
         rgba(0, 0, 0, 0.08),
         rgba(0, 0, 0, 0.08) 1px,
-        rgba(0, 0, 0, 0.0) 3px,
-        rgba(0, 0, 0, 0.0) 6px
+        rgba(0, 0, 0, 0) 3px,
+        rgba(0, 0, 0, 0) 6px
       );
     mix-blend-mode: overlay;
     opacity: 0.55;
@@ -267,7 +271,7 @@
     /* Slightly softer so text/cards stay crisp on dark photography */
     mix-blend-mode: soft-light;
     opacity: 0.38;
-  }/* Leaflet popup: default is white; in night mode it clashes with our light text overrides. */
+  } /* Leaflet popup: default is white; in night mode it clashes with our light text overrides. */
 
   .theme-day body::before {
     mix-blend-mode: normal;
@@ -375,7 +379,12 @@
   }
 
   .pp-calendar-header {
-    background: linear-gradient(90deg, rgba(255, 237, 213, 0.85), rgba(255, 228, 230, 0.75), rgba(254, 243, 199, 0.8));
+    background: linear-gradient(
+      90deg,
+      rgba(255, 237, 213, 0.85),
+      rgba(255, 228, 230, 0.75),
+      rgba(254, 243, 199, 0.8)
+    );
   }
 
   .pp-calendar-day--idle {
@@ -570,20 +579,19 @@
 
   .section--surface-2 {
     background: var(--bg-surface-muted);
-  }/* Warm light card surface */
+  } /* Warm light card surface */
   .card-light {
     background-color: var(--bg-card);
     color: var(--text-primary);
   }
 
   .deal-card-media {
-    background:
-      radial-gradient(
-        220px circle at 20% 15%,
-        rgba(255, 240, 220, 0.85),
-        rgba(243, 227, 208, 0.95) 55%,
-        rgba(233, 214, 193, 0.98) 100%
-      );
+    background: radial-gradient(
+      220px circle at 20% 15%,
+      rgba(255, 240, 220, 0.85),
+      rgba(243, 227, 208, 0.95) 55%,
+      rgba(233, 214, 193, 0.98) 100%
+    );
   }
 
   .bg-app {
@@ -653,7 +661,11 @@
   }
 
   .bg-success-soft {
-    background-color: color-mix(in srgb, var(--status-success) 18%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--status-success) 18%,
+      transparent
+    );
   }
 
   .bg-success {
@@ -700,7 +712,6 @@
   .text-muted-foreground {
     color: var(--text-muted);
   }
-
 
   /* Ember-lit app background */
   .app-background {
@@ -751,7 +762,8 @@
 
     .home-cinematic .home-hero-panel {
       background: rgba(255, 255, 255, 0.92);
-      border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+      border: 1px solid
+        color-mix(in srgb, var(--border-subtle) 70%, transparent);
       border-radius: 28px;
       padding: 28px 32px;
       box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
@@ -902,8 +914,11 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background:
-      radial-gradient(1200px 800px at 50% 50%, rgba(255, 255, 255, 0.02), transparent 70%);
+    background: radial-gradient(
+      1200px 800px at 50% 50%,
+      rgba(255, 255, 255, 0.02),
+      transparent 70%
+    );
     pointer-events: none;
     opacity: 0.7;
   }
@@ -1191,12 +1206,14 @@
 
   /* Clean shadows */
   .shadow-clean {
-    box-shadow: 0 2px 6px 0 rgba(18, 10, 6, 0.25),
+    box-shadow:
+      0 2px 6px 0 rgba(18, 10, 6, 0.25),
       0 1px 2px 0 rgba(18, 10, 6, 0.18);
   }
 
   .shadow-clean-lg {
-    box-shadow: 0 18px 28px -10px rgba(16, 8, 4, 0.45),
+    box-shadow:
+      0 18px 28px -10px rgba(16, 8, 4, 0.45),
       0 8px 14px -6px rgba(16, 8, 4, 0.3);
   }
 
@@ -1409,5 +1426,3 @@
     }
   }
 }
-
-

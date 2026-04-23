@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -3015,6 +3015,11 @@ export default function ParkingPassPage() {
 
   const focusLocation = (key: string, scroll = false) => {
     setActiveLocationKey(key);
+    if (viewMode === "map") {
+      // Keep card-mode behavior consistent by ensuring we zoom into the
+      // card threshold when focusing a location from card/list interactions.
+      setParkingMapZoom((current) => Math.max(15, current));
+    }
     if (!scroll) return;
     requestAnimationFrame(() => {
       document
@@ -3155,11 +3160,29 @@ export default function ParkingPassPage() {
         ),
     [filteredLocations, hostLocationsByHostId, parkingCoords],
   );
+  const pointInBounds = useCallback(
+    (bounds: MapPickerBounds | null, point: GeoPoint) => {
+      if (!bounds) return true;
+      const withinLat = point.lat <= bounds.north && point.lat >= bounds.south;
+      const crossesDateLine = bounds.west > bounds.east;
+      const withinLng = crossesDateLine
+        ? point.lng >= bounds.west || point.lng <= bounds.east
+        : point.lng >= bounds.west && point.lng <= bounds.east;
+      return withinLat && withinLng;
+    },
+    [],
+  );
+  const mapPinCandidatesForCards = useMemo(() => {
+    const inView = mapPins.filter((pin) =>
+      pointInBounds(parkingMapBounds, pin.coords),
+    );
+    return inView.length > 0 ? inView : mapPins;
+  }, [mapPins, parkingMapBounds, pointInBounds]);
   const pinZoomCardMode = usePinZoomCardMode<(typeof mapPins)[number]>({
     enabled: viewMode === "map",
     zoom: parkingMapZoom,
     cardsAtOrAboveZoom: 15,
-    markers: mapPins,
+    markers: mapPinCandidatesForCards,
     markerId: (marker) => marker.key,
     dedupeKey: (marker) => marker.group.key,
     maxCards: 6,
@@ -3213,6 +3236,26 @@ export default function ParkingPassPage() {
         ),
     [paidMapLocations, normalizedCityQuery],
   );
+  const fallbackPinCandidatesForCards = useMemo(() => {
+    const inView = fallbackHostPins.filter((pin) =>
+      pointInBounds(parkingMapBounds, pin.coords),
+    );
+    return inView.length > 0 ? inView : fallbackHostPins;
+  }, [fallbackHostPins, parkingMapBounds, pointInBounds]);
+  const fallbackPinZoomCardMode = usePinZoomCardMode<
+    (typeof fallbackHostPins)[number]
+  >({
+    enabled: viewMode === "map",
+    zoom: parkingMapZoom,
+    cardsAtOrAboveZoom: 15,
+    markers: fallbackPinCandidatesForCards,
+    markerId: (marker) => marker.key,
+    dedupeKey: (marker) => marker.hostId,
+    maxCards: 6,
+  });
+  const fallbackHostPinsForRender = fallbackPinZoomCardMode.showPins
+    ? fallbackHostPins
+    : [];
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
@@ -5742,15 +5785,17 @@ export default function ParkingPassPage() {
                           <div className="relative h-72 w-full bg-slate-100/60">
                             <GoogleMapPicker
                               center={fallbackMapCenter}
-                              zoom={13}
+                              zoom={parkingMapZoom}
                               interactionsEnabled={mapInteractionsEnabled}
                               onBoundsChanged={setParkingMapBounds}
                               onZoomChanged={setParkingMapZoom}
                               trafficCells={parkingTrafficCells}
-                              pins={fallbackHostPins.map(
+                              onPinClick={(pinKey) => {
+                                fallbackPinZoomCardMode.setActiveCardId(pinKey);
+                              }}
+                              pins={fallbackHostPinsForRender.map(
                                 ({
                                   key,
-                                  hostId,
                                   name,
                                   coords,
                                   addressLabel,
@@ -5785,11 +5830,48 @@ export default function ParkingPassPage() {
                               )}
                               className="h-full w-full"
                             />
+                            {fallbackPinZoomCardMode.showCards && (
+                              <div className="absolute inset-x-2 bottom-2 z-[1000] max-h-[62%] space-y-2 overflow-y-auto pr-1">
+                                {fallbackPinZoomCardMode.cards.map((pin) => {
+                                  const isActive =
+                                    fallbackPinZoomCardMode.activeCardId ===
+                                    pin.key;
+                                  return (
+                                    <button
+                                      key={`fallback-zoom-card-${pin.key}`}
+                                      type="button"
+                                      className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
+                                        isActive
+                                          ? "border-orange-300 pp-glass"
+                                          : "border-[color:var(--border-subtle)] pp-glass-muted"
+                                      }`}
+                                      onClick={() =>
+                                        fallbackPinZoomCardMode.setActiveCardId(
+                                          pin.key,
+                                        )
+                                      }
+                                    >
+                                      <p className="truncate text-sm font-semibold text-orange-600">
+                                        {pin.name}
+                                      </p>
+                                      <p className="truncate text-[11px] text-[color:var(--text-muted)]">
+                                        {pin.addressLabel}
+                                      </p>
+                                      <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                                        {isActive ? "Selected" : "Tap to open"}
+                                      </p>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                            {requestedHostId
-                              ? "This host is visible on the map, but has no active parking pass listing yet."
-                              : "Host locations are visible, but no active parking pass listings are open right now."}
+                            {fallbackPinZoomCardMode.showCards
+                              ? "Zoom cards active. Tap a card to view host location details."
+                              : requestedHostId
+                                ? "This host is visible on the map, but has no active parking pass listing yet."
+                                : "Host locations are visible, but no active parking pass listings are open right now."}
                           </div>
                         </div>
                       </div>
@@ -5807,7 +5889,7 @@ export default function ParkingPassPage() {
                         <div className="relative h-72 w-full bg-slate-100/60">
                           <GoogleMapPicker
                             center={mapCenter}
-                            zoom={13}
+                            zoom={parkingMapZoom}
                             interactionsEnabled={mapInteractionsEnabled}
                             onBoundsChanged={setParkingMapBounds}
                             onZoomChanged={setParkingMapZoom}
@@ -6074,7 +6156,7 @@ export default function ParkingPassPage() {
                             </div>
                           )}
                           {pinZoomCardMode.showCards && (
-                            <div className="absolute inset-x-2 bottom-2 z-20 max-h-[62%] space-y-2 overflow-y-auto pr-1">
+                            <div className="absolute inset-x-2 bottom-2 z-[1000] max-h-[62%] space-y-2 overflow-y-auto pr-1">
                               {pinZoomCardMode.cards.map((pin) => {
                                 const isActive =
                                   pinZoomCardMode.activeCardId === pin.key;

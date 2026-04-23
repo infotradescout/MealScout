@@ -762,7 +762,6 @@ export function registerHostRoutes(app: Express) {
 
   registerHostEventsRoutes(app);
 
-
   // =====================================================================
   // STRIPE CONNECT & PAYMENT ENDPOINTS
   // =====================================================================
@@ -1041,7 +1040,9 @@ export function registerHostRoutes(app: Express) {
         res.json({ requests });
       } catch (error: unknown) {
         console.error("Error loading payout request history:", error);
-        res.status(500).json({ message: "Failed to load payout request history" });
+        res
+          .status(500)
+          .json({ message: "Failed to load payout request history" });
       }
     },
   );
@@ -1864,4 +1865,3 @@ export function registerHostRoutes(app: Express) {
     },
   );
 }
-

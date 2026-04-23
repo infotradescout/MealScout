@@ -1303,9 +1303,9 @@ export function registerAdminManagementRoutes(app: Express) {
           ]
             .filter(Boolean)
             .join(", ");
-          const coords = await forwardGeocode(fullAddress, { force: true }).catch(
-            () => null,
-          );
+          const coords = await forwardGeocode(fullAddress, {
+            force: true,
+          }).catch(() => null);
           if (!coords) {
             return res.status(400).json({
               message:

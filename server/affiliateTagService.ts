@@ -55,7 +55,11 @@ async function isAffiliateTagAvailable(tag: string, userId?: string) {
 }
 
 export async function ensureAffiliateTag(userId: string): Promise<string> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  const [user] = await db
+    .select({ id: users.id, affiliateTag: users.affiliateTag })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   if (!user) {
     throw new Error("User not found");
   }

@@ -1080,142 +1080,142 @@ export default function Home() {
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
       <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
         <div className="content">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
-                <h3 className="text-sm font-bold text-foreground">
-                  Live Food Trucks:{" "}
-                  {shortLocation === "Your Location" ? "Nearby" : shortLocation}
-                </h3>
-              </div>
-              <Link href="/map">
-                <Button
-                  variant="link"
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto text-xs"
-                >
-                  View Map {"->"}
-                </Button>
-              </Link>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
+              <h3 className="text-sm font-bold text-foreground">
+                Live Food Trucks:{" "}
+                {shortLocation === "Your Location" ? "Nearby" : shortLocation}
+              </h3>
             </div>
-            {liveTrucksLoading ? (
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : liveTrucksError ? (
-              <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
-                <p>We couldn't load live trucks right now.</p>
+            <Link href="/map">
+              <Button
+                variant="link"
+                className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto text-xs"
+              >
+                View Map {"->"}
+              </Button>
+            </Link>
+          </div>
+          {liveTrucksLoading ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : liveTrucksError ? (
+            <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
+              <p>We couldn't load live trucks right now.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                onClick={() => refetchLiveTrucks()}
+              >
+                Retry Live Trucks
+              </Button>
+            </div>
+          ) : liveTrucks.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              {liveTrucks.map((truck) => {
+                const truckDeals =
+                  dealsByRestaurant.get(String(truck.id)) || [];
+                const distanceMiles =
+                  typeof truck.distance === "number" &&
+                  Number.isFinite(truck.distance)
+                    ? truck.distance * 0.621371
+                    : null;
+                const lastSeenLabel = truck.lastBroadcastAt
+                  ? `Updated ${new Date(
+                      truck.lastBroadcastAt,
+                    ).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}`
+                  : "Live location active";
+
+                return (
+                  <Link key={truck.id} href={`/restaurant/${truck.id}`}>
+                    <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-semibold text-foreground truncate">
+                            {truck.name}
+                          </h4>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {truck.cuisineType || "Food Truck"}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
+                          Live
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>
+                          {distanceMiles != null
+                            ? `${distanceMiles.toFixed(1)} mi away`
+                            : "Nearby"}
+                        </span>
+                        <span>{lastSeenLabel}</span>
+                      </div>
+
+                      <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Active Deals ({truckDeals.length})
+                        </p>
+                        {truckDeals.length > 0 ? (
+                          <div className="mt-1 space-y-1.5">
+                            {truckDeals.slice(0, 2).map((deal) => (
+                              <p
+                                key={deal.id}
+                                className="text-xs text-foreground line-clamp-1"
+                              >
+                                {deal.title}
+                              </p>
+                            ))}
+                            {truckDeals.length > 2 && (
+                              <p className="text-[11px] text-muted-foreground">
+                                +{truckDeals.length - 2} more
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            No active deals yet
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[color:var(--text-secondary)]">
+              <p>No live trucks in view yet.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="mt-3"
-                  onClick={() => refetchLiveTrucks()}
+                  onClick={retryLocation}
+                  disabled={isLoadingLocation}
                 >
-                  Retry Live Trucks
+                  {isLoadingLocation ? "Locating..." : "Refresh location"}
                 </Button>
-              </div>
-            ) : liveTrucks.length > 0 ? (
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-                {liveTrucks.map((truck) => {
-                  const truckDeals =
-                    dealsByRestaurant.get(String(truck.id)) || [];
-                  const distanceMiles =
-                    typeof truck.distance === "number" &&
-                    Number.isFinite(truck.distance)
-                      ? truck.distance * 0.621371
-                      : null;
-                  const lastSeenLabel = truck.lastBroadcastAt
-                    ? `Updated ${new Date(
-                        truck.lastBroadcastAt,
-                      ).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}`
-                    : "Live location active";
-
-                  return (
-                    <Link key={truck.id} href={`/restaurant/${truck.id}`}>
-                      <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-semibold text-foreground truncate">
-                              {truck.name}
-                            </h4>
-                            <p className="text-xs text-muted-foreground truncate mt-0.5">
-                              {truck.cuisineType || "Food Truck"}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
-                            Live
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                          <span>
-                            {distanceMiles != null
-                              ? `${distanceMiles.toFixed(1)} mi away`
-                              : "Nearby"}
-                          </span>
-                          <span>{lastSeenLabel}</span>
-                        </div>
-
-                        <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Active Deals ({truckDeals.length})
-                          </p>
-                          {truckDeals.length > 0 ? (
-                            <div className="mt-1 space-y-1.5">
-                              {truckDeals.slice(0, 2).map((deal) => (
-                                <p
-                                  key={deal.id}
-                                  className="text-xs text-foreground line-clamp-1"
-                                >
-                                  {deal.title}
-                                </p>
-                              ))}
-                              {truckDeals.length > 2 && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  +{truckDeals.length - 2} more
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              No active deals yet
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 text-sm text-[color:var(--text-secondary)]">
-                <p>No live trucks in view yet.</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={retryLocation}
-                    disabled={isLoadingLocation}
-                  >
-                    {isLoadingLocation ? "Locating..." : "Refresh location"}
+                <Link href="/map">
+                  <Button size="sm" variant="outline">
+                    Open live map
                   </Button>
-                  <Link href="/map">
-                    <Button size="sm" variant="outline">
-                      Open live map
-                    </Button>
-                  </Link>
-                </div>
+                </Link>
               </div>
-            )}
-          </div>
-        </section>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Public Profiles Section */}
       {(publicProfilesLoading ||

@@ -23,7 +23,9 @@ const BASE_URL = String(
 )
   .trim()
   .replace(/\/$/, "");
-const ORIGIN = String(process.env.ADMIN_SMOKE_ORIGIN || "http://localhost:5000").trim();
+const ORIGIN = String(
+  process.env.ADMIN_SMOKE_ORIGIN || "http://localhost:5000",
+).trim();
 const ADMIN_EMAIL = String(process.env.ADMIN_SMOKE_EMAIL || "").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_SMOKE_PASSWORD || "").trim();
 const ADMIN_COOKIE = String(process.env.ADMIN_SMOKE_COOKIE || "").trim();
@@ -66,7 +68,9 @@ async function loginAsAdmin(): Promise<string> {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    failFast(`Admin login failed (${response.status}): ${JSON.stringify(payload)}`);
+    failFast(
+      `Admin login failed (${response.status}): ${JSON.stringify(payload)}`,
+    );
   }
 
   const cookie = parseCookieHeader(response);
@@ -110,47 +114,57 @@ async function run(): Promise<void> {
 
   const tests: TestResult[] = [];
 
-  const privatePaid = await callJson(cookie, "POST", "/api/event-coordinator/events", {
-    businessName: `Guardrail Org ${stamp}`,
-    address: "100 Main St",
-    city: "Austin",
-    state: "TX",
-    contactPhone: "555-123-4567",
-    name: `Guardrail Private Paid ${stamp}`,
-    description: "Regression test",
-    date: testDate,
-    startTime: "10:00",
-    endTime: "14:00",
-    maxTrucks: 3,
-    eventVisibility: "private",
-    eventCadence: "one_time",
-    requiresPayment: true,
-    hostPriceCents: 2500,
-  });
+  const privatePaid = await callJson(
+    cookie,
+    "POST",
+    "/api/event-coordinator/events",
+    {
+      businessName: `Guardrail Org ${stamp}`,
+      address: "100 Main St",
+      city: "Austin",
+      state: "TX",
+      contactPhone: "555-123-4567",
+      name: `Guardrail Private Paid ${stamp}`,
+      description: "Regression test",
+      date: testDate,
+      startTime: "10:00",
+      endTime: "14:00",
+      maxTrucks: 3,
+      eventVisibility: "private",
+      eventCadence: "one_time",
+      requiresPayment: true,
+      hostPriceCents: 2500,
+    },
+  );
   tests.push({
     name: "Private one-time paid event is rejected",
     passed: privatePaid.status === 400,
     details: `status=${privatePaid.status}`,
   });
 
-  const privateRecurring = await callJson(cookie, "POST", "/api/event-coordinator/events", {
-    businessName: `Guardrail Org ${stamp}`,
-    address: "100 Main St",
-    city: "Austin",
-    state: "TX",
-    contactPhone: "555-123-4567",
-    name: `Guardrail Private Recurring ${stamp}`,
-    description: "Regression test",
-    date: testDate,
-    startTime: "10:00",
-    endTime: "14:00",
-    maxTrucks: 3,
-    eventVisibility: "private",
-    eventCadence: "recurring",
-    recurringDaysOfWeek: [1, 3],
-    recurrenceEndDate: testDate,
-    requiresPayment: false,
-  });
+  const privateRecurring = await callJson(
+    cookie,
+    "POST",
+    "/api/event-coordinator/events",
+    {
+      businessName: `Guardrail Org ${stamp}`,
+      address: "100 Main St",
+      city: "Austin",
+      state: "TX",
+      contactPhone: "555-123-4567",
+      name: `Guardrail Private Recurring ${stamp}`,
+      description: "Regression test",
+      date: testDate,
+      startTime: "10:00",
+      endTime: "14:00",
+      maxTrucks: 3,
+      eventVisibility: "private",
+      eventCadence: "recurring",
+      recurringDaysOfWeek: [1, 3],
+      recurrenceEndDate: testDate,
+      requiresPayment: false,
+    },
+  );
   tests.push({
     name: "Private recurring event is rejected",
     passed: privateRecurring.status === 400,
@@ -177,7 +191,9 @@ async function run(): Promise<void> {
 
   console.log("Event guardrail regression results:");
   for (const test of tests) {
-    console.log(`${test.passed ? "PASS" : "FAIL"} - ${test.name} (${test.details})`);
+    console.log(
+      `${test.passed ? "PASS" : "FAIL"} - ${test.name} (${test.details})`,
+    );
   }
 
   const failed = tests.filter((test) => !test.passed);

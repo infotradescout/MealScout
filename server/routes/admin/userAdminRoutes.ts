@@ -194,7 +194,10 @@ export function registerUserAdminRoutes(
           .filter((item: any) => {
             if (visibilityFilter === "all") return true;
             if (visibilityFilter === "unknown") {
-              return item.eventVisibility !== "public" && item.eventVisibility !== "private";
+              return (
+                item.eventVisibility !== "public" &&
+                item.eventVisibility !== "private"
+              );
             }
             return item.eventVisibility === visibilityFilter;
           });
@@ -2062,8 +2065,12 @@ export function registerUserAdminRoutes(
         const finalRequiresPayment = Boolean(
           updates.requiresPayment ?? event.requiresPayment,
         );
-        const isPrivateEvent = String(event.eventType || "") === "private_event";
-        if (isPrivateEvent && (finalRequiresPayment || breakfast > 0 || lunch > 0 || dinner > 0)) {
+        const isPrivateEvent =
+          String(event.eventType || "") === "private_event";
+        if (
+          isPrivateEvent &&
+          (finalRequiresPayment || breakfast > 0 || lunch > 0 || dinner > 0)
+        ) {
           return res.status(400).json({
             message:
               "Private events cannot use paid pricing. Change event type/visibility before adding Parking Pass pricing.",

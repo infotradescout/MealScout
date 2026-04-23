@@ -60,12 +60,12 @@ export function registerEventRoutes(
 ) {
   const parkingPassFeedLimiter = distributedRateLimit({
     scope: "parking-pass-feed",
-    limit: 120,
+    limit: 600,
     windowMs: 60 * 1000,
   });
   const parkingPassBookabilityLimiter = distributedRateLimit({
     scope: "parking-pass-bookability",
-    limit: 180,
+    limit: 900,
     windowMs: 60 * 1000,
   });
 

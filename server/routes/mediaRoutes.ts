@@ -18,7 +18,8 @@ export function registerMediaRoutes(app: Express) {
 
   const canManageRestaurant = (user: any, restaurant: any) =>
     Boolean(restaurant) &&
-    (isAdminUser(user) || String(restaurant.ownerId) === String(user?.id || ""));
+    (isAdminUser(user) ||
+      String(restaurant.ownerId) === String(user?.id || ""));
 
   app.post(
     "/api/upload/restaurant-logo",
