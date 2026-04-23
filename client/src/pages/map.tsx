@@ -2577,14 +2577,30 @@ export default function MapPage() {
 
   const selectedParkingHost = useMemo(() => {
     if (!selectedParkingPreview) return null;
-    const host =
-      visibleHostLocations.find(
-        (item) => item.id === selectedParkingPreview.hostId,
-      ) ||
-      mapLocations.hostLocations.find(
-        (item) => item.id === selectedParkingPreview.hostId,
-      );
-    if (!host) return null;
+    const selectedHostOverlay = visibleHostLocations.find(
+      (item) => item.id === selectedParkingPreview.hostId,
+    );
+    const selectedHostCanonicalById = mapLocations.hostLocations.find(
+      (item) => item.id === selectedParkingPreview.hostId,
+    );
+    const selectedHostCanonicalByHostId = selectedHostOverlay?.hostId
+      ? mapLocations.hostLocations.find(
+          (item) =>
+            String(item.hostId || "").trim() ===
+            String(selectedHostOverlay.hostId || "").trim(),
+        )
+      : null;
+    const canonicalHost =
+      selectedHostCanonicalById || selectedHostCanonicalByHostId || null;
+    const hostBase = selectedHostOverlay || canonicalHost;
+    if (!hostBase) return null;
+    const host: HostLocation = {
+      ...(canonicalHost || {}),
+      ...hostBase,
+      spotImageUrl:
+        resolveHostImageUrl(hostBase) ||
+        resolveHostImageUrl(canonicalHost || undefined),
+    };
     const coords = resolveHostCoords(host);
     if (!coords) return null;
     const nearby = findNearbyTruck(coords);
