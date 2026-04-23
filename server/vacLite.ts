@@ -4,6 +4,7 @@
 import type { User } from "@shared/schema";
 import { logAudit } from "./auditLogger";
 import type { Request } from "express";
+import { computeExternalReviewAdjustment } from "./services/externalReviewScoring";
 
 function vacNormalizePhone(input: unknown): string {
   return String(input || "").replace(/\D/g, "").slice(-10);
@@ -100,6 +101,8 @@ interface VacRestaurantInput {
   latitude?: string | number | null;
   longitude?: string | number | null;
   address?: string;
+  externalReviewRating?: number | null;
+  externalReviewSourceCount?: number | null;
 }
 
 interface VacEvaluationResult {
@@ -118,6 +121,9 @@ interface VacEvaluationResult {
     hasAddress: boolean;
     phoneMatches: boolean;
     freeEmailDomain: boolean;
+    externalReviewRating: number | null;
+    externalReviewAdjustment: number;
+    externalReviewSourceCount: number;
   };
 }
 
@@ -190,8 +196,22 @@ export async function vacEvaluateRestaurantSignup({
 
   // Small penalty: free email without a matching business domain
   if (vacIsFreeEmailDomain(emailDomain) && !emailMatchesWebsite) score -= 10;
+  const externalReviewRating =
+    restaurant?.externalReviewRating != null
+      ? Number(restaurant.externalReviewRating)
+      : null;
+  const externalReviewAdjustment =
+    externalReviewRating != null && Number.isFinite(externalReviewRating)
+      ? computeExternalReviewAdjustment(externalReviewRating)
+      : 0;
+  const externalReviewSourceCount = Math.max(
+    0,
+    Number(restaurant?.externalReviewSourceCount || 0),
+  );
+  score += externalReviewAdjustment;
 
   if (score < 0) score = 0;
+  if (score > 100) score = 100;
 
   const result: VacEvaluationResult = {
     version: "vac-lite-v1",
@@ -208,7 +228,13 @@ export async function vacEvaluateRestaurantSignup({
       hasGeo,
       hasAddress,
       phoneMatches,
-      freeEmailDomain: vacIsFreeEmailDomain(emailDomain)
+      freeEmailDomain: vacIsFreeEmailDomain(emailDomain),
+      externalReviewRating:
+        externalReviewRating != null && Number.isFinite(externalReviewRating)
+          ? Math.round(externalReviewRating * 100) / 100
+          : null,
+      externalReviewAdjustment,
+      externalReviewSourceCount,
     }
   };
 

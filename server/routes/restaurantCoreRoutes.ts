@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -9,6 +10,11 @@ import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import {
+  aggregateImportedReviews,
+  computeExternalReviewAdjustment,
+  normalizeImportedReviews,
+} from "../services/externalReviewScoring";
 import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
@@ -1449,6 +1455,159 @@ export function registerRestaurantCoreRoutes(
         res
           .status(500)
           .json({ message: "Failed to track recommendation click" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/restaurants/:id/verification/external-reviews",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const restaurantId = req.params.id;
+        const userId = req.user.id;
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant || restaurant.ownerId !== userId) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const parsed = z
+          .object({
+            reviews: z
+              .array(
+                z.object({
+                  platform: z.string().trim().min(1).max(50),
+                  rating: z.number().min(1).max(5),
+                  reviewCount: z.number().int().min(0).max(100000).optional(),
+                  profileUrl: z
+                    .string()
+                    .trim()
+                    .url()
+                    .max(500)
+                    .optional()
+                    .nullable(),
+                }),
+              )
+              .max(20),
+          })
+          .parse(req.body || {});
+
+        const normalized = normalizeImportedReviews(parsed.reviews);
+        const aggregate = aggregateImportedReviews(normalized);
+        const ratingAdjustment =
+          aggregate.averageRating != null
+            ? computeExternalReviewAdjustment(aggregate.averageRating)
+            : 0;
+
+        const user = await storage.getUserById(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const currentSettings =
+          user.accountSettings && typeof user.accountSettings === "object"
+            ? ({ ...(user.accountSettings as any) } as Record<string, any>)
+            : {};
+        const existingExternal = currentSettings.externalReviews || {};
+        const byRestaurant =
+          existingExternal.byRestaurant &&
+          typeof existingExternal.byRestaurant === "object"
+            ? { ...(existingExternal.byRestaurant as Record<string, any>) }
+            : {};
+
+        byRestaurant[restaurantId] = {
+          reviews: normalized,
+          averageRating: aggregate.averageRating,
+          sourceCount: aggregate.sourceCount,
+          totalReviewCount: aggregate.totalReviewCount,
+          ratingAdjustment,
+          importedAt: new Date().toISOString(),
+        };
+
+        const nextAccountSettings = {
+          ...currentSettings,
+          externalReviews: {
+            ...existingExternal,
+            byRestaurant,
+          },
+        };
+
+        await storage.updateUser(userId, {
+          accountSettings: nextAccountSettings as any,
+        });
+
+        const vac = await vacEvaluateRestaurantSignup({
+          user: { ...user, accountSettings: nextAccountSettings } as any,
+          restaurant: {
+            ...restaurant,
+            externalReviewRating: aggregate.averageRating,
+            externalReviewSourceCount: aggregate.sourceCount,
+          } as any,
+          req,
+        });
+
+        if (vac.shouldAutoVerify && !restaurant.isVerified) {
+          await storage.setRestaurantVerified(restaurantId, true);
+        }
+
+        res.json({
+          success: true,
+          externalReviews: byRestaurant[restaurantId],
+          verification: {
+            score: vac.score,
+            threshold: vac.threshold,
+            shouldAutoVerify: vac.shouldAutoVerify,
+            externalReviewRating: vac.signals.externalReviewRating,
+            externalReviewAdjustment: vac.signals.externalReviewAdjustment,
+          },
+        });
+      } catch (error: any) {
+        console.error("Error importing external reviews:", error);
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: "Invalid external review payload",
+            errors: error.errors,
+          });
+        }
+        res.status(500).json({
+          message: error?.message || "Failed to import external reviews",
+        });
+      }
+    },
+  );
+
+  app.get(
+    "/api/restaurants/:id/verification/external-reviews",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const restaurantId = req.params.id;
+        const userId = req.user.id;
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant || restaurant.ownerId !== userId) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const user = await storage.getUserById(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const accountSettings =
+          user.accountSettings && typeof user.accountSettings === "object"
+            ? (user.accountSettings as any)
+            : {};
+        const imported =
+          accountSettings?.externalReviews?.byRestaurant?.[restaurantId] || null;
+
+        res.json({
+          externalReviews: imported,
+        });
+      } catch (error) {
+        console.error("Error loading external reviews:", error);
+        res.status(500).json({ message: "Failed to load external reviews" });
       }
     },
   );
