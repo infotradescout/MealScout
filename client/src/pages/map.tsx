@@ -54,6 +54,7 @@ type ParkingPreviewSelection = {
   hostId: string;
   markerLat: number;
   markerLng: number;
+  source: "zoom-card" | "pin-tap";
 };
 
 type MapBranding = {
@@ -2433,13 +2434,19 @@ export default function MapPage() {
     }
     const targetHostId = String(target.sourceId || "").trim();
     if (!targetHostId) return;
-    if (selectedParkingPreview?.hostId === targetHostId) return;
+    if (
+      selectedParkingPreview?.hostId === targetHostId &&
+      selectedParkingPreview.source === "zoom-card"
+    ) {
+      return;
+    }
     setSelectedDeal(null);
     setSelectedHostCluster(null);
     setSelectedParkingPreview({
       hostId: targetHostId,
       markerLat: target.lat,
       markerLng: target.lng,
+      source: "zoom-card",
     });
   }, [
     pinZoomCardMode.showCards,
@@ -2448,6 +2455,12 @@ export default function MapPage() {
     preferredParkingZoomCard,
     selectedParkingPreview,
   ]);
+
+  useEffect(() => {
+    if (pinZoomCardMode.showCards) return;
+    if (selectedParkingPreview?.source !== "zoom-card") return;
+    setSelectedParkingPreview(null);
+  }, [pinZoomCardMode.showCards, selectedParkingPreview]);
 
   const mapMarkersForRender = pinZoomCardMode.showPins
     ? adapterMarkers
@@ -2491,6 +2504,7 @@ export default function MapPage() {
           hostId: host.id,
           markerLat: marker.lat,
           markerLng: marker.lng,
+          source: "pin-tap",
         });
         return;
       }
