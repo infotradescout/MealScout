@@ -2374,15 +2374,15 @@ export default function MapPage() {
   ]);
 
   // Shared reusable pin->zoom->card controller.
-  // Keep disabled for now to preserve stable baseline while we validate the pattern.
-  const enablePinZoomCardMode = false;
+  // Phase 2: enabled for parking markers only.
+  const enablePinZoomCardMode = true;
   const pinZoomCardMode = usePinZoomCardMode<MapAdapterMarker>({
     enabled: enablePinZoomCardMode,
     zoom: zoomLevel,
     cardsAtOrAboveZoom: 15,
     markers: adapterMarkers,
     markerId: (marker) => marker.id,
-    includeMarker: (marker) => marker.kind !== "user" && marker.kind !== "geo_ad",
+    includeMarker: (marker) => marker.kind === "parking",
     dedupeKey: (marker) => `${marker.kind}:${marker.sourceId}`,
     maxCards: 6,
     hasBlockingSelection: Boolean(
@@ -2458,6 +2458,15 @@ export default function MapPage() {
       isTruckOwnerUser,
       getParkingPassHrefForHost,
     ],
+  );
+
+  const handlePinZoomCardTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      pinZoomCardMode.setActiveCardId(marker.id);
+      setMapCenter({ lat: marker.lat, lng: marker.lng });
+      handleAdapterMarkerTap(marker);
+    },
+    [handleAdapterMarkerTap, pinZoomCardMode],
   );
 
   const selectedParkingHost = useMemo(() => {
@@ -2875,6 +2884,39 @@ export default function MapPage() {
                   Add host location
                 </Button>
               </div>
+            </div>
+          )}
+
+          {pinZoomCardMode.showCards && (
+            <div className="absolute inset-x-3 bottom-3 z-20 max-h-[62%] space-y-2 overflow-y-auto pr-1">
+              {pinZoomCardMode.cards.map((marker) => {
+                const isActive = pinZoomCardMode.activeCardId === marker.id;
+                return (
+                  <button
+                    key={`pin-zoom-card-${marker.id}`}
+                    type="button"
+                    className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
+                      isActive
+                        ? "border-orange-300 bg-[var(--bg-card)]"
+                        : "border-[color:var(--border-subtle)] bg-[var(--bg-card)]/90"
+                    }`}
+                    onClick={() => handlePinZoomCardTap(marker)}
+                    data-testid={`pin-zoom-card-${marker.id}`}
+                  >
+                    <p className="truncate text-sm font-semibold text-orange-600">
+                      {marker.title || "Parking location"}
+                    </p>
+                    {marker.subtitle && (
+                      <p className="truncate text-[11px] text-[color:var(--text-muted)]">
+                        {marker.subtitle}
+                      </p>
+                    )}
+                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                      {isActive ? "Selected" : "Tap to open"}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           )}
 
