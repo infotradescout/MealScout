@@ -2993,9 +2993,7 @@ export default function ParkingPassPage() {
   }, [locationGroups, normalizedCityQuery]);
 
   const activeLocation =
-    filteredLocations.find((group) => group.key === activeLocationKey) ||
-    filteredLocations[0] ||
-    null;
+    filteredLocations.find((group) => group.key === activeLocationKey) || null;
 
   const focusLocation = (key: string, scroll = false) => {
     setActiveLocationKey(key);
@@ -3296,17 +3294,6 @@ export default function ParkingPassPage() {
       }
     })();
   }, [filteredLocations, hostLocationsByHostId, parkingCoords, geocodeCache]);
-
-  useEffect(() => {
-    if (!activeLocation) {
-      setActiveLocationKey(null);
-      return;
-    }
-    if (activeLocationKey && activeLocationKey === activeLocation.key) {
-      return;
-    }
-    setActiveLocationKey(activeLocation.key);
-  }, [activeLocation, activeLocationKey]);
 
   if (
     isAuthenticated &&
