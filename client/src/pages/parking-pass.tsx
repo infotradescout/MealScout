@@ -6099,9 +6099,10 @@ export default function ParkingPassPage() {
                               group.host.city ?? "",
                               group.host.state ?? "",
                             );
-                          const hostCardPhotoUrl =
-                            group.host.spotImageUrl ||
-                            buildGoogleLocationPhotoUrl(hostPreviewAddress || null);
+                          const hostCardPhotoUrl = group.host.spotImageUrl || null;
+                          const hostMapPreviewUrl = buildGoogleLocationPhotoUrl(
+                            hostPreviewAddress || null,
+                          );
                           const isActive = activeLocation?.key === group.key;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
@@ -6252,6 +6253,14 @@ export default function ParkingPassPage() {
                                     variant="outline"
                                   />
                                 </div>
+                              )}
+                              {hostMapPreviewUrl && (
+                                <img
+                                  src={hostMapPreviewUrl}
+                                  alt={`${group.host.businessName} map preview`}
+                                  className="h-28 w-full rounded-xl border border-border/60 object-cover"
+                                  loading="lazy"
+                                />
                               )}
                               {isActive &&
                                 listingForDate &&
@@ -6415,9 +6424,10 @@ export default function ParkingPassPage() {
                             group.host.city ?? "",
                             group.host.state ?? "",
                           );
-                        const hostCardPhotoUrl =
-                          group.host.spotImageUrl ||
-                          buildGoogleLocationPhotoUrl(hostPreviewAddress || null);
+                        const hostCardPhotoUrl = group.host.spotImageUrl || null;
+                        const hostMapPreviewUrl = buildGoogleLocationPhotoUrl(
+                          hostPreviewAddress || null,
+                        );
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
@@ -6559,6 +6569,14 @@ export default function ParkingPassPage() {
                                   variant="outline"
                                 />
                               </div>
+                            )}
+                            {hostMapPreviewUrl && (
+                              <img
+                                src={hostMapPreviewUrl}
+                                alt={`${group.host.businessName} map preview`}
+                                className="h-28 w-full rounded-xl border border-border/60 object-cover"
+                                loading="lazy"
+                              />
                             )}
                             {isActive &&
                               listingForDate &&
