@@ -26,6 +26,7 @@ import type {
   MapPickerPin,
 } from "@/components/maps/GoogleMapPicker";
 import type { MapTrafficCell } from "@/components/maps/map-adapter.types";
+import { usePinZoomCardMode } from "@/components/maps/usePinZoomCardMode";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
 import { Button } from "@/components/ui/button";
@@ -685,6 +686,7 @@ export default function ParkingPassPage() {
     Array<{ listing: ParkingPassListing; slotTypes: string[] }>
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [parkingMapZoom, setParkingMapZoom] = useState(13);
   const [showFootTraffic, setShowFootTraffic] = useState(true);
   const [parkingMapBounds, setParkingMapBounds] =
     useState<MapPickerBounds | null>(null);
@@ -3153,6 +3155,16 @@ export default function ParkingPassPage() {
         ),
     [filteredLocations, hostLocationsByHostId, parkingCoords],
   );
+  const pinZoomCardMode = usePinZoomCardMode<(typeof mapPins)[number]>({
+    enabled: viewMode === "map",
+    zoom: parkingMapZoom,
+    cardsAtOrAboveZoom: 15,
+    markers: mapPins,
+    markerId: (marker) => marker.key,
+    dedupeKey: (marker) => marker.group.key,
+    maxCards: 6,
+  });
+  const mapPinsForRender = pinZoomCardMode.showPins ? mapPins : [];
   const fallbackHostPins = useMemo(
     () =>
       (paidMapLocations?.hostLocations ?? [])
@@ -5733,6 +5745,7 @@ export default function ParkingPassPage() {
                               zoom={13}
                               interactionsEnabled={mapInteractionsEnabled}
                               onBoundsChanged={setParkingMapBounds}
+                              onZoomChanged={setParkingMapZoom}
                               trafficCells={parkingTrafficCells}
                               pins={fallbackHostPins.map(
                                 ({
@@ -5797,12 +5810,16 @@ export default function ParkingPassPage() {
                             zoom={13}
                             interactionsEnabled={mapInteractionsEnabled}
                             onBoundsChanged={setParkingMapBounds}
+                            onZoomChanged={setParkingMapZoom}
                             trafficCells={parkingTrafficCells}
                             onPinClick={(pinKey) => {
                               const hit = mapPins.find((p) => p.key === pinKey);
-                              if (hit) setActiveLocationKey(hit.group.key);
+                              if (hit) {
+                                pinZoomCardMode.setActiveCardId(hit.key);
+                                setActiveLocationKey(hit.group.key);
+                              }
                             }}
-                            pins={mapPins.map(
+                            pins={mapPinsForRender.map(
                               ({ key, group, coords, addressLabel }) => {
                                 const effectiveDateKey =
                                   group.key === activeLocationKey
@@ -6056,12 +6073,48 @@ export default function ParkingPassPage() {
                               No mappable locations yet.
                             </div>
                           )}
+                          {pinZoomCardMode.showCards && (
+                            <div className="absolute inset-x-2 bottom-2 z-20 max-h-[62%] space-y-2 overflow-y-auto pr-1">
+                              {pinZoomCardMode.cards.map((pin) => {
+                                const isActive =
+                                  pinZoomCardMode.activeCardId === pin.key;
+                                return (
+                                  <button
+                                    key={`parking-zoom-card-${pin.key}`}
+                                    type="button"
+                                    className={`w-full rounded-xl border px-3 py-2 text-left text-xs shadow-clean backdrop-blur transition-colors ${
+                                      isActive
+                                        ? "border-orange-300 pp-glass"
+                                        : "border-[color:var(--border-subtle)] pp-glass-muted"
+                                    }`}
+                                    onClick={() => {
+                                      pinZoomCardMode.setActiveCardId(pin.key);
+                                      focusLocation(pin.group.key);
+                                    }}
+                                  >
+                                    <p className="truncate text-sm font-semibold text-orange-600">
+                                      {pin.group.host.businessName}
+                                    </p>
+                                    <p className="truncate text-[11px] text-[color:var(--text-muted)]">
+                                      {pin.addressLabel}
+                                    </p>
+                                    <p className="mt-1 text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                                      {isActive ? "Selected" : "Tap to open"}
+                                    </p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                         <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
-                          Tap a location below to update the map.
+                          {pinZoomCardMode.showCards
+                            ? "Zoom cards active. Tap a card to open booking details."
+                            : "Tap a location below to update the map."}
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      {!pinZoomCardMode.showCards && (
+                        <div className="space-y-2">
                         {filteredLocations.map((group) => {
                           const effectiveDateKey =
                             group.key === activeLocationKey
@@ -6392,7 +6445,8 @@ export default function ParkingPassPage() {
                             No locations match that search.
                           </div>
                         )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
