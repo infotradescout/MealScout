@@ -419,20 +419,43 @@ const getListingDateKey = (value: string) => {
   return format(parsed, "yyyy-MM-dd");
 };
 
+const dateFromDateKey = (dateKey: string) => {
+  const key = String(dateKey || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const [yearRaw, monthRaw, dayRaw] = key.split("-");
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+};
+
+const listingDayStart = (listing: ParkingPassListing) => {
+  const key = getListingDateKey(listing.date);
+  return dateFromDateKey(key);
+};
+
+const formatListingDateLocal = (value: string, dateFormat: string) => {
+  const key = getListingDateKey(value);
+  const localDate = dateFromDateKey(key);
+  return localDate ? format(localDate, dateFormat) : "";
+};
+
 function isSlotBookableByTime(
   listing: ParkingPassListing,
   slotType: (typeof PARKING_PASS_SLOT_TYPES)[number],
   now = new Date(),
 ) {
-  const listingDate = new Date(listing.date);
-  const listingDayStart = new Date(listingDate);
-  listingDayStart.setHours(0, 0, 0, 0);
+  const dayStart = listingDayStart(listing);
+  if (!dayStart) return false;
 
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
 
-  if (listingDayStart < todayStart) return false;
-  if (listingDayStart > todayStart) return true;
+  if (dayStart < todayStart) return false;
+  if (dayStart > todayStart) return true;
 
   const window = getSlotWindowMinutesWithCleanup(
     slotType,
@@ -3324,24 +3347,16 @@ export default function ParkingPassPage() {
     if (!listingHasAvailability(listing)) return false;
     if (!listing) return false;
 
-    const listingDate = new Date(listing.date);
-    const listingDayStart = new Date(listingDate);
-    listingDayStart.setHours(0, 0, 0, 0);
+    const dayStart = listingDayStart(listing);
+    if (!dayStart) return false;
 
     const now = new Date();
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    if (listingDayStart < todayStart) return false;
-    if (listingDayStart > todayStart) return true;
-
-    // Same-day rule: keep day selectable until the 3rd meal window (dinner) starts.
-    const [dinnerHour, dinnerMinute] = PARKING_PASS_MEAL_WINDOWS.dinner.start
-      .split(":")
-      .map(Number);
-    const dinnerStartMinutes = dinnerHour * 60 + dinnerMinute;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return nowMinutes < dinnerStartMinutes;
+    if (dayStart < todayStart) return false;
+    // Selectable means there is at least one slot that hasn't started yet.
+    return buildSlotOptions(listing).length > 0;
   };
 
   const selectedDateHasOpenSpots = Boolean(
@@ -5840,8 +5855,8 @@ export default function ParkingPassPage() {
                                         )}
                                         {displayListing && (
                                           <p className="text-[color:var(--text-muted)]">
-                                            {format(
-                                              new Date(displayListing.date),
+                                            {formatListingDateLocal(
+                                              displayListing.date,
                                               "EEE, MMM d",
                                             )}{" "}
                                             -{" "}
@@ -6026,13 +6041,15 @@ export default function ParkingPassPage() {
                               : nextBookableDateByGroup.get(group.key);
                           const groupDateKeys = Array.from(
                             new Set(
-                              group.listings.map((listing) =>
-                                getListingDateKey(listing.date),
-                              ),
+                              group.listings
+                                .filter((listing) => listingDayIsSelectable(listing))
+                                .map((listing) => getListingDateKey(listing.date))
+                                .filter(Boolean),
                             ),
                           ).sort();
                           const selectedGroupDateKey =
                             effectiveDateKey ||
+                            nextBookableDateByGroup.get(group.key) ||
                             groupDateKeys[0] ||
                             selectedDate;
                           const listingForDate = effectiveDateKey
@@ -6132,19 +6149,9 @@ export default function ParkingPassPage() {
                               }`}
                             >
                               <div className="flex items-center justify-between">
-                                <div>
-                                  <span className="text-[15px] font-semibold text-orange-500 font-display">
-                                    {group.host.businessName}
-                                  </span>
-                                  <div className="text-xs text-[color:var(--text-muted)]">
-                                    {displayListing
-                                      ? format(
-                                          new Date(displayListing.date),
-                                          "EEE, MMM d",
-                                        )
-                                      : "No dates listed"}
-                                  </div>
-                                </div>
+                                <span className="text-[15px] font-semibold text-orange-500 font-display">
+                                  {group.host.businessName}
+                                </span>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -6355,13 +6362,17 @@ export default function ParkingPassPage() {
                             : nextBookableDateByGroup.get(group.key);
                         const groupDateKeys = Array.from(
                           new Set(
-                            group.listings.map((listing) =>
-                              getListingDateKey(listing.date),
-                            ),
+                            group.listings
+                              .filter((listing) => listingDayIsSelectable(listing))
+                              .map((listing) => getListingDateKey(listing.date))
+                              .filter(Boolean),
                           ),
                         ).sort();
                         const selectedGroupDateKey =
-                          effectiveDateKey || groupDateKeys[0] || selectedDate;
+                          effectiveDateKey ||
+                          nextBookableDateByGroup.get(group.key) ||
+                          groupDateKeys[0] ||
+                          selectedDate;
                         const listingForDate = effectiveDateKey
                           ? group.listings.find(
                               (listing) =>
@@ -6459,14 +6470,6 @@ export default function ParkingPassPage() {
                             <div className="flex items-center justify-between">
                               <span className="text-[15px] font-semibold text-orange-500 font-display">
                                 {group.host.businessName}
-                              </span>
-                              <span className="text-xs text-[color:var(--text-muted)]">
-                                {displayListing
-                                  ? format(
-                                      new Date(displayListing.date),
-                                      "EEE, MMM d",
-                                    )
-                                  : "No dates listed"}
                               </span>
                             </div>
                             {hostCardPhotoUrl && (
