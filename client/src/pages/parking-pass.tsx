@@ -6329,7 +6329,7 @@ export default function ParkingPassPage() {
                                     </div>
                                   )}
                                 </div>
-                                {hostMapPreviewUrl && (
+                                {!isActive && hostMapPreviewUrl && (
                                   <img
                                     src={hostMapPreviewUrl}
                                     alt={`${group.host.businessName} map snapshot`}
@@ -6355,7 +6355,7 @@ export default function ParkingPassPage() {
                                   />
                                 </div>
                               )}
-                              {hostPlaceImageUrl && (
+                              {!isActive && hostPlaceImageUrl && (
                                 <img
                                   src={hostPlaceImageUrl}
                                   alt={`${group.host.businessName} place image`}
@@ -6662,7 +6662,7 @@ export default function ParkingPassPage() {
                                   </p>
                                 )}
                               </div>
-                              {hostMapPreviewUrl && (
+                              {!isActive && hostMapPreviewUrl && (
                                 <img
                                   src={hostMapPreviewUrl}
                                   alt={`${group.host.businessName} map snapshot`}
@@ -6688,7 +6688,7 @@ export default function ParkingPassPage() {
                                 />
                               </div>
                             )}
-                            {hostPlaceImageUrl && (
+                            {!isActive && hostPlaceImageUrl && (
                               <img
                                 src={hostPlaceImageUrl}
                                 alt={`${group.host.businessName} place image`}
