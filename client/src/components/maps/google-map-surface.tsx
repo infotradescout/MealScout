@@ -450,14 +450,27 @@ export function GoogleMapSurface({
       }
     };
 
+    const observer =
+      typeof ResizeObserver === "function" && mapContainerRef.current
+        ? new ResizeObserver(() => {
+            syncMapSize();
+          })
+        : null;
+    if (observer && mapContainerRef.current) {
+      observer.observe(mapContainerRef.current);
+    }
+
     const first = window.setTimeout(syncMapSize, 0);
     const second = window.setTimeout(syncMapSize, 250);
+    const third = window.setTimeout(syncMapSize, 700);
     window.addEventListener("resize", syncMapSize);
     document.addEventListener("visibilitychange", visibilityHandler);
 
     return () => {
       window.clearTimeout(first);
       window.clearTimeout(second);
+      window.clearTimeout(third);
+      observer?.disconnect();
       window.removeEventListener("resize", syncMapSize);
       document.removeEventListener("visibilitychange", visibilityHandler);
     };

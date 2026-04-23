@@ -110,6 +110,50 @@ function LeafletCenterer({
   return null;
 }
 
+function LeafletSizeSync() {
+  const map = useMap();
+
+  useEffect(() => {
+    const sync = () => {
+      map.invalidateSize(false);
+    };
+
+    const container = map.getContainer();
+    const observer =
+      typeof ResizeObserver === "function" && container
+        ? new ResizeObserver(() => {
+            sync();
+          })
+        : null;
+    if (observer && container) {
+      observer.observe(container);
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        sync();
+      }
+    };
+
+    const t1 = window.setTimeout(sync, 0);
+    const t2 = window.setTimeout(sync, 250);
+    const t3 = window.setTimeout(sync, 700);
+    window.addEventListener("resize", sync);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      observer?.disconnect();
+      window.removeEventListener("resize", sync);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [map]);
+
+  return null;
+}
+
 function LeafletClickHandler({
   onMapClick,
 }: {
@@ -389,6 +433,49 @@ function GoogleMapRenderer({
     mapRef.current.setZoom(zoom ?? 13);
   }, [center.lat, center.lng, zoom]);
 
+  // Keep Google map tiles in sync with container size changes.
+  useEffect(() => {
+    const g = (window as GoogleMapsWindow).google;
+    if (!g?.maps || !mapRef.current || !containerRef.current) return;
+
+    const sync = () => {
+      if (!mapRef.current) return;
+      g.maps.event.trigger(mapRef.current, "resize");
+      mapRef.current.setCenter({ lat: center.lat, lng: center.lng });
+    };
+
+    const observer =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(() => {
+            sync();
+          })
+        : null;
+    if (observer) {
+      observer.observe(containerRef.current);
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        sync();
+      }
+    };
+
+    const t1 = window.setTimeout(sync, 0);
+    const t2 = window.setTimeout(sync, 250);
+    const t3 = window.setTimeout(sync, 700);
+    window.addEventListener("resize", sync);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      observer?.disconnect();
+      window.removeEventListener("resize", sync);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [center.lat, center.lng]);
+
   // Sync pins
   useEffect(() => {
     const g = (window as GoogleMapsWindow).google;
@@ -624,6 +711,7 @@ function LeafletRenderer({
       keyboard={interactionsEnabled}
       className="h-full w-full"
     >
+      <LeafletSizeSync />
       <TileLayer attribution={attribution} url={tileUrl} />
       <LeafletCenterer center={center} zoom={zoom} />
       {onMapClick && <LeafletClickHandler onMapClick={onMapClick} />}
