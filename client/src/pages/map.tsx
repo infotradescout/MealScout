@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { BackHeader } from "@/components/back-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { GoogleMapSurface } from "@/components/maps/google-map-surface";
+import { usePinZoomCardMode } from "@/components/maps/usePinZoomCardMode";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -2372,6 +2373,27 @@ export default function MapPage() {
     businessPopularityByRestaurant,
   ]);
 
+  // Shared reusable pin->zoom->card controller.
+  // Keep disabled for now to preserve stable baseline while we validate the pattern.
+  const enablePinZoomCardMode = false;
+  const pinZoomCardMode = usePinZoomCardMode<MapAdapterMarker>({
+    enabled: enablePinZoomCardMode,
+    zoom: zoomLevel,
+    cardsAtOrAboveZoom: 15,
+    markers: adapterMarkers,
+    markerId: (marker) => marker.id,
+    includeMarker: (marker) => marker.kind !== "user" && marker.kind !== "geo_ad",
+    dedupeKey: (marker) => `${marker.kind}:${marker.sourceId}`,
+    maxCards: 6,
+    hasBlockingSelection: Boolean(
+      selectedDeal || selectedParkingPreview || selectedHostCluster,
+    ),
+  });
+
+  const mapMarkersForRender = pinZoomCardMode.showPins
+    ? adapterMarkers
+    : adapterMarkers.filter((marker) => marker.kind === "user");
+
   const handleAdapterMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       if (marker.kind === "deal") {
@@ -2816,7 +2838,7 @@ export default function MapPage() {
               mapId={effectiveGoogleMapsMapId || undefined}
               center={mapCenter}
               zoom={zoomLevel}
-              markers={adapterMarkers}
+              markers={mapMarkersForRender}
               showRoadTrafficLayer={false}
               userLocation={userLocation}
               isNightTheme={isNightTheme}
