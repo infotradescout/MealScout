@@ -20,9 +20,7 @@ import {
   Truck,
 } from "lucide-react";
 import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
-import {
-  GoogleMapPicker,
-} from "@/components/maps/GoogleMapPicker";
+import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
 import type {
   MapPickerBounds,
   MapPickerPin,
@@ -426,7 +424,11 @@ const dateFromDateKey = (dateKey: string) => {
   const year = Number(yearRaw);
   const month = Number(monthRaw);
   const day = Number(dayRaw);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
     return null;
   }
   return new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -484,9 +486,7 @@ const getLocationKey = (listing: ParkingPassListing) => {
   const lat = parseCoord(listing.host?.latitude);
   const lng = parseCoord(listing.host?.longitude);
   const coordsKey =
-    lat !== null && lng !== null
-      ? `${lat.toFixed(5)},${lng.toFixed(5)}`
-      : "";
+    lat !== null && lng !== null ? `${lat.toFixed(5)},${lng.toFixed(5)}` : "";
 
   const composite = [hostIdKey, addressKey, coordsKey]
     .filter(Boolean)
@@ -543,7 +543,8 @@ export default function ParkingPassPage() {
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageProfile === true;
   const hasPremiumTruckTools =
-    canManageParkingPass && (isAdminOrStaff || Boolean(subscription?.hasAccess));
+    canManageParkingPass &&
+    (isAdminOrStaff || Boolean(subscription?.hasAccess));
   const [isLoading, setIsLoading] = useState(true);
   const [passListings, setPassListings] = useState<ParkingPassListing[]>([]);
   const [truckId, setTruckId] = useState<string | null>(null);
@@ -818,7 +819,10 @@ export default function ParkingPassPage() {
     refetchOnWindowFocus: false,
   });
   useEffect(() => {
-    if (!bookableHostIdPayload || !Array.isArray(bookableHostIdPayload.hostIds)) {
+    if (
+      !bookableHostIdPayload ||
+      !Array.isArray(bookableHostIdPayload.hostIds)
+    ) {
       return;
     }
     const next = new Set(bookableHostIdPayload.hostIds.map((id) => String(id)));
@@ -1479,9 +1483,12 @@ export default function ParkingPassPage() {
   };
 
   const hydrateFromPlaceDetails = async (placeId: string) => {
-    const res = await fetch(`/api/map/place-details/${encodeURIComponent(placeId)}`, {
-      credentials: "include",
-    });
+    const res = await fetch(
+      `/api/map/place-details/${encodeURIComponent(placeId)}`,
+      {
+        credentials: "include",
+      },
+    );
     if (!res.ok) {
       throw new Error("Unable to load place details");
     }
@@ -1539,7 +1546,8 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
+        description:
+          "Off-platform schedule stops require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -1650,7 +1658,8 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
+        description:
+          "Managing off-platform schedule stops requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -2686,7 +2695,8 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
+        description:
+          "Social auto-post settings require Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -2795,7 +2805,8 @@ export default function ParkingPassPage() {
     if (!hasPremiumTruckTools) {
       toast({
         title: "Premium required",
-        description: "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
+        description:
+          "One-click live location sharing requires Premium. Parking pass bookings and menu browsing are always free.",
         variant: "destructive",
       });
       setLocation("/subscription");
@@ -2958,9 +2969,8 @@ export default function ParkingPassPage() {
       }
     });
     for (const group of byHost.values()) {
-      group.listings.sort(
-        (a, b) =>
-          getListingDateKey(a.date).localeCompare(getListingDateKey(b.date)),
+      group.listings.sort((a, b) =>
+        getListingDateKey(a.date).localeCompare(getListingDateKey(b.date)),
       );
     }
     return Array.from(byHost.values());
@@ -3564,7 +3574,8 @@ export default function ParkingPassPage() {
                       { ok: hasSpotPhoto, label: "Spot photo uploaded" },
                       {
                         ok: payoutsEnabled,
-                        label: "Host payouts enabled (optional — bookings work without this)",
+                        label:
+                          "Host payouts enabled (optional — bookings work without this)",
                         optional: true,
                       },
                     ] as { ok: boolean; label: string; optional?: boolean }[];
@@ -3635,8 +3646,8 @@ export default function ParkingPassPage() {
                                   item.ok
                                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                                     : item.optional
-                                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                                    : "border-amber-200 bg-amber-50 text-amber-800"
+                                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                                      : "border-amber-200 bg-amber-50 text-amber-800"
                                 }`}
                               >
                                 {item.ok ? "OK" : item.optional ? "–" : "!"}
@@ -3646,8 +3657,8 @@ export default function ParkingPassPage() {
                                   item.ok
                                     ? "text-slate-700"
                                     : item.optional
-                                    ? "text-blue-800"
-                                    : "text-amber-900"
+                                      ? "text-blue-800"
+                                      : "text-amber-900"
                                 }
                               >
                                 {item.label}
@@ -4270,7 +4281,9 @@ export default function ParkingPassPage() {
                             <GoogleMapPicker
                               center={newLocationMapCenter}
                               zoom={newLocationMapZoom}
-                              onMapClick={(point) => setNewLocationPinPosition(point)}
+                              onMapClick={(point) =>
+                                setNewLocationPinPosition(point)
+                              }
                               pins={
                                 newLocationPinPosition
                                   ? [
@@ -4282,7 +4295,9 @@ export default function ParkingPassPage() {
                                     ]
                                   : []
                               }
-                              onPinDrag={(_key, point) => setNewLocationPinPosition(point)}
+                              onPinDrag={(_key, point) =>
+                                setNewLocationPinPosition(point)
+                              }
                               className="h-full w-full"
                             />
                             {!newLocationPinPosition && (
@@ -5584,10 +5599,14 @@ export default function ParkingPassPage() {
             >
               {isTruckViewUser && truck && truck.isVerified === false && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
-                  <p className="font-semibold">⚠️ Verification required to book parking passes</p>
+                  <p className="font-semibold">
+                    ⚠️ Verification required to book parking passes
+                  </p>
                   <p className="text-xs">
-                    Your business is pending verification. Booking is locked until your account is approved — most reviews complete within 1 business day.
-                    You can still browse available spots below.
+                    Your business is pending verification. Booking is locked
+                    until your account is approved — most reviews complete
+                    within 1 business day. You can still browse available spots
+                    below.
                   </p>
                   <a
                     href="/restaurant-signup"
@@ -5617,8 +5636,8 @@ export default function ParkingPassPage() {
                           Search + availability
                         </p>
                         <p className="text-[11px] text-slate-500">
-                          Choose a spot (space), then pick an open date and
-                          time slot.
+                          Choose a spot (space), then pick an open date and time
+                          slot.
                         </p>
                       </div>
                       <div className="hidden sm:flex items-center gap-2">
@@ -5709,27 +5728,42 @@ export default function ParkingPassPage() {
                               interactionsEnabled={mapInteractionsEnabled}
                               onBoundsChanged={setParkingMapBounds}
                               trafficCells={parkingTrafficCells}
-                              pins={fallbackHostPins.map(({ key, hostId, name, coords, addressLabel, spotImageUrl }) => ({
-                                key,
-                                position: coords,
-                                popup: (
-                                  <div className="space-y-2 text-xs">
-                                    <p className="font-semibold text-orange-600">{name}</p>
-                                    <p className="text-[color:var(--text-muted)]">{addressLabel}</p>
-                                    {spotImageUrl && (
-                                      <img
-                                        src={spotImageUrl}
-                                        alt={`${name} parking spot`}
-                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    <p className="text-[11px] text-[color:var(--text-muted)]">
-                                      No active parking pass listing is open here right now.
-                                    </p>
-                                  </div>
-                                ),
-                              } satisfies MapPickerPin))}
+                              pins={fallbackHostPins.map(
+                                ({
+                                  key,
+                                  hostId,
+                                  name,
+                                  coords,
+                                  addressLabel,
+                                  spotImageUrl,
+                                }) =>
+                                  ({
+                                    key,
+                                    position: coords,
+                                    popup: (
+                                      <div className="space-y-2 text-xs">
+                                        <p className="font-semibold text-orange-600">
+                                          {name}
+                                        </p>
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {addressLabel}
+                                        </p>
+                                        {spotImageUrl && (
+                                          <img
+                                            src={spotImageUrl}
+                                            alt={`${name} parking spot`}
+                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                                          No active parking pass listing is open
+                                          here right now.
+                                        </p>
+                                      </div>
+                                    ),
+                                  }) satisfies MapPickerPin,
+                              )}
                               className="h-full w-full"
                             />
                           </div>
@@ -5840,180 +5874,166 @@ export default function ParkingPassPage() {
                                 );
 
                                 const pinPopup = (
-                                    <div className="space-y-2 text-xs">
-                                        <p className="font-semibold text-orange-600">
-                                          {group.host.businessName}
-                                        </p>
-                                        <p className="text-[color:var(--text-muted)]">
-                                          {addressLabel}
-                                        </p>
-                                        {group.host.spotImageUrl && (
-                                          <img
-                                            src={group.host.spotImageUrl}
-                                            alt={`${group.host.businessName} parking spot`}
-                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        {displayListing && (
-                                          <p className="text-[color:var(--text-muted)]">
-                                            {formatListingDateLocal(
-                                              displayListing.date,
+                                  <div className="space-y-2 text-xs">
+                                    <p className="font-semibold text-orange-600">
+                                      {group.host.businessName}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {addressLabel}
+                                    </p>
+                                    {group.host.spotImageUrl && (
+                                      <img
+                                        src={group.host.spotImageUrl}
+                                        alt={`${group.host.businessName} parking spot`}
+                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                        loading="lazy"
+                                      />
+                                    )}
+                                    {displayListing && (
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {formatListingDateLocal(
+                                          displayListing.date,
+                                          "EEE, MMM d",
+                                        )}{" "}
+                                        -{" "}
+                                        {displayListing.startTime === "00:00" &&
+                                        displayListing.endTime === "23:59"
+                                          ? "Any time"
+                                          : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                      </p>
+                                    )}
+                                    {!listingForDate && (
+                                      <p className="text-[11px] text-amber-700">
+                                        {group.key === activeLocationKey
+                                          ? `No slots on ${format(
+                                              new Date(
+                                                `${selectedDate}T00:00:00`,
+                                              ),
                                               "EEE, MMM d",
-                                            )}{" "}
-                                            -{" "}
-                                            {displayListing.startTime ===
-                                              "00:00" &&
-                                            displayListing.endTime === "23:59"
-                                              ? "Any time"
-                                              : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                          </p>
-                                        )}
-                                        {!listingForDate && (
-                                          <p className="text-[11px] text-amber-700">
-                                            {group.key === activeLocationKey
-                                              ? `No slots on ${format(
-                                                  new Date(
-                                                    `${selectedDate}T00:00:00`,
-                                                  ),
-                                                  "EEE, MMM d",
-                                                )}.`
-                                              : "No open dates right now."}
-                                          </p>
-                                        )}
-                                        <p className="text-[color:var(--text-muted)]">
-                                          {availability}
+                                            )}.`
+                                          : "No open dates right now."}
+                                      </p>
+                                    )}
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {availability}
+                                    </p>
+                                    {(() => {
+                                      const lastConfirmedAt =
+                                        listingForDate?.lastConfirmedAt ??
+                                        displayListing?.lastConfirmedAt ??
+                                        null;
+                                      const relative = lastConfirmedAt
+                                        ? formatRelativeTime(lastConfirmedAt)
+                                        : null;
+                                      if (!relative) return null;
+                                      return (
+                                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                                          Last confirmed: {relative}
                                         </p>
-                                        {(() => {
-                                          const lastConfirmedAt =
-                                            listingForDate?.lastConfirmedAt ??
-                                            displayListing?.lastConfirmedAt ??
-                                            null;
-                                          const relative = lastConfirmedAt
-                                            ? formatRelativeTime(
-                                                lastConfirmedAt,
-                                              )
-                                            : null;
-                                          if (!relative) return null;
-                                          return (
-                                            <p className="text-[11px] text-[color:var(--text-muted)]">
-                                              Last confirmed: {relative}
-                                            </p>
-                                          );
-                                        })()}
-                                        {listingForDate &&
-                                        slotOptions.length > 0 ? (
-                                          <div className="space-y-2">
-                                            <div className="grid grid-cols-2 gap-2">
-                                              {slotOptions.map((slot) => {
-                                                const feeCents =
-                                                  getFeeCentsForSlots([
-                                                    slot.type,
-                                                  ]);
-                                                const totalPrice =
-                                                  ((slot.priceCents || 0) +
-                                                    feeCents) /
-                                                  100;
-                                                const isSelected =
-                                                  selectedSlots.includes(
-                                                    slot.type,
-                                                  );
-                                                return (
-                                                  <Button
-                                                    key={slot.type}
-                                                    variant={
-                                                      isSelected
-                                                        ? "default"
-                                                        : "outline"
-                                                    }
-                                                    size="sm"
-                                                    className="justify-between text-[11px]"
-                                                    disabled={!canBook}
-                                                    onClick={() =>
-                                                      handleSelect(
-                                                        listingForDate,
-                                                        slot.type,
-                                                      )
-                                                    }
-                                                  >
-                                                    <span>{slot.label}</span>
-                                                    <span>
-                                                      ${totalPrice.toFixed(2)}
-                                                    </span>
-                                                  </Button>
-                                                );
-                                              })}
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                              <span className="text-[11px] text-[color:var(--text-muted)]">
-                                                Includes a $10/day MealScout
-                                                fee. Cleanup time is 30 minutes
-                                                after the end time.
-                                              </span>
+                                      );
+                                    })()}
+                                    {listingForDate &&
+                                    slotOptions.length > 0 ? (
+                                      <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                          {slotOptions.map((slot) => {
+                                            const feeCents =
+                                              getFeeCentsForSlots([slot.type]);
+                                            const totalPrice =
+                                              ((slot.priceCents || 0) +
+                                                feeCents) /
+                                              100;
+                                            const isSelected =
+                                              selectedSlots.includes(slot.type);
+                                            return (
                                               <Button
+                                                key={slot.type}
+                                                variant={
+                                                  isSelected
+                                                    ? "default"
+                                                    : "outline"
+                                                }
                                                 size="sm"
+                                                className="justify-between text-[11px]"
+                                                disabled={!canBook}
                                                 onClick={() =>
-                                                  handleBookSelected(
+                                                  handleSelect(
                                                     listingForDate,
+                                                    slot.type,
                                                   )
                                                 }
-                                                disabled={
-                                                  !paymentsReady ||
-                                                  selectedSlots.length === 0
-                                                }
                                               >
-                                                Book spot
-                                                {selectedTotalWithFee > 0 && (
-                                                  <span className="ml-2 text-[11px]">
-                                                    $
-                                                    {(
-                                                      (selectedTotalWithFee ||
-                                                        0) / 100
-                                                    ).toFixed(2)}
-                                                  </span>
-                                                )}
+                                                <span>{slot.label}</span>
+                                                <span>
+                                                  ${totalPrice.toFixed(2)}
+                                                </span>
                                               </Button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <p className="text-[11px] text-[color:var(--text-muted)]">
-                                            Choose a day with availability.
-                                          </p>
-                                        )}
-                                        {!platformPaymentsReady && (
-                                          <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
-                                            Payments are temporarily
-                                            unavailable.
-                                          </p>
-                                        )}
-                                        {bookings.length > 0 ? (
-                                          <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
-                                            {bookings
-                                              .slice(0, 3)
-                                              .map((booking) => (
-                                                <div
-                                                  key={`${booking.truckId}-${booking.slotType || "slot"}`}
-                                                >
-                                                  {booking.truckName}
-                                                  {booking.slotType
-                                                    ? ` - ${formatSlotLabel(
-                                                        booking.slotType,
-                                                      )}`
-                                                    : ""}
-                                                </div>
-                                              ))}
-                                            {bookings.length > 3 && (
-                                              <div>
-                                                +{bookings.length - 3} more
-                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[11px] text-[color:var(--text-muted)]">
+                                            Includes a $10/day MealScout fee.
+                                            Cleanup time is 30 minutes after the
+                                            end time.
+                                          </span>
+                                          <Button
+                                            size="sm"
+                                            onClick={() =>
+                                              handleBookSelected(listingForDate)
+                                            }
+                                            disabled={
+                                              !paymentsReady ||
+                                              selectedSlots.length === 0
+                                            }
+                                          >
+                                            Book spot
+                                            {selectedTotalWithFee > 0 && (
+                                              <span className="ml-2 text-[11px]">
+                                                $
+                                                {(
+                                                  (selectedTotalWithFee || 0) /
+                                                  100
+                                                ).toFixed(2)}
+                                              </span>
                                             )}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                                        Choose a day with availability.
+                                      </p>
+                                    )}
+                                    {!platformPaymentsReady && (
+                                      <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
+                                        Payments are temporarily unavailable.
+                                      </p>
+                                    )}
+                                    {bookings.length > 0 ? (
+                                      <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
+                                        {bookings.slice(0, 3).map((booking) => (
+                                          <div
+                                            key={`${booking.truckId}-${booking.slotType || "slot"}`}
+                                          >
+                                            {booking.truckName}
+                                            {booking.slotType
+                                              ? ` - ${formatSlotLabel(
+                                                  booking.slotType,
+                                                )}`
+                                              : ""}
                                           </div>
-                                        ) : (
-                                          <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
-                                            No bookings yet
-                                          </p>
+                                        ))}
+                                        {bookings.length > 3 && (
+                                          <div>+{bookings.length - 3} more</div>
                                         )}
                                       </div>
+                                    ) : (
+                                      <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
+                                        No bookings yet
+                                      </p>
+                                    )}
+                                  </div>
                                 );
                                 return {
                                   key,
@@ -6021,7 +6041,7 @@ export default function ParkingPassPage() {
                                   occupied: bookings.length > 0,
                                   popup: pinPopup,
                                 } satisfies MapPickerPin;
-                              }
+                              },
                             )}
                             className="h-full w-full"
                           />
@@ -6044,8 +6064,12 @@ export default function ParkingPassPage() {
                           const groupDateKeys = Array.from(
                             new Set(
                               group.listings
-                                .filter((listing) => listingDayIsSelectable(listing))
-                                .map((listing) => getListingDateKey(listing.date))
+                                .filter((listing) =>
+                                  listingDayIsSelectable(listing),
+                                )
+                                .map((listing) =>
+                                  getListingDateKey(listing.date),
+                                )
                                 .filter(Boolean),
                             ),
                           ).sort();
@@ -6108,7 +6132,9 @@ export default function ParkingPassPage() {
                           )
                             ? (bookingListing?.bookings ?? [])
                             : [];
-                          const hostLocations = hostLocationsByHostId.get(group.host.id);
+                          const hostLocations = hostLocationsByHostId.get(
+                            group.host.id,
+                          );
                           const hostPreviewAddress =
                             (hostLocations && hostLocations.length > 0
                               ? hostLocations[0].addressLabel
@@ -6118,10 +6144,13 @@ export default function ParkingPassPage() {
                               group.host.city ?? "",
                               group.host.state ?? "",
                             );
-                          const hostCardPhotoUrl = group.host.spotImageUrl || null;
+                          const hostCardPhotoUrl =
+                            group.host.spotImageUrl || null;
                           const hostMapPreviewUrl = buildGoogleLocationPhotoUrl(
                             hostPreviewAddress || null,
                           );
+                          const hostPlaceImageUrl =
+                            hostCardPhotoUrl || hostMapPreviewUrl;
                           const isActive = activeLocation?.key === group.key;
                           const shareDate = displayListing
                             ? getListingDateKey(displayListing.date)
@@ -6165,14 +6194,6 @@ export default function ParkingPassPage() {
                                   {isActive ? "Selected" : "Select spot"}
                                 </Button>
                               </div>
-                              {hostCardPhotoUrl && (
-                                <img
-                                  src={hostCardPhotoUrl}
-                                  alt={`${group.host.businessName} location`}
-                                  className="h-28 w-full rounded-xl border border-border/60 object-cover"
-                                  loading="lazy"
-                                />
-                              )}
                               {isActive && groupDateKeys.length > 1 && (
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] text-[color:var(--text-muted)]">
@@ -6199,51 +6220,61 @@ export default function ParkingPassPage() {
                                   </select>
                                 </div>
                               )}
-                              <div className="text-xs text-slate-700 space-y-1">
-                                <p>{group.host.address}</p>
-                                {displayListing && (
-                                  <p>
-                                    {displayListing.startTime === "00:00" &&
-                                    displayListing.endTime === "23:59"
-                                      ? "Any time"
-                                      : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                  </p>
-                                )}
-                                {!listingForDate && (
-                                  <p className="text-[11px] text-amber-700">
-                                    {effectiveDateKey
-                                      ? `No slots on ${format(
-                                          new Date(
-                                            `${effectiveDateKey}T00:00:00`,
-                                          ),
-                                          "EEE, MMM d",
-                                        )}.`
-                                      : "No open dates right now."}
-                                  </p>
-                                )}
-                                {listingForDate?.availableSpotNumbers && (
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    {listingForDate.availableSpotNumbers
-                                      .length > 0
-                                      ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                      : "Fully booked"}
-                                  </p>
-                                )}
-                                {bookings.length > 0 ? (
-                                  <div className="text-[11px] text-[color:var(--text-muted)]">
-                                    Booked trucks:{" "}
-                                    {bookings
-                                      .slice(0, 2)
-                                      .map((booking) => booking.truckName)
-                                      .join(", ")}
-                                    {bookings.length > 2
-                                      ? ` +${bookings.length - 2} more`
-                                      : ""}
-                                  </div>
-                                ) : (
-                                  <div className="text-[11px] text-[color:var(--text-muted)]">
-                                    No bookings yet
-                                  </div>
+                              <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex-1 text-xs text-slate-700 space-y-1">
+                                  <p>{group.host.address}</p>
+                                  {displayListing && (
+                                    <p>
+                                      {displayListing.startTime === "00:00" &&
+                                      displayListing.endTime === "23:59"
+                                        ? "Any time"
+                                        : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                    </p>
+                                  )}
+                                  {!listingForDate && (
+                                    <p className="text-[11px] text-amber-700">
+                                      {effectiveDateKey
+                                        ? `No slots on ${format(
+                                            new Date(
+                                              `${effectiveDateKey}T00:00:00`,
+                                            ),
+                                            "EEE, MMM d",
+                                          )}.`
+                                        : "No open dates right now."}
+                                    </p>
+                                  )}
+                                  {listingForDate?.availableSpotNumbers && (
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      {listingForDate.availableSpotNumbers
+                                        .length > 0
+                                        ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
+                                        : "Fully booked"}
+                                    </p>
+                                  )}
+                                  {bookings.length > 0 ? (
+                                    <div className="text-[11px] text-[color:var(--text-muted)]">
+                                      Booked trucks:{" "}
+                                      {bookings
+                                        .slice(0, 2)
+                                        .map((booking) => booking.truckName)
+                                        .join(", ")}
+                                      {bookings.length > 2
+                                        ? ` +${bookings.length - 2} more`
+                                        : ""}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-[color:var(--text-muted)]">
+                                      No bookings yet
+                                    </div>
+                                  )}
+                                </div>
+                                {hostMapPreviewUrl && (
+                                  <img
+                                    src={hostMapPreviewUrl}
+                                    alt={`${group.host.businessName} map snapshot`}
+                                    className="h-24 w-28 shrink-0 rounded-xl border border-border/60 object-cover"
+                                    loading="lazy"
+                                  />
                                 )}
                               </div>
                               {shareListingId && (
@@ -6263,10 +6294,10 @@ export default function ParkingPassPage() {
                                   />
                                 </div>
                               )}
-                              {hostMapPreviewUrl && (
+                              {hostPlaceImageUrl && (
                                 <img
-                                  src={hostMapPreviewUrl}
-                                  alt={`${group.host.businessName} map preview`}
+                                  src={hostPlaceImageUrl}
+                                  alt={`${group.host.businessName} place image`}
                                   className="h-28 w-full rounded-xl border border-border/60 object-cover"
                                   loading="lazy"
                                 />
@@ -6365,7 +6396,9 @@ export default function ParkingPassPage() {
                         const groupDateKeys = Array.from(
                           new Set(
                             group.listings
-                              .filter((listing) => listingDayIsSelectable(listing))
+                              .filter((listing) =>
+                                listingDayIsSelectable(listing),
+                              )
                               .map((listing) => getListingDateKey(listing.date))
                               .filter(Boolean),
                           ),
@@ -6427,7 +6460,9 @@ export default function ParkingPassPage() {
                         const bookings = Array.isArray(bookingListing?.bookings)
                           ? (bookingListing?.bookings ?? [])
                           : [];
-                        const hostLocations = hostLocationsByHostId.get(group.host.id);
+                        const hostLocations = hostLocationsByHostId.get(
+                          group.host.id,
+                        );
                         const hostPreviewAddress =
                           (hostLocations && hostLocations.length > 0
                             ? hostLocations[0].addressLabel
@@ -6437,10 +6472,13 @@ export default function ParkingPassPage() {
                             group.host.city ?? "",
                             group.host.state ?? "",
                           );
-                        const hostCardPhotoUrl = group.host.spotImageUrl || null;
+                        const hostCardPhotoUrl =
+                          group.host.spotImageUrl || null;
                         const hostMapPreviewUrl = buildGoogleLocationPhotoUrl(
                           hostPreviewAddress || null,
                         );
+                        const hostPlaceImageUrl =
+                          hostCardPhotoUrl || hostMapPreviewUrl;
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
                           ? getListingDateKey(displayListing.date)
@@ -6484,14 +6522,6 @@ export default function ParkingPassPage() {
                                 {isActive ? "Selected" : "Select spot"}
                               </Button>
                             </div>
-                            {hostCardPhotoUrl && (
-                              <img
-                                src={hostCardPhotoUrl}
-                                alt={`${group.host.businessName} location`}
-                                className="h-28 w-full rounded-xl border border-border/60 object-cover"
-                                loading="lazy"
-                              />
-                            )}
                             {isActive && groupDateKeys.length > 1 && (
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <span className="text-[11px] text-[color:var(--text-muted)]">
@@ -6518,54 +6548,64 @@ export default function ParkingPassPage() {
                                 </select>
                               </div>
                             )}
-                            <div className="text-xs text-slate-700">
-                              <p>{group.host.address}</p>
-                              {(group.host.city || group.host.state) && (
-                                <p>
-                                  {[group.host.city, group.host.state]
-                                    .filter(Boolean)
-                                    .join(", ")}
-                                </p>
-                              )}
-                              {displayListing && (
-                                <p>
-                                  {displayListing.startTime === "00:00" &&
-                                  displayListing.endTime === "23:59"
-                                    ? "Any time"
-                                    : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                </p>
-                              )}
-                              {!listingForDate && (
-                                <p className="text-[11px] text-amber-700">
-                                  {effectiveDateKey
-                                    ? `No slots on ${format(
-                                        new Date(
-                                          `${effectiveDateKey}T00:00:00`,
-                                        ),
-                                        "EEE, MMM d",
-                                      )}.`
-                                    : "No open dates right now."}
-                                </p>
-                              )}
-                              {!isActive &&
-                                nextBookableDateByGroup.get(group.key) && (
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    Next open:{" "}
-                                    {format(
-                                      new Date(
-                                        `${nextBookableDateByGroup.get(group.key)}T00:00:00`,
-                                      ),
-                                      "EEE, MMM d",
-                                    )}
+                            <div className="flex items-start gap-3">
+                              <div className="min-w-0 flex-1 text-xs text-slate-700">
+                                <p>{group.host.address}</p>
+                                {(group.host.city || group.host.state) && (
+                                  <p>
+                                    {[group.host.city, group.host.state]
+                                      .filter(Boolean)
+                                      .join(", ")}
                                   </p>
                                 )}
-                              {listingForDate?.availableSpotNumbers && (
-                                <p className="text-[11px] text-[color:var(--text-muted)]">
-                                  {listingForDate.availableSpotNumbers.length >
-                                  0
-                                    ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                    : "Fully booked"}
-                                </p>
+                                {displayListing && (
+                                  <p>
+                                    {displayListing.startTime === "00:00" &&
+                                    displayListing.endTime === "23:59"
+                                      ? "Any time"
+                                      : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                  </p>
+                                )}
+                                {!listingForDate && (
+                                  <p className="text-[11px] text-amber-700">
+                                    {effectiveDateKey
+                                      ? `No slots on ${format(
+                                          new Date(
+                                            `${effectiveDateKey}T00:00:00`,
+                                          ),
+                                          "EEE, MMM d",
+                                        )}.`
+                                      : "No open dates right now."}
+                                  </p>
+                                )}
+                                {!isActive &&
+                                  nextBookableDateByGroup.get(group.key) && (
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      Next open:{" "}
+                                      {format(
+                                        new Date(
+                                          `${nextBookableDateByGroup.get(group.key)}T00:00:00`,
+                                        ),
+                                        "EEE, MMM d",
+                                      )}
+                                    </p>
+                                  )}
+                                {listingForDate?.availableSpotNumbers && (
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    {listingForDate.availableSpotNumbers.length >
+                                    0
+                                      ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
+                                      : "Fully booked"}
+                                  </p>
+                                )}
+                              </div>
+                              {hostMapPreviewUrl && (
+                                <img
+                                  src={hostMapPreviewUrl}
+                                  alt={`${group.host.businessName} map snapshot`}
+                                  className="h-24 w-28 shrink-0 rounded-xl border border-border/60 object-cover"
+                                  loading="lazy"
+                                />
                               )}
                             </div>
                             {shareListingId && (
@@ -6585,10 +6625,10 @@ export default function ParkingPassPage() {
                                 />
                               </div>
                             )}
-                            {hostMapPreviewUrl && (
+                            {hostPlaceImageUrl && (
                               <img
-                                src={hostMapPreviewUrl}
-                                alt={`${group.host.businessName} map preview`}
+                                src={hostPlaceImageUrl}
+                                alt={`${group.host.businessName} place image`}
                                 className="h-28 w-full rounded-xl border border-border/60 object-cover"
                                 loading="lazy"
                               />
