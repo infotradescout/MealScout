@@ -358,6 +358,15 @@ function GoogleMapRenderer({
     const infoWindow = infoWindowRef.current;
     const existing = markersRef.current;
 
+    const setMarkerPosition = (marker: any, next: GeoPoint) => {
+      if (!marker) return;
+      if (typeof marker.setPosition === "function") {
+        marker.setPosition(next);
+        return;
+      }
+      marker.position = next;
+    };
+
     // Remove stale markers
     const incomingKeys = new Set(pins.map((p) => p.key));
     for (const [key, marker] of existing) {
@@ -370,7 +379,10 @@ function GoogleMapRenderer({
     // Add / update markers
     for (const pin of pins) {
       if (existing.has(pin.key)) {
-        existing.get(pin.key).setPosition({ lat: pin.position.lat, lng: pin.position.lng });
+        setMarkerPosition(existing.get(pin.key), {
+          lat: pin.position.lat,
+          lng: pin.position.lng,
+        });
       } else {
         const AdvancedMarkerElement = g.maps.marker?.AdvancedMarkerElement;
         const useAdvanced = Boolean(AdvancedMarkerElement && mapId);

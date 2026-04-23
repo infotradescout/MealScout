@@ -19,7 +19,6 @@ import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
-  MapTrafficCell,
 } from "@/components/maps/map-adapter.types";
 import {
   GOOGLE_MAPS_WEB_API_KEY,
@@ -364,32 +363,6 @@ type MapViewportOverlaysResponse = {
   eventLocations: EventLocation[];
 };
 
-type MapFootTrafficResponse = {
-  generatedAt: string;
-  windowMinutes: number;
-  requestedWindowMinutes?: number;
-  mode?: "avg" | "live";
-  cells: MapTrafficCell[];
-  signalQuality?: {
-    tier?: "sparse" | "emerging" | "solid";
-    isLowDensity?: boolean;
-  };
-  firstParty?: {
-    totalPings?: number;
-    totalUniqueActors?: number;
-    cells?: MapTrafficCell[];
-  };
-  supplySignals?: {
-    cells?: MapTrafficCell[];
-  };
-  googlePlaces?: {
-    enabled?: boolean;
-    used?: boolean;
-    error?: string | null;
-    cells?: MapTrafficCell[];
-  };
-};
-
 type MapRuntimeResponse = {
   hasGoogleMapsKey?: boolean;
   googleMapsApiKey?: string | null;
@@ -528,20 +501,6 @@ const formatBookingTimeRange = (startTime?: string, endTime?: string) => {
   if (start && end) return `${start} - ${end}`;
   return start || end || "Time TBD";
 };
-
-const trafficCellColor = (source: MapTrafficCell["source"]) =>
-  source === "google_places"
-    ? "#60A5FA"
-    : source === "supply_signal"
-      ? "#EF4444"
-      : "#F97316";
-
-const trafficCellFillOpacity = (source: MapTrafficCell["source"]) =>
-  source === "google_places"
-    ? 0.14
-    : source === "supply_signal"
-      ? 0.22
-      : 0.18;
 
 const offsetOverlappingCoords = (
   coords: GeoPoint,
@@ -1039,7 +998,6 @@ export default function MapPage() {
   const [googleMapsRuntimeError, setGoogleMapsRuntimeError] = useState<
     string | null
   >(null);
-  const [showFootTraffic, setShowFootTraffic] = useState(true);
   const [hostCoords, setHostCoords] = useState<Record<string, GeoPoint>>({});
   const [eventCoords, setEventCoords] = useState<Record<string, GeoPoint>>({});
   const geocodeInFlight = useRef(false);
@@ -1193,11 +1151,6 @@ export default function MapPage() {
     user?.userType === "admin" ||
     user?.userType === "super_admin";
   const showMapDiagnostics = isStaffOrAdmin;
-
-  useEffect(() => {
-    if (isStaffOrAdmin) return;
-    setShowFootTraffic(false);
-  }, [isStaffOrAdmin]);
 
   const getLocalDateKey = () => {
     const now = new Date();
@@ -1396,57 +1349,6 @@ export default function MapPage() {
       return appliedMapBounds.contains([lat, lng]);
     });
   }, [liveTrucks, appliedMapBounds]);
-
-  const trafficBounds = appliedMapBounds ?? mapBounds;
-  const trafficQueryKey = trafficBounds
-    ? [
-        "/api/map/foot-traffic",
-        Number(trafficBounds.north.toFixed(4)),
-        Number(trafficBounds.south.toFixed(4)),
-        Number(trafficBounds.east.toFixed(4)),
-        Number(trafficBounds.west.toFixed(4)),
-        zoomLevel >= 15 ? 120 : zoomLevel >= 13 ? 180 : 360,
-        "first_party",
-      ]
-    : ["/api/map/foot-traffic", "none"];
-
-  const { data: footTrafficData } = useQuery<MapFootTrafficResponse>({
-    queryKey: trafficQueryKey,
-    enabled: Boolean(showFootTraffic && trafficBounds),
-    queryFn: async () => {
-      if (!trafficBounds) {
-        return {
-          generatedAt: new Date().toISOString(),
-          windowMinutes: 180,
-          cells: [],
-        };
-      }
-      const params = new URLSearchParams({
-        north: String(trafficBounds.north),
-        south: String(trafficBounds.south),
-        east: String(trafficBounds.east),
-        west: String(trafficBounds.west),
-        windowMinutes: String(
-          zoomLevel >= 15 ? 360 : zoomLevel >= 13 ? 720 : 1440,
-        ),
-        mode: "avg",
-        includeGoogle: "false",
-      });
-      const res = await fetch(apiUrl(`/api/map/foot-traffic?${params}`));
-      if (!res.ok) throw new Error("Failed to load map foot traffic");
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
-
-  const visibleTrafficCells = useMemo(() => {
-    if (!showFootTraffic) return [];
-    const cells = Array.isArray(footTrafficData?.cells) ? footTrafficData.cells : [];
-    if (!appliedMapBounds) return cells;
-    return cells.filter((cell) => appliedMapBounds.contains([cell.lat, cell.lng]));
-  }, [showFootTraffic, footTrafficData, appliedMapBounds]);
 
   const popularityRestaurantIds = useMemo(() => {
     const ids = new Set<string>();
@@ -2867,29 +2769,6 @@ export default function MapPage() {
                   </Button>
                 )}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <Button
-                variant={showFootTraffic ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowFootTraffic((prev) => !prev)}
-                data-testid="button-toggle-foot-traffic"
-              >
-                {showFootTraffic ? "Foot traffic on" : "Foot traffic off"}
-              </Button>
-              {showFootTraffic && (
-                <span className="text-muted-foreground">
-                  {visibleTrafficCells.length} traffic cells in view
-                </span>
-              )}
-              {showFootTraffic && footTrafficData?.signalQuality?.tier && (
-                <span className="text-muted-foreground">
-                  signal: {footTrafficData.signalQuality.tier}
-                  {typeof footTrafficData.windowMinutes === "number"
-                    ? ` | window ${footTrafficData.windowMinutes}m`
-                    : ""}
-                </span>
-              )}
-            </div>
           </>
         )}
       </header>
@@ -2924,7 +2803,6 @@ export default function MapPage() {
                 center={mapCenter}
                 zoom={zoomLevel}
                 markers={adapterMarkers}
-                trafficCells={visibleTrafficCells}
                 showRoadTrafficLayer={false}
                 userLocation={userLocation}
                 isNightTheme={isNightTheme}
