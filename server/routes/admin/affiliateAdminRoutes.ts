@@ -251,7 +251,13 @@ export function registerAffiliateAdminRoutes(
           .update(users)
           .set(updates)
           .where(eq(users.id, targetUserId))
-          .returning();
+          .returning({
+            id: users.id,
+            affiliateTag: users.affiliateTag,
+            affiliatePercent: users.affiliatePercent,
+            affiliateCloserUserId: users.affiliateCloserUserId,
+            affiliateBookerUserId: users.affiliateBookerUserId,
+          });
 
         if (!updated) {
           return res.status(404).json({ message: "User not found" });

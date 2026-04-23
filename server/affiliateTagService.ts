@@ -84,7 +84,7 @@ export async function ensureAffiliateTag(userId: string): Promise<string> {
     .update(users)
     .set({ affiliateTag: tag, updatedAt: new Date() })
     .where(eq(users.id, userId))
-    .returning();
+    .returning({ affiliateTag: users.affiliateTag });
 
   if (!updated?.affiliateTag) {
     throw new Error("Failed to set affiliate tag");
@@ -137,7 +137,7 @@ export async function setAffiliateTag(
     .update(users)
     .set({ affiliateTag: tag, updatedAt: new Date() })
     .where(eq(users.id, userId))
-    .returning();
+    .returning({ affiliateTag: users.affiliateTag });
 
   if (!updated?.affiliateTag) {
     throw new Error("Failed to update affiliate tag");
