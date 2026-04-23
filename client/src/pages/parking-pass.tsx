@@ -3525,6 +3525,86 @@ export default function ParkingPassPage() {
           )}
         </div>
 
+        {isTruckViewUser && (
+          <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+            <CardContent className="p-5 space-y-4">
+              {!hasPremiumTruckTools && (
+                <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
+                  Parking pass bookings and your booking calendar are always
+                  free. Upgrade to Premium to unlock off-platform schedule
+                  stops, one-tap live location sharing, and social auto-post
+                  controls.
+                </div>
+              )}
+              {hasPremiumTruckTools && !canManageTruckProfile && (
+                <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-amber-50 p-4 text-sm text-amber-900">
+                  You can manage Parking Pass bookings and schedules, but live
+                  location and social/profile settings require profile access.
+                </div>
+              )}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Live share
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Share your live location in one tap.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={handleShareLocation}
+                  disabled={
+                    isSharingLocation ||
+                    !truckId ||
+                    !hasPremiumTruckTools ||
+                    !canManageTruckProfile
+                  }
+                >
+                  <Share2 className="h-4 w-4 mr-1" />
+                  {isSharingLocation
+                    ? "Working..."
+                    : isLive
+                      ? "Go offline"
+                      : "Go live + share"}
+                </Button>
+              </div>
+              {(truck?.instagramUrl || truck?.facebookPageUrl || truck?.xUrl) && (
+                <div className="flex flex-wrap gap-2">
+                  {truck?.instagramUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(truck.instagramUrl, "_blank")}
+                    >
+                      Open Instagram
+                    </Button>
+                  )}
+                  {truck?.facebookPageUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(truck.facebookPageUrl, "_blank")}
+                    >
+                      Open Facebook
+                    </Button>
+                  )}
+                  {truck?.xUrl && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(truck.xUrl, "_blank")}
+                    >
+                      Open X
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs value={topTab} onValueChange={(value) => setTopTab(value as any)}>
           <TabsList className="w-full justify-start pp-glass-muted rounded-xl p-1">
             <TabsTrigger value="book" className="text-sm">
@@ -5013,92 +5093,6 @@ export default function ParkingPassPage() {
                 />
               </>
             )}
-
-          {topTab === "schedule" && isTruckViewUser && (
-            <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-              <CardContent className="p-5 space-y-4">
-                {!hasPremiumTruckTools && (
-                  <div className="rounded-xl border border-[color:var(--accent-text)]/25 bg-[color:var(--accent-text)]/8 p-4 text-sm text-[color:var(--text-secondary)]">
-                    Parking pass bookings and your booking calendar are always
-                    free. Upgrade to Premium to unlock off-platform schedule
-                    stops, one-tap live location sharing, and social auto-post
-                    controls.
-                  </div>
-                )}
-                {hasPremiumTruckTools && !canManageTruckProfile && (
-                  <div className="rounded-xl border border-[color:var(--status-warning)]/30 bg-amber-50 p-4 text-sm text-amber-900">
-                    You can manage Parking Pass bookings and schedules, but live
-                    location and social/profile settings require profile access.
-                  </div>
-                )}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      Live share
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Share your live location in one tap.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={handleShareLocation}
-                    disabled={
-                      isSharingLocation ||
-                      !truckId ||
-                      !hasPremiumTruckTools ||
-                      !canManageTruckProfile
-                    }
-                  >
-                    <Share2 className="h-4 w-4 mr-1" />
-                    {isSharingLocation
-                      ? "Working..."
-                      : isLive
-                        ? "Go offline"
-                        : "Go live + share"}
-                  </Button>
-                </div>
-                {(truck?.instagramUrl ||
-                  truck?.facebookPageUrl ||
-                  truck?.xUrl) && (
-                  <div className="flex flex-wrap gap-2">
-                    {truck?.instagramUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(truck.instagramUrl, "_blank")
-                        }
-                      >
-                        Open Instagram
-                      </Button>
-                    )}
-                    {truck?.facebookPageUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          window.open(truck.facebookPageUrl, "_blank")
-                        }
-                      >
-                        Open Facebook
-                      </Button>
-                    )}
-                    {truck?.xUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(truck.xUrl, "_blank")}
-                      >
-                        Open X
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {topTab === "schedule" && isTruckViewUser && (
             <Card className="rounded-2xl pp-glass shadow-clean">
