@@ -1009,6 +1009,53 @@ app.use((req, res, next) => {
     }
   });
 
+  // In production, never return HTML for missing static assets/chunks.
+  // Returning index.html for a missing JS module causes MIME errors and a white screen.
+  app.use((req, res, next) => {
+    if (app.get("env") === "development") return next();
+    if (!["GET", "HEAD"].includes(req.method)) return next();
+
+    const pathValue = String(req.path || "");
+    const looksLikeStaticAsset =
+      pathValue.startsWith("/assets/") ||
+      pathValue.startsWith("/static/") ||
+      /\.(js|mjs|css|map|png|jpg|jpeg|gif|svg|ico|woff|woff2|webmanifest)$/i.test(
+        pathValue,
+      );
+
+    if (!looksLikeStaticAsset) return next();
+
+    const decodedPath = (() => {
+      try {
+        return decodeURIComponent(pathValue);
+      } catch {
+        return pathValue;
+      }
+    })();
+
+    const publicRoots = [
+      path.resolve(process.cwd(), "dist", "public"),
+      path.resolve(process.cwd(), "server", "public"),
+    ];
+
+    for (const root of publicRoots) {
+      if (!fs.existsSync(root)) continue;
+      const candidate = path.resolve(root, `.${decodedPath}`);
+      if (!candidate.startsWith(root)) continue;
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        return next();
+      }
+    }
+
+    return res
+      .status(404)
+      .set({
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+      })
+      .send("Asset not found");
+  });
+
   // Root endpoint health guard - handles health checks while preserving SPA functionality
   app.use("/", (req, res, next) => {
     // Only handle root path, let other paths go through
