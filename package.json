@@ -30,6 +30,8 @@
     "test:flows:e2e": "playwright test",
     "test:staff-rbac": "npx --yes tsx scripts/testStaffRBAC.ts",
     "test:admin-manual-provisioning": "npx --yes tsx scripts/testAdminManualProvisioning.ts",
+    "test:event-guardrails": "npx --yes tsx scripts/testEventGuardrails.ts",
+    "test:admin-guardrails": "npm run test:admin-manual-provisioning && npm run test:event-guardrails",
     "prep:admin-manual-provisioning": "npx --yes tsx scripts/prepAdminManualProvisioning.ts",
     "test:admin-manual-provisioning:full": "npm run prep:admin-manual-provisioning && npm run test:admin-manual-provisioning",
     "test:deal-contract": "tsx scripts/testDealCreationContract.ts",
