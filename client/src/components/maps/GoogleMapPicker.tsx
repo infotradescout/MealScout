@@ -839,10 +839,16 @@ export function GoogleMapPicker({
     string | null
   >(null);
   const useGoogle = apiKey.length > 0;
+  const shouldUseGoogleRenderer = useGoogle && !googleFailureMessage;
+
+  useEffect(() => {
+    // Clear transient failures when runtime/build keys update.
+    setGoogleFailureMessage(null);
+  }, [apiKey, mapId]);
 
   return (
     <div className={`relative h-full w-full ${className}`}>
-      {useGoogle ? (
+      {shouldUseGoogleRenderer ? (
         <GoogleMapRenderer
           apiKey={apiKey}
           mapId={mapId}

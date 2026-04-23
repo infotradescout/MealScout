@@ -2244,6 +2244,7 @@ export default function MapPage() {
     setGoogleMapsRuntimeError(
       message || "Google Maps failed to load for this domain.",
     );
+    setForceLegacyMap(true);
   }, []);
 
   useEffect(() => {
