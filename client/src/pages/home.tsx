@@ -1476,7 +1476,7 @@ export default function Home() {
                   Event Viewers
                 </p>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  View events on the map
+                  Find local events
                 </p>
               </div>
             </Link>

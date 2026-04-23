@@ -54,6 +54,9 @@ export default function EventsPage() {
     ["admin", "super_admin", "staff"].includes(String(user?.userType || "")),
   );
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [activeView, setActiveView] = useState<"discover" | "manage">(
+    "discover",
+  );
   const [intakeVisibilityFilter, setIntakeVisibilityFilter] = useState<
     "all" | "public" | "private" | "unknown"
   >("all");
@@ -140,6 +143,7 @@ export default function EventsPage() {
     (business) => Boolean(business?.isFoodTruck),
   );
   const intakeItems = Array.isArray(intakeData?.items) ? intakeData.items : [];
+  const hasOperationsTools = isStaffOrAdmin || isEventCoordinator;
 
   const createEvent = useMutation({
     mutationFn: async () => {
@@ -291,8 +295,28 @@ export default function EventsPage() {
         <div className="space-y-4">
           <h1 className="text-4xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
             <Calendar className="w-10 h-10 text-[color:var(--accent-text)]" />
-            Find Food Trucks at Events
+            Find Local Events
           </h1>
+          {hasOperationsTools && (
+            <div className="inline-flex rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
+              <Button
+                variant={activeView === "discover" ? "default" : "ghost"}
+                className="rounded-full"
+                onClick={() => setActiveView("discover")}
+                data-testid="button-events-discover-view"
+              >
+                Find local events
+              </Button>
+              <Button
+                variant={activeView === "manage" ? "default" : "ghost"}
+                className="rounded-full"
+                onClick={() => setActiveView("manage")}
+                data-testid="button-events-manage-view"
+              >
+                Organizer & ops
+              </Button>
+            </div>
+          )}
           <div className="bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-lg p-4">
             <p className="text-base text-[color:var(--text-secondary)] mb-2">
               <strong>What are these events?</strong>
@@ -304,7 +328,7 @@ export default function EventsPage() {
             </p>
           </div>
 
-          {isStaffOrAdmin && (
+          {activeView === "manage" && isStaffOrAdmin && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader>
                 <CardTitle className="text-lg">
@@ -417,7 +441,7 @@ export default function EventsPage() {
             </Card>
           )}
 
-          {isEventCoordinator && (
+          {activeView === "manage" && isEventCoordinator && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3">
@@ -842,7 +866,7 @@ export default function EventsPage() {
         </div>
 
         {/* Events Grid */}
-        {events.length === 0 ? (
+        {activeView === "discover" && events.length === 0 ? (
           <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="p-12 text-center">
               <Calendar className="w-16 h-16 text-[color:var(--text-muted)] mx-auto mb-4" />
@@ -854,7 +878,7 @@ export default function EventsPage() {
               </p>
             </CardContent>
           </Card>
-        ) : (
+        ) : activeView === "discover" ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {events.map((event) => (
               <Card
@@ -936,9 +960,10 @@ export default function EventsPage() {
               </Card>
             ))}
           </div>
-        )}
+        ) : null}
 
-        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+        {activeView === "discover" ? (
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
           <CardHeader>
             <CardTitle className="text-lg">Food Truck Directory</CardTitle>
             <p className="text-sm text-[color:var(--text-secondary)]">
@@ -974,7 +999,8 @@ export default function EventsPage() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
+        ) : null}
       </div>
     </div>
   );
