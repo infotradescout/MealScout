@@ -280,11 +280,25 @@ function GoogleMapRenderer({
   useEffect(() => {
     let cancelled = false;
     loadGoogleMaps(apiKey)
-      .then(() => {
+      .then(async () => {
         if (cancelled || !containerRef.current) return;
         const g = (window as GoogleMapsWindow).google;
         if (!g?.maps) return;
-        const map = new g.maps.Map(containerRef.current, {
+
+        let MapConstructor = g.maps.Map;
+        if (
+          typeof MapConstructor !== "function" &&
+          typeof g.maps.importLibrary === "function"
+        ) {
+          const mapsLibrary = await g.maps.importLibrary("maps");
+          MapConstructor = mapsLibrary?.Map;
+        }
+
+        if (typeof MapConstructor !== "function") {
+          throw new Error("Google Maps constructor unavailable");
+        }
+
+        const map = new MapConstructor(containerRef.current, {
           center: { lat: center.lat, lng: center.lng },
           zoom,
           disableDefaultUI: true,
