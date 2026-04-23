@@ -2371,53 +2371,6 @@ export default function MapPage() {
     businessPopularityByRestaurant,
   ]);
 
-  const zoomCardMode = false;
-
-  const mapMarkersForRender = useMemo(
-    () =>
-      zoomCardMode
-        ? adapterMarkers.filter((marker) => marker.kind === "user")
-        : adapterMarkers,
-    [zoomCardMode, adapterMarkers],
-  );
-
-  const zoomHostCards = useMemo(() => {
-    return visibleHostLocations
-      .slice(0, 6)
-      .map((host) => {
-        const coords = resolveHostCoords(host);
-        if (!coords) return null;
-        const nearbyTruck = findNearbyTruck(coords)?.truck ?? null;
-        return { host, coords, nearbyTruck };
-      })
-      .filter(
-        (
-          item,
-        ): item is { host: HostLocation; coords: GeoPoint; nearbyTruck: LiveTruck | null } =>
-          item !== null,
-      );
-  }, [visibleHostLocations, resolveHostCoords, findNearbyTruck]);
-
-  const zoomBusinessCards = useMemo(() => {
-    const seen = new Set<string>();
-    return visibleDeals
-      .filter((deal) => {
-        const id = String(deal.restaurantId || "").trim();
-        if (!id || seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      })
-      .slice(0, 6)
-      .map((deal) => {
-        const cuisine = String(deal.restaurant?.cuisineType || "").toLowerCase();
-        const name = String(deal.restaurant?.name || "").toLowerCase();
-        const isBar =
-          /bar|pub|lounge|tap|brew/.test(cuisine) ||
-          /bar|pub|lounge|tap|brew/.test(name);
-        return { deal, isBar };
-      });
-  }, [visibleDeals]);
-
   const handleAdapterMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       if (marker.kind === "deal") {
@@ -2860,7 +2813,7 @@ export default function MapPage() {
               mapId={effectiveGoogleMapsMapId || undefined}
               center={mapCenter}
               zoom={zoomLevel}
-              markers={mapMarkersForRender}
+              markers={adapterMarkers}
               showRoadTrafficLayer={false}
               userLocation={userLocation}
               isNightTheme={isNightTheme}
@@ -2900,135 +2853,6 @@ export default function MapPage() {
             </div>
           )}
 
-          {zoomCardMode && !selectedDeal && !selectedParkingHost && (
-            <div className="absolute inset-x-2 bottom-2 z-20 max-h-[75%] overflow-y-auto space-y-2 pr-1">
-              {zoomHostCards.map(({ host, coords, nearbyTruck }) => {
-                const { label } = getHostAvailabilityLabel(host);
-                return (
-                  <div
-                    key={`zoom-host-${host.id}`}
-                    className="grid grid-cols-1 gap-2 md:grid-cols-2"
-                  >
-                    <Card className="shadow-clean-lg border-orange-300">
-                      <CardContent className="p-3 space-y-1">
-                        <p className="text-xs font-semibold text-orange-600 truncate">
-                          {host.name}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          {host.address}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">{label}</p>
-                        <div className="flex gap-2 pt-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              window.open(
-                                `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
-                                "_blank",
-                              )
-                            }
-                          >
-                            Route
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              setSelectedParkingPreview({
-                                hostId: host.id,
-                                markerLat: coords.lat,
-                                markerLng: coords.lng,
-                              })
-                            }
-                          >
-                            Host details
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    {nearbyTruck ? (
-                      <Card className="shadow-clean-lg border-emerald-300 bg-emerald-50/70">
-                        <CardContent className="p-3 space-y-1">
-                          <p className="text-xs font-semibold text-emerald-700 truncate">
-                            {nearbyTruck.name}
-                          </p>
-                          <p className="text-[11px] text-emerald-800/80">
-                            Live at this host now
-                          </p>
-                          <div className="flex gap-2 pt-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                window.open(
-                                  `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
-                                  "_blank",
-                                )
-                              }
-                            >
-                              Route
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                window.location.href = `/restaurant/${nearbyTruck.id}`;
-                              }}
-                            >
-                              Truck card
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ) : null}
-                  </div>
-                );
-              })}
-
-              {zoomBusinessCards.map(({ deal, isBar }) => (
-                <Card
-                  key={`zoom-business-${deal.restaurantId}`}
-                  className={`shadow-clean-lg ${
-                    isBar ? "border-sky-300 bg-sky-50/70" : "border-amber-300 bg-amber-50/70"
-                  }`}
-                >
-                  <CardContent className="p-3 space-y-1">
-                    <p
-                      className={`text-xs font-semibold truncate ${
-                        isBar ? "text-sky-700" : "text-amber-700"
-                      }`}
-                    >
-                      {deal.restaurant?.name}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {deal.title}
-                    </p>
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          window.location.href = `/deal/${deal.id}`;
-                        }}
-                      >
-                        More info
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          window.open(
-                            `https://maps.google.com/?q=${deal.restaurant?.latitude},${deal.restaurant?.longitude}`,
-                            "_blank",
-                          )
-                        }
-                      >
-                        Route
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Selected Deal Info Card */}
