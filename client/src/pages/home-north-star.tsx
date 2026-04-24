@@ -94,10 +94,10 @@ export default function Home() {
                     List my food truck or restaurant
                   </h3>
                   <p className="text-sm text-[color:var(--text-muted)]">
-                    Join before April 1 and lock in{" "}
+                    Current rollout pricing:{" "}
                     <span className="line-through text-[color:var(--text-muted)]">$50</span>{" "}
                     <span className="font-semibold text-[color:var(--text-primary)]">$25/month</span>{" "}
-                    forever
+                    for premium visibility
                   </p>
                   <Button className="mt-4">Get Started</Button>
                 </div>
@@ -176,7 +176,7 @@ export default function Home() {
           </p>
           <p className="font-semibold text-orange-600">
             Locked promo pricing: <span className="line-through">$50</span> $25/month
-            forever for restaurants joining before April 1, 2026
+            for the current rollout
           </p>
           <p className="text-[color:var(--text-secondary)]">
             MealScout is a food truck finder, parking sourcing tool, and local

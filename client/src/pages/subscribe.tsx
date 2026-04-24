@@ -1199,7 +1199,7 @@ export default function Subscribe() {
                       <span className="line-through text-[color:var(--text-muted)]">
                         $50
                       </span>{" "}
-                      $25/month (join before April 1, 2026)
+                      $25/month current rollout pricing
                     </p>
                   </CardContent>
                 </Card>
