@@ -907,15 +907,34 @@ export default function Home() {
               </p>
             </div>
 
-            <SmartSearch
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onSearch={(query) =>
-                setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
-              }
-              className="mb-6 shadow-clean-lg"
-              placeholder="Search deals, restaurants..."
-            />
+            <div className="mb-6 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <SmartSearch
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onSearch={(query) =>
+                    setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
+                  }
+                  className="shadow-clean-lg"
+                  placeholder="Search deals, restaurants..."
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={retryLocation}
+                disabled={isLoadingLocation}
+                data-testid="button-home-search-location"
+                onPointerDown={() => {
+                  trackUxEvent("home_location_request_search", {
+                    surface: "home_search_row",
+                  });
+                }}
+              >
+                <MapPin className="w-4 h-4 mr-1" />
+                {isLoadingLocation ? "Locating..." : "Location"}
+              </Button>
+            </div>
 
             <div className="mb-5 grid grid-cols-3 gap-2">
               <Button
