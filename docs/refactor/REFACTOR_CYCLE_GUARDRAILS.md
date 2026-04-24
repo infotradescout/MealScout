@@ -4,6 +4,10 @@ Status: Active freeze window for the current refactor cycle.
 
 This document is the enforcement layer for the refactor sequence. If a change does not fit the allowed lane below, it waits until the cycle closes.
 
+Execution control artifacts for this cycle:
+- `docs/refactor/EXECUTION_DISCIPLINE_PROTOCOL.md`
+- `docs/refactor/HOTSPOT_OWNERSHIP_MATRIX.md`
+
 ## Allowed During This Cycle
 
 - Bug fixes
