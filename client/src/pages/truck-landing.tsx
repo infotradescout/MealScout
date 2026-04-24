@@ -1,392 +1,417 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
-import L from "leaflet";
-import { apiUrl } from "@/lib/api";
-import {
-  PENSACOLA_MARKET,
-  haversineMiles,
-  isPensacolaAreaCity,
-} from "@/lib/launchMarkets";
-import RoleLandingPage from "@/components/role-landing";
-import { roleLandingContent } from "@/content/role-landing";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MapPin, Calendar, ShoppingCart, TrendingUp, Users, Share2, Star, BarChart3, Sparkles, Truck } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
 
-type HostPin = {
-  id: string;
-  name: string;
-  address: string;
-  city?: string | null;
-  state?: string | null;
-  spotImageUrl?: string | null;
-  latitude: number | string | null;
-  longitude: number | string | null;
-};
-
-type DiscoveryCity = {
-  id: string;
-  name: string;
-  slug: string;
-  state?: string | null;
-  cuisines: Array<{ slug: string; count: number }>;
-};
-
-type SearchTrend = {
-  query: string;
-  count?: number;
-  lastSeen?: string | null;
-};
-
-const hostIcon = new L.Icon({
-  iconUrl:
-    "data:image/svg+xml;base64," +
-    btoa(`
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="14" cy="14" r="12" fill="#F97316" stroke="white" stroke-width="3"/>
-        <path d="M14 7l5 4v8h-3v-4h-4v4H9v-8l5-4z" fill="white"/>
-      </svg>
-    `),
-  iconSize: [28, 28],
-  iconAnchor: [14, 28],
-  popupAnchor: [0, -22],
-});
-
-export default function TruckLanding() {
-  const [hostPins, setHostPins] = useState<HostPin[]>([]);
-  const [mapError, setMapError] = useState(false);
-  const { data: cityData } = useQuery<DiscoveryCity[]>({
-    queryKey: ["/api/cities", "truck-landing"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/cities"));
-      if (!res.ok) throw new Error("Failed to fetch cities");
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-  const { data: trendingSearches = [] } = useQuery<SearchTrend[]>({
-    queryKey: ["/api/search/trending", "truck-landing"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/search/trending?limit=8&windowDays=7"));
-      if (!res.ok) throw new Error("Failed to fetch trending searches");
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-  const { data: latestSearches = [] } = useQuery<SearchTrend[]>({
-    queryKey: ["/api/search/latest", "truck-landing"],
-    queryFn: async () => {
-      const res = await fetch(apiUrl("/api/search/latest?limit=8&windowDays=7"));
-      if (!res.ok) throw new Error("Failed to fetch latest searches");
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchPins = async () => {
-      try {
-        const [hostIdsRes, locationsRes] = await Promise.all([
-          fetch(apiUrl("/api/parking-pass/host-ids")),
-          fetch(apiUrl("/api/map/locations")),
-        ]);
-        if (!hostIdsRes.ok) throw new Error("Parking pass host ids unavailable");
-        if (!locationsRes.ok) throw new Error("Map locations unavailable");
-
-        const hostIdsPayload = await hostIdsRes.json();
-        const data = await locationsRes.json();
-        if (cancelled) return;
-        const hostIdSet = new Set<string>(
-          Array.isArray(hostIdsPayload?.hostIds)
-            ? hostIdsPayload.hostIds.map((id: any) => String(id))
-            : [],
-        );
-        const pins = (data?.hostLocations || [])
-          .map((host: HostPin) => ({
-            ...host,
-            latitude:
-              host.latitude !== null ? Number(host.latitude) : host.latitude,
-            longitude:
-              host.longitude !== null
-                ? Number(host.longitude)
-                : host.longitude,
-          }))
-          .filter(
-            (host: HostPin) =>
-              typeof host.latitude === "number" &&
-              typeof host.longitude === "number" &&
-              hostIdSet.has(String((host as any).hostId ?? host.id)),
-          );
-        setHostPins(pins);
-      } catch {
-        if (!cancelled) {
-          setMapError(true);
-        }
-      }
-    };
-    fetchPins();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const mapCenter = useMemo(() => {
-    if (!hostPins.length) {
-      return { lat: 30.4213, lng: -87.2169 };
-    }
-    const latSum = hostPins.reduce(
-      (sum, host) => sum + Number(host.latitude || 0),
-      0,
-    );
-    const lngSum = hostPins.reduce(
-      (sum, host) => sum + Number(host.longitude || 0),
-      0,
-    );
-    return {
-      lat: latSum / hostPins.length,
-      lng: lngSum / hostPins.length,
-    };
-  }, [hostPins]);
-
-  const showLiveMap = hostPins.length > 0 && !mapError;
-  const pensacolaHostCount = useMemo(() => {
-    return hostPins.filter((host) => {
-      const haystack = `${host.name || ""} ${host.address || ""} ${host.city || ""} ${host.state || ""}`.toLowerCase();
-      return haystack.includes("pensacola");
-    }).length;
-  }, [hostPins]);
-  const cities = useMemo(() => {
-    const raw = Array.isArray(cityData) ? [...cityData] : [];
-    return raw
-      .sort((a, b) => {
-        const aLaunch = isPensacolaAreaCity(a.name);
-        const bLaunch = isPensacolaAreaCity(b.name);
-        if (aLaunch !== bLaunch) return aLaunch ? -1 : 1;
-
-        const aLat = Number((a as any).latitude);
-        const aLng = Number((a as any).longitude);
-        const bLat = Number((b as any).latitude);
-        const bLng = Number((b as any).longitude);
-        const aHasCoords = Number.isFinite(aLat) && Number.isFinite(aLng);
-        const bHasCoords = Number.isFinite(bLat) && Number.isFinite(bLng);
-        if (aHasCoords && bHasCoords) {
-          const aDist = haversineMiles(
-            PENSACOLA_MARKET.latitude,
-            PENSACOLA_MARKET.longitude,
-            aLat,
-            aLng,
-          );
-          const bDist = haversineMiles(
-            PENSACOLA_MARKET.latitude,
-            PENSACOLA_MARKET.longitude,
-            bLat,
-            bLng,
-          );
-          if (aDist !== bDist) return aDist - bDist;
-        }
-
-        return String(a.name || "").localeCompare(String(b.name || ""));
-      })
-      .slice(0, 12);
-  }, [cityData]);
-  const trendingQueries = (Array.isArray(trendingSearches) ? trendingSearches : [])
-    .map((row) => String(row?.query || "").trim())
-    .filter(Boolean);
-  const latestQueries = (Array.isArray(latestSearches) ? latestSearches : [])
-    .map((row) => String(row?.query || "").trim())
-    .filter(Boolean);
-  const fallbackQueries = cities
-    .slice(0, 8)
-    .map((city) => `food trucks in ${city.name}${city.state ? ` ${city.state}` : ""}`);
-  const resolvedTrending = trendingQueries.length > 0 ? trendingQueries : fallbackQueries;
-  const resolvedLatest = latestQueries.length > 0
-    ? latestQueries
-    : fallbackQueries.slice(2).concat(fallbackQueries.slice(0, 2));
-  const content = {
-    ...roleLandingContent.truck,
-    map: {
-      ...roleLandingContent.truck.map,
-      badge: showLiveMap ? "Live view" : roleLandingContent.truck.map.badge,
-    },
-    stats: [
-      { label: "Live host spots", value: String(hostPins.length) },
-      { label: "Pensacola spots", value: String(pensacolaHostCount) },
-    ],
-  };
+export default function Home() {
+  const { user, isAuthenticated } = useAuth();
 
   return (
-    <RoleLandingPage
-      content={content}
-      discoverySlot={
-        <div className="space-y-6">
-          <Card className="border shadow-clean-lg bg-[var(--card)]" style={{ borderColor: "var(--border)" }}>
-            <CardContent className="p-6 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
-                    Launch Market
-                  </p>
-                  <h2 className="text-2xl font-semibold text-[var(--ink-dark)]">
-                    Pensacola Truck Fast-Track
-                  </h2>
-                  <p className="mt-1 text-sm text-[var(--ink-dark-muted)]">
-                    We already have host locations live in Pensacola. Claim your truck, view open calls, and lock your first operating slots.
-                  </p>
-                </div>
-                <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="font-semibold text-[var(--ink-dark)]">
-                    {pensacolaHostCount} Pensacola host spot{pensacolaHostCount === 1 ? "" : "s"}
-                  </div>
-                  <div className="text-[var(--ink-dark-muted)]">
-                    currently visible on MealScout
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link href="/truck-discovery?city=Pensacola%2C%20FL">
-                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                    View Pensacola open calls
-                  </div>
-                </Link>
-                <Link href="/pensacola/spots">
-                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                    See Pensacola host spots
-                  </div>
-                </Link>
-                <Link href="/restaurant-signup?businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL">
-                  <div className="rounded-lg border px-3 py-2 text-sm font-medium text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                    Claim my truck
-                  </div>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border shadow-clean-lg bg-[var(--card)]" style={{ borderColor: "var(--border)" }}>
-            <CardContent className="p-6 space-y-4">
-              <h2 className="text-2xl font-semibold text-[var(--ink-dark)]">
-                Trending + Latest Searches
-              </h2>
-              <p className="text-sm text-[var(--ink-dark-muted)]">
-                Real search intent from MealScout users. Use this to spot active demand and open routes.
-              </p>
-
-              {resolvedTrending.length === 0 && resolvedLatest.length === 0 ? (
-                <p className="text-sm text-[var(--ink-dark-muted)]">
-                  Loading search intent...
-                </p>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
-                      Trending now
-                    </h3>
-                    <div className="mt-3 grid gap-2">
-                      {resolvedTrending.slice(0, 8).map((query) => (
-                        <Link
-                          key={`trend-${query}`}
-                          href={`/search?q=${encodeURIComponent(query)}`}
-                        >
-                          <div className="rounded-lg border bg-[var(--card)] px-3 py-2 text-sm text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                            {query}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
-                      Latest searches
-                    </h3>
-                    <div className="mt-3 grid gap-2">
-                      {resolvedLatest.slice(0, 8).map((query) => (
-                        <Link
-                          key={`latest-${query}`}
-                          href={`/search?q=${encodeURIComponent(query)}`}
-                        >
-                          <div className="rounded-lg border bg-[var(--card)] px-3 py-2 text-sm text-[var(--ink-dark)] transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                            {query}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {cities.length > 0 && (
-                <div className="pt-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--ink-dark-muted)]">
-                    Active Markets
-                  </h3>
-                  <p className="mt-1 text-xs text-[var(--ink-dark-muted)]">
-                    Ordered from our launch core outward from Pensacola.
-                  </p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {cities.map((city) => (
-                      <Link key={city.id} href={`/food-trucks/${city.slug}`}>
-                        <div className="rounded-xl border bg-[var(--card)] p-4 transition-colors hover:bg-[var(--card-muted)]" style={{ borderColor: "var(--border)" }}>
-                          <div className="text-sm font-semibold text-[var(--ink-dark)]">
-                            {city.name}{city.state ? `, ${city.state}` : ""}
-                          </div>
-                          <div className="mt-1 text-xs text-[var(--ink-dark-muted)]">
-                            {city.cuisines.length} local cuisine pages
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {cities.length === 0 && (
-                <p className="text-xs text-[var(--ink-dark-muted)]">
-                  Market pages will appear here as activity expands.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-background">
+      {/* Navigation */}
+      <nav className="border-b border-border sticky top-0 bg-background/95 backdrop-blur z-50">
+        <div className="container flex items-center justify-between h-16">
+          <div className="flex items-center space-x-2">
+            <Truck className="h-6 w-6 text-primary" />
+            <span className="text-lg font-bold">MealScout</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <a href="/map" className="text-sm hover:text-primary">Find Spots</a>
+            <a href="/search" className="text-sm hover:text-primary">Search</a>
+            <a href="/deals" className="text-sm hover:text-primary">Deals</a>
+            <a href={isAuthenticated ? "/dashboard" : getLoginUrl()} className="ml-4">
+              <Button size="sm" className="bg-primary hover:bg-primary/90">
+                {isAuthenticated ? "Dashboard" : "Get Started"}
+              </Button>
+            </a>
+          </div>
         </div>
-      }
-      mapSlot={
-        showLiveMap ? (
-          <MapContainer
-            center={[mapCenter.lat, mapCenter.lng]}
-            zoom={12}
-            scrollWheelZoom={false}
-            className="h-full w-full"
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {hostPins.map((host) => (
-              <Marker
-                key={host.id}
-                position={[Number(host.latitude), Number(host.longitude)]}
-                icon={hostIcon}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <div className="font-semibold">{host.name}</div>
-                    <div className="text-xs text-[color:var(--text-muted)]">{host.address}</div>
-                    {host.spotImageUrl && (
-                      <img
-                        src={host.spotImageUrl}
-                        alt={`${host.name} parking spot`}
-                        className="mt-2 h-24 w-full rounded-lg border border-border/50 object-cover"
-                        loading="lazy"
-                      />
-                    )}
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        ) : undefined
-      }
-    />
+      </nav>
+
+      {/* Hero Section */}
+      <section className="py-12 md:py-20 bg-gradient-to-b from-primary/5 to-background">
+        <div className="container">
+          <div className="max-w-3xl mx-auto text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-primary">Now with Local Intelligence</span>
+            </div>
+            
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
+              Never Stop <span className="text-primary">Moving</span>
+            </h1>
+            
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Find profitable parking spots, fill your schedule year-round, and manage orders all in one place. No off-season. No downtime.
+            </p>
+            
+            <a href="/map">
+              <Button size="lg" className="bg-primary hover:bg-primary/90 gap-2">
+                <MapPin className="h-5 w-5" />
+                Find Parking Spots
+              </Button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-12">
+        <div className="container">
+          <div className="text-center mb-8">
+            <p className="text-lg font-semibold max-w-2xl mx-auto">
+              The tools to find spots, fill your calendar, and run your business efficiently
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader>
+                <MapPin className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Find Parking Spots</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Browse available parking passes and book spots year-round</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Calendar className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Manage Your Schedule</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Post your schedule and manage bookings all in one place</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <ShoppingCart className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Accept Orders Online</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Premium: Let customers pre-order and pay directly through MealScout</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <TrendingUp className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Post Deals & Specials</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Premium: Create unlimited deals and track their performance</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Share2 className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Share Your Location</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Premium: Broadcast your live location to customers in real-time</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <BarChart3 className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Track Your Growth</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Premium: Get detailed analytics on bookings, customers, and deals</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Users className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Build Community</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Get recommendations, join events, and earn through our affiliate program</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Star className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Earn Commissions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Share any link and earn when customers book through your referral</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <Sparkles className="h-10 w-10 text-primary mb-2" />
+                <CardTitle>Local Intelligence</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>Premium: Get market insights and community-powered data to grow smarter</CardDescription>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Why Section */}
+      <section className="py-12 bg-muted/50">
+        <div className="container">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">Why Food Trucks Choose MealScout</h2>
+            <p className="text-lg text-muted-foreground">
+              Built for the realities of food truck operations
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <div className="text-center">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <MapPin className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Year-Round Opportunities</h3>
+              <p className="text-sm text-muted-foreground">
+                No off-season. Find parking spots and bookings every day of the year
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Truck className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Built for Trucks</h3>
+              <p className="text-sm text-muted-foreground">
+                Features designed specifically for food truck operations and workflows
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="font-semibold mb-2">Grow Your Revenue</h3>
+              <p className="text-sm text-muted-foreground">
+                Increase bookings, manage orders, and build your customer base
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-12 bg-muted/50">
+        <div className="container">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">Start Free with Premium Features</h2>
+            <p className="text-lg text-muted-foreground">
+              Get 30 days of premium access free. No credit card required. Then choose your plan.
+            </p>
+          </div>
+          
+          {/* Pricing Lists */}
+          <div className="max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Free Features */}
+              <div>
+                <h3 className="text-xl font-semibold mb-4 text-foreground">Free (After Trial)</h3>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Search visibility</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Online menu</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Schedule posting</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Parking pass bookings</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Browse events</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Basic dashboard</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Recommendations system</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Affiliate program</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Supplier directory</span>
+                  </li>
+                </ul>
+              </div>
+              {/* Premium Features */}
+              <div>
+                <h3 className="text-xl font-semibold mb-4 text-primary">Premium ($25/mo) - Early Adopter Lock-In</h3>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Everything in Free, plus:</span>
+                  </li>
+                  <li className="flex items-start gap-2 mt-3">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Map visibility</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Home page featured</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Online ordering</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Off-platform scheduling</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Post deals & specials</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Unlimited active deals</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Live location tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Social auto-posting</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Performance analytics</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Customer tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Deal performance tracking</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-primary font-bold mt-0.5">+</span>
+                    <span>Local Intelligence</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm text-muted-foreground mb-4">Early adopters lock in $25/month forever. Price will increase for new users in the future.</p>
+            <a href={getLoginUrl()}>
+              <Button size="lg" className="bg-primary hover:bg-primary/90">Start Your Free Trial</Button>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-12">
+        <div className="container">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">Start Free with Premium Features</h2>
+            <p className="text-lg text-muted-foreground">
+              Get 30 days of premium access free. No credit card required. Then choose your plan.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+            <Card className="text-center hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <CardTitle>I Own a Food Truck</CardTitle>
+                <CardDescription className="text-left">
+                  Find parking spots, manage bookings, and accept online orders
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <a href={getLoginUrl()}>
+                  <Button className="w-full">Get Started</Button>
+                </a>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <CardTitle>I Love Food Trucks</CardTitle>
+                <CardDescription className="text-left">
+                  Discover local trucks, order ahead, and support independent food truck owners
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <a href={getLoginUrl()}>
+                  <Button className="w-full">Start Exploring</Button>
+                </a>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t py-8 bg-muted/30">
+        <div className="container">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center space-x-2 mb-4">
+                <Truck className="h-6 w-6 text-primary" />
+                <span className="text-lg font-bold">MealScout</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The platform built for food trucks to find spots, fill schedules, and thrive year-round
+              </p>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">For Trucks</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><a href="/map" className="hover:text-foreground">Find Spots</a></li>
+                <li><a href="/search" className="hover:text-foreground">Search</a></li>
+                <li><a href="/deals" className="hover:text-foreground">Deals</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">Resources</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-foreground">Help Center</a></li>
+                <li><a href="#" className="hover:text-foreground">Contact Us</a></li>
+                <li><a href="#" className="hover:text-foreground">Blog</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="font-semibold mb-3">Legal</h3>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><a href="#" className="hover:text-foreground">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-foreground">Terms of Service</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-6 pt-6 border-t text-center text-sm text-muted-foreground">
+            <p>&copy; {new Date().getFullYear()} MealScout. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
