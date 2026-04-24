@@ -1,10 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Calendar, ShoppingCart, TrendingUp, Users, Share2, Star, BarChart3, Sparkles, Truck } from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { useAuth } from "@/hooks/useAuth";
 
-export default function Home() {
+export default function TruckLanding() {
   const { user, isAuthenticated } = useAuth();
 
   return (
@@ -20,11 +19,13 @@ export default function Home() {
             <a href="/map" className="text-sm hover:text-primary">Find Spots</a>
             <a href="/search" className="text-sm hover:text-primary">Search</a>
             <a href="/deals" className="text-sm hover:text-primary">Deals</a>
-            <a href={isAuthenticated ? "/dashboard" : getLoginUrl()} className="ml-4">
-              <Button size="sm" className="bg-primary hover:bg-primary/90">
-                {isAuthenticated ? "Dashboard" : "Get Started"}
-              </Button>
-            </a>
+            {isAuthenticated && (
+              <a href="/dashboard" className="ml-4">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">
+                  Dashboard
+                </Button>
+              </a>
+            )}
           </div>
         </div>
       </nav>
