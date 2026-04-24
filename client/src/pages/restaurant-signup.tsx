@@ -391,7 +391,10 @@ export default function RestaurantSignup() {
           restaurantData: restaurantDataPayload,
         });
         const payload = await res.json();
-        return payload?.restaurant || payload;
+        return {
+          ...payload,
+          restaurant: payload?.restaurant || payload,
+        };
       }
       // Check if user is already authenticated
       if (isAuthenticated && user) {
@@ -412,7 +415,10 @@ export default function RestaurantSignup() {
           requestData,
         );
         const payload = await res.json();
-        return payload?.restaurant || payload;
+        return {
+          ...payload,
+          restaurant: payload?.restaurant || payload,
+        };
       } else {
         // For new registrations, get user data from signup form
         const signupData = signupForm.getValues();
@@ -433,15 +439,18 @@ export default function RestaurantSignup() {
           requestData,
         );
         const payload = await res.json();
-        return payload?.restaurant || payload;
+        return {
+          ...payload,
+          restaurant: payload?.restaurant || payload,
+        };
       }
     },
-    onSuccess: (restaurant: any) => {
-      if (restaurant?.requiresEmailVerification) {
+    onSuccess: async (result: any) => {
+      if (result?.requiresEmailVerification) {
         toast({
           title: "Verify your email",
           description:
-            restaurant?.message ||
+            result?.message ||
             "We sent a verification link to your email. Verify it, then log in to continue.",
         });
         try {
@@ -456,6 +465,14 @@ export default function RestaurantSignup() {
         return;
       }
 
+      const restaurant = result?.restaurant || result;
+
+      if (result?.user) {
+        queryClient.setQueryData(["/api/auth/user"], result.user);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/restaurants/my-restaurants"] });
+
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "restaurant-signup",
         stage: "restaurant_profile_created",
@@ -466,7 +483,9 @@ export default function RestaurantSignup() {
         title: COPY.notifications.restaurant.successTitle,
         description: COPY.notifications.restaurant.successDescription,
       });
-      setLocation("/restaurant-owner-dashboard?src=onboarding&showOnboardingPrompt=1");
+      window.location.assign(
+        "/restaurant-owner-dashboard?src=onboarding&showOnboardingPrompt=1",
+      );
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
