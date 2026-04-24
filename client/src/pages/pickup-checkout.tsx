@@ -24,8 +24,13 @@ import {
   AlertCircle,
   CreditCard,
   Banknote,
+  ExternalLink,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
+import {
+  isInAppBrowser,
+  openCurrentUrlInExternalBrowser,
+} from "@/lib/inAppBrowser";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
@@ -74,6 +79,8 @@ export default function CheckoutPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const inAppBrowser =
+    typeof window !== "undefined" ? isInAppBrowser(window.navigator.userAgent) : false;
 
   useEffect(() => {
     const restaurantCart = getCart().filter(
@@ -228,6 +235,25 @@ export default function CheckoutPage() {
       <Navigation />
       <div className="max-w-lg mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+
+        {inAppBrowser && paymentMethod === "card" && (
+          <div className="flex flex-col gap-3 text-amber-900 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                Card payments can fail inside Facebook and Messenger in-app browsers. Open this page in Safari or Chrome to complete payment.
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => openCurrentUrlInExternalBrowser()}
+            >
+              Open in Browser <ExternalLink className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         {!orderingEnabled && (
           <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
@@ -405,7 +431,12 @@ export default function CheckoutPage() {
         <Button
           className="w-full h-12 text-base"
           onClick={createOrder}
-          disabled={isCreating || !contact.name.trim() || !orderingEnabled}
+          disabled={
+            isCreating ||
+            !contact.name.trim() ||
+            !orderingEnabled ||
+            (inAppBrowser && paymentMethod === "card")
+          }
         >
           {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
           {paymentMethod === "cash"

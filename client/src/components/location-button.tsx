@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserAddress } from "@shared/schema";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
+import { isInAppBrowser } from "@/lib/inAppBrowser";
 
 interface LocationButtonProps {
   onLocationUpdate: (location: { lat: number; lng: number }) => void;
@@ -96,13 +97,7 @@ export default function LocationButton({
         userAgent
       );
 
-    // Detect Facebook in-app browser
-    const isFacebookBrowser =
-      userAgent.includes("fban") ||
-      userAgent.includes("fbav") ||
-      userAgent.includes("fb_iab") ||
-      userAgent.includes("fb//") ||
-      (userAgent.includes("mobile") && userAgent.includes("facebook"));
+    const isFacebookBrowser = isInAppBrowser(userAgent);
 
     return {
       isWindows,
@@ -219,7 +214,7 @@ export default function LocationButton({
     if (platform.isFacebookBrowser) {
       console.log("🔵 Facebook in-app browser detected - using IP fallback");
       onLocationError(
-        "For the best experience, open this in your regular browser. Using approximate location based on your internet connection."
+        "Facebook or Messenger in-app browser is limiting location access. Open this page in Safari or Chrome for precise GPS. Using approximate location for now."
       );
 
       // Try IP fallback immediately for Facebook browser

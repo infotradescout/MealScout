@@ -14,8 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, ExternalLink, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  isInAppBrowser,
+  openCurrentUrlInExternalBrowser,
+} from "@/lib/inAppBrowser";
 
 const stripePublicKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null;
@@ -66,6 +70,8 @@ function PaymentForm({
   const elements = useElements();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const inAppBrowser =
+    typeof window !== "undefined" ? isInAppBrowser(window.navigator.userAgent) : false;
 
   const waitForBookingConfirmation = async () => {
     const startedAt = Date.now();
@@ -152,6 +158,25 @@ function PaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {inAppBrowser && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+          <div className="flex items-start gap-2 text-sm">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              Stripe payment may fail inside Facebook or Messenger in-app browsers. Open this page in Safari or Chrome to complete payment.
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            onClick={() => openCurrentUrlInExternalBrowser()}
+          >
+            Open in Browser <ExternalLink className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Pricing Breakdown */}
       <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 space-y-2 text-sm">
         <div className="flex items-center justify-between text-[color:var(--text-secondary)]">
@@ -202,7 +227,7 @@ function PaymentForm({
         <Button
           type="submit"
           className="flex-1"
-          disabled={!stripe || isProcessing}
+          disabled={!stripe || isProcessing || inAppBrowser}
         >
           {isProcessing ? (
             <>
