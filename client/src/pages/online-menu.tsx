@@ -137,7 +137,7 @@ export default function MenuPage() {
     setCart(getCart());
   }, []);
 
-  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; cuisineType?: string | null }>({
+  const menusQuery = useQuery<{ menus: Menu[]; orderingEnabled: boolean; restaurantName?: string | null; restaurantCity?: string | null; isFoodTruck?: boolean; businessType?: string | null; cuisineType?: string | null }>({
     queryKey: ["/api/menus", restaurantId],
     queryFn: async () => {
       const res = await fetch(
@@ -154,15 +154,18 @@ export default function MenuPage() {
   const activeMenus = menus.filter((m) => m.isActive);
   const restaurantName = menusQuery.data?.restaurantName ?? null;
   const restaurantCity = menusQuery.data?.restaurantCity ?? null;
-  const isFoodTruck = menusQuery.data?.isFoodTruck ?? false;
+  const businessType = String(menusQuery.data?.businessType || "").toLowerCase();
+  const isFoodTruck = menusQuery.data?.isFoodTruck ?? businessType === "food_truck";
+  const isBar = businessType === "bar";
   const cuisineType = menusQuery.data?.cuisineType ?? null;
-  const entityType = isFoodTruck ? "Food Truck" : "Restaurant";
+  const entityType = isFoodTruck ? "food truck" : isBar ? "bar" : "restaurant";
+  const orderingModeText = isFoodTruck ? "pickup order" : "pickup or dine-in order";
   const seoTitle = restaurantName
     ? `${restaurantName} Menu${restaurantCity ? ` - ${restaurantCity}` : ""} | MealScout`
     : `Online Menu | MealScout`;
   const seoDescription = restaurantName
-    ? `Order online from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}. Browse the full menu${cuisineType ? ` — ${cuisineType}` : ""} and place a pickup order on MealScout.`
-    : `Browse the full menu and place a pickup order on MealScout.`;
+    ? `Order online from ${restaurantName}${restaurantCity ? ` in ${restaurantCity}` : ""}. Browse the full menu${cuisineType ? ` — ${cuisineType}` : ""} and place a ${orderingModeText} on MealScout.`
+    : `Browse the full menu and place a ${orderingModeText} on MealScout.`;
 
   useEffect(() => {
     if (activeMenus.length > 0 && !selectedMenuId) {
@@ -276,7 +279,7 @@ export default function MenuPage() {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>
                   Menu browsing is always free. Online ordering is not yet
-                  active for this restaurant — browse the menu and place your
+                  active for this {entityType} — browse the menu and place your
                   order in person.
                 </span>
               </div>

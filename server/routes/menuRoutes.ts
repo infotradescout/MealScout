@@ -260,7 +260,14 @@ export function registerMenuRoutes(app: Express) {
       // We also check trial status via users.trialEndsAt.
       let orderingEnabled = false;
       const [restaurantRow] = await db
-        .select({ ownerId: restaurants.ownerId, name: restaurants.name, city: restaurants.city, isFoodTruck: restaurants.isFoodTruck, cuisineType: restaurants.cuisineType })
+        .select({
+          ownerId: restaurants.ownerId,
+          name: restaurants.name,
+          city: restaurants.city,
+          isFoodTruck: restaurants.isFoodTruck,
+          businessType: restaurants.businessType,
+          cuisineType: restaurants.cuisineType,
+        })
         .from(restaurants)
         .where(eq(restaurants.id, restaurantId))
         .limit(1);
@@ -305,6 +312,7 @@ export function registerMenuRoutes(app: Express) {
         restaurantName: restaurantRow?.name ?? null,
         restaurantCity: restaurantRow?.city ?? null,
         isFoodTruck: restaurantRow?.isFoodTruck ?? false,
+        businessType: restaurantRow?.businessType ?? null,
         cuisineType: restaurantRow?.cuisineType ?? null,
       });
     }),

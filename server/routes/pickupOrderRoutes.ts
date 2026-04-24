@@ -481,6 +481,16 @@ export function registerPickupOrderRoutes(app: Express) {
       if (!restaurant || !restaurant.isActive) {
         return res.status(400).json({ message: "Restaurant not available" });
       }
+      if (
+        body.orderType === "dine_in" &&
+        (restaurant.isFoodTruck ||
+          String((restaurant as any).businessType || "").toLowerCase() ===
+            "food_truck")
+      ) {
+        return res.status(400).json({
+          message: "Food truck online orders must be pickup orders.",
+        });
+      }
 
       // Verify this restaurant has an active ordering subscription
       if (restaurant.ownerId) {

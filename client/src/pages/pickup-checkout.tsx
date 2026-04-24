@@ -60,6 +60,8 @@ function clearCartForRestaurant(restaurantId: string) {
 interface MenuInfo {
   acceptsCash: boolean;
   hidePlatformFee: boolean;
+  businessType: string | null;
+  isFoodTruck: boolean;
 }
 
 export default function CheckoutPage() {
@@ -94,12 +96,19 @@ export default function CheckoutPage() {
         .then((r) => r.json())
         .then((payload: any) => {
           setOrderingEnabled(Boolean(payload?.orderingEnabled));
+          const businessType = String(payload?.businessType || "").toLowerCase();
+          const isFoodTruck = Boolean(payload?.isFoodTruck || businessType === "food_truck");
+          if (isFoodTruck) {
+            setOrderType("pickup");
+          }
           const menus = Array.isArray(payload?.menus) ? payload.menus : [];
           const activeMenu = menus.find((m: any) => m.isActive);
           if (activeMenu) {
             setMenuInfo({
               acceptsCash: activeMenu.acceptsCash,
               hidePlatformFee: activeMenu.hidePlatformFee,
+              businessType,
+              isFoodTruck,
             });
           }
         })
@@ -129,6 +138,13 @@ export default function CheckoutPage() {
   const platformFee = menuInfo?.hidePlatformFee ? 0 : 100;
   const total = subtotal + platformFee;
   const menuId = cart[0].menuId;
+  const isFoodTruck = Boolean(menuInfo?.isFoodTruck);
+  const entityType =
+    menuInfo?.businessType === "bar"
+      ? "bar"
+      : isFoodTruck
+        ? "food truck"
+        : "restaurant";
 
   const createOrder = async () => {
     if (!contact.name.trim()) {
@@ -259,7 +275,7 @@ export default function CheckoutPage() {
           <div className="flex items-center gap-2 text-amber-800 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
             <AlertCircle className="w-4 h-4 shrink-0" />
             Menu browsing is always free. Online ordering is not yet active
-            for this restaurant — please order in person.
+            for this {entityType} — please order in person.
           </div>
         )}
 
@@ -373,15 +389,17 @@ export default function CheckoutPage() {
                   Pickup
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="dine_in" id="ot-dinein" />
-                <Label
-                  htmlFor="ot-dinein"
-                  className="cursor-pointer font-normal"
-                >
-                  Dine In
-                </Label>
-              </div>
+              {!isFoodTruck && (
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem value="dine_in" id="ot-dinein" />
+                  <Label
+                    htmlFor="ot-dinein"
+                    className="cursor-pointer font-normal"
+                  >
+                    Dine In
+                  </Label>
+                </div>
+              )}
             </RadioGroup>
           </CardContent>
         </Card>
@@ -413,7 +431,8 @@ export default function CheckoutPage() {
                     htmlFor="pm-cash"
                     className="cursor-pointer font-normal flex items-center gap-1"
                   >
-                    <Banknote className="w-4 h-4" /> Cash at Pickup
+                    <Banknote className="w-4 h-4" />{" "}
+                    {isFoodTruck ? "Cash at Pickup" : "Cash In Person"}
                   </Label>
                 </div>
               )}
