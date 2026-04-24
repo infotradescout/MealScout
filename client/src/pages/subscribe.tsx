@@ -913,10 +913,6 @@ export default function Subscribe() {
     setSubscriptionState({ status: "selecting" });
   };
 
-  const showNewSubscription = () => {
-    setSubscriptionState({ status: "selecting" });
-  };
-
   if (isLoading) {
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
@@ -988,6 +984,10 @@ export default function Subscribe() {
 
   // Determine which view to show based on subscription status
   const hasActiveSubscription = currentSubscription?.status === "active";
+  const hasManagedBilling =
+    hasActiveSubscription &&
+    !currentSubscription?.trialAccess &&
+    !currentSubscription?.lifetimeAccess;
   const showManagement =
     hasActiveSubscription && subscriptionState.status === "selecting";
 
@@ -1064,28 +1064,28 @@ export default function Subscribe() {
           <div className="space-y-6">
             <SubscriptionManagement />
 
-            {/* Option to upgrade/change plan */}
-            <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(168,85,247,0.12))] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 text-center">
-                <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
-                  Need to update your plan?
-                </h3>
-                <p className="text-sm text-[color:var(--text-secondary)] mb-2">
-                  You can switch plans or add a promo code anytime.
-                </p>
-                <p className="text-xs text-[color:var(--accent-text)] font-medium mb-4">
-                  Have a code? Add it in the next step.
-                </p>
-                <Button
-                  onClick={showNewSubscription}
-                  variant="outline"
-                  className="w-full"
-                  data-testid="button-change-plan"
-                >
-                  Manage Plan & Promo
-                </Button>
-              </CardContent>
-            </Card>
+            {hasManagedBilling && (
+              <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(168,85,247,0.12))] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="p-6 text-center">
+                  <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
+                    Need to update your plan?
+                  </h3>
+                  <p className="text-sm text-[color:var(--text-secondary)] mb-2">
+                    You can manage payment methods and invoices through the
+                    billing portal.
+                  </p>
+                  <Link href="/subscription/manage">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      data-testid="button-change-plan"
+                    >
+                      Open Billing Overview
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 

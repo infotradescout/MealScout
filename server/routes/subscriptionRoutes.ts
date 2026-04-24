@@ -491,44 +491,12 @@ export function registerSubscriptionRoutes(
 
       const subscription = await stripe.subscriptions.retrieve(
         hydratedUser.stripeSubscriptionId,
-        {
-          expand: ["latest_invoice.payment_intent"],
-        },
       );
-
-      if (subscription.status === "incomplete") {
-        const latestInvoice = subscription.latest_invoice;
-        if (latestInvoice && typeof latestInvoice === "object") {
-          const invoice = latestInvoice as any;
-          console.log(
-            `Force paying invoice ${invoice.id} to complete subscription...`,
-          );
-
-          try {
-            const paidInvoice = await stripe.invoices.pay(invoice.id);
-            console.log(
-              `Successfully paid invoice ${invoice.id}, status: ${paidInvoice.status}`,
-            );
-
-            const refreshedSubscription = await stripe.subscriptions.retrieve(
-              hydratedUser.stripeSubscriptionId,
-            );
-            res.json({
-              status: refreshedSubscription.status,
-              currentPeriodEnd: (refreshedSubscription as any)
-                .current_period_end,
-              cancelAtPeriodEnd: (refreshedSubscription as any)
-                .cancel_at_period_end,
-            });
-            return;
-          } catch (payError: any) {
-            console.log(`Error paying invoice: ${payError.message}`);
-          }
-        }
-      }
+      const hasAccess = ["active", "trialing"].includes(subscription.status);
 
       res.json({
         status: subscription.status,
+        hasAccess,
         currentPeriodEnd: (subscription as any).current_period_end,
         cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
       });
