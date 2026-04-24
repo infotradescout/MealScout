@@ -617,4 +617,62 @@ router.get('/county/fallback', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/referral/ref/:tag
+ * Handle affiliate tag redirect - record referral click and set cookies
+ * Public endpoint (no auth required) for tracking affiliate links
+ */
+router.get('/ref/:tag', async (req, res) => {
+  try {
+    const { tag } = req.params;
+    if (!tag) {
+      return res.status(400).json({ error: 'Tag is required' });
+    }
+
+    // Resolve the affiliate tag to the affiliate user ID
+    const { resolveAffiliateUserId } = await import('./affiliateTagService');
+    const affiliateUserId = await resolveAffiliateUserId(tag);
+    
+    if (!affiliateUserId) {
+      // Invalid tag - still set cookie but with null value
+      res.cookie('referralTag', tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+        httpOnly: false,
+        sameSite: 'lax',
+      });
+      return res.status(404).json({ error: 'Affiliate tag not found' });
+    }
+
+    // Record the referral click
+    const { recordReferralClick } = await import('./referralService');
+    const result = await recordReferralClick(
+      affiliateUserId,
+      req.originalUrl || '/',
+      req.get('user-agent') || undefined,
+      req.ip || undefined,
+    );
+
+    // Set cookies for tracking
+    if (result?.referralId) {
+      res.cookie('referralId', result.referralId, {
+        maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+        httpOnly: true,
+        sameSite: 'lax',
+      });
+    }
+
+    // Also set the tag for reference
+    res.cookie('referralTag', tag, {
+      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+      httpOnly: false,
+      sameSite: 'lax',
+    });
+
+    res.json({ success: true, affiliateUserId, referralId: result?.referralId });
+  } catch (error) {
+    console.error('Failed to handle affiliate redirect:', error);
+    res.status(500).json({ error: 'Failed to process referral' });
+  }
+});
+
 export default router;

@@ -7,8 +7,23 @@ export default function AffiliateRedirect() {
 
   useEffect(() => {
     if (match && params?.tag) {
-      // Redirect to home page with affiliate tag as query parameter
-      setLocation(`/?ref=${encodeURIComponent(params.tag)}`);
+      const tag = encodeURIComponent(params.tag);
+      
+      // Call backend to record the referral click and set cookies
+      fetch(`/api/referral/ref/${tag}`, {
+        method: "GET",
+        credentials: "include", // Include cookies
+      })
+        .then(() => {
+          // Redirect to home page with affiliate tag as query parameter
+          // The backend will have set the referral cookies
+          setLocation(`/?ref=${tag}`);
+        })
+        .catch((error) => {
+          console.error("Failed to record referral:", error);
+          // Still redirect even if tracking fails
+          setLocation(`/?ref=${tag}`);
+        });
     }
   }, [match, params, setLocation]);
 
