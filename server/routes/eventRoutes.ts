@@ -287,8 +287,12 @@ export function registerEventRoutes(
             })
             .from(eventBookings)
             .innerJoin(restaurants, eq(eventBookings.truckId, restaurants.id))
-            .where(inArray(eventBookings.eventId, eventIds))
-            .where(inArray(eventBookings.status, ["confirmed"]))
+            .where(
+              and(
+                inArray(eventBookings.eventId, eventIds),
+                inArray(eventBookings.status, ["confirmed"]),
+              ),
+            )
             .orderBy(asc(eventBookings.bookingConfirmedAt))
         : [];
 
@@ -300,8 +304,12 @@ export function registerEventRoutes(
               count: sql<number>`count(*)`,
             })
             .from(eventBookings)
-            .where(inArray(eventBookings.eventId, eventIds))
-            .where(inArray(eventBookings.status, ["pending"]))
+            .where(
+              and(
+                inArray(eventBookings.eventId, eventIds),
+                inArray(eventBookings.status, ["pending"]),
+              ),
+            )
             .groupBy(eventBookings.eventId)
         : [];
 
@@ -1053,8 +1061,12 @@ export function registerEventRoutes(
               count: sql<number>`count(*)`,
             })
             .from(eventBookings)
-            .where(inArray(eventBookings.eventId, eventIds))
-            .where(inArray(eventBookings.status, ["confirmed", "pending"]))
+            .where(
+              and(
+                inArray(eventBookings.eventId, eventIds),
+                inArray(eventBookings.status, ["confirmed", "pending"]),
+              ),
+            )
             .groupBy(eventBookings.eventId, eventBookings.status)
         : [];
 

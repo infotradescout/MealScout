@@ -1241,9 +1241,13 @@ export function registerHostRoutes(app: Express) {
         const existingBooking = await db
           .select()
           .from(eventBookings)
-          .where(eq(eventBookings.eventId, passId))
-          .where(eq(eventBookings.truckId, truckId))
-          .where(inArray(eventBookings.status, ["pending", "confirmed"]))
+          .where(
+            and(
+              eq(eventBookings.eventId, event.id),
+              eq(eventBookings.truckId, truckId),
+              inArray(eventBookings.status, ["pending", "confirmed"]),
+            ),
+          )
           .limit(1);
 
         if (existingBooking.length > 0) {

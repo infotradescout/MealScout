@@ -830,9 +830,11 @@ export function registerHostEventsRoutes(app: Express) {
                     count: sql<number>`count(*)`,
                   })
                   .from(eventBookings)
-                  .where(inArray(eventBookings.eventId, affectedEventIds))
                   .where(
-                    inArray(eventBookings.status, ["confirmed", "pending"]),
+                    and(
+                      inArray(eventBookings.eventId, affectedEventIds),
+                      inArray(eventBookings.status, ["confirmed", "pending"]),
+                    ),
                   )
                   .groupBy(eventBookings.eventId)
               : [];
@@ -865,9 +867,11 @@ export function registerHostEventsRoutes(app: Express) {
                     slotType: eventBookings.slotType,
                   })
                   .from(eventBookings)
-                  .where(inArray(eventBookings.eventId, affectedEventIds))
                   .where(
-                    inArray(eventBookings.status, ["confirmed", "pending"]),
+                    and(
+                      inArray(eventBookings.eventId, affectedEventIds),
+                      inArray(eventBookings.status, ["confirmed", "pending"]),
+                    ),
                   )
               : [];
 

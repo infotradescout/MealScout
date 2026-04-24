@@ -521,8 +521,12 @@ export function registerBookingRoutes(
         const remainingBookings = await db
           .select({ id: eventBookings.id })
           .from(eventBookings)
-          .where(eq(eventBookings.eventId, booking.eventId))
-          .where(inArray(eventBookings.status, ["pending", "confirmed"]));
+          .where(
+            and(
+              eq(eventBookings.eventId, booking.eventId),
+              inArray(eventBookings.status, ["pending", "confirmed"]),
+            ),
+          );
 
         const newStatus = remainingBookings.length > 0 ? "open" : "open";
 
