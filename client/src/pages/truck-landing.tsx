@@ -82,54 +82,74 @@ export default function TruckLanding() {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Card>
-              <CardHeader>
-                <MapPin className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Find Parking Spots</CardTitle>
-                <CardDescription>Browse available spots and book year-round</CardDescription>
-              </CardHeader>
-            </Card>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+            {/* Free Features */}
+            <div>
+              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
+              <Card>
+                <CardHeader>
+                  <MapPin className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Find Parking Spots</CardTitle>
+                  <CardDescription>Browse available spots and book year-round</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <Calendar className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Manage Schedule</CardTitle>
-                <CardDescription>Post your schedule and manage bookings</CardDescription>
-              </CardHeader>
-            </Card>
+            <div>
+              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
+              <Card>
+                <CardHeader>
+                  <Calendar className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Manage Schedule</CardTitle>
+                  <CardDescription>Post your schedule and manage bookings</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <ShoppingCart className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Accept Orders Online</CardTitle>
-                <CardDescription>Premium: Let customers pre-order and pay</CardDescription>
-              </CardHeader>
-            </Card>
+            <div>
+              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
+              <Card>
+                <CardHeader>
+                  <Share2 className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Affiliate System</CardTitle>
+                  <CardDescription>Earn commissions by sharing links</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <TrendingUp className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Track Growth</CardTitle>
-                <CardDescription>Analytics, insights, and performance tracking</CardDescription>
-              </CardHeader>
-            </Card>
+            {/* Premium Features */}
+            <div>
+              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
+              <Card>
+                <CardHeader>
+                  <ShoppingCart className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Accept Orders Online</CardTitle>
+                  <CardDescription>Let customers pre-order and pay</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <Share2 className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Affiliate System</CardTitle>
-                <CardDescription>Earn commissions by sharing links</CardDescription>
-              </CardHeader>
-            </Card>
+            <div>
+              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
+              <Card>
+                <CardHeader>
+                  <TrendingUp className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Track Growth</CardTitle>
+                  <CardDescription>Analytics, insights, and performance tracking</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <Sparkles className="h-8 w-8 text-primary mb-2" />
-                <CardTitle className="text-lg">Local Intelligence</CardTitle>
-                <CardDescription>Premium: Market insights and trends</CardDescription>
-              </CardHeader>
-            </Card>
+            <div>
+              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
+              <Card>
+                <CardHeader>
+                  <Sparkles className="h-8 w-8 text-primary mb-2" />
+                  <CardTitle className="text-lg">Local Intelligence</CardTitle>
+                  <CardDescription>Market insights and trends</CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
           </div>
         </div>
       </section>
