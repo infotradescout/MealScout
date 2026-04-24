@@ -140,6 +140,7 @@ const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
+const AffiliateRedirect = lazy(() => import("@/pages/affiliate-redirect"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -198,6 +199,7 @@ const publicRoutePrefixes = [
   "/menu/",
   "/checkout/",
   "/order-confirmation/",
+  "/ref/",
 ];
 
 const isPublicPath = (path: string) =>
@@ -274,6 +276,7 @@ function Router() {
       <Switch>
         {shouldUseGuestRoutes ? (
           <>
+            <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/" component={Home} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
@@ -395,6 +398,7 @@ function Router() {
           </>
         ) : (
           <>
+            <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/" component={Home} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
