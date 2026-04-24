@@ -3,7 +3,7 @@
  * Online Menu Management – CRUD for menus, categories, items, variants, modifiers
  * and menu import infrastructure (CSV, PDF, UberEats/DoorDash/POS adapters).
  *
- * All write endpoints require: isAuthenticated + verified restaurant ownership.
+ * All write endpoints require: isAuthenticated + business profile access.
  * Public read endpoints are unauthenticated (customer-facing menu view).
  *
  * Platform fee: $1 USD per order. Configurable per-menu via hidePlatformFee flag.
@@ -41,7 +41,7 @@ import {
   type MenuItemModifier,
 } from "@shared/schema";
 import { eq, and, asc, inArray } from "drizzle-orm";
-import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
+import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
@@ -89,11 +89,14 @@ async function assertOwnsRestaurant(
   if (["admin", "super_admin", "staff"].includes(String(userType || ""))) {
     return;
   }
-  const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
+  const ok = await storage.verifyRestaurantOwnership(
+    restaurantId,
+    userId,
+    "manageProfile",
+  );
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
-
 async function assertOwnsMenu(userId: string, menuId: string, userType?: string) {
   const [menu] = await db.select().from(menus).where(eq(menus.id, menuId));
   if (!menu)
@@ -291,7 +294,6 @@ export function registerMenuRoutes(app: Express) {
   app.get(
     "/api/owner/menus/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId, req.user?.userType);
@@ -313,7 +315,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuSchema.parse(req.body);
       await assertOwnsRestaurant(
@@ -347,7 +348,6 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menus/:menuId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
@@ -373,7 +373,6 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menus/:menuId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
@@ -394,7 +393,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menu-categories",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuCategorySchema.parse(req.body);
       await assertOwnsMenu(req.user.id, body.menuId, req.user?.userType);
@@ -410,7 +408,6 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-categories/:categoryId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { categoryId } = req.params;
       const [cat] = await db
@@ -440,7 +437,6 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menu-categories/:categoryId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { categoryId } = req.params;
       const [cat] = await db
@@ -466,7 +462,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menu-items",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const body = insertMenuItemSchema.parse(req.body);
       await assertOwnsMenu(req.user.id, body.menuId, req.user?.userType);
@@ -482,7 +477,6 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-items/:itemId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
       await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
@@ -508,7 +502,6 @@ export function registerMenuRoutes(app: Express) {
   app.delete(
     "/api/owner/menu-items/:itemId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
       await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
@@ -530,7 +523,6 @@ export function registerMenuRoutes(app: Express) {
   app.patch(
     "/api/owner/menu-items/:itemId/inventory",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
       await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
@@ -561,7 +553,6 @@ export function registerMenuRoutes(app: Express) {
   app.put(
     "/api/owner/menu-items/:itemId/variants",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
       await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
@@ -595,7 +586,6 @@ export function registerMenuRoutes(app: Express) {
   app.put(
     "/api/owner/menu-items/:itemId/modifiers",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { itemId } = req.params;
       await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
@@ -631,7 +621,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/csv",
     isAuthenticated,
-    isRestaurantOwner,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
@@ -689,7 +678,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/pdf",
     isAuthenticated,
-    isRestaurantOwner,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
@@ -745,7 +733,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/external",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
@@ -802,7 +789,6 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/url",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
@@ -925,7 +911,6 @@ export function registerMenuRoutes(app: Express) {
   app.get(
     "/api/owner/menus/:menuId/import-logs",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);

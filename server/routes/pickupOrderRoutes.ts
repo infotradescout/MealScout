@@ -50,7 +50,7 @@ import {
   ensurePremiumTrialForUser,
 } from "../services/premiumTrial";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
+import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
@@ -85,7 +85,11 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(userId: string, restaurantId: string) {
-  const ok = await storage.verifyRestaurantOwnership(restaurantId, userId);
+  const ok = await storage.verifyRestaurantOwnership(
+    restaurantId,
+    userId,
+    "manageProfile",
+  );
   if (!ok)
     throw Object.assign(new Error("Not authorized"), { statusCode: 403 });
 }
@@ -99,7 +103,17 @@ async function assertHasOrderingSubscription(
   userId: string,
   restaurantId?: string,
 ) {
-  const user = await storage.getUser(userId);
+  const restaurantOwnerId = restaurantId
+    ? (
+        await db
+          .select({ ownerId: restaurants.ownerId })
+          .from(restaurants)
+          .where(eq(restaurants.id, restaurantId))
+          .limit(1)
+      )[0]?.ownerId
+    : null;
+  const accessUserId = restaurantOwnerId || userId;
+  const user = await storage.getUser(accessUserId);
   if (!user)
     throw Object.assign(new Error("User not found"), { statusCode: 401 });
 
@@ -108,9 +122,9 @@ async function assertHasOrderingSubscription(
   if (isPremiumTrialActive(hydratedUser)) return;
 
   // 2. Lifetime or active subscription via restaurantSubscriptions table
-  const restaurants_ = await storage.getRestaurantsByOwner(userId);
+  const restaurants_ = await storage.getRestaurantsByOwner(accessUserId);
   const restaurantIds = restaurantId
-    ? restaurants_.filter((r) => r.id === restaurantId).map((r) => r.id)
+    ? [restaurantId]
     : restaurants_.map((r) => r.id);
   if (restaurantIds.length > 0) {
     const [sub] = await db
@@ -670,6 +684,7 @@ export function registerPickupOrderRoutes(app: Express) {
           (await storage.verifyRestaurantOwnership(
             order.restaurantId,
             userId,
+            "manageProfile",
           )));
 
       const safeOrder = isOwner
@@ -720,7 +735,6 @@ export function registerPickupOrderRoutes(app: Express) {
   app.get(
     "/api/owner/kitchen-queue/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
@@ -767,7 +781,6 @@ export function registerPickupOrderRoutes(app: Express) {
   app.get(
     "/api/owner/orders/:restaurantId",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
       await assertOwnsRestaurant(req.user.id, restaurantId);
@@ -801,7 +814,6 @@ export function registerPickupOrderRoutes(app: Express) {
   app.patch(
     "/api/owner/orders/:orderId/status",
     isAuthenticated,
-    isRestaurantOwner,
     wrap(async (req, res) => {
       const { orderId } = req.params;
       const { status, prepTimeMinutes } = z

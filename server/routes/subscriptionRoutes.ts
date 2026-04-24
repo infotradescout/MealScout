@@ -538,6 +538,64 @@ export function registerSubscriptionRoutes(
     }
   });
 
+  app.post(
+    "/api/subscription/customer-portal",
+    isAuthenticated,
+    async (req: any, res) => {
+      if (!stripe) {
+        return res.status(503).json({ message: "Payment service unavailable" });
+      }
+
+      try {
+        const user = await storage.getUser(req.user.id);
+        if (!user) {
+          return res.status(401).json({ message: "Authentication required" });
+        }
+        if (!user.email) {
+          return res
+            .status(400)
+            .json({ message: "No user email on file" });
+        }
+
+        let customerId = String(user.stripeCustomerId || "").trim();
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            email: user.email,
+            name:
+              user.firstName && user.lastName
+                ? `${user.firstName} ${user.lastName}`
+                : user.email,
+          });
+          customerId = customer.id;
+          await storage.updateUserStripeCustomerId(user.id, customerId);
+        }
+
+        const rawReturnPath = String(req.body?.returnPath || "").trim();
+        const returnPath =
+          rawReturnPath.startsWith("/") && !rawReturnPath.startsWith("//")
+            ? rawReturnPath
+            : "/subscription/manage";
+        const baseUrl = (
+          process.env.PUBLIC_BASE_URL ||
+          (req.get("host") ? `${req.protocol}://${req.get("host")}` : "") ||
+          "http://localhost:5000"
+        ).replace(/\/+$/, "");
+
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${baseUrl}${returnPath}`,
+        });
+
+        res.json({ url: portalSession.url });
+      } catch (error: any) {
+        console.error("Customer portal error:", error);
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to open billing portal" });
+      }
+    },
+  );
+
   app.post("/api/subscription/pause", isAuthenticated, async (req: any, res) => {
     if (!stripe) {
       return res.status(503).json({ message: "Payment service unavailable" });

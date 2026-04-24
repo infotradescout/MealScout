@@ -37,6 +37,7 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,6 +72,7 @@ interface ApiSubscriptionStatus {
   status: string;
   hasAccess?: boolean;
   trialAccess?: boolean;
+  lifetimeAccess?: boolean;
   trialEndsAt?: string | Date | null;
   message?: string;
   currentPeriodEnd?: number;
@@ -381,6 +383,35 @@ const SubscriptionManagement = () => {
     },
   });
 
+  const billingPortalMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest(
+        "POST",
+        "/api/subscription/customer-portal",
+        { returnPath: "/subscription/manage" },
+      );
+      return response.json();
+    },
+    onSuccess: (payload: { url?: string }) => {
+      if (payload?.url) {
+        window.location.href = payload.url;
+        return;
+      }
+      toast({
+        title: "Billing Portal Unavailable",
+        description: "We could not open your billing portal session.",
+        variant: "destructive",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Billing Portal Unavailable",
+        description: error.message || "Failed to open billing portal",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
@@ -530,8 +561,22 @@ const SubscriptionManagement = () => {
           )}
 
           {subscriptionStatus?.status === "active" &&
+            !subscriptionStatus.trialAccess &&
+            !subscriptionStatus.lifetimeAccess &&
             !subscriptionStatus.cancelAtPeriodEnd && (
               <div className="pt-4 space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => billingPortalMutation.mutate()}
+                  disabled={billingPortalMutation.isPending}
+                  data-testid="button-manage-billing"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  {billingPortalMutation.isPending
+                    ? "Opening Billing..."
+                    : "Manage Billing"}
+                </Button>
                 <Dialog
                   open={showCancelDialog}
                   onOpenChange={setShowCancelDialog}

@@ -1245,7 +1245,10 @@ export async function setupUnifiedAuth(app: Express) {
       }
 
       const user = await storage.getUserByEmail(email);
-      if (!user || user.userType !== "restaurant_owner") {
+      if (
+        !user ||
+        !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
+      ) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
