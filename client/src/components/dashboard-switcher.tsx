@@ -85,7 +85,7 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
     { label: "Menu", href: "/menu-builder", icon: Store },
     { label: "Kitchen", href: "/kitchen", icon: ChefHat },
     { label: "Orders", href: "/orders", icon: User },
-    { label: "Delivery", href: "/supply/orders", icon: Package },
+    { label: "Supply Orders", href: "/supply/orders", icon: Package },
   ];
 
   const renderDashboard = () => {

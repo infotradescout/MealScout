@@ -381,7 +381,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     {
       path: "/supply/orders",
       icon: Package,
-      fallbackLabel: "Delivery",
+      fallbackLabel: "Supply Orders",
     },
     {
       path: "/subscription",
@@ -501,7 +501,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     {
       path: "/supply/orders",
       icon: Package,
-      fallbackLabel: "Delivery",
+      fallbackLabel: "Supply Orders",
     },
     {
       path: "/parking-pass",
@@ -597,7 +597,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       {
         path: "/supply/orders",
         icon: Package,
-        fallbackLabel: "Delivery",
+        fallbackLabel: "Supply Orders",
       },
       ...(canSeeParkingPassNav
         ? ([
@@ -646,7 +646,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     {
       path: "/supply/orders",
       icon: Package,
-      fallbackLabel: "Delivery",
+      fallbackLabel: "Supply Orders",
     },
     ...(canManageParkingPass
       ? ([

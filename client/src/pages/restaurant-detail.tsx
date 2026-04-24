@@ -1052,8 +1052,8 @@ export default function RestaurantDetailPage() {
           <MinimalFAQ
             items={[
               {
-                question: `Does ${restaurantName} offer delivery?`,
-                answer: `Contact ${restaurantName} directly at ${(restaurant as any)?.phone || "their phone number"} to inquire about delivery options and availability in your area.`,
+                question: `How do I order from ${restaurantName}?`,
+                answer: `Check ${restaurantName}'s menu and current MealScout profile details, or contact them directly at ${(restaurant as any)?.phone || "their phone number"} for pickup and ordering options.`,
               },
               {
                 question: `What are the current specials at ${restaurantName}?`,

@@ -139,12 +139,6 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
                 <i className="fas fa-star text-yellow-400 text-xs"></i>
                 <span className="text-xs text-muted-foreground" data-testid={`text-rating-${restaurant.id}`}>4.5</span>
               </div>
-              {!restaurant.isFoodTruck && (
-                <div className="flex items-center space-x-1">
-                  <i className="fas fa-clock text-muted-foreground text-xs"></i>
-                  <span className="text-xs text-muted-foreground" data-testid={`text-delivery-time-${restaurant.id}`}>20-30 min</span>
-                </div>
-              )}
               {restaurant.isFoodTruck && distance && (
                 <div className="flex items-center space-x-1">
                   <MapPin className="w-3 h-3 text-muted-foreground" />

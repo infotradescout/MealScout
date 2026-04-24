@@ -5744,116 +5744,6 @@ export const orderNotifications = pgTable(
   ],
 );
 
-// ── DELIVERY INFRASTRUCTURE (Phase 2 – schema ready, routes dormant) ─────────
-
-/**
- * driverProfiles – contractor driver resume + reputation.
- * Linked to a regular MealScout user account.
- */
-export const driverProfiles = pgTable(
-  "driver_profiles",
-  {
-    id: varchar("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    userId: varchar("user_id")
-      .notNull()
-      .unique()
-      .references(() => users.id, { onDelete: "cascade" }),
-    bio: text("bio"),
-    vehicleType: varchar("vehicle_type"), // 'car' | 'motorcycle' | 'bicycle' | 'scooter'
-    serviceCities: jsonb("service_cities").default(sql`'[]'::jsonb`),
-    // list of city slugs where the driver works
-    ratePerDeliveryCents: integer("rate_per_delivery_cents"),
-    // driver's requested rate; null = negotiable
-    totalDeliveries: integer("total_deliveries").notNull().default(0),
-    averageRating: decimal("average_rating", { precision: 3, scale: 2 }),
-    isActive: boolean("is_active").notNull().default(true),
-    backgroundCheckStatus: varchar("background_check_status").default("none"),
-    // 'none' | 'pending' | 'approved' | 'rejected'
-    resumeUrl: varchar("resume_url"),
-    createdAt: timestamp("created_at").defaultNow(),
-    updatedAt: timestamp("updated_at").defaultNow(),
-  },
-  (table) => [
-    index("idx_driver_profiles_user").on(table.userId),
-    index("idx_driver_profiles_active").on(table.isActive),
-  ],
-);
-
-/**
- * deliveryJobs – job listings posted by businesses looking for drivers.
- * Can be recurring (e.g. "every Fri-Sun 5-10pm") or one-time.
- */
-export const deliveryJobs = pgTable(
-  "delivery_jobs",
-  {
-    id: varchar("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    restaurantId: varchar("restaurant_id")
-      .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
-    title: varchar("title").notNull(),
-    description: text("description"),
-    jobType: varchar("job_type").notNull().default("recurring"),
-    // 'recurring' | 'one_time'
-    scheduleDescription: text("schedule_description"),
-    // human-readable: "Fri–Sun 5pm–10pm"
-    rateOfferedCents: integer("rate_offered_cents"),
-    // null = open to driver's rate
-    deliveryZoneRadius: decimal("delivery_zone_radius", {
-      precision: 6,
-      scale: 2,
-    }),
-    // miles
-    status: varchar("status").notNull().default("open"),
-    // 'open' | 'filled' | 'closed'
-    positionsAvailable: integer("positions_available").default(1),
-    expiresAt: timestamp("expires_at"),
-    createdAt: timestamp("created_at").defaultNow(),
-    updatedAt: timestamp("updated_at").defaultNow(),
-  },
-  (table) => [
-    index("idx_delivery_jobs_restaurant").on(table.restaurantId),
-    index("idx_delivery_jobs_status").on(table.status),
-    index("idx_delivery_jobs_created").on(table.createdAt),
-  ],
-);
-
-/**
- * deliveryJobApplications – driver applies to a job listing.
- */
-export const deliveryJobApplications = pgTable(
-  "delivery_job_applications",
-  {
-    id: varchar("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    jobId: varchar("job_id")
-      .notNull()
-      .references(() => deliveryJobs.id, { onDelete: "cascade" }),
-    driverProfileId: varchar("driver_profile_id")
-      .notNull()
-      .references(() => driverProfiles.id, { onDelete: "cascade" }),
-    coverNote: text("cover_note"),
-    proposedRateCents: integer("proposed_rate_cents"),
-    status: varchar("status").notNull().default("pending"),
-    // 'pending' | 'accepted' | 'rejected' | 'withdrawn'
-    respondedAt: timestamp("responded_at"),
-    createdAt: timestamp("created_at").defaultNow(),
-  },
-  (table) => [
-    index("idx_delivery_job_apps_job").on(table.jobId),
-    index("idx_delivery_job_apps_driver").on(table.driverProfileId),
-    index("idx_delivery_job_apps_status").on(table.status),
-    unique("uq_delivery_job_apps_job_driver").on(
-      table.jobId,
-      table.driverProfileId,
-    ),
-  ],
-);
-
 // ── RELATIONS ────────────────────────────────────────────────────────────────
 
 export const menusRelations = relations(menus, ({ one, many }) => ({
@@ -5949,42 +5839,6 @@ export const orderNotificationsRelations = relations(
   }),
 );
 
-export const driverProfilesRelations = relations(
-  driverProfiles,
-  ({ one, many }) => ({
-    user: one(users, {
-      fields: [driverProfiles.userId],
-      references: [users.id],
-    }),
-    applications: many(deliveryJobApplications),
-  }),
-);
-
-export const deliveryJobsRelations = relations(
-  deliveryJobs,
-  ({ one, many }) => ({
-    restaurant: one(restaurants, {
-      fields: [deliveryJobs.restaurantId],
-      references: [restaurants.id],
-    }),
-    applications: many(deliveryJobApplications),
-  }),
-);
-
-export const deliveryJobApplicationsRelations = relations(
-  deliveryJobApplications,
-  ({ one }) => ({
-    job: one(deliveryJobs, {
-      fields: [deliveryJobApplications.jobId],
-      references: [deliveryJobs.id],
-    }),
-    driverProfile: one(driverProfiles, {
-      fields: [deliveryJobApplications.driverProfileId],
-      references: [driverProfiles.id],
-    }),
-  }),
-);
-
 // ── ZOOD VALIDATION SCHEMAS ──────────────────────────────────────────────────
 
 export const insertMenuSchema = createInsertSchema(menus).omit({
@@ -6048,27 +5902,6 @@ export const insertPickupOrderItemSchema = createInsertSchema(
   },
 ).omit({ id: true, createdAt: true });
 
-export const insertDriverProfileSchema = createInsertSchema(driverProfiles, {
-  ratePerDeliveryCents: z.number().int().min(0).optional().nullable(),
-}).omit({
-  id: true,
-  totalDeliveries: true,
-  averageRating: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertDeliveryJobSchema = createInsertSchema(deliveryJobs, {
-  rateOfferedCents: z.number().int().min(0).optional().nullable(),
-}).omit({ id: true, createdAt: true, updatedAt: true });
-
-export const insertDeliveryJobApplicationSchema = createInsertSchema(
-  deliveryJobApplications,
-  {
-    proposedRateCents: z.number().int().min(0).optional().nullable(),
-  },
-).omit({ id: true, respondedAt: true, createdAt: true });
-
 // ── MENU / ORDER TYPES ───────────────────────────────────────────────────────
 
 export type Menu = typeof menus.$inferSelect;
@@ -6089,15 +5922,6 @@ export type InsertPickupOrder = z.infer<typeof insertPickupOrderSchema>;
 export type PickupOrderItem = typeof pickupOrderItems.$inferSelect;
 export type InsertPickupOrderItem = z.infer<typeof insertPickupOrderItemSchema>;
 export type OrderNotification = typeof orderNotifications.$inferSelect;
-export type DriverProfile = typeof driverProfiles.$inferSelect;
-export type InsertDriverProfile = z.infer<typeof insertDriverProfileSchema>;
-export type DeliveryJob = typeof deliveryJobs.$inferSelect;
-export type InsertDeliveryJob = z.infer<typeof insertDeliveryJobSchema>;
-export type DeliveryJobApplication =
-  typeof deliveryJobApplications.$inferSelect;
-export type InsertDeliveryJobApplication = z.infer<
-  typeof insertDeliveryJobApplicationSchema
->;
 
 // ── ORDER STATUS ENUM ────────────────────────────────────────────────────────
 

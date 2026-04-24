@@ -1832,12 +1832,6 @@ export default function Home() {
                 Comparisons
               </Link>
               <Link
-                href="/delivery-app-alternatives"
-                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
-              >
-                Delivery Alternatives
-              </Link>
-              <Link
                 href="/online-ordering-platforms"
                 className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
               >

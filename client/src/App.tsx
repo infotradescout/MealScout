@@ -86,15 +86,6 @@ const PrivacyPolicy = lazy(() => import("@/pages/privacy-policy"));
 const DataDeletion = lazy(() => import("@/pages/data-deletion"));
 const About = lazy(() => import("@/pages/about"));
 const ComparePage = lazy(() => import("@/pages/compare"));
-const CompareDoorDashPage = lazy(() => import("@/pages/compare-doordash"));
-const CompareUberEatsPage = lazy(() => import("@/pages/compare-uber-eats"));
-const CompareGrubhubPage = lazy(() => import("@/pages/compare-grubhub"));
-const ServiceCompareLandingPage = lazy(
-  () => import("@/pages/service-compare-landing"),
-);
-const DeliveryAppAlternativesPage = lazy(
-  () => import("@/pages/delivery-app-alternatives"),
-);
 const OnlineOrderingPlatformsPage = lazy(
   () => import("@/pages/online-ordering-platforms"),
 );
@@ -176,7 +167,6 @@ const publicRoutePrefixes = [
   "/data-deletion",
   "/about",
   "/compare",
-  "/delivery-app-alternatives",
   "/online-ordering-platforms",
   "/faq",
   "/how-it-works",
@@ -329,17 +319,6 @@ function Router() {
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
             <Route path="/compare" component={ComparePage} />
-            <Route path="/compare/doordash" component={CompareDoorDashPage} />
-            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
-            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
-            <Route
-              path="/compare/:service/local/:city/:cuisine"
-              component={ServiceCompareLandingPage}
-            />
-            <Route
-              path="/delivery-app-alternatives"
-              component={DeliveryAppAlternativesPage}
-            />
             <Route
               path="/online-ordering-platforms"
               component={OnlineOrderingPlatformsPage}
@@ -531,17 +510,6 @@ function Router() {
             <Route path="/data-deletion" component={DataDeletion} />
             <Route path="/about" component={About} />
             <Route path="/compare" component={ComparePage} />
-            <Route path="/compare/doordash" component={CompareDoorDashPage} />
-            <Route path="/compare/uber-eats" component={CompareUberEatsPage} />
-            <Route path="/compare/grubhub" component={CompareGrubhubPage} />
-            <Route
-              path="/compare/:service/local/:city/:cuisine"
-              component={ServiceCompareLandingPage}
-            />
-            <Route
-              path="/delivery-app-alternatives"
-              component={DeliveryAppAlternativesPage}
-            />
             <Route
               path="/online-ordering-platforms"
               component={OnlineOrderingPlatformsPage}

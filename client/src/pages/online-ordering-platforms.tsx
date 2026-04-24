@@ -79,7 +79,7 @@ export default function OnlineOrderingPlatformsPage() {
               "restaurant online ordering software alternatives",
               "food truck ordering platform",
               "best food apps near me",
-              "local food delivery and pickup apps",
+          "local food pickup apps",
             ].map((term) => (
               <p
                 key={term}
@@ -90,11 +90,6 @@ export default function OnlineOrderingPlatformsPage() {
             ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/delivery-app-alternatives">
-              <Button size="sm" variant="outline">
-                Delivery alternatives <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
-            </Link>
             <Link href="/compare">
               <Button size="sm">Compare platforms</Button>
             </Link>

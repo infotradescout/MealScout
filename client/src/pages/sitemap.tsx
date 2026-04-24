@@ -51,10 +51,10 @@ export default function Sitemap() {
   };
 
   const serviceLandingPages = [
-    { href: "/compare/doordash/local/chicago/pizza", title: "Pizza in Chicago: MealScout vs DoorDash" },
-    { href: "/compare/uber-eats/local/austin/tacos", title: "Tacos in Austin: MealScout vs Uber Eats" },
-    { href: "/compare/grubhub/local/denver/burgers", title: "Burgers in Denver: MealScout vs Grubhub" },
-    { href: "/compare/doordash/local/pensacola/seafood", title: "Seafood in Pensacola: MealScout vs DoorDash" },
+    { href: "/food-trucks/pensacola", title: "Food trucks in Pensacola" },
+    { href: "/city/pensacola", title: "Pensacola food discovery" },
+    { href: "/category/seafood", title: "Seafood near you" },
+    { href: "/parking-pass", title: "Food truck parking pass" },
   ];
 
   const siteStructure = [
@@ -67,7 +67,6 @@ export default function Sitemap() {
         { title: "Search Deals", href: "/search", description: "Search by city, cuisine, or restaurant" },
         { title: "Map View", href: "/map", description: "Interactive live food and deal map" },
         { title: "Featured Deals", href: "/deals/featured", description: "Active local and limited-time offers" },
-        { title: "Delivery App Alternatives", href: "/delivery-app-alternatives", description: "Compare MealScout with legacy delivery apps" },
         { title: "Online Ordering Platforms", href: "/online-ordering-platforms", description: "Local-first online ordering and discovery" },
         { title: "Comparison Hub", href: "/compare", description: "Head-to-head platform comparisons" },
       ],

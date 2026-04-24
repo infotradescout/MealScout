@@ -179,8 +179,8 @@ export default function Home() {
             forever for restaurants joining before April 1, 2026
           </p>
           <p className="text-[color:var(--text-secondary)]">
-            MealScout is a food truck finder and parking sourcing tool. It is
-            not delivery, not a marketplace, and not events-only.
+            MealScout is a food truck finder, parking sourcing tool, and local
+            food discovery layer.
           </p>
         </div>
       </main>

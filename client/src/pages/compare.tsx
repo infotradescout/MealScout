@@ -1,13 +1,10 @@
-import { Link } from "wouter";
 import { SEOHead } from "@/components/seo-head";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Scale, ShieldCheck, Users } from "lucide-react";
+import { MapPin, ShieldCheck, Users } from "lucide-react";
 
 const cards = [
   {
-    title: "MealScout vs DoorDash",
-    href: "/compare/doordash",
+    title: "Discovery that rewards local proof",
     points: [
       "No pay-to-rank model",
       "Community trust signals drive visibility",
@@ -15,17 +12,15 @@ const cards = [
     ],
   },
   {
-    title: "MealScout vs Uber Eats",
-    href: "/compare/uber-eats",
+    title: "Map-first local context",
     points: [
-      "Local-first discovery over ad placement",
+      "Nearby relevance over ad placement",
       "Transparent profile ranking factors",
       "Built for small business sustainability",
     ],
   },
   {
-    title: "MealScout vs Grubhub",
-    href: "/compare/grubhub",
+    title: "Food business operating tools",
     points: [
       "Community engagement prioritized",
       "Profiles stay visible even without ad spend",
@@ -38,8 +33,8 @@ export default function ComparePage() {
   return (
     <div className="page">
       <SEOHead
-        title="MealScout vs Legacy Delivery Apps | Fair Local Discovery"
-        description="Compare MealScout with DoorDash, Uber Eats, and Grubhub. Learn how MealScout ranks food businesses by community trust and local relevance instead of paid placement."
+        title="MealScout Ranking Philosophy | Fair Local Food Discovery"
+        description="Learn how MealScout ranks food businesses by community trust, local relevance, active profiles, and real customer intent instead of paid placement."
         canonicalUrl="https://www.mealscout.us/compare"
       />
 
@@ -50,7 +45,7 @@ export default function ComparePage() {
               Fair Ranking Philosophy
             </p>
             <h1 className="mt-2 text-2xl font-bold text-foreground">
-              MealScout vs legacy delivery and ordering marketplaces
+              MealScout's local discovery philosophy
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               MealScout does not sell top placement. We rank public restaurant,
@@ -80,7 +75,7 @@ export default function ComparePage() {
       <section className="section section--full py-5">
         <div className="content grid gap-3 md:grid-cols-3">
           {cards.map((card) => (
-            <Card key={card.href} className="border border-[color:var(--border-subtle)]">
+            <Card key={card.title} className="border border-[color:var(--border-subtle)]">
               <CardContent className="p-4">
                 <h2 className="text-base font-semibold text-foreground">
                   {card.title}
@@ -89,13 +84,6 @@ export default function ComparePage() {
                   {card.points.map((point) => (
                     <p key={point}>{point}</p>
                   ))}
-                </div>
-                <div className="mt-3">
-                  <Link href={card.href}>
-                    <Button size="sm" variant="outline" className="w-full">
-                      Read comparison <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                    </Button>
-                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -107,10 +95,10 @@ export default function ComparePage() {
         <div className="content grid gap-3 md:grid-cols-3">
           <Card>
             <CardContent className="p-4">
-              <Scale className="h-5 w-5 text-[color:var(--accent-text)]" />
-              <h3 className="mt-2 text-sm font-semibold">No pay-to-win ranking</h3>
+              <MapPin className="h-5 w-5 text-[color:var(--accent-text)]" />
+              <h3 className="mt-2 text-sm font-semibold">Location-aware discovery</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Visibility is earned through community trust and active value.
+                Search, map, city, cuisine, and profile pages are tuned around real local intent.
               </p>
             </CardContent>
           </Card>

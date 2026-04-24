@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -29,6 +29,8 @@ import {
   users,
   telemetryEvents,
   truckImportListings,
+  moderationCases,
+  moderationResolutions,
 } from "@shared/schema";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
@@ -666,18 +668,61 @@ export function registerRestaurantCoreRoutes(
         return res.status(404).json({ message: "Restaurant not found" });
       }
 
-      // Trust scoring endpoint placeholder until moderation-backed scoring lands.
+      const caseRows = await db
+        .select({
+          caseId: moderationCases.id,
+          status: moderationCases.status,
+          createdAt: moderationCases.createdAt,
+          resolvedAt: moderationCases.resolvedAt,
+          outcome: moderationResolutions.outcome,
+        })
+        .from(moderationCases)
+        .leftJoin(
+          moderationResolutions,
+          eq(moderationResolutions.caseId, moderationCases.id),
+        )
+        .where(eq(moderationCases.restaurantId, restaurantId))
+        .orderBy(desc(moderationCases.createdAt));
+
+      const totalFlags = caseRows.length;
+      const flagsUpheld = caseRows.filter((row: any) => row.outcome === "valid").length;
+      const flagsDismissed = caseRows.filter((row: any) => row.outcome === "invalid").length;
+      const flagsPartial = caseRows.filter((row: any) => row.outcome === "partial").length;
+      const resolvedDisputes = caseRows.filter(
+        (row: any) => row.status === "resolved" || Boolean(row.outcome),
+      ).length;
+      const activeDisputes = caseRows.filter(
+        (row: any) => !row.outcome && row.status !== "resolved",
+      ).length;
+      const lastFlagDate = caseRows[0]?.createdAt
+        ? new Date(caseRows[0].createdAt).toISOString()
+        : null;
+      const profileAccuracyScore = Math.max(
+        0,
+        Math.min(100, 100 - flagsUpheld * 15 - flagsPartial * 7 - activeDisputes * 5),
+      );
+      const recentWindowMs = 14 * 24 * 60 * 60 * 1000;
+      const hasRecentFlag =
+        lastFlagDate !== null &&
+        Date.now() - new Date(lastFlagDate).getTime() <= recentWindowMs;
+      const trend =
+        activeDisputes > 0 && hasRecentFlag
+          ? "watch"
+          : profileAccuracyScore < 80
+            ? "needs_attention"
+            : "stable";
+
       res.json({
         restaurantId,
-        totalFlags: 0,
-        flagsUpheld: 0,
-        flagsDismissed: 0,
-        flagsPartial: 0,
-        profileAccuracyScore: 100,
-        activeDisputes: 0,
-        resolvedDisputes: 0,
-        lastFlagDate: null,
-        trend: "stable",
+        totalFlags,
+        flagsUpheld,
+        flagsDismissed,
+        flagsPartial,
+        profileAccuracyScore,
+        activeDisputes,
+        resolvedDisputes,
+        lastFlagDate,
+        trend,
       });
     } catch (error) {
       console.error("Error fetching restaurant trust stats:", error);

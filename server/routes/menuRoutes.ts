@@ -13,6 +13,8 @@ import type { Express } from "express";
 import { z } from "zod";
 import multer from "multer";
 import path from "path";
+import dns from "dns/promises";
+import net from "net";
 import { db } from "../db";
 import {
   menus,
@@ -58,6 +60,13 @@ const EXTERNAL_MENU_SOURCES = [
 ] as const;
 
 type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
+
+const MENU_URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const MENU_URL_IMPORT_MAX_REDIRECTS = 5;
+const MENU_URL_IMPORT_HEADERS = {
+  "User-Agent": "MealScoutMenuImporter/1.0 (+https://www.mealscout.us)",
+  Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+};
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
 const upload = multer({
@@ -805,10 +814,11 @@ export function registerMenuRoutes(app: Express) {
 
       const { url, source } = bodySchema.parse(req.body);
       const parsed = new URL(url);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
+      const urlValidation = await validatePublicImportUrl(parsed);
+      if (!urlValidation.ok) {
         return res
           .status(400)
-          .json({ message: "Only http/https URLs are supported for import." });
+          .json({ message: urlValidation.message });
       }
 
       const resolvedSource = normalizeExternalSource(
@@ -820,23 +830,28 @@ export function registerMenuRoutes(app: Express) {
 
       let rawData: Record<string, any>[] = [];
       try {
-        const response = await fetch(url, {
-          method: "GET",
-          redirect: "follow",
-          signal: controller.signal,
-          headers: {
-            "User-Agent":
-              "MealScoutMenuImporter/1.0 (+https://www.mealscout.us)",
-            Accept:
-              "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-          },
-        });
+        const response = await fetchPublicMenuUrl(parsed, controller.signal);
 
         if (!response.ok) {
           throw new Error(`Source URL returned ${response.status}`);
         }
 
+        const contentLength = Number(response.headers.get("content-length") || 0);
+        if (
+          Number.isFinite(contentLength) &&
+          contentLength > MENU_URL_IMPORT_MAX_BYTES
+        ) {
+          return res.status(413).json({
+            message: "That menu URL is too large to import.",
+          });
+        }
+
         const html = await response.text();
+        if (Buffer.byteLength(html, "utf8") > MENU_URL_IMPORT_MAX_BYTES) {
+          return res.status(413).json({
+            message: "That menu URL is too large to import.",
+          });
+        }
         rawData = extractMenuRowsFromHtml(html);
       } finally {
         clearTimeout(timer);
@@ -1039,6 +1054,127 @@ function detectSourceFromUrl(url: string): string {
   if (value.includes("grubhub")) return "grubhub";
   if (value.includes("yelp")) return "yelp";
   return "website";
+}
+
+async function fetchPublicMenuUrl(
+  initialUrl: URL,
+  signal: AbortSignal,
+): Promise<Response> {
+  let currentUrl = new URL(initialUrl.toString());
+
+  for (let attempt = 0; attempt <= MENU_URL_IMPORT_MAX_REDIRECTS; attempt += 1) {
+    const validation = await validatePublicImportUrl(currentUrl);
+    if (!validation.ok) {
+      throw Object.assign(new Error(validation.message), { statusCode: 400 });
+    }
+
+    const response = await fetch(currentUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      signal,
+      headers: MENU_URL_IMPORT_HEADERS,
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location) {
+      return response;
+    }
+
+    currentUrl = new URL(location, currentUrl);
+  }
+
+  throw Object.assign(new Error("Too many redirects while importing menu URL."), {
+    statusCode: 400,
+  });
+}
+
+async function validatePublicImportUrl(url: URL): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return {
+      ok: false,
+      message: "Only http/https URLs are supported for import.",
+    };
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (
+    !hostname ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "metadata.google.internal"
+  ) {
+    return {
+      ok: false,
+      message: "That menu URL is not a public website.",
+    };
+  }
+
+  const literalIpVersion = net.isIP(hostname);
+  if (literalIpVersion && isBlockedImportIp(hostname)) {
+    return {
+      ok: false,
+      message: "That menu URL is not a public website.",
+    };
+  }
+
+  if (!literalIpVersion) {
+    let addresses: Array<{ address: string }> = [];
+    try {
+      addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    } catch {
+      return {
+        ok: false,
+        message: "We could not resolve that menu URL.",
+      };
+    }
+
+    if (
+      addresses.length === 0 ||
+      addresses.some((entry) => isBlockedImportIp(entry.address))
+    ) {
+      return {
+        ok: false,
+        message: "That menu URL is not a public website.",
+      };
+    }
+  }
+
+  return { ok: true, message: "" };
+}
+
+function isBlockedImportIp(address: string): boolean {
+  const version = net.isIP(address);
+  if (version === 4) {
+    const parts = address.split(".").map((part) => Number(part));
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+
+  if (version === 6) {
+    const value = address.toLowerCase();
+    return (
+      value === "::" ||
+      value === "::1" ||
+      value.startsWith("fc") ||
+      value.startsWith("fd") ||
+      value.startsWith("fe80:") ||
+      value.startsWith("ff")
+    );
+  }
+
+  return true;
 }
 
 function extractMenuRowsFromHtml(html: string): Record<string, any>[] {

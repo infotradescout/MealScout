@@ -9,9 +9,6 @@ export {
   pickupOrders,
   pickupOrderItems,
   orderNotifications,
-  driverProfiles,
-  deliveryJobs,
-  deliveryJobApplications,
   menusRelations,
   menuCategoriesRelations,
   menuItemsRelations,
@@ -20,9 +17,6 @@ export {
   pickupOrdersRelations,
   pickupOrderItemsRelations,
   orderNotificationsRelations,
-  driverProfilesRelations,
-  deliveryJobsRelations,
-  deliveryJobApplicationsRelations,
   insertMenuSchema,
   insertMenuCategorySchema,
   insertMenuItemSchema,
@@ -30,9 +24,6 @@ export {
   insertMenuItemModifierSchema,
   insertPickupOrderSchema,
   insertPickupOrderItemSchema,
-  insertDriverProfileSchema,
-  insertDeliveryJobSchema,
-  insertDeliveryJobApplicationSchema,
 } from "./legacy";
 
 export type {
@@ -52,10 +43,4 @@ export type {
   PickupOrderItem,
   InsertPickupOrderItem,
   OrderNotification,
-  DriverProfile,
-  InsertDriverProfile,
-  DeliveryJob,
-  InsertDeliveryJob,
-  DeliveryJobApplication,
-  InsertDeliveryJobApplication,
 } from "./legacy";
