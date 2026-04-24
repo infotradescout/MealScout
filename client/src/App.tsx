@@ -248,7 +248,6 @@ function Router() {
     const url = new URL(window.location.href);
     if (url.pathname.startsWith("/ref/")) return;
     if (url.searchParams.has("ref")) return;
-    if (url.pathname === "/truck-landing") return;
 
     url.searchParams.set("ref", affiliateTag);
     window.history.replaceState({}, "", url.toString());
