@@ -1319,23 +1319,8 @@ export default function RestaurantOwnerDashboard() {
     null;
 
   const handleQuickFixMissingField = () => {
-    if (
-      prioritizedMissingKey &&
-      ["address", "city", "state", "phone"].includes(prioritizedMissingKey) &&
-      availableTabs.includes("foodtruck" as any)
-    ) {
-      setActiveTab("foodtruck");
-      return;
-    }
-    if (
-      prioritizedMissingKey &&
-      ["name", "businessType"].includes(prioritizedMissingKey)
-    ) {
-      setLocation("/restaurant-signup");
-      return;
-    }
     const focus = encodeURIComponent(prioritizedMissingKey || "profile");
-    setLocation(`/profile/settings?src=onboarding&focus=${focus}`);
+    setLocation(`/edit-restaurant/${selectedRestaurant}?src=onboarding&focus=${focus}`);
   };
 
   if (loadingRestaurants) {
@@ -1579,9 +1564,9 @@ export default function RestaurantOwnerDashboard() {
         const hasPhone = Boolean((currentRestaurant as any).phone || (currentRestaurant as any).contactPhone);
         const hasDeal = (stats?.activeDeals || 0) > 0;
         const checklistItems = [
-          { label: "Profile photo or logo uploaded", done: hasPhoto, href: `/edit-restaurant/${selectedRestaurant}` },
-          { label: "Address or service area set", done: hasAddress, href: `/edit-restaurant/${selectedRestaurant}` },
-          { label: "Phone number added", done: hasPhone, href: `/edit-restaurant/${selectedRestaurant}` },
+          { label: "Profile photo or logo uploaded", done: hasPhoto, href: `/edit-restaurant/${selectedRestaurant}?focus=logoUrl` },
+          { label: "Address or service area set", done: hasAddress, href: `/edit-restaurant/${selectedRestaurant}?focus=address` },
+          { label: "Phone number added", done: hasPhone, href: `/edit-restaurant/${selectedRestaurant}?focus=phone` },
           { label: "Online menu linked or built", done: hasMenu, href: `/menu-builder/${selectedRestaurant}` },
           { label: "First special or deal created", done: hasDeal, href: "/deal-creation" },
         ];

@@ -39,6 +39,25 @@ export function registerRestaurantOperationsRoutes(
     hasBusinessDistributionAccess,
   }: RestaurantOperationsRouteDependencies,
 ) {
+  const urlOrEmpty = z.string().trim().url().optional().nullable().or(z.literal(""));
+  const restaurantProfileUpdateSchema = z
+    .object({
+      name: z.string().trim().min(1).max(160).optional(),
+      address: z.string().trim().min(1).max(240).optional(),
+      city: z.string().trim().min(1).max(120).optional(),
+      state: z.string().trim().min(2).max(32).optional(),
+      phone: z.string().trim().max(40).optional().nullable(),
+      businessType: z.enum(["restaurant", "bar", "food_truck"]).optional(),
+      cuisineType: z.string().trim().max(80).optional().nullable(),
+      description: z.string().trim().max(1200).optional().nullable(),
+      websiteUrl: urlOrEmpty,
+      instagramUrl: urlOrEmpty,
+      facebookPageUrl: urlOrEmpty,
+      logoUrl: urlOrEmpty,
+      coverImageUrl: urlOrEmpty,
+    })
+    .strict();
+
   const buildPremiumWeeklySummary = async (userId: string) => {
     const now = new Date();
     const windowStart = new Date(now);
@@ -416,6 +435,69 @@ export function registerRestaurantOperationsRoutes(
       } catch (error) {
         console.error("Error emailing premium weekly summary:", error);
         res.status(500).json({ message: "Failed to send weekly summary" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/restaurants/:restaurantId/profile",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const isAuthorized = await storage.verifyRestaurantOwnership(
+          restaurantId,
+          req.user.id,
+          "manageProfile",
+        );
+        if (!isAuthorized) {
+          return res.status(403).json({
+            message:
+              "Unauthorized: You can only update profiles for businesses you can manage",
+          });
+        }
+
+        const parsed = restaurantProfileUpdateSchema.parse(req.body);
+        const changes: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(parsed)) {
+          if (value !== undefined) {
+            changes[key] = value === "" ? null : value;
+          }
+        }
+
+        if (parsed.businessType !== undefined) {
+          changes.isFoodTruck = parsed.businessType === "food_truck";
+        }
+
+        if (Object.keys(changes).length === 0) {
+          return res
+            .status(400)
+            .json({ message: "No profile fields were provided" });
+        }
+
+        const [updated] = await db
+          .update(restaurants)
+          .set({
+            ...changes,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, restaurantId))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        res.json({ success: true, restaurant: updated });
+      } catch (error) {
+        console.error("Error updating restaurant profile:", error);
+        res.status(400).json({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update restaurant profile",
+        });
       }
     },
   );

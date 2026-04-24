@@ -79,6 +79,7 @@ const HelpSupportPage = lazy(() => import("@/pages/profile/help"));
 const RestaurantOwnerDashboard = lazy(
   () => import("@/pages/restaurant-owner-dashboard"),
 );
+const EditRestaurantPage = lazy(() => import("@/pages/edit-restaurant"));
 const UserDashboard = lazy(() => import("@/pages/user-dashboard"));
 const DashboardSwitcher = lazy(() => import("@/components/dashboard-switcher"));
 const TermsOfService = lazy(() => import("@/pages/terms-of-service"));
@@ -412,6 +413,10 @@ function Router() {
             <Route
               path="/restaurant/dashboard"
               component={RestaurantOwnerDashboard}
+            />
+            <Route
+              path="/edit-restaurant/:restaurantId"
+              component={EditRestaurantPage}
             />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/user-dashboard" component={UserDashboard} />
