@@ -3628,11 +3628,31 @@ export class DatabaseStorage implements IStorage {
   async createVerificationRequest(
     verificationRequest: InsertVerificationRequest,
   ): Promise<VerificationRequest> {
-    const [newRequest] = await db
-      .insert(verificationRequests)
-      .values(verificationRequest)
-      .returning();
-    return newRequest;
+    try {
+      const [newRequest] = await db
+        .insert(verificationRequests)
+        .values(verificationRequest)
+        .returning();
+      return newRequest;
+    } catch (error: any) {
+      const code = String(error?.code || "");
+      const message = String(error?.message || "").toLowerCase();
+      const missingLicenseNumberColumn =
+        code === "42703" && message.includes("license_number");
+
+      if (!missingLicenseNumberColumn) {
+        throw error;
+      }
+
+      // Backward-compat fallback for databases that predate `license_number`.
+      const { licenseNumber: _omit, ...fallbackVerificationRequest } =
+        verificationRequest as any;
+      const [newRequest] = await db
+        .insert(verificationRequests)
+        .values(fallbackVerificationRequest)
+        .returning();
+      return newRequest;
+    }
   }
 
   async getVerificationRequestsByOwner(
@@ -3786,7 +3806,7 @@ export class DatabaseStorage implements IStorage {
 
   async hasPendingVerificationRequest(restaurantId: string): Promise<boolean> {
     const [request] = await db
-      .select()
+      .select({ id: verificationRequests.id })
       .from(verificationRequests)
       .where(
         and(
