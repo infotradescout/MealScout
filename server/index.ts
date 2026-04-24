@@ -92,6 +92,34 @@ const privateNoIndexPrefixes = [
   "/account-setup",
 ];
 
+async function ensureLaunchSchemaCompatibility() {
+  if (!db) return;
+
+  try {
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS reporter_reputation_score integer NOT NULL DEFAULT 100
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS flagged_count integer NOT NULL DEFAULT 0
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS upheld_against_count integer NOT NULL DEFAULT 0
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS users
+      ADD COLUMN IF NOT EXISTS false_flag_count integer NOT NULL DEFAULT 0
+    `);
+  } catch (error) {
+    console.warn(
+      "[db] Launch schema compatibility check failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 // Canonical redirect for SEO/indexing consistency (https + canonical host).
 app.use((req, res, next) => {
   if (process.env.NODE_ENV !== "production") return next();
@@ -995,6 +1023,8 @@ app.use((req, res, next) => {
 
     return next();
   });
+
+  await ensureLaunchSchemaCompatibility();
 
   const server = await registerRoutes(app);
 
