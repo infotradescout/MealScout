@@ -59,6 +59,15 @@ const EXTERNAL_MENU_SOURCES = [
   "website",
 ] as const;
 
+const MENU_SERVICE_TYPES = new Set([
+  "all",
+  "breakfast",
+  "lunch",
+  "dinner",
+  "late_night",
+  "weekend_brunch",
+]);
+
 type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
 
 const MENU_URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
@@ -132,6 +141,24 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
       res.status(status).json({ message });
     }
   };
+}
+
+function normalizeMenuServiceType(value: unknown): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return "all";
+
+  const aliases: Record<string, string> = {
+    all_day: "all",
+    brunch: "weekend_brunch",
+    happy_hour: "late_night",
+    seasonal: "all",
+  };
+
+  const mapped = aliases[normalized] ?? normalized;
+  return MENU_SERVICE_TYPES.has(mapped) ? mapped : "all";
 }
 
 export function registerMenuRoutes(app: Express) {
@@ -317,13 +344,17 @@ export function registerMenuRoutes(app: Express) {
     isAuthenticated,
     wrap(async (req, res) => {
       const body = insertMenuSchema.parse(req.body);
+      const normalizedBody = {
+        ...body,
+        serviceType: normalizeMenuServiceType(body.serviceType),
+      };
       await assertOwnsRestaurant(
         req.user.id,
-        body.restaurantId,
+        normalizedBody.restaurantId,
         req.user?.userType,
       );
 
-      const [menu] = await db.insert(menus).values(body).returning();
+      const [menu] = await db.insert(menus).values(normalizedBody).returning();
 
       // Emit LISA claim for menu published
       db.insert(lisaClaims).values({
@@ -334,7 +365,7 @@ export function registerMenuRoutes(app: Express) {
         subjectId: menu.id,
         actorType: "user",
         actorId: req.user.id,
-        payload: { restaurantId: body.restaurantId, menuName: menu.name },
+        payload: { restaurantId: normalizedBody.restaurantId, menuName: menu.name },
       }).catch(() => {});
 
       res.status(201).json({ menu });
@@ -355,7 +386,15 @@ export function registerMenuRoutes(app: Express) {
       const updateSchema = insertMenuSchema
         .partial()
         .omit({ restaurantId: true });
-      const updates = updateSchema.parse(req.body);
+      const parsedUpdates = updateSchema.parse(req.body);
+      const updates = {
+        ...parsedUpdates,
+        ...(Object.prototype.hasOwnProperty.call(parsedUpdates, "serviceType")
+          ? {
+              serviceType: normalizeMenuServiceType(parsedUpdates.serviceType),
+            }
+          : {}),
+      };
 
       const [updated] = await db
         .update(menus)

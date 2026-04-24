@@ -118,6 +118,34 @@ interface FullMenu extends Menu {
   uncategorizedItems?: MenuItem[];
 }
 
+const MENU_SERVICE_TYPE_OPTIONS = [
+  { value: "all", label: "All Day" },
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "late_night", label: "Late Night" },
+  { value: "weekend_brunch", label: "Weekend Brunch" },
+] as const;
+
+function normalizeMenuServiceType(value: string): string {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return "all";
+
+  const aliases: Record<string, string> = {
+    all_day: "all",
+    brunch: "weekend_brunch",
+    happy_hour: "late_night",
+    seasonal: "all",
+  };
+
+  const mapped = aliases[normalized] ?? normalized;
+  return MENU_SERVICE_TYPE_OPTIONS.some((option) => option.value === mapped)
+    ? mapped
+    : "all";
+}
+
 interface RestaurantOption {
   id: string;
   name: string;
@@ -159,7 +187,7 @@ export default function MenuBuilderPage() {
   const [showNewMenuDialog, setShowNewMenuDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [newMenuName, setNewMenuName] = useState("");
-  const [newMenuServiceType, setNewMenuServiceType] = useState("all_day");
+  const [newMenuServiceType, setNewMenuServiceType] = useState("all");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importType, setImportType] = useState<"csv" | "pdf" | "url">("csv");
   const [importUrl, setImportUrl] = useState("");
@@ -224,7 +252,7 @@ export default function MenuBuilderPage() {
       const res = await apiRequest("POST", "/api/owner/menus", {
         restaurantId,
         name: newMenuName,
-        serviceType: newMenuServiceType,
+        serviceType: normalizeMenuServiceType(newMenuServiceType),
       });
       return res.json();
     },
@@ -277,7 +305,16 @@ export default function MenuBuilderPage() {
         );
       }
 
-      const data = await res.json();
+      const raw = await res.text();
+      const data = raw
+        ? (() => {
+            try {
+              return JSON.parse(raw);
+            } catch {
+              return { message: raw };
+            }
+          })()
+        : {};
       if (!res.ok) throw new Error(data.message || "Import failed");
       queryClient.invalidateQueries({
         queryKey: ["/api/menus", selectedMenuId],
@@ -465,14 +502,11 @@ export default function MenuBuilderPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all_day">All Day</SelectItem>
-                  <SelectItem value="breakfast">Breakfast</SelectItem>
-                  <SelectItem value="lunch">Lunch</SelectItem>
-                  <SelectItem value="dinner">Dinner</SelectItem>
-                  <SelectItem value="late_night">Late Night</SelectItem>
-                  <SelectItem value="brunch">Brunch</SelectItem>
-                  <SelectItem value="happy_hour">Happy Hour</SelectItem>
-                  <SelectItem value="seasonal">Seasonal</SelectItem>
+                  {MENU_SERVICE_TYPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
