@@ -44,6 +44,21 @@ import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
 
+const EXTERNAL_MENU_SOURCES = [
+  "ubereats",
+  "doordash",
+  "clover",
+  "toast",
+  "square",
+  "gmb",
+  "google",
+  "grubhub",
+  "yelp",
+  "website",
+] as const;
+
+type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
+
 // ── Multer config (memory storage – files processed in-process) ───────────────
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -713,7 +728,7 @@ export function registerMenuRoutes(app: Express) {
   /**
    * POST /api/owner/menus/:menuId/import/external
    * Import menu from UberEats / DoorDash / Clover / Toast / Square / GMB.
-   * Body: { source: 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb', url?: string, data?: object }
+   * Body: { source: 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'google' | 'grubhub' | 'yelp' | 'website', rawData: object[] }
    *
    * NOTE: Full third-party API integrations are implemented incrementally.
    * This endpoint accepts raw exported JSON/objects and normalizes them.
@@ -727,14 +742,7 @@ export function registerMenuRoutes(app: Express) {
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
 
       const bodySchema = z.object({
-        source: z.enum([
-          "ubereats",
-          "doordash",
-          "clover",
-          "toast",
-          "square",
-          "gmb",
-        ]),
+        source: z.enum(EXTERNAL_MENU_SOURCES),
         // Raw exported data from the third-party platform.
         // Shape varies per source; normalizer handles each.
         rawData: z.array(z.record(z.any())).min(1).max(500),
@@ -774,6 +782,124 @@ export function registerMenuRoutes(app: Express) {
         .where(eq(menus.id, menuId));
 
       res.json({ imported: imported.length, skipped, errors });
+    }),
+  );
+
+  /**
+   * POST /api/owner/menus/:menuId/import/url
+   * Import menu by crawling a public URL (DoorDash/UberEats/Google/other sites).
+   * Body: { url: string, source?: string }
+   */
+  app.post(
+    "/api/owner/menus/:menuId/import/url",
+    isAuthenticated,
+    isRestaurantOwner,
+    wrap(async (req, res) => {
+      const { menuId } = req.params;
+      const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
+
+      const bodySchema = z.object({
+        url: z.string().url(),
+        source: z.string().optional(),
+      });
+
+      const { url, source } = bodySchema.parse(req.body);
+      const parsed = new URL(url);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return res
+          .status(400)
+          .json({ message: "Only http/https URLs are supported for import." });
+      }
+
+      const resolvedSource = normalizeExternalSource(
+        source || detectSourceFromUrl(url),
+      );
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+
+      let rawData: Record<string, any>[] = [];
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          signal: controller.signal,
+          headers: {
+            "User-Agent":
+              "MealScoutMenuImporter/1.0 (+https://www.mealscout.us)",
+            Accept:
+              "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Source URL returned ${response.status}`);
+        }
+
+        const html = await response.text();
+        rawData = extractMenuRowsFromHtml(html);
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (rawData.length === 0) {
+        await db.insert(menuImportLogs).values({
+          restaurantId: menu.restaurantId,
+          importedByUserId: req.user.id,
+          source: resolvedSource,
+          fileName: url,
+          itemsImported: 0,
+          itemsSkipped: 0,
+          errors: [{ row: 0, reason: "No menu item data found on URL." }] as any,
+          status: "failed",
+        });
+        return res.status(422).json({
+          message:
+            "We could not extract menu items from that URL. Try CSV/PDF import or upload a platform export.",
+          imported: 0,
+          skipped: 0,
+          errors: [{ row: 0, reason: "No menu item data found on URL." }],
+        });
+      }
+
+      const { imported, skipped, errors } = normalizeExternalMenuData(
+        rawData,
+        resolvedSource,
+        menuId,
+        menu.restaurantId,
+      );
+
+      if (imported.length > 0) {
+        await db.insert(menuItems).values(imported);
+      }
+
+      await db.insert(menuImportLogs).values({
+        restaurantId: menu.restaurantId,
+        importedByUserId: req.user.id,
+        source: resolvedSource,
+        fileName: url,
+        itemsImported: imported.length,
+        itemsSkipped: skipped,
+        errors: errors as any,
+        status:
+          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+      });
+
+      await db
+        .update(menus)
+        .set({
+          importSource: resolvedSource,
+          importedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(menus.id, menuId));
+
+      res.json({
+        imported: imported.length,
+        skipped,
+        errors,
+        source: resolvedSource,
+      });
     }),
   );
 
@@ -893,4 +1019,121 @@ function normalizeExternalMenuData(
   });
 
   return { imported, skipped, errors };
+}
+
+function normalizeExternalSource(source?: string): ExternalMenuSource {
+  const normalized = String(source || "website").trim().toLowerCase();
+  if ((EXTERNAL_MENU_SOURCES as readonly string[]).includes(normalized)) {
+    return normalized as ExternalMenuSource;
+  }
+  return "website";
+}
+
+function detectSourceFromUrl(url: string): string {
+  const value = String(url || "").toLowerCase();
+  if (value.includes("doordash")) return "doordash";
+  if (value.includes("ubereats") || value.includes("uber.com")) return "ubereats";
+  if (value.includes("google.") || value.includes("g.page") || value.includes("maps.app.goo.gl")) {
+    return "google";
+  }
+  if (value.includes("grubhub")) return "grubhub";
+  if (value.includes("yelp")) return "yelp";
+  return "website";
+}
+
+function extractMenuRowsFromHtml(html: string): Record<string, any>[] {
+  const rows: Record<string, any>[] = [];
+
+  const pushRow = (name: string, priceRaw: unknown, description?: string) => {
+    const cleanName = String(name || "").trim();
+    const priceCents = toPriceCents(priceRaw);
+    if (!cleanName || priceCents === null || priceCents < 0) return;
+    rows.push({
+      name: cleanName,
+      description: String(description || "").trim() || null,
+      price_cents: priceCents,
+    });
+  };
+
+  const jsonLdPattern =
+    /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let jsonLdMatch: RegExpExecArray | null = null;
+  while ((jsonLdMatch = jsonLdPattern.exec(html))) {
+    const parsed = parseJsonSafe(jsonLdMatch[1]);
+    if (!parsed) continue;
+    collectMenuNodes(parsed, pushRow);
+  }
+
+  const nextDataMatch = html.match(
+    /<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (nextDataMatch) {
+    const parsed = parseJsonSafe(nextDataMatch[1]);
+    if (parsed) collectMenuNodes(parsed, pushRow);
+  }
+
+  const uniqueMap = new Map<string, Record<string, any>>();
+  for (const row of rows) {
+    const key = `${String(row.name).toLowerCase()}::${Number(row.price_cents)}`;
+    if (!uniqueMap.has(key)) uniqueMap.set(key, row);
+  }
+
+  return Array.from(uniqueMap.values()).slice(0, 500);
+}
+
+function collectMenuNodes(
+  node: unknown,
+  pushRow: (name: string, priceRaw: unknown, description?: string) => void,
+) {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectMenuNodes(item, pushRow);
+    return;
+  }
+  if (typeof node !== "object") return;
+
+  const value = node as Record<string, any>;
+  const name = value.name || value.title || value.itemName;
+  const description = value.description || value.subtitle || value.details;
+  const offerPrice =
+    value.price ??
+    value.priceAmount ??
+    value.basePrice ??
+    value.item_price ??
+    value.price_cents ??
+    value?.offers?.price ??
+    value?.offer?.price ??
+    value?.priceSpecification?.price ??
+    value?.pricing?.price;
+
+  if (name && offerPrice != null) {
+    pushRow(String(name), offerPrice, description ? String(description) : "");
+  }
+
+  for (const child of Object.values(value)) {
+    if (child && typeof child === "object") {
+      collectMenuNodes(child, pushRow);
+    }
+  }
+}
+
+function toPriceCents(rawPrice: unknown): number | null {
+  if (rawPrice == null) return null;
+  if (typeof rawPrice === "number" && Number.isFinite(rawPrice)) {
+    return rawPrice > 500 ? Math.round(rawPrice) : Math.round(rawPrice * 100);
+  }
+
+  const cleaned = String(rawPrice).replace(/[^0-9.]/g, "");
+  if (!cleaned) return null;
+  const numeric = Number(cleaned);
+  if (!Number.isFinite(numeric)) return null;
+  return numeric > 500 ? Math.round(numeric) : Math.round(numeric * 100);
+}
+
+function parseJsonSafe(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw.trim());
+  } catch {
+    return null;
+  }
 }

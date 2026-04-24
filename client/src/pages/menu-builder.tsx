@@ -140,7 +140,9 @@ export default function MenuBuilderPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all_day");
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"csv" | "pdf">("csv");
+  const [importType, setImportType] = useState<"csv" | "pdf" | "url">("csv");
+  const [importUrl, setImportUrl] = useState("");
+  const [importSource, setImportSource] = useState("auto");
   const [isImporting, setIsImporting] = useState(false);
 
   // fetch menus list
@@ -205,15 +207,35 @@ export default function MenuBuilderPage() {
 
   // import menu items
   const handleImport = async () => {
-    if (!importFile || !selectedMenuId) return;
+    if (!selectedMenuId) return;
     setIsImporting(true);
     try {
-      const form = new FormData();
-      form.append("file", importFile);
-      const res = await fetch(
-        `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/${importType}`,
-        { method: "POST", body: form, credentials: "include" },
-      );
+      let res: Response;
+      if (importType === "url") {
+        const cleanedUrl = importUrl.trim();
+        if (!cleanedUrl) throw new Error("Paste a menu URL to import.");
+        res = await fetch(
+          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/url`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: cleanedUrl,
+              source: importSource === "auto" ? undefined : importSource,
+            }),
+          },
+        );
+      } else {
+        if (!importFile) throw new Error("Choose a file to import.");
+        const form = new FormData();
+        form.append("file", importFile);
+        res = await fetch(
+          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/${importType}`,
+          { method: "POST", body: form, credentials: "include" },
+        );
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Import failed");
       queryClient.invalidateQueries({
@@ -221,9 +243,11 @@ export default function MenuBuilderPage() {
       });
       setShowImportDialog(false);
       setImportFile(null);
+      setImportUrl("");
+      setImportSource("auto");
       toast({
         title: "Import complete",
-        description: `${data.inserted ?? 0} items imported.`,
+        description: `${data.imported ?? data.inserted ?? 0} items imported.`,
       });
     } catch (err: any) {
       toast({
@@ -427,32 +451,66 @@ export default function MenuBuilderPage() {
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">
-                {(["csv", "pdf"] as const).map((t) => (
+                {(["csv", "pdf", "url"] as const).map((t) => (
                   <Button
                     key={t}
                     variant={importType === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t.toUpperCase()}
+                    {t === "url" ? "URL" : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {importType === "csv"
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
-                  : "Upload a PDF menu — AI will extract items automatically."}
+                  : importType === "pdf"
+                    ? "Upload a PDF menu — AI will extract items automatically."
+                    : "Paste a DoorDash, UberEats, Google, or other public menu URL."}
               </p>
             </div>
-            <div>
-              <Label htmlFor="import-file">File</Label>
-              <Input
-                id="import-file"
-                type="file"
-                accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : ".pdf"}
-                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-              />
-            </div>
+            {importType === "url" ? (
+              <>
+                <div>
+                  <Label htmlFor="import-url">Menu URL</Label>
+                  <Input
+                    id="import-url"
+                    type="url"
+                    placeholder="https://www.doordash.com/store/..."
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="import-source">Source</Label>
+                  <Select value={importSource} onValueChange={setImportSource}>
+                    <SelectTrigger id="import-source">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto detect</SelectItem>
+                      <SelectItem value="doordash">DoorDash</SelectItem>
+                      <SelectItem value="ubereats">UberEats</SelectItem>
+                      <SelectItem value="google">Google</SelectItem>
+                      <SelectItem value="grubhub">Grubhub</SelectItem>
+                      <SelectItem value="yelp">Yelp</SelectItem>
+                      <SelectItem value="website">Other Website</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div>
+                <Label htmlFor="import-file">File</Label>
+                <Input
+                  id="import-file"
+                  type="file"
+                  accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : ".pdf"}
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -463,7 +521,12 @@ export default function MenuBuilderPage() {
             </Button>
             <Button
               onClick={handleImport}
-              disabled={!importFile || isImporting}
+              disabled={
+                isImporting ||
+                (importType === "url"
+                  ? !importUrl.trim()
+                  : !importFile)
+              }
             >
               {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Import
