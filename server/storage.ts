@@ -138,7 +138,8 @@ import { resolveCityTimeZoneSync } from "./services/cityTimeZone";
 import { utcDateFromDateKey } from "./services/dateKeys";
 import { isPublicBusinessVisible } from "./utils/publicBusinessVisibility";
 import { broadcastLisaClaim } from "./websocket";
-import { createAuthTokensRepository } from "./storage/authTokensRepository";
+import { createApiKeysRepository } from "./storage/apiKeysRepository";
+import { createAuthTokenLifecycleRepository } from "./storage/authTokenLifecycleRepository";
 import { createHostsEventsRepository } from "./storage/hostsEventsRepository";
 import { createRestaurantsDealsRepository } from "./storage/restaurantsDealsRepository";
 import { createUsersRepository } from "./storage/usersRepository";
@@ -773,7 +774,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  private readonly authTokensRepository = createAuthTokensRepository();
+  private readonly authTokenLifecycleRepository = createAuthTokenLifecycleRepository();
+  private readonly apiKeysRepository = createApiKeysRepository();
   private readonly hostsEventsRepository = createHostsEventsRepository();
   private readonly restaurantsDealsRepository = createRestaurantsDealsRepository({
     ensureCityExists: async (name: string, state: string | null) =>
@@ -4957,44 +4959,48 @@ export class DatabaseStorage implements IStorage {
   async createPasswordResetToken(
     tokenData: InsertPasswordResetToken,
   ): Promise<PasswordResetToken> {
-    return this.authTokensRepository.createPasswordResetToken(tokenData);
+    return this.authTokenLifecycleRepository.createPasswordResetToken(tokenData);
   }
 
   async getPasswordResetToken(
     id: string,
   ): Promise<PasswordResetToken | undefined> {
-    return this.authTokensRepository.getPasswordResetToken(id);
+    return this.authTokenLifecycleRepository.getPasswordResetToken(id);
   }
 
   async getPasswordResetTokenByTokenHash(
     tokenHash: string,
   ): Promise<PasswordResetToken | undefined> {
-    return this.authTokensRepository.getPasswordResetTokenByTokenHash(tokenHash);
+    return this.authTokenLifecycleRepository.getPasswordResetTokenByTokenHash(
+      tokenHash,
+    );
   }
 
   async markPasswordResetTokenUsed(id: string): Promise<PasswordResetToken> {
-    return this.authTokensRepository.markPasswordResetTokenUsed(id);
+    return this.authTokenLifecycleRepository.markPasswordResetTokenUsed(id);
   }
 
   async deleteUserResetTokens(userId: string): Promise<void> {
-    return this.authTokensRepository.deleteUserResetTokens(userId);
+    return this.authTokenLifecycleRepository.deleteUserResetTokens(userId);
   }
 
   async deleteExpiredResetTokens(): Promise<number> {
-    return this.authTokensRepository.deleteExpiredResetTokens();
+    return this.authTokenLifecycleRepository.deleteExpiredResetTokens();
   }
 
   async createPhoneVerificationToken(
     tokenData: InsertPhoneVerificationToken,
   ): Promise<PhoneVerificationToken> {
-    return this.authTokensRepository.createPhoneVerificationToken(tokenData);
+    return this.authTokenLifecycleRepository.createPhoneVerificationToken(
+      tokenData,
+    );
   }
 
   async getPhoneVerificationTokenByHash(
     phone: string,
     tokenHash: string,
   ): Promise<PhoneVerificationToken | undefined> {
-    return this.authTokensRepository.getPhoneVerificationTokenByHash(
+    return this.authTokenLifecycleRepository.getPhoneVerificationTokenByHash(
       phone,
       tokenHash,
     );
@@ -5003,59 +5009,65 @@ export class DatabaseStorage implements IStorage {
   async markPhoneVerificationTokenUsed(
     id: string,
   ): Promise<PhoneVerificationToken> {
-    return this.authTokensRepository.markPhoneVerificationTokenUsed(id);
+    return this.authTokenLifecycleRepository.markPhoneVerificationTokenUsed(id);
   }
 
   async deletePhoneVerificationTokens(phone: string): Promise<void> {
-    return this.authTokensRepository.deletePhoneVerificationTokens(phone);
+    return this.authTokenLifecycleRepository.deletePhoneVerificationTokens(
+      phone,
+    );
   }
 
   async deleteExpiredPhoneVerificationTokens(): Promise<number> {
-    return this.authTokensRepository.deleteExpiredPhoneVerificationTokens();
+    return this.authTokenLifecycleRepository.deleteExpiredPhoneVerificationTokens();
   }
 
   // Account setup token operations
   async createAccountSetupToken(
     tokenData: InsertAccountSetupToken,
   ): Promise<AccountSetupToken> {
-    return this.authTokensRepository.createAccountSetupToken(tokenData);
+    return this.authTokenLifecycleRepository.createAccountSetupToken(tokenData);
   }
 
   async getAccountSetupToken(
     id: string,
   ): Promise<AccountSetupToken | undefined> {
-    return this.authTokensRepository.getAccountSetupToken(id);
+    return this.authTokenLifecycleRepository.getAccountSetupToken(id);
   }
 
   async getAccountSetupTokenByTokenHash(
     tokenHash: string,
   ): Promise<AccountSetupToken | undefined> {
-    return this.authTokensRepository.getAccountSetupTokenByTokenHash(tokenHash);
+    return this.authTokenLifecycleRepository.getAccountSetupTokenByTokenHash(
+      tokenHash,
+    );
   }
 
   async markAccountSetupTokenUsed(id: string): Promise<AccountSetupToken> {
-    return this.authTokensRepository.markAccountSetupTokenUsed(id);
+    return this.authTokenLifecycleRepository.markAccountSetupTokenUsed(id);
   }
 
   async deleteUserSetupTokens(userId: string): Promise<void> {
-    return this.authTokensRepository.deleteUserSetupTokens(userId);
+    return this.authTokenLifecycleRepository.deleteUserSetupTokens(userId);
   }
 
   async deleteExpiredSetupTokens(): Promise<number> {
-    return this.authTokensRepository.deleteExpiredSetupTokens();
+    return this.authTokenLifecycleRepository.deleteExpiredSetupTokens();
   }
 
   // Email verification token operations
   async createEmailVerificationToken(
     tokenData: InsertEmailVerificationToken,
   ): Promise<EmailVerificationToken> {
-    return this.authTokensRepository.createEmailVerificationToken(tokenData);
+    return this.authTokenLifecycleRepository.createEmailVerificationToken(
+      tokenData,
+    );
   }
 
   async getEmailVerificationTokenByTokenHash(
     tokenHash: string,
   ): Promise<EmailVerificationToken | undefined> {
-    return this.authTokensRepository.getEmailVerificationTokenByTokenHash(
+    return this.authTokenLifecycleRepository.getEmailVerificationTokenByTokenHash(
       tokenHash,
     );
   }
@@ -5063,16 +5075,16 @@ export class DatabaseStorage implements IStorage {
   async markEmailVerificationTokenUsed(
     id: string,
   ): Promise<EmailVerificationToken> {
-    return this.authTokensRepository.markEmailVerificationTokenUsed(id);
+    return this.authTokenLifecycleRepository.markEmailVerificationTokenUsed(id);
   }
 
   // API Key operations
   async getActiveApiKeys(): Promise<any[]> {
-    return this.authTokensRepository.getActiveApiKeys();
+    return this.apiKeysRepository.getActiveApiKeys();
   }
 
   async updateApiKeyLastUsed(keyId: string): Promise<void> {
-    return this.authTokensRepository.updateApiKeyLastUsed(keyId);
+    return this.apiKeysRepository.updateApiKeyLastUsed(keyId);
   }
 
   // Deal feedback operations
