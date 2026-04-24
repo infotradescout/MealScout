@@ -166,7 +166,7 @@ export function registerRestaurantSignupRoutes(
         await db.insert(menus).values({
           restaurantId: restaurant.id,
           name: "All Day Menu",
-          serviceType: "all_day",
+          serviceType: "all",
           isActive: true,
           acceptsCash: true,
           hidePlatformFee: false,
