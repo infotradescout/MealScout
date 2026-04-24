@@ -8,7 +8,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Bug, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 export function BetaDisclaimer() {
   const [open, setOpen] = useState(false);
@@ -38,28 +38,20 @@ export function BetaDisclaimer() {
         <AlertDialogHeader>
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="h-6 w-6 text-orange-500" />
-            <AlertDialogTitle className="text-2xl">Welcome to MealScout Beta!</AlertDialogTitle>
+            <AlertDialogTitle className="text-2xl">MealScout 2.0 Beta</AlertDialogTitle>
           </div>
           <AlertDialogDescription asChild>
             <div className="text-base space-y-3">
               <p className="text-foreground font-medium">
-                You're experiencing an early version of MealScout. We're excited to have you here!
+                Online Ordering infrastructure for local food operators.
               </p>
-              <div>
-                <p className="font-semibold text-foreground mb-2">We encourage you to:</p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>Try all features and explore the platform</li>
-                  <li>Report any bugs or issues you encounter</li>
-                  <li>Share your feedback to help us improve</li>
-                </ul>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-md p-3">
-                <div className="flex items-start gap-2">
-                  <Bug className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-sm text-orange-800 dark:text-orange-200">
-                    Found a bug? Use the bug report button (bottom right corner) to send us a screenshot with one click!
-                  </span>
-                </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Operator-controlled menus, availability, offers, and order workflows for restaurants, bars, and food trucks.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Beta features are being rolled out in phases.
+                </p>
               </div>
             </div>
           </AlertDialogDescription>
@@ -70,7 +62,7 @@ export function BetaDisclaimer() {
             className="w-full sm:w-auto"
             data-testid="button-beta-disclaimer-close"
           >
-            Got it, let's explore!
+            Explore Beta
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
