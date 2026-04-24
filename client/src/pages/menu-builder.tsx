@@ -2,7 +2,7 @@
  * Menu Builder — Business dashboard page
  * Allows restaurant/bar/truck owners to create and manage their online menus.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -55,7 +55,7 @@ import {
   EyeOff,
   Settings,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -115,25 +115,46 @@ interface MenuItem {
 
 interface FullMenu extends Menu {
   categories: Array<MenuCategory & { items: MenuItem[] }>;
+  uncategorizedItems?: MenuItem[];
+}
+
+interface RestaurantOption {
+  id: string;
+  name: string;
+  businessType?: string | null;
 }
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
-function useRestaurantId(): string | null {
+function useRestaurantId(restaurants: RestaurantOption[]): string | null {
   const { user } = useAuth();
+  const params = useParams<{ restaurantId?: string }>();
+  const routeRestaurantId = String(params.restaurantId || "").trim();
+  if (routeRestaurantId) return routeRestaurantId;
+
   const role = String((user as any)?.userType || "");
   const isAdminMode = ["admin", "super_admin", "staff"].includes(role);
   if (isAdminMode && typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const override = String(params.get("adminRestaurantId") || "").trim();
-    if (override) return override;
+      if (override) return override;
   }
-  return (user as any)?.restaurantId ?? null;
+  return (user as any)?.restaurantId ?? restaurants[0]?.id ?? null;
 }
 
 // ──────────────────────────────── main page ───────────────────────────────────
 export default function MenuBuilderPage() {
-  const restaurantId = useRestaurantId();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const restaurantsQuery = useQuery<RestaurantOption[]>({
+    queryKey: ["/api/restaurants/my-restaurants"],
+    enabled: !!user,
+  });
+  const restaurantOptions = restaurantsQuery.data ?? [];
+  const restaurantId = useRestaurantId(restaurantOptions);
+  const activeRestaurant = useMemo(
+    () => restaurantOptions.find((restaurant) => restaurant.id === restaurantId),
+    [restaurantOptions, restaurantId],
+  );
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [showNewMenuDialog, setShowNewMenuDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -155,7 +176,8 @@ export default function MenuBuilderPage() {
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menus");
-      return res.json();
+      const payload = await res.json();
+      return Array.isArray(payload) ? payload : payload?.menus ?? [];
     },
     enabled: !!restaurantId,
   });
@@ -171,12 +193,30 @@ export default function MenuBuilderPage() {
       );
       if (!res.ok) throw new Error("Failed to load menu");
       const data = await res.json();
-      // Return the specific menu from the list
-      const menus: FullMenu[] = Array.isArray(data) ? data : [data];
+      const menus: FullMenu[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.menus)
+          ? data.menus
+          : [data].filter(Boolean);
       return menus.find((m) => m.id === selectedMenuId) ?? menus[0];
     },
     enabled: !!selectedMenuId && !!restaurantId,
   });
+
+  useEffect(() => {
+    if (!restaurantId) {
+      setSelectedMenuId(null);
+      return;
+    }
+    const menus = menusQuery.data ?? [];
+    if (menus.length === 0) {
+      setSelectedMenuId(null);
+      return;
+    }
+    if (!selectedMenuId || !menus.some((menu) => menu.id === selectedMenuId)) {
+      setSelectedMenuId(menus[0].id);
+    }
+  }, [menusQuery.data, restaurantId, selectedMenuId]);
 
   // create menu
   const createMenuMutation = useMutation({
@@ -188,11 +228,12 @@ export default function MenuBuilderPage() {
       });
       return res.json();
     },
-    onSuccess: (menu) => {
+    onSuccess: (payload) => {
+      const menu = payload?.menu ?? payload;
       queryClient.invalidateQueries({
         queryKey: ["/api/owner/menus", restaurantId],
       });
-      setSelectedMenuId(menu.id);
+      if (menu?.id) setSelectedMenuId(menu.id);
       setShowNewMenuDialog(false);
       setNewMenuName("");
       toast({ title: "Menu created!" });
@@ -260,14 +301,30 @@ export default function MenuBuilderPage() {
     }
   };
 
+  if (restaurantsQuery.isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Navigation />
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   if (!restaurantId) {
     return (
       <div className="min-h-screen">
         <Navigation />
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">
-            No restaurant linked to your account.
-          </p>
+          <div className="text-center">
+            <p className="text-muted-foreground">
+              No business profile is linked to your account yet.
+            </p>
+            <Link href="/restaurant-signup">
+              <Button className="mt-4">Create Business Profile</Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -288,8 +345,7 @@ export default function MenuBuilderPage() {
               Menu Builder
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Create and manage your online menus for pickup &amp; dine-in
-              ordering.
+              Create and manage menus for {activeRestaurant?.name || "your business"}.
             </p>
           </div>
           <div className="flex gap-2">

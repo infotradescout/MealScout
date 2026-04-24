@@ -156,6 +156,12 @@ interface OnboardingCompletion {
   };
 }
 
+interface OwnerMenuSummary {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -347,6 +353,23 @@ export default function RestaurantOwnerDashboard() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: [`/api/restaurants/${selectedRestaurant}/stats`],
     enabled: !!selectedRestaurant,
+  });
+
+  const { data: ownerMenus = [] } = useQuery<OwnerMenuSummary[]>({
+    queryKey: ["/api/owner/menus", selectedRestaurant],
+    queryFn: async () => {
+      if (!selectedRestaurant) return [];
+      const res = await fetch(
+        `/api/owner/menus/${encodeURIComponent(selectedRestaurant)}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      const payload = await res.json();
+      return Array.isArray(payload) ? payload : payload?.menus ?? [];
+    },
+    enabled: !!selectedRestaurant && (canManageDeals || canManageParkingPass),
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch advanced analytics
@@ -1551,7 +1574,7 @@ export default function RestaurantOwnerDashboard() {
       {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
       {subscription?.hasAccess && currentRestaurant && (() => {
         const hasPhoto = Boolean((currentRestaurant as any).imageUrl || (currentRestaurant as any).logoUrl);
-        const hasMenu = Boolean((currentRestaurant as any).menuUrl || (currentRestaurant as any).hasMenu);
+        const hasMenu = ownerMenus.length > 0;
         const hasAddress = Boolean((currentRestaurant as any).address || (currentRestaurant as any).city);
         const hasPhone = Boolean((currentRestaurant as any).phone || (currentRestaurant as any).contactPhone);
         const hasDeal = (stats?.activeDeals || 0) > 0;

@@ -583,6 +583,10 @@ function Router() {
               path="/order-confirmation/:orderId"
               component={OrderConfirmationPage}
             />
+            <Route
+              path="/menu-builder/:restaurantId"
+              component={MenuBuilderPage}
+            />
             <Route path="/menu-builder" component={MenuBuilderPage} />
             <Route path="/kitchen" component={KitchenDisplayPage} />
           </>

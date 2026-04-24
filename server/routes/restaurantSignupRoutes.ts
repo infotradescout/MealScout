@@ -9,7 +9,7 @@ import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
-import { users, insertRestaurantSchema, type User } from "@shared/schema";
+import { menus, users, insertRestaurantSchema, type User } from "@shared/schema";
 
 type RestaurantSignupRouteDependencies = {
   ensureTrialForUser: (user: User) => Promise<User | null | undefined>;
@@ -161,6 +161,19 @@ export function registerRestaurantSignupRoutes(
       }
 
       const restaurant = await storage.createRestaurant(minimalRestaurantPayload);
+
+      try {
+        await db.insert(menus).values({
+          restaurantId: restaurant.id,
+          name: "All Day Menu",
+          serviceType: "all_day",
+          isActive: true,
+          acceptsCash: true,
+          hidePlatformFee: false,
+        });
+      } catch (error) {
+        console.warn("Failed to create starter menu:", error);
+      }
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
         const currentType = String((user as any)?.userType || "");
