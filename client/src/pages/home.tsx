@@ -18,7 +18,6 @@ import {
   RotateCw,
   ChefHat,
   Clock,
-  Target,
   Heart,
   Bell,
   Map as MapIcon,
@@ -820,21 +819,6 @@ export default function Home() {
                 >
                   <Store className="w-5 h-5" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={retryLocation}
-                  disabled={isLoadingLocation}
-                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
-                  title="Refresh Location"
-                  aria-label="Refresh location"
-                >
-                  {isLoadingLocation ? (
-                    <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Target className="w-4 h-4" />
-                  )}
-                </Button>
               </>
             ) : (
               <div className="flex items-center space-x-2">
@@ -845,21 +829,6 @@ export default function Home() {
                   className="w-2 h-2 rounded-full bg-[color:var(--status-success)]"
                   title="Real-time location active"
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={retryLocation}
-                  disabled={isLoadingLocation}
-                  className="text-foreground hover:text-[color:var(--accent-text-hover)] bg-[var(--bg-surface)]/80 border border-[color:var(--border-subtle)]"
-                  title="Refresh Location"
-                  aria-label="Refresh location"
-                >
-                  {isLoadingLocation ? (
-                    <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Target className="w-3.5 h-3.5" />
-                  )}
-                </Button>
               </div>
             )}
           </div>
@@ -1057,15 +1026,6 @@ export default function Home() {
                     {isLoadingLocation ? "..." : "Go"}
                   </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={retryLocation}
-                  disabled={isLoadingLocation}
-                  className="mt-2 text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
-                >
-                  Use my location
-                </Button>
                 {locationError && (
                   <p className="manual-location-error" role="alert">
                     {locationError}
