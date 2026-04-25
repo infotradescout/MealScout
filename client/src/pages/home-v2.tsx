@@ -555,10 +555,10 @@ export default function Home() {
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[color:var(--accent-text)]/10 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           {/* Main heading */}
-          <div className="mb-12">
-            <h1 className="text-6xl sm:text-7xl font-black mb-4 leading-tight tracking-tight">
+          <div className="mb-6">
+            <h1 className="text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight">
               {firstName ? (
                 <>
                   Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
@@ -569,13 +569,13 @@ export default function Home() {
                 </>
               )}
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl leading-relaxed">
+            <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
               Discover live food trucks, trending deals, and local gems happening right now
             </p>
           </div>
 
           {/* Search bar */}
-          <div className="mb-8 max-w-2xl">
+          <div className="mb-4 max-w-2xl">
             <SmartSearch
               value={searchQuery}
               onChange={setSearchQuery}
@@ -588,33 +588,33 @@ export default function Home() {
           </div>
 
           {/* Quick action buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={retryLocation}
               disabled={isLoadingLocation}
-              className="action-primary h-12 px-6 rounded-full font-semibold"
-              size="lg"
+              className="action-primary h-10 px-4 rounded-full font-semibold text-sm"
+              size="sm"
             >
-              <MapPin className="w-5 h-5 mr-2" />
-              {isLoadingLocation ? "Finding location..." : "Use My Location"}
+              <MapPin className="w-4 h-4 mr-2" />
+              {isLoadingLocation ? "Finding..." : "My Location"}
             </Button>
             <Link href="/map">
-              <Button variant="outline" className="h-12 px-6 rounded-full font-semibold" size="lg">
-                <MapIcon className="w-5 h-5 mr-2" />
-                View Map
+              <Button variant="outline" className="h-10 px-4 rounded-full font-semibold text-sm" size="sm">
+                <MapIcon className="w-4 h-4 mr-2" />
+                Map
               </Button>
             </Link>
             <Link href="/deals/featured">
-              <Button variant="outline" className="h-12 px-6 rounded-full font-semibold" size="lg">
-                <Zap className="w-5 h-5 mr-2" />
-                Hot Deals
+              <Button variant="outline" className="h-10 px-4 rounded-full font-semibold text-sm" size="sm">
+                <Zap className="w-4 h-4 mr-2" />
+                Deals
               </Button>
             </Link>
           </div>
 
           {/* Manual location input */}
           {!location && !showWelcomeModal && (
-            <div className="mt-8 max-w-sm">
+            <div className="mt-4 max-w-sm">
               <div className="flex gap-2">
                 <Input
                   type="text"
@@ -644,9 +644,9 @@ export default function Home() {
 
       {/* Live Food Trucks Section */}
       {liveTrucks.length > 0 && (
-        <section className="py-16 bg-[color:var(--bg-surface)]">
+        <section className="py-8 bg-[color:var(--bg-surface)]">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="mb-10">
+            <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
                   <Truck className="w-6 h-6 text-[color:var(--accent-text)]" />
@@ -706,11 +706,10 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      {/* Cuisine Categories */}
-      <section className="py-16 bg-[color:var(--bg-surface)]">
+      {/* Explore by Cuisine Section */}
+      <section className="py-8 bg-[color:var(--bg-card)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="mb-10">
+          <div className="mb-6">
             <h2 className="text-3xl font-black mb-2">Explore by Cuisine</h2>
             <p className="text-muted-foreground">Find exactly what you're craving</p>
           </div>
@@ -739,38 +738,38 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 bg-gradient-to-b from-transparent to-[color:var(--accent-text)]/5">
+      {/* CTA Sections */}
+      <section className="py-8 bg-gradient-to-b from-[color:var(--bg-card)] to-[color:var(--bg-surface)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-10 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-              <div className="mb-8">
-                <div className="w-14 h-14 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-6">
-                  <Store className="w-7 h-7 text-[color:var(--accent-text)]" />
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
+              <div className="mb-6">
+                <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
+                  <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
                 </div>
-                <h3 className="text-3xl font-black mb-3">For Businesses</h3>
-                <p className="text-muted-foreground text-lg">Get discovered by hungry customers in your area</p>
+                <h3 className="text-2xl font-black mb-2">For Businesses</h3>
+                <p className="text-muted-foreground text-sm">Get discovered by hungry customers in your area</p>
               </div>
               <Link href="/customer-signup?role=business">
-                <Button className="action-primary w-full h-12 rounded-full font-semibold text-base">
+                <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
                   Start Free Trial
-                  <ChevronRight className="w-5 h-5 ml-2" />
+                  <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
             </div>
 
-            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-10 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-              <div className="mb-8">
-                <div className="w-14 h-14 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-6">
-                  <Heart className="w-7 h-7 text-[color:var(--accent-text)]" />
+            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
+              <div className="mb-6">
+                <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
+                  <Users className="w-6 h-6 text-[color:var(--accent-text)]" />
                 </div>
-                <h3 className="text-3xl font-black mb-3">For Diners</h3>
-                <p className="text-muted-foreground text-lg">Discover amazing food happening around you</p>
+                <h3 className="text-2xl font-black mb-2">For Diners</h3>
+                <p className="text-muted-foreground text-sm">Discover amazing food happening around you</p>
               </div>
-              <Link href="/customer-signup">
-                <Button variant="outline" className="w-full h-12 rounded-full font-semibold text-base">
+              <Link href="/customer-signup?role=diner">
+                <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
                   Create Account
-                  <ChevronRight className="w-5 h-5 ml-2" />
+                  <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
             </div>
