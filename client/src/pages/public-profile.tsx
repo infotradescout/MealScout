@@ -19,6 +19,7 @@ type PublicProfile = {
   phone?: string | null;
   websiteUrl?: string | null;
   imageUrl?: string | null;
+  businessHours?: Record<string, { open?: string; close?: string }> | null;
   canonicalUrl: string;
   profilePath: string;
   profileSettings?: {
@@ -84,6 +85,31 @@ const labelByEntity: Record<string, string> = {
   restaurant: "Restaurant Profile",
   host: "Host Profile",
   supplier: "Supplier Profile",
+};
+
+const dayOrder = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const dayLabel = (day: string) => day.charAt(0).toUpperCase() + day.slice(1, 3);
+
+const formatBusinessHours = (
+  hours?: Record<string, { open?: string; close?: string }> | null,
+) => {
+  if (!hours || typeof hours !== "object") return [];
+  return dayOrder
+    .map((day) => {
+      const value = hours[day];
+      if (!value?.open || !value?.close) return null;
+      return `${dayLabel(day)} ${value.open}-${value.close}`;
+    })
+    .filter((value): value is string => Boolean(value));
 };
 
 export default function PublicProfilePage() {
@@ -173,6 +199,7 @@ export default function PublicProfilePage() {
   const highlights = Array.isArray(profile.highlights) ? profile.highlights : [];
   const featuredLinks = Array.isArray(profile.featuredLinks) ? profile.featuredLinks : [];
   const galleryUrls = Array.isArray(profile.galleryUrls) ? profile.galleryUrls : [];
+  const businessHours = formatBusinessHours(data.businessHours);
   const ctaLabel = profile.ctaLabel || (data.websiteUrl ? "Visit website" : "");
   const ctaUrl = profile.ctaUrl || data.websiteUrl || "";
 
@@ -246,10 +273,24 @@ export default function PublicProfilePage() {
   );
   sections.set(
     "contact",
-    data.phone ? (
-      <div className="flex items-center gap-2 text-sm">
-        <Phone className="h-4 w-4 text-muted-foreground" />
-        <span>{data.phone}</span>
+    data.phone || (profile.showHours !== false && businessHours.length > 0) ? (
+      <div className="space-y-2 text-sm">
+        {data.phone ? (
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-muted-foreground" />
+            <span>{data.phone}</span>
+          </div>
+        ) : null}
+        {profile.showHours !== false && businessHours.length > 0 ? (
+          <div className="rounded-md border p-3 text-xs text-muted-foreground">
+            <div className="mb-1 font-medium text-foreground">Hours</div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {businessHours.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     ) : null,
   );

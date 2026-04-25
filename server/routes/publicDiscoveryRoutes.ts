@@ -17,6 +17,11 @@ import {
   suppliers,
   videoStories,
 } from "@shared/schema";
+import {
+  getGooglePhotoUrl,
+  populateHostProfile,
+  populateRestaurantProfile,
+} from "../services/googleProfileService";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -56,6 +61,64 @@ const machineReadinessBucket = (score: number) => {
 
 const roundToWholeHours = (value: number | null) =>
   value == null ? null : Math.max(0, Math.round(value));
+
+const parseArray = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const googlePhotoUrls = (value: unknown, maxWidth = 900) =>
+  parseArray(value)
+    .map((photo) => {
+      const directUrl = String(photo?.url || photo?.photoUrl || "").trim();
+      if (directUrl) return directUrl;
+      const name = String(photo?.name || photo?.photoReference || "").trim();
+      return name ? getGooglePhotoUrl(name, maxWidth) : null;
+    })
+    .filter((url): url is string => Boolean(url));
+
+const hasGallery = (settings: any) =>
+  Array.isArray(settings?.galleryUrls) && settings.galleryUrls.length > 0;
+
+const hasHighlights = (settings: any) =>
+  Array.isArray(settings?.highlights) && settings.highlights.length > 0;
+
+const importedHighlights = (value: unknown) =>
+  parseArray(value)
+    .map((item) =>
+      String(item || "")
+        .replace(/_/g, " ")
+        .trim()
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    )
+    .filter(Boolean)
+    .slice(0, 8);
+
+const hasRichHostProfile = (row: any) =>
+  Boolean(
+    row?.googlePlaceId &&
+      (row?.description ||
+        row?.businessWebsite ||
+        row?.businessHours ||
+        row?.googleFormattedPhone ||
+        parseArray(row?.googlePhotos).length > 0),
+  );
+
+const hasRichRestaurantProfile = (row: any) =>
+  Boolean(
+    row?.googlePlaceId &&
+      (row?.description ||
+        row?.websiteUrl ||
+        row?.operatingHours ||
+        row?.googleFormattedPhone ||
+        parseArray(row?.googlePhotos).length > 0),
+  );
 
 const normalizeLoose = (value: unknown) =>
   String(value || "")
@@ -411,12 +474,36 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       const baseUrl = resolvePublicBaseUrl();
 
       if (entity === "restaurant") {
-        const row = await storage.getRestaurant(id);
+        let row = await storage.getRestaurant(id);
         if (!row || !row.isActive) {
           return res.status(404).json({ message: "Profile not found" });
         }
+
+        if (!hasRichRestaurantProfile(row)) {
+          const populated = await populateRestaurantProfile(id);
+          if (populated.success) {
+            const refreshed = await storage.getRestaurant(id);
+            if (refreshed) row = refreshed;
+          } else {
+            console.warn(
+              `[public-profile] Google restaurant enrichment skipped for ${id}: ${populated.error}`,
+            );
+          }
+        }
+
         const ownerUser = await storage.getUser(row.ownerId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const baseSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const importedGallery = googlePhotoUrls(row.googlePhotos);
+        const googleHighlights = importedHighlights(row.googleCategories);
+        const profileSettings = {
+          ...baseSettings,
+          galleryUrls: hasGallery(baseSettings)
+            ? baseSettings.galleryUrls
+            : importedGallery,
+          highlights: hasHighlights(baseSettings)
+            ? baseSettings.highlights
+            : googleHighlights,
+        };
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const slug = toSlug(row.name) || row.id;
@@ -433,9 +520,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           address: showAddress ? row.address || null : null,
           city: row.city || null,
           state: row.state || null,
-          phone: showContact ? row.phone || null : null,
+          phone: showContact
+            ? row.phone || row.googleFormattedPhone || null
+            : null,
           websiteUrl: row.websiteUrl || null,
-          imageUrl: row.coverImageUrl || row.logoUrl || null,
+          imageUrl:
+            row.coverImageUrl || row.logoUrl || importedGallery[0] || null,
+          businessHours: row.operatingHours || null,
           profilePath,
           canonicalUrl: `${baseUrl}${profilePath}`,
           profileSettings,
@@ -448,12 +539,36 @@ export function registerPublicDiscoveryRoutes(app: Express) {
       }
 
       if (entity === "host") {
-        const row = await storage.getHost(id);
+        let row = await storage.getHost(id);
         if (!row) {
           return res.status(404).json({ message: "Profile not found" });
         }
+
+        if (!hasRichHostProfile(row)) {
+          const populated = await populateHostProfile(id);
+          if (populated.success) {
+            const refreshed = await storage.getHost(id);
+            if (refreshed) row = refreshed;
+          } else {
+            console.warn(
+              `[public-profile] Google host enrichment skipped for ${id}: ${populated.error}`,
+            );
+          }
+        }
+
         const ownerUser = await storage.getUser(row.userId);
-        const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const baseSettings = (ownerUser?.publicProfileSettings || {}) as any;
+        const importedGallery = googlePhotoUrls(row.googlePhotos);
+        const googleHighlights = importedHighlights(row.googleCategories);
+        const profileSettings = {
+          ...baseSettings,
+          galleryUrls: hasGallery(baseSettings)
+            ? baseSettings.galleryUrls
+            : importedGallery,
+          highlights: hasHighlights(baseSettings)
+            ? baseSettings.highlights
+            : googleHighlights,
+        };
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const slug = toSlug(row.businessName) || row.id;
@@ -467,14 +582,18 @@ export function registerPublicDiscoveryRoutes(app: Express) {
               ? "Event Coordinator"
               : "Host Location",
           description:
+            row.description ||
             row.notes ||
             `${row.businessName} hosts trucks on MealScout with live event and parking availability.`,
           address: showAddress ? row.address || null : null,
           city: row.city || null,
           state: row.state || null,
-          phone: showContact ? row.contactPhone || null : null,
-          websiteUrl: null,
-          imageUrl: row.spotImageUrl || null,
+          phone: showContact
+            ? row.contactPhone || row.googleFormattedPhone || null
+            : null,
+          websiteUrl: row.businessWebsite || null,
+          imageUrl: row.spotImageUrl || importedGallery[0] || null,
+          businessHours: row.businessHours || null,
           profilePath,
           canonicalUrl: `${baseUrl}${profilePath}`,
           profileSettings,
