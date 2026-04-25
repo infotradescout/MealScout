@@ -628,7 +628,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         {/* Toggle button - always visible */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="fixed top-4 left-4 z-50 h-10 w-10 flex items-center justify-center rounded-xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean transition-colors hover:bg-[var(--bg-card-hover)]"
+          className="fixed top-4 left-4 z-50 h-10 w-10 flex items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-clean transition-colors hover:bg-[var(--bg-card-hover)]"
           aria-label="Toggle navigation"
         >
           {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -716,7 +716,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
         {/* Desktop top-right quick actions (compact) */}
         <div data-nav-root={scope} className="fixed top-4 right-4 z-50">
-          <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
+          <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg p-2">
             <div className="flex items-center gap-2">
               {topItems.map((item) =>
                 item.path ? (

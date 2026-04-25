@@ -21,11 +21,12 @@
   --bg-day-glow: none;
   --bg-ember: none;
   --bg-layered: linear-gradient(180deg, #faf8f4 0%, #f5f2ec 100%);
-  --bg-surface: rgba(255, 255, 255, 0.92);
-  --bg-surface-muted: rgba(255, 255, 255, 0.82);
-  --bg-card: rgba(255, 255, 255, 0.94);
-  --bg-popup: rgba(255, 255, 255, 0.96);
-  --field-bg: rgba(255, 255, 255, 0.95);
+  --bg-surface: #f9f8f6;
+  --bg-surface-muted: #f3f1ed;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f3ef;
+  --bg-popup: #ffffff;
+  --field-bg: #fafaf9;
   --text-primary: #0a0a0a;
   --text-secondary: #1f2937;
   --text-muted: #6b7280;
@@ -117,6 +118,7 @@
   --bg-surface: #171513;
   --bg-surface-muted: #1f1b18;
   --bg-card: #111111;
+  --bg-card-hover: #1c1917;
   --bg-popup: #1c1a18;
   --field-bg: #332d28;
   --text-primary: #ffffff;
@@ -761,13 +763,13 @@
     }
 
     .home-cinematic .home-hero-panel {
-      background: rgba(255, 255, 255, 0.92);
+      background: #ffffff;
       border: 1px solid
         color-mix(in srgb, var(--border-subtle) 70%, transparent);
       border-radius: 28px;
       padding: 28px 32px;
       box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
-      backdrop-filter: blur(12px);
+      backdrop-filter: none;
     }
 
     .theme-night .home-cinematic .home-hero-panel {
@@ -1083,7 +1085,7 @@
   }
 
   .theme-day .nav-bar {
-    background: rgba(255, 255, 255, 0.94);
+    background: #ffffff;
     border-color: rgba(15, 23, 42, 0.12);
     box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.1);
     -webkit-backdrop-filter: none;

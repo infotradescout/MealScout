@@ -53,8 +53,8 @@ export function TimeOfDayBackground() {
         style={{
           backgroundColor: "transparent",
           backgroundImage: isDay
-            ? "linear-gradient(180deg, rgba(250, 250, 248, 0.55) 0%, rgba(250, 250, 248, 0.72) 50%, rgba(250, 250, 248, 0.62) 100%)"
-            : "linear-gradient(180deg, rgba(8, 8, 8, 0.75) 0%, rgba(8, 8, 8, 0.55) 50%, rgba(8, 8, 8, 0.7) 100%)",
+            ? "linear-gradient(180deg, rgba(250, 250, 248, 0.88) 0%, rgba(250, 250, 248, 0.92) 50%, rgba(250, 250, 248, 0.88) 100%)"
+            : "linear-gradient(180deg, rgba(8, 8, 8, 0.82) 0%, rgba(8, 8, 8, 0.65) 50%, rgba(8, 8, 8, 0.78) 100%)",
         }}
       />
     </>
