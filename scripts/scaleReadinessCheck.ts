@@ -53,8 +53,12 @@ async function main() {
   const metricsHeaders: Record<string, string> = {};
   if (healthToken) metricsHeaders["X-Health-Token"] = healthToken;
   const metrics = await checkEndpoint("/health/metrics", metricsHeaders);
-  console.log(`${metrics.ok ? "PASS" : "FAIL"} /health/metrics status=${metrics.status}`);
-  if (!metrics.ok) failed += 1;
+  if (!healthToken && metrics.status === 401) {
+    console.log("SKIP /health/metrics status=401 (set HEALTH_METRICS_TOKEN to verify protected metrics)");
+  } else {
+    console.log(`${metrics.ok ? "PASS" : "FAIL"} /health/metrics status=${metrics.status}`);
+    if (!metrics.ok) failed += 1;
+  }
 
   if (failed > 0) {
     console.log(`Readiness check FAILED (${failed} issue(s))`);
