@@ -598,7 +598,6 @@ export default function Home() {
                 setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
               }
               placeholder="Search food trucks, deals, restaurants..."
-              className="shadow-2xl"
             />
           </div>
 
