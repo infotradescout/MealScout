@@ -20,7 +20,7 @@
  *   VITE_GOOGLE_MAPS_WEB_API_KEY   - Warned if absent (all in-app map rendering)
  */
 
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 
 const baseUrl = String(process.env.SMOKE_BASE_URL || "http://127.0.0.1:5000")
   .trim()
@@ -45,6 +45,27 @@ function fail(msg) {
 
 function warn(msg) {
   console.warn(`  ⚠️   ${msg}`);
+}
+
+function runNpmScript(label, script, extraEnv = {}) {
+  console.log(`\n  Running: npm run ${script}`);
+  const result = spawnSync("npm", ["run", script], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: {
+      ...process.env,
+      SMOKE_BASE_URL: baseUrl,
+      MEALSCOUT_BASE_URL: baseUrl,
+      API_BASE: baseUrl,
+      ...extraEnv,
+    },
+  });
+
+  if (result.status === 0) {
+    pass(label);
+  } else {
+    fail(`${label} failed with exit code ${result.status ?? "unknown"}`);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -188,7 +209,20 @@ console.log(`
 warn("Cannot auto-verify Stripe webhook registration — confirm manually in the Stripe Dashboard.");
 
 // ─────────────────────────────────────────────
-// STEP 5: Final result
+// STEP 5: Full launch readiness suites
+// ─────────────────────────────────────────────
+section("Step 5: Full Launch Readiness Suites");
+
+runNpmScript("Critical smoke route suite passed", "smoke:critical");
+runNpmScript("Role/user flow suite passed", "test:flows");
+runNpmScript("Scale readiness suite passed", "check:scale-readiness");
+runNpmScript("Launch spike smoke passed", "smoke:launch-spike", {
+  SPIKE_DURATION_SEC: process.env.SPIKE_DURATION_SEC || "20",
+  SPIKE_CONCURRENCY: process.env.SPIKE_CONCURRENCY || "12",
+});
+
+// ─────────────────────────────────────────────
+// STEP 6: Final result
 // ─────────────────────────────────────────────
 section("Pre-Launch Gate Result");
 
