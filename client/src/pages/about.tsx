@@ -13,8 +13,10 @@ import {
   Award,
   Globe
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function About() {
+  const { user } = useAuth();
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -125,11 +127,19 @@ export default function About() {
                 Food trucks need locations and bookings. Restaurants need menus, specials, and pickup flow.
                 Bars need happy hours, event nights, and repeat visits. MealScout keeps those experiences distinct.
               </p>
-              <Link href="/customer-signup?role=business">
-                <Button className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3">
-                  List Your Business
-                </Button>
-              </Link>
+              {!user ? (
+                <Link href="/customer-signup?role=business">
+                  <Button className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3">
+                    List Your Business
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/">
+                  <Button className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3">
+                    Explore Nearby
+                  </Button>
+                </Link>
+              )}
             </div>
             <div className="relative">
               <div className="w-full h-64 bg-gradient-to-br from-red-200 to-orange-200 rounded-2xl flex items-center justify-center">
@@ -188,16 +198,28 @@ export default function About() {
 
         {/* CTA Section */}
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-[color:var(--text-primary)] mb-6">Ready to Start Exploring?</h2>
+          <h2 className="text-3xl font-bold text-[color:var(--text-primary)] mb-6">
+            {user ? "Start Exploring" : "Ready to Start Exploring?"}
+          </h2>
           <p className="text-xl text-[color:var(--text-secondary)] mb-8 max-w-2xl mx-auto">
-            Join locals discovering food trucks, restaurants, bars, menus, and deals in their neighborhood.
+            {user
+              ? "Discover food trucks, restaurants, bars, menus, and deals in your neighborhood."
+              : "Join locals discovering food trucks, restaurants, bars, menus, and deals in their neighborhood."}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login">
-              <Button size="lg" className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-8 py-3">
-                Get Started Today
-              </Button>
-            </Link>
+            {!user ? (
+              <Link href="/login">
+                <Button size="lg" className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-8 py-3">
+                  Get Started Today
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/">
+                <Button size="lg" className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-8 py-3">
+                  Explore Nearby
+                </Button>
+              </Link>
+            )}
             <Link href="/how-it-works">
               <Button size="lg" variant="outline" className="border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface)] font-semibold px-8 py-3">
                 Learn How It Works

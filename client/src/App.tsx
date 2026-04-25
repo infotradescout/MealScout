@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -400,9 +400,9 @@ function Router() {
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/" component={Home} />
-            <Route path="/login" component={Login} />
-            <Route path="/customer-signup" component={CustomerSignup} />
-            <Route path="/restaurant-signup" component={RestaurantSignup} />
+            <Route path="/login">{() => <Redirect to="/dashboard" />}</Route>
+            <Route path="/customer-signup">{() => <Redirect to="/dashboard" />}</Route>
+            <Route path="/restaurant-signup">{() => <Redirect to="/dashboard" />}</Route>
             <Route path="/claim-truck" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal-edit/:dealId" component={DealEdit} />
@@ -430,13 +430,11 @@ function Router() {
               component={EventsRouter}
             />
             <Route path="/truck-discovery" component={TruckDiscovery} />
-            <Route path="/for-restaurants" component={ForRestaurants} />
-            <Route path="/for-bars" component={ForBars} />
-            <Route path="/for-hosts" component={ForHosts} />
-            <Route
-              path="/host-location-partner"
-              component={HostLocationPartnerPage}
-            />
+            <Route path="/for-restaurants">{() => <Redirect to="/dashboard" />}</Route>
+            <Route path="/for-bars">{() => <Redirect to="/dashboard" />}</Route>
+            <Route path="/for-hosts">{() => <Redirect to="/host/dashboard" />}</Route>
+            <Route path="/host-location-partner">{() => <Redirect to="/host/dashboard" />}</Route>
+
             <Route path="/for-events" component={ForEvents} />
             <Route path="/find-food" component={FindFood} />
             <Route path="/search" component={Search} />
@@ -527,7 +525,7 @@ function Router() {
             <Route path="/how-it-works" component={HowItWorks} />
             <Route path="/contact" component={Contact} />
             <Route path="/install" component={InstallApp} />
-            <Route path="/host-signup" component={HostSignup} />
+            <Route path="/host-signup">{() => <Redirect to="/host/dashboard" />}</Route>
             <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />

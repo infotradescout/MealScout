@@ -197,9 +197,13 @@ export default function Home() {
       <section className="py-20 bg-muted/50">
         <div className="container">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Join MealScout</h2>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              {isAuthenticated ? "Explore MealScout" : "Join MealScout"}
+            </h2>
             <p className="text-lg text-muted-foreground">
-              Choose your role and start connecting today
+              {isAuthenticated
+                ? "Jump into the features built for your role"
+                : "Choose your role and start connecting today"}
             </p>
           </div>
           
@@ -212,9 +216,15 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <a href={getLoginUrl()}>
-                  <Button className="w-full">Get Started</Button>
-                </a>
+                {isAuthenticated ? (
+                  <Link href="/dashboard">
+                    <Button className="w-full">Go to Dashboard</Button>
+                  </Link>
+                ) : (
+                  <a href={getLoginUrl()}>
+                    <Button className="w-full">Get Started</Button>
+                  </a>
+                )}
               </CardContent>
             </Card>
 
@@ -226,9 +236,15 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <a href={getLoginUrl()}>
-                  <Button className="w-full">Get Started</Button>
-                </a>
+                {isAuthenticated ? (
+                  <Link href="/discover">
+                    <Button className="w-full">Discover Now</Button>
+                  </Link>
+                ) : (
+                  <a href={getLoginUrl()}>
+                    <Button className="w-full">Get Started</Button>
+                  </a>
+                )}
               </CardContent>
             </Card>
 
@@ -240,9 +256,15 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <a href={getLoginUrl()}>
-                  <Button className="w-full">Get Started</Button>
-                </a>
+                {isAuthenticated ? (
+                  <Link href="/events">
+                    <Button className="w-full">Browse Events</Button>
+                  </Link>
+                ) : (
+                  <a href={getLoginUrl()}>
+                    <Button className="w-full">Get Started</Button>
+                  </a>
+                )}
               </CardContent>
             </Card>
 
@@ -254,9 +276,15 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <a href={getLoginUrl()}>
-                  <Button className="w-full">Get Started</Button>
-                </a>
+                {isAuthenticated ? (
+                  <Link href="/host/dashboard">
+                    <Button className="w-full">Host Dashboard</Button>
+                  </Link>
+                ) : (
+                  <a href={getLoginUrl()}>
+                    <Button className="w-full">Get Started</Button>
+                  </a>
+                )}
               </CardContent>
             </Card>
           </div>
