@@ -2706,7 +2706,9 @@ export default function MapPage() {
   ]);
   const selectedParkingHostId = useMemo(() => {
     if (!selectedParkingHost) return "";
-    return String(selectedParkingHost.host.hostId || "").trim();
+    return String(
+      selectedParkingHost.host.hostId || selectedParkingHost.host.id || "",
+    ).trim();
   }, [selectedParkingHost]);
 
   const { data: selectedParkingHostProfile } = useQuery<HostProfile>({
@@ -2731,6 +2733,20 @@ export default function MapPage() {
           selectedParkingHost?.host.googleCategories,
       ),
     [selectedParkingHostProfile, selectedParkingHost],
+  );
+
+  const selectedParkingHasBusinessInfo = Boolean(
+    selectedParkingHostProfile?.description ||
+      selectedParkingHost?.host.description ||
+      selectedParkingGoogleCategories.length > 0 ||
+      selectedParkingHostProfile?.businessHours ||
+      selectedParkingHost?.host.businessHours ||
+      selectedParkingHostProfile?.phone ||
+      selectedParkingHost?.host.googleFormattedPhone ||
+      selectedParkingHostProfile?.website ||
+      selectedParkingHost?.host.businessWebsite ||
+      (selectedParkingHostProfile?.googlePriceLevel ??
+        selectedParkingHost?.host.googlePriceLevel) != null,
   );
 
   const selectedParkingHostImageUrl = useMemo(() => {
@@ -2770,6 +2786,11 @@ export default function MapPage() {
     },
     staleTime: 60_000,
   });
+
+  const selectedParkingHasUpcomingBookings = Boolean(
+    Array.isArray(selectedHostUpcomingBookings?.bookings) &&
+      selectedHostUpcomingBookings.bookings.length > 0,
+  );
 
   const {
     data: selectedParkingRouteSummary,
@@ -3222,10 +3243,20 @@ export default function MapPage() {
         )}
 
         {!selectedDeal && selectedParkingHost && (
-          <Card className="absolute bottom-4 left-4 right-4 z-20 max-h-[68vh] overflow-hidden rounded-2xl shadow-clean-lg">
-            <CardContent className="flex max-h-[68vh] flex-col p-0">
+          <Card className="absolute bottom-4 left-3 right-3 z-20 max-h-[56vh] overflow-hidden rounded-2xl shadow-clean-lg sm:left-4 sm:right-4">
+            <CardContent className="flex max-h-[56vh] flex-col p-0">
               <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
-              <div className="mb-2 flex items-start justify-between gap-3 pr-10">
+              <div className="mb-2 flex items-start gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="mt-0.5 h-8 w-8 shrink-0 rounded-full border border-[color:var(--border-subtle)] bg-background/95 shadow-sm"
+                  onClick={closeParkingPreview}
+                  data-testid="button-close-selected-parking-preview"
+                  aria-label="Close parking preview"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
                 <div className="min-w-0 pt-0.5">
                   <h3 className="truncate text-sm font-semibold text-foreground">
                     {selectedParkingHost.host.name}
@@ -3234,16 +3265,6 @@ export default function MapPage() {
                     {selectedParkingHost.host.address}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-3 top-3 h-9 w-9 rounded-full border border-[color:var(--border-subtle)] bg-background/95 shadow-sm"
-                  onClick={closeParkingPreview}
-                  data-testid="button-close-selected-parking-preview"
-                  aria-label="Close parking preview"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
               <div className="mb-2 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
                 {selectedParkingHost.availabilityLabel}
@@ -3292,7 +3313,7 @@ export default function MapPage() {
                     {selectedParkingHost.nearbyTruck.name}
                   </div>
                 </div>
-              ) : (
+              ) : selectedParkingHasBusinessInfo ? (
                 <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
                   <div className="flex items-center justify-between">
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -3317,11 +3338,7 @@ export default function MapPage() {
                         .map(formatGoogleCategory)
                         .join(" · ")}
                     </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground italic">
-                      No description available yet
-                    </p>
-                  )}
+                  ) : null}
                   {(selectedParkingHostProfile?.googlePriceLevel ??
                     selectedParkingHost.host.googlePriceLevel) != null &&
                     Number(
@@ -3399,7 +3416,9 @@ export default function MapPage() {
                     </a>
                   )}
                 </div>
-              )}
+              ) : null}
+              {(isLoadingSelectedHostUpcomingBookings ||
+                selectedParkingHasUpcomingBookings) && (
               <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">
                   Upcoming bookings
@@ -3408,11 +3427,9 @@ export default function MapPage() {
                   <div className="mt-1 text-xs text-muted-foreground">
                     Loading schedule...
                   </div>
-                ) : selectedParkingHostId ? (
-                  Array.isArray(selectedHostUpcomingBookings?.bookings) &&
-                  selectedHostUpcomingBookings.bookings.length > 0 ? (
+                ) : selectedParkingHasUpcomingBookings ? (
                     <div className="mt-1 space-y-1">
-                      {selectedHostUpcomingBookings.bookings
+                      {selectedHostUpcomingBookings?.bookings
                         .slice(0, 3)
                         .map((booking) => (
                           <div
@@ -3432,17 +3449,11 @@ export default function MapPage() {
                           </div>
                         ))}
                     </div>
-                  ) : (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      No upcoming bookings yet.
-                    </div>
-                  )
                 ) : (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Upcoming bookings show after this host profile is connected.
-                  </div>
+                  null
                 )}
               </div>
+              )}
               </div>
               <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--border-subtle)] bg-background/95 px-4 py-3">
                 <Button

@@ -19,6 +19,21 @@ import { MealScoutRestaurantAdapter, MealScoutHostAdapter, toBusinessPhotoInsert
 
 export function registerProfileRoutes(app: Express) {
 
+const hostNeedsGoogleProfile = (host: typeof hosts.$inferSelect) => {
+  const hasCategories =
+    Array.isArray(host.googleCategories) && host.googleCategories.length > 0;
+  const hasPhotos = Array.isArray(host.googlePhotos) && host.googlePhotos.length > 0;
+  return (
+    !host.googlePlaceId ||
+    (!host.description &&
+      !hasCategories &&
+      !hasPhotos &&
+      !host.googleFormattedPhone &&
+      !host.businessHours &&
+      !host.businessWebsite)
+  );
+};
+
 // ── Public: Get restaurant profile ──────────────────────────────────────────
 app.get("/api/profiles/restaurant/:id", async (req, res) => {
   try {
@@ -85,13 +100,29 @@ app.get("/api/profiles/host/:id", async (req, res) => {
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ error: "Missing host id" });
 
-    const [host] = await db
+    let [host] = await db
       .select()
       .from(hosts)
       .where(eq(hosts.id, id))
       .limit(1);
 
     if (!host) return res.status(404).json({ error: "Not found" });
+
+    if (hostNeedsGoogleProfile(host)) {
+      const populated = await populateHostProfile(id);
+      if (populated.success) {
+        const [freshHost] = await db
+          .select()
+          .from(hosts)
+          .where(eq(hosts.id, id))
+          .limit(1);
+        if (freshHost) host = freshHost;
+      } else {
+        console.warn(
+          `[Profiles] Google host enrichment skipped for ${id}: ${populated.error}`,
+        );
+      }
+    }
 
     const photos = Array.isArray(host.googlePhotos)
       ? (host.googlePhotos as any[]).map((p) => ({
