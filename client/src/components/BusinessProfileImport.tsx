@@ -485,7 +485,7 @@ export default function BusinessProfileImport({
                     {fbConnecting ? "Connecting..." : "Continue with Facebook"}
                   </Button>
 
-                  {showManualFb && (
+                  {showManualFb && entityType === "restaurant" && (
                     <div className="space-y-2 pt-2 border-t">
                       <p className="text-xs text-muted-foreground">
                         Having trouble? You can also paste your Facebook Page URL

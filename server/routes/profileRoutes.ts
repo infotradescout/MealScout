@@ -14,10 +14,45 @@ import {
   populateHostProfile,
   getGooglePhotoUrl,
 } from "../services/googleProfileService";
+import { isAuthenticated } from "../unifiedAuth";
 import { FacebookPagesProvider } from "../../shared/business-profile-import/providers/facebook";
 import { MealScoutRestaurantAdapter, MealScoutHostAdapter, toBusinessPhotoInserts } from "../../shared/business-profile-import/adapters/mealscout";
 
 export function registerProfileRoutes(app: Express) {
+
+const hasProfileWriteAccess = async (
+  req: any,
+  entityType: "restaurant" | "host",
+  entityId: string,
+) => {
+  const userId = String(req?.user?.id || "").trim();
+  const userType = String(req?.user?.userType || "").trim().toLowerCase();
+  if (!userId) return false;
+  if (["admin", "super_admin", "staff"].includes(userType)) return true;
+
+  if (entityType === "restaurant") {
+    const [row] = await db
+      .select({ ownerId: restaurants.ownerId })
+      .from(restaurants)
+      .where(eq(restaurants.id, entityId))
+      .limit(1);
+    return String(row?.ownerId || "") === userId;
+  }
+
+  const [row] = await db
+    .select({ userId: hosts.userId })
+    .from(hosts)
+    .where(eq(hosts.id, entityId))
+    .limit(1);
+  return String(row?.userId || "") === userId;
+};
+
+const requireStaffOrAdmin = (req: any, res: any): boolean => {
+  const userType = String(req?.user?.userType || "").trim().toLowerCase();
+  if (["admin", "super_admin", "staff"].includes(userType)) return true;
+  res.status(403).json({ error: "Forbidden" });
+  return false;
+};
 
 const hostNeedsGoogleProfile = (host: typeof hosts.$inferSelect) => {
   const hasCategories =
@@ -166,12 +201,15 @@ app.get("/api/profiles/host/:id", async (req, res) => {
 });
 
 // ── Admin/Owner: Trigger auto-populate for a restaurant ─────────────────────
-app.post("/api/profiles/restaurant/:id/populate", async (req, res) => {
+app.post("/api/profiles/restaurant/:id/populate", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ error: "Missing restaurant id" });
 
-    // TODO: Add auth check - only owner or admin can trigger
+    if (!(await hasProfileWriteAccess(req, "restaurant", id))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const result = await populateRestaurantProfile(id);
     if (result.success) {
       res.json({ success: true, placeId: result.placeId });
@@ -185,12 +223,15 @@ app.post("/api/profiles/restaurant/:id/populate", async (req, res) => {
 });
 
 // ── Admin/Owner: Trigger auto-populate for a host ───────────────────────────
-app.post("/api/profiles/host/:id/populate", async (req, res) => {
+app.post("/api/profiles/host/:id/populate", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ error: "Missing host id" });
 
-    // TODO: Add auth check - only owner or admin can trigger
+    if (!(await hasProfileWriteAccess(req, "host", id))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const result = await populateHostProfile(id);
     if (result.success) {
       res.json({ success: true, placeId: result.placeId });
@@ -204,12 +245,15 @@ app.post("/api/profiles/host/:id/populate", async (req, res) => {
 });
 
 // ── Admin/Owner: Manually edit restaurant profile ───────────────────────────
-app.patch("/api/profiles/restaurant/:id", async (req, res) => {
+app.patch("/api/profiles/restaurant/:id", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ error: "Missing restaurant id" });
 
-    // TODO: Add auth check - only owner or admin can edit
+    if (!(await hasProfileWriteAccess(req, "restaurant", id))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const allowedFields = [
       "description",
       "websiteUrl",
@@ -254,12 +298,15 @@ app.patch("/api/profiles/restaurant/:id", async (req, res) => {
 });
 
 // ── Admin/Owner: Manually edit host profile ─────────────────────────────────
-app.patch("/api/profiles/host/:id", async (req, res) => {
+app.patch("/api/profiles/host/:id", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ error: "Missing host id" });
 
-    // TODO: Add auth check - only owner or admin can edit
+    if (!(await hasProfileWriteAccess(req, "host", id))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const allowedFields = [
       "description",
       "businessWebsite",
@@ -300,9 +347,10 @@ app.patch("/api/profiles/host/:id", async (req, res) => {
 });
 
 // ── Admin: Bulk auto-populate all restaurants without profiles ───────────────
-app.post("/api/profiles/bulk-populate/restaurants", async (req, res) => {
+app.post("/api/profiles/bulk-populate/restaurants", isAuthenticated, async (req: any, res) => {
   try {
-    // TODO: Add admin auth check
+    if (!requireStaffOrAdmin(req, res)) return;
+
     const unpopulated = await db
       .select({ id: restaurants.id, name: restaurants.name })
       .from(restaurants)
@@ -328,7 +376,7 @@ app.post("/api/profiles/bulk-populate/restaurants", async (req, res) => {
 });
 
 // ── Facebook Import: Exchange code and list user's pages ───────────────────
-app.post("/api/profiles/facebook/pages", async (req: any, res) => {
+app.post("/api/profiles/facebook/pages", isAuthenticated, async (req: any, res) => {
   try {
     const userAccessToken = String(req.body.accessToken || "").trim();
     if (!userAccessToken) {
@@ -349,7 +397,7 @@ app.post("/api/profiles/facebook/pages", async (req: any, res) => {
 });
 
 // ── Facebook Import: Populate restaurant from Facebook Page ────────────────
-app.post("/api/profiles/restaurant/:id/populate-facebook", async (req: any, res) => {
+app.post("/api/profiles/restaurant/:id/populate-facebook", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     const pageId = String(req.body.pageId || "").trim();
@@ -358,6 +406,10 @@ app.post("/api/profiles/restaurant/:id/populate-facebook", async (req: any, res)
 
     if (!id || !pageId || !pageAccessToken) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (!(await hasProfileWriteAccess(req, "restaurant", id))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const fbProvider = new FacebookPagesProvider({
@@ -405,7 +457,7 @@ app.post("/api/profiles/restaurant/:id/populate-facebook", async (req: any, res)
 });
 
 // ── Facebook Import: Populate host from Facebook Page ──────────────────────
-app.post("/api/profiles/host/:id/populate-facebook", async (req: any, res) => {
+app.post("/api/profiles/host/:id/populate-facebook", isAuthenticated, async (req: any, res) => {
   try {
     const id = String(req.params.id || "").trim();
     const pageId = String(req.body.pageId || "").trim();
@@ -414,6 +466,10 @@ app.post("/api/profiles/host/:id/populate-facebook", async (req: any, res) => {
 
     if (!id || !pageId || !pageAccessToken) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (!(await hasProfileWriteAccess(req, "host", id))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const fbProvider = new FacebookPagesProvider({
