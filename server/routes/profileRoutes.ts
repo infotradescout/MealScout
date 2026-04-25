@@ -7,13 +7,15 @@
 
 import type { Express } from "express";
 import { db } from "../db";
-import { restaurants, hosts } from "../../shared/schema/legacy";
-import { eq } from "drizzle-orm";
+import { restaurants, hosts, businessPhotos } from "../../shared/schema/legacy";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   populateRestaurantProfile,
   populateHostProfile,
   getGooglePhotoUrl,
 } from "../services/googleProfileService";
+import { FacebookPagesProvider } from "../../shared/business-profile-import/providers/facebook";
+import { MealScoutRestaurantAdapter, MealScoutHostAdapter, toBusinessPhotoInserts } from "../../shared/business-profile-import/adapters/mealscout";
 
 export function registerProfileRoutes(app: Express) {
 
@@ -294,6 +296,266 @@ app.post("/api/profiles/bulk-populate/restaurants", async (req, res) => {
     });
   } catch (err) {
     console.error("[Profiles] Bulk populate restaurants error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Facebook Import: Exchange code and list user's pages ───────────────────
+app.post("/api/profiles/facebook/pages", async (req: any, res) => {
+  try {
+    const userAccessToken = String(req.body.accessToken || "").trim();
+    if (!userAccessToken) {
+      return res.status(400).json({ error: "Missing Facebook access token" });
+    }
+
+    const fbProvider = new FacebookPagesProvider({
+      appId: process.env.FACEBOOK_APP_ID || "",
+      appSecret: process.env.FACEBOOK_APP_SECRET || "",
+    });
+
+    const pages = await fbProvider.listUserPages(userAccessToken);
+    res.json({ pages });
+  } catch (err) {
+    console.error("[Profiles] Facebook list pages error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Facebook Import: Populate restaurant from Facebook Page ────────────────
+app.post("/api/profiles/restaurant/:id/populate-facebook", async (req: any, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const pageId = String(req.body.pageId || "").trim();
+    const pageAccessToken = String(req.body.pageAccessToken || "").trim();
+    const userId = req.user?.id;
+
+    if (!id || !pageId || !pageAccessToken) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const fbProvider = new FacebookPagesProvider({
+      appId: process.env.FACEBOOK_APP_ID || "",
+      appSecret: process.env.FACEBOOK_APP_SECRET || "",
+    });
+
+    const profile = await fbProvider.fetchProfile(pageId, pageAccessToken);
+    if (!profile) {
+      return res.status(400).json({ success: false, error: "Failed to fetch Facebook page data" });
+    }
+
+    // Get existing restaurant for fill_empty merge
+    const [existing] = await db
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.id, id))
+      .limit(1);
+
+    if (!existing) return res.status(404).json({ error: "Restaurant not found" });
+
+    const adapter = new MealScoutRestaurantAdapter("fill_empty");
+    const updates = adapter.toEntityUpdate(profile, existing as any);
+
+    await db.update(restaurants).set(updates).where(eq(restaurants.id, id));
+
+    // Import photos to business_photos gallery
+    if (profile.photos.length > 0 && userId) {
+      const photoInserts = toBusinessPhotoInserts(profile.photos, {
+        restaurantId: id,
+        uploadedByUserId: userId,
+        maxPhotos: 20,
+      });
+
+      for (const photo of photoInserts) {
+        await db.insert(businessPhotos).values(photo).onConflictDoNothing();
+      }
+    }
+
+    res.json({ success: true, fieldsUpdated: Object.keys(updates).length, photosImported: profile.photos.length });
+  } catch (err) {
+    console.error("[Profiles] Facebook populate restaurant error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Facebook Import: Populate host from Facebook Page ──────────────────────
+app.post("/api/profiles/host/:id/populate-facebook", async (req: any, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const pageId = String(req.body.pageId || "").trim();
+    const pageAccessToken = String(req.body.pageAccessToken || "").trim();
+    const userId = req.user?.id;
+
+    if (!id || !pageId || !pageAccessToken) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const fbProvider = new FacebookPagesProvider({
+      appId: process.env.FACEBOOK_APP_ID || "",
+      appSecret: process.env.FACEBOOK_APP_SECRET || "",
+    });
+
+    const profile = await fbProvider.fetchProfile(pageId, pageAccessToken);
+    if (!profile) {
+      return res.status(400).json({ success: false, error: "Failed to fetch Facebook page data" });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(hosts)
+      .where(eq(hosts.id, id))
+      .limit(1);
+
+    if (!existing) return res.status(404).json({ error: "Host not found" });
+
+    const adapter = new MealScoutHostAdapter("fill_empty");
+    const updates = adapter.toEntityUpdate(profile, existing as any);
+
+    await db.update(hosts).set(updates).where(eq(hosts.id, id));
+
+    if (profile.photos.length > 0 && userId) {
+      const photoInserts = toBusinessPhotoInserts(profile.photos, {
+        hostId: id,
+        uploadedByUserId: userId,
+        maxPhotos: 20,
+      });
+
+      for (const photo of photoInserts) {
+        await db.insert(businessPhotos).values(photo).onConflictDoNothing();
+      }
+    }
+
+    res.json({ success: true, fieldsUpdated: Object.keys(updates).length, photosImported: profile.photos.length });
+  } catch (err) {
+    console.error("[Profiles] Facebook populate host error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Business Photos Gallery: Get photos for a restaurant ───────────────────
+app.get("/api/profiles/restaurant/:id/photos", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing restaurant id" });
+
+    const photos = await db
+      .select()
+      .from(businessPhotos)
+      .where(eq(businessPhotos.restaurantId, id))
+      .orderBy(businessPhotos.sortOrder);
+
+    // Also include Google photos from the restaurant record
+    const [restaurant] = await db
+      .select({ googlePhotos: restaurants.googlePhotos })
+      .from(restaurants)
+      .where(eq(restaurants.id, id))
+      .limit(1);
+
+    const googlePhotoUrls = Array.isArray(restaurant?.googlePhotos)
+      ? (restaurant.googlePhotos as any[]).map((p) => ({
+          url: getGooglePhotoUrl(p.name) || "",
+          width: p.widthPx,
+          height: p.heightPx,
+          source: "google",
+          attribution: p.authorAttributions?.[0]?.displayName || "",
+        }))
+      : [];
+
+    res.json({ gallery: photos, googlePhotos: googlePhotoUrls });
+  } catch (err) {
+    console.error("[Profiles] Get restaurant photos error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Business Photos Gallery: Upload a photo ────────────────────────────────
+app.post("/api/profiles/:entityType/:id/photos", async (req: any, res) => {
+  try {
+    const entityType = String(req.params.entityType || "").trim();
+    const id = String(req.params.id || "").trim();
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!id || !['restaurant', 'host'].includes(entityType)) {
+      return res.status(400).json({ error: "Invalid entity type or id" });
+    }
+
+    const { url, caption, width, height, fileSize, mimeType } = req.body;
+    if (!url) return res.status(400).json({ error: "Missing photo URL" });
+
+    // Check photo count limit (50 per entity)
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(businessPhotos)
+      .where(
+        entityType === 'restaurant'
+          ? eq(businessPhotos.restaurantId, id)
+          : eq(businessPhotos.hostId, id)
+      );
+
+    const currentCount = Number(countResult[0]?.count || 0);
+    if (currentCount >= 50) {
+      return res.status(400).json({ error: "Maximum of 50 photos per business" });
+    }
+
+    const [photo] = await db.insert(businessPhotos).values({
+      restaurantId: entityType === 'restaurant' ? id : null,
+      hostId: entityType === 'host' ? id : null,
+      uploadedByUserId: userId,
+      url,
+      caption: caption || null,
+      width: width || null,
+      height: height || null,
+      fileSize: fileSize || null,
+      mimeType: mimeType || null,
+      sortOrder: currentCount,
+      source: 'manual',
+    }).returning();
+
+    res.json({ success: true, photo });
+  } catch (err) {
+    console.error("[Profiles] Upload photo error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Business Photos Gallery: Delete a photo ────────────────────────────────
+app.delete("/api/profiles/photos/:photoId", async (req: any, res) => {
+  try {
+    const photoId = String(req.params.photoId || "").trim();
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!photoId) return res.status(400).json({ error: "Missing photo id" });
+
+    await db.delete(businessPhotos).where(eq(businessPhotos.id, photoId));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Profiles] Delete photo error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+// ── Business Photos Gallery: Reorder photos ────────────────────────────────
+app.patch("/api/profiles/photos/reorder", async (req: any, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { photoIds } = req.body; // Array of photo IDs in desired order
+    if (!Array.isArray(photoIds)) {
+      return res.status(400).json({ error: "photoIds must be an array" });
+    }
+
+    for (let i = 0; i < photoIds.length; i++) {
+      await db
+        .update(businessPhotos)
+        .set({ sortOrder: i })
+        .where(eq(businessPhotos.id, photoIds[i]));
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[Profiles] Reorder photos error:", err);
     res.status(500).json({ error: "Internal error" });
   }
 });

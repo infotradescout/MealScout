@@ -1457,6 +1457,22 @@ export function registerAdminManagementRoutes(app: Express) {
           });
         }
 
+        // Auto-populate Google profile data for newly created restaurants and hosts
+        if (createdRestaurantId) {
+          import("../services/googleProfileService").then(({ populateRestaurantProfile }) => {
+            populateRestaurantProfile(createdRestaurantId!).catch((e) => {
+              console.warn("[Admin Onboard] Google auto-populate failed for restaurant:", e);
+            });
+          }).catch(() => {});
+        }
+        if (createdHostId) {
+          import("../services/googleProfileService").then(({ populateHostProfile }) => {
+            populateHostProfile(createdHostId!).catch((e) => {
+              console.warn("[Admin Onboard] Google auto-populate failed for host:", e);
+            });
+          }).catch(() => {});
+        }
+
         if (shouldAssignAffiliateTag(user.userType)) {
           ensureAffiliateTag(user.id).catch((error) =>
             console.error("[affiliate] Failed to assign tag:", error),

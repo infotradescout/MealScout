@@ -1543,10 +1543,32 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               dashboard they use.
             </p>
           )}
+          {inviteRestaurantId && (
+            <div className="space-y-2 pt-2 border-t border-[color:var(--status-success)]/30">
+              <p className="text-xs font-medium text-[color:var(--status-success)]">
+                Restaurant created: {inviteRestaurantId}
+              </p>
+              <p className="text-xs text-[color:var(--status-success)]/80">
+                Google auto-populate is running in the background. Photos, hours, and description will be imported automatically.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/menu-builder?adminRestaurantId=${encodeURIComponent(inviteRestaurantId)}`}>
+                  <Button size="sm" variant="outline" className="gap-1">
+                    Upload Menu (PDF/Image)
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
           {inviteHostId && (
-            <p className="text-xs text-[color:var(--status-success)]">
-              Host profile created: {inviteHostId}
-            </p>
+            <div className="space-y-2 pt-2 border-t border-[color:var(--status-success)]/30">
+              <p className="text-xs font-medium text-[color:var(--status-success)]">
+                Host profile created: {inviteHostId}
+              </p>
+              <p className="text-xs text-[color:var(--status-success)]/80">
+                Google auto-populate is running in the background.
+              </p>
+            </div>
           )}
           {inviteSupplierId && (
             <p className="text-xs text-[color:var(--status-success)]">

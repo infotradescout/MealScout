@@ -88,6 +88,11 @@ export const users: any = pgTable(
     falseFlagCount: integer("false_flag_count").default(0),
     // App context for multi-platform shared auth (TradeScout + MealScout)
     appContext: varchar("app_context").default("mealscout"), // 'mealscout' | 'tradescout' | 'both'
+    // Public profile fields
+    publicHandle: varchar("public_handle").unique(),
+    publicBio: text("public_bio"),
+    communityTrustScore: integer("community_trust_score").default(0),
+    trustTier: varchar("trust_tier").default("newcomer"), // 'newcomer' | 'regular' | 'trusted' | 'expert' | 'legend'
     publicProfileSettings: jsonb("public_profile_settings")
       .notNull()
       .default(sql`'{}'::jsonb`),
@@ -237,7 +242,14 @@ export const restaurants = pgTable("restaurants", {
   menuUrl: varchar("menu_url"),
   orderUrl: varchar("order_url"),
   reservationUrl: varchar("reservation_url"),
-  profileSource: varchar("profile_source").default("none"), // 'google' | 'manual' | 'mixed' | 'none'
+  // Facebook Pages auto-populated profile data
+  facebookPageId: varchar("facebook_page_id"),
+  facebookCoverUrl: text("facebook_cover_url"),
+  facebookAbout: text("facebook_about"),
+  facebookCategory: varchar("facebook_category"),
+  facebookHours: jsonb("facebook_hours"),
+  facebookPhotos: jsonb("facebook_photos"), // [{ url, width, height, caption }]
+  profileSource: varchar("profile_source").default("none"), // 'google' | 'facebook' | 'manual' | 'mixed' | 'none'
   profileLastSynced: timestamp("profile_last_synced"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -3279,7 +3291,15 @@ export const hosts = pgTable(
     businessHours: jsonb("business_hours"), // { monday: { open: '9:00', close: '17:00' }, ... }
     businessWebsite: text("business_website"),
     menuUrl: varchar("menu_url"),
-    profileSource: varchar("profile_source").default("none"), // 'google' | 'manual' | 'mixed' | 'none'
+    // Facebook Pages auto-populated profile data
+    facebookPageId: varchar("facebook_page_id"),
+    facebookPageUrl: text("facebook_page_url"),
+    facebookCoverUrl: text("facebook_cover_url"),
+    facebookAbout: text("facebook_about"),
+    facebookCategory: varchar("facebook_category"),
+    facebookHours: jsonb("facebook_hours"),
+    facebookPhotos: jsonb("facebook_photos"), // [{ url, width, height, caption }]
+    profileSource: varchar("profile_source").default("none"), // 'google' | 'facebook' | 'manual' | 'mixed' | 'none'
     profileLastSynced: timestamp("profile_last_synced"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
@@ -4019,6 +4039,43 @@ export const imageUploads = pgTable(
     index("idx_image_entity").on(table.entityId, table.entityType),
     index("idx_image_uploader").on(table.uploadedByUserId),
     index("idx_image_type").on(table.imageType),
+  ],
+);
+
+// Business Photos - Gallery photos from imports and manual uploads (up to 50 per business)
+export const businessPhotos = pgTable(
+  "business_photos",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
+    hostId: varchar("host_id").references(() => hosts.id, {
+      onDelete: "cascade",
+    }),
+    uploadedByUserId: varchar("uploaded_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    url: text("url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    width: integer("width"),
+    height: integer("height"),
+    fileSize: integer("file_size"),
+    mimeType: varchar("mime_type"),
+    caption: text("caption"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    source: varchar("source").notNull().default("manual"), // 'manual' | 'import'
+    sourceProvider: varchar("source_provider"), // 'google' | 'facebook' | null
+    sourceExternalId: varchar("source_external_id"),
+    isFeatured: boolean("is_featured").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_biz_photos_restaurant").on(table.restaurantId),
+    index("idx_biz_photos_host").on(table.hostId),
+    index("idx_biz_photos_source").on(table.source),
   ],
 );
 

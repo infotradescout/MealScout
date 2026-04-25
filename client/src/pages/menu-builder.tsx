@@ -189,7 +189,7 @@ export default function MenuBuilderPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all");
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"csv" | "pdf" | "url">("csv");
+  const [importType, setImportType] = useState<"csv" | "pdf" | "image" | "url">("csv");
   const [importUrl, setImportUrl] = useState("");
   const [importSource, setImportSource] = useState("auto");
   const [isImporting, setIsImporting] = useState(false);
@@ -299,8 +299,10 @@ export default function MenuBuilderPage() {
         if (!importFile) throw new Error("Choose a file to import.");
         const form = new FormData();
         form.append("file", importFile);
+        // Image imports use the same PDF AI parser endpoint
+        const importEndpoint = importType === "image" ? "pdf" : importType;
         res = await fetch(
-          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/${importType}`,
+          `/api/owner/menus/${encodeURIComponent(selectedMenuId)}/import/${importEndpoint}`,
           { method: "POST", body: form, credentials: "include" },
         );
       }
@@ -541,14 +543,14 @@ export default function MenuBuilderPage() {
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">
-                {(["csv", "pdf", "url"] as const).map((t) => (
+                {(["csv", "pdf", "image", "url"] as const).map((t) => (
                   <Button
                     key={t}
                     variant={importType === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t === "url" ? "URL" : t.toUpperCase()}
+                    {t === "url" ? "URL" : t === "image" ? "Photo" : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
@@ -557,7 +559,9 @@ export default function MenuBuilderPage() {
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
                   : importType === "pdf"
                     ? "Upload a PDF menu — AI will extract items automatically."
-                    : "Paste a DoorDash, UberEats, Google, or other public menu URL."}
+                    : importType === "image"
+                      ? "Upload a photo of your menu board or printed menu — AI will read and extract items."
+                      : "Paste a DoorDash, UberEats, Google, or other public menu URL."}
               </p>
             </div>
             {importType === "url" ? (
@@ -596,7 +600,7 @@ export default function MenuBuilderPage() {
                 <Input
                   id="import-file"
                   type="file"
-                  accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : ".pdf"}
+                  accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : importType === "image" ? "image/*" : ".pdf"}
                   onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
                 />
               </div>

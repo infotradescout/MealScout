@@ -223,9 +223,9 @@ function normalizeGoogleProfile(
   // Business status
   const googleBusinessStatus = raw?.businessStatus || null;
 
-  // Photos (up to 10)
+  // Photos (up to 20)
   const googlePhotos = Array.isArray(raw?.photos)
-    ? raw.photos.slice(0, 10).map((p: any) => ({
+    ? raw.photos.slice(0, 20).map((p: any) => ({
         name: String(p.name || ""),
         widthPx: p.widthPx || 0,
         heightPx: p.heightPx || 0,

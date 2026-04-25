@@ -83,9 +83,12 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
   fileFilter(_req, file, cb) {
     const allowed = [".csv", ".pdf", ".json", ".xlsx", ".xls"];
+    const imageExts = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) return cb(null, true);
-    cb(new Error("Unsupported file type. Allowed: csv, pdf, json, xlsx, xls"));
+    if (allowed.includes(ext) || imageExts.includes(ext) || file.mimetype?.startsWith("image/")) {
+      return cb(null, true);
+    }
+    cb(new Error("Unsupported file type. Allowed: csv, pdf, json, xlsx, xls, jpg, png, webp"));
   },
 });
 
@@ -738,6 +741,7 @@ export function registerMenuRoutes(app: Express) {
         req.file.buffer,
         menuId,
         menu.restaurantId,
+        req.file.mimetype,
       );
 
       if (imported.length > 0) {

@@ -45,6 +45,7 @@ export async function parsePdfMenuWithAi(
   buffer: Buffer,
   menuId: string,
   restaurantId: string,
+  mimeType?: string,
 ): Promise<ParseResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -68,7 +69,26 @@ export async function parsePdfMenuWithAi(
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey });
 
-    const base64Pdf = buffer.toString("base64");
+    const base64Data = buffer.toString("base64");
+    const isImage = mimeType?.startsWith("image/") || false;
+
+    const contentBlock = isImage
+      ? {
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: (mimeType || "image/jpeg") as any,
+            data: base64Data,
+          },
+        }
+      : {
+          type: "document" as const,
+          source: {
+            type: "base64" as const,
+            media_type: "application/pdf" as const,
+            data: base64Data,
+          },
+        };
 
     const message = await client.messages.create({
       model: "claude-opus-4-5",
@@ -77,14 +97,7 @@ export async function parsePdfMenuWithAi(
         {
           role: "user",
           content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Pdf,
-              },
-            } as any,
+            contentBlock as any,
             {
               type: "text",
               text: EXTRACTION_PROMPT,
