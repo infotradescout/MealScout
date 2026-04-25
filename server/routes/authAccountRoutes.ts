@@ -285,15 +285,17 @@ const accountSettingsSchema = z.object({
 export function registerAuthAccountRoutes(app: Express) {
   app.get("/api/auth/user", async (req: any, res) => {
     try {
-      console.log(
-        "📋 /api/auth/user called, isAuthenticated:",
-        req.isAuthenticated(),
-      );
-      console.log("📋 Session ID:", req.sessionID);
-      console.log("📋 Session data:", req.session);
+      const debugAuthUser =
+        String(process.env.AUTH_USER_DEBUG || "").toLowerCase() === "true";
+      if (debugAuthUser) {
+        console.log("/api/auth/user called", {
+          isAuthenticated: req.isAuthenticated(),
+          sessionID: req.sessionID,
+          userId: req.user?.id || null,
+        });
+      }
 
       if (!req.isAuthenticated()) {
-        console.log("❌ User not authenticated");
         return res.status(401).json({ error: "Not authenticated" });
       }
 
