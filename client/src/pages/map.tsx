@@ -2624,10 +2624,19 @@ export default function MapPage() {
     formatDistance,
     getParkingPassHrefForHost,
   ]);
-  const selectedParkingHostImageUrl = useMemo(
-    () => resolveHostImageUrl(selectedParkingHost?.host),
-    [selectedParkingHost],
-  );
+  const selectedParkingHostImageUrl = useMemo(() => {
+    const uploaded = resolveHostImageUrl(selectedParkingHost?.host);
+    if (uploaded) return uploaded;
+    if (!selectedParkingHost || !effectiveGoogleMapsApiKey) return null;
+    const host = selectedParkingHost.host;
+    const addressParts = [host.address, host.city, host.state].filter(Boolean);
+    const addressQuery = addressParts.length > 0 ? addressParts.join(", ") : null;
+    if (!addressQuery) return null;
+    const encoded = encodeURIComponent(addressQuery);
+    const streetView = `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encoded}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+    const staticMap = `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encoded}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+    return streetView || staticMap;
+  }, [selectedParkingHost, effectiveGoogleMapsApiKey]);
 
   const selectedParkingHostId = useMemo(() => {
     if (!selectedParkingHost) return "";
