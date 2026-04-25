@@ -6100,7 +6100,6 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-        {mapPinAudit && (
           <Card className="mb-6">
             <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">

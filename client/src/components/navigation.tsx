@@ -25,11 +25,27 @@ import {
   ChefHat,
   Package,
   ShoppingCart,
+  MoreHorizontal,
+  Settings,
+  LogOut,
+  X,
+  HelpCircle,
+  Bell,
+  CreditCard,
+  MapPinned,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerClose,
+} from "@/components/ui/drawer";
 
 type NavItem = {
   path?: string;
@@ -62,6 +78,8 @@ type NavItem = {
   onClick?: () => void;
   isBug?: boolean;
   testId?: string;
+  /** Group label for the "More" drawer */
+  group?: string;
 };
 
 type NavigationProps = {
@@ -78,6 +96,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
   const { t } = useI18n();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (isGlobalScope) {
@@ -102,26 +122,21 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     if (isReporting) return;
     setIsReporting(true);
     try {
-      // Lazy load html2canvas only when needed (don't bundle it in main app)
       const html2canvas = (await import("html2canvas")).default;
-
       const canvas = await html2canvas(document.body, {
         useCORS: true,
         allowTaint: true,
         scale: 0.5,
         logging: false,
       });
-
       const screenshot = canvas.toDataURL("image/png");
       const currentUrl = window.location.href;
       const userAgent = navigator.userAgent;
-
       await apiRequest("POST", "/api/bug-report", {
         screenshot,
         currentUrl,
         userAgent,
       });
-
       toast({
         title: t("toast.bugSentTitle", "Bug report sent!"),
         description: t(
@@ -141,6 +156,26 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       });
     } finally {
       setIsReporting(false);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "MealScout",
+          text: "Discover local food trucks, deals, and more!",
+          url: window.location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({
+          title: "Link copied!",
+          description: "Share it with your friends.",
+        });
+      }
+    } catch {
+      // User cancelled share
     }
   };
 
@@ -187,18 +222,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     businessAccess?.permissions?.manageProfile === true;
 
   const [isHost, setIsHost] = useState(false);
-  const canSeeParkingPassNav =
-    canManageParkingPass || isHost;
+  const canSeeParkingPassNav = canManageParkingPass || isHost;
 
-  // Detect if this user has a host profile so we can show host flows
   useEffect(() => {
     if (!user) {
       setIsHost(false);
       return;
     }
-
     let cancelled = false;
-    // Use list endpoint so users without a host profile don't generate noisy 404s.
     fetch("/api/hosts")
       .then(async (res) => {
         if (cancelled) return;
@@ -213,7 +244,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         if (cancelled) return;
         setIsHost(false);
       });
-
     return () => {
       cancelled = true;
     };
@@ -223,566 +253,589 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     return null;
   }
 
-  // Debug logging (development only)
-  if (user && typeof window !== "undefined" && import.meta.env.DEV) {
-    console.log("🔍 Navigation User Debug:", {
-      email: user.email,
-      userType: user.userType,
-      isAdmin,
-      isStaff,
-      isRestaurantOwner,
-      isEventCoordinator,
-      isHost,
-    });
-  }
-  // Shared core nav: Food (home), Map, Video, Profile (only when logged in)
-  const sharedNavItems: NavItem[] = [
-    { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-    { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
-    ...(user && canSeeParkingPassNav
-      ? ([
-          {
-            path: "/parking-pass",
-            icon: ParkingSquare,
-            labelKey: "nav.parkingPass",
-            fallbackLabel: "Parking Pass",
-          },
-        ] as NavItem[])
-      : []),
-    { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
-    ...(user
-      ? ([{ path: "/profile", icon: User, labelKey: "nav.profile", fallbackLabel: "Profile" }] as NavItem[])
-      : []),
-    ...(user && !isAdmin && !isStaff
-      ? ([{
-          path: "/share-hub",
-          icon: Share2,
-          labelKey: "nav.share",
-          fallbackLabel: "Share",
-        }] as NavItem[])
-      : []),
-  ];
+  // ─── NAV ITEM DEFINITIONS ───────────────────────────────────────
 
-  const customerExtras: NavItem[] = [
-    {
-      path: "/dashboard",
-      icon: LayoutDashboard,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-    { path: "/favorites", icon: Heart, labelKey: "nav.favorites", fallbackLabel: "Favorites" },
-  ];
-
-  const unauthenticatedExtras: NavItem[] = [
-    {
-      path: "/customer-signup",
-      icon: UserPlus,
-      labelKey: "nav.createAccount",
-      fallbackLabel: "Create Account",
-    },
-    {
-      path: "/restaurant-signup?businessType=food_truck&claim=1",
-      icon: Truck,
-      labelKey: "nav.claimTruck",
-      fallbackLabel: "Claim Truck",
-    },
-  ];
-
-  // Host-specific flows: dashboard + host marketing and discovery
-  const hostExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-    {
-      path: "/for-restaurants",
-      icon: Store,
-      labelKey: "nav.forRestaurants",
-      fallbackLabel: "For Restaurants",
-    },
-    { path: "/for-bars", icon: Store, labelKey: "nav.forBars", fallbackLabel: "For Bars" },
-  ];
-
-  // Staff should be able to jump into every major website flow
-  // Including all business types (restaurant, food truck, bar), host, and event coordinator capabilities
-  const staffExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-    { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
-    { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-    {
-      path: "/restaurant-owner-dashboard",
-      icon: Store,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-    {
-      path: "/deal-creation",
-      icon: Plus,
-      labelKey: "nav.createSpecial",
-      fallbackLabel: "Create Special",
-    },
-    {
-      path: "/subscription",
-      icon: BarChart3,
-      labelKey: "nav.subscription",
-      fallbackLabel: "Subscription",
-    },
-    {
-      path: "/parking-pass",
-      icon: ParkingSquare,
-      labelKey: "nav.parkingPass",
-      fallbackLabel: "Parking Pass",
-    },
-    {
-      path: "/for-restaurants",
-      icon: Store,
-      labelKey: "nav.forRestaurants",
-      fallbackLabel: "For Restaurants",
-    },
-    { path: "/for-bars", icon: Store, labelKey: "nav.forBars", fallbackLabel: "For Bars" },
-    {
-      path: "/deals/featured",
-      icon: Receipt,
-      labelKey: "nav.featuredSpecials",
-      fallbackLabel: "Featured Specials",
-    },
-  ];
-
-  const restaurantOwnerExtras: NavItem[] = [
-    {
-      path: "/dashboard",
-      icon: LayoutDashboard,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-    ...(canManageDeals
-      ? ([
-          {
-            path: "/deal-creation",
-            icon: Plus,
-            labelKey: "nav.createSpecial",
-            fallbackLabel: "Create Special",
-          },
-        ] as NavItem[])
-      : []),
-    {
-      path: "/menu-builder",
-      icon: Store,
-      fallbackLabel: "Menu Builder",
-    },
-    {
-      path: "/kitchen",
-      icon: ChefHat,
-      fallbackLabel: "Kitchen",
-    },
-    {
-      path: "/orders",
-      icon: ShoppingCart,
-      fallbackLabel: "Orders",
-    },
-    {
-      path: "/supply/orders",
-      icon: Package,
-      fallbackLabel: "Supply Orders",
-    },
-    {
-      path: "/subscription",
-      icon: BarChart3,
-      labelKey: "nav.subscription",
-      fallbackLabel: "Subscription",
-    },
-    ...(hasBusinessTeamAccess || canManageBusinessProfile
-      ? ([
-          {
-            path: "/business-team",
-            icon: Users,
-            fallbackLabel: "Team",
-          },
-        ] as NavItem[])
-      : []),
-    { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
-  ];
-
-  const bugNavItem: NavItem = {
-    labelKey: "nav.report",
-    fallbackLabel: "Report",
-    icon: Bug,
-    onClick: handleBugReport,
-    isBug: true,
-    testId: "report",
+  // Top 3 items per role (shown in bottom bar)
+  const getTopItems = (): NavItem[] => {
+    if (!user) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+      ];
+    }
+    if (isAdmin) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/admin/dashboard", icon: Shield, labelKey: "nav.admin", fallbackLabel: "Admin" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isStaff) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isEventCoordinator) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isSupplier) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/supplier/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isFoodTruck) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isRestaurantOwner) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (hasBusinessTeamAccess) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/restaurant-owner-dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    if (isHost) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      ];
+    }
+    // Customer
+    return [
+      { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+      { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+      { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+    ];
   };
 
-  const mergeNavItems = (...groups: NavItem[][]): NavItem[] => {
-    const seen = new Set<string>();
-    const result: NavItem[] = [];
-    for (const group of groups) {
-      for (const item of group) {
-        const key = item.path ? `path:${item.path}` : `label:${item.fallbackLabel}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        result.push(item);
+  // All overflow items for the "More" drawer, grouped by category
+  const getOverflowItems = (): NavItem[] => {
+    const items: NavItem[] = [];
+
+    // ── Discover ──
+    items.push(
+      { path: "/", icon: UtensilsCrossed, fallbackLabel: "Food", group: "Discover" },
+      { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" },
+      { path: "/video", icon: Clapperboard, fallbackLabel: "Video", group: "Discover" },
+      { path: "/events", icon: Calendar, fallbackLabel: "Events", group: "Discover" },
+    );
+
+    if (!user) {
+      items.push(
+        { path: "/customer-signup", icon: UserPlus, fallbackLabel: "Create Account", group: "Get Started" },
+        { path: "/restaurant-signup?businessType=food_truck&claim=1", icon: Truck, fallbackLabel: "Claim Truck", group: "Get Started" },
+      );
+    }
+
+    if (user) {
+      // ── My Stuff ──
+      items.push(
+        { path: "/dashboard", icon: LayoutDashboard, fallbackLabel: "Dashboard", group: "My Stuff" },
+        { path: "/favorites", icon: Heart, fallbackLabel: "Favorites", group: "My Stuff" },
+        { path: "/orders", icon: Receipt, fallbackLabel: "Orders", group: "My Stuff" },
+      );
+
+      // ── Business ──
+      if (isAdmin || isStaff || isRestaurantOwner || isFoodTruck || hasBusinessTeamAccess) {
+        if (isRestaurantOwner || isFoodTruck || hasBusinessTeamAccess) {
+          items.push(
+            { path: "/restaurant-owner-dashboard", icon: Store, fallbackLabel: "Business Dashboard", group: "Business" },
+          );
+        }
+        if (canManageDeals) {
+          items.push(
+            { path: "/deal-creation", icon: Plus, fallbackLabel: "Create Special", group: "Business" },
+          );
+        }
+        items.push(
+          { path: "/menu-builder", icon: Store, fallbackLabel: "Menu Builder", group: "Business" },
+          { path: "/kitchen", icon: ChefHat, fallbackLabel: "Kitchen", group: "Business" },
+          { path: "/supply/orders", icon: Package, fallbackLabel: "Supply Orders", group: "Business" },
+        );
+        if (canSeeParkingPassNav) {
+          items.push(
+            { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Business" },
+          );
+        }
+        if (hasBusinessTeamAccess || canManageBusinessProfile) {
+          items.push(
+            { path: "/business-team", icon: Users, fallbackLabel: "Team", group: "Business" },
+          );
+        }
+        items.push(
+          { path: "/subscription", icon: BarChart3, fallbackLabel: "Subscription", group: "Business" },
+          { path: "/suppliers", icon: Store, fallbackLabel: "Supplies", group: "Business" },
+        );
+      }
+
+      // ── Host ──
+      if (isHost || isAdmin || isStaff) {
+        items.push(
+          { path: "/host/dashboard", icon: Users, fallbackLabel: "Host Dashboard", group: "Host" },
+        );
+        if (canSeeParkingPassNav && !items.some(i => i.path === "/parking-pass")) {
+          items.push(
+            { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Host" },
+          );
+        }
+      }
+
+      // ── Supplier ──
+      if (isSupplier) {
+        items.push(
+          { path: "/supplier/dashboard", icon: LayoutDashboard, fallbackLabel: "Supplier Dashboard", group: "Supplier" },
+        );
+      }
+
+      // ── Staff ──
+      if (isStaff) {
+        items.push(
+          { path: "/staff", icon: Users, fallbackLabel: "Staff Hub", group: "Staff" },
+        );
+      }
+
+      // ── Admin ──
+      if (isAdmin) {
+        items.push(
+          { path: "/admin/dashboard", icon: Shield, fallbackLabel: "Admin", group: "Admin" },
+          { path: "/admin/control-center", icon: LayoutDashboard, fallbackLabel: "Control Center", group: "Admin" },
+          { path: "/admin/affiliates", icon: Users, fallbackLabel: "Affiliates", group: "Admin" },
+          { path: "/admin/vac-logs", icon: Shield, fallbackLabel: "VAC Logs", group: "Admin" },
+          { path: "/deals/featured", icon: Receipt, fallbackLabel: "Featured Specials", group: "Admin" },
+          { path: "/truck-discovery", icon: Truck, fallbackLabel: "Open Calls", group: "Admin" },
+        );
+      }
+
+      // ── Account ──
+      items.push(
+        { path: "/profile", icon: User, fallbackLabel: "Profile", group: "Account" },
+        { path: "/profile/settings", icon: Settings, fallbackLabel: "Settings", group: "Account" },
+        { path: "/profile/notifications", icon: Bell, fallbackLabel: "Notifications", group: "Account" },
+        { path: "/profile/payment", icon: CreditCard, fallbackLabel: "Payment Methods", group: "Account" },
+        { path: "/profile/addresses", icon: MapPinned, fallbackLabel: "Addresses", group: "Account" },
+        { path: "/profile/help", icon: HelpCircle, fallbackLabel: "Help & Support", group: "Account" },
+      );
+
+      // ── Share & Report ──
+      if (!isAdmin && !isStaff) {
+        items.push(
+          { path: "/share-hub", icon: Share2, fallbackLabel: "Share Hub", group: "More" },
+        );
       }
     }
-    return result;
+
+    items.push({
+      icon: Bug,
+      fallbackLabel: "Report Bug",
+      onClick: handleBugReport,
+      isBug: true,
+      group: "More",
+    });
+
+    // Deduplicate by path
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = item.path ? `path:${item.path}` : `label:${item.fallbackLabel}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   };
 
-  // Admins should see every flow including all business types, host, and event coordinator capabilities
-  const adminNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
-    { path: "/admin/dashboard", icon: Shield, labelKey: "nav.admin", fallbackLabel: "Admin" },
-    {
-      path: "/user-dashboard",
-      icon: User,
-      fallbackLabel: "Customer",
-    },
-    {
-      path: "/restaurant-owner-dashboard",
-      icon: Store,
-      fallbackLabel: "Restaurant/Truck",
-    },
-    {
-      path: "/host/dashboard",
-      icon: Users,
-      labelKey: "nav.host",
-      fallbackLabel: "Host",
-    },
-    {
-      path: "/events",
-      icon: Calendar,
-      fallbackLabel: "Events",
-    },
-    {
-      path: "/supplier/dashboard",
-      icon: LayoutDashboard,
-      fallbackLabel: "Supplier",
-    },
-    {
-      path: "/parking-pass?adminMode=truck",
-      icon: ParkingSquare,
-      fallbackLabel: "Parking (Truck)",
-    },
-    {
-      path: "/parking-pass?adminMode=host",
-      icon: ParkingSquare,
-      fallbackLabel: "Parking (Host)",
-    },
-    {
-      path: "/admin/control-center",
-      icon: LayoutDashboard,
-      labelKey: "nav.controlCenter",
-      fallbackLabel: "Control Center",
-    },
-    {
-      path: "/admin/affiliates",
-      icon: Users,
-      labelKey: "nav.affiliates",
-      fallbackLabel: "Affiliates",
-    },
-    {
-      path: "/admin/vac-logs",
-      icon: Shield,
-      fallbackLabel: "VAC Logs",
-    },
-    { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
-    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-    ...restaurantOwnerExtras,
-    {
-      path: "/truck-discovery",
-      icon: Truck,
-      fallbackLabel: "Open Calls",
-    },
-    {
-      path: "/kitchen",
-      icon: ChefHat,
-      fallbackLabel: "Kitchen",
-    },
-    {
-      path: "/orders",
-      icon: ShoppingCart,
-      fallbackLabel: "Orders",
-    },
-    {
-      path: "/supply/orders",
-      icon: Package,
-      fallbackLabel: "Supply Orders",
-    },
-    {
-      path: "/parking-pass",
-      icon: ParkingSquare,
-      labelKey: "nav.parkingPass",
-      fallbackLabel: "Parking Pass",
-    },
-    ...customerExtras,
-  ]);
+  const topItems = getTopItems();
+  const overflowItems = getOverflowItems();
 
-  const customerNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    customerExtras,
+  // Group overflow items for the drawer
+  const groupedOverflow = overflowItems.reduce(
+    (acc, item) => {
+      const group = item.group || "More";
+      if (!acc[group]) acc[group] = [];
+      acc[group].push(item);
+      return acc;
+    },
+    {} as Record<string, NavItem[]>,
   );
 
-  const unauthenticatedNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    unauthenticatedExtras,
-  );
+  // ─── DESKTOP SIDEBAR ITEMS ──────────────────────────────────────
+  // For desktop, we show a proper sidebar with grouped navigation
+  const desktopSidebarGroups = Object.entries(groupedOverflow);
 
-  const staffNavItems: NavItem[] = mergeNavItems(sharedNavItems, staffExtras);
+  // ─── RENDER HELPERS ─────────────────────────────────────────────
 
-  const restaurantOwnerNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    restaurantOwnerExtras,
-  );
+  const renderNavLink = (item: NavItem, size: "sm" | "md" = "sm") => {
+    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const isActive = item.path ? location === item.path : false;
+    const iconSize = size === "sm" ? "w-5 h-5" : "w-5 h-5";
+    const textSize = size === "sm" ? "text-[11px]" : "text-sm";
 
-  const hostNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    customerExtras,
-    hostExtras,
-    canSeeParkingPassNav
-      ? ([
-          {
-            path: "/parking-pass",
-            icon: ParkingSquare,
-            labelKey: "nav.parkingPass",
-            fallbackLabel: "Parking Pass",
-          },
-        ] as NavItem[])
-      : [],
-  );
+    if (item.path) {
+      return (
+        <Link
+          key={item.path}
+          href={item.path}
+          className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
+            isActive ? "nav-link--active" : "nav-link--inactive"
+          }`}
+          data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase().replace(/\s+/g, "-")}`}
+          aria-label={label}
+          aria-current={isActive ? "page" : undefined}
+          onClick={() => setMoreOpen(false)}
+        >
+          <item.icon className={iconSize} />
+          <span className={`${textSize} leading-tight font-semibold tracking-normal`}>{label}</span>
+        </Link>
+      );
+    }
 
-  const eventCoordinatorExtras: NavItem[] = [
-    { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-    {
-      path: "/dashboard",
-      icon: LayoutDashboard,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-  ];
+    return (
+      <button
+        key={item.fallbackLabel}
+        onClick={() => {
+          item.onClick?.();
+          setMoreOpen(false);
+        }}
+        disabled={item.isBug ? isReporting : false}
+        className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
+          item.isBug ? "nav-bug" : "nav-link--inactive"
+        } ${isReporting && item.isBug ? "opacity-80 cursor-not-allowed" : ""}`}
+        data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase().replace(/\s+/g, "-")}`}
+        aria-label={label}
+      >
+        {isReporting && item.isBug ? (
+          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <item.icon className={iconSize} />
+        )}
+        <span className={`${textSize} leading-tight font-semibold tracking-normal`}>{label}</span>
+      </button>
+    );
+  };
 
-  const eventCoordinatorNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    eventCoordinatorExtras,
-  );
+  const renderDrawerItem = (item: NavItem) => {
+    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const isActive = item.path ? location === item.path : false;
 
-  const foodTruckNavItems: NavItem[] = mergeNavItems(
-    sharedNavItems,
-    customerExtras,
-    [
-      { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-      { path: "/suppliers", icon: Store, labelKey: "nav.supplies", fallbackLabel: "Supplies" },
-      ...(hasBusinessTeamAccess || canManageBusinessProfile
-        ? ([{ path: "/business-team", icon: Users, fallbackLabel: "Team" }] as NavItem[])
-        : []),
-      ...(canManageDeals
-        ? ([
-            {
-              path: "/deal-creation",
-              icon: Plus,
-              labelKey: "nav.createSpecial",
-              fallbackLabel: "Create Special",
-            },
-          ] as NavItem[])
-        : []),
-      {
-        path: "/menu-builder",
-        icon: Store,
-        fallbackLabel: "Menu Builder",
-      },
-      {
-        path: "/kitchen",
-        icon: ChefHat,
-        fallbackLabel: "Kitchen",
-      },
-      {
-        path: "/orders",
-        icon: ShoppingCart,
-        fallbackLabel: "Orders",
-      },
-      {
-        path: "/supply/orders",
-        icon: Package,
-        fallbackLabel: "Supply Orders",
-      },
-      ...(canSeeParkingPassNav
-        ? ([
-            {
-              path: "/parking-pass",
-              icon: ParkingSquare,
-              labelKey: "nav.parkingPass",
-              fallbackLabel: "Parking Pass",
-            },
-          ] as NavItem[])
-        : []),
-    ],
-  );
-  const collaboratorNavItems: NavItem[] = mergeNavItems(sharedNavItems, [
-    {
-      path: "/restaurant-owner-dashboard",
-      icon: LayoutDashboard,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-    ...(canManageDeals
-      ? ([
-          {
-            path: "/deal-creation",
-            icon: Plus,
-            labelKey: "nav.createSpecial",
-            fallbackLabel: "Create Special",
-          },
-        ] as NavItem[])
-      : []),
-    {
-      path: "/menu-builder",
-      icon: Store,
-      fallbackLabel: "Menu Builder",
-    },
-    {
-      path: "/kitchen",
-      icon: ChefHat,
-      fallbackLabel: "Kitchen",
-    },
-    {
-      path: "/orders",
-      icon: ShoppingCart,
-      fallbackLabel: "Orders",
-    },
-    {
-      path: "/supply/orders",
-      icon: Package,
-      fallbackLabel: "Supply Orders",
-    },
-    ...(canManageParkingPass
-      ? ([
-          {
-            path: "/parking-pass",
-            icon: ParkingSquare,
-            labelKey: "nav.parkingPass",
-            fallbackLabel: "Parking Pass",
-          },
-        ] as NavItem[])
-      : []),
-    ...(hasBusinessTeamAccess || canManageBusinessProfile
-      ? ([{ path: "/business-team", icon: Users, fallbackLabel: "Team" }] as NavItem[])
-      : []),
-  ]);
+    if (item.path) {
+      return (
+        <Link
+          key={item.path}
+          href={item.path}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+            isActive
+              ? "bg-orange-500/10 text-orange-500 font-semibold"
+              : "text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+          }`}
+          onClick={() => setMoreOpen(false)}
+        >
+          <item.icon className="w-5 h-5 flex-shrink-0" />
+          <span className="text-sm font-medium">{label}</span>
+        </Link>
+      );
+    }
 
-  const supplierExtras: NavItem[] = [
-    {
-      path: "/supplier/dashboard",
-      icon: LayoutDashboard,
-      labelKey: "nav.dashboard",
-      fallbackLabel: "Dashboard",
-    },
-  ];
-  const supplierNavItems: NavItem[] = mergeNavItems(sharedNavItems, supplierExtras);
+    return (
+      <button
+        key={item.fallbackLabel}
+        onClick={() => {
+          item.onClick?.();
+          setMoreOpen(false);
+        }}
+        disabled={item.isBug ? isReporting : false}
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full text-left ${
+          item.isBug
+            ? "text-amber-500 hover:bg-amber-500/10"
+            : "text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+        }`}
+      >
+        {isReporting && item.isBug ? (
+          <div className="h-5 w-5 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0" />
+        ) : (
+          <item.icon className="w-5 h-5 flex-shrink-0" />
+        )}
+        <span className="text-sm font-medium">{label}</span>
+      </button>
+    );
+  };
 
-  const navItems = !user
-    ? [...unauthenticatedNavItems, bugNavItem]
-    : isAdmin
-      ? [...adminNavItems, bugNavItem]
-      : isStaff
-        ? [...staffNavItems, bugNavItem]
-      : isEventCoordinator
-          ? [...eventCoordinatorNavItems, bugNavItem]
-          : isSupplier
-            ? [...supplierNavItems, bugNavItem]
-          : isFoodTruck
-            ? [...foodTruckNavItems, bugNavItem]
-            : isRestaurantOwner
-              ? [...restaurantOwnerNavItems, bugNavItem]
-              : hasBusinessTeamAccess
-                ? [...collaboratorNavItems, bugNavItem]
-              : isHost
-                ? [...hostNavItems, bugNavItem]
-              : [...customerNavItems, bugNavItem];
+  const renderSidebarLink = (item: NavItem) => {
+    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const isActive = item.path ? location === item.path : false;
 
-  const desktopQuickActionPaths = [
-    "/search",
-    "/map",
-    "/events",
-    "/dashboard",
-    "/profile",
-    "/admin/dashboard",
-    "/staff",
-    "/host/dashboard",
-    "/supplier/dashboard",
-    "/menu-builder",
-  ];
-  const desktopQuickActions = navItems
-    .filter((item) => item.path && desktopQuickActionPaths.includes(item.path))
-    .slice(0, 5);
+    if (item.path) {
+      return (
+        <Link
+          key={item.path}
+          href={item.path}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
+            isActive
+              ? "bg-orange-500/10 text-orange-500 font-semibold"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+          }`}
+          onClick={() => setSidebarOpen(false)}
+        >
+          <item.icon className="w-4 h-4 flex-shrink-0" />
+          <span>{label}</span>
+        </Link>
+      );
+    }
+
+    return (
+      <button
+        key={item.fallbackLabel}
+        onClick={() => {
+          item.onClick?.();
+          setSidebarOpen(false);
+        }}
+        disabled={item.isBug ? isReporting : false}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm w-full text-left ${
+          item.isBug
+            ? "text-amber-500 hover:bg-amber-500/10"
+            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+        }`}
+      >
+        <item.icon className="w-4 h-4 flex-shrink-0" />
+        <span>{label}</span>
+      </button>
+    );
+  };
 
   return (
     <>
-      <div data-nav-root={scope} className="hidden lg:block fixed top-4 right-4 z-50">
-        <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
-          <div className="flex items-center gap-2">
-            {desktopQuickActions.map((item) =>
-              item.path ? (
+      {/* ═══════════════════════════════════════════════════════════════
+          DESKTOP: Sidebar toggle button + collapsible sidebar
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="hidden lg:block">
+        {/* Toggle button - always visible */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="fixed top-4 left-4 z-50 h-10 w-10 flex items-center justify-center rounded-xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean transition-colors hover:bg-[var(--bg-card-hover)]"
+          aria-label="Toggle navigation"
+        >
+          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+
+        {/* Sidebar panel */}
+        {sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Sidebar */}
+            <aside className="fixed top-0 left-0 bottom-0 w-72 z-50 bg-[var(--bg-surface)] border-r border-[var(--border-subtle)] shadow-clean-lg overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-4">
+                <Link href="/" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
+                  <UtensilsCrossed className="w-6 h-6 text-orange-500" />
+                  <span className="text-lg font-bold font-display tracking-tight">MealScout</span>
+                </Link>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* User info */}
+              {user && (
+                <div className="px-5 pb-4 border-b border-[var(--border-subtle)]">
+                  <Link
+                    href="/profile"
+                    className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors"
+                    onClick={() => setSidebarOpen(false)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                      <User className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{user.firstName || user.email}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate">{user.email}</p>
+                    </div>
+                  </Link>
+                </div>
+              )}
+
+              {/* Nav groups */}
+              <nav className="px-3 py-3 space-y-4">
+                {desktopSidebarGroups.map(([group, items]) => (
+                  <div key={group}>
+                    <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      {group}
+                    </p>
+                    <div className="space-y-0.5">
+                      {items.map(renderSidebarLink)}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Logout */}
+                {user && (
+                  <div className="pt-2 border-t border-[var(--border-subtle)]">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+                          window.location.href = "/";
+                        } catch {
+                          window.location.href = "/";
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm w-full text-left text-red-500 hover:bg-red-500/10"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Log Out</span>
+                    </button>
+                  </div>
+                )}
+              </nav>
+            </aside>
+          </>
+        )}
+
+        {/* Desktop top-right quick actions (compact) */}
+        <div data-nav-root={scope} className="fixed top-4 right-4 z-50">
+          <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
+            <div className="flex items-center gap-2">
+              {topItems.map((item) =>
+                item.path ? (
+                  <Link
+                    key={`quick-${item.path}`}
+                    href={item.path}
+                    className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors ${
+                      location === item.path
+                        ? "bg-[color:var(--accent-text)] text-white"
+                        : "bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)]"
+                    }`}
+                    aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="hidden lg:inline">
+                      {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                    </span>
+                  </Link>
+                ) : null,
+              )}
+              {user && (
                 <Link
-                  key={`quick-${item.path}`}
-                  href={item.path}
+                  href="/profile"
                   className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors ${
-                    location === item.path
+                    location === "/profile"
                       ? "bg-[color:var(--accent-text)] text-white"
                       : "bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)]"
                   }`}
-                  aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                  aria-label="Profile"
                 >
-                  <item.icon className="h-4 w-4" />
-                  <span className="hidden lg:inline">
-                    {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
-                  </span>
+                  <User className="h-4 w-4" />
+                  <span className="hidden lg:inline">Profile</span>
                 </Link>
-              ) : null,
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 w-full border-t px-3 pt-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] z-[1100] lg:hidden">
-      <div className="w-full mx-auto overflow-x-auto max-w-none">
-        <div className="flex items-stretch justify-start space-x-2 min-w-max snap-x snap-mandatory">
-          {navItems.map((item) =>
-            item.path ? (
-              <Link
-                key={item.path}
-                href={item.path}
-                className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
-                  location === item.path ? "nav-link--active" : "nav-link--inactive"
-                }`}
-                data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
-                aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
-                aria-current={location === item.path ? "page" : undefined}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                  {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
-                </span>
-              </Link>
-            ) : (
-              <button
-                key={item.fallbackLabel}
-                onClick={item.onClick}
-                disabled={isReporting}
-                className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
-                  item.isBug ? "nav-bug" : "nav-link--inactive"
-                } ${isReporting ? "opacity-80 cursor-not-allowed" : ""}`}
-                data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
-                aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
-              >
-                {isReporting ? (
-                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <item.icon className="w-5 h-5" />
-                )}
-                <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                  {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
-                </span>
-              </button>
-            ),
-          )}
+      {/* ═══════════════════════════════════════════════════════════════
+          MOBILE: Bottom nav bar with top 3 + share + more
+          ═══════════════════════════════════════════════════════════════ */}
+      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 w-full border-t px-2 pt-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] z-[1100] lg:hidden">
+        <div className="flex items-stretch justify-around w-full max-w-md mx-auto">
+          {/* Top 3 role-specific items */}
+          {topItems.map((item) => renderNavLink(item))}
+
+          {/* Share button */}
+          <button
+            onClick={handleShare}
+            className="flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 nav-link--inactive"
+            aria-label="Share"
+          >
+            <Share2 className="w-5 h-5" />
+            <span className="text-[11px] leading-tight font-semibold tracking-normal">Share</span>
+          </button>
+
+          {/* More button */}
+          <button
+            onClick={() => setMoreOpen(true)}
+            className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
+              moreOpen ? "nav-link--active" : "nav-link--inactive"
+            }`}
+            aria-label="More"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+            <span className="text-[11px] leading-tight font-semibold tracking-normal">More</span>
+          </button>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MOBILE: "More" drawer
+          ═══════════════════════════════════════════════════════════════ */}
+      <Drawer open={moreOpen} onOpenChange={setMoreOpen}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="flex items-center justify-between pb-2">
+            <DrawerTitle className="text-lg font-display">Menu</DrawerTitle>
+            <DrawerClose asChild>
+              <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </DrawerClose>
+          </DrawerHeader>
+
+          <div className="overflow-y-auto px-4 pb-8 space-y-5">
+            {Object.entries(groupedOverflow).map(([group, items]) => (
+              <div key={group}>
+                <p className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  {group}
+                </p>
+                <div className="space-y-0.5">
+                  {items.map(renderDrawerItem)}
+                </div>
+              </div>
+            ))}
+
+            {/* Logout in drawer */}
+            {user && (
+              <div className="pt-2 border-t border-[var(--border-subtle)]">
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+                      window.location.href = "/";
+                    } catch {
+                      window.location.href = "/";
+                    }
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full text-left text-red-500 hover:bg-red-500/10"
+                >
+                  <LogOut className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-sm font-medium">Log Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }
-

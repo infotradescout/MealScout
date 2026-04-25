@@ -151,8 +151,7 @@ export default function HomeRedesigned() {
       });
       const { latitude, longitude } = position.coords;
       setLocation({ lat: latitude, lng: longitude });
-      const name = await getReverseGeocodedLocationName(latitude, longitude);
-      setLocationName(name);
+      await getReverseGeocodedLocationName(latitude, longitude, setLocationName);
     } catch (error) {
       console.error("Location error:", error);
     } finally {
@@ -164,7 +163,7 @@ export default function HomeRedesigned() {
 
   return (
     <>
-      <SEOHead title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout" />
+      <SEOHead title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout" description="Discover food trucks, restaurants, and bars near you. Browse menus, find deals, and book parking spots with MealScout." />
       <Navigation />
 
       {/* HERO SECTION */}

@@ -397,16 +397,10 @@ export default function Home() {
     queryKey: location
       ? ["/api/trucks/live", location.lat, location.lng]
       : ["/api/trucks/live", "no-location"],
-    enabled: true,
+    enabled: !!location,
     queryFn: async () => {
       if (!location) {
-        try {
-          const response = await fetch("/api/trucks/live", { credentials: "include" });
-          if (!response.ok) return { trucks: [] };
-          return response.json();
-        } catch {
-          return { trucks: [] };
-        }
+        return { trucks: [] };
       }
       const response = await fetch(
         `/api/trucks/live?lat=${location.lat}&lng=${location.lng}`,
@@ -546,7 +540,7 @@ export default function Home() {
 
   return (
     <>
-      <SEOHead title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout" />
+      <SEOHead title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout" description="Discover food trucks, restaurants, and bars near you. Browse menus, find deals, and book parking spots with MealScout." />
       <Navigation />
 
       {/* Hero Section */}
