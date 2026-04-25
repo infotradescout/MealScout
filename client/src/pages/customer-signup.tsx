@@ -90,10 +90,16 @@ export default function CustomerSignup() {
   >(
     initialAccountType
   );
-  const initialBusinessSubType: "restaurant" | "food_truck" =
-    searchParams.get("businessType") === "food_truck" ? "food_truck" : "restaurant";
+  type BusinessSubType = "restaurant" | "bar" | "food_truck";
+  const businessTypeParam = searchParams.get("businessType");
+  const initialBusinessSubType: BusinessSubType =
+    businessTypeParam === "food_truck"
+      ? "food_truck"
+      : businessTypeParam === "bar"
+        ? "bar"
+        : "restaurant";
   const [businessSubType, setBusinessSubType] = useState<
-    "restaurant" | "food_truck"
+    BusinessSubType
   >(initialAccountType === "business" ? initialBusinessSubType : "restaurant");
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
 
@@ -219,7 +225,10 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        signupData
+        {
+          ...signupData,
+          businessType: businessSubType,
+        }
       );
       return await res.json();
     },
@@ -248,6 +257,8 @@ export default function CustomerSignup() {
       const businessRedirect =
         businessSubType === "food_truck"
           ? "/restaurant-signup?businessType=food_truck&claim=1"
+          : businessSubType === "bar"
+            ? "/restaurant-signup?businessType=bar"
           : "/restaurant-signup";
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
@@ -363,6 +374,8 @@ export default function CustomerSignup() {
       const businessRedirect =
         businessSubType === "food_truck"
           ? "/restaurant-signup?businessType=food_truck&claim=1"
+          : businessSubType === "bar"
+            ? "/restaurant-signup?businessType=bar"
           : "/restaurant-signup";
       setLocation(businessRedirect);
       return;
@@ -490,6 +503,8 @@ export default function CustomerSignup() {
       : accountType === "business"
         ? businessSubType === "food_truck"
           ? "Create food truck profile"
+          : businessSubType === "bar"
+            ? "Create bar profile"
           : "Create restaurant profile"
         : accountType === "supplier"
           ? "Create supplier profile"
@@ -591,6 +606,17 @@ export default function CustomerSignup() {
                   }`}
                 >
                   Restaurant
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusinessSubType("bar")}
+                  className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                    businessSubType === "bar"
+                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                      : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                >
+                  Bar
                 </button>
                 <button
                   type="button"
@@ -740,10 +766,22 @@ export default function CustomerSignup() {
                     }`}
                     data-testid="button-business-type-restaurant"
                   >
-                    Restaurant
-                  </button>
-                  <button
-                    type="button"
+                  Restaurant
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusinessSubType("bar")}
+                  className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                    businessSubType === "bar"
+                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                      : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                  data-testid="button-business-type-bar"
+                >
+                  Bar
+                </button>
+                <button
+                  type="button"
                     onClick={() => setBusinessSubType("food_truck")}
                     className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
                       businessSubType === "food_truck"

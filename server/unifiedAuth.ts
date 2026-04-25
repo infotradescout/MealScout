@@ -1067,7 +1067,15 @@ export async function setupUnifiedAuth(app: Express) {
   // Email/password registration for restaurant owners
   app.post("/api/auth/restaurant/register", async (req, res) => {
     try {
-      const { email, firstName, lastName, phone, password, otpCode } = req.body;
+      const {
+        email,
+        firstName,
+        lastName,
+        phone,
+        password,
+        otpCode,
+        businessType,
+      } = req.body;
 
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
@@ -1120,16 +1128,34 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
       };
 
+      const normalizedBusinessType = ["restaurant", "bar", "food_truck"].includes(
+        String(businessType || ""),
+      )
+        ? String(businessType)
+        : "restaurant";
+      const businessUserType =
+        normalizedBusinessType === "food_truck"
+          ? "food_truck"
+          : "restaurant_owner";
+
       const user = await storage.upsertUserByAuth(
         "email",
         userData,
-        "restaurant_owner",
+        businessUserType,
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
       // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "restaurant owner");
+      void sendWelcomeOrVerification(
+        user,
+        req,
+        normalizedBusinessType === "food_truck"
+          ? "food truck owner"
+          : normalizedBusinessType === "bar"
+            ? "bar owner"
+            : "restaurant owner",
+      );
       // Send admin signup notification with context asynchronously
       emailService
         .sendAdminSignupNotification(user, {

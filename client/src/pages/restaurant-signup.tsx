@@ -223,7 +223,11 @@ export default function RestaurantSignup() {
     try {
       const params = new URLSearchParams(window.location.search);
       const businessType = params.get("businessType");
-      if (businessType === "food_truck" || businessType === "restaurant") {
+      if (
+        businessType === "food_truck" ||
+        businessType === "restaurant" ||
+        businessType === "bar"
+      ) {
         form.setValue("businessType", businessType as any);
       }
 
