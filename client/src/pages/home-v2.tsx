@@ -400,7 +400,7 @@ export default function Home() {
     queryFn: async () => {
       if (!location) {
         try {
-          const response = await fetch("/api/trucks/live?limit=20", { credentials: "include" });
+          const response = await fetch("/api/trucks/live", { credentials: "include" });
           if (!response.ok) return { trucks: [] };
           return response.json();
         } catch {
@@ -408,7 +408,7 @@ export default function Home() {
         }
       }
       const response = await fetch(
-        `/api/trucks/live?lat=${location.lat}&lng=${location.lng}&radiusKm=7`,
+        `/api/trucks/live?lat=${location.lat}&lng=${location.lng}`,
         { credentials: "include" },
       );
       if (!response.ok) throw new Error("Failed to fetch live trucks");
@@ -431,13 +431,21 @@ export default function Home() {
     isLoading: profilesLoading,
   } = useQuery<PublicBusinessProfile[]>({
     queryKey: location
-      ? ["/api/businesses/public", location.lat, location.lng]
-      : ["/api/businesses/public", "no-location"],
+      ? ["/api/restaurants/public", location.lat, location.lng]
+      : ["/api/restaurants/public", "no-location"],
     enabled: true,
     queryFn: async () => {
-      if (!location) return [];
+      if (!location) {
+        try {
+          const response = await fetch("/api/restaurants/public", { credentials: "include" });
+          if (!response.ok) return [];
+          return response.json();
+        } catch {
+          return [];
+        }
+      }
       const response = await fetch(
-        `/api/businesses/public?lat=${location.lat}&lng=${location.lng}&limit=30`,
+        `/api/restaurants/public?lat=${location.lat}&lng=${location.lng}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -456,9 +464,17 @@ export default function Home() {
       : ["/api/deals/nearby", "no-location"],
     enabled: true,
     queryFn: async () => {
-      if (!location) return [];
+      if (!location) {
+        try {
+          const response = await fetch("/api/deals/active", { credentials: "include" });
+          if (!response.ok) return [];
+          return response.json();
+        } catch {
+          return [];
+        }
+      }
       const response = await fetch(
-        `/api/deals/nearby?lat=${location.lat}&lng=${location.lng}&radiusKm=7&limit=50`,
+        `/api/deals/nearby/${location.lat}/${location.lng}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
