@@ -422,20 +422,25 @@ router.get("/vac-logs", isAdmin, async (req, res) => {
  */
 router.get("/support-tickets", isAdmin, async (req, res) => {
   try {
-    const { status, priority } = req.query;
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+    const priority = typeof req.query.priority === "string" ? req.query.priority : "";
+    const conditions = [];
 
-    let tickets = await db
+    if (status && status !== "all") {
+      conditions.push(eq(supportTickets.status, status));
+    }
+    if (priority && priority !== "all") {
+      conditions.push(eq(supportTickets.priority, priority));
+    }
+
+    const query = db
       .select()
       .from(supportTickets)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(supportTickets.createdAt))
       .limit(200);
 
-    if (status) {
-      tickets = tickets.filter((t: any) => t.status === status);
-    }
-    if (priority) {
-      tickets = tickets.filter((t: any) => t.priority === priority);
-    }
+    const tickets = await query;
 
     res.json(tickets);
   } catch (error) {

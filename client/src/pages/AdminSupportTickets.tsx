@@ -4,7 +4,6 @@ import { AlertCircle, MessageSquare, Clock, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -88,7 +87,7 @@ const getStatusIcon = (status: string) => {
 
 export default function AdminSupportTickets() {
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
-  const [filters, setFilters] = useState({ status: '', priority: '' });
+  const [filters, setFilters] = useState({ status: 'all', priority: 'all' });
   const [adminNotes, setAdminNotes] = useState('');
   const queryClient = useQueryClient();
 
@@ -96,8 +95,8 @@ export default function AdminSupportTickets() {
     queryKey: ['support-tickets', filters],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.priority) params.append('priority', filters.priority);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.priority !== 'all') params.append('priority', filters.priority);
       const res = await fetch(`/api/admin/support-tickets?${params}`);
       if (!res.ok) throw new Error('Failed to fetch tickets');
       return res.json();
@@ -145,7 +144,7 @@ export default function AdminSupportTickets() {
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in-progress">In Progress</SelectItem>
                 <SelectItem value="resolved">Resolved</SelectItem>
@@ -158,7 +157,7 @@ export default function AdminSupportTickets() {
                 <SelectValue placeholder="Filter by priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="high">High</SelectItem>
