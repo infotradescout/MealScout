@@ -40,6 +40,9 @@ import {
   Zap,
   ChevronRight,
   Users,
+  Wine,
+  CalendarDays,
+  Utensils,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
@@ -532,6 +535,23 @@ export default function Home() {
       .slice(0, 12);
   }, [publicProfiles, dealsByRestaurant]);
 
+  // Split businesses by type
+  const foodTrucks = useMemo(() => {
+    return featuredBusinesses.filter((b) => b.isFoodTruck);
+  }, [featuredBusinesses]);
+
+  const restaurants = useMemo(() => {
+    return featuredBusinesses.filter(
+      (b) => !b.isFoodTruck && !String(b.businessType || "").toLowerCase().includes("bar"),
+    );
+  }, [featuredBusinesses]);
+
+  const bars = useMemo(() => {
+    return featuredBusinesses.filter(
+      (b) => !b.isFoodTruck && String(b.businessType || "").toLowerCase().includes("bar"),
+    );
+  }, [featuredBusinesses]);
+
   const shortLocation = locationName?.split(",")[0] || "your area";
   const firstName =
     (user as any)?.firstName?.trim() ||
@@ -637,94 +657,199 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Live Food Trucks Section */}
-      {liveTrucks.length > 0 && (
-        <section className="py-8">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
-                  <Truck className="w-6 h-6 text-[color:var(--accent-text)]" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-black">Live Food Trucks</h2>
-                  <p className="text-sm text-muted-foreground">Open right now in {shortLocation}</p>
-                </div>
+      {/* ── Food Scene Sections ── */}
+
+      {/* Live Food Trucks */}
+      <section className="py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-green-500/15">
+                <Truck className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black">Live Food Trucks</h2>
+                <p className="text-sm text-muted-foreground">Broadcasting now in {shortLocation}</p>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {liveTrucks.slice(0, 6).map((truck) => (
-                <TruckCard
-                  key={truck.id}
-                  truck={truck}
-                  deals={dealsByRestaurant.get(String(truck.id)) || []}
-                />
-              ))}
-            </div>
-
-            {liveTrucks.length > 6 && (
-              <div className="mt-10 text-center">
-                <Link href="/map">
-                  <Button variant="outline" className="h-12 px-8 rounded-full font-semibold" size="lg">
-                    View All {liveTrucks.length} Trucks
-                    <ChevronRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-              </div>
+            {liveTrucks.length > 0 && (
+              <Link href="/map">
+                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
+                  View All <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
             )}
           </div>
-        </section>
-      )}
-
-      {/* Featured Businesses Section */}
-      {featuredBusinesses.length > 0 && (
-        <section className="py-16 bg-gradient-to-b from-transparent to-[color:var(--accent-text)]/5">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="mb-10">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
-                  <TrendingUp className="w-6 h-6 text-[color:var(--accent-text)]" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-black">Trending Now</h2>
-                  <p className="text-sm text-muted-foreground">Hot deals and popular spots</p>
-                </div>
-              </div>
-            </div>
-
+          {liveTrucks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {featuredBusinesses.map((business) => (
-                <BusinessCard key={business.id} business={business} />
+              {liveTrucks.slice(0, 6).map((truck) => (
+                <TruckCard key={truck.id} truck={truck} deals={dealsByRestaurant.get(String(truck.id)) || []} />
               ))}
             </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
+              <Truck className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-muted-foreground font-medium">No food trucks broadcasting right now</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Food trucks with a subscription appear here when they go live</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Restaurants */}
+      <section className="py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
+                <Utensils className="w-6 h-6 text-[color:var(--accent-text)]" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black">Restaurants</h2>
+                <p className="text-sm text-muted-foreground">Local favorites near you</p>
+              </div>
+            </div>
+            {restaurants.length > 0 && (
+              <Link href="/search?type=restaurant">
+                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
+                  View All <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+            )}
           </div>
-        </section>
-      )}
-      {/* Explore by Cuisine Section */}
+          {restaurants.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {restaurants.slice(0, 6).map((biz) => (
+                <BusinessCard key={biz.id} business={biz} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
+              <Utensils className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-muted-foreground font-medium">No restaurants featured yet</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Subscribed restaurants in your area will be showcased here</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Bars */}
+      <section className="py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-purple-500/15">
+                <Wine className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black">Bars &amp; Nightlife</h2>
+                <p className="text-sm text-muted-foreground">Drinks and vibes nearby</p>
+              </div>
+            </div>
+            {bars.length > 0 && (
+              <Link href="/search?type=bar">
+                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
+                  View All <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+            )}
+          </div>
+          {bars.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {bars.slice(0, 6).map((biz) => (
+                <BusinessCard key={biz.id} business={biz} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
+              <Wine className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-muted-foreground font-medium">No bars listed yet</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Bars with a subscription will appear here</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Hot Deals */}
+      <section className="py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-amber-500/15">
+                <Zap className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black">Hot Deals</h2>
+                <p className="text-sm text-muted-foreground">Save on your next meal</p>
+              </div>
+            </div>
+            {deals.length > 0 && (
+              <Link href="/deals/featured">
+                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
+                  All Deals <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </Link>
+            )}
+          </div>
+          {deals.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {deals.slice(0, 6).map((deal) => (
+                <Link key={deal.id} href={`/restaurant/${deal.restaurantId}`}>
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="p-2 rounded-lg bg-amber-500/15 flex-shrink-0">
+                        <Zap className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">{deal.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{deal.restaurant?.name || "Local Spot"}</p>
+                      </div>
+                    </div>
+                    {deal.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{deal.description}</p>
+                    )}
+                    {deal.discountValue && (
+                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                        {deal.discountValue}% OFF
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
+              <Zap className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-muted-foreground font-medium">No deals available right now</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">Businesses post deals to attract hungry customers like you</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Explore by Cuisine */}
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="mb-6">
-            <h2 className="text-3xl font-black mb-2">Explore by Cuisine</h2>
+            <h2 className="text-2xl sm:text-3xl font-black mb-2">Explore by Cuisine</h2>
             <p className="text-muted-foreground">Find exactly what you're craving</p>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {[
-              { name: "Hot Deals", icon: Zap, href: "/deals/featured" },
               { name: "Pizza", icon: Pizza, href: "/category/pizza" },
               { name: "Burgers", icon: Beef, href: "/category/burgers" },
               { name: "Sushi", icon: Fish, href: "/category/sushi" },
               { name: "Tacos", icon: Sandwich, href: "/category/mexican" },
               { name: "Breakfast", icon: Croissant, href: "/category/breakfast" },
+              { name: "Coffee", icon: Coffee, href: "/category/coffee" },
             ].map((cuisine) => (
               <Link key={cuisine.name} href={cuisine.href}>
-                <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
-                      <cuisine.icon className="w-6 h-6 text-[color:var(--accent-text)]" />
+                <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="p-2.5 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
+                      <cuisine.icon className="w-5 h-5 text-[color:var(--accent-text)]" />
                     </div>
-                    <span className="text-sm font-semibold text-center">{cuisine.name}</span>
+                    <span className="text-xs font-semibold text-center">{cuisine.name}</span>
                   </div>
                 </div>
               </Link>
