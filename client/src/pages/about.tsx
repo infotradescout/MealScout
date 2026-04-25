@@ -19,7 +19,7 @@ export default function About() {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "MealScout",
-    "description": "MealScout helps food trucks find real places to park and serve - and helps customers find where food trucks are today.",
+    "description": "MealScout helps locals find nearby food trucks, restaurants, and bars while giving operators practical tools for profiles, menus, specials, and bookings.",
     "url": "https://www.mealscout.us",
     "logo": "https://www.mealscout.us/logo.png",
     "foundingDate": "2024",
@@ -33,25 +33,25 @@ export default function About() {
 
   const stats = [
     { number: "10,000+", label: "Active Diners", icon: Users },
-    { number: "500+", label: "Food Trucks", icon: ShoppingBag },
+    { number: "500+", label: "Local Businesses", icon: ShoppingBag },
     { number: "50,000+", label: "Parking Pass Visits", icon: Star },
     { number: "25+", label: "Cities Covered", icon: MapPin }
   ];
 
   const features = [
     {
-      title: "Find Food Trucks",
-      description: "See which trucks are active nearby and where they are today.",
+      title: "Find Local Food",
+      description: "Search nearby food trucks, restaurants, bars, menus, and specials.",
       icon: MapPin
     },
     {
       title: "Source Parking",
-      description: "Discover verified host locations and reliable places to operate.",
+      description: "Discover verified host locations and reliable places for trucks to operate.",
       icon: TrendingUp
     },
     {
-      title: "Built for Trucks",
-      description: "Tools that match how food truck operators think: where can I park?",
+      title: "Built for Operators",
+      description: "Profiles, menus, pickup ordering, deals, and scheduling shaped around different business models.",
       icon: Heart
     },
     {
@@ -64,9 +64,9 @@ export default function About() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50">
       <SEOHead
-        title="About MealScout - Food Truck Finder & Parking Sourcing"
-        description="MealScout helps food trucks find real places to park and serve and helps customers find active food trucks near them."
-        keywords="about MealScout, food truck finder platform, food truck parking pass, host locations for food trucks, local food truck discovery, restaurant and truck deals"
+        title="About MealScout - Local Food Discovery & Business Tools"
+        description="MealScout helps locals find food trucks, restaurants, and bars while giving operators tools for profiles, menus, specials, pickup ordering, and bookings."
+        keywords="about MealScout, local food discovery, food truck finder platform, restaurant specials, bar happy hour discovery, food truck parking pass, host locations for food trucks"
         canonicalUrl="https://www.mealscout.us/about"
         schemaData={schemaData}
       />
@@ -85,11 +85,12 @@ export default function About() {
             <Heart className="w-12 h-12 text-white" />
           </div>
           <h1 className="text-4xl font-bold text-[color:var(--text-primary)] mb-6">
-            Connecting Food Trucks with Places to Park - and Customers with Food Trucks
+            Connecting Locals with Food Trucks, Restaurants, and Bars
           </h1>
           <p className="text-xl text-[color:var(--text-secondary)] leading-relaxed max-w-3xl mx-auto">
-            MealScout helps food trucks find real places to park and serve - and helps customers find where food trucks are today. 
-            Discover food trucks near you or scout verified parking spots, host locations, and opportunities to operate.
+            MealScout helps people find what is actually local: active food trucks, neighborhood restaurants,
+            bar specials, menus, and nearby deals. For operators, it keeps profiles, ordering, schedules,
+            bookings, and discovery in one practical place.
           </p>
         </div>
 
@@ -117,16 +118,16 @@ export default function About() {
           <div className="grid lg:grid-cols-2 gap-8 items-center">
             <div>
               <p className="text-lg text-[color:var(--text-secondary)] leading-relaxed mb-6">
-                We believe great food brings communities together. Our mission is to help food trucks
-                operate legally and reliably by making real parking locations easy to find.
+                We believe great food brings communities together. Our mission is to help local food businesses
+                stay visible, keep their information current, and turn nearby interest into real visits.
               </p>
               <p className="text-lg text-[color:var(--text-secondary)] leading-relaxed mb-6">
-                By focusing on real-time discovery and verified host locations, we create clear
-                connections between trucks and customers in the moments that matter most.
+                Food trucks need locations and bookings. Restaurants need menus, specials, and pickup flow.
+                Bars need happy hours, event nights, and repeat visits. MealScout keeps those experiences distinct.
               </p>
               <Link href="/customer-signup?role=business">
                 <Button className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold px-6 py-3">
-                  List Your Food Truck
+                  List Your Business
                 </Button>
               </Link>
             </div>
@@ -176,7 +177,7 @@ export default function About() {
             </div>
             <div>
               <h3 className="text-xl font-semibold mb-3">Transparency</h3>
-              <p className="opacity-90">Clear pricing, honest reviews, and authentic restaurant partnerships.</p>
+              <p className="opacity-90">Clear pricing, honest reviews, and authentic local business partnerships.</p>
             </div>
             <div>
               <h3 className="text-xl font-semibold mb-3">Innovation</h3>
@@ -189,7 +190,7 @@ export default function About() {
         <div className="text-center">
           <h2 className="text-3xl font-bold text-[color:var(--text-primary)] mb-6">Ready to Start Exploring?</h2>
           <p className="text-xl text-[color:var(--text-secondary)] mb-8 max-w-2xl mx-auto">
-            Join thousands of food lovers who are already discovering amazing deals in their neighborhood.
+            Join locals discovering food trucks, restaurants, bars, menus, and deals in their neighborhood.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/login">

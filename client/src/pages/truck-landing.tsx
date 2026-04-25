@@ -6,7 +6,8 @@ import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
 
 export default function TruckLanding() {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const signupHref = "/customer-signup?role=business&businessType=food_truck";
 
   return (
     <div className="min-h-screen bg-background">
@@ -50,7 +51,7 @@ export default function TruckLanding() {
             </h1>
             
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Find profitable parking spots, fill your schedule year-round, and manage orders all in one place. No off-season. No downtime.
+              Find profitable parking spots, fill your schedule year-round, publish your menu, and accept pickup pre-orders from one place.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
@@ -61,9 +62,9 @@ export default function TruckLanding() {
                 </Button>
               </a>
               {!isAuthenticated && (
-                <a href={getLoginUrl()}>
+                <a href={signupHref}>
                   <Button size="lg" variant="outline" className="text-lg px-8">
-                    Start Free Trial
+                    List My Truck
                   </Button>
                 </a>
               )}
@@ -78,7 +79,7 @@ export default function TruckLanding() {
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold mb-3">For Food Truck Owners</h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to find spots, manage your business, and grow revenue
+              Everything you need to find spots, manage your schedule, and grow pickup revenue
             </p>
           </div>
           
@@ -123,8 +124,8 @@ export default function TruckLanding() {
               <Card>
                 <CardHeader>
                   <ShoppingCart className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Accept Orders Online</CardTitle>
-                  <CardDescription>Let customers pre-order and pay</CardDescription>
+                  <CardTitle className="text-lg">Accept Pickup Orders</CardTitle>
+                  <CardDescription>Let customers pre-order and pay before they reach the window</CardDescription>
                 </CardHeader>
               </Card>
             </div>
@@ -226,7 +227,7 @@ export default function TruckLanding() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary font-bold">+</span>
-                  <span>Online ordering</span>
+                  <span>Pickup pre-ordering</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary font-bold">+</span>
@@ -271,9 +272,9 @@ export default function TruckLanding() {
                 </Button>
               </a>
               {!isAuthenticated && (
-                <a href={getLoginUrl()}>
+                <a href={signupHref}>
                   <Button size="lg" variant="outline" className="text-lg px-8">
-                    Start Free Trial
+                    List My Truck
                   </Button>
                 </a>
               )}

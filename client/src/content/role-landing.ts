@@ -56,7 +56,10 @@ export const roleLandingContent = {
     headline: "Stop chasing.\nStart getting booked.",
     subhead:
       "MealScout puts your truck on the map hosts actually use. Your profile, schedule, and booking flow are built for how you really move.",
-    primaryCta: { label: "List my food truck", href: "/restaurant-signup" },
+    primaryCta: {
+      label: "List my food truck",
+      href: "/customer-signup?role=business&businessType=food_truck",
+    },
     secondaryCta: {
       label: "Claim my business",
       href: "/restaurant-signup?businessType=food_truck&claim=1",
@@ -125,7 +128,10 @@ export const roleLandingContent = {
     finalCta: {
       title: "Ready to get booked?",
       copy: "Build your profile, set your schedule, and start getting real booking requests.",
-      primary: { label: "List my food truck", href: "/restaurant-signup" },
+      primary: {
+        label: "List my food truck",
+        href: "/customer-signup?role=business&businessType=food_truck",
+      },
       secondary: { label: "Already have an account?", href: "/login" },
     },
   },
@@ -140,13 +146,16 @@ export const roleLandingContent = {
     badge: "MealScout for Restaurants",
     headline: "Be the spot locals can actually find.",
     subhead:
-      "Turn your profile into a mini website, publish specials, and stay visible in local search without extra noise.",
-    primaryCta: { label: "List my restaurant", href: "/restaurant-signup" },
+      "Turn your profile into a local storefront with menus, pickup ordering, specials, and search visibility that fits a seated restaurant model.",
+    primaryCta: {
+      label: "List my restaurant",
+      href: "/customer-signup?role=business&businessType=restaurant",
+    },
     secondaryCta: { label: "Sign in", href: "/login" },
-    bullets: ["Local visibility", "Profile = mini website", "Stay in control"],
+    bullets: ["Menus + pickup ordering", "Profile = mini website", "Stay in control"],
     map: {
       kicker: "Local presence",
-      title: "Discovery + specials",
+      title: "Menus + specials",
       badge: "Live listings",
       hint: "Always local",
     },
@@ -157,11 +166,11 @@ export const roleLandingContent = {
     valueProps: [
       {
         icon: Store,
-        text: "Your profile acts like a local landing page",
+        text: "Your profile acts like a local storefront",
       },
       {
         icon: Sparkles,
-        text: "Publish specials and stay visible in search",
+        text: "Publish menus, specials, and pickup ordering",
       },
       {
         icon: Bolt,
@@ -172,7 +181,7 @@ export const roleLandingContent = {
       {
         icon: Store,
         title: "Build your profile",
-        copy: "Show menu highlights, photos, and the vibe locals love.",
+        copy: "Show menus, photos, hours, and the dining experience locals should expect.",
       },
       {
         icon: Radar,
@@ -181,17 +190,17 @@ export const roleLandingContent = {
       },
       {
         icon: Calendar,
-        title: "Stay active",
-        copy: "Post specials and keep your info up to date.",
+        title: "Drive repeat visits",
+        copy: "Post specials, keep menus current, and accept pickup orders when it makes sense.",
       },
     ],
     reasons: {
       title: "Why restaurants stay on MealScout",
       items: [
         "You own your presence and pricing.",
+        "Menus and pickup ordering fit your kitchen flow.",
         "No confusing tiers or hidden boosts.",
         "Locals find you faster when you stay active.",
-        "Everything stays local and community-driven.",
       ],
     },
     starter: {
@@ -206,8 +215,11 @@ export const roleLandingContent = {
     },
     finalCta: {
       title: "Ready to show up locally?",
-      copy: "Create your profile and start getting discovered by real locals.",
-      primary: { label: "List my restaurant", href: "/restaurant-signup" },
+      copy: "Create your restaurant profile, publish your menu, and start getting discovered by real locals.",
+      primary: {
+        label: "List my restaurant",
+        href: "/customer-signup?role=business&businessType=restaurant",
+      },
       secondary: { label: "Already have an account?", href: "/login" },
     },
   },
@@ -222,13 +234,16 @@ export const roleLandingContent = {
     badge: "MealScout for Bars",
     headline: "Own your local nightlife presence.",
     subhead:
-      "Your bar deserves more than random social reach. Use MealScout to stay visible where locals are looking.",
-    primaryCta: { label: "List my bar", href: "/restaurant-signup" },
+      "Bars need a different playbook: happy hours, late-night specials, events, menus, and local discovery without pretending you are a food truck.",
+    primaryCta: {
+      label: "List my bar",
+      href: "/customer-signup?role=business&businessType=bar",
+    },
     secondaryCta: { label: "Sign in", href: "/login" },
-    bullets: ["Local visibility", "Specials that stand out", "Built for repeat visits"],
+    bullets: ["Happy hour visibility", "Events + menus", "Built for repeat visits"],
     map: {
       kicker: "Local presence",
-      title: "Nightlife discovery",
+      title: "Nightlife + specials",
       badge: "Live listings",
       hint: "Local picks",
     },
@@ -239,11 +254,11 @@ export const roleLandingContent = {
     valueProps: [
       {
         icon: Sparkles,
-        text: "Stay visible to locals nearby",
+        text: "Stay visible for happy hour, game days, and late-night searches",
       },
       {
         icon: Store,
-        text: "Your profile works like a local website",
+        text: "Show menus, specials, events, and the room's vibe",
       },
       {
         icon: Bolt,
@@ -254,24 +269,24 @@ export const roleLandingContent = {
       {
         icon: Store,
         title: "Build your bar profile",
-        copy: "Photos, specials, hours, and what makes you different.",
+        copy: "Photos, menus, happy hours, event nights, hours, and what makes the room different.",
       },
       {
         icon: Radar,
         title: "Get discovered",
-        copy: "Show up when locals search for nightlife nearby.",
+        copy: "Show up when locals search for drinks, food, specials, or nightlife nearby.",
       },
       {
         icon: Calendar,
-        title: "Stay active",
-        copy: "Post specials and keep the energy visible.",
+        title: "Bring people back",
+        copy: "Keep specials and event nights current so regulars have a reason to return.",
       },
     ],
     reasons: {
       title: "Why bars stay on MealScout",
       items: [
         "Locals can find you without digging.",
-        "Your specials are visible when it matters.",
+        "Happy hours, events, and menus are visible when it matters.",
         "No confusing marketing tools or tiers.",
         "Everything stays local and community-driven.",
       ],
@@ -289,7 +304,10 @@ export const roleLandingContent = {
     finalCta: {
       title: "Ready to own your local presence?",
       copy: "Set up your bar profile and start showing up locally.",
-      primary: { label: "List my bar", href: "/restaurant-signup" },
+      primary: {
+        label: "List my bar",
+        href: "/customer-signup?role=business&businessType=bar",
+      },
       secondary: { label: "Already have an account?", href: "/login" },
     },
   },
