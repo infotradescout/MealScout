@@ -39,6 +39,7 @@ import {
   TrendingUp,
   Zap,
   ChevronRight,
+  Users,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
