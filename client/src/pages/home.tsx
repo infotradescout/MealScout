@@ -736,8 +736,8 @@ export default function Home() {
       <Navigation />
 
       {/* Header with Logo and Navigation */}
-      <header className="section section--full bg-[var(--bg-card)] border-b border-[color:var(--border-subtle)] sticky top-0 z-10 shadow-clean">
-        <div className="content flex items-center justify-between py-2">
+      <header className="section section--full bg-[var(--bg-card)]/95 backdrop-blur-sm border-b border-[color:var(--border-subtle)] sticky top-0 z-10 shadow-clean">
+        <div className="content flex items-center justify-between py-3">
           <div className="flex items-center space-x-2 flex-shrink-0">
             <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
               <img
@@ -836,16 +836,16 @@ export default function Home() {
       </header>
 
       {!user && (
-        <section className="section section--full border-b border-[color:var(--border-subtle)] py-3 bg-[var(--bg-card)]">
+        <section className="section section--full border-b border-[color:var(--border-subtle)] py-4 bg-gradient-to-r from-[color:var(--accent-text)]/10 to-transparent">
           <div className="content">
-            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 shadow-clean">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+            <div className="rounded-2xl border border-[color:var(--accent-text)]/30 bg-gradient-to-br from-[color:var(--accent-text)]/5 to-transparent p-5 shadow-clean backdrop-blur-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[color:var(--accent-text)] opacity-90">
                 Traction Sprint Offer
               </p>
-              <h2 className="mt-1 text-lg font-bold text-foreground">
+              <h2 className="mt-2 text-xl font-black text-foreground">
                 Get your restaurant or truck live in minutes
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                 Post deals, appear on discovery, and start converting nearby
                 regulars.
               </p>
@@ -891,14 +891,14 @@ export default function Home() {
       )}
 
       {/* Hero & Search Section */}
-      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-8">
+      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-12">
         <div className="content">
           <div className="home-hero-panel">
             <div className="mb-6">
-              <h1 className="hero-title text-4xl font-bold mb-2 leading-tight">
+              <h1 className="hero-title text-5xl sm:text-6xl font-black mb-3 leading-tight tracking-tight">
                 {firstName ? `Hey ${firstName}!` : "What's for dinner?"}
               </h1>
-              <p className="hero-subtitle text-base text-muted-foreground">
+              <p className="hero-subtitle text-lg text-muted-foreground leading-relaxed">
                 Discover food trucks, restaurants & deals{" "}
                 {shortLocation === "Your Location"
                   ? "near you"
@@ -906,7 +906,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mb-6 flex flex-col gap-3">
+            <div className="mb-8 flex flex-col gap-4">
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <SmartSearch
@@ -938,7 +938,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mb-5 grid grid-cols-3 gap-3">
+            <div className="mb-6 grid grid-cols-3 gap-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -1060,12 +1060,12 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
-      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-6">
+      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-10">
         <div className="content">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <Truck className="w-5 h-5 text-[color:var(--accent-text)]" />
-              <h3 className="text-lg font-bold text-foreground">
+              <h3 className="text-2xl font-bold text-foreground">
                 Live Food Trucks{" "}
                 {shortLocation === "Your Location" ? "Nearby" : `in ${shortLocation}`}
               </h3>
@@ -1080,7 +1080,7 @@ export default function Home() {
             </Link>
           </div>
           {liveTrucksLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -1101,7 +1101,7 @@ export default function Home() {
               </Button>
             </div>
           ) : liveTrucks.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
               {liveTrucks.map((truck) => {
                 const truckDeals =
                   dealsByRestaurant.get(String(truck.id)) || [];
@@ -1237,7 +1237,7 @@ export default function Home() {
             </div>
 
             {publicProfilesLoading ? (
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -1261,7 +1261,7 @@ export default function Home() {
                 </Button>
               </div>
             ) : featuredBusinesses.length > 0 ? (
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide -mx-6 px-6">
                 {featuredBusinesses.map((business) => (
                   <div key={business.id} className="flex-shrink-0 w-64">
                     <BusinessDealsCard business={business} />
