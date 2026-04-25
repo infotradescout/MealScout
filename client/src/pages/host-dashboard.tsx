@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import BusinessProfileImport from "@/components/BusinessProfileImport";
+import BusinessPhotoGallery from "@/components/BusinessPhotoGallery";
 
 interface HostProfile {
   id: string;
@@ -1227,6 +1229,35 @@ function HostDashboard() {
           )}
         </div>
       </section>
+
+      {/* ── Profile Import & Photo Gallery ────────────────────── */}
+      {host && (
+        <section className="mb-12 space-y-6">
+          <BusinessProfileImport
+            entityType="host"
+            entityId={host.id}
+            entityName={host.businessName}
+            entityAddress={host.address || undefined}
+            entityCity={host.city || undefined}
+            entityState={host.state || undefined}
+            onImportComplete={() => {
+              // Refetch hosts data
+              fetch("/api/hosts", { credentials: "include" })
+                .then(res => res.json())
+                .then(data => {
+                  if (Array.isArray(data)) setHosts(data);
+                })
+                .catch(() => {});
+            }}
+          />
+          <BusinessPhotoGallery
+            entityType="host"
+            entityId={host.id}
+            maxPhotos={50}
+            canEdit={true}
+          />
+        </section>
+      )}
 
       {/* ── Bookings section ────────────────────────────────────── */}
       {host && <HostBookingsSection hostId={host.id} />}

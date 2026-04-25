@@ -4,30 +4,60 @@ declare global {
     FB: any;
     fbAsyncInit: () => void;
     __FB_INITED?: boolean;
+    __FB_APP_ID_CACHE?: string;
   }
 }
 
-export const initFacebookSDK = () => {
+/**
+ * Resolve the Facebook App ID.
+ * 1. Try the Vite build-time env var (VITE_FACEBOOK_APP_ID)
+ * 2. If not set, fetch it at runtime from /api/config/public
+ * 3. Cache the result on window so subsequent calls are instant
+ */
+async function resolveFacebookAppId(): Promise<string> {
+  // Build-time env var
+  const buildTimeId = import.meta.env.VITE_FACEBOOK_APP_ID;
+  if (buildTimeId) return buildTimeId;
+
+  // Cached runtime value
+  if (window.__FB_APP_ID_CACHE) return window.__FB_APP_ID_CACHE;
+
+  // Fetch from server
+  try {
+    const res = await fetch("/api/config/public");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.facebookAppId) {
+        window.__FB_APP_ID_CACHE = data.facebookAppId;
+        return data.facebookAppId;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch public config for Facebook App ID:", err);
+  }
+
+  return "";
+}
+
+function initFBWithAppId(appId: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    // Validate Facebook App ID is configured
-    const appId = import.meta.env.VITE_FACEBOOK_APP_ID;
     if (!appId) {
-      console.warn('Facebook App ID not configured. Facebook sharing will not be available.');
+      console.warn('Facebook App ID not configured. Facebook features will not be available.');
       reject(new Error('Facebook App ID not configured'));
       return;
     }
 
-    // Check if Facebook SDK is already loaded and initialized
+    // Already loaded and initialized
     if (window.FB && window.__FB_INITED) {
       resolve();
       return;
     }
 
-    // If FB exists but not initialized, initialize it
+    // FB exists but not initialized
     if (window.FB && !window.__FB_INITED) {
       try {
         window.FB.init({
-          appId: appId,
+          appId,
           cookie: true,
           xfbml: true,
           version: 'v19.0'
@@ -46,7 +76,7 @@ export const initFacebookSDK = () => {
     window.fbAsyncInit = function() {
       try {
         window.FB.init({
-          appId: appId,
+          appId,
           cookie: true,
           xfbml: true,
           version: 'v19.0'
@@ -73,6 +103,11 @@ export const initFacebookSDK = () => {
       fjs.parentNode?.insertBefore(js, fjs);
     }(document, 'script', 'facebook-jssdk'));
   });
+}
+
+export const initFacebookSDK = async (): Promise<void> => {
+  const appId = await resolveFacebookAppId();
+  return initFBWithAppId(appId);
 };
 
 export const facebookLogin = (): Promise<any> => {
@@ -111,21 +146,15 @@ export const postToFacebook = (postData: {
       href: postData.link || window.location.origin,
       quote: postData.message,
     }, (response: any) => {
-      // Handle Facebook Share dialog response properly
       if (response && response.error_code) {
-        // Clear error from Facebook
         reject(new Error(response.error_message || 'Facebook sharing failed'));
       } else if (response === null) {
-        // User explicitly cancelled
         reject(new Error('User cancelled Facebook sharing'));
       } else if (response === undefined) {
-        // Facebook returns undefined for both success and cancellation - unknown outcome
         reject(new Error('Facebook sharing outcome unknown'));
       } else if (response && response.post_id) {
-        // Clear success indicator
         resolve();
       } else {
-        // Any other case - treat as unknown
         reject(new Error('Facebook sharing outcome unknown'));
       }
     });
@@ -143,29 +172,22 @@ export const shareToFacebook = (postData: {
       return;
     }
 
-    // Create a post mentioning the restaurant using Facebook Share Dialog
-    const shareMessage = `🍽️ Just discovered this amazing deal at ${postData.restaurantName}!\n\n${postData.message}\n\nFound through MealScout! #MealScout #FoodDeals`;
+    const shareMessage = `Just discovered this amazing deal at ${postData.restaurantName}!\n\n${postData.message}\n\nFound through MealScout! #MealScout #FoodDeals`;
     
     window.FB.ui({
       method: 'share',
       href: window.location.origin,
       quote: shareMessage,
     }, (response: any) => {
-      // Handle Facebook Share dialog response properly
       if (response && response.error_code) {
-        // Clear error from Facebook
         reject(new Error(response.error_message || 'Facebook sharing failed'));
       } else if (response === null) {
-        // User explicitly cancelled
         reject(new Error('User cancelled Facebook sharing'));
       } else if (response === undefined) {
-        // Facebook returns undefined for both success and cancellation - unknown outcome
         reject(new Error('Facebook sharing outcome unknown'));
       } else if (response && response.post_id) {
-        // Clear success indicator
         resolve();
       } else {
-        // Any other case - treat as unknown
         reject(new Error('Facebook sharing outcome unknown'));
       }
     });

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Save, Store, UtensilsCrossed } from "lucide-react";
+import BusinessProfileImport from "@/components/BusinessProfileImport";
+import BusinessPhotoGallery from "@/components/BusinessPhotoGallery";
 
 import { BackHeader } from "@/components/back-header";
 import { Button } from "@/components/ui/button";
@@ -243,7 +245,21 @@ export default function EditRestaurantPage() {
         }
       />
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+        {/* Quick Profile Import — fill your profile from Google/Facebook */}
+        <BusinessProfileImport
+          entityType="restaurant"
+          entityId={restaurant.id}
+          entityName={restaurant.name}
+          entityAddress={restaurant.address}
+          entityCity={restaurant.city || undefined}
+          entityState={restaurant.state || undefined}
+          onImportComplete={() => {
+            // Refetch restaurant data so the form updates with imported data
+            queryClient.invalidateQueries({ queryKey: ["/api/restaurants/my-restaurants"] });
+          }}
+        />
+
         <form id="business-profile-form" onSubmit={handleSubmit} className="space-y-6">
           <Card>
             <CardHeader>
@@ -420,6 +436,16 @@ export default function EditRestaurantPage() {
             </CardContent>
           </Card>
 
+        </form>
+
+        {/* Photo Gallery — manage business photos */}
+        <BusinessPhotoGallery
+          entityType="restaurant"
+          entityId={restaurant.id}
+          maxPhotos={50}
+          canEdit={true}
+        />
+
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <Link href={`/menu-builder/${restaurant.id}`}>
               <Button type="button" variant="outline" className="w-full sm:w-auto">
@@ -428,6 +454,7 @@ export default function EditRestaurantPage() {
             </Link>
             <Button
               type="submit"
+              form="business-profile-form"
               disabled={saveMutation.isPending}
               className="w-full sm:w-auto"
               data-testid="button-save-business-profile-bottom"
@@ -436,7 +463,6 @@ export default function EditRestaurantPage() {
               {saveMutation.isPending ? "Saving..." : "Save Profile"}
             </Button>
           </div>
-        </form>
       </main>
     </div>
   );

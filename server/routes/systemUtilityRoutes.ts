@@ -37,6 +37,15 @@ export function registerSystemUtilityRoutes(
     });
   });
 
+  // Public config endpoint — exposes non-secret config to the frontend
+  // (Facebook App ID is public by design — it's embedded in the JS SDK)
+  app.get("/api/config/public", (_req, res) => {
+    res.json({
+      facebookAppId: process.env.FACEBOOK_APP_ID || "",
+      googleMapsConfigured: !!process.env.GOOGLE_MAPS_API_KEY,
+    });
+  });
+
   app.get(
     "/api/admin/oauth/status",
     isAuthenticated,

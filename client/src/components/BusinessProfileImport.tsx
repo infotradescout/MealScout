@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { initFacebookSDK } from "@/lib/facebook";
 import {
   Globe,
   Facebook,
@@ -39,6 +40,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Link as LinkIcon,
 } from "lucide-react";
 
 type ImportProvider = "google" | "facebook";
@@ -55,6 +57,8 @@ type FacebookPage = {
   pageId: string;
   pageName: string;
   accessToken: string;
+  category?: string;
+  pictureUrl?: string;
 };
 
 interface BusinessProfileImportProps {
@@ -87,11 +91,15 @@ export default function BusinessProfileImport({
 
   // Facebook state
   const [fbLoading, setFbLoading] = useState(false);
+  const [fbConnecting, setFbConnecting] = useState(false);
   const [fbPages, setFbPages] = useState<FacebookPage[]>([]);
   const [fbSelectedPage, setFbSelectedPage] = useState<FacebookPage | null>(null);
   const [fbResult, setFbResult] = useState<ImportResult | null>(null);
-  const [fbUrlInput, setFbUrlInput] = useState("");
   const [showFbSection, setShowFbSection] = useState(false);
+
+  // Manual Facebook URL input as fallback
+  const [fbUrlInput, setFbUrlInput] = useState("");
+  const [showManualFb, setShowManualFb] = useState(false);
 
   // Expanded details
   const [showDetails, setShowDetails] = useState(false);
@@ -155,40 +163,86 @@ export default function BusinessProfileImport({
   // ── Facebook Import ────────────────────────────────────────────────────
 
   const handleFacebookConnect = useCallback(async () => {
-    // For now, we'll use the existing Facebook auth flow.
-    // The user's Facebook access token should be available from their auth session.
-    // This triggers a redirect to Facebook OAuth with pages_show_list scope.
-    const redirectUri = `${window.location.origin}/api/auth/facebook/callback`;
-    const scope = "pages_show_list,pages_read_engagement,pages_read_user_content";
-    const fbAppId = (window as any).__FB_APP_ID || "";
+    setFbConnecting(true);
+    try {
+      // Initialize the Facebook SDK (uses VITE_FACEBOOK_APP_ID from env)
+      await initFacebookSDK();
 
-    if (!fbAppId) {
+      // Use FB.login with page permissions to get a user access token
+      // that includes pages_show_list scope
+      const loginResponse = await new Promise<any>((resolve, reject) => {
+        if (!window.FB) {
+          reject(new Error("Facebook SDK not loaded"));
+          return;
+        }
+        window.FB.login(
+          (response: any) => {
+            if (response.authResponse) {
+              resolve(response.authResponse);
+            } else {
+              reject(new Error("Facebook login cancelled or failed"));
+            }
+          },
+          {
+            scope: "pages_show_list,pages_read_engagement,pages_read_user_content",
+            return_scopes: true,
+          },
+        );
+      });
+
+      const userAccessToken = loginResponse.accessToken;
+      if (!userAccessToken) {
+        throw new Error("No access token received from Facebook");
+      }
+
+      // Now fetch the user's pages using our backend endpoint
+      const res = await apiRequest("POST", "/api/profiles/facebook/pages", {
+        accessToken: userAccessToken,
+      });
+      const data = await res.json();
+
+      if (data.pages && data.pages.length > 0) {
+        setFbPages(
+          data.pages.map((p: any) => ({
+            pageId: p.id || p.pageId,
+            pageName: p.name || p.pageName,
+            accessToken: p.access_token || p.accessToken,
+            category: p.category,
+            pictureUrl: p.picture?.data?.url,
+          })),
+        );
+        toast({
+          title: "Facebook connected",
+          description: `Found ${data.pages.length} page(s). Select one to import.`,
+        });
+      } else {
+        toast({
+          title: "No pages found",
+          description:
+            "No Facebook Pages found for your account. Make sure you're an admin of a Facebook Page.",
+          variant: "destructive",
+        });
+        setShowManualFb(true);
+      }
+    } catch (err: any) {
+      console.error("[BusinessProfileImport] Facebook connect error:", err);
+      const message =
+        err?.message === "Facebook login cancelled or failed"
+          ? "Facebook login was cancelled"
+          : err?.message === "Facebook App ID not configured"
+            ? "Facebook integration is being set up. Check back soon!"
+            : "Could not connect to Facebook. Please try again.";
       toast({
-        title: "Facebook not configured",
-        description: "Facebook integration is being set up. Check back soon!",
+        title: "Facebook connection issue",
+        description: message,
         variant: "destructive",
       });
-      return;
+      // Show manual input as fallback
+      setShowManualFb(true);
+    } finally {
+      setFbConnecting(false);
     }
-
-    // Open Facebook OAuth in a popup
-    const width = 600;
-    const height = 700;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${fbAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=profile_import_${entityType}_${entityId}`;
-
-    window.open(
-      oauthUrl,
-      "facebook_import",
-      `width=${width},height=${height},left=${left},top=${top}`,
-    );
-
-    toast({
-      title: "Connecting to Facebook",
-      description: "Complete the authorization in the popup window",
-    });
-  }, [entityType, entityId, toast]);
+  }, [toast]);
 
   const handleFacebookImport = useCallback(
     async (page: FacebookPage) => {
@@ -271,10 +325,10 @@ export default function BusinessProfileImport({
           variant="outline"
           size="sm"
           onClick={handleFacebookConnect}
-          disabled={fbLoading}
+          disabled={fbConnecting || fbLoading}
           className="gap-1.5"
         >
-          {fbLoading ? (
+          {fbConnecting || fbLoading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : fbResult?.success ? (
             <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
@@ -308,7 +362,7 @@ export default function BusinessProfileImport({
         <div className="rounded-lg border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
                 <Globe className="h-4 w-4 text-blue-600" />
               </div>
               <div>
@@ -347,8 +401,8 @@ export default function BusinessProfileImport({
             <div
               className={`text-xs rounded-md p-2 ${
                 googleResult.success
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-700"
+                  ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                  : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
               }`}
             >
               {googleResult.success ? (
@@ -373,7 +427,7 @@ export default function BusinessProfileImport({
         <div className="rounded-lg border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
                 <Facebook className="h-4 w-4 text-blue-700" />
               </div>
               <div>
@@ -410,28 +464,75 @@ export default function BusinessProfileImport({
 
           {showFbSection && (
             <div className="space-y-3 pt-2">
-              <p className="text-xs text-muted-foreground">
-                Connect your Facebook account to import data from your business page.
-                We'll pull in your about section, cover photo, gallery photos, hours, and reviews.
-              </p>
-              <Button
-                onClick={handleFacebookConnect}
-                disabled={fbLoading}
-                variant="default"
-                size="sm"
-                className="gap-1.5 bg-[#1877F2] hover:bg-[#166FE5]"
-              >
-                {fbLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Facebook className="h-3.5 w-3.5" />
-                )}
-                Continue with Facebook
-              </Button>
+              {fbPages.length === 0 ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Connect your Facebook account to import data from your business page.
+                    We'll pull in your about section, cover photo, gallery photos, hours, and reviews.
+                  </p>
+                  <Button
+                    onClick={handleFacebookConnect}
+                    disabled={fbConnecting}
+                    variant="default"
+                    size="sm"
+                    className="gap-1.5 bg-[#1877F2] hover:bg-[#166FE5]"
+                  >
+                    {fbConnecting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Facebook className="h-3.5 w-3.5" />
+                    )}
+                    {fbConnecting ? "Connecting..." : "Continue with Facebook"}
+                  </Button>
 
-              {fbPages.length > 0 && (
+                  {showManualFb && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <p className="text-xs text-muted-foreground">
+                        Having trouble? You can also paste your Facebook Page URL
+                        and we'll save it to your profile.
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="https://facebook.com/yourpage"
+                          value={fbUrlInput}
+                          onChange={(e) => setFbUrlInput(e.target.value)}
+                          className="text-sm h-8"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1"
+                          disabled={!fbUrlInput.trim()}
+                          onClick={async () => {
+                            try {
+                              await apiRequest(
+                                "PATCH",
+                                `/api/restaurants/${entityId}`,
+                                { facebookPageUrl: fbUrlInput.trim() },
+                              );
+                              toast({
+                                title: "Facebook URL saved",
+                                description: "Your Facebook page URL has been saved to your profile.",
+                              });
+                            } catch {
+                              toast({
+                                title: "Could not save",
+                                description: "Please try again.",
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
                 <div className="space-y-2">
-                  <Label className="text-xs">Select your business page:</Label>
+                  <Label className="text-xs font-medium">Select your business page:</Label>
                   {fbPages.map((page) => (
                     <button
                       key={page.pageId}
@@ -439,13 +540,29 @@ export default function BusinessProfileImport({
                         setFbSelectedPage(page);
                         handleFacebookImport(page);
                       }}
-                      className={`w-full text-left rounded-md border p-2.5 text-sm transition-colors hover:bg-accent ${
+                      disabled={fbLoading}
+                      className={`w-full text-left rounded-md border p-3 text-sm transition-colors hover:bg-accent flex items-center gap-3 ${
                         fbSelectedPage?.pageId === page.pageId
                           ? "border-primary bg-accent"
                           : ""
                       }`}
                     >
-                      {page.pageName}
+                      {page.pictureUrl && (
+                        <img
+                          src={page.pictureUrl}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{page.pageName}</p>
+                        {page.category && (
+                          <p className="text-xs text-muted-foreground">{page.category}</p>
+                        )}
+                      </div>
+                      {fbLoading && fbSelectedPage?.pageId === page.pageId ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : null}
                     </button>
                   ))}
                 </div>
@@ -457,8 +574,8 @@ export default function BusinessProfileImport({
             <div
               className={`text-xs rounded-md p-2 ${
                 fbResult.success
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-700"
+                  ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                  : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
               }`}
             >
               {fbResult.success ? (
