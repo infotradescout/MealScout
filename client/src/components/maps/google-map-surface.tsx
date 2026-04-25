@@ -528,16 +528,15 @@ export function GoogleMapSurface({
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildMarkerIcon(googleMaps, marker),
           });
+      const handleMarkerTap = () => {
+        const tapped = markerIndex.get(marker.id);
+        if (tapped) onMarkerTap(tapped);
+      };
       if (typeof instance.addEventListener === "function") {
-        instance.addEventListener("gmp-click", () => {
-          const tapped = markerIndex.get(marker.id);
-          if (tapped) onMarkerTap(tapped);
-        });
-      } else {
-        instance.addListener("click", () => {
-          const tapped = markerIndex.get(marker.id);
-          if (tapped) onMarkerTap(tapped);
-        });
+        instance.addEventListener("gmp-click", handleMarkerTap);
+      }
+      if (typeof instance.addListener === "function") {
+        instance.addListener("click", handleMarkerTap);
       }
       markerRefs.current.set(marker.id, instance);
       markerSignatureRefs.current.set(marker.id, signature);

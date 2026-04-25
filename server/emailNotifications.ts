@@ -177,6 +177,11 @@ export async function sendDealClaimedNotification(dealId: string, userId: string
   if (!owner || !owner.email) return;
 
   const subject = `🎉 New Deal Claimed: ${deal.title}`;
+  const discountLabel = deal.discountValue
+    ? deal.dealType === "fixed"
+      ? `$${deal.discountValue} off`
+      : `${deal.discountValue}% off`
+    : "Limited Time";
   const html = `
     <!DOCTYPE html>
     <html>
@@ -202,7 +207,7 @@ export async function sendDealClaimedNotification(dealId: string, userId: string
           
           <div class="deal-info">
             <h3 style="margin-top: 0;">${deal.title}</h3>
-            <p><strong>Deal:</strong> ${deal.discountValue}% off</p>
+            <p><strong>Deal:</strong> ${discountLabel}</p>
             <p><strong>Customer:</strong> ${customer?.firstName || 'Customer'} ${customer?.lastName || ''}</p>
             <p><strong>Claimed:</strong> ${new Date().toLocaleString()}</p>
           </div>

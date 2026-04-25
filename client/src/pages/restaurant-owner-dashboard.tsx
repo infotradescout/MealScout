@@ -1252,7 +1252,7 @@ export default function RestaurantOwnerDashboard() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const getDealTypeColor = (type: string) => {
+  const getDealTypeColor = (type?: string | null) => {
     switch (type) {
       case "breakfast":
         return "bg-yellow-100 text-yellow-800";
@@ -1697,7 +1697,7 @@ export default function RestaurantOwnerDashboard() {
                             {deal.title}
                           </h3>
                           <Badge className={getDealTypeColor(deal.dealType)}>
-                            {deal.dealType}
+                            {deal.dealType || "special"}
                           </Badge>
                         </div>
 
@@ -1709,7 +1709,7 @@ export default function RestaurantOwnerDashboard() {
                           <div className="flex items-center gap-1">
                             <DollarSign className="h-4 w-4" />
                             <span className="font-medium">
-                              {deal.discountValue}
+                              {deal.discountValue ?? "Limited Time"}
                             </span>
                           </div>
                           <div className="flex items-center gap-1">

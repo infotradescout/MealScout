@@ -8,8 +8,8 @@ interface Deal {
   id: string;
   title: string;
   description: string;
-  dealType: string;
-  discountValue: string;
+  dealType?: string | null;
+  discountValue?: string | null;
   minOrderAmount?: string;
   currentUses?: number;
 }
@@ -33,6 +33,9 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   const formatDiscount = (deal: Deal) => {
+    if (!deal.discountValue) {
+      return "Limited Time";
+    }
     if (deal.dealType === "percentage") {
       return `${deal.discountValue}%`;
     } else {
@@ -115,8 +118,10 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
                 <div key={deal.id} className="py-1.5">
                   {/* Price Line */}
                   <div className="text-[color:var(--accent-text)] leading-none mb-1">
-                    <span className="font-semibold text-base">{formatDiscount(deal)} OFF</span>
-                    <span className="text-sm ml-1.5">${deal.minOrderAmount || '8'}+</span>
+                    <span className="font-semibold text-base">{formatDiscount(deal)}</span>
+                    {deal.discountValue && (
+                      <span className="text-sm ml-1.5">${deal.minOrderAmount || '8'}+</span>
+                    )}
                   </div>
                   
                   {/* Description */}

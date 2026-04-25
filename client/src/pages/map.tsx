@@ -338,6 +338,23 @@ type HostLocation = {
   googleFormattedPhone?: string | null;
   businessHours?: any | null;
   businessWebsite?: string | null;
+  menuUrl?: string | null;
+};
+
+type HostProfile = {
+  id: string;
+  businessName?: string | null;
+  description?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  businessHours?: any | null;
+  googleRating?: string | null;
+  googleReviewCount?: number | null;
+  googlePriceLevel?: number | null;
+  googleCategories?: any | null;
+  menuUrl?: string | null;
+  photos?: Array<{ url?: string | null; attribution?: string | null }>;
+  profileSource?: string | null;
 };
 
 type HostCluster = {
@@ -375,6 +392,23 @@ const resolveHostImageUrl = (host?: HostLocation | null): string | null => {
   }
   return null;
 };
+
+const parseGoogleCategories = (value: any): string[] => {
+  if (!value) return [];
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed)
+      ? parsed.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const formatGoogleCategory = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 type EventLocation = {
   id: string;
@@ -665,6 +699,7 @@ function HostMarkerLayer({
   isStaffOrAdmin,
   qualityFlagsByHostId,
   onClusterSelect,
+  onHostSelect,
 }: {
   hosts: HostLocation[];
   zoomLevel: number;
@@ -688,6 +723,11 @@ function HostMarkerLayer({
   isStaffOrAdmin: boolean;
   qualityFlagsByHostId: Map<string, string[]>;
   onClusterSelect?: (cluster: HostCluster) => void;
+  onHostSelect?: (
+    host: HostLocation,
+    markerCoords: GeoPoint,
+    source: ParkingPreviewSelection["source"],
+  ) => void;
 }) {
   const map = useMap();
 
@@ -873,6 +913,11 @@ function HostMarkerLayer({
                     ? hostPinBookableIcon
                     : hostPinUnpricedIcon
             }
+            eventHandlers={{
+              click: () => {
+                onHostSelect?.(host, markerCoords, "pin-tap");
+              },
+            }}
           >
             <Popup>
               <div className="min-w-56 space-y-1 rounded-xl bg-[var(--bg-card)] text-[color:var(--text-primary)] p-3 shadow-clean-lg">
@@ -2470,6 +2515,12 @@ export default function MapPage() {
     return [...cards].sort((a, b) => score(a) - score(b))[0] || null;
   }, [pinZoomCardMode.cards, pinZoomCardMode.activeCardId, mapCenter]);
 
+  const closeParkingPreview = useCallback(() => {
+    setSelectedParkingPreview(null);
+    setShouldAutoOpenZoomCard(false);
+    pinZoomCardMode.clearActiveCard();
+  }, [pinZoomCardMode]);
+
   useEffect(() => {
     const current = Number(zoomLevel);
     if (!Number.isFinite(current)) return;
@@ -2532,6 +2583,28 @@ export default function MapPage() {
 
   const mapMarkersForRender = adapterMarkers;
 
+  const selectParkingHost = useCallback(
+    (
+      host: HostLocation,
+      markerCoords: Pick<GeoPoint, "lat" | "lng">,
+      source: ParkingPreviewSelection["source"] = "pin-tap",
+    ) => {
+      if (isTruckOwnerUser) {
+        window.location.href = getParkingPassHrefForHost(host);
+        return;
+      }
+      setSelectedDeal(null);
+      setSelectedHostCluster(null);
+      setSelectedParkingPreview({
+        hostId: host.id,
+        markerLat: markerCoords.lat,
+        markerLng: markerCoords.lng,
+        source,
+      });
+    },
+    [getParkingPassHrefForHost, isTruckOwnerUser],
+  );
+
   const handleAdapterMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       if (marker.kind === "deal") {
@@ -2560,18 +2633,7 @@ export default function MapPage() {
           (item) => item.id === marker.sourceId,
         );
         if (!host) return;
-        if (isTruckOwnerUser) {
-          window.location.href = getParkingPassHrefForHost(host);
-          return;
-        }
-        setSelectedDeal(null);
-        setSelectedHostCluster(null);
-        setSelectedParkingPreview({
-          hostId: host.id,
-          markerLat: marker.lat,
-          markerLng: marker.lng,
-          source: "pin-tap",
-        });
+        selectParkingHost(host, marker, "pin-tap");
         return;
       }
 
@@ -2592,10 +2654,8 @@ export default function MapPage() {
       visibleGeoAds,
       visibleHostLocations,
       visibleEventLocations,
-      resolveHostCoords,
       resolveEventCoords,
-      isTruckOwnerUser,
-      getParkingPassHrefForHost,
+      selectParkingHost,
     ],
   );
 
@@ -2648,9 +2708,42 @@ export default function MapPage() {
     formatDistance,
     getParkingPassHrefForHost,
   ]);
+  const selectedParkingHostId = useMemo(() => {
+    if (!selectedParkingHost) return "";
+    return String(selectedParkingHost.host.hostId || "").trim();
+  }, [selectedParkingHost]);
+
+  const { data: selectedParkingHostProfile } = useQuery<HostProfile>({
+    queryKey: ["/api/profiles/host", selectedParkingHostId],
+    enabled: Boolean(selectedParkingHostId),
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch(
+        apiUrl(`/api/profiles/host/${encodeURIComponent(selectedParkingHostId)}`),
+      );
+      if (!res.ok) {
+        throw new Error("Failed to load host profile");
+      }
+      return (await res.json()) as HostProfile;
+    },
+  });
+
+  const selectedParkingGoogleCategories = useMemo(
+    () =>
+      parseGoogleCategories(
+        selectedParkingHostProfile?.googleCategories ??
+          selectedParkingHost?.host.googleCategories,
+      ),
+    [selectedParkingHostProfile, selectedParkingHost],
+  );
+
   const selectedParkingHostImageUrl = useMemo(() => {
     const uploaded = resolveHostImageUrl(selectedParkingHost?.host);
     if (uploaded) return uploaded;
+    const profilePhoto = selectedParkingHostProfile?.photos?.find((photo) =>
+      String(photo?.url || "").trim(),
+    )?.url;
+    if (profilePhoto) return profilePhoto;
     if (!selectedParkingHost || !effectiveGoogleMapsApiKey) return null;
     const host = selectedParkingHost.host;
     const addressParts = [host.address, host.city, host.state].filter(Boolean);
@@ -2660,12 +2753,7 @@ export default function MapPage() {
     const streetView = `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encoded}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
     const staticMap = `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encoded}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
     return streetView || staticMap;
-  }, [selectedParkingHost, effectiveGoogleMapsApiKey]);
-
-  const selectedParkingHostId = useMemo(() => {
-    if (!selectedParkingHost) return "";
-    return String(selectedParkingHost.host.hostId || "").trim();
-  }, [selectedParkingHost]);
+  }, [selectedParkingHost, selectedParkingHostProfile, effectiveGoogleMapsApiKey]);
 
   const {
     data: selectedHostUpcomingBookings,
@@ -3097,11 +3185,17 @@ export default function MapPage() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center space-x-2">
                   <span className="text-primary font-bold text-sm">
-                    {selectedDeal.discountValue}% OFF
+                    {selectedDeal.discountValue
+                      ? selectedDeal.dealType === "fixed"
+                        ? `$${selectedDeal.discountValue} OFF`
+                        : `${selectedDeal.discountValue}% OFF`
+                      : "Limited Time"}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    Min: ${selectedDeal.minOrderAmount}
-                  </span>
+                  {selectedDeal.discountValue && (
+                    <span className="text-xs text-muted-foreground">
+                      Min: ${selectedDeal.minOrderAmount}
+                    </span>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -3147,7 +3241,7 @@ export default function MapPage() {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9"
-                  onClick={() => setSelectedParkingPreview(null)}
+                  onClick={closeParkingPreview}
                   data-testid="button-close-selected-parking-preview"
                   aria-label="Close parking preview"
                 >
@@ -3213,20 +3307,18 @@ export default function MapPage() {
                       </span>
                     )}
                   </div>
-                  {selectedParkingHost.host.description ? (
+                  {selectedParkingHostProfile?.description ||
+                  selectedParkingHost.host.description ? (
                     <p className="mt-1 text-xs text-foreground leading-relaxed line-clamp-3">
-                      {selectedParkingHost.host.description}
+                      {selectedParkingHostProfile?.description ||
+                        selectedParkingHost.host.description}
                     </p>
-                  ) : selectedParkingHost.host.googleCategories ? (
+                  ) : selectedParkingGoogleCategories.length > 0 ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {(() => {
-                        try {
-                          const cats = typeof selectedParkingHost.host.googleCategories === 'string'
-                            ? JSON.parse(selectedParkingHost.host.googleCategories)
-                            : selectedParkingHost.host.googleCategories;
-                          return Array.isArray(cats) ? cats.slice(0, 3).join(' · ') : '';
-                        } catch { return ''; }
-                      })()}
+                      {selectedParkingGoogleCategories
+                        .slice(0, 3)
+                        .map(formatGoogleCategory)
+                        .join(" · ")}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground italic">
@@ -3234,29 +3326,56 @@ export default function MapPage() {
                     </p>
                   )}
                   {/* Google rating + reviews */}
-                  {selectedParkingHost.host.googleRating && (
+                  {(selectedParkingHostProfile?.googleRating ||
+                    selectedParkingHost.host.googleRating) && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="text-amber-500">★</span>
-                      <span className="font-medium text-foreground">{selectedParkingHost.host.googleRating}</span>
-                      {selectedParkingHost.host.googleReviewCount != null && (
-                        <span>({selectedParkingHost.host.googleReviewCount} reviews)</span>
+                      <span className="font-medium text-foreground">
+                        {selectedParkingHostProfile?.googleRating ||
+                          selectedParkingHost.host.googleRating}
+                      </span>
+                      {(selectedParkingHostProfile?.googleReviewCount ??
+                        selectedParkingHost.host.googleReviewCount) != null && (
+                        <span>
+                          (
+                          {selectedParkingHostProfile?.googleReviewCount ??
+                            selectedParkingHost.host.googleReviewCount}{" "}
+                          reviews)
+                        </span>
                       )}
-                      {selectedParkingHost.host.googlePriceLevel != null && selectedParkingHost.host.googlePriceLevel > 0 && (
-                        <span className="ml-1 text-muted-foreground">{'$'.repeat(selectedParkingHost.host.googlePriceLevel)}</span>
+                      {(selectedParkingHostProfile?.googlePriceLevel ??
+                        selectedParkingHost.host.googlePriceLevel) != null &&
+                        Number(
+                          selectedParkingHostProfile?.googlePriceLevel ??
+                            selectedParkingHost.host.googlePriceLevel,
+                        ) > 0 && (
+                        <span className="ml-1 text-muted-foreground">
+                          {"$".repeat(
+                            Number(
+                              selectedParkingHostProfile?.googlePriceLevel ??
+                                selectedParkingHost.host.googlePriceLevel,
+                            ),
+                          )}
+                        </span>
                       )}
                     </div>
                   )}
                   {/* Business hours - show if open/closed */}
-                  {selectedParkingHost.host.businessHours && (() => {
+                  {(selectedParkingHostProfile?.businessHours ||
+                    selectedParkingHost.host.businessHours) && (() => {
                     try {
-                      const hours = typeof selectedParkingHost.host.businessHours === 'string'
-                        ? JSON.parse(selectedParkingHost.host.businessHours)
-                        : selectedParkingHost.host.businessHours;
+                      const rawHours =
+                        selectedParkingHostProfile?.businessHours ||
+                        selectedParkingHost.host.businessHours;
+                      const hours = typeof rawHours === 'string'
+                        ? JSON.parse(rawHours)
+                        : rawHours;
                       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                       const today = dayNames[new Date().getDay()];
+                      const todayKey = today.toLowerCase();
                       const todayHours = Array.isArray(hours)
                         ? hours.find((h: any) => h.day === today || h.day?.toLowerCase() === today.toLowerCase())
-                        : null;
+                        : hours?.[todayKey] || null;
                       if (todayHours && todayHours.open && todayHours.close) {
                         return (
                           <div className="mt-1 text-[11px] text-muted-foreground">
@@ -3274,20 +3393,32 @@ export default function MapPage() {
                     } catch { return null; }
                   })()}
                   {/* Phone number */}
-                  {selectedParkingHost.host.googleFormattedPhone && (
+                  {(selectedParkingHostProfile?.phone ||
+                    selectedParkingHost.host.googleFormattedPhone) && (
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      📞 {selectedParkingHost.host.googleFormattedPhone}
+                      Phone:{" "}
+                      {selectedParkingHostProfile?.phone ||
+                        selectedParkingHost.host.googleFormattedPhone}
                     </div>
                   )}
                   {/* Website link */}
-                  {selectedParkingHost.host.businessWebsite && (
+                  {(selectedParkingHostProfile?.website ||
+                    selectedParkingHost.host.businessWebsite) && (
                     <a
-                      href={selectedParkingHost.host.businessWebsite}
+                      href={
+                        selectedParkingHostProfile?.website ||
+                        selectedParkingHost.host.businessWebsite ||
+                        "#"
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-1 block text-[11px] text-blue-600 hover:underline truncate"
                     >
-                      {selectedParkingHost.host.businessWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                      {(
+                        selectedParkingHostProfile?.website ||
+                        selectedParkingHost.host.businessWebsite ||
+                        ""
+                      ).replace(/^https?:\/\//, '').replace(/\/$/, '')}
                     </a>
                   )}
                 </div>

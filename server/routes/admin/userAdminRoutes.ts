@@ -2469,9 +2469,20 @@ export function registerUserAdminRoutes(
     async (_req: any, res) => {
       try {
         const allHosts = await storage.getAllHosts();
-        const hostsNeedingPopulation = allHosts.filter(
-          (h: any) => !h.googlePlaceId && h.businessName && h.address
-        );
+        const hostsNeedingPopulation = allHosts.filter((h: any) => {
+          if (!h.businessName || !h.address) return false;
+          return (
+            !h.googlePlaceId ||
+            !h.description ||
+            !h.googleRating ||
+            !h.googleReviewCount ||
+            !h.googlePhotos ||
+            !h.googleCategories ||
+            !h.googleFormattedPhone ||
+            !h.businessHours ||
+            !h.businessWebsite
+          );
+        });
 
         // Process in background, return immediately
         const total = hostsNeedingPopulation.length;

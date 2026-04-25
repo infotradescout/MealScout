@@ -65,8 +65,8 @@ interface Deal {
   restaurantId: string;
   title: string;
   description: string;
-  dealType: string;
-  discountValue: string;
+  dealType?: string | null;
+  discountValue?: string | null;
   minOrderAmount?: string;
   imageUrl?: string;
   facebookPageUrl?: string;
@@ -347,6 +347,10 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
   }, [user, deal.restaurantId]);
 
   const formatDiscount = () => {
+    if (!deal.discountValue) {
+      return "Limited Time";
+    }
+
     // Normalize discount display for percentage vs flat amounts
     if (deal.dealType === "percentage") {
       return `${deal.discountValue}%`;
@@ -657,7 +661,7 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
             {/* Deal Badge - top left */}
             <div className="absolute top-1.5 left-1.5 bg-[#F59E0B] text-[#111111] px-1.5 py-0.5 rounded-lg shadow-clean-lg">
               <span className="font-bold text-sm leading-none">
-                {formatDiscount()} OFF
+                {formatDiscount()}
               </span>
             </div>
 

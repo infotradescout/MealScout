@@ -60,6 +60,22 @@ const testPayloads = {
     isOngoing: true,
     availableDuringBusinessHours: true,
   },
+
+  testE_specialNoDiscount: {
+    category: "special" as const,
+    title: "Test E Limited Time Special",
+    description: "Verifying specials can publish without a discount",
+    dealType: null,
+    discountValue: null,
+    imageUrl: "https://example.com/test-image.jpg",
+    restaurantId: "test-restaurant-id",
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 86400000 * 7),
+    startTime: "11:00",
+    endTime: "15:00",
+    isOngoing: false,
+    availableDuringBusinessHours: false,
+  },
 };
 
 console.log("🧪 Testing Deal Creation Contract (Schema Validation)\n");
@@ -181,6 +197,33 @@ try {
   allTestsPassed = false;
 }
 
+// Test E: Specials can omit discount fields
+console.log("\n📋 Test E: Specials accept null discount fields");
+try {
+  const result = insertDealSchema.parse(testPayloads.testE_specialNoDiscount);
+
+  if (
+    result.category === "special" &&
+    result.dealType === null &&
+    result.discountValue === null
+  ) {
+    console.log("   ✅ PASS: Schema accepts special payload with:");
+    console.log("      category: special");
+    console.log("      dealType: null");
+    console.log("      discountValue: null");
+  } else {
+    console.log("   ❌ FAIL: Payload transformed incorrectly");
+    console.log("   ", result);
+    allTestsPassed = false;
+  }
+} catch (error) {
+  console.log("   ❌ FAIL: Schema rejected valid special payload");
+  if (error instanceof z.ZodError) {
+    console.log("   ", error.errors);
+  }
+  allTestsPassed = false;
+}
+
 console.log("\n" + "=".repeat(70));
 if (allTestsPassed) {
   console.log("✅ ALL TESTS PASSED - Contract is valid");
@@ -189,6 +232,7 @@ if (allTestsPassed) {
   console.log("   • availableDuringBusinessHours=true allows null times");
   console.log("   • isOngoing=true allows null endDate");
   console.log("   • Both checkboxes can coexist with all nulls");
+  console.log("   • category=special allows null dealType and discountValue");
   console.log("\n🔒 Backend normalization (routes.ts) provides additional enforcement.");
   console.log("   UI now clears form values when checkboxes are toggled.");
   console.log("   This test proves the schema/API contract is sound.");

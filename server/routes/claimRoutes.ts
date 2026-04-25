@@ -107,11 +107,18 @@ export function registerClaimRoutes(
           );
         }
 
-        const facebookMessage = `🍽️ Just claimed an amazing deal at ${
+        const discountLabel = deal.discountValue
+          ? deal.dealType === "fixed"
+            ? `$${deal.discountValue} OFF`
+            : `${deal.discountValue}% OFF`
+          : "Limited Time";
+        const minOrderText = deal.discountValue
+          ? ` (Min order: $${deal.minOrderAmount || "15"})`
+          : "";
+
+        const facebookMessage = `🍽️ Just claimed an amazing special at ${
           restaurant.name
-        }!\n\n${deal.title}\n${deal.discountValue}% OFF (Min order: $${
-          deal.minOrderAmount || "15"
-        })\n\nFound this through MealScout - check it out! #MealScout #FoodDeals`;
+        }!\n\n${deal.title}\n${discountLabel}${minOrderText}\n\nFound this through MealScout - check it out! #MealScout #FoodSpecials`;
 
         res.json({
           success: true,

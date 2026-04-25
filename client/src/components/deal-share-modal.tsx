@@ -10,7 +10,8 @@ interface Deal {
   id: string;
   title: string;
   description: string;
-  discountValue: string;
+  dealType?: string | null;
+  discountValue?: string | null;
   minOrderAmount?: string;
   restaurant?: {
     name: string;
@@ -49,8 +50,17 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
     };
   }, [deal.id, isOpen]);
   
+  const discountLabel = deal.discountValue
+    ? deal.dealType === "fixed"
+      ? `$${deal.discountValue} OFF`
+      : `${deal.discountValue}% OFF`
+    : "Limited Time";
+  const minOrderText = deal.discountValue
+    ? ` (Min order: $${deal.minOrderAmount || "15"})`
+    : "";
+
   // Create share text
-  const shareText = `Amazing deal at ${deal.restaurant?.name || 'this restaurant'}!\n\n${deal.title}\n${deal.discountValue}% OFF (Min order: $${deal.minOrderAmount || '15'})\n\nCheck it out on MealScout:`;
+  const shareText = `Amazing special at ${deal.restaurant?.name || 'this restaurant'}!\n\n${deal.title}\n${discountLabel}${minOrderText}\n\nCheck it out on MealScout:`;
 
   const handleCopyLink = async () => {
     try {
@@ -146,11 +156,13 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
             </p>
             <div className="flex items-center space-x-2">
               <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full font-semibold">
-                {deal.discountValue}% OFF
+                {discountLabel}
               </span>
-              <span className="text-xs text-muted-foreground">
-                Min: ${deal.minOrderAmount || '15'}
-              </span>
+              {deal.discountValue && (
+                <span className="text-xs text-muted-foreground">
+                  Min: ${deal.minOrderAmount || '15'}
+                </span>
+              )}
             </div>
           </div>
 

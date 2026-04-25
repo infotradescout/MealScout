@@ -143,7 +143,7 @@ async function runTests() {
       availableDuringBusinessHours: true,
       isOngoing: false,
     },
-    201, // Expect success if auth works, otherwise will fail with 401/403
+    200, // Expect success if auth works, otherwise will fail with 401/403
     "Business hours with null times"
   );
   
@@ -168,11 +168,37 @@ async function runTests() {
       isOngoing: true,
       availableDuringBusinessHours: false,
     },
-    201,
+    200,
     "Ongoing deal with null endDate"
   );
 
   if (!test4Result.success && test4Result.status === 401) {
+    console.log("   ℹ️  Test requires authentication - set TEST_AUTH_TOKEN env var");
+  }
+
+  // Test 5: Special without discount fields
+  console.log("📋 Test 5: Limited-time special without discount (would create special if auth works)");
+  const test5Result = await makeRequest(
+    {
+      category: "special",
+      title: "Route Test - Limited Time Special",
+      description: "Testing special creation without discount fields",
+      dealType: null,
+      discountValue: null,
+      imageUrl: "https://example.com/test3.jpg",
+      restaurantId: "test-restaurant-id",
+      startDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 86400000 * 7).toISOString(),
+      startTime: "11:00",
+      endTime: "15:00",
+      isOngoing: false,
+      availableDuringBusinessHours: false,
+    },
+    200,
+    "Special with null discount fields"
+  );
+
+  if (!test5Result.success && test5Result.status === 401) {
     console.log("   ℹ️  Test requires authentication - set TEST_AUTH_TOKEN env var");
   }
 

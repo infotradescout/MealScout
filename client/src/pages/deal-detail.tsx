@@ -22,8 +22,8 @@ interface Deal {
   restaurantId: string;
   title: string;
   description: string;
-  dealType: string;
-  discountValue: string;
+  dealType?: string | null;
+  discountValue?: string | null;
   minOrderAmount?: string;
   imageUrl?: string;
   startDate: string;
@@ -198,6 +198,9 @@ export default function DealDetail() {
   }
 
   const formatDiscount = (deal: Deal) => {
+    if (!deal.discountValue) {
+      return "Limited Time";
+    }
     if (deal.dealType === "percentage") {
       return `${deal.discountValue}% OFF`;
     } else {
@@ -220,6 +223,11 @@ export default function DealDetail() {
     "Exclusive food special from a local restaurant";
   const discountValue = (deal as Deal)?.discountValue || "";
   const dealType = (deal as Deal)?.dealType || "";
+  const discountDescription = discountValue
+    ? dealType === "percentage"
+      ? `Get ${discountValue}% off`
+      : `Save $${discountValue}`
+    : "Limited-time special";
   const distance = (deal as Deal)?.distance;
 
   const offerSchema = {
@@ -229,9 +237,13 @@ export default function DealDetail() {
     description: dealDescription,
     url: `https://www.mealscout.us/deals/${dealId}`,
     priceCurrency: "USD",
-    price: dealType === "percentage" ? "0" : discountValue,
-    discount:
-      dealType === "percentage" ? `${discountValue}%` : `$${discountValue}`,
+    price: dealType === "fixed" && discountValue ? discountValue : "0",
+    ...(discountValue
+      ? {
+          discount:
+            dealType === "percentage" ? `${discountValue}%` : `$${discountValue}`,
+        }
+      : {}),
     seller: {
       "@type": "Restaurant",
       name: restaurantName,
@@ -246,11 +258,7 @@ export default function DealDetail() {
     <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen">
       <SEOHead
         title={`${dealTitle} - ${restaurantName} | MealScout`}
-        description={`${dealDescription}. ${
-          dealType === "percentage"
-            ? `Get ${discountValue}% off`
-            : `Save $${discountValue}`
-        } at ${restaurantName}. Claim this exclusive special now on MealScout!`}
+        description={`${dealDescription}. ${discountDescription} at ${restaurantName}. Claim this exclusive special now on MealScout!`}
         keywords={`${restaurantName}, ${dealTitle}, food special, restaurant discount, ${
           (restaurant as Restaurant)?.cuisineType || "food"
         }`}
@@ -690,7 +698,8 @@ export default function DealDetail() {
           id: (deal as Deal)?.id || "",
           title: (deal as Deal)?.title || "",
           description: (deal as Deal)?.description || "",
-          discountValue: (deal as Deal)?.discountValue || "0",
+          dealType: (deal as Deal)?.dealType || null,
+          discountValue: (deal as Deal)?.discountValue || null,
           minOrderAmount: (deal as Deal)?.minOrderAmount,
           restaurant: {
             name: (restaurant as Restaurant)?.name || "Restaurant",

@@ -1,0 +1,6 @@
+ALTER TABLE deals
+  ADD COLUMN IF NOT EXISTS category varchar NOT NULL DEFAULT 'deal';
+
+ALTER TABLE deals
+  ALTER COLUMN deal_type DROP NOT NULL,
+  ALTER COLUMN discount_value DROP NOT NULL;

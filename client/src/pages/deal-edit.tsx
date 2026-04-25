@@ -96,7 +96,7 @@ export default function DealEdit() {
         title: deal.title,
         description: deal.description,
         dealType: deal.dealType as "percentage" | "fixed",
-        discountValue: deal.discountValue.toString(),
+        discountValue: deal.discountValue?.toString() || "",
         minOrderAmount: deal.minOrderAmount?.toString() || "",
         startDate: formatDate(deal.startDate.toString()),
         endDate: deal.endDate ? formatDate(deal.endDate.toString()) : "",

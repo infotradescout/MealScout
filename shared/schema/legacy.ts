@@ -1114,13 +1114,14 @@ export const deals = pgTable("deals", {
   restaurantId: varchar("restaurant_id")
     .notNull()
     .references(() => restaurants.id),
+  category: varchar("category").notNull().default("deal"), // 'deal' or 'special'
   title: varchar("title").notNull(),
   description: text("description").notNull(),
-  dealType: varchar("deal_type").notNull(), // 'percentage' or 'fixed'
+  dealType: varchar("deal_type"), // 'percentage' or 'fixed'; nullable for non-discount specials
   discountValue: decimal("discount_value", {
     precision: 5,
     scale: 2,
-  }).notNull(),
+  }),
   minOrderAmount: decimal("min_order_amount", { precision: 8, scale: 2 }),
   imageUrl: varchar("image_url").notNull(), // Required image for all deals
   startDate: timestamp("start_date").notNull(),
@@ -2358,11 +2359,28 @@ export const insertDealSchema = createInsertSchema(deals)
     updatedAt: true,
   })
   .extend({
+    category: z.enum(["deal", "special"]).optional(),
+    dealType: z.enum(["percentage", "fixed"]).optional().nullable(),
+    discountValue: z.string().optional().nullable(),
     imageUrl: z.string().min(1, "Deal image is required"),
     endDate: z.date().optional().nullable(),
     startTime: z.string().optional().nullable(),
     endTime: z.string().optional().nullable(),
   })
+  .refine(
+    (data) => data.category === "special" || !!data.dealType,
+    {
+      message: "Deal type is required for deals",
+      path: ["dealType"],
+    },
+  )
+  .refine(
+    (data) => data.category === "special" || !!data.discountValue,
+    {
+      message: "Discount value is required for deals",
+      path: ["discountValue"],
+    },
+  )
   .refine(
     (data) => {
       // If not ongoing, endDate is required

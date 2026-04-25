@@ -147,7 +147,7 @@ export default function UserDashboard() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const getDealTypeColor = (type: string) => {
+  const getDealTypeColor = (type?: string | null) => {
     switch (type) {
       case "breakfast":
         return "bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]";
@@ -318,7 +318,7 @@ export default function UserDashboard() {
                             <Badge
                               className={getDealTypeColor(claim.deal.dealType)}
                             >
-                              {claim.deal.dealType}
+                              {claim.deal.dealType || "special"}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground mb-1">
@@ -333,7 +333,7 @@ export default function UserDashboard() {
                             </span>
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              {claim.deal.discountValue}
+                              {claim.deal.discountValue ?? "Limited Time"}
                             </span>
                           </div>
                         </div>
@@ -400,7 +400,7 @@ export default function UserDashboard() {
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-semibold">{deal.title}</h4>
                             <Badge className={getDealTypeColor(deal.dealType)}>
-                              {deal.dealType}
+                              {deal.dealType || "special"}
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground mb-1">
@@ -419,7 +419,7 @@ export default function UserDashboard() {
                             </span>
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              {deal.discountValue}
+                              {deal.discountValue ?? "Limited Time"}
                             </span>
                             {(deal as any).distance !== undefined && (
                               <span className="flex items-center gap-1">
@@ -552,7 +552,7 @@ export default function UserDashboard() {
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-semibold">{deal.title}</h4>
                             <Badge className={getDealTypeColor(deal.dealType)}>
-                              {deal.dealType}
+                              {deal.dealType || "special"}
                             </Badge>
                             <Badge variant="secondary">
                               <TrendingUp className="h-3 w-3 mr-1" />
@@ -575,7 +575,7 @@ export default function UserDashboard() {
                             </span>
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              {deal.discountValue}
+                              {deal.discountValue ?? "Limited Time"}
                             </span>
                           </div>
                         </div>

@@ -201,10 +201,16 @@ export function registerDealManagementRoutes(
 
       const userId = req.user.id;
       const raw = req.body || {};
+      const category = raw.category === "special" ? "special" : "deal";
       const normalized = {
         ...raw,
+        category,
+        dealType:
+          category === "special" && !raw.dealType ? null : raw.dealType,
         discountValue:
-          typeof raw.discountValue === "number"
+          category === "special" && (raw.discountValue === "" || raw.discountValue == null)
+            ? null
+            : typeof raw.discountValue === "number"
             ? raw.discountValue.toString()
             : raw.discountValue,
         minOrderAmount:
@@ -242,6 +248,7 @@ export function registerDealManagementRoutes(
       console.log("🧭 Normalized deal payload", {
         restaurantId: normalized.restaurantId,
         title: normalized.title,
+        category: normalized.category,
         dealType: normalized.dealType,
         discountValue: normalized.discountValue,
         startDate: normalized.startDate,

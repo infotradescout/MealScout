@@ -48,10 +48,11 @@ import { authUrl } from "@/lib/api";
 
 const dealSchema = z
   .object({
+    category: z.enum(["deal", "special"]).default("deal"),
     title: z.string().min(1, "Special title is required"),
     description: z.string().min(1, "Description is required"),
-    dealType: z.enum(["percentage", "fixed"]),
-    discountValue: z.string().min(1, "Discount value is required"),
+    dealType: z.enum(["percentage", "fixed"]).optional(),
+    discountValue: z.string().optional(),
     minOrderAmount: z.string().optional(),
     imageUrl: z.string().min(1, "Special image is required"),
     startDate: z.string().min(1, "Start date is required"),
@@ -64,6 +65,20 @@ const dealSchema = z
     perCustomerLimit: z.string().optional(),
     facebookPageUrl: z.string().optional(),
   })
+  .refine(
+    (data) => data.category === "special" || !!data.dealType,
+    {
+      message: "Special type is required for deals",
+      path: ["dealType"],
+    }
+  )
+  .refine(
+    (data) => data.category === "special" || !!data.discountValue,
+    {
+      message: "Discount value is required for deals",
+      path: ["discountValue"],
+    }
+  )
   .refine(
     (data) => {
       // If not ongoing, endDate is required
@@ -201,6 +216,7 @@ export default function DealCreation() {
 
   const dealDefaultValues = useMemo<DealFormData>(() => {
     const base: DealFormData = {
+      category: "deal",
       title: "",
       description: "",
       dealType: "percentage",
@@ -238,6 +254,7 @@ export default function DealCreation() {
     resolver: zodResolver(dealSchema),
     defaultValues: dealDefaultValues,
   });
+  const selectedCategory = form.watch("category");
 
   const handleDealShareToggle = (
     platform: keyof SocialAutopostSettings["platforms"],
@@ -343,8 +360,13 @@ export default function DealCreation() {
 
       const dealData = {
         ...data,
+        category: data.category,
         restaurantId: restaurants[0].id,
-        discountValue: parseFloat(data.discountValue),
+        dealType: data.category === "deal" ? data.dealType : null,
+        discountValue:
+          data.category === "deal" && data.discountValue
+            ? parseFloat(data.discountValue)
+            : null,
         minOrderAmount: data.minOrderAmount
           ? parseFloat(data.minOrderAmount)
           : null,
@@ -496,6 +518,7 @@ export default function DealCreation() {
   };
 
   const dealPreviewData = {
+    category: form.watch("category"),
     title: form.watch("title") || "Your Special Title",
     description:
       form.watch("description") || "Your deal description will appear here...",
@@ -689,9 +712,11 @@ export default function DealCreation() {
                 )}
 
                 <div className="absolute bottom-2 right-2 bg-[linear-gradient(110deg,rgba(255,77,46,0.9),rgba(245,158,11,0.9))] text-white px-2 py-1 rounded-md text-sm font-bold shadow-clean">
-                  {dealPreviewData.dealType === "percentage"
-                    ? `${dealPreviewData.discountValue}% OFF`
-                    : `$${dealPreviewData.discountValue} OFF`}
+                  {dealPreviewData.category === "special"
+                    ? "Limited Time"
+                    : dealPreviewData.dealType === "percentage"
+                      ? `${dealPreviewData.discountValue}% OFF`
+                      : `$${dealPreviewData.discountValue} OFF`}
                 </div>
               </div>
 
@@ -732,6 +757,65 @@ export default function DealCreation() {
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6 bg-[var(--bg-card)]/90 border border-[color:var(--border-subtle)] rounded-2xl px-4 py-5 shadow-clean"
           >
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel data-testid="label-special-category">
+                    What are you publishing?
+                  </FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        if (value === "special") {
+                          form.setValue("discountValue", "", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        } else if (!form.getValues("dealType")) {
+                          form.setValue("dealType", "percentage", {
+                            shouldDirty: true,
+                          });
+                        }
+                      }}
+                      value={field.value}
+                      className="grid grid-cols-2 gap-3"
+                    >
+                      <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
+                        <RadioGroupItem
+                          value="deal"
+                          id="category-deal"
+                          data-testid="radio-category-deal"
+                        />
+                        <Label htmlFor="category-deal" className="cursor-pointer">
+                          <p className="font-medium text-sm">Deal</p>
+                          <p className="text-xs text-muted-foreground">
+                            Discount or dollars off
+                          </p>
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
+                        <RadioGroupItem
+                          value="special"
+                          id="category-special"
+                          data-testid="radio-category-special"
+                        />
+                        <Label htmlFor="category-special" className="cursor-pointer">
+                          <p className="font-medium text-sm">Special</p>
+                          <p className="text-xs text-muted-foreground">
+                            Featured item or event
+                          </p>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Deal Image - REQUIRED */}
             <FormField
               control={form.control}
@@ -829,6 +913,7 @@ export default function DealCreation() {
                   size="sm"
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
+                    form.setValue("category", "deal");
                     form.setValue("title", "Happy Hour Special");
                     form.setValue(
                       "description",
@@ -850,6 +935,7 @@ export default function DealCreation() {
                   size="sm"
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
+                    form.setValue("category", "deal");
                     form.setValue("title", "Lunch Combo Deal");
                     form.setValue(
                       "description",
@@ -872,6 +958,7 @@ export default function DealCreation() {
                   size="sm"
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
+                    form.setValue("category", "deal");
                     form.setValue("title", "Family Night Special");
                     form.setValue(
                       "description",
@@ -942,123 +1029,127 @@ export default function DealCreation() {
               )}
             />
 
-            {/* Special Type */}
-            <FormField
-              control={form.control}
-              name="dealType"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel data-testid="label-deal-type">
-                    Special Type
-                  </FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="grid grid-cols-2 gap-3"
-                    >
-                      <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
-                        <RadioGroupItem
-                          value="percentage"
-                          id="percentage"
-                          data-testid="radio-percentage"
-                        />
-                        <Label htmlFor="percentage" className="cursor-pointer">
-                          <p
-                            className="font-medium text-sm"
-                            data-testid="text-percentage-title"
-                          >
-                            Percentage Off
-                          </p>
-                          <p
-                            className="text-xs text-muted-foreground"
-                            data-testid="text-percentage-desc"
-                          >
-                            e.g., 20% off
-                          </p>
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
-                        <RadioGroupItem
-                          value="fixed"
-                          id="fixed"
-                          data-testid="radio-fixed"
-                        />
-                        <Label htmlFor="fixed" className="cursor-pointer">
-                          <p
-                            className="font-medium text-sm"
-                            data-testid="text-fixed-title"
-                          >
-                            Fixed Amount
-                          </p>
-                          <p
-                            className="text-xs text-muted-foreground"
-                            data-testid="text-fixed-desc"
-                          >
-                            e.g., $5 off
-                          </p>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {selectedCategory === "deal" && (
+              <>
+                {/* Special Type */}
+                <FormField
+                  control={form.control}
+                  name="dealType"
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel data-testid="label-deal-type">
+                        Special Type
+                      </FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          className="grid grid-cols-2 gap-3"
+                        >
+                          <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
+                            <RadioGroupItem
+                              value="percentage"
+                              id="percentage"
+                              data-testid="radio-percentage"
+                            />
+                            <Label htmlFor="percentage" className="cursor-pointer">
+                              <p
+                                className="font-medium text-sm"
+                                data-testid="text-percentage-title"
+                              >
+                                Percentage Off
+                              </p>
+                              <p
+                                className="text-xs text-muted-foreground"
+                                data-testid="text-percentage-desc"
+                              >
+                                e.g., 20% off
+                              </p>
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-3 p-3 border border-input rounded-lg cursor-pointer hover:bg-muted/50">
+                            <RadioGroupItem
+                              value="fixed"
+                              id="fixed"
+                              data-testid="radio-fixed"
+                            />
+                            <Label htmlFor="fixed" className="cursor-pointer">
+                              <p
+                                className="font-medium text-sm"
+                                data-testid="text-fixed-title"
+                              >
+                                Fixed Amount
+                              </p>
+                              <p
+                                className="text-xs text-muted-foreground"
+                                data-testid="text-fixed-desc"
+                              >
+                                e.g., $5 off
+                              </p>
+                            </Label>
+                          </div>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="discountValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel data-testid="label-discount-value">
-                      Discount Value
-                    </FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          placeholder="25"
-                          {...field}
-                          data-testid="input-discount-value"
-                        />
-                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                          {form.watch("dealType") === "percentage" ? "%" : "$"}
-                        </span>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="minOrderAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel data-testid="label-min-order">
-                      Min. Order
-                    </FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          placeholder="15.00"
-                          className="pl-8"
-                          {...field}
-                          data-testid="input-min-order"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="discountValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel data-testid="label-discount-value">
+                          Discount Value
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              placeholder="25"
+                              {...field}
+                              data-testid="input-discount-value"
+                            />
+                            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                              {form.watch("dealType") === "percentage" ? "%" : "$"}
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="minOrderAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel data-testid="label-min-order">
+                          Min. Order
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                              $
+                            </span>
+                            <Input
+                              type="number"
+                              placeholder="15.00"
+                              className="pl-8"
+                              {...field}
+                              data-testid="input-min-order"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Timing */}
             <div>

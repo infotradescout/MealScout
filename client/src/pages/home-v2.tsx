@@ -810,7 +810,14 @@ export default function Home() {
                     )}
                     {deal.discountValue && (
                       <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
-                        {deal.discountValue}% OFF
+                        {deal.dealType === "fixed"
+                          ? `$${deal.discountValue} OFF`
+                          : `${deal.discountValue}% OFF`}
+                      </div>
+                    )}
+                    {!deal.discountValue && (
+                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                        Limited Time
                       </div>
                     )}
                   </div>

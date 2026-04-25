@@ -8407,7 +8407,12 @@ export default function AdminDashboard() {
                             {deal.title}
                           </div>
                           <div className="text-sm text-muted-foreground mt-1">
-                            {deal.restaurant?.name} - {deal.discountValue}% off
+                            {deal.restaurant?.name} -{" "}
+                            {deal.discountValue
+                              ? deal.dealType === "fixed"
+                                ? `$${deal.discountValue} off`
+                                : `${deal.discountValue}% off`
+                              : "Limited Time"}
                             - Ends {new Date(deal.endDate).toLocaleDateString()}
                           </div>
                         </div>
@@ -10596,7 +10601,11 @@ export default function AdminDashboard() {
                   <div className="space-y-1">
                     <p className="text-xs text-muted-foreground">Discount</p>
                     <p className="font-medium">
-                      {selectedDeal.discountValue}% off
+                      {selectedDeal.discountValue
+                        ? selectedDeal.dealType === "fixed"
+                          ? `$${selectedDeal.discountValue} off`
+                          : `${selectedDeal.discountValue}% off`
+                        : "Limited Time"}
                     </p>
                   </div>
                   <div className="space-y-1">

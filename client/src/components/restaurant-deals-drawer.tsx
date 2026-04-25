@@ -19,8 +19,8 @@ interface Deal {
   restaurantId: string;
   title: string;
   description: string;
-  dealType: string;
-  discountValue: string;
+  dealType?: string | null;
+  discountValue?: string | null;
   minOrderAmount?: string;
   imageUrl?: string;
   restaurant?: {
@@ -129,7 +129,10 @@ export default function RestaurantDealsDrawer({
     };
   }, [isOpen]);
 
-  const formatDiscount = (dealType: string, discountValue: string) => {
+  const formatDiscount = (dealType?: string | null, discountValue?: string | null) => {
+    if (!discountValue) {
+      return "Limited Time";
+    }
     if (dealType === "percentage") {
       return `${discountValue}%`;
     } else {
@@ -354,8 +357,7 @@ export default function RestaurantDealsDrawer({
                         {formatDiscount(
                           deals[currentDealIndex].dealType,
                           deals[currentDealIndex].discountValue
-                        )}{" "}
-                        off
+                        )}
                       </div>
                     </div>
 
@@ -394,13 +396,14 @@ export default function RestaurantDealsDrawer({
                               {formatDiscount(
                                 deals[currentDealIndex].dealType,
                                 deals[currentDealIndex].discountValue
-                              )}{" "}
-                              off
+                              )}
                             </span>
-                            <p className="text-[color:var(--status-error)] text-sm">
-                              orders $
-                              {deals[currentDealIndex].minOrderAmount || "15"}+
-                            </p>
+                            {deals[currentDealIndex].discountValue && (
+                              <p className="text-[color:var(--status-error)] text-sm">
+                                orders $
+                                {deals[currentDealIndex].minOrderAmount || "15"}+
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
