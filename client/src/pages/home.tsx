@@ -1203,24 +1203,20 @@ export default function Home() {
       {(publicProfilesLoading ||
         publicProfilesError ||
         (location && featuredBusinesses.length > 0)) && (
-        <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <section className="section section--full border-y border-[color:var(--border-subtle)] py-8">
           <div className="content">
-            <div className="mb-3">
-              <h2 className="text-base font-bold text-foreground flex items-center">
-                <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-                Restaurants, Bars & Trucks With Deals in{" "}
-                {shortLocation === "Your Location"
-                  ? "Your Neighborhood"
-                  : shortLocation}
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-foreground flex items-center mb-2">
+                <Sparkles className="w-6 h-6 text-[color:var(--accent-text)] mr-2" />
+                Trending Near You
               </h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Deal-active local spots ranked by live demand, recommendations,
-                and proximity.
+              <p className="text-base text-muted-foreground">
+                Deal-active spots ranked by demand, recommendations & proximity in {shortLocation === "Your Location" ? "your neighborhood" : shortLocation}
               </p>
               <Link href="/deals/featured">
                 <Button
                   variant="link"
-                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto mt-1"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto mt-2 font-semibold"
                 >
                   See all nearby deals {"->"}
                 </Button>
@@ -1264,16 +1260,16 @@ export default function Home() {
         </section>
       )}
 
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-8">
         <div className="content">
-          <div className="mb-3">
-            <h2 className="text-base font-bold text-foreground flex items-center">
-              <UtensilsCrossed className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-              Explore Locally
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-foreground flex items-center">
+              <UtensilsCrossed className="w-6 h-6 text-[color:var(--accent-text)] mr-2" />
+              Explore by Cuisine
             </h2>
           </div>
 
-          <div className="flex space-x-2 overflow-x-auto pb-1">
+          <div className="flex space-x-2 overflow-x-auto pb-2">
             <Link href="/deals/featured">
               <Button
                 className="filter-pill filter-pill--active flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-semibold shadow-clean hover:shadow-clean-lg transition-all"
@@ -1386,16 +1382,16 @@ export default function Home() {
       </section>
 
       {weeklyTrendingVideos.length > 0 && (
-        <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <section className="section section--full border-y border-[color:var(--border-subtle)] py-8">
           <div className="content">
-            <div className="mb-3 flex items-end justify-between gap-3">
+            <div className="mb-6 flex items-end justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold text-foreground flex items-center">
-                  <PlayCircle className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
-                  Weekly Top Video Recommendations
+                <h2 className="text-2xl font-bold text-foreground flex items-center">
+                  <PlayCircle className="w-6 h-6 text-[color:var(--accent-text)] mr-2" />
+                  Community Favorites
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Most shared and watched community food videos this week.
+                <p className="text-base text-muted-foreground mt-2">
+                  Most shared & watched food videos this week
                 </p>
               </div>
               <Link href="/video">
@@ -1429,35 +1425,35 @@ export default function Home() {
         </section>
       )}
 
-      <section className="section section--full section--surface py-3">
+      <section className="section section--full section--surface py-8">
         <div className="content">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-3">
             <Link href="/events">
-              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/50 cursor-pointer">
+                <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--accent-text)] mb-2">
                   Event Organizers
                 </p>
-                <p className="mt-1 text-sm font-semibold text-foreground">
+                <p className="text-lg font-bold text-foreground">
                   Post public events
                 </p>
               </div>
             </Link>
             <Link href="/request-truck">
-              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/50 cursor-pointer">
+                <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--accent-text)] mb-2">
                   Private Requests
                 </p>
-                <p className="mt-1 text-sm font-semibold text-foreground">
+                <p className="text-lg font-bold text-foreground">
                   Request a food truck
                 </p>
               </div>
             </Link>
             <Link href="/map">
-              <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 hover:shadow-clean transition-shadow">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/50 cursor-pointer">
+                <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--accent-text)] mb-2">
                   Event Viewers
                 </p>
-                <p className="mt-1 text-sm font-semibold text-foreground">
+                <p className="text-lg font-bold text-foreground">
                   Find local events
                 </p>
               </div>
