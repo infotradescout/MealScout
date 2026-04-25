@@ -901,14 +901,14 @@ export default function Home() {
       )}
 
       {/* Hero & Search Section */}
-      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-12">
+      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-7 sm:py-10">
         <div className="content">
           <div className="home-hero-panel">
-            <div className="mb-6">
-              <h1 className="hero-title text-5xl sm:text-6xl font-black mb-3 leading-tight tracking-tight">
+            <div className="mb-4 sm:mb-5">
+              <h1 className="hero-title text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight">
                 {firstName ? `Hey ${firstName}! ${mealPrompt}` : mealPrompt}
               </h1>
-              <p className="hero-subtitle text-lg text-muted-foreground leading-relaxed">
+              <p className="hero-subtitle text-base sm:text-lg text-muted-foreground leading-relaxed">
                 Discover food trucks, restaurants & deals{" "}
                 {shortLocation === "Your Location"
                   ? "near you"
@@ -916,7 +916,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mb-8 flex flex-col gap-4">
+            <div className="mb-4 sm:mb-6 flex flex-col gap-2.5 sm:gap-4">
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <SmartSearch
@@ -940,7 +940,7 @@ export default function Home() {
                       surface: "home_search_row",
                     });
                   }}
-                  className="whitespace-nowrap"
+                  className="hidden sm:inline-flex whitespace-nowrap h-11 rounded-full px-4"
                 >
                   <MapPin className="w-4 h-4 mr-1" />
                   {isLoadingLocation ? "Locating..." : "Location"}
@@ -948,7 +948,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mb-6 grid grid-cols-3 gap-3">
+            <div className="mb-4 sm:mb-5 grid grid-cols-3 gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -960,16 +960,16 @@ export default function Home() {
                     surface: "home_quick_actions",
                   });
                 }}
-                className="font-medium"
+                className="h-10 rounded-full px-2 sm:px-3 text-[13px] sm:text-sm font-semibold"
               >
-                <MapPin className="w-4 h-4 mr-1" />
-                {isLoadingLocation ? "Locating..." : "Use location"}
+                <MapPin className="w-3.5 h-3.5 mr-1" />
+                {isLoadingLocation ? "Locating..." : "My location"}
               </Button>
               <Link href="/map">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full font-medium"
+                  className="w-full h-10 rounded-full px-2 sm:px-3 text-[13px] sm:text-sm font-semibold"
                   data-testid="button-home-open-map"
                   onPointerDown={() => {
                     trackUxEvent("home_open_map_quick", {
@@ -977,15 +977,15 @@ export default function Home() {
                     });
                   }}
                 >
-                  <MapIcon className="w-4 h-4 mr-1" />
-                  Open map
+                  <MapIcon className="w-3.5 h-3.5 mr-1" />
+                  Map
                 </Button>
               </Link>
               <Link href="/deals/featured">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full font-medium"
+                  className="w-full h-10 rounded-full px-2 sm:px-3 text-[13px] sm:text-sm font-semibold"
                   data-testid="button-home-featured"
                   onPointerDown={() => {
                     trackUxEvent("home_open_featured_quick", {
@@ -993,7 +993,7 @@ export default function Home() {
                     });
                   }}
                 >
-                  <Sparkles className="w-4 h-4 mr-1" />
+                  <Sparkles className="w-3.5 h-3.5 mr-1" />
                   Deals
                 </Button>
               </Link>
@@ -1283,9 +1283,9 @@ export default function Home() {
         </section>
       )}
 
-      <section className="section section--full border-y border-[color:var(--border-subtle)] py-8">
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-6">
         <div className="content">
-          <div className="mb-6">
+          <div className="mb-4">
             <h2 className="text-2xl font-bold text-foreground flex items-center">
               <UtensilsCrossed className="w-6 h-6 text-[color:var(--accent-text)] mr-2" />
               Explore by Cuisine

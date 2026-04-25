@@ -23,6 +23,23 @@ export type CacheType =
 
 // In-process L1 cache to avoid hitting Postgres on every hot path
 const l1: Map<string, { value: unknown; expiresAt: number | null }> = new Map();
+let dbCacheAvailable: boolean | null = null;
+
+function isMissingCacheTableError(error: unknown) {
+  const message = String((error as any)?.message || "").toLowerCase();
+  const code = String((error as any)?.code || "");
+  return code === "42P01" || message.includes('relation "google_api_cache" does not exist');
+}
+
+function markDbCacheUnavailable(error: unknown) {
+  if (dbCacheAvailable !== false) {
+    dbCacheAvailable = false;
+    console.warn(
+      "[googleApiCache] DB cache table unavailable; using in-memory cache only until restart:",
+      (error as any)?.message || String(error),
+    );
+  }
+}
 
 function l1Key(cacheType: CacheType, cacheKey: string) {
   return `${cacheType}:${cacheKey}`;
@@ -45,6 +62,10 @@ export async function getCached<T>(
     l1.delete(k);
   }
 
+  if (dbCacheAvailable === false) {
+    return undefined;
+  }
+
   // L2 (Postgres) check
   try {
     const rows = await db.execute(
@@ -61,8 +82,12 @@ export async function getCached<T>(
     const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : null;
     // Populate L1
     l1.set(k, { value, expiresAt });
+    dbCacheAvailable = true;
     return value;
-  } catch {
+  } catch (error: unknown) {
+    if (isMissingCacheTableError(error)) {
+      markDbCacheUnavailable(error);
+    }
     // DB unavailable — degrade gracefully, don't block the request
     return undefined;
   }
@@ -83,6 +108,10 @@ export async function setCached(
   // Update L1 immediately
   l1.set(k, { value, expiresAt });
 
+  if (dbCacheAvailable === false) {
+    return;
+  }
+
   // Persist to Postgres asynchronously (fire-and-forget; failures are non-fatal)
   const expiresAtIso = expiresAt ? new Date(expiresAt).toISOString() : null;
   db.execute(
@@ -93,6 +122,10 @@ export async function setCached(
               created_at = NOW(),
               expires_at = EXCLUDED.expires_at`,
   ).catch((err: unknown) => {
+    if (isMissingCacheTableError(err)) {
+      markDbCacheUnavailable(err);
+      return;
+    }
     console.warn("[googleApiCache] DB write failed (non-fatal):", (err as any)?.message);
   });
 }
@@ -105,10 +138,17 @@ export async function evictCached(
   cacheKey: string,
 ): Promise<void> {
   l1.delete(l1Key(cacheType, cacheKey));
+  if (dbCacheAvailable === false) {
+    return;
+  }
   await db
     .execute(
       sql`DELETE FROM google_api_cache
           WHERE cache_key = ${cacheKey} AND cache_type = ${cacheType}`,
     )
-    .catch(() => {});
+    .catch((error: unknown) => {
+      if (isMissingCacheTableError(error)) {
+        markDbCacheUnavailable(error);
+      }
+    });
 }
