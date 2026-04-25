@@ -70,6 +70,7 @@
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
     "smoke:launch-spike": "node scripts/launchSpikeSmoke.mjs",
+    "check:launch-week": "node scripts/launchWeekReadiness.mjs",
     "launch:degraded:on": "node scripts/toggleLaunchMode.mjs on",
     "launch:degraded:off": "node scripts/toggleLaunchMode.mjs off",
     "launch:degraded:reset": "node scripts/toggleLaunchMode.mjs reset",
