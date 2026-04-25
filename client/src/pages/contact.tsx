@@ -1,7 +1,13 @@
+import { useState } from "react";
 import { SEOHead } from "@/components/seo-head";
 import { BackHeader } from "@/components/back-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Mail, 
   MapPin,
@@ -13,6 +19,16 @@ import {
 } from "lucide-react";
 
 export default function Contact() {
+  const { user, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const [ticketDraft, setTicketDraft] = useState({
+    subject: "",
+    category: "onboarding",
+    priority: "normal",
+    description: "",
+  });
+  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
+
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "ContactPage",
@@ -56,6 +72,46 @@ export default function Contact() {
   ];
 
   const supportEmail = "info.mealscout@gmail.com";
+
+  const submitSupportTicket = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isAuthenticated) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/contact")}`;
+      return;
+    }
+
+    setIsSubmittingTicket(true);
+    try {
+      const response = await fetch("/api/support-tickets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ticketDraft),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to create support ticket");
+      }
+      setTicketDraft({
+        subject: "",
+        category: "onboarding",
+        priority: "normal",
+        description: "",
+      });
+      toast({
+        title: "Support ticket sent",
+        description: "We added it to the admin queue and will follow up soon.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Could not send ticket",
+        description: error?.message || "Please email support instead.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingTicket(false);
+    }
+  };
 
   const quickHelp = [
     "How do I get started?",
@@ -134,7 +190,111 @@ export default function Contact() {
           })}
         </div>
 
-        <div className="space-y-8">
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr] gap-8">
+          <Card className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] shadow-clean-lg">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
+                <Send className="w-5 h-5 text-[color:var(--accent-text)]" />
+                Open a Support Ticket
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={submitSupportTicket} className="space-y-4">
+                {!isAuthenticated && (
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-secondary)]">
+                    Sign in to create a tracked support ticket. You can still email us directly below.
+                  </div>
+                )}
+                {isAuthenticated && user?.email && (
+                  <div className="text-xs text-[color:var(--text-secondary)]">
+                    We will reply to {user.email}.
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <Label htmlFor="ticket-subject">Subject</Label>
+                  <Input
+                    id="ticket-subject"
+                    value={ticketDraft.subject}
+                    onChange={(event) =>
+                      setTicketDraft({ ...ticketDraft, subject: event.target.value })
+                    }
+                    required
+                    minLength={3}
+                    maxLength={160}
+                    placeholder="I need help with onboarding"
+                  />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="ticket-category">Category</Label>
+                    <select
+                      id="ticket-category"
+                      value={ticketDraft.category}
+                      onChange={(event) =>
+                        setTicketDraft({ ...ticketDraft, category: event.target.value })
+                      }
+                      className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
+                    >
+                      <option value="onboarding">Onboarding</option>
+                      <option value="account">Account</option>
+                      <option value="payment">Payment</option>
+                      <option value="bug">Bug</option>
+                      <option value="feature">Feature request</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="ticket-priority">Priority</Label>
+                    <select
+                      id="ticket-priority"
+                      value={ticketDraft.priority}
+                      onChange={(event) =>
+                        setTicketDraft({ ...ticketDraft, priority: event.target.value })
+                      }
+                      className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ticket-description">What happened?</Label>
+                  <Textarea
+                    id="ticket-description"
+                    value={ticketDraft.description}
+                    onChange={(event) =>
+                      setTicketDraft({
+                        ...ticketDraft,
+                        description: event.target.value,
+                      })
+                    }
+                    required
+                    minLength={10}
+                    maxLength={4000}
+                    rows={6}
+                    placeholder="Tell us what you were trying to do and where you got stuck."
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingTicket}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  {isSubmittingTicket
+                    ? "Sending..."
+                    : isAuthenticated
+                      ? "Send Ticket"
+                      : "Sign In to Send Ticket"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-8">
             {/* Quick Help */}
             <Card className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] shadow-clean-lg">
               <CardHeader>
@@ -198,6 +358,7 @@ export default function Contact() {
                 </div>
               </CardContent>
             </Card>
+          </div>
         </div>
       </div>
     </div>

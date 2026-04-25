@@ -5,7 +5,13 @@ import { z } from "zod";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
-import { insertDealFeedbackSchema, searchQueryEvents, type User } from "@shared/schema";
+import { isAuthenticated } from "../unifiedAuth";
+import {
+  insertDealFeedbackSchema,
+  searchQueryEvents,
+  supportTickets,
+  type User,
+} from "@shared/schema";
 
 function normalizeSearchQuery(input: string) {
   return String(input || "")
@@ -28,6 +34,56 @@ function shouldDropSearchQuery(normalized: string) {
 }
 
 export function registerAnalyticsRoutes(app: Express) {
+  app.post("/api/support-tickets", isAuthenticated, async (req: any, res) => {
+    try {
+      const schema = z.object({
+        subject: z.string().trim().min(3).max(160),
+        description: z.string().trim().min(10).max(4000),
+        category: z
+          .enum(["bug", "feature", "payment", "account", "onboarding", "other"])
+          .default("other"),
+        priority: z.enum(["low", "normal", "high", "critical"]).default("normal"),
+      });
+      const parsed = schema.parse(req.body);
+      const [ticket] = await db
+        .insert(supportTickets)
+        .values({
+          userId: req.user.id,
+          subject: parsed.subject,
+          description: parsed.description,
+          category: parsed.category,
+          priority: parsed.priority,
+          status: "open",
+        })
+        .returning();
+
+      res.status(201).json({ ticket });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid support ticket", errors: error.errors });
+      }
+      console.error("Error creating support ticket:", error);
+      res.status(500).json({ message: "Failed to create support ticket" });
+    }
+  });
+
+  app.get("/api/support-tickets/my", isAuthenticated, async (req: any, res) => {
+    try {
+      const rows = await db
+        .select()
+        .from(supportTickets)
+        .where(sql`${supportTickets.userId} = ${req.user.id}`)
+        .orderBy(sql`${supportTickets.createdAt} desc`)
+        .limit(25);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching support tickets:", error);
+      res.status(500).json({ message: "Failed to fetch support tickets" });
+    }
+  });
+
   app.get("/api/search/trending", async (req, res) => {
     try {
       const limitRaw = Number(req.query?.limit ?? 8);
