@@ -280,6 +280,56 @@ export default function CustomerSignup() {
     },
   });
 
+  const eventCoordinatorSignupMutation = useMutation({
+    mutationFn: async (data: SignupFormData) => {
+      const { confirmPassword, ...signupData } = data;
+      const res = await apiRequest(
+        "POST",
+        "/api/auth/event-coordinator/register",
+        signupData,
+      );
+      return await res.json();
+    },
+    onSuccess: async (payload: any) => {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
+      }
+      try {
+        window.sessionStorage.setItem(
+          "mealscout:lastSignupEmail",
+          form.getValues("email") || "",
+        );
+      } catch {}
+      toast({
+        title: "Verify your email",
+        description:
+          payload?.message ||
+          "We sent a verification link to your email. Verify it, then log in to continue.",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        page: "customer-signup",
+        accountType: "event_organizer",
+        stage: "signup_success",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        page: "customer-signup",
+        stage: "redirect_to_login",
+        redirectPath: "/events",
+        accountType: "event_organizer",
+      });
+      window.location.href = `/login?redirect=${encodeURIComponent(
+        "/events",
+      )}&signup=1`;
+    },
+    onError: (error) => {
+      toast({
+        title: "Event organizer signup failed",
+        description: error.message || "Failed to create event organizer account",
+        variant: "destructive",
+      });
+    },
+  });
+
   const supplierSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
@@ -436,6 +486,15 @@ export default function CustomerSignup() {
         return;
       }
       customerSignupMutation.mutate(data);
+    } else if (accountType === "event_organizer") {
+      if (requirePhoneVerification && !data.otpCode) {
+        form.setError("otpCode", {
+          type: "manual",
+          message: "Verification code is required",
+        });
+        return;
+      }
+      eventCoordinatorSignupMutation.mutate(data);
     } else if (accountType === "supplier") {
       if (requirePhoneVerification && !data.otpCode) {
         form.setError("otpCode", {
@@ -492,6 +551,7 @@ export default function CustomerSignup() {
   const isSubmitting =
     customerSignupMutation.isPending ||
     businessSignupMutation.isPending ||
+    eventCoordinatorSignupMutation.isPending ||
     supplierSignupMutation.isPending ||
     activateSupplierProfileMutation.isPending;
 

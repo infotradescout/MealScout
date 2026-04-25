@@ -66,6 +66,7 @@
     "stress-test": "tsx scripts/stressTest.ts",
     "test:flows": "tsx scripts/userFlows.ts",
     "test:onboarding-completion": "tsx scripts/testOnboardingCompletionEndpoint.ts",
+    "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
     "smoke:launch-spike": "node scripts/launchSpikeSmoke.mjs",

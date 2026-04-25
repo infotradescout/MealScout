@@ -131,6 +131,13 @@ export function registerHostProfileRoutes(app: Express) {
             ? coords.lng.toString()
             : null,
       });
+
+      if ((req.user as User).userType === "customer") {
+        await storage.updateUserType(userId, "host").catch((error: unknown) => {
+          console.warn("Failed to promote customer to host:", error);
+        });
+      }
+
       const parkingPassSeriesReady = await storage
         .ensureDraftParkingPassForHost(host.id)
         .catch(() => false);
