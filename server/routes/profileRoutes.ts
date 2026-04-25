@@ -60,8 +60,6 @@ app.get("/api/profiles/restaurant/:id", async (req, res) => {
       coverImageUrl: restaurant.coverImageUrl,
       operatingHours: restaurant.operatingHours,
       amenities: restaurant.amenities,
-      googleRating: restaurant.googleRating,
-      googleReviewCount: restaurant.googleReviewCount,
       googlePriceLevel: restaurant.googlePriceLevel,
       priceLevelLabel:
         typeof restaurant.googlePriceLevel === "number"
@@ -119,8 +117,6 @@ app.get("/api/profiles/host/:id", async (req, res) => {
       spotImageUrl: host.spotImageUrl,
       businessHours: host.businessHours,
       amenities: host.amenities,
-      googleRating: host.googleRating,
-      googleReviewCount: host.googleReviewCount,
       googlePriceLevel: host.googlePriceLevel,
       priceLevelLabel:
         typeof host.googlePriceLevel === "number"

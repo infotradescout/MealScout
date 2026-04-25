@@ -24,6 +24,7 @@ import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
+import { computeExternalReviewAdjustment } from "../services/externalReviewScoring";
 import { isLaunchDegradedMode } from "../launchMode";
 import {
   dealClaims,
@@ -648,8 +649,6 @@ export function registerPublicMapRoutes(app: Express) {
         // Google profile enrichment
         description: (host as any).description ?? null,
         googlePlaceId: (host as any).googlePlaceId ?? null,
-        googleRating: (host as any).googleRating ?? null,
-        googleReviewCount: (host as any).googleReviewCount ?? null,
         googlePriceLevel: (host as any).googlePriceLevel ?? null,
         googleBusinessStatus: (host as any).googleBusinessStatus ?? null,
         googlePhotos: (host as any).googlePhotos ?? null,
@@ -1404,6 +1403,8 @@ export function registerPublicMapRoutes(app: Express) {
         .select({
           id: restaurants.id,
           rankingScore: restaurants.rankingScore,
+          googleRating: restaurants.googleRating,
+          googleReviewCount: restaurants.googleReviewCount,
         })
         .from(restaurants)
         .where(and(inTargetIds, eq(restaurants.isActive, true)))
@@ -1504,12 +1505,20 @@ export function registerPublicMapRoutes(app: Express) {
         (row: (typeof restaurantRows)[number]) => {
           const restaurantId = String(row.id || "");
           const ranking = Math.max(0, Number(row.rankingScore || 0));
+          const externalRating = Number(row.googleRating || 0);
+          const externalReviewCount = Number(row.googleReviewCount || 0);
+          const externalScoreAdjustment =
+            Number.isFinite(externalRating) && externalRating > 0
+              ? computeExternalReviewAdjustment(externalRating) *
+                Math.min(1, Math.log10(Math.max(1, externalReviewCount)) / 3)
+              : 0;
           const activeDeals = activeDealsByRestaurant.get(restaurantId) || 0;
           const claims30d = claimsByRestaurant.get(restaurantId) || 0;
           const views30d = viewsByRestaurant.get(restaurantId) || 0;
           const bookings30d = bookingsByRestaurant.get(restaurantId) || 0;
           const rawScore =
             ranking * 0.5 +
+            externalScoreAdjustment +
             activeDeals * 15 +
             claims30d * 4 +
             bookings30d * 12 +

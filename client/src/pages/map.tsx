@@ -329,8 +329,6 @@ type HostLocation = {
   // Google profile enrichment
   description?: string | null;
   googlePlaceId?: string | null;
-  googleRating?: string | null;
-  googleReviewCount?: number | null;
   googlePriceLevel?: number | null;
   googleBusinessStatus?: string | null;
   googlePhotos?: any | null;
@@ -348,8 +346,6 @@ type HostProfile = {
   phone?: string | null;
   website?: string | null;
   businessHours?: any | null;
-  googleRating?: string | null;
-  googleReviewCount?: number | null;
   googlePriceLevel?: number | null;
   googleCategories?: any | null;
   menuUrl?: string | null;
@@ -3226,10 +3222,11 @@ export default function MapPage() {
         )}
 
         {!selectedDeal && selectedParkingHost && (
-          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="min-w-0">
+          <Card className="absolute bottom-4 left-4 right-4 z-20 max-h-[68vh] overflow-hidden rounded-2xl shadow-clean-lg">
+            <CardContent className="flex max-h-[68vh] flex-col p-0">
+              <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
+              <div className="mb-2 flex items-start justify-between gap-3 pr-10">
+                <div className="min-w-0 pt-0.5">
                   <h3 className="truncate text-sm font-semibold text-foreground">
                     {selectedParkingHost.host.name}
                   </h3>
@@ -3240,15 +3237,15 @@ export default function MapPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9"
+                  className="absolute right-3 top-3 h-9 w-9 rounded-full border border-[color:var(--border-subtle)] bg-background/95 shadow-sm"
                   onClick={closeParkingPreview}
                   data-testid="button-close-selected-parking-preview"
                   aria-label="Close parking preview"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="mb-3 inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border border-[color:var(--border-subtle)]">
+              <div className="mb-2 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
                 {selectedParkingHost.availabilityLabel}
               </div>
               {selectedParkingHost.distanceLabel && (
@@ -3269,7 +3266,7 @@ export default function MapPage() {
                   <img
                     src={imgUrl}
                     alt={`${selectedParkingHost.host.name} place image`}
-                    className="mb-3 h-28 w-full rounded-xl border border-border/60 object-cover"
+                    className="mb-3 h-24 w-full rounded-xl border border-border/60 object-cover sm:h-28"
                     loading="lazy"
                   />
                 ) : null;
@@ -3325,38 +3322,18 @@ export default function MapPage() {
                       No description available yet
                     </p>
                   )}
-                  {/* Google rating + reviews */}
-                  {(selectedParkingHostProfile?.googleRating ||
-                    selectedParkingHost.host.googleRating) && (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="text-amber-500">★</span>
-                      <span className="font-medium text-foreground">
-                        {selectedParkingHostProfile?.googleRating ||
-                          selectedParkingHost.host.googleRating}
-                      </span>
-                      {(selectedParkingHostProfile?.googleReviewCount ??
-                        selectedParkingHost.host.googleReviewCount) != null && (
-                        <span>
-                          (
-                          {selectedParkingHostProfile?.googleReviewCount ??
-                            selectedParkingHost.host.googleReviewCount}{" "}
-                          reviews)
-                        </span>
-                      )}
-                      {(selectedParkingHostProfile?.googlePriceLevel ??
-                        selectedParkingHost.host.googlePriceLevel) != null &&
+                  {(selectedParkingHostProfile?.googlePriceLevel ??
+                    selectedParkingHost.host.googlePriceLevel) != null &&
+                    Number(
+                      selectedParkingHostProfile?.googlePriceLevel ??
+                        selectedParkingHost.host.googlePriceLevel,
+                    ) > 0 && (
+                    <div className="mt-1.5 text-xs text-muted-foreground">
+                      {"$".repeat(
                         Number(
                           selectedParkingHostProfile?.googlePriceLevel ??
                             selectedParkingHost.host.googlePriceLevel,
-                        ) > 0 && (
-                        <span className="ml-1 text-muted-foreground">
-                          {"$".repeat(
-                            Number(
-                              selectedParkingHostProfile?.googlePriceLevel ??
-                                selectedParkingHost.host.googlePriceLevel,
-                            ),
-                          )}
-                        </span>
+                        ),
                       )}
                     </div>
                   )}
@@ -3466,10 +3443,12 @@ export default function MapPage() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--border-subtle)] bg-background/95 px-4 py-3">
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-11 rounded-full"
                   onClick={() =>
                     window.open(
                       `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
@@ -3481,6 +3460,7 @@ export default function MapPage() {
                 </Button>
                 <Button
                   size="sm"
+                  className="h-11 rounded-full"
                   onClick={() => {
                     window.location.href = selectedParkingHost.parkingPassHref;
                   }}
