@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
+import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
 import {
   sendGeoPing,
   trackGeoAdEvent,
@@ -69,6 +70,15 @@ const WelcomeLocationModal = lazy(
 );
 
 console.log("MealScout Client Loaded - Build: " + new Date().toISOString());
+
+function getMealPrompt(date = new Date()) {
+  const hour = date.getHours();
+  if (hour >= 21 || hour < 5) return "Late Night Snack?";
+  if (hour < 10) return "Breakfast?";
+  if (hour < 12) return "Brunch?";
+  if (hour < 16) return "Lunch?";
+  return "Dinner?";
+}
 
 interface Deal {
   id: string;
@@ -304,6 +314,7 @@ export default function Home() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [navigateTo, setNavigateTo] = useState("");
   const [, navigate] = useLocation();
+  const mealPrompt = useMemo(() => getMealPrompt(), []);
 
   useEffect(() => {
     if (navigateTo) {
@@ -320,6 +331,11 @@ export default function Home() {
 
   // Auto-detect location on mount
   useEffect(() => {
+    const cached = readDeviceLocation();
+    if (cached && !location) {
+      setLocation({ lat: cached.lat, lng: cached.lng });
+      if (cached.name) setLocationName(cached.name);
+    }
     if (!location) {
       handleLocationDetection();
     }
@@ -341,11 +357,22 @@ export default function Home() {
 
       setLocation(newLocation);
       setLocationError(null);
+      writeDeviceLocation({
+        ...newLocation,
+        accuracy: position.coords.accuracy,
+      });
 
       await getReverseGeocodedLocationName(
         newLocation.lat,
         newLocation.lng,
-        setLocationName,
+        (name) => {
+          setLocationName(name);
+          writeDeviceLocation({
+            ...newLocation,
+            accuracy: position.coords.accuracy,
+            name,
+          });
+        },
       );
 
       queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
@@ -371,6 +398,10 @@ export default function Home() {
         };
         setLocation(newLocation);
         setLocationName(data[0].display_name);
+        writeDeviceLocation({
+          ...newLocation,
+          name: data[0].display_name,
+        });
         setLocationError(null);
         queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
       } else {
@@ -580,7 +611,10 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  What's for <span className="text-[color:var(--accent-text)]">dinner?</span>
+                  What's for{" "}
+                  <span className="text-[color:var(--accent-text)]">
+                    {mealPrompt}
+                  </span>
                 </>
               )}
             </h1>

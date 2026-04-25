@@ -23,6 +23,7 @@ import type {
 } from "@/components/maps/map-adapter.types";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiUrl } from "@/lib/api";
+import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
 import {
   MapPin,
   Navigation as NavigationIcon,
@@ -1112,10 +1113,6 @@ export default function MapPage() {
     userLocationRef.current = userLocation;
   }, [userLocation]);
 
-  const locationStorageKey = useMemo(() => {
-    return "mealscout_last_location:device";
-  }, []);
-
   const stopLocationWatch = useCallback(() => {
     if (
       locationWatchIdRef.current !== null &&
@@ -1182,14 +1179,10 @@ export default function MapPage() {
           hasCenteredFromLiveLocationRef.current = true;
         }
         try {
-          localStorage.setItem(
-            locationStorageKey,
-            JSON.stringify({
-              ...currentLocation,
-              accuracy: Number.isFinite(accuracy) ? accuracy : null,
-              timestamp: Date.now(),
-            }),
-          );
+          writeDeviceLocation({
+            ...currentLocation,
+            accuracy: Number.isFinite(accuracy) ? accuracy : null,
+          });
         } catch {
           // ignore localStorage issues
         }
@@ -1235,7 +1228,7 @@ export default function MapPage() {
         );
       }
     }, 25000);
-  }, [locationStorageKey, stopLocationWatch]);
+  }, [stopLocationWatch]);
 
   const isStaffOrAdmin =
     user?.userType === "staff" ||
@@ -1300,23 +1293,9 @@ export default function MapPage() {
     // Start from this device's last viewed area if location was previously shared.
     // Important: do NOT treat this as "you are here" because it can be stale.
     try {
-      const legacyKey = "mealscout_last_location";
-      const stored =
-        localStorage.getItem(locationStorageKey) ||
-        localStorage.getItem(legacyKey);
+      const stored = readDeviceLocation();
       if (stored) {
-        const parsed = JSON.parse(stored) as {
-          lat?: number;
-          lng?: number;
-        } | null;
-        if (parsed?.lat && parsed?.lng) {
-          const approx = { lat: parsed.lat, lng: parsed.lng };
-          setMapCenter(approx);
-          // One-time migrate legacy key into device storage so shared accounts do not fight over one account location.
-          if (!localStorage.getItem(locationStorageKey)) {
-            localStorage.setItem(locationStorageKey, stored);
-          }
-        }
+        setMapCenter({ lat: stored.lat, lng: stored.lng });
       }
     } catch {
       // ignore localStorage issues
@@ -1326,7 +1305,7 @@ export default function MapPage() {
     return () => {
       stopLocationWatch();
     };
-  }, [locationStorageKey, requestUserLocation, stopLocationWatch]);
+  }, [requestUserLocation, stopLocationWatch]);
 
   // Fetch nearby deals based on user location
   const { data: dealsData = [], isLoading } = useQuery({
@@ -1482,9 +1461,6 @@ export default function MapPage() {
   }, [businessPopularityData]);
 
   const hostedRadiusKm = 0.12;
-  const isTruckOwnerUser =
-    user?.userType === "food_truck" || user?.userType === "restaurant_owner";
-
   const liveTruckById = useMemo(() => {
     return new Map(liveTrucks.map((truck) => [truck.id, truck]));
   }, [liveTrucks]);
@@ -1502,13 +1478,6 @@ export default function MapPage() {
     }
     return nearest;
   };
-
-  const getParkingPassHrefForHost = useCallback((host: HostLocation) => {
-    const hostId = String(host.hostId || "").trim();
-    return hostId
-      ? `/parking-pass?hostId=${encodeURIComponent(hostId)}`
-      : "/parking-pass";
-  }, []);
 
   const getPublicProfileHrefForHost = useCallback((host: HostLocation) => {
     const profileHostId = String(host.hostId || host.id || "").trim();
@@ -2595,10 +2564,6 @@ export default function MapPage() {
       markerCoords: Pick<GeoPoint, "lat" | "lng">,
       source: ParkingPreviewSelection["source"] = "pin-tap",
     ) => {
-      if (isTruckOwnerUser) {
-        window.location.href = getParkingPassHrefForHost(host);
-        return;
-      }
       setSelectedDeal(null);
       setSelectedHostCluster(null);
       setSelectedParkingPreview({
@@ -2608,7 +2573,7 @@ export default function MapPage() {
         source,
       });
     },
-    [getParkingPassHrefForHost, isTruckOwnerUser],
+    [],
   );
 
   const handleAdapterMarkerTap = useCallback(
@@ -2700,7 +2665,6 @@ export default function MapPage() {
       coords,
       nearbyTruck: nearby?.truck || null,
       distanceLabel: formatDistance(coords),
-      parkingPassHref: getParkingPassHrefForHost(host),
       publicProfileHref: getPublicProfileHrefForHost(host),
       availabilityLabel: label,
       isBookable,
@@ -2713,7 +2677,6 @@ export default function MapPage() {
     findNearbyTruck,
     getHostAvailabilityLabel,
     formatDistance,
-    getParkingPassHrefForHost,
     getPublicProfileHrefForHost,
   ]);
   const selectedParkingHostId = useMemo(() => {

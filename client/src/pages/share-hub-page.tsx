@@ -15,7 +15,7 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "A quick directory of shareable MealScout links for customers, business owners, food trucks, and host locations."
+      ? "Pick the kind of MealScout link you want to send. Each card has a ready-to-copy link and a plain-language message."
       : "Share directory for growth ops, outreach, referrals, and internal tools.";
 
   return (

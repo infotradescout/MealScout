@@ -42,6 +42,7 @@ import {
 import { SEOHead } from "@/components/seo-head";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
+import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
 
 type DiscoveryCity = {
   id: string;
@@ -234,6 +235,15 @@ export default function SearchPage() {
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const cached = readDeviceLocation();
+    if (cached) {
+      setUserLocation({ lat: cached.lat, lng: cached.lng });
+      return;
+    }
+    requestUserLocation();
+  }, []);
+
   // Parse URL query parameter
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -265,6 +275,10 @@ export default function SearchPage() {
           lng: position.coords.longitude,
         };
         setUserLocation(location);
+        writeDeviceLocation({
+          ...location,
+          accuracy: position.coords.accuracy,
+        });
         setIsLocating(false);
       },
       () => {

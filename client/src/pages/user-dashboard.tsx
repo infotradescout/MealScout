@@ -40,6 +40,7 @@ import { VideoUploadModal } from "@/components/video-upload-modal";
 import type { Deal, Restaurant, DealClaim } from "@shared/schema";
 import { SEOHead } from "@/components/seo-head";
 import ShareHub from "@/components/share-hub";
+import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
 
 interface UserStats {
   totalDealsUsed: number;
@@ -70,11 +71,22 @@ export default function UserDashboard() {
 
   // Get user location
   useEffect(() => {
+    const cached = readDeviceLocation();
+    if (cached) {
+      setLocation({ lat: cached.lat, lng: cached.lng });
+      setLocationName(cached.name || "Your Location");
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
           setLocation({ lat: latitude, lng: longitude });
+          writeDeviceLocation({
+            lat: latitude,
+            lng: longitude,
+            accuracy: position.coords.accuracy,
+          });
 
           fetch(
             `/api/location/reverse?lat=${encodeURIComponent(String(latitude))}&lng=${encodeURIComponent(String(longitude))}`,
@@ -83,6 +95,12 @@ export default function UserDashboard() {
             .then((data) => {
               const nextName = String(data?.label || "").trim();
               setLocationName(nextName || "Your Location");
+              writeDeviceLocation({
+                lat: latitude,
+                lng: longitude,
+                accuracy: position.coords.accuracy,
+                name: nextName || "Your Location",
+              });
             })
             .catch(() => {
               setLocationName("Your Location");

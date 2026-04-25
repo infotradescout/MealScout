@@ -19,8 +19,8 @@ interface ShareHubItem {
 const USER_ITEMS: ShareHubItem[] = [
   {
     key: "owner-signup",
-    title: "Business Signup",
-    description: "Primary link for restaurant owners and food truck operators to start.",
+    title: "Add a Business",
+    description: "Invite a restaurant, bar, or food truck to join MealScout.",
     href: "/restaurant-signup",
     audience: "Restaurant + Food Truck Owners",
     priority: 1,
@@ -30,7 +30,7 @@ const USER_ITEMS: ShareHubItem[] = [
   {
     key: "claim-business",
     title: "Claim Business",
-    description: "Direct page for business owners to claim and activate their profile.",
+    description: "Help an owner find and activate an existing listing.",
     href: "/restaurant-signup?businessType=food_truck&claim=1",
     audience: "Business Owners",
     priority: 2,
@@ -39,8 +39,8 @@ const USER_ITEMS: ShareHubItem[] = [
   },
   {
     key: "host-partner",
-    title: "Host Location Signup",
-    description: "Direct intake page for non-food businesses with usable parking.",
+    title: "Become a Host",
+    description: "Share this with places that have parking space for food trucks.",
     href: "/host-location-partner",
     audience: "Potential Hosts",
     priority: 3,
@@ -49,15 +49,15 @@ const USER_ITEMS: ShareHubItem[] = [
   },
   {
     key: "for-restaurants",
-    title: "Restaurant Growth Page",
-    description: "Share this with restaurant owners ready for monthly growth.",
+    title: "Restaurant Info",
+    description: "A simple overview for restaurants considering MealScout.",
     href: "/for-restaurants",
     audience: "Restaurant Owners",
   },
   {
     key: "for-hosts",
-    title: "Host Program Page",
-    description: "Great for businesses with parking lots that can host trucks.",
+    title: "Host Program",
+    description: "A simple overview for host locations and property owners.",
     href: "/for-hosts",
     audience: "Potential Hosts",
   },
@@ -70,8 +70,8 @@ const USER_ITEMS: ShareHubItem[] = [
   },
   {
     key: "sitemap",
-    title: "Site Directory",
-    description: "Shareable index of important public pages.",
+    title: "MealScout Directory",
+    description: "A clean index of useful public MealScout pages.",
     href: "/sitemap",
     audience: "General",
   },
@@ -218,7 +218,7 @@ export default function ShareHub({
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h4 className="font-semibold">{item.title}</h4>
                 <div className="flex items-center gap-2">
-                  {typeof item.priority === "number" ? (
+                  {mode !== "user" && typeof item.priority === "number" ? (
                     <Badge>{`P${item.priority}`}</Badge>
                   ) : null}
                   <Badge variant="secondary">{item.audience}</Badge>
@@ -237,7 +237,7 @@ export default function ShareHub({
                     }
                     onClick={() => void trackShareHubEvent("open", item)}
                   >
-                    Open
+                    Open Page
                   </a>
                 </Button>
                 <Button
@@ -262,7 +262,7 @@ export default function ShareHub({
                   variant="secondary"
                   onClick={() => copyOutreachText(item)}
                 >
-                  Copy Outreach
+                  Copy Message
                 </Button>
               </div>
             </div>

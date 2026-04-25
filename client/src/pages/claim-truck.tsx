@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Truck } from "lucide-react";
+import { Store } from "lucide-react";
 
 type ClaimRow = {
   id: string;
@@ -58,7 +58,7 @@ export default function ClaimTruckPage() {
       const next = Array.isArray(data) ? data : [];
       setRows(next);
       if (next.length === 0) {
-        setError("No matching trucks found. Try a shorter name or the license/external ID.");
+        setError("No matching businesses found. Try a shorter name or the license/external ID.");
       }
     } catch (err: any) {
       setError(err?.message || "Search failed. Try again.");
@@ -122,18 +122,18 @@ export default function ClaimTruckPage() {
   return (
     <div className="min-h-screen bg-[var(--bg-layered)]">
       <BackHeader
-        title="Claim a Truck"
+        title="Claim Business"
         fallbackHref="/"
-        icon={Truck}
+        icon={Store}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 space-y-6">
         <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
           <CardHeader>
-            <CardTitle>Find your truck</CardTitle>
+            <CardTitle>Find your business</CardTitle>
             <CardDescription>
-              Search by name, license/external ID, city, or state. If your truck is unclaimed, you can claim it or request a setup reminder.
+              Search by name, license/external ID, city, or state. If your business is unclaimed, you can claim it or request a setup reminder.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -168,7 +168,7 @@ export default function ClaimTruckPage() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="font-semibold truncate">
-                              {row.name || "Unnamed truck"}
+                              {row.name || "Unnamed business"}
                             </div>
                             {row.invited ? (
                               <Badge variant="secondary">Invited</Badge>
@@ -210,7 +210,7 @@ export default function ClaimTruckPage() {
                       </div>
                       {!canClaim && row.invited ? (
                         <div className="text-xs text-muted-foreground">
-                          This truck already has an invited owner. Use “Request setup” to remind them.
+                          This business already has an invited owner. Use “Request setup” to remind them.
                         </div>
                       ) : null}
                     </div>

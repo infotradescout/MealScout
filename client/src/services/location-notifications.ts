@@ -1,4 +1,9 @@
 import { apiRequest } from "@/lib/queryClient";
+import {
+  DEVICE_LOCATION_STORAGE_KEY,
+  readDeviceLocation,
+  writeDeviceLocation,
+} from "@/lib/device-location";
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -20,7 +25,7 @@ export interface Deal {
 
 const STORAGE_KEYS = {
   SETTINGS: "mealscout_notification_settings",
-  LAST_LOCATION: "mealscout_last_location",
+  LAST_LOCATION: DEVICE_LOCATION_STORAGE_KEY,
   SHOWN_DEALS: "mealscout_shown_deals",
   SHOWN_EVENTS: "mealscout_shown_events",
   DAILY_COUNT: "mealscout_daily_count",
@@ -50,9 +55,9 @@ class LocationNotificationService {
 
   private loadStoredData() {
     try {
-      const lastLocation = localStorage.getItem(STORAGE_KEYS.LAST_LOCATION);
+      const lastLocation = readDeviceLocation();
       if (lastLocation) {
-        this.lastLocation = JSON.parse(lastLocation);
+        this.lastLocation = lastLocation;
       }
 
       const shownDeals = localStorage.getItem(STORAGE_KEYS.SHOWN_DEALS);
@@ -182,10 +187,7 @@ class LocationNotificationService {
     if (!shouldCheck) return;
 
     this.lastLocation = { lat, lng, timestamp: now };
-    localStorage.setItem(
-      STORAGE_KEYS.LAST_LOCATION,
-      JSON.stringify(this.lastLocation)
-    );
+    writeDeviceLocation(this.lastLocation);
 
     // Check for nearby deals and events
     await Promise.all([
