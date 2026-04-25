@@ -14,6 +14,37 @@ import {
   videoStories,
 } from "@shared/schema";
 
+const normalizeSearchTerm = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildSearchTerms = (query: string) => {
+  const terms = new Set<string>();
+  const normalized = normalizeSearchTerm(query);
+  if (normalized) terms.add(normalized);
+
+  String(query || "")
+    .split(",")
+    .map(normalizeSearchTerm)
+    .filter((part) => part.length >= 2)
+    .forEach((part) => terms.add(part));
+
+  return Array.from(terms)
+    .filter((term) => term.length >= 2)
+    .slice(0, 6);
+};
+
+const matchesAnySearchTerm = (fields: unknown[], terms: string[]) => {
+  if (terms.length === 0) return false;
+  const haystack = fields.map(normalizeSearchTerm).join(" ");
+  return terms.some((term) => haystack.includes(term));
+};
+
 export function registerPublicSearchRoutes(app: Express) {
   app.get("/api/search/suggestions/:query", async (req, res) => {
     try {
@@ -270,6 +301,7 @@ export function registerPublicSearchRoutes(app: Express) {
 
       const searchTerm = query.toLowerCase();
       const searchValue = `%${searchTerm}%`;
+      const searchTerms = buildSearchTerms(query);
 
       const restaurantMatches = await storage.getAllRestaurants();
       const restaurantsOut = restaurantMatches
@@ -279,11 +311,7 @@ export function registerPublicSearchRoutes(app: Express) {
           const name = String(restaurant.name || "").toLowerCase();
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
           const address = String(restaurant.address || "").toLowerCase();
-          return (
-            name.includes(searchTerm) ||
-            cuisine.includes(searchTerm) ||
-            address.includes(searchTerm)
-          );
+          return matchesAnySearchTerm([name, cuisine, address], searchTerms);
         })
         .slice(0, 12)
         .map((restaurant: any) => ({

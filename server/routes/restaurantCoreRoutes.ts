@@ -35,6 +35,46 @@ import {
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
 
+const normalizeRestaurantSearchTerm = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildRestaurantSearchTerms = (query: string) => {
+  const terms = new Set<string>();
+  const normalized = normalizeRestaurantSearchTerm(query);
+  if (normalized) terms.add(normalized);
+
+  String(query || "")
+    .split(",")
+    .map(normalizeRestaurantSearchTerm)
+    .filter((part) => part.length >= 2)
+    .forEach((part) => terms.add(part));
+
+  return Array.from(terms)
+    .filter((term) => term.length >= 2)
+    .slice(0, 6);
+};
+
+const matchesRestaurantSearchTerms = (restaurant: any, terms: string[]) => {
+  if (terms.length === 0) return false;
+  const haystack = [
+    restaurant?.name,
+    restaurant?.cuisineType,
+    restaurant?.businessType,
+    restaurant?.address,
+    restaurant?.city,
+    restaurant?.state,
+  ]
+    .map(normalizeRestaurantSearchTerm)
+    .join(" ");
+  return terms.some((term) => haystack.includes(term));
+};
+
 type AnalyticsAccessResult = {
   hasAccess: boolean;
   error?: string;
@@ -243,15 +283,25 @@ export function registerRestaurantCoreRoutes(
   app.get("/api/restaurants/search", async (req, res) => {
     try {
       const { q: query, lat, lng, radius = 10 } = req.query;
+      const hasLocationFilter =
+        typeof lat === "string" &&
+        typeof lng === "string" &&
+        Number.isFinite(Number.parseFloat(lat)) &&
+        Number.isFinite(Number.parseFloat(lng));
 
-      console.log("🔍 Restaurant search request:", { query, lat, lng, radius });
+      console.log("🔍 Restaurant search request:", {
+        query,
+        ...(hasLocationFilter
+          ? { lat, lng, radius }
+          : { locationFilter: "none", radius }),
+      });
 
       if (!query || typeof query !== "string" || query.length < 2) {
         console.log("⚠️  Empty or short query, returning empty array");
         return res.json([]);
       }
 
-      const searchTerm = query.toLowerCase();
+      const searchTerms = buildRestaurantSearchTerms(query);
       const restaurants = (await storage.getAllRestaurants()).filter(
         (restaurant: any) => isPublicRestaurantVisible(restaurant),
       );
@@ -259,12 +309,10 @@ export function registerRestaurantCoreRoutes(
       let filteredRestaurants = restaurants.filter(
         (restaurant: any) =>
           restaurant.isActive &&
-          (restaurant.name.toLowerCase().includes(searchTerm) ||
-            restaurant.cuisineType?.toLowerCase().includes(searchTerm) ||
-            restaurant.address?.toLowerCase().includes(searchTerm)),
+          matchesRestaurantSearchTerms(restaurant, searchTerms),
       );
 
-      if (lat && lng && typeof lat === "string" && typeof lng === "string") {
+      if (hasLocationFilter) {
         const userLat = parseFloat(lat);
         const userLng = parseFloat(lng);
         const radiusKm = parseFloat(radius as string);

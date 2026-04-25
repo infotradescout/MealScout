@@ -309,28 +309,6 @@ export default function SearchPage() {
     staleTime: 30_000,
   });
 
-  const { data: restaurantSearchResults = [] } = useQuery<any[]>({
-    queryKey: [
-      "/api/restaurants/search",
-      debouncedSearchQuery,
-      userLocation?.lat ?? null,
-      userLocation?.lng ?? null,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({ q: debouncedSearchQuery });
-      if (userLocation) {
-        params.set("lat", String(userLocation.lat));
-        params.set("lng", String(userLocation.lng));
-        params.set("radius", "20");
-      }
-      const res = await fetch(`/api/restaurants/search?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to search restaurants");
-      return res.json();
-    },
-    enabled: debouncedSearchQuery.length >= 2,
-    staleTime: 30_000,
-  });
-
   const isLoading =
     nearbyLoading || featuredLoading || unifiedLoading || isLocating;
 
@@ -423,21 +401,8 @@ export default function SearchPage() {
       if (!id) return;
       byId.set(id, restaurant);
     });
-    restaurantSearchResults.forEach((restaurant: any) => {
-      const id = String(restaurant?.id || "").trim();
-      if (!id) return;
-      if (byId.has(id)) return;
-      byId.set(id, {
-        id,
-        name: restaurant?.name,
-        cuisineType: restaurant?.cuisineType,
-        address: restaurant?.address,
-        isFoodTruck: Boolean(restaurant?.isFoodTruck),
-        isVerified: Boolean(restaurant?.isVerified),
-      });
-    });
     return Array.from(byId.values()).slice(0, 24);
-  }, [searchedRestaurants, restaurantSearchResults]);
+  }, [searchedRestaurants]);
   const searchedParkingPassHosts = Array.isArray(
     (unifiedResults as any)?.parkingPassHosts,
   )
