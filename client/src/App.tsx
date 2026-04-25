@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 // Eager load only critical pages (home, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import Home from "@/pages/home";
+import Home from "@/pages/home-redesigned";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
