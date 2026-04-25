@@ -565,7 +565,7 @@ export default function Home() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 opacity-40">
+        <div className="absolute inset-0 opacity-25">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-[color:var(--accent-text)]/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[color:var(--accent-text)]/10 rounded-full blur-3xl" />
         </div>
@@ -573,7 +573,7 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           {/* Main heading */}
           <div className="mb-6">
-            <h1 className="text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight">
+            <h1 className="text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight text-[color:var(--text-primary)]">
               {firstName ? (
                 <>
                   Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
@@ -584,7 +584,7 @@ export default function Home() {
                 </>
               )}
             </h1>
-            <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
+            <p className="text-sm font-medium text-[color:var(--text-secondary)] max-w-2xl leading-relaxed">
               Discover live food trucks, trending deals, and local gems happening right now
             </p>
           </div>
@@ -660,6 +660,7 @@ export default function Home() {
       {/* ── Food Scene Sections ── */}
 
       {/* Live Food Trucks */}
+      {liveTrucks.length > 0 && (
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
@@ -669,7 +670,7 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black">Live Food Trucks</h2>
-                <p className="text-sm text-muted-foreground">Broadcasting now in {shortLocation}</p>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Broadcasting now in {shortLocation}</p>
               </div>
             </div>
             {liveTrucks.length > 0 && (
@@ -680,23 +681,17 @@ export default function Home() {
               </Link>
             )}
           </div>
-          {liveTrucks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {liveTrucks.slice(0, 6).map((truck) => (
-                <TruckCard key={truck.id} truck={truck} deals={dealsByRestaurant.get(String(truck.id)) || []} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
-              <Truck className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground font-medium">No food trucks broadcasting right now</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Food trucks with a subscription appear here when they go live</p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {liveTrucks.slice(0, 6).map((truck) => (
+              <TruckCard key={truck.id} truck={truck} deals={dealsByRestaurant.get(String(truck.id)) || []} />
+            ))}
+          </div>
         </div>
       </section>
+      )}
 
       {/* Restaurants */}
+      {restaurants.length > 0 && (
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
@@ -706,7 +701,7 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black">Restaurants</h2>
-                <p className="text-sm text-muted-foreground">Local favorites near you</p>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Local favorites near you</p>
               </div>
             </div>
             {restaurants.length > 0 && (
@@ -717,23 +712,17 @@ export default function Home() {
               </Link>
             )}
           </div>
-          {restaurants.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {restaurants.slice(0, 6).map((biz) => (
-                <BusinessCard key={biz.id} business={biz} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
-              <Utensils className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground font-medium">No restaurants featured yet</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Subscribed restaurants in your area will be showcased here</p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {restaurants.slice(0, 6).map((biz) => (
+              <BusinessCard key={biz.id} business={biz} />
+            ))}
+          </div>
         </div>
       </section>
+      )}
 
       {/* Bars */}
+      {bars.length > 0 && (
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
@@ -743,7 +732,7 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black">Bars &amp; Nightlife</h2>
-                <p className="text-sm text-muted-foreground">Drinks and vibes nearby</p>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Drinks and vibes nearby</p>
               </div>
             </div>
             {bars.length > 0 && (
@@ -754,23 +743,17 @@ export default function Home() {
               </Link>
             )}
           </div>
-          {bars.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {bars.slice(0, 6).map((biz) => (
-                <BusinessCard key={biz.id} business={biz} />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
-              <Wine className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground font-medium">No bars listed yet</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Bars with a subscription will appear here</p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {bars.slice(0, 6).map((biz) => (
+              <BusinessCard key={biz.id} business={biz} />
+            ))}
+          </div>
         </div>
       </section>
+      )}
 
       {/* Hot Deals */}
+      {deals.length > 0 && (
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between mb-6">
@@ -780,7 +763,7 @@ export default function Home() {
               </div>
               <div>
                 <h2 className="text-2xl sm:text-3xl font-black">Hot Deals</h2>
-                <p className="text-sm text-muted-foreground">Save on your next meal</p>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Save on your next meal</p>
               </div>
             </div>
             {deals.length > 0 && (
@@ -791,55 +774,48 @@ export default function Home() {
               </Link>
             )}
           </div>
-          {deals.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {deals.slice(0, 6).map((deal) => (
-                <Link key={deal.id} href={`/restaurant/${deal.restaurantId}`}>
-                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="p-2 rounded-lg bg-amber-500/15 flex-shrink-0">
-                        <Zap className="w-4 h-4 text-amber-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">{deal.title}</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">{deal.restaurant?.name || "Local Spot"}</p>
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {deals.slice(0, 6).map((deal) => (
+              <Link key={deal.id} href={`/restaurant/${deal.restaurantId}`}>
+                <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-amber-500/15 flex-shrink-0">
+                      <Zap className="w-4 h-4 text-amber-600" />
                     </div>
-                    {deal.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{deal.description}</p>
-                    )}
-                    {deal.discountValue && (
-                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
-                        {deal.dealType === "fixed"
-                          ? `$${deal.discountValue} OFF`
-                          : `${deal.discountValue}% OFF`}
-                      </div>
-                    )}
-                    {!deal.discountValue && (
-                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
-                        Limited Time
-                      </div>
-                    )}
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">{deal.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{deal.restaurant?.name || "Local Spot"}</p>
+                    </div>
                   </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[color:var(--border-subtle)] bg-[var(--bg-card)]/60 p-8 text-center">
-              <Zap className="w-10 h-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground font-medium">No deals available right now</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Businesses post deals to attract hungry customers like you</p>
-            </div>
-          )}
+                  {deal.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{deal.description}</p>
+                  )}
+                  {deal.discountValue && (
+                    <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                      {deal.dealType === "fixed"
+                        ? `$${deal.discountValue} OFF`
+                        : `${deal.discountValue}% OFF`}
+                    </div>
+                  )}
+                  {!deal.discountValue && (
+                    <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                      Limited Time
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
+      )}
 
       {/* Explore by Cuisine */}
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="mb-6">
             <h2 className="text-2xl sm:text-3xl font-black mb-2">Explore by Cuisine</h2>
-            <p className="text-muted-foreground">Find exactly what you're craving</p>
+            <p className="font-medium text-[color:var(--text-secondary)]">Find exactly what you're craving</p>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {[

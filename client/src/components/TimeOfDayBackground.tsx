@@ -46,6 +46,7 @@ export function TimeOfDayBackground() {
           backgroundPosition: "center",
           filter: isDay ? "blur(6px)" : "none",
           transform: isDay ? "scale(1.01)" : "none",
+          opacity: 0.25,
         }}
       />
       <div
@@ -53,8 +54,8 @@ export function TimeOfDayBackground() {
         style={{
           backgroundColor: "transparent",
           backgroundImage: isDay
-            ? "linear-gradient(180deg, rgba(250, 250, 248, 0.38) 0%, rgba(250, 250, 248, 0.52) 50%, rgba(250, 250, 248, 0.42) 100%)"
-            : "linear-gradient(180deg, rgba(8, 8, 8, 0.75) 0%, rgba(8, 8, 8, 0.55) 50%, rgba(8, 8, 8, 0.7) 100%)",
+            ? "linear-gradient(180deg, rgba(250, 250, 248, 0.78) 0%, rgba(250, 250, 248, 0.86) 50%, rgba(250, 250, 248, 0.82) 100%)"
+            : "linear-gradient(180deg, rgba(8, 8, 8, 0.88) 0%, rgba(8, 8, 8, 0.78) 50%, rgba(8, 8, 8, 0.86) 100%)",
         }}
       />
     </>
