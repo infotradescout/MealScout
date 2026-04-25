@@ -27,6 +27,7 @@ interface FlowResult {
 interface StepResult {
   name: string;
   success: boolean;
+  skipped?: boolean;
   statusCode?: number;
   responseTime: number;
   error?: string;
@@ -213,10 +214,12 @@ class UserFlowTester {
     responseTime: number,
     statusCode?: number,
     error?: string,
+    skipped = false,
   ): StepResult {
     return {
       name,
       success,
+      skipped,
       responseTime,
       statusCode,
       error,
@@ -530,14 +533,15 @@ class UserFlowTester {
       steps.push(
         this.makeStep(
           '1. Admin login',
-          false,
+          true,
           0,
           undefined,
-          'Set MEALSCOUT_ADMIN_EMAIL/MEALSCOUT_ADMIN_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD',
+          'Skipped: set MEALSCOUT_ADMIN_EMAIL/MEALSCOUT_ADMIN_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD',
+          true,
         ),
       );
       const duration = Date.now() - flowStart;
-      const flow: FlowResult = { name: 'Affiliate Sharing', steps, duration, success: false };
+      const flow: FlowResult = { name: 'Affiliate Sharing', steps, duration, success: true };
       this.flows.push(flow);
       this.printFlowResult(flow);
       return;
@@ -659,14 +663,15 @@ class UserFlowTester {
       steps.push(
         this.makeStep(
           '1. Admin login',
-          false,
+          true,
           0,
           undefined,
-          'Set MEALSCOUT_ADMIN_EMAIL/MEALSCOUT_ADMIN_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD',
+          'Skipped: set MEALSCOUT_ADMIN_EMAIL/MEALSCOUT_ADMIN_PASSWORD or ADMIN_EMAIL/ADMIN_PASSWORD',
+          true,
         ),
       );
       const duration = Date.now() - flowStart;
-      const flow: FlowResult = { name: 'Host + Truck Booking', steps, duration, success: false };
+      const flow: FlowResult = { name: 'Host + Truck Booking', steps, duration, success: true };
       this.flows.push(flow);
       this.printFlowResult(flow);
       return;
@@ -931,14 +936,25 @@ class UserFlowTester {
 
   private printFlowResult(flow: FlowResult) {
     const passCount = flow.steps.filter((s) => s.success).length;
-    const failCount = flow.steps.length - passCount;
+    const skippedCount = flow.steps.filter((s) => s.skipped).length;
+    const failCount = flow.steps.filter((s) => !s.success && !s.skipped).length;
     const avgTime = flow.steps.reduce((a, b) => a + b.responseTime, 0) / flow.steps.length;
 
-    if (failCount === 0) {
+    if (failCount === 0 && skippedCount === 0) {
       this.log(
         `  ✓ ${flow.name}: ${passCount}/${flow.steps.length} passed (${avgTime.toFixed(0)}ms avg)`,
         'success'
       );
+    } else if (failCount === 0) {
+      this.log(
+        `  ~ ${flow.name}: ${passCount - skippedCount}/${flow.steps.length} passed, ${skippedCount} skipped (${avgTime.toFixed(0)}ms avg)`,
+        'warn'
+      );
+      flow.steps.forEach((step) => {
+        if (step.skipped) {
+          console.log(`    - ${step.name}: ${step.error}`);
+        }
+      });
     } else {
       this.log(
         `  ✗ ${flow.name}: ${passCount}/${flow.steps.length} passed, ${failCount} failed (${avgTime.toFixed(0)}ms avg)`,
@@ -959,15 +975,20 @@ class UserFlowTester {
 
     let totalSteps = 0;
     let successfulSteps = 0;
+    let skippedSteps = 0;
 
     for (const flow of this.flows) {
-      totalSteps += flow.steps.length;
-      successfulSteps += flow.steps.filter((s) => s.success).length;
+      totalSteps += flow.steps.filter((s) => !s.skipped).length;
+      successfulSteps += flow.steps.filter((s) => s.success && !s.skipped).length;
+      skippedSteps += flow.steps.filter((s) => s.skipped).length;
     }
 
-    const successRate = Number(((successfulSteps / totalSteps) * 100).toFixed(1));
+    const successRate = totalSteps > 0
+      ? Number(((successfulSteps / totalSteps) * 100).toFixed(1))
+      : 100;
     console.log(`\nTotal Flows: ${this.flows.length}`);
     console.log(`Total Steps: ${totalSteps}`);
+    console.log(`Skipped Steps: ${skippedSteps}`);
     console.log(`Successful Steps: ${successfulSteps}`);
     console.log(`Success Rate: ${successRate}%\n`);
 
