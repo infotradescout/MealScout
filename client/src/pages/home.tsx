@@ -891,52 +891,54 @@ export default function Home() {
       )}
 
       {/* Hero & Search Section */}
-      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-3">
+      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-8">
         <div className="content">
           <div className="home-hero-panel">
-            <div className="mb-3">
-              <h1 className="hero-title text-xl mb-1">
-                {firstName ? `Hey ${firstName}, hungry?` : "Hungry?"}
+            <div className="mb-6">
+              <h1 className="hero-title text-4xl font-bold mb-2 leading-tight">
+                {firstName ? `Hey ${firstName}!` : "What's for dinner?"}
               </h1>
-              <p className="hero-subtitle text-sm">
-                See what's happening{" "}
+              <p className="hero-subtitle text-base text-muted-foreground">
+                Discover food trucks, restaurants & deals{" "}
                 {shortLocation === "Your Location"
                   ? "near you"
                   : `in ${shortLocation}`}
-                . Fresh deals and local favorites.
               </p>
             </div>
 
-            <div className="mb-6 flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <SmartSearch
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  onSearch={(query) =>
-                    setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
-                  }
-                  className="shadow-clean-lg"
-                  placeholder="Search deals, restaurants..."
-                />
+            <div className="mb-6 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <SmartSearch
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    onSearch={(query) =>
+                      setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
+                    }
+                    className="shadow-clean-lg"
+                    placeholder="Search deals, restaurants..."
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={retryLocation}
+                  disabled={isLoadingLocation}
+                  data-testid="button-home-search-location"
+                  onPointerDown={() => {
+                    trackUxEvent("home_location_request_search", {
+                      surface: "home_search_row",
+                    });
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  <MapPin className="w-4 h-4 mr-1" />
+                  {isLoadingLocation ? "Locating..." : "Location"}
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={retryLocation}
-                disabled={isLoadingLocation}
-                data-testid="button-home-search-location"
-                onPointerDown={() => {
-                  trackUxEvent("home_location_request_search", {
-                    surface: "home_search_row",
-                  });
-                }}
-              >
-                <MapPin className="w-4 h-4 mr-1" />
-                {isLoadingLocation ? "Locating..." : "Location"}
-              </Button>
             </div>
 
-            <div className="mb-5 grid grid-cols-3 gap-2">
+            <div className="mb-5 grid grid-cols-3 gap-3">
               <Button
                 variant="outline"
                 size="sm"
@@ -948,6 +950,7 @@ export default function Home() {
                     surface: "home_quick_actions",
                   });
                 }}
+                className="font-medium"
               >
                 <MapPin className="w-4 h-4 mr-1" />
                 {isLoadingLocation ? "Locating..." : "Use location"}
@@ -956,7 +959,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full"
+                  className="w-full font-medium"
                   data-testid="button-home-open-map"
                   onPointerDown={() => {
                     trackUxEvent("home_open_map_quick", {
@@ -972,7 +975,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full"
+                  className="w-full font-medium"
                   data-testid="button-home-featured"
                   onPointerDown={() => {
                     trackUxEvent("home_open_featured_quick", {
@@ -1057,14 +1060,14 @@ export default function Home() {
       </section>
 
       {/* Food Trucks Nearby - Horizontal Scroll Row */}
-      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
+      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-6">
         <div className="content">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
-              <h3 className="text-sm font-bold text-foreground">
-                Live Food Trucks:{" "}
-                {shortLocation === "Your Location" ? "Nearby" : shortLocation}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Truck className="w-5 h-5 text-[color:var(--accent-text)]" />
+              <h3 className="text-lg font-bold text-foreground">
+                Live Food Trucks{" "}
+                {shortLocation === "Your Location" ? "Nearby" : `in ${shortLocation}`}
               </h3>
             </div>
             <Link href="/map">
