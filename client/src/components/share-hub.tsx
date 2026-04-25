@@ -77,37 +77,7 @@ const USER_ITEMS: ShareHubItem[] = [
   },
 ];
 
-const STAFF_ADMIN_ITEMS: ShareHubItem[] = [
-  ...USER_ITEMS,
-  {
-    key: "staff-dashboard",
-    title: "Staff Dashboard",
-    description: "Account creation and host-location operations in one place.",
-    href: "/staff/dashboard",
-    audience: "Internal",
-  },
-  {
-    key: "admin-dashboard",
-    title: "Admin Dashboard",
-    description: "Platform operations, moderation, imports, and host controls.",
-    href: "/admin/dashboard",
-    audience: "Internal",
-  },
-  {
-    key: "lisa",
-    title: "LISA Control Center",
-    description: "AI operations, traffic insights, and growth automation tools.",
-    href: "/admin/control-center",
-    audience: "Internal",
-  },
-  {
-    key: "admin-affiliates",
-    title: "Affiliate Manager",
-    description: "Manage referral tags and commission settings.",
-    href: "/admin/affiliates",
-    audience: "Internal",
-  },
-];
+const INTERNAL_SHARE_PATH = /^(?:\/admin(?:\/|$)|\/staff(?:\/|$))/i;
 
 export default function ShareHub({
   mode,
@@ -138,7 +108,8 @@ export default function ShareHub({
   }, []);
 
   const items = useMemo(() => {
-    const base = mode === "user" ? USER_ITEMS : STAFF_ADMIN_ITEMS;
+    // Share Hub must stay public-safe: never expose internal admin/staff routes.
+    const base = USER_ITEMS.filter((item) => !INTERNAL_SHARE_PATH.test(item.href));
     if (!affiliateTag) return base;
     const referralItem: ShareHubItem = {
       key: "referral",
@@ -148,7 +119,7 @@ export default function ShareHub({
       audience: "All",
     };
     return [referralItem, ...base];
-  }, [mode, affiliateTag]);
+  }, [affiliateTag]);
 
   const absoluteUrl = (href: string) => {
     if (href.startsWith("http://") || href.startsWith("https://")) return href;
