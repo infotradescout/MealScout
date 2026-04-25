@@ -733,42 +733,95 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Sections */}
+      {/* CTA / Quick Access Section */}
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-              <div className="mb-6">
-                <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
-                  <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
+          {!user ? (
+            /* Logged-out: signup CTAs */
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
+                <div className="mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
+                    <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
+                  </div>
+                  <h3 className="text-2xl font-black mb-2">For Businesses</h3>
+                  <p className="text-muted-foreground text-sm">Get discovered by hungry customers in your area</p>
                 </div>
-                <h3 className="text-2xl font-black mb-2">For Businesses</h3>
-                <p className="text-muted-foreground text-sm">Get discovered by hungry customers in your area</p>
+                <Link href="/customer-signup?role=business">
+                  <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
+                    Start Free Trial
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
-              <Link href="/customer-signup?role=business">
-                <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
-                  Start Free Trial
-                  <ChevronRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
 
-            <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-              <div className="mb-6">
-                <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
-                  <Users className="w-6 h-6 text-[color:var(--accent-text)]" />
+              <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
+                <div className="mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
+                    <Users className="w-6 h-6 text-[color:var(--accent-text)]" />
+                  </div>
+                  <h3 className="text-2xl font-black mb-2">For Diners</h3>
+                  <p className="text-muted-foreground text-sm">Discover amazing food happening around you</p>
                 </div>
-                <h3 className="text-2xl font-black mb-2">For Diners</h3>
-                <p className="text-muted-foreground text-sm">Discover amazing food happening around you</p>
+                <Link href="/customer-signup?role=diner">
+                  <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
+                    Create Account
+                    <ChevronRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
-              <Link href="/customer-signup?role=diner">
-                <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
-                  Create Account
-                  <ChevronRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
             </div>
-          </div>
+          ) : (
+            /* Logged-in: quick access cards */
+            <div>
+              <div className="mb-6">
+                <h2 className="text-3xl font-black mb-2">Quick Access</h2>
+                <p className="text-muted-foreground">Jump to your most-used features</p>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Link href="/favorites">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 rounded-xl bg-red-500/15 group-hover:bg-red-500/25 transition-colors">
+                        <Heart className="w-6 h-6 text-red-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-center">Favorites</span>
+                    </div>
+                  </div>
+                </Link>
+                <Link href="/orders">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 rounded-xl bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors">
+                        <Clock className="w-6 h-6 text-blue-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-center">Orders</span>
+                    </div>
+                  </div>
+                </Link>
+                <Link href="/dashboard">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
+                        <Rocket className="w-6 h-6 text-[color:var(--accent-text)]" />
+                      </div>
+                      <span className="text-sm font-semibold text-center">Dashboard</span>
+                    </div>
+                  </div>
+                </Link>
+                <Link href="/events">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 rounded-xl bg-purple-500/15 group-hover:bg-purple-500/25 transition-colors">
+                        <Bell className="w-6 h-6 text-purple-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-center">Events</span>
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </>
