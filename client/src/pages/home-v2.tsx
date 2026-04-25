@@ -842,7 +842,7 @@ export default function Home() {
       </section>
 
       {/* CTA / Quick Access Section */}
-      <section className="py-8">
+      <section className="pb-[calc(7rem+env(safe-area-inset-bottom))] pt-8 md:pb-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           {!user ? (
             /* Logged-out: signup CTAs */
@@ -881,14 +881,46 @@ export default function Home() {
             </div>
           ) : (
             /* Logged-in: quick access cards */
-            <div>
+            <div className="space-y-6">
               <div className="mb-6">
-                <h2 className="text-3xl font-black mb-2">Quick Access</h2>
-                <p className="text-muted-foreground">Jump to your most-used features</p>
+                <h2 className="text-3xl font-black mb-2 text-[color:var(--text-primary)]">Quick Access</h2>
+                <p className="font-medium text-[color:var(--text-secondary)]">Jump to your most-used features</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Link href="/map">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean hover:border-[color:var(--accent-text)]/50 hover:shadow-lg transition-all duration-300 cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="rounded-2xl bg-[color:var(--accent-text)]/15 p-3 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
+                        <MapIcon className="h-6 w-6 text-[color:var(--accent-text)]" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-black text-[color:var(--text-primary)]">Explore Nearby</h3>
+                        <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                          Open the live map for trucks, spots, and deals around {shortLocation}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+                <Link href="/deals/featured">
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean hover:border-amber-500/50 hover:shadow-lg transition-all duration-300 cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      <div className="rounded-2xl bg-amber-500/15 p-3 group-hover:bg-amber-500/25 transition-colors">
+                        <Zap className="h-6 w-6 text-amber-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-black text-[color:var(--text-primary)]">Find Deals</h3>
+                        <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                          Browse current specials and limited-time offers.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Link href="/favorites">
-                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                     <div className="flex flex-col items-center gap-3">
                       <div className="p-3 rounded-xl bg-red-500/15 group-hover:bg-red-500/25 transition-colors">
                         <Heart className="w-6 h-6 text-red-500" />
@@ -898,7 +930,7 @@ export default function Home() {
                   </div>
                 </Link>
                 <Link href="/orders">
-                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                     <div className="flex flex-col items-center gap-3">
                       <div className="p-3 rounded-xl bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors">
                         <Clock className="w-6 h-6 text-blue-500" />
@@ -908,7 +940,7 @@ export default function Home() {
                   </div>
                 </Link>
                 <Link href="/dashboard">
-                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                     <div className="flex flex-col items-center gap-3">
                       <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
                         <Rocket className="w-6 h-6 text-[color:var(--accent-text)]" />
@@ -918,7 +950,7 @@ export default function Home() {
                   </div>
                 </Link>
                 <Link href="/events">
-                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                  <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                     <div className="flex flex-col items-center gap-3">
                       <div className="p-3 rounded-xl bg-purple-500/15 group-hover:bg-purple-500/25 transition-colors">
                         <Bell className="w-6 h-6 text-purple-500" />
