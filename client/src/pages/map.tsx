@@ -3138,14 +3138,24 @@ export default function MapPage() {
                   {selectedParkingHost.distanceLabel} away
                 </p>
               )}
-              {selectedParkingHostImageUrl && (
-                <img
-                  src={selectedParkingHostImageUrl}
-                  alt={`${selectedParkingHost.host.name} place image`}
-                  className="mb-3 h-28 w-full rounded-xl border border-border/60 object-cover"
-                  loading="lazy"
-                />
-              )}
+              {(() => {
+                const imgUrl = selectedParkingHostImageUrl || (() => {
+                  if (!effectiveGoogleMapsApiKey) return null;
+                  const host = selectedParkingHost.host;
+                  const parts = [host.address, host.city, host.state].filter(Boolean);
+                  if (parts.length === 0) return null;
+                  const encoded = encodeURIComponent(parts.join(", "));
+                  return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encoded}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+                })();
+                return imgUrl ? (
+                  <img
+                    src={imgUrl}
+                    alt={`${selectedParkingHost.host.name} place image`}
+                    className="mb-3 h-28 w-full rounded-xl border border-border/60 object-cover"
+                    loading="lazy"
+                  />
+                ) : null;
+              })()}
               {userLocation && (
                 <p className="mb-2 text-xs text-muted-foreground">
                   {isLoadingSelectedParkingRouteSummary
