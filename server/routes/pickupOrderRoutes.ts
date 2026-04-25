@@ -124,7 +124,7 @@ async function assertHasOrderingSubscription(
   // 2. Lifetime or active subscription via restaurantSubscriptions table
   const restaurants_ = await storage.getRestaurantsByOwner(accessUserId);
   const restaurantIds = restaurantId
-    ? [restaurantId]
+    ? restaurants_.filter((r) => r.id === restaurantId).map((r) => r.id)
     : restaurants_.map((r) => r.id);
   if (restaurantIds.length > 0) {
     const [sub] = await db
