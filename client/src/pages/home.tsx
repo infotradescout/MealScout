@@ -1121,53 +1121,66 @@ export default function Home() {
 
                 return (
                   <Link key={truck.id} href={`/restaurant/${truck.id}`}>
-                    <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-semibold text-foreground truncate">
-                            {truck.name}
-                          </h4>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {truck.cuisineType || "Food Truck"}
-                          </p>
+                    <div className="flex-shrink-0 w-64 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden shadow-clean hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/40 cursor-pointer group">
+                      {/* Header with status badge */}
+                      <div className="p-4 pb-3">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-base font-bold text-foreground truncate group-hover:text-[color:var(--accent-text)] transition-colors">
+                              {truck.name}
+                            </h4>
+                            <p className="text-sm text-muted-foreground truncate mt-1">
+                              {truck.cuisineType || "Food Truck"}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-[color:var(--status-success)]/25 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[color:var(--status-success)] whitespace-nowrap flex-shrink-0">
+                            ● Live
+                          </span>
                         </div>
-                        <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
-                          Live
-                        </span>
+
+                        {/* Location and time info */}
+                        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-[color:var(--accent-text)]" />
+                            {distanceMiles != null
+                              ? `${distanceMiles.toFixed(1)} mi away`
+                              : "Nearby"}
+                          </span>
+                          <span className="text-xs">{lastSeenLabel}</span>
+                        </div>
                       </div>
 
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        <span>
-                          {distanceMiles != null
-                            ? `${distanceMiles.toFixed(1)} mi away`
-                            : "Nearby"}
-                        </span>
-                        <span>{lastSeenLabel}</span>
-                      </div>
-
-                      <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Active Deals ({truckDeals.length})
+                      {/* Deals section */}
+                      <div className="border-t border-[color:var(--border-subtle)] px-4 py-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2.5">
+                          {truckDeals.length} Active Deal{truckDeals.length !== 1 ? 's' : ''}
                         </p>
                         {truckDeals.length > 0 ? (
-                          <div className="mt-1 space-y-1.5">
+                          <div className="space-y-2">
                             {truckDeals.slice(0, 2).map((deal) => (
-                              <p
+                              <div
                                 key={deal.id}
-                                className="text-xs text-foreground line-clamp-1"
+                                className="rounded-lg bg-[color:var(--accent-ember)]/10 px-3 py-2 border border-[color:var(--accent-ember)]/20"
                               >
-                                {deal.title}
-                              </p>
+                                <p className="text-sm font-semibold text-foreground line-clamp-1">
+                                  {deal.title}
+                                </p>
+                                {deal.discountValue && (
+                                  <p className="text-xs text-[color:var(--accent-text)] font-bold mt-0.5">
+                                    {deal.discountValue}
+                                  </p>
+                                )}
+                              </div>
                             ))}
                             {truckDeals.length > 2 && (
-                              <p className="text-[11px] text-muted-foreground">
-                                +{truckDeals.length - 2} more
+                              <p className="text-xs text-[color:var(--accent-text)] font-semibold pt-1">
+                                +{truckDeals.length - 2} more deal{truckDeals.length - 2 !== 1 ? 's' : ''}
                               </p>
                             )}
                           </div>
                         ) : (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            No active deals yet
+                          <p className="text-sm text-muted-foreground italic">
+                            No deals posted yet
                           </p>
                         )}
                       </div>
