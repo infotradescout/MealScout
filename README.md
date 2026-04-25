@@ -20,6 +20,8 @@ Active docs and maintenance
 - `docs/refactor/REFACTOR_CYCLE_GUARDRAILS.md` - active freeze policy and phase gate rules for the current refactor cycle
 - `docs/refactor/REFACTOR_BOARD.md` - queue/in-progress/merged/verified/rollback tracking board
 - `docs/refactor/REFACTOR_METRICS_LOG.md` - before/after reliability metrics log for each refactor merge
+- `docs/PROD_ROLLOUT_CHECKLIST.md` - current launch and deployment checklist
+- `docs/SCALING_READINESS.md` - scaling, observability, and load-test readiness checklist
 - `EMBED_CONTRACT.md` and `API_ACTIONS.md` - TradeScout integration (do not modify)
 
 Local prerequisites
@@ -40,6 +42,7 @@ npm run doctor
 npm run check
 npm run build
 npm run test:flows:e2e
+npm run gate:prelaunch
 ```
 
 License

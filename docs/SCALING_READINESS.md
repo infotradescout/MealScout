@@ -14,11 +14,16 @@ This checklist is the minimum baseline for stable growth under burst traffic.
 - Enable horizontal scaling for web service (at least 2 instances in production).
 - Ensure sticky sessions are configured or session storage is shared.
 - Use a production Postgres tier sized for expected peak QPS.
-- Add PgBouncer or equivalent connection pooling.
-- Configure Redis for cross-instance rate limiting and queue workloads.
+- Tune the Neon/Postgres pool with:
+  - `DB_POOL_MAX`
+  - `DB_POOL_IDLE_TIMEOUT_MS`
+  - `DB_POOL_CONNECTION_TIMEOUT_MS`
+- Configure Redis (`REDIS_URL`) for public response caching and future cross-instance workloads.
 - Set health checks:
   - Liveness: `GET /health`
   - Readiness: `GET /health/ready`
+- Set gzip/compression threshold:
+  - `COMPRESSION_THRESHOLD_BYTES`
 
 ## 3. Security and abuse controls
 
@@ -35,7 +40,12 @@ This checklist is the minimum baseline for stable growth under burst traffic.
   - API p95/p99 latency
   - API 4xx/5xx rates
   - request volume
+  - cache mode, hit/miss/error counters
+  - DB pool totals/idle/waiting counts
 - Alert on SLO breach windows (5m + 30m).
+- Configure built-in alert thresholds:
+  - `PERF_ALERT_P95_MS`
+  - `PERF_ALERT_5XX_RATE_PCT`
 - Track job-queue pressure from `/health/metrics`:
   - `jobs.queued`
   - `jobs.active`
@@ -74,12 +84,17 @@ This checklist is the minimum baseline for stable growth under burst traffic.
 ## 8. Load testing cadence
 
 - Run load tests before each major release:
+  - public discovery/search/map feeds
+  - signup and onboarding route guards
   - browse suppliers
   - create supplier orders
   - create pay-intent (ACH and card)
   - webhook success/failure processing
 - Test at 5x expected peak RPS for at least 10 minutes.
-- Use `npm run load:supplier-payments` for a repeatable supplier payment-intent load test harness.
+- Use:
+  - `npm run smoke:launch-spike` for a short public-feed spike check.
+  - `npm run load:supplier-payments` for a repeatable supplier payment-intent load test harness.
+  - `npm run stress-test` for broader read-heavy API stress.
 
 ## 9. Required DB migrations for scale controls
 
@@ -95,12 +110,15 @@ This checklist is the minimum baseline for stable growth under burst traffic.
 - On-call owner and escalation path defined.
 - Incident runbook for:
   - database saturation
+  - Redis unavailable or high cache error rate
   - Stripe outage
   - webhook backlog
   - elevated 5xx rates
+- In-app support ticket triage owner assigned for launch week.
 
 ## 11. Release strategy
 
 - Use feature flags for payment flow changes.
 - Roll out via canary (small traffic slice first).
 - Have a rollback procedure that is tested and documented.
+- Keep customer-facing delivery disabled; only supplier delivery workflows are in scope.
