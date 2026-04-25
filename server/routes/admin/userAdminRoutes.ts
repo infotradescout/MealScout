@@ -10,6 +10,7 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
+import { populateHostProfile } from "../../services/googleProfileService";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -1451,6 +1452,12 @@ export function registerUserAdminRoutes(
         const host = await storage.createHost(parsed);
         // Ensure the new host has draft Parking Pass events so pricing can be edited immediately.
         await storage.ensureDraftParkingPassForHost(host.id);
+
+        // Fire-and-forget: auto-populate Google profile data
+        populateHostProfile(host.id).catch((err) => {
+          console.warn("[AdminCreateHost] Google auto-populate failed for host", host.id, err);
+        });
+
         res.status(201).json(host);
       } catch (error: any) {
         console.error("Error creating host location:", error);
@@ -2454,9 +2461,58 @@ export function registerUserAdminRoutes(
     },
   );
 
+   // POST /api/admin/backfill/google-profiles - Backfill Google data for all hosts missing it
+  app.post(
+    "/api/admin/backfill/google-profiles",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (_req: any, res) => {
+      try {
+        const allHosts = await storage.getAllHosts();
+        const hostsNeedingPopulation = allHosts.filter(
+          (h: any) => !h.googlePlaceId && h.businessName && h.address
+        );
+
+        // Process in background, return immediately
+        const total = hostsNeedingPopulation.length;
+        let succeeded = 0;
+        let failed = 0;
+
+        // Process sequentially with a small delay to avoid rate limits
+        (async () => {
+          for (const host of hostsNeedingPopulation) {
+            try {
+              const result = await populateHostProfile(host.id);
+              if (result.success) {
+                succeeded++;
+              } else {
+                failed++;
+                console.warn(`[Backfill] Host ${host.id} (${host.businessName}): ${result.error}`);
+              }
+            } catch (err) {
+              failed++;
+              console.warn(`[Backfill] Host ${host.id} error:`, err);
+            }
+            // Small delay between requests to avoid rate limiting
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          console.log(`[Backfill] Complete: ${succeeded} succeeded, ${failed} failed out of ${total}`);
+        })();
+
+        res.json({
+          message: `Backfill started for ${total} hosts without Google data`,
+          total,
+          alreadyPopulated: allHosts.length - total,
+        });
+      } catch (error) {
+        console.error("Error starting backfill:", error);
+        res.status(500).json({ message: "Failed to start backfill" });
+      }
+    },
+  );
+
   // Register verification admin routes
   registerVerificationAdminRoutes(app, { storage });
-
   // Register deal admin routes
   registerDealAdminRoutes(app);
 }

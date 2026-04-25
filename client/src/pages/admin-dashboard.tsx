@@ -48,6 +48,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getGroupedLocationTypes, getLocationTypeLabel } from "@shared/constants/locationTypes";
+const groupedLocationTypes = getGroupedLocationTypes();
 
 interface DashboardStats {
   totalUsers: number;
@@ -2007,11 +2009,13 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                     }
                     className="w-full px-3 py-2 border rounded-md"
                   >
-                    <option value="private_residence">Private Residence</option>
-                    <option value="business">Business</option>
-                    <option value="parking_lot">Parking Lot</option>
-                    <option value="event_space">Event Space</option>
-                    <option value="public_park">Public Park</option>
+                    {Object.entries(groupedLocationTypes).map(([group, options]) => (
+                      <optgroup key={group} label={group}>
+                        {options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
 
@@ -3392,6 +3396,25 @@ export default function AdminDashboard() {
       });
     },
   });
+  const backfillGoogleProfiles = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/backfill/google-profiles");
+      return await res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Google backfill started",
+        description: `Processing ${data?.totalToProcess ?? 0} hosts. This runs in the background.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Google backfill failed",
+        description: error?.message || "Unable to start Google profile backfill.",
+        variant: "destructive",
+      });
+    },
+  });
   const normalizeParkingPassSeries = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
@@ -3865,12 +3888,13 @@ export default function AdminDashboard() {
                       })
                     }
                   >
-                    <option value="private_residence">Private Residence</option>
-                    <option value="business">Business</option>
-                    <option value="parking_lot">Parking Lot</option>
-                    <option value="event_space">Event Space</option>
-                    <option value="public_park">Public Park</option>
-                    <option value="other">Other</option>
+                    {Object.entries(groupedLocationTypes).map(([group, options]) => (
+                      <optgroup key={group} label={group}>
+                        {options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                   <select
                     className="w-full px-2 py-1 border rounded-md text-sm bg-background"
@@ -4559,12 +4583,13 @@ export default function AdminDashboard() {
                   })
                 }
               >
-                <option value="private_residence">Private Residence</option>
-                <option value="business">Business</option>
-                <option value="parking_lot">Parking Lot</option>
-                <option value="event_space">Event Space</option>
-                <option value="public_park">Public Park</option>
-                <option value="other">Other</option>
+                {Object.entries(groupedLocationTypes).map(([group, options]) => (
+                  <optgroup key={group} label={group}>
+                    {options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
               </select>
               <select
                 className="w-full px-2 py-1 border rounded-md text-sm bg-background"
@@ -6075,9 +6100,9 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
+        {mapPinAudit && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Operations
             </CardTitle>
@@ -6182,14 +6207,23 @@ export default function AdminDashboard() {
                 <p className="font-semibold">
                   {operations?.trucks?.liveTrucks15m ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                 <p className="text-xs text-muted-foreground mt-1">
                   {operations?.trucks?.activeSessions ?? 0} active sessions
                 </p>
               </div>
             </div>
+            <div className="mt-4 pt-3 border-t flex gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => backfillGoogleProfiles.mutate()}
+                disabled={backfillGoogleProfiles.isPending}
+              >
+                {backfillGoogleProfiles.isPending ? "Running..." : "Backfill Google Profiles"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-
         {mapPinAudit && (
           <Card className="mb-6">
             <CardHeader className="pb-3">

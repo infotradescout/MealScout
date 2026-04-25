@@ -41,6 +41,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
+import { getLocationTypeLabel } from "@shared/constants/locationTypes";
 
 type DiscoveryCity = {
   id: string;
@@ -325,6 +326,18 @@ type HostLocation = {
   latitude?: number | string | null;
   longitude?: number | string | null;
   status?: string | null;
+  // Google profile enrichment
+  description?: string | null;
+  googlePlaceId?: string | null;
+  googleRating?: string | null;
+  googleReviewCount?: number | null;
+  googlePriceLevel?: number | null;
+  googleBusinessStatus?: string | null;
+  googlePhotos?: any | null;
+  googleCategories?: any | null;
+  googleFormattedPhone?: string | null;
+  businessHours?: any | null;
+  businessWebsite?: string | null;
 };
 
 type HostCluster = {
@@ -348,6 +361,17 @@ const resolveHostImageUrl = (host?: HostLocation | null): string | null => {
   for (const value of candidates) {
     const next = String(value || "").trim();
     if (next) return next;
+  }
+  // Fallback: use first Google photo if available
+  if (host.googlePhotos) {
+    try {
+      const photos = typeof host.googlePhotos === 'string' ? JSON.parse(host.googlePhotos) : host.googlePhotos;
+      if (Array.isArray(photos) && photos.length > 0) {
+        const firstPhoto = photos[0];
+        const photoUrl = firstPhoto?.url || firstPhoto?.photoUrl || firstPhoto?.photoReference;
+        if (photoUrl) return String(photoUrl);
+      }
+    } catch { /* ignore parse errors */ }
   }
   return null;
 };
@@ -3179,31 +3203,92 @@ export default function MapPage() {
                 </div>
               ) : (
                 <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    About this location
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      About this location
+                    </div>
+                    {selectedParkingHost.host.locationType && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {getLocationTypeLabel(selectedParkingHost.host.locationType)}
+                      </span>
+                    )}
                   </div>
                   {selectedParkingHost.host.description ? (
                     <p className="mt-1 text-xs text-foreground leading-relaxed line-clamp-3">
                       {selectedParkingHost.host.description}
+                    </p>
+                  ) : selectedParkingHost.host.googleCategories ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {(() => {
+                        try {
+                          const cats = typeof selectedParkingHost.host.googleCategories === 'string'
+                            ? JSON.parse(selectedParkingHost.host.googleCategories)
+                            : selectedParkingHost.host.googleCategories;
+                          return Array.isArray(cats) ? cats.slice(0, 3).join(' · ') : '';
+                        } catch { return ''; }
+                      })()}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-muted-foreground italic">
                       No description available yet
                     </p>
                   )}
-                  {(selectedParkingHost.host as any).googleRating && (
+                  {/* Google rating + reviews */}
+                  {selectedParkingHost.host.googleRating && (
                     <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className="text-amber-500">★</span>
-                      <span className="font-medium text-foreground">{(selectedParkingHost.host as any).googleRating}</span>
-                      {(selectedParkingHost.host as any).googleReviewCount && (
-                        <span>({(selectedParkingHost.host as any).googleReviewCount} reviews)</span>
+                      <span className="font-medium text-foreground">{selectedParkingHost.host.googleRating}</span>
+                      {selectedParkingHost.host.googleReviewCount != null && (
+                        <span>({selectedParkingHost.host.googleReviewCount} reviews)</span>
+                      )}
+                      {selectedParkingHost.host.googlePriceLevel != null && selectedParkingHost.host.googlePriceLevel > 0 && (
+                        <span className="ml-1 text-muted-foreground">{'$'.repeat(selectedParkingHost.host.googlePriceLevel)}</span>
                       )}
                     </div>
                   )}
-                  {(selectedParkingHost.host as any).locationType && (
-                    <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {(selectedParkingHost.host as any).locationType}
+                  {/* Business hours - show if open/closed */}
+                  {selectedParkingHost.host.businessHours && (() => {
+                    try {
+                      const hours = typeof selectedParkingHost.host.businessHours === 'string'
+                        ? JSON.parse(selectedParkingHost.host.businessHours)
+                        : selectedParkingHost.host.businessHours;
+                      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                      const today = dayNames[new Date().getDay()];
+                      const todayHours = Array.isArray(hours)
+                        ? hours.find((h: any) => h.day === today || h.day?.toLowerCase() === today.toLowerCase())
+                        : null;
+                      if (todayHours && todayHours.open && todayHours.close) {
+                        return (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            <span className="font-medium text-green-600">Open today</span> · {todayHours.open} – {todayHours.close}
+                          </div>
+                        );
+                      } else if (todayHours && todayHours.closed) {
+                        return (
+                          <div className="mt-1 text-[11px] text-red-500 font-medium">
+                            Closed today
+                          </div>
+                        );
+                      }
+                      return null;
+                    } catch { return null; }
+                  })()}
+                  {/* Phone number */}
+                  {selectedParkingHost.host.googleFormattedPhone && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      📞 {selectedParkingHost.host.googleFormattedPhone}
                     </div>
+                  )}
+                  {/* Website link */}
+                  {selectedParkingHost.host.businessWebsite && (
+                    <a
+                      href={selectedParkingHost.host.businessWebsite}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block text-[11px] text-blue-600 hover:underline truncate"
+                    >
+                      {selectedParkingHost.host.businessWebsite.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                    </a>
                   )}
                 </div>
               )}

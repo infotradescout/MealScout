@@ -12,6 +12,7 @@ import {
   buildLocationKey,
   buildGeocodeAddress,
 } from "./shared";
+import { populateHostProfile } from "../../services/googleProfileService";
 
 export function registerHostProfileRoutes(app: Express) {
   // POST /api/hosts - Create a new host profile
@@ -141,6 +142,11 @@ export function registerHostProfileRoutes(app: Express) {
       const parkingPassSeriesReady = await storage
         .ensureDraftParkingPassForHost(host.id)
         .catch(() => false);
+
+      // Fire-and-forget: auto-populate Google profile data for the new host
+      populateHostProfile(host.id).catch((err) => {
+        console.warn("[HostSignup] Google auto-populate failed for host", host.id, err);
+      });
 
       if (locationRequestClaimId) {
         await storage

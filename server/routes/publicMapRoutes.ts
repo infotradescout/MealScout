@@ -637,7 +637,7 @@ export function registerPublicMapRoutes(app: Express) {
         address: host.address,
         city: host.city ?? null,
         state: host.state ?? null,
-        spotImageUrl: null,
+        spotImageUrl: (host as any).spotImageUrl ?? null,
         locationType: host.locationType || "other",
         expectedFootTraffic: host.expectedFootTraffic ?? null,
         notes: host.notes ?? null,
@@ -645,6 +645,18 @@ export function registerPublicMapRoutes(app: Express) {
         status: host.isVerified ? "verified" : "active",
         latitude: host.latitude ?? null,
         longitude: host.longitude ?? null,
+        // Google profile enrichment
+        description: (host as any).description ?? null,
+        googlePlaceId: (host as any).googlePlaceId ?? null,
+        googleRating: (host as any).googleRating ?? null,
+        googleReviewCount: (host as any).googleReviewCount ?? null,
+        googlePriceLevel: (host as any).googlePriceLevel ?? null,
+        googleBusinessStatus: (host as any).googleBusinessStatus ?? null,
+        googlePhotos: (host as any).googlePhotos ?? null,
+        googleCategories: (host as any).googleCategories ?? null,
+        googleFormattedPhone: (host as any).googleFormattedPhone ?? null,
+        businessHours: (host as any).businessHours ?? null,
+        businessWebsite: (host as any).businessWebsite ?? null,
       }));
 
       const hostLocations = [

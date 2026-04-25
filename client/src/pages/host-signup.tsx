@@ -7,14 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, ArrowLeft, Building2, MapPin, UserRound, ClipboardList } from "lucide-react";
 
-const locationTypeOptions = [
-  { value: "office", label: "Office / Corporate" },
-  { value: "bar", label: "Bar" },
-  { value: "brewery", label: "Brewery" },
-  { value: "campus", label: "Campus" },
-  { value: "event", label: "Event Space" },
-  { value: "other", label: "Other" },
-];
+import { getGroupedLocationTypes } from "@shared/constants/locationTypes";
+const groupedLocationTypes = getGroupedLocationTypes();
 
 async function geocodeAddress(address: string) {
   if (!address) return null;
@@ -343,10 +337,14 @@ function HostSignup() {
                   className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm text-[color:var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--action-primary)]"
                 >
                   <option value="">Select a type...</option>
-                  {locationTypeOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
+                  {Object.entries(groupedLocationTypes).map(([group, options]) => (
+                    <optgroup key={group} label={group}>
+                      {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 {errors.locationType && <p className="text-xs text-[color:var(--status-error)]">{errors.locationType}</p>}
