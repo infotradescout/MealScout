@@ -314,8 +314,15 @@ export default function Home() {
     }
   }, [user]);
 
+  // Auto-detect location on mount
+  useEffect(() => {
+    if (!location) {
+      handleLocationDetection();
+    }
+  }, []);
+
   const handleLocationDetection = async () => {
-    setIsLoadingLocation(true);
+    // Don't show loading state for automatic detection
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -339,11 +346,7 @@ export default function Home() {
 
       queryClient.invalidateQueries({ queryKey: ["/api/deals/nearby"] });
     } catch (error: any) {
-      setLocationError(
-        "Unable to detect location automatically. Please set your location.",
-      );
-    } finally {
-      setIsLoadingLocation(false);
+      // Silent fail for auto-detection
     }
   };
 
@@ -377,7 +380,6 @@ export default function Home() {
       setIsLoadingLocation(false);
     }
   };
-
   const retryLocation = () => {
     setLocationError(null);
     setIsLoadingLocation(true);
@@ -394,9 +396,17 @@ export default function Home() {
     queryKey: location
       ? ["/api/trucks/live", location.lat, location.lng]
       : ["/api/trucks/live", "no-location"],
-    enabled: !!location,
+    enabled: true,
     queryFn: async () => {
-      if (!location) return { trucks: [] };
+      if (!location) {
+        try {
+          const response = await fetch("/api/trucks/live?limit=20", { credentials: "include" });
+          if (!response.ok) return { trucks: [] };
+          return response.json();
+        } catch {
+          return { trucks: [] };
+        }
+      }
       const response = await fetch(
         `/api/trucks/live?lat=${location.lat}&lng=${location.lng}&radiusKm=7`,
         { credentials: "include" },
@@ -423,7 +433,7 @@ export default function Home() {
     queryKey: location
       ? ["/api/businesses/public", location.lat, location.lng]
       : ["/api/businesses/public", "no-location"],
-    enabled: !!location,
+    enabled: true,
     queryFn: async () => {
       if (!location) return [];
       const response = await fetch(
@@ -444,7 +454,7 @@ export default function Home() {
     queryKey: location
       ? ["/api/deals/nearby", location.lat, location.lng]
       : ["/api/deals/nearby", "no-location"],
-    enabled: !!location,
+    enabled: true,
     queryFn: async () => {
       if (!location) return [];
       const response = await fetch(
