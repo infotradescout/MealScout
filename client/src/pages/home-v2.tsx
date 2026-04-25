@@ -544,7 +544,7 @@ export default function Home() {
       <Navigation />
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[color:var(--bg-surface)] via-[color:var(--bg-surface)] to-[color:var(--bg-card)]">
+      <section className="relative overflow-hidden">
         <div className="absolute inset-0 opacity-40">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-[color:var(--accent-text)]/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[color:var(--accent-text)]/10 rounded-full blur-3xl" />
@@ -639,7 +639,7 @@ export default function Home() {
 
       {/* Live Food Trucks Section */}
       {liveTrucks.length > 0 && (
-        <section className="py-8 bg-[color:var(--bg-surface)]">
+        <section className="py-8">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
@@ -702,7 +702,7 @@ export default function Home() {
         </section>
       )}
       {/* Explore by Cuisine Section */}
-      <section className="py-8 bg-[color:var(--bg-card)]">
+      <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="mb-6">
             <h2 className="text-3xl font-black mb-2">Explore by Cuisine</h2>
@@ -734,7 +734,7 @@ export default function Home() {
       </section>
 
       {/* CTA Sections */}
-      <section className="py-8 bg-gradient-to-b from-[color:var(--bg-card)] to-[color:var(--bg-surface)]">
+      <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">

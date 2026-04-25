@@ -21,12 +21,12 @@
   --bg-day-glow: none;
   --bg-ember: none;
   --bg-layered: linear-gradient(180deg, #faf8f4 0%, #f5f2ec 100%);
-  --bg-surface: #f9f8f6;
-  --bg-surface-muted: #f3f1ed;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f5f3ef;
-  --bg-popup: #ffffff;
-  --field-bg: #fafaf9;
+  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-surface-muted: rgba(255, 255, 255, 0.82);
+  --bg-card: rgba(255, 255, 255, 0.94);
+  --bg-card-hover: rgba(245, 243, 239, 0.95);
+  --bg-popup: rgba(255, 255, 255, 0.96);
+  --field-bg: rgba(255, 255, 255, 0.95);
   --text-primary: #0a0a0a;
   --text-secondary: #1f2937;
   --text-muted: #6b7280;
@@ -763,13 +763,13 @@
     }
 
     .home-cinematic .home-hero-panel {
-      background: #ffffff;
+      background: rgba(255, 255, 255, 0.92);
       border: 1px solid
         color-mix(in srgb, var(--border-subtle) 70%, transparent);
       border-radius: 28px;
       padding: 28px 32px;
       box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
-      backdrop-filter: none;
+      backdrop-filter: blur(12px);
     }
 
     .theme-night .home-cinematic .home-hero-panel {
@@ -1085,7 +1085,7 @@
   }
 
   .theme-day .nav-bar {
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.94);
     border-color: rgba(15, 23, 42, 0.12);
     box-shadow: 0 -6px 20px rgba(15, 23, 42, 0.1);
     -webkit-backdrop-filter: none;
