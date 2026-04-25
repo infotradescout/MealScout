@@ -325,11 +325,6 @@ export function GoogleMapSurface({
             throw new Error("Google Maps constructor unavailable");
           }
 
-          const prefersFinePointer =
-            typeof window !== "undefined" &&
-            typeof window.matchMedia === "function" &&
-            window.matchMedia("(pointer: fine)").matches;
-
           mapRef.current = new MapConstructor(mapContainerRef.current, {
             center,
             zoom,
@@ -337,9 +332,9 @@ export function GoogleMapSurface({
             zoomControl: false,
             clickableIcons: false,
             ...(effectiveMapId ? { mapId: effectiveMapId } : {}),
-            // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
-            // Touch devices: keep native cooperative behavior.
-            gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
+            // Always capture pan/wheel while hovered so users can scroll and drag
+            // naturally without Ctrl-to-zoom or two-finger prompts.
+            gestureHandling: "greedy",
             ...(!effectiveMapId
               ? {
                   styles: isNightTheme
