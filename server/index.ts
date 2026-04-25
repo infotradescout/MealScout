@@ -29,6 +29,7 @@ import crypto from "crypto";
 import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
+import { publicResponseCache } from "./utils/responseCache";
 import { videoStories, restaurants, requestLogs } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
@@ -400,6 +401,7 @@ if (process.env.NODE_ENV === "production") {
   );
   app.use(
     compression({
+      threshold: Number(process.env.COMPRESSION_THRESHOLD_BYTES || 1024) || 1024,
       filter: (req, res) => {
         if (req.headers["x-no-compression"]) {
           return false;
@@ -526,6 +528,7 @@ app.use((req, res, next) => {
 
 // Basic health endpoints (no auth)
 app.use(healthRouter);
+app.use(publicResponseCache());
 
 // CSP for development - permissive to allow Vite HMR and inline scripts
 if (process.env.NODE_ENV !== "production") {

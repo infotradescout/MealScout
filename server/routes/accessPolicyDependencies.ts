@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { storage } from "../storage";
 import { db } from "../db";
 import type { User } from "@shared/schema";
-import { restaurants, restaurantSubscriptions } from "@shared/schema";
+import { restaurants, restaurantSubscriptions, users } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   ensurePremiumTrialForUser,
@@ -32,6 +32,9 @@ export type RouteAccessPolicyDependencies = {
     maxDeals?: number;
   }>;
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  getBusinessDistributionAccessByOwnerIds: (
+    userIds: string[],
+  ) => Promise<Map<string, boolean>>;
   filterDealsByBusinessAccess: <T extends { restaurantId?: string | null }>(
     dealRows: T[],
   ) => Promise<T[]>;
@@ -310,6 +313,118 @@ export function createRouteAccessPolicyDependencies(
     return hasAccess;
   }
 
+  async function getBusinessDistributionAccessByOwnerIds(
+    userIds: string[],
+  ): Promise<Map<string, boolean>> {
+    const uniqueIds = Array.from(
+      new Set(userIds.map((id) => String(id || "").trim()).filter(Boolean)),
+    );
+    const result = new Map<string, boolean>();
+    if (uniqueIds.length === 0) return result;
+
+    const now = Date.now();
+    const missingIds: string[] = [];
+    for (const userId of uniqueIds) {
+      const cached = businessAccessCache.get(userId);
+      if (cached && cached.expiresAt > now) {
+        result.set(userId, cached.hasAccess);
+      } else {
+        missingIds.push(userId);
+      }
+    }
+    if (missingIds.length === 0) return result;
+
+    try {
+      const [userRows, lifetimeRows] = await Promise.all([
+        db
+          .select({
+            id: users.id,
+            userType: users.userType,
+            createdAt: users.createdAt,
+            stripeSubscriptionId: users.stripeSubscriptionId,
+          })
+          .from(users)
+          .where(inArray(users.id, missingIds)),
+        db
+          .select({ ownerId: restaurants.ownerId })
+          .from(restaurantSubscriptions)
+          .innerJoin(
+            restaurants,
+            eq(restaurantSubscriptions.restaurantId, restaurants.id),
+          )
+          .where(
+            and(
+              inArray(restaurants.ownerId, missingIds),
+              eq(restaurantSubscriptions.isLifetimeFree, true),
+              eq(restaurantSubscriptions.status, "active"),
+            ),
+          ),
+      ]);
+
+      const lifetimeOwnerIds = new Set(
+        lifetimeRows
+          .map((row: any) => String(row.ownerId || "").trim())
+          .filter(Boolean),
+      );
+      const usersById = new Map<string, User>();
+      for (const row of userRows as User[]) {
+        if (row?.id) usersById.set(String(row.id), row);
+      }
+
+      await Promise.all(
+        missingIds.map(async (userId) => {
+          const user = usersById.get(userId) || null;
+          let hasAccess = false;
+          if (user) {
+            if (["admin", "super_admin"].includes(String(user.userType || ""))) {
+              hasAccess = true;
+            } else if (hasAccountAgeTrialAccess(user)) {
+              hasAccess = true;
+            } else if (lifetimeOwnerIds.has(userId)) {
+              hasAccess = true;
+            } else if (stripe && user.stripeSubscriptionId) {
+              try {
+                const subscription = await stripe.subscriptions.retrieve(
+                  user.stripeSubscriptionId,
+                );
+                hasAccess = ["active", "trialing"].includes(
+                  String(subscription?.status || ""),
+                );
+              } catch (subscriptionError) {
+                console.warn(
+                  "[subscription] Unable to verify subscription for visibility",
+                  {
+                    userId,
+                    error:
+                      (subscriptionError as any)?.message || subscriptionError,
+                  },
+                );
+              }
+            }
+          }
+
+          businessAccessCache.set(userId, {
+            hasAccess,
+            expiresAt: now + BUSINESS_ACCESS_CACHE_TTL_MS,
+          });
+          result.set(userId, hasAccess);
+        }),
+      );
+    } catch (error) {
+      console.warn("[subscription] Failed bulk business access lookup", {
+        count: missingIds.length,
+        error: (error as any)?.message || error,
+      });
+      await Promise.all(
+        missingIds.map(async (userId) => {
+          result.set(userId, await hasBusinessDistributionAccess(userId));
+        }),
+      );
+    }
+
+    return result;
+  }
+
   async function filterDealsByBusinessAccess<
     T extends { restaurantId?: string | null },
   >(dealRows: T[]): Promise<T[]> {
@@ -364,7 +479,7 @@ export function createRouteAccessPolicyDependencies(
     validateAnalyticsAccess,
     validateSubscriptionLimits,
     hasBusinessDistributionAccess,
+    getBusinessDistributionAccessByOwnerIds,
     filterDealsByBusinessAccess,
   };
 }
-

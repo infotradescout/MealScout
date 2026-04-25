@@ -44,6 +44,9 @@ type AnalyticsAccessResult = {
 type RestaurantCoreRouteDependencies = {
   validateAnalyticsAccess: (userId: string) => Promise<AnalyticsAccessResult>;
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  getBusinessDistributionAccessByOwnerIds?: (
+    userIds: string[],
+  ) => Promise<Map<string, boolean>>;
 };
 
 const ENGAGEMENT_ACTION_COOLDOWN_MS = 3000;
@@ -84,6 +87,7 @@ export function registerRestaurantCoreRoutes(
   {
     validateAnalyticsAccess,
     hasBusinessDistributionAccess,
+    getBusinessDistributionAccessByOwnerIds,
   }: RestaurantCoreRouteDependencies,
 ) {
   const trackEngagement = async (
@@ -325,13 +329,20 @@ export function registerRestaurantCoreRoutes(
             .filter(Boolean),
         ),
       );
-      const ownerAccessEntries = await Promise.all(
-        ownerIds.map(
-          async (ownerId) =>
-            [ownerId, await hasBusinessDistributionAccess(ownerId)] as const,
-        ),
-      );
-      const ownerHasAccess = new Map<string, boolean>(ownerAccessEntries);
+      const ownerHasAccess =
+        getBusinessDistributionAccessByOwnerIds
+          ? await getBusinessDistributionAccessByOwnerIds(ownerIds)
+          : new Map(
+              await Promise.all(
+                ownerIds.map(
+                  async (ownerId) =>
+                    [
+                      ownerId,
+                      await hasBusinessDistributionAccess(ownerId),
+                    ] as const,
+                ),
+              ),
+            );
 
       const homeEligibleRestaurants = activeRestaurants.filter(
         (restaurant: any) => {

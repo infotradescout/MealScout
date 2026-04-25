@@ -5,6 +5,18 @@ import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
 
+function readPositiveInt(name: string, fallback: number) {
+  const value = Number(process.env[name] || "");
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+const isProduction = process.env.NODE_ENV === "production";
+const poolOptions = {
+  max: readPositiveInt("DB_POOL_MAX", isProduction ? 10 : 5),
+  idleTimeoutMillis: readPositiveInt("DB_POOL_IDLE_TIMEOUT_MS", 30_000),
+  connectionTimeoutMillis: readPositiveInt("DB_POOL_CONNECTION_TIMEOUT_MS", 5_000),
+};
+
 // Allow development to boot without a DATABASE_URL; server will run in limited mode
 if (!process.env.DATABASE_URL) {
   if (process.env.NODE_ENV === 'development') {
@@ -17,13 +29,17 @@ if (!process.env.DATABASE_URL) {
 }
 
 export const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL })
+  ? new Pool({ connectionString: process.env.DATABASE_URL, ...poolOptions })
   : undefined as unknown as Pool;
 
 // Some managed Postgres setups (or older DBs) can end up with a `search_path`
 // that excludes `public`, which breaks unqualified table lookups (SQLSTATE 42P01)
 // for tables that were created in `public`.
 if (process.env.DATABASE_URL && pool) {
+  pool.on("error", (error) => {
+    console.warn("[DB] Pool idle client error:", error?.message || error);
+  });
+
   pool.on("connect", (client) => {
     void client
       .query("show search_path")
@@ -42,6 +58,18 @@ if (process.env.DATABASE_URL && pool) {
       });
   });
 }
+
+export function getDbPoolSnapshot() {
+  const maybePool = pool as any;
+  return {
+    configured: Boolean(process.env.DATABASE_URL),
+    options: { ...poolOptions },
+    totalCount: Number(maybePool?.totalCount || 0),
+    idleCount: Number(maybePool?.idleCount || 0),
+    waitingCount: Number(maybePool?.waitingCount || 0),
+  };
+}
+
 // Cast to any to keep query builder usable even when DATABASE_URL is absent in local dev.
 // Runtime will still require a real connection string in production.
 export const db = (process.env.DATABASE_URL

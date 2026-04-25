@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { db } from "../db";
+import { db, getDbPoolSnapshot } from "../db";
 import { sql } from "drizzle-orm";
-import { getApiMetricsSnapshot } from "../observability";
+import { getApiMetricsSnapshot, getPerformanceHealthSnapshot } from "../observability";
 import { getOpsCleanupSnapshot, runOpsDataCleanup } from "../opsCleanup";
 import { getJobQueueStats } from "../jobs/jobQueue";
 import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
 import { getPaymentHealthSnapshot } from "../services/paymentHealth";
+import { getResponseCacheSnapshot } from "../utils/responseCache";
 import {
   clearLaunchDegradedModeOverride,
   getLaunchModeState,
@@ -45,7 +46,13 @@ function getConfigSnapshot() {
     observability: {
       healthMetricsToken: envPresent("HEALTH_METRICS_TOKEN"),
       sentryDsn: envPresent("SENTRY_DSN"),
+      redisUrl: envPresent("REDIS_URL"),
+      performanceAlerts: {
+        p95Ms: Number(process.env.PERF_ALERT_P95_MS || 1500) || 1500,
+        serverErrorRatePct: Number(process.env.PERF_ALERT_5XX_RATE_PCT || 2) || 2,
+      },
     },
+    database: getDbPoolSnapshot(),
     queue: {
       concurrency: Number(process.env.JOB_QUEUE_CONCURRENCY || 2) || 2,
       maxSize: Number(process.env.JOB_QUEUE_MAX_SIZE || 5000) || 5000,
@@ -152,6 +159,9 @@ healthRouter.get("/health/metrics", async (req, res) => {
     status: "ok",
     ts: Date.now(),
     metrics: getApiMetricsSnapshot(),
+    performance: getPerformanceHealthSnapshot(),
+    cache: getResponseCacheSnapshot(),
+    database: getDbPoolSnapshot(),
     mapEndpoints: getMapEndpointWatchdogSnapshot(),
     payments: paymentHealth,
     cleanup: getOpsCleanupSnapshot(),

@@ -24,6 +24,12 @@ const counters = {
 const requestDurationsMs: number[] = [];
 const MAX_SAMPLES = 20_000;
 const startedAt = Date.now();
+let lastPerformanceAlertAt = 0;
+
+function readPositiveNumber(name: string, fallback: number) {
+  const value = Number(process.env[name] || "");
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
 
 function pushDuration(durationMs: number) {
   requestDurationsMs.push(durationMs);
@@ -75,6 +81,7 @@ export function apiMetricsMiddleware() {
         if (status >= 500) counters.api5xx += 1;
         observeLatency(durationMs);
         pushDuration(durationMs);
+        maybeEmitPerformanceAlert();
       }
     });
     next();
@@ -105,3 +112,40 @@ export function getApiMetricsSnapshot() {
   };
 }
 
+export function getPerformanceHealthSnapshot() {
+  const snapshot = getApiMetricsSnapshot();
+  const p95ThresholdMs = readPositiveNumber("PERF_ALERT_P95_MS", 1_500);
+  const serverErrorRateThresholdPct = readPositiveNumber("PERF_ALERT_5XX_RATE_PCT", 2);
+  const minSamples = readPositiveNumber("PERF_ALERT_MIN_SAMPLES", 25);
+  const api = snapshot.api;
+  const warnings: string[] = [];
+
+  if (api.sampleSize >= minSamples && api.p95Ms > p95ThresholdMs) {
+    warnings.push(`API p95 latency ${api.p95Ms}ms exceeds ${p95ThresholdMs}ms`);
+  }
+  if (snapshot.counters.apiTotal >= minSamples && api.serverErrorRatePct > serverErrorRateThresholdPct) {
+    warnings.push(`API 5xx rate ${api.serverErrorRatePct}% exceeds ${serverErrorRateThresholdPct}%`);
+  }
+
+  return {
+    status: warnings.length > 0 ? "degraded" : "ok",
+    thresholds: {
+      p95Ms: p95ThresholdMs,
+      serverErrorRatePct: serverErrorRateThresholdPct,
+      minSamples,
+    },
+    warnings,
+  };
+}
+
+function maybeEmitPerformanceAlert() {
+  const intervalMs = readPositiveNumber("PERF_ALERT_LOG_INTERVAL_MS", 5 * 60 * 1000);
+  const now = Date.now();
+  if (now - lastPerformanceAlertAt < intervalMs) return;
+
+  const health = getPerformanceHealthSnapshot();
+  if (health.status !== "degraded") return;
+
+  lastPerformanceAlertAt = now;
+  console.warn("[performance-alert]", health.warnings.join("; "));
+}

@@ -79,6 +79,7 @@ const {
   validateAnalyticsAccess,
   validateSubscriptionLimits,
   hasBusinessDistributionAccess,
+  getBusinessDistributionAccessByOwnerIds,
   filterDealsByBusinessAccess,
 } = createRouteAccessPolicyDependencies(stripe);
 
@@ -136,6 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerRestaurantCoreRoutes(app, {
     validateAnalyticsAccess,
     hasBusinessDistributionAccess,
+    getBusinessDistributionAccessByOwnerIds,
   });
 
   registerPublicSearchRoutes(app);
