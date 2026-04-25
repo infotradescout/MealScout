@@ -247,6 +247,15 @@ function BusinessDealsCard({
   );
 }
 
+function getMealPrompt(date = new Date()) {
+  const hour = date.getHours();
+  if (hour >= 21 || hour < 5) return "What's for late night snack?";
+  if (hour < 10) return "What's for breakfast?";
+  if (hour < 12) return "What's for brunch?";
+  if (hour < 16) return "What's for lunch?";
+  return "What's for dinner?";
+}
+
 export default function Home() {
   const isStandalone = useIsStandalone();
   const { user } = useAuth();
@@ -260,6 +269,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, setNavigateTo] = useLocation();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const mealPrompt = useMemo(() => getMealPrompt(), []);
 
   // Show welcome modal only for anonymous users.
   useEffect(() => {
@@ -896,7 +906,7 @@ export default function Home() {
           <div className="home-hero-panel">
             <div className="mb-6">
               <h1 className="hero-title text-5xl sm:text-6xl font-black mb-3 leading-tight tracking-tight">
-                {firstName ? `Hey ${firstName}!` : "What's for dinner?"}
+                {firstName ? `Hey ${firstName}! ${mealPrompt}` : mealPrompt}
               </h1>
               <p className="hero-subtitle text-lg text-muted-foreground leading-relaxed">
                 Discover food trucks, restaurants & deals{" "}

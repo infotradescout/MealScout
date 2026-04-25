@@ -52,7 +52,7 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
     "nav.dashboard": "Dashboard",
     "nav.favorites": "Favorites",
     "nav.createAccount": "Create Account",
-    "nav.claimTruck": "Claim Truck",
+    "nav.claimTruck": "Claim Business",
     "nav.events": "Events",
     "nav.host": "Host",
     "nav.forRestaurants": "For Restaurants",

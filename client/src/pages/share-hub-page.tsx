@@ -15,14 +15,14 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "One-tap links you can share right now to bring in restaurant owners, food trucks, and host locations."
-      : "Quick-share portal for growth ops and outreach.";
+      ? "A quick directory of shareable MealScout links for customers, business owners, food trucks, and host locations."
+      : "Share directory for growth ops, outreach, referrals, and internal tools.";
 
   return (
     <div className="min-h-screen pb-28">
-      <BackHeader title="Share Hub" fallbackHref="/" />
+      <BackHeader title="Share Directory" fallbackHref="/" />
       <main className="mx-auto w-full max-w-5xl px-4 py-5">
-        <ShareHub mode={mode} title="Share Hub" description={description} />
+        <ShareHub mode={mode} title="Share Directory" description={description} />
       </main>
     </div>
   );

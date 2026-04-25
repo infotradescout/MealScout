@@ -19,7 +19,7 @@ interface ShareHubItem {
 const USER_ITEMS: ShareHubItem[] = [
   {
     key: "owner-signup",
-    title: "1) Owner Signup",
+    title: "Business Signup",
     description: "Primary link for restaurant owners and food truck operators to start.",
     href: "/restaurant-signup",
     audience: "Restaurant + Food Truck Owners",
@@ -28,18 +28,18 @@ const USER_ITEMS: ShareHubItem[] = [
       "Get your business on MealScout and start getting monthly visibility and booking leads: ",
   },
   {
-    key: "claim-truck",
-    title: "2) Food Truck Claim",
-    description: "Direct page for food truck operators to claim and activate their profile.",
-    href: "/claim-truck",
-    audience: "Food Truck Owners",
+    key: "claim-business",
+    title: "Claim Business",
+    description: "Direct page for business owners to claim and activate their profile.",
+    href: "/restaurant-signup?businessType=food_truck&claim=1",
+    audience: "Business Owners",
     priority: 2,
     outreachText:
-      "Claim your food truck listing and start receiving local booking opportunities here: ",
+      "Claim your MealScout business listing and start receiving local booking opportunities here: ",
   },
   {
     key: "host-partner",
-    title: "3) Host Location Signup",
+    title: "Host Location Signup",
     description: "Direct intake page for non-food businesses with usable parking.",
     href: "/host-location-partner",
     audience: "Potential Hosts",

@@ -91,7 +91,7 @@ let hasGlobalNavigation = false;
 export default function Navigation({ scope = "local" }: NavigationProps) {
   const isGlobalScope = scope === "global";
   const [showLocalNav, setShowLocalNav] = useState(true);
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
@@ -160,23 +160,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "MealScout",
-          text: "Discover local food trucks, deals, and more!",
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast({
-          title: "Link copied!",
-          description: "Share it with your friends.",
-        });
-      }
-    } catch {
-      // User cancelled share
-    }
+    setLocation("/share-hub");
   };
 
   // Check user role
@@ -343,7 +327,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     if (!user) {
       items.push(
         { path: "/customer-signup", icon: UserPlus, fallbackLabel: "Create Account", group: "Get Started" },
-        { path: "/restaurant-signup?businessType=food_truck&claim=1", icon: Truck, fallbackLabel: "Claim Truck", group: "Get Started" },
+        { path: "/restaurant-signup?businessType=food_truck&claim=1", icon: Truck, fallbackLabel: "Claim Business", group: "Get Started" },
       );
     }
 

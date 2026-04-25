@@ -764,7 +764,7 @@ function TruckDiscovery() {
             )
           }
         >
-          Claim truck (Pensacola)
+          Claim business (Pensacola)
         </Button>
       </div>
       {pensacolaEventCount > 0 && (

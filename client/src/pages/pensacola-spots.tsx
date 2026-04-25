@@ -206,7 +206,7 @@ export default function PensacolaSpots() {
                                     "/truck-discovery?city=Pensacola%2C%20FL",
                                   )}`}
                                 >
-                                  Claim truck & unlock
+                                  Claim business & unlock
                                 </a>
                               </Button>
                             ) : (

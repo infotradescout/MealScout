@@ -94,6 +94,15 @@ const titleCaseSlug = (value: string) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+const toProfileSlug = (value: string | null | undefined) => {
+  const slug = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "business";
+};
 
 // Fix for default markers in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -890,11 +899,9 @@ function HostMarkerLayer({
         const hostImageUrl = resolveHostImageUrl(host);
         const hostIsVerified =
           String(host.status || "").toLowerCase() === "verified";
-        // Deep link to Parking Pass for this host. Do not fall back to the map pin id
-        // (host.id can be a map/location id, which won't match host listings).
-        const parkingPassHref = hostId
-          ? `/parking-pass?hostId=${encodeURIComponent(hostId)}`
-          : `/parking-pass`;
+        const publicProfileHref = hostId
+          ? `/p/host/${encodeURIComponent(hostId)}/${toProfileSlug(host.name)}`
+          : `/p/host/${encodeURIComponent(host.id)}/${toProfileSlug(host.name)}`;
 
         return (
           <Marker
@@ -987,10 +994,10 @@ function HostMarkerLayer({
                       variant="secondary"
                       className="w-full"
                       onClick={() => {
-                        window.location.href = parkingPassHref;
+                        window.location.href = publicProfileHref;
                       }}
                     >
-                      {isBookable ? "View details" : "View spot"}
+                      View details
                     </Button>
                   </div>
                 ) : (
@@ -1012,10 +1019,10 @@ function HostMarkerLayer({
                       variant="secondary"
                       className="w-full"
                       onClick={() => {
-                        window.location.href = parkingPassHref;
+                        window.location.href = publicProfileHref;
                       }}
                     >
-                      {isBookable ? "View details" : "View spot"}
+                      View details
                     </Button>
                   </div>
                 )}
@@ -1106,10 +1113,8 @@ export default function MapPage() {
   }, [userLocation]);
 
   const locationStorageKey = useMemo(() => {
-    return user?.id
-      ? `mealscout_last_location:${user.id}`
-      : "mealscout_last_location:anon";
-  }, [user?.id]);
+    return "mealscout_last_location:device";
+  }, []);
 
   const stopLocationWatch = useCallback(() => {
     if (
@@ -1292,7 +1297,7 @@ export default function MapPage() {
 
   // Get user location
   useEffect(() => {
-    // Start from last viewed area if the user has previously shared location.
+    // Start from this device's last viewed area if location was previously shared.
     // Important: do NOT treat this as "you are here" because it can be stale.
     try {
       const legacyKey = "mealscout_last_location";
@@ -1307,7 +1312,7 @@ export default function MapPage() {
         if (parsed?.lat && parsed?.lng) {
           const approx = { lat: parsed.lat, lng: parsed.lng };
           setMapCenter(approx);
-          // One-time migrate legacy key into per-user storage to avoid cross-account confusion on shared devices.
+          // One-time migrate legacy key into device storage so shared accounts do not fight over one account location.
           if (!localStorage.getItem(locationStorageKey)) {
             localStorage.setItem(locationStorageKey, stored);
           }
@@ -1503,6 +1508,11 @@ export default function MapPage() {
     return hostId
       ? `/parking-pass?hostId=${encodeURIComponent(hostId)}`
       : "/parking-pass";
+  }, []);
+
+  const getPublicProfileHrefForHost = useCallback((host: HostLocation) => {
+    const profileHostId = String(host.hostId || host.id || "").trim();
+    return `/p/host/${encodeURIComponent(profileHostId)}/${toProfileSlug(host.name)}`;
   }, []);
 
   const resolveHostCoords = (host: HostLocation) => {
@@ -2691,6 +2701,7 @@ export default function MapPage() {
       nearbyTruck: nearby?.truck || null,
       distanceLabel: formatDistance(coords),
       parkingPassHref: getParkingPassHrefForHost(host),
+      publicProfileHref: getPublicProfileHrefForHost(host),
       availabilityLabel: label,
       isBookable,
     };
@@ -2703,6 +2714,7 @@ export default function MapPage() {
     getHostAvailabilityLabel,
     formatDistance,
     getParkingPassHrefForHost,
+    getPublicProfileHrefForHost,
   ]);
   const selectedParkingHostId = useMemo(() => {
     if (!selectedParkingHost) return "";
@@ -3473,12 +3485,10 @@ export default function MapPage() {
                   size="sm"
                   className="h-11 rounded-full"
                   onClick={() => {
-                    window.location.href = selectedParkingHost.parkingPassHref;
+                    window.location.href = selectedParkingHost.publicProfileHref;
                   }}
                 >
-                  {selectedParkingHost.isBookable
-                    ? "Open details"
-                    : "View spot"}
+                  Open details
                 </Button>
               </div>
             </CardContent>
