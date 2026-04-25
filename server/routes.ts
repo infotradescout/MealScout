@@ -57,6 +57,7 @@ import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
 import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
+import { registerProfileRoutes } from "./routes/profileRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import {
@@ -190,6 +191,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
   registerGrowthRoutes(app);
+
+  // Business profile auto-population from Google Places
+  registerProfileRoutes(app);
 
   // Moderation and community trust
   registerModerationRoutes(app);

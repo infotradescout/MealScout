@@ -3168,7 +3168,7 @@ export default function MapPage() {
                         .join(" • ") || "Drive ETA unavailable"}
                 </p>
               )}
-              {selectedParkingHost.nearbyTruck && (
+              {selectedParkingHost.nearbyTruck ? (
                 <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     Live truck at this location
@@ -3176,6 +3176,35 @@ export default function MapPage() {
                   <div className="text-sm font-medium text-foreground">
                     {selectedParkingHost.nearbyTruck.name}
                   </div>
+                </div>
+              ) : (
+                <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    About this location
+                  </div>
+                  {selectedParkingHost.host.description ? (
+                    <p className="mt-1 text-xs text-foreground leading-relaxed line-clamp-3">
+                      {selectedParkingHost.host.description}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground italic">
+                      No description available yet
+                    </p>
+                  )}
+                  {(selectedParkingHost.host as any).googleRating && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="text-amber-500">★</span>
+                      <span className="font-medium text-foreground">{(selectedParkingHost.host as any).googleRating}</span>
+                      {(selectedParkingHost.host as any).googleReviewCount && (
+                        <span>({(selectedParkingHost.host as any).googleReviewCount} reviews)</span>
+                      )}
+                    </div>
+                  )}
+                  {(selectedParkingHost.host as any).locationType && (
+                    <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {(selectedParkingHost.host as any).locationType}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">

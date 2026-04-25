@@ -225,6 +225,20 @@ export const restaurants = pgTable("restaurants", {
   lockedPriceCents: integer("locked_price_cents"), // Price is stored, never recalculated
   priceLockDate: timestamp("price_lock_date"), // When the price lock was applied
   priceLockReason: varchar("price_lock_reason"), // 'early_rollout' or other reason
+  // Google Places auto-populated profile data
+  googlePlaceId: varchar("google_place_id"),
+  googleRating: decimal("google_rating", { precision: 2, scale: 1 }),
+  googleReviewCount: integer("google_review_count"),
+  googlePriceLevel: integer("google_price_level"), // 0-4 ($-$$$$)
+  googleBusinessStatus: varchar("google_business_status"), // OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY
+  googlePhotos: jsonb("google_photos"), // [{ url, width, height, attribution }]
+  googleCategories: jsonb("google_categories"), // ['restaurant', 'bar', ...]
+  googleFormattedPhone: varchar("google_formatted_phone"),
+  menuUrl: varchar("menu_url"),
+  orderUrl: varchar("order_url"),
+  reservationUrl: varchar("reservation_url"),
+  profileSource: varchar("profile_source").default("none"), // 'google' | 'manual' | 'mixed' | 'none'
+  profileLastSynced: timestamp("profile_last_synced"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3252,6 +3266,21 @@ export const hosts = pgTable(
     stripeChargesEnabled: boolean("stripe_charges_enabled").default(false),
     stripePayoutsEnabled: boolean("stripe_payouts_enabled").default(false),
     spotImageUrl: text("spot_image_url"),
+    // Google Places auto-populated profile data
+    description: text("description"),
+    googlePlaceId: varchar("google_place_id"),
+    googleRating: decimal("google_rating", { precision: 2, scale: 1 }),
+    googleReviewCount: integer("google_review_count"),
+    googlePriceLevel: integer("google_price_level"), // 0-4 ($-$$$$)
+    googleBusinessStatus: varchar("google_business_status"), // OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY
+    googlePhotos: jsonb("google_photos"), // [{ url, width, height, attribution }]
+    googleCategories: jsonb("google_categories"), // ['bar', 'brewery', ...]
+    googleFormattedPhone: varchar("google_formatted_phone"),
+    businessHours: jsonb("business_hours"), // { monday: { open: '9:00', close: '17:00' }, ... }
+    businessWebsite: text("business_website"),
+    menuUrl: varchar("menu_url"),
+    profileSource: varchar("profile_source").default("none"), // 'google' | 'manual' | 'mixed' | 'none'
+    profileLastSynced: timestamp("profile_last_synced"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -3260,6 +3289,7 @@ export const hosts = pgTable(
     index("idx_hosts_verified").on(table.isVerified),
     index("idx_hosts_location").on(table.latitude, table.longitude),
     index("idx_hosts_stripe_account").on(table.stripeConnectAccountId),
+    index("idx_hosts_google_place").on(table.googlePlaceId),
   ],
 );
 
