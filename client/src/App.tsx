@@ -299,6 +299,7 @@ function Router() {
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
+            <Route path="/restaurant/:id/:slug" component={RestaurantDetail} />
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
@@ -493,6 +494,7 @@ function Router() {
             <Route path="/deals" component={FeaturedDealsPage} />
             <Route path="/deals/featured" component={FeaturedDealsPage} />
             <Route path="/deals/:city" component={DealsCityPage} />
+            <Route path="/restaurant/:id/:slug" component={RestaurantDetail} />
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />

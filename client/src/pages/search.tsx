@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import Navigation from "@/components/navigation";
 import DealCard from "@/components/deal-card";
 import SmartSearch from "@/components/smart-search";
+import RestaurantCard from "@/components/restaurant-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackHeader } from "@/components/back-header";
@@ -945,42 +946,35 @@ export default function SearchPage() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {mergedRestaurants.map((restaurant: any) => (
-                <Link
+                <RestaurantCard
                   key={restaurant.id}
-                  href={`/restaurant/${restaurant.id}`}
-                  data-testid={`card-restaurant-${restaurant.id}`}
-                >
-                  <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1">
-                          <h3
-                            className="font-semibold text-foreground mb-1"
-                            data-testid={`text-restaurant-name-${restaurant.id}`}
-                          >
-                            {restaurant.name}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {restaurant.isFoodTruck
-                              ? "Food truck"
-                              : restaurant.cuisineType}
-                          </p>
-                          {restaurant.address && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {restaurant.address}
-                            </p>
-                          )}
-                        </div>
-                        {restaurant.isVerified && (
-                          <div className="bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
-                            Verified
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                  restaurant={{
+                    id: String(restaurant.id),
+                    name: String(restaurant.name || "Local Spot"),
+                    address: String(restaurant.address || ""),
+                    cuisineType: String(restaurant.cuisineType || ""),
+                    isActive: true,
+                    isVerified: Boolean(restaurant.isVerified),
+                    isFoodTruck: Boolean(restaurant.isFoodTruck),
+                    mobileOnline: Boolean(restaurant.mobileOnline),
+                    currentLatitude:
+                      typeof restaurant.currentLatitude === "number"
+                        ? restaurant.currentLatitude
+                        : undefined,
+                    currentLongitude:
+                      typeof restaurant.currentLongitude === "number"
+                        ? restaurant.currentLongitude
+                        : undefined,
+                    lastBroadcastAt:
+                      typeof restaurant.lastBroadcastAt === "string"
+                        ? restaurant.lastBroadcastAt
+                        : undefined,
+                    distance:
+                      typeof restaurant.distance === "number"
+                        ? restaurant.distance
+                        : undefined,
+                  }}
+                />
               ))}
             </div>
           </div>

@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "wouter";
-import type { ReactNode } from "react";
+import { Link, useLocation, useParams } from "wouter";
+import { useEffect, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Phone, Globe, Store } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
+import { useAuth } from "@/hooks/useAuth";
 
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
@@ -112,11 +113,26 @@ const formatBusinessHours = (
     .filter((value): value is string => Boolean(value));
 };
 
+const toSlug = (value: string | null | undefined) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
 export default function PublicProfilePage() {
-  const { profileType, profileId } = useParams<{
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const { profileType, profileId, profileSlug } = useParams<{
     profileType: string;
     profileId: string;
+    profileSlug?: string;
   }>();
+  const isStaffOrAdmin =
+    user?.userType === "staff" ||
+    user?.userType === "admin" ||
+    user?.userType === "super_admin";
 
   const { data, isLoading } = useQuery<PublicProfile>({
     queryKey: ["/api/public/profiles", profileType, profileId],
@@ -137,6 +153,7 @@ export default function PublicProfilePage() {
     enabled:
       !!profileType &&
       !!profileId &&
+      isStaffOrAdmin &&
       (profileType === "host" || profileType === "restaurant"),
     queryFn: async () => {
       const res = await fetch(
@@ -154,6 +171,7 @@ export default function PublicProfilePage() {
     enabled:
       !!profileType &&
       !!profileId &&
+      isStaffOrAdmin &&
       (profileType === "host" || profileType === "restaurant"),
     queryFn: async () => {
       const res = await fetch(
@@ -165,6 +183,14 @@ export default function PublicProfilePage() {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    if (!profileType || !profileId || !data?.title) return;
+    const expectedSlug = toSlug(data.title) || profileId;
+    if (profileSlug === expectedSlug) return;
+    const canonicalPath = `/p/${encodeURIComponent(profileType)}/${encodeURIComponent(profileId)}/${encodeURIComponent(expectedSlug)}`;
+    setLocation(canonicalPath);
+  }, [profileType, profileId, profileSlug, data?.title, setLocation]);
 
   if (isLoading) {
     return <div className="mx-auto max-w-3xl px-4 py-10">Loading profile...</div>;
@@ -408,7 +434,7 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {canonical ? (
+          {isStaffOrAdmin && canonical ? (
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -444,7 +470,7 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
-          {evidence ? (
+          {isStaffOrAdmin && evidence ? (
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>

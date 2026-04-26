@@ -25,6 +25,14 @@ interface RestaurantCardProps {
   showDistance?: boolean;
 }
 
+const toSlug = (value: string | null | undefined) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
 export default function RestaurantCard({ restaurant, userLocation, showDistance = false }: RestaurantCardProps) {
   // Calculate distance if user location is available
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -50,8 +58,9 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
   const isLiveFoodTruck = restaurant.isFoodTruck && restaurant.mobileOnline && restaurant.isActive;
   const isRecentlyActive = restaurant.lastBroadcastAt && 
     (Date.now() - new Date(restaurant.lastBroadcastAt).getTime()) < 300000; // 5 minutes
+  const profileSlug = toSlug(restaurant.name) || String(restaurant.id || "");
   return (
-    <Link href={`/restaurant/${restaurant.id}`}>
+    <Link href={`/restaurant/${restaurant.id}/${profileSlug}`}>
       <Card className={`bg-card border rounded-xl overflow-hidden shadow-clean hover:shadow-clean-lg transition-all duration-200 cursor-pointer ${
         restaurant.isFoodTruck ? 'border-orange-200 hover:border-orange-300' : 'border-border'
       } ${isLiveFoodTruck ? 'ring-2 ring-orange-200 ring-opacity-50' : ''}`} 
