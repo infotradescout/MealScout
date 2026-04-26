@@ -11,6 +11,7 @@ import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
+import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
 
 // Eager load only critical pages (home, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -616,8 +617,10 @@ function App() {
         <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
           <Toaster />
           <BetaDisclaimer />
-          <Router />
-          <Navigation scope="global" />
+          <AdminInlineCopyProvider>
+            <Router />
+            <Navigation scope="global" />
+          </AdminInlineCopyProvider>
           {/* Build canary - shows deployment timestamp */}
           {import.meta.env.PROD && (
             <div

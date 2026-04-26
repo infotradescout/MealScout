@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Shield, Users, Store, DollarSign, AlertTriangle, Settings } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useAdminInlineCopy } from "@/components/admin-inline-copy";
 
 const getEntityContext = (path: string) => {
   const segments = path.split("/").filter(Boolean);
@@ -82,6 +83,7 @@ const getPageControlTarget = (path: string) => {
 export default function AdminQuickHeader() {
   const [location] = useLocation();
   const { user, authState } = useAuth();
+  const { isEditMode, setIsEditMode } = useAdminInlineCopy();
 
   if (authState !== "authenticated") return null;
 
@@ -146,6 +148,19 @@ export default function AdminQuickHeader() {
               {pageControl.label}
             </a>
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setIsEditMode(!isEditMode)}
+            className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-semibold ${
+              isEditMode
+                ? "border-emerald-500 bg-emerald-100 text-emerald-900"
+                : "border-amber-400 bg-amber-100 text-amber-900"
+            }`}
+            title="Toggle inline copy edit mode"
+          >
+            Inline Edit: {isEditMode ? "On" : "Off"}
+          </button>
 
           {!isAdminSurface && context?.id ? (
             <Link href={`/admin/dashboard?tab=users&q=${encodeURIComponent(context.id)}`}>

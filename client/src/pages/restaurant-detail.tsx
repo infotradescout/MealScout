@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
+import { AdminEditableText, AdminEditButton } from "@/components/admin-inline-copy";
 import { generateRestaurantSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -509,7 +510,17 @@ export default function RestaurantDetailPage() {
             </div>
             <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
               <Clock className="w-4 h-4" />
-              <span>Open now</span>
+              <span>
+                <AdminEditableText
+                  textKey="restaurant.detail.status.openNow"
+                  defaultText="Open now"
+                />
+              </span>
+              <AdminEditButton
+                textKey="restaurant.detail.status.openNow"
+                defaultText="Open now"
+                label="Restaurant status label"
+              />
             </div>
           </div>
 
@@ -706,7 +717,10 @@ export default function RestaurantDetailPage() {
               data-testid="button-directions"
             >
               <DirectionsIcon className="w-4 h-4 mr-2" />
-              Directions
+              <AdminEditableText
+                textKey="restaurant.detail.actions.directions"
+                defaultText="Directions"
+              />
             </Button>
             <Button
               variant="outline"
@@ -714,7 +728,10 @@ export default function RestaurantDetailPage() {
               data-testid="button-call-restaurant"
             >
               <Phone className="w-4 h-4 mr-2" />
-              Call
+              <AdminEditableText
+                textKey="restaurant.detail.actions.call"
+                defaultText="Call"
+              />
             </Button>
             {isFoodTruck && (
               <Dialog>
@@ -724,7 +741,10 @@ export default function RestaurantDetailPage() {
                     className="w-full sm:flex-1"
                     data-testid="button-book-truck"
                   >
-                    Book This Truck
+                    <AdminEditableText
+                      textKey="restaurant.detail.actions.bookTruck"
+                      defaultText="Book This Truck"
+                    />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-lg">
@@ -844,17 +864,37 @@ export default function RestaurantDetailPage() {
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
               >
-                View Specials
+                <AdminEditableText
+                  textKey="restaurant.detail.actions.viewSpecials"
+                  defaultText="View Specials"
+                />
               </Button>
             )}
+          </div>
+          <div className="mt-1">
+            <AdminEditButton
+              textKey="restaurant.detail.actions.directions"
+              defaultText="Directions"
+              label="Directions button label"
+            />
           </div>
         </div>
 
         {isFoodTruck && (
           <div className="mb-8">
-            <h2 className="text-xl font-bold text-foreground mb-4">
-              Parking Schedule
-            </h2>
+            <div className="mb-4 inline-flex items-center gap-2">
+              <h2 className="text-xl font-bold text-foreground">
+                <AdminEditableText
+                  textKey="restaurant.detail.parking.title"
+                  defaultText="Parking Schedule"
+                />
+              </h2>
+              <AdminEditButton
+                textKey="restaurant.detail.parking.title"
+                defaultText="Parking Schedule"
+                label="Parking schedule title"
+              />
+            </div>
             {scheduleLoading ? (
               <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
                 <CardContent className="p-6 text-center text-muted-foreground">
@@ -869,7 +909,10 @@ export default function RestaurantDetailPage() {
             ) : (
               <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
                 <CardContent className="p-6 text-center text-muted-foreground">
-                  No upcoming parking schedule yet.
+                  <AdminEditableText
+                    textKey="restaurant.detail.parking.empty"
+                    defaultText="No upcoming parking schedule yet."
+                  />
                 </CardContent>
               </Card>
             )}
@@ -878,9 +921,19 @@ export default function RestaurantDetailPage() {
 
         {/* Current Specials */}
         <div className="mb-8" id="restaurant-specials">
-          <h2 className="text-xl font-bold text-foreground mb-4">
-            Current Specials
-          </h2>
+          <div className="mb-4 inline-flex items-center gap-2">
+            <h2 className="text-xl font-bold text-foreground">
+              <AdminEditableText
+                textKey="restaurant.detail.specials.title"
+                defaultText="Current Specials"
+              />
+            </h2>
+            <AdminEditButton
+              textKey="restaurant.detail.specials.title"
+              defaultText="Current Specials"
+              label="Current specials title"
+            />
+          </div>
           {restaurantDeals.length > 0 ? (
             <div className="space-y-4">
               {restaurantDeals.map((deal: any) => (

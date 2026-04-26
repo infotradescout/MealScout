@@ -53,6 +53,7 @@ import {
   trackGeoAdImpression,
 } from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
+import { AdminEditableText, AdminEditButton } from "@/components/admin-inline-copy";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import {
   FUNNEL_EVENTS,
@@ -604,23 +605,45 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           {/* Main heading */}
           <div className="mb-6">
-            <h1 className="text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight text-[color:var(--text-primary)]">
+            <div className="mb-2 inline-flex items-start gap-2">
+              <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight text-[color:var(--text-primary)]">
               {firstName ? (
                 <>
                   Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
                 </>
               ) : (
                 <>
-                  What's for{" "}
+                  <AdminEditableText
+                    textKey="home.hero.promptPrefix"
+                    defaultText="What's for"
+                  />{" "}
                   <span className="text-[color:var(--accent-text)]">
                     {mealPrompt}
                   </span>
                 </>
               )}
-            </h1>
+              </h1>
+              {!firstName && (
+                <AdminEditButton
+                  textKey="home.hero.promptPrefix"
+                  defaultText="What's for"
+                  label="Home hero prefix"
+                />
+              )}
+            </div>
             <p className="text-sm font-medium text-[color:var(--text-secondary)] max-w-2xl leading-relaxed">
-              Discover live food trucks, trending deals, and local gems happening right now
+              <AdminEditableText
+                textKey="home.hero.subtitle"
+                defaultText="Discover live food trucks, trending deals, and local gems happening right now"
+              />
             </p>
+            <div className="mt-1">
+              <AdminEditButton
+                textKey="home.hero.subtitle"
+                defaultText="Discover live food trucks, trending deals, and local gems happening right now"
+                label="Home hero subtitle"
+              />
+            </div>
           </div>
 
           {/* Search bar */}
@@ -702,8 +725,25 @@ export default function Home() {
                 <Truck className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black">Live Food Trucks</h2>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Broadcasting now in {shortLocation}</p>
+                <div className="inline-flex items-center gap-2">
+                  <h2 className="text-2xl sm:text-3xl font-black">
+                    <AdminEditableText
+                      textKey="home.section.liveTrucks.title"
+                      defaultText="Live Food Trucks"
+                    />
+                  </h2>
+                  <AdminEditButton
+                    textKey="home.section.liveTrucks.title"
+                    defaultText="Live Food Trucks"
+                    label="Live food trucks section title"
+                  />
+                </div>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                  <AdminEditableText
+                    textKey="home.section.liveTrucks.subtitlePrefix"
+                    defaultText="Broadcasting now in"
+                  /> {shortLocation}
+                </p>
               </div>
             </div>
             {liveTrucks.length > 0 && (
@@ -733,8 +773,25 @@ export default function Home() {
                 <Utensils className="w-6 h-6 text-[color:var(--accent-text)]" />
               </div>
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black">Restaurants</h2>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Local favorites near you</p>
+                <div className="inline-flex items-center gap-2">
+                  <h2 className="text-2xl sm:text-3xl font-black">
+                    <AdminEditableText
+                      textKey="home.section.restaurants.title"
+                      defaultText="Restaurants"
+                    />
+                  </h2>
+                  <AdminEditButton
+                    textKey="home.section.restaurants.title"
+                    defaultText="Restaurants"
+                    label="Restaurants section title"
+                  />
+                </div>
+                <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                  <AdminEditableText
+                    textKey="home.section.restaurants.subtitle"
+                    defaultText="Local favorites near you"
+                  />
+                </p>
               </div>
             </div>
             {restaurants.length > 0 && (
@@ -847,8 +904,25 @@ export default function Home() {
       <section className="py-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="mb-6">
-            <h2 className="text-2xl sm:text-3xl font-black mb-2">Explore by Cuisine</h2>
-            <p className="font-medium text-[color:var(--text-secondary)]">Find exactly what you're craving</p>
+            <div className="inline-flex items-center gap-2">
+              <h2 className="text-2xl sm:text-3xl font-black mb-2">
+                <AdminEditableText
+                  textKey="home.section.cuisine.title"
+                  defaultText="Explore by Cuisine"
+                />
+              </h2>
+              <AdminEditButton
+                textKey="home.section.cuisine.title"
+                defaultText="Explore by Cuisine"
+                label="Cuisine section title"
+              />
+            </div>
+            <p className="font-medium text-[color:var(--text-secondary)]">
+              <AdminEditableText
+                textKey="home.section.cuisine.subtitle"
+                defaultText="Find exactly what you're craving"
+              />
+            </p>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {[
@@ -916,8 +990,25 @@ export default function Home() {
             /* Logged-in: quick access cards */
             <div className="space-y-6">
               <div className="mb-6">
-                <h2 className="text-3xl font-black mb-2 text-[color:var(--text-primary)]">Quick Access</h2>
-                <p className="font-medium text-[color:var(--text-secondary)]">Jump to your most-used features</p>
+                <div className="inline-flex items-center gap-2">
+                  <h2 className="text-3xl font-black mb-2 text-[color:var(--text-primary)]">
+                    <AdminEditableText
+                      textKey="home.section.quickAccess.title"
+                      defaultText="Quick Access"
+                    />
+                  </h2>
+                  <AdminEditButton
+                    textKey="home.section.quickAccess.title"
+                    defaultText="Quick Access"
+                    label="Quick access section title"
+                  />
+                </div>
+                <p className="font-medium text-[color:var(--text-secondary)]">
+                  <AdminEditableText
+                    textKey="home.section.quickAccess.subtitle"
+                    defaultText="Jump to your most-used features"
+                  />
+                </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <Link href="/map">

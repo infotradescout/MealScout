@@ -41,6 +41,11 @@ import {
   ArrowDownToLine,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
+import {
+  AdminEditableText,
+  AdminEditButton,
+  useAdminInlineCopy,
+} from "@/components/admin-inline-copy";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
@@ -220,6 +225,7 @@ const levenshteinDistance = (a: string, b: string) => {
 
 export default function SearchPage() {
   const isStandalone = useIsStandalone();
+  const { getText } = useAdminInlineCopy();
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -659,6 +665,11 @@ export default function SearchPage() {
         "See matching restaurants, trucks, deals, parking, and events.",
     }));
 
+  const searchPlaceholder = getText(
+    "search.input.placeholder",
+    "Search restaurants, cuisines, deals...",
+  );
+
   async function trackSearch(query: string, source: string) {
     try {
       await fetch("/api/search/track", {
@@ -688,18 +699,62 @@ export default function SearchPage() {
       <header className="px-4 sm:px-6 py-6 bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean">
         <div className="mb-6 flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Search</h1>
+            <div className="inline-flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">
+                <AdminEditableText
+                  textKey="search.hero.title"
+                  defaultText="Search"
+                />
+              </h1>
+              <AdminEditButton
+                textKey="search.hero.title"
+                defaultText="Search"
+                label="Search page title"
+              />
+            </div>
             <p className="text-sm text-muted-foreground">
               {isLocating && !searchQuery
-                ? "Finding your location..."
+                ? (
+                    <AdminEditableText
+                      textKey="search.hero.state.locating"
+                      defaultText="Finding your location..."
+                    />
+                  )
                 : userLocation && !searchQuery
-                  ? "Popular deals near you"
+                  ? (
+                      <AdminEditableText
+                        textKey="search.hero.state.popularNearby"
+                        defaultText="Popular deals near you"
+                      />
+                    )
                   : searchQuery && totalStructuredMatches > 0
-                    ? "Showing restaurants, trucks, and deals that match your search"
+                    ? (
+                        <AdminEditableText
+                          textKey="search.hero.state.resultsFound"
+                          defaultText="Showing restaurants, trucks, and deals that match your search"
+                        />
+                      )
                     : searchQuery
-                      ? "No matches yet"
-                      : "Use location for nearby results or browse featured deals"}
+                      ? (
+                          <AdminEditableText
+                            textKey="search.hero.state.noMatches"
+                            defaultText="No matches yet"
+                          />
+                        )
+                      : (
+                          <AdminEditableText
+                            textKey="search.hero.state.default"
+                            defaultText="Use location for nearby results or browse featured deals"
+                          />
+                        )}
             </p>
+            <div className="mt-1">
+              <AdminEditButton
+                textKey="search.hero.state.default"
+                defaultText="Use location for nearby results or browse featured deals"
+                label="Search default hero subtitle"
+              />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {!isStandalone && (
@@ -810,9 +865,18 @@ export default function SearchPage() {
             const newUrl = `/search?q=${encodeURIComponent(query)}`;
             setLocation(newUrl);
           }}
-          placeholder="Search restaurants, cuisines, deals..."
+          placeholder={searchPlaceholder}
           className="mb-6"
         />
+        {!searchQuery && (
+          <div className="-mt-4 mb-4">
+            <AdminEditButton
+              textKey="search.input.placeholder"
+              defaultText="Search restaurants, cuisines, deals..."
+              label="Search input placeholder"
+            />
+          </div>
+        )}
 
         {/* Category Filters */}
         {!searchQuery && (
