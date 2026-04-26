@@ -8,6 +8,7 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 type TruckSightingRow = {
   id: string;
   truckName: string;
+  photoUrl: string;
   notes: string | null;
   latitude: number;
   longitude: number;
@@ -33,6 +34,7 @@ async function ensureTruckSightingTable() {
       truck_name varchar not null,
       normalized_truck_name varchar not null,
       sighting_key varchar not null,
+      photo_url text,
       notes text,
       latitude decimal(10,8) not null,
       longitude decimal(11,8) not null,
@@ -49,6 +51,11 @@ async function ensureTruckSightingTable() {
       created_at timestamp not null default now(),
       updated_at timestamp not null default now()
     )
+  `);
+
+  await db.execute(sql`
+    alter table community_truck_sightings
+    add column if not exists photo_url text
   `);
 
   await db.execute(sql`
@@ -71,6 +78,21 @@ async function ensureTruckSightingTable() {
 
 const submitSightingSchema = z.object({
   truckName: z.string().min(2).max(120),
+  photoUrl: z
+    .string()
+    .min(8)
+    .max(2_000_000)
+    .refine(
+      (value) => {
+        const normalized = String(value || "").trim().toLowerCase();
+        return (
+          normalized.startsWith("http://") ||
+          normalized.startsWith("https://") ||
+          normalized.startsWith("data:image/")
+        );
+      },
+      { message: "photoUrl must be an image URL or image data URI" },
+    ),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   notes: z.string().max(500).optional(),
@@ -81,7 +103,14 @@ const submitSightingSchema = z.object({
 
 const updateSightingSchema = z.object({
   status: z
-    .enum(["pending", "reviewing", "outreach", "claimed", "dismissed", "duplicate"])
+    .enum([
+      "pending",
+      "reviewing",
+      "outreach",
+      "claimed",
+      "dismissed",
+      "duplicate",
+    ])
     .optional(),
   adminNotes: z.string().max(2000).optional(),
   linkedRestaurantId: z.string().optional().nullable(),
@@ -121,6 +150,7 @@ export function registerTruckSightingRoutes(app: Express) {
         const sightingKey = `${normalizedTruckName}|${latBucket}|${lngBucket}`;
         const seenAt = parsed.seenAt ? new Date(parsed.seenAt) : new Date();
         const source = String(parsed.source || "map_user_ping").trim();
+        const photoUrl = String(parsed.photoUrl || "").trim();
 
         const existingResult = await db.execute(
           sql<{ id: string }>`
@@ -150,11 +180,16 @@ export function registerTruckSightingRoutes(app: Express) {
                   when coalesce(notes, '') = '' then ${parsed.notes || null}
                   else notes
                 end,
+                photo_url = case
+                  when coalesce(photo_url, '') = '' then ${photoUrl}
+                  else photo_url
+                end,
                 updated_at = now()
               where id = ${existing.id}
               returning
                 id,
                 truck_name as "truckName",
+                photo_url as "photoUrl",
                 notes,
                 latitude::float8 as latitude,
                 longitude::float8 as longitude,
@@ -180,6 +215,7 @@ export function registerTruckSightingRoutes(app: Express) {
               truck_name,
               normalized_truck_name,
               sighting_key,
+              photo_url,
               notes,
               latitude,
               longitude,
@@ -195,6 +231,7 @@ export function registerTruckSightingRoutes(app: Express) {
               ${String(parsed.truckName).trim()},
               ${normalizedTruckName},
               ${sightingKey},
+              ${photoUrl},
               ${parsed.notes || null},
               ${parsed.latitude},
               ${parsed.longitude},
@@ -206,6 +243,7 @@ export function registerTruckSightingRoutes(app: Express) {
             returning
               id,
               truck_name as "truckName",
+              photo_url as "photoUrl",
               notes,
               latitude::float8 as latitude,
               longitude::float8 as longitude,
@@ -254,6 +292,7 @@ export function registerTruckSightingRoutes(app: Express) {
           select
             id,
             truck_name as "truckName",
+            photo_url as "photoUrl",
             notes,
             latitude::float8 as latitude,
             longitude::float8 as longitude,
@@ -315,6 +354,7 @@ export function registerTruckSightingRoutes(app: Express) {
             select
               s.id,
               s.truck_name as "truckName",
+              s.photo_url as "photoUrl",
               s.notes,
               s.latitude::float8 as latitude,
               s.longitude::float8 as longitude,

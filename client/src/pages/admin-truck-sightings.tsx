@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 type TruckSighting = {
   id: string;
   truckName: string;
+  photoUrl: string | null;
   notes: string | null;
   latitude: number;
   longitude: number;
@@ -194,6 +195,15 @@ export default function AdminTruckSightingsPage() {
                 <MapPin className="w-3 h-3" />
                 {row.latitude.toFixed(5)}, {row.longitude.toFixed(5)}
               </div>
+
+              {row.photoUrl && (
+                <img
+                  src={row.photoUrl}
+                  alt={`${row.truckName} sighting`}
+                  className="h-28 w-full rounded-md border border-border/60 object-cover"
+                  loading="lazy"
+                />
+              )}
 
               {row.locationLabel && (
                 <div className="text-xs text-muted-foreground">{row.locationLabel}</div>

@@ -310,6 +310,7 @@ interface LiveTruck {
 type CommunityTruckSighting = {
   id: string;
   truckName: string;
+  photoUrl: string;
   notes?: string | null;
   latitude: number;
   longitude: number;
@@ -1096,10 +1097,13 @@ export default function MapPage() {
     useState<CommunityTruckSighting | null>(null);
   const [showReportTruckDialog, setShowReportTruckDialog] = useState(false);
   const [reportTruckName, setReportTruckName] = useState("");
+  const [reportTruckPhotoDataUrl, setReportTruckPhotoDataUrl] = useState("");
+  const [reportTruckPhotoName, setReportTruckPhotoName] = useState("");
   const [reportTruckNotes, setReportTruckNotes] = useState("");
   const [reportLocationLabel, setReportLocationLabel] = useState("");
   const [isSubmittingTruckSighting, setIsSubmittingTruckSighting] =
     useState(false);
+  const truckSightingPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [locationAccuracyM, setLocationAccuracyM] = useState<number | null>(
     null,
@@ -1140,6 +1144,53 @@ export default function MapPage() {
   const bestLocationAccuracyRef = useRef<number | null>(null);
   const hasCenteredFromLiveLocationRef = useRef(false);
   const enableClientGeocode = false;
+
+  const handleTruckSightingPhotoChange = useCallback(
+    async (file: File | null) => {
+      if (!file) {
+        setReportTruckPhotoDataUrl("");
+        setReportTruckPhotoName("");
+        return;
+      }
+
+      if (!file.type.startsWith("image/")) {
+        toast({
+          title: "Invalid file",
+          description: "Please choose an image file.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const maxBytes = 6 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        toast({
+          title: "Image too large",
+          description: "Use an image smaller than 6MB.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("Failed to read image file"));
+          reader.readAsDataURL(file);
+        });
+        setReportTruckPhotoDataUrl(dataUrl);
+        setReportTruckPhotoName(file.name || "truck-photo");
+      } catch {
+        toast({
+          title: "Unable to read image",
+          description: "Please try selecting the photo again.",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast],
+  );
 
   useEffect(() => {
     userLocationRef.current = userLocation;
@@ -3384,6 +3435,14 @@ export default function MapPage() {
                   {selectedSighting.notes}
                 </p>
               )}
+              {selectedSighting.photoUrl && (
+                <img
+                  src={selectedSighting.photoUrl}
+                  alt={`${selectedSighting.truckName} sighting`}
+                  className="mb-2 h-28 w-full rounded-lg border border-border/60 object-cover"
+                  loading="lazy"
+                />
+              )}
               <div className="mb-3 text-xs text-muted-foreground">
                 Reports: {selectedSighting.reportCount} · Expires from map at{" "}
                 {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
@@ -3804,9 +3863,36 @@ export default function MapPage() {
             <Input
               value={reportTruckName}
               onChange={(e) => setReportTruckName(e.target.value)}
-              placeholder="Truck name (if known)"
+              placeholder="Truck name"
               maxLength={120}
             />
+            <div className="space-y-2">
+              <Input
+                ref={truckSightingPhotoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  void handleTruckSightingPhotoChange(file);
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                A photo is required to post this sighting.
+              </p>
+              {reportTruckPhotoDataUrl && (
+                <img
+                  src={reportTruckPhotoDataUrl}
+                  alt="Truck sighting preview"
+                  className="h-24 w-full rounded-md border border-border/60 object-cover"
+                />
+              )}
+              {reportTruckPhotoName && (
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {reportTruckPhotoName}
+                </p>
+              )}
+            </div>
             <Input
               value={reportLocationLabel}
               onChange={(e) => setReportLocationLabel(e.target.value)}
@@ -3823,7 +3909,14 @@ export default function MapPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowReportTruckDialog(false)}
+              onClick={() => {
+                setShowReportTruckDialog(false);
+                setReportTruckPhotoDataUrl("");
+                setReportTruckPhotoName("");
+                if (truckSightingPhotoInputRef.current) {
+                  truckSightingPhotoInputRef.current.value = "";
+                }
+              }}
               disabled={isSubmittingTruckSighting}
             >
               Cancel
@@ -3832,6 +3925,7 @@ export default function MapPage() {
               disabled={
                 isSubmittingTruckSighting ||
                 !reportTruckName.trim() ||
+                !reportTruckPhotoDataUrl ||
                 !(userLocation || mapCenter)
               }
               onClick={async () => {
@@ -3855,6 +3949,7 @@ export default function MapPage() {
                     credentials: "include",
                     body: JSON.stringify({
                       truckName: reportTruckName.trim(),
+                      photoUrl: reportTruckPhotoDataUrl,
                       latitude: coords.lat,
                       longitude: coords.lng,
                       notes: reportTruckNotes.trim() || undefined,
@@ -3871,8 +3966,13 @@ export default function MapPage() {
 
                   setShowReportTruckDialog(false);
                   setReportTruckName("");
+                  setReportTruckPhotoDataUrl("");
+                  setReportTruckPhotoName("");
                   setReportTruckNotes("");
                   setReportLocationLabel("");
+                  if (truckSightingPhotoInputRef.current) {
+                    truckSightingPhotoInputRef.current.value = "";
+                  }
                   setSelectedSighting(null);
                   queryClient.invalidateQueries({
                     queryKey: ["/api/trucks/community-sightings/live"],
