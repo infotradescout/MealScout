@@ -65,6 +65,20 @@ export async function hasBusinessPermissionForRestaurant(
   restaurantId: string,
   permission: BusinessPermissionKey,
 ) {
+  const [userRow] = await db
+    .select({ userType: users.userType })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (
+    ["staff", "admin", "super_admin"].includes(
+      String(userRow?.userType || "").toLowerCase(),
+    )
+  ) {
+    return true;
+  }
+
   const owner = await isRestaurantOwner(userId, restaurantId);
   if (owner) return true;
 
