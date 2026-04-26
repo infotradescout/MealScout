@@ -78,6 +78,14 @@ type InitialOnboardingBatchOptions = {
   markContacted?: boolean;
 };
 
+type DirectoryAutopopulateOptions = {
+  limitCities?: number;
+  limitPerCity?: number;
+  minQualityScore?: number;
+  includeCommissary?: boolean;
+  includeDelivery?: boolean;
+};
+
 type OnboardingCandidateRow = {
   listingId: string;
   name: string;
@@ -90,6 +98,40 @@ type OnboardingCandidateRow = {
   corridor: string;
   seedOrder: number;
   lifecycleStatus: string;
+};
+
+type ActiveUserCityRow = {
+  city: string;
+  state: string;
+  user_count: number;
+};
+
+type SupplierCandidateRow = {
+  supplierId: string;
+  businessName: string;
+  city: string;
+  state: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  offersDelivery: boolean;
+  deliveryRadiusMiles: number | null;
+  deliveryNotes: string | null;
+  onlinePaymentsEnabled: boolean;
+  stripeOnboardingCompleted: boolean;
+  activeProducts: number;
+};
+
+type HostLeadCandidateRow = {
+  id: string;
+  businessName: string;
+  city: string;
+  state: string;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  locationType: string;
+  parkingSpots: number | null;
+  notes: string | null;
 };
 
 type RecomputeOptions = {
@@ -217,6 +259,150 @@ function normalizeBatchLimit(value: unknown, fallback: number, max = 500) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(1, Math.min(max, Math.floor(parsed)));
+}
+
+function normalizeDirectoryText(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function toTagArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function buildUniqueTags(...groups: Array<unknown>): string[] {
+  const out = new Set<string>();
+  groups.forEach((group) => {
+    toTagArray(group).forEach((tag) => out.add(tag));
+  });
+  return Array.from(out.values());
+}
+
+async function upsertDirectoryByNaturalKey(input: {
+  entityType: string;
+  businessName: string;
+  city: string;
+  state: string;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  websiteUrl?: string | null;
+  serviceRadiusMiles?: number | null;
+  servesFoodTrucks?: boolean;
+  verificationStatus?: string | null;
+  qualityScore?: number | null;
+  source?: string | null;
+  isActive?: boolean;
+  tags?: unknown;
+  notes?: string | null;
+}) {
+  const entityType = normalizeDirectoryText(input.entityType);
+  const businessName = String(input.businessName || "").trim();
+  const city = normalizeDirectoryText(input.city);
+  const state = normalizeDirectoryText(input.state);
+  if (!entityType || !businessName || !city || !state) {
+    return { skipped: true };
+  }
+
+  const existingResult = await db.execute(sql<{ id: string; tags: unknown; quality_score: number }>`
+    select id, tags, quality_score
+    from market_expansion_directory
+    where
+      lower(entity_type) = ${entityType} and
+      lower(business_name) = ${normalizeDirectoryText(businessName)} and
+      lower(coalesce(city, '')) = ${city} and
+      lower(coalesce(state, '')) = ${state}
+    limit 1
+  `);
+
+  const existing = ((existingResult as any)?.rows || [])[0] as
+    | { id: string; tags: unknown; quality_score: number }
+    | undefined;
+
+  const nextQuality = clampScore(Number(input.qualityScore ?? 50));
+
+  if (existing?.id) {
+    const mergedTags = buildUniqueTags(existing.tags, input.tags || []);
+    await db.execute(sql`
+      update market_expansion_directory
+      set
+        contact_phone = ${input.contactPhone || null},
+        contact_email = ${input.contactEmail || null},
+        website_url = ${input.websiteUrl || null},
+        service_radius_miles = ${input.serviceRadiusMiles ?? null},
+        serves_food_trucks = ${input.servesFoodTrucks !== false},
+        verification_status = ${input.verificationStatus || "unverified"},
+        quality_score = ${Math.max(Number(existing.quality_score || 0), nextQuality)},
+        source = ${input.source || "autopopulate"},
+        is_active = ${input.isActive !== false},
+        tags = ${JSON.stringify(mergedTags)}::jsonb,
+        notes = ${input.notes || null},
+        updated_at = now()
+      where id = ${existing.id}
+    `);
+    return { updated: true, id: existing.id };
+  }
+
+  const created = await upsertMarketDirectoryEntry({
+    entityType,
+    businessName,
+    city,
+    state,
+    contactPhone: input.contactPhone || null,
+    contactEmail: input.contactEmail || null,
+    websiteUrl: input.websiteUrl || null,
+    serviceRadiusMiles: input.serviceRadiusMiles ?? null,
+    servesFoodTrucks: input.servesFoodTrucks !== false,
+    verificationStatus: input.verificationStatus || "unverified",
+    qualityScore: nextQuality,
+    source: input.source || "autopopulate",
+    isActive: input.isActive !== false,
+    tags: buildUniqueTags(input.tags || []),
+    notes: input.notes || null,
+  });
+  return { created: true, id: created.id };
+}
+
+async function getActiveUserCities(limitCities: number): Promise<ActiveUserCityRow[]> {
+  const result = await db.execute(sql<ActiveUserCityRow>`
+    with city_sources as (
+      select
+        lower(trim(coalesce(r.city, ''))) as city,
+        lower(trim(coalesce(r.state, ''))) as state,
+        count(distinct r.owner_id)::int as user_count
+      from restaurants r
+      where
+        coalesce(r.is_active, true) = true and
+        trim(coalesce(r.city, '')) <> '' and
+        trim(coalesce(r.state, '')) <> ''
+      group by 1, 2
+
+      union all
+
+      select
+        lower(trim(coalesce(s.city, ''))) as city,
+        lower(trim(coalesce(s.state, ''))) as state,
+        count(distinct s.user_id)::int as user_count
+      from suppliers s
+      where
+        coalesce(s.is_active, true) = true and
+        trim(coalesce(s.city, '')) <> '' and
+        trim(coalesce(s.state, '')) <> ''
+      group by 1, 2
+    )
+    select
+      city,
+      state,
+      sum(user_count)::int as user_count
+    from city_sources
+    where city <> '' and state <> ''
+    group by 1, 2
+    order by sum(user_count) desc, city asc
+    limit ${limitCities}
+  `);
+
+  return ((result as any)?.rows || []) as ActiveUserCityRow[];
 }
 
 async function recordMarketExpansionJobRun(input: {
@@ -1335,5 +1521,211 @@ export async function createInitialOnboardingBatch(
     limitCities,
     markContacted,
     rows: batch,
+  };
+}
+
+export async function autoPopulateDirectoryForActiveCities(
+  options?: DirectoryAutopopulateOptions,
+) {
+  await ensureExpansionTables();
+  const startedAt = Date.now();
+  const limitCities = normalizeBatchLimit(options?.limitCities, 8, 40);
+  const limitPerCity = normalizeBatchLimit(options?.limitPerCity, 30, 120);
+  const minQualityScore = normalizeBatchLimit(options?.minQualityScore, 60, 100);
+  const includeCommissary = options?.includeCommissary !== false;
+  const includeDelivery = options?.includeDelivery !== false;
+
+  const cities = await getActiveUserCities(limitCities);
+  let created = 0;
+  let updated = 0;
+
+  for (const cityRow of cities) {
+    const city = normalizeLocationToken(cityRow.city);
+    const state = normalizeLocationToken(cityRow.state);
+    if (!city || !state) continue;
+
+    const supplierResult = await db.execute(sql<SupplierCandidateRow>`
+      select
+        s.id as "supplierId",
+        s.business_name as "businessName",
+        lower(trim(coalesce(s.city, ''))) as city,
+        lower(trim(coalesce(s.state, ''))) as state,
+        s.contact_phone as "contactPhone",
+        s.contact_email as "contactEmail",
+        coalesce(s.offers_delivery, false) as "offersDelivery",
+        s.delivery_radius_miles as "deliveryRadiusMiles",
+        s.delivery_notes as "deliveryNotes",
+        coalesce(s.online_payments_enabled, false) as "onlinePaymentsEnabled",
+        coalesce(s.stripe_onboarding_completed, false) as "stripeOnboardingCompleted",
+        coalesce(count(sp.id), 0)::int as "activeProducts"
+      from suppliers s
+      left join supplier_products sp
+        on sp.supplier_id = s.id and coalesce(sp.is_active, true) = true
+      where
+        coalesce(s.is_active, true) = true and
+        lower(trim(coalesce(s.city, ''))) = ${city} and
+        lower(trim(coalesce(s.state, ''))) = ${state}
+      group by s.id
+      order by count(sp.id) desc, s.updated_at desc
+      limit ${limitPerCity}
+    `);
+
+    const supplierRows = ((supplierResult as any)?.rows || []) as SupplierCandidateRow[];
+    for (const row of supplierRows) {
+      const supplierScore = clampScore(
+        40 +
+          Math.min(30, Number(row.activeProducts || 0) * 5) +
+          (row.onlinePaymentsEnabled ? 10 : 0) +
+          (row.stripeOnboardingCompleted ? 8 : 0) +
+          (row.offersDelivery ? 12 : 0),
+      );
+
+      if (supplierScore >= minQualityScore) {
+        const result = await upsertDirectoryByNaturalKey({
+          entityType: "supplier",
+          businessName: row.businessName,
+          city,
+          state,
+          contactPhone: row.contactPhone || null,
+          contactEmail: row.contactEmail || null,
+          serviceRadiusMiles: row.deliveryRadiusMiles ?? null,
+          servesFoodTrucks: true,
+          verificationStatus: row.stripeOnboardingCompleted ? "verified" : "unverified",
+          qualityScore: supplierScore,
+          source: "autopopulate:internal_supplier",
+          isActive: true,
+          tags: ["supplier", "internal", "active"],
+          notes: "Auto-populated from active Supplier marketplace profile.",
+        });
+        if ((result as any).created) created += 1;
+        if ((result as any).updated) updated += 1;
+      }
+
+      if (includeDelivery && row.offersDelivery) {
+        const deliveryScore = clampScore(
+          45 +
+            Math.min(20, Number(row.activeProducts || 0) * 4) +
+            (row.deliveryRadiusMiles && row.deliveryRadiusMiles > 0 ? 20 : 0) +
+            (row.onlinePaymentsEnabled ? 10 : 0),
+        );
+        if (deliveryScore >= minQualityScore) {
+          const deliveryResult = await upsertDirectoryByNaturalKey({
+            entityType: "delivery_service",
+            businessName: row.businessName,
+            city,
+            state,
+            contactPhone: row.contactPhone || null,
+            contactEmail: row.contactEmail || null,
+            serviceRadiusMiles: row.deliveryRadiusMiles ?? null,
+            servesFoodTrucks: true,
+            verificationStatus: row.stripeOnboardingCompleted ? "verified" : "unverified",
+            qualityScore: deliveryScore,
+            source: "autopopulate:internal_supplier",
+            isActive: true,
+            tags: ["delivery", "supplier_network", "active"],
+            notes: row.deliveryNotes || "Auto-populated from supplier delivery capability.",
+          });
+          if ((deliveryResult as any).created) created += 1;
+          if ((deliveryResult as any).updated) updated += 1;
+        }
+      }
+    }
+
+    if (includeCommissary) {
+      const leadResult = await db.execute(sql<HostLeadCandidateRow>`
+        select
+          hpl.id,
+          hpl.business_name as "businessName",
+          lower(trim(coalesce(hpl.city, ''))) as city,
+          lower(trim(coalesce(hpl.state, ''))) as state,
+          hpl.phone,
+          hpl.email,
+          hpl.status,
+          hpl.location_type as "locationType",
+          hpl.parking_spots as "parkingSpots",
+          hpl.notes
+        from host_partner_leads hpl
+        where
+          lower(trim(coalesce(hpl.city, ''))) = ${city} and
+          lower(trim(coalesce(hpl.state, ''))) = ${state} and
+          hpl.status in ('qualified', 'converted', 'contacted') and
+          (
+            lower(coalesce(hpl.business_name, '')) like '%commissary%' or
+            lower(coalesce(hpl.business_name, '')) like '%kitchen%' or
+            lower(coalesce(hpl.notes, '')) like '%commissary%' or
+            lower(coalesce(hpl.notes, '')) like '%commercial kitchen%'
+          )
+        order by hpl.updated_at desc, hpl.created_at desc
+        limit ${limitPerCity}
+      `);
+
+      const leadRows = ((leadResult as any)?.rows || []) as HostLeadCandidateRow[];
+      for (const lead of leadRows) {
+        const commissaryScore = clampScore(
+          50 +
+            (String(lead.status) === "converted"
+              ? 20
+              : String(lead.status) === "qualified"
+                ? 15
+                : 8) +
+            (Number(lead.parkingSpots || 0) >= 6 ? 10 : 0) +
+            (String(lead.locationType || "").toLowerCase().includes("industrial") ? 8 : 0),
+        );
+
+        if (commissaryScore >= minQualityScore) {
+          const commissaryResult = await upsertDirectoryByNaturalKey({
+            entityType: "commissary_kitchen",
+            businessName: lead.businessName,
+            city,
+            state,
+            contactPhone: lead.phone || null,
+            contactEmail: lead.email || null,
+            servesFoodTrucks: true,
+            verificationStatus:
+              String(lead.status) === "converted" ? "verified" : "unverified",
+            qualityScore: commissaryScore,
+            source: "autopopulate:host_partner_lead",
+            isActive: true,
+            tags: ["commissary", "host_partner", `status:${String(lead.status || "new")}`],
+            notes:
+              lead.notes ||
+              "Auto-populated from qualified/converted host partner lead that matches commissary signals.",
+          });
+          if ((commissaryResult as any).created) created += 1;
+          if ((commissaryResult as any).updated) updated += 1;
+        }
+      }
+    }
+  }
+
+  const durationMs = Date.now() - startedAt;
+  await recordMarketExpansionJobRun({
+    jobName: "directory_autopopulate",
+    status: "ok",
+    batchLimit: limitCities,
+    evaluatedCount: cities.length,
+    changedCount: created + updated,
+    durationMs,
+    details: {
+      limitPerCity,
+      minQualityScore,
+      includeCommissary,
+      includeDelivery,
+      created,
+      updated,
+    },
+  });
+
+  return {
+    ok: true,
+    evaluatedCities: cities.length,
+    created,
+    updated,
+    durationMs,
+    limits: {
+      limitCities,
+      limitPerCity,
+      minQualityScore,
+    },
   };
 }

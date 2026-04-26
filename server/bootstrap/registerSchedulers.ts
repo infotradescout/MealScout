@@ -20,6 +20,7 @@ import { runLocationDemandActivationCron } from "../services/locationDemandActiv
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
 import {
+  autoPopulateDirectoryForActiveCities,
   runMarketExpansionScoreRecompute,
   runMarketExpansionStateTransition,
 } from "../services/marketExpansionAutomation";
@@ -688,6 +689,22 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.log("[market-expansion] Daily state transition complete", result);
     } catch (error) {
       console.error("[market-expansion] Daily state transition failed:", error);
+    }
+  });
+
+  // Market expansion partner directory autopopulate — daily 5:15 AM
+  cron.schedule("15 5 * * *", async () => {
+    try {
+      const result = await autoPopulateDirectoryForActiveCities({
+        limitCities: 12,
+        limitPerCity: 30,
+        minQualityScore: 60,
+        includeCommissary: true,
+        includeDelivery: true,
+      });
+      console.log("[market-expansion] Daily directory autopopulate complete", result);
+    } catch (error) {
+      console.error("[market-expansion] Daily directory autopopulate failed:", error);
     }
   });
 

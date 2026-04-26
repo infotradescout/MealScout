@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import {
+  autoPopulateDirectoryForActiveCities,
   createInitialOnboardingBatch,
   listMarketDirectory,
   listMarketExpansionLifecycle,
@@ -47,6 +48,14 @@ const initialBatchSchema = z.object({
   limitCities: z.number().int().min(1).max(50).optional(),
   corridor: z.string().optional(),
   markContacted: z.boolean().optional(),
+});
+
+const directoryAutopopulateSchema = z.object({
+  limitCities: z.number().int().min(1).max(40).optional(),
+  limitPerCity: z.number().int().min(1).max(120).optional(),
+  minQualityScore: z.number().int().min(0).max(100).optional(),
+  includeCommissary: z.boolean().optional(),
+  includeDelivery: z.boolean().optional(),
 });
 
 export function registerMarketExpansionRoutes(app: Express) {
@@ -172,6 +181,28 @@ export function registerMarketExpansionRoutes(app: Express) {
         }
         console.error("[market-expansion] initial onboarding batch failed:", error);
         res.status(500).json({ message: "Unable to build initial onboarding batch" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/market-expansion/directory/autopopulate",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const parsed = directoryAutopopulateSchema.parse(req.body || {});
+        const result = await autoPopulateDirectoryForActiveCities(parsed);
+        res.json(result);
+      } catch (error) {
+        if ((error as any)?.name === "ZodError") {
+          return res.status(400).json({
+            message: "Invalid directory autopopulate payload",
+            issues: (error as any).issues,
+          });
+        }
+        console.error("[market-expansion] directory autopopulate failed:", error);
+        res.status(500).json({ message: "Unable to auto-populate partner directory" });
       }
     },
   );
