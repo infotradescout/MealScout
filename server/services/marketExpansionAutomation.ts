@@ -71,6 +71,27 @@ type MarketExpansionJobRunRow = {
   finished_at: Date | string;
 };
 
+type InitialOnboardingBatchOptions = {
+  limitListings?: number;
+  limitCities?: number;
+  corridor?: string;
+  markContacted?: boolean;
+};
+
+type OnboardingCandidateRow = {
+  listingId: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  email: string | null;
+  phone: string | null;
+  externalId: string | null;
+  confidenceScore: number | null;
+  corridor: string;
+  seedOrder: number;
+  lifecycleStatus: string;
+};
+
 type RecomputeOptions = {
   limitCities?: number;
   corridor?: string;
@@ -1192,5 +1213,127 @@ export async function listMarketExpansionUsage(params?: {
           ? Math.round(aggregate.totalChanged / aggregate.totalRuns)
           : 0,
     },
+  };
+}
+
+export async function createInitialOnboardingBatch(
+  options?: InitialOnboardingBatchOptions,
+) {
+  await ensureExpansionTables();
+  const startedAt = Date.now();
+  const limitListings = normalizeBatchLimit(options?.limitListings, 60, 500);
+  const limitCities = normalizeBatchLimit(options?.limitCities, 6, 50);
+  const corridorFilter = normalizeLocationToken(options?.corridor || "");
+  const markContacted = options?.markContacted !== false;
+
+  const candidateRows = await db.execute(sql<OnboardingCandidateRow>`
+    with city_scope as (
+      select
+        s.city,
+        s.state,
+        s.corridor,
+        s.seed_order,
+        coalesce(l.status, 'seeded') as lifecycle_status
+      from market_expansion_city_scores s
+      left join market_expansion_city_lifecycle l
+        on l.city = s.city and l.state = s.state
+      where
+        (${corridorFilter} = '' or lower(s.corridor) = ${corridorFilter}) and
+        coalesce(l.status, 'seeded') in ('launch_ready', 'active', 'remediation_required')
+      order by
+        case s.corridor
+          when 'pensacola_core' then 1
+          when 'gulf_to_dallas' then 2
+          when 'east_coast_to_nj' then 3
+          else 4
+        end,
+        s.seed_order asc,
+        s.final_score desc
+      limit ${limitCities}
+    )
+    select
+      t.id as "listingId",
+      t.name,
+      t.city,
+      t.state,
+      t.email,
+      t.phone,
+      t.external_id as "externalId",
+      t.confidence_score as "confidenceScore",
+      c.corridor,
+      c.seed_order as "seedOrder",
+      c.lifecycle_status as "lifecycleStatus"
+    from city_scope c
+    inner join truck_import_listings t
+      on lower(trim(coalesce(t.city, ''))) = c.city
+      and lower(trim(coalesce(t.state, ''))) = c.state
+    where
+      t.status = 'unclaimed' and
+      t.last_invite_sent_at is null and
+      trim(coalesce(t.email, '')) <> ''
+    order by
+      case c.corridor
+        when 'pensacola_core' then 1
+        when 'gulf_to_dallas' then 2
+        when 'east_coast_to_nj' then 3
+        else 4
+      end,
+      c.seed_order asc,
+      coalesce(t.confidence_score, 0) desc,
+      t.created_at asc
+    limit ${limitListings}
+  `);
+
+  const rows = ((candidateRows as any)?.rows || []) as OnboardingCandidateRow[];
+
+  if (markContacted && rows.length > 0) {
+    const ids = rows.map((row) => String(row.listingId || "").trim()).filter(Boolean);
+    if (ids.length > 0) {
+      await db.execute(sql`
+        update truck_import_listings
+        set
+          status = 'claim_requested',
+          last_invite_sent_at = now(),
+          updated_at = now()
+        where id = any(${ids}::varchar[])
+      `);
+    }
+  }
+
+  const baseUrl = String(process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(/\/+$/, "");
+  const batch = rows.map((row) => {
+    const query = String(row.externalId || row.name || "").trim();
+    const claimUrl = `${baseUrl}/restaurant-signup?businessType=food_truck&claim=1${
+      query ? `&q=${encodeURIComponent(query)}` : ""
+    }`;
+    return {
+      ...row,
+      claimUrl,
+    };
+  });
+
+  const durationMs = Date.now() - startedAt;
+  await recordMarketExpansionJobRun({
+    jobName: "initial_onboarding_batch",
+    status: "ok",
+    batchLimit: limitListings,
+    evaluatedCount: rows.length,
+    changedCount: markContacted ? rows.length : 0,
+    durationMs,
+    details: {
+      limitCities,
+      corridorFilter: corridorFilter || null,
+      markContacted,
+    },
+  });
+
+  return {
+    ok: true,
+    count: batch.length,
+    durationMs,
+    limitListings,
+    limitCities,
+    markContacted,
+    rows: batch,
   };
 }

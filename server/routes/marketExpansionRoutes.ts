@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import {
+  createInitialOnboardingBatch,
   listMarketDirectory,
   listMarketExpansionLifecycle,
   listMarketExpansionQueue,
@@ -39,6 +40,13 @@ const recomputeSchema = z.object({
 const transitionSchema = z.object({
   limitCities: z.number().int().min(1).max(1000).optional(),
   maxActivations: z.number().int().min(1).max(25).optional(),
+});
+
+const initialBatchSchema = z.object({
+  limitListings: z.number().int().min(1).max(500).optional(),
+  limitCities: z.number().int().min(1).max(50).optional(),
+  corridor: z.string().optional(),
+  markContacted: z.boolean().optional(),
 });
 
 export function registerMarketExpansionRoutes(app: Express) {
@@ -142,6 +150,28 @@ export function registerMarketExpansionRoutes(app: Express) {
       } catch (error) {
         console.error("[market-expansion] usage failed:", error);
         res.status(500).json({ message: "Unable to load usage tracking" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/market-expansion/onboarding/initial-batch",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const parsed = initialBatchSchema.parse(req.body || {});
+        const payload = await createInitialOnboardingBatch(parsed);
+        res.json(payload);
+      } catch (error) {
+        if ((error as any)?.name === "ZodError") {
+          return res.status(400).json({
+            message: "Invalid initial onboarding batch payload",
+            issues: (error as any).issues,
+          });
+        }
+        console.error("[market-expansion] initial onboarding batch failed:", error);
+        res.status(500).json({ message: "Unable to build initial onboarding batch" });
       }
     },
   );

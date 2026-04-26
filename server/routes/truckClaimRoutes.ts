@@ -38,7 +38,8 @@ const decorateTruckClaimRows = (
       : 0;
 
     const canClaim = hasInviteUser ? Boolean(isInviteOwner) : true;
-    const canRequest = hasEmail && !isInviteOwner;
+    const hasPriorInvite = Boolean(lastInviteSentAtMs);
+    const canRequest = hasEmail && !isInviteOwner && !hasPriorInvite;
 
     return {
       id: row.id,
@@ -53,6 +54,7 @@ const decorateTruckClaimRows = (
       hasEmail,
       canClaim,
       canRequest,
+      noRepeatPolicy: hasPriorInvite,
       requestCooldownMinutes: cooldownRemainingMs
         ? Math.ceil(cooldownRemainingMs / 60000)
         : 0,
@@ -227,16 +229,18 @@ export function registerTruckClaimRoutes(app: Express) {
       const COOLDOWN_MS = 6 * 60 * 60 * 1000;
       if (listing.lastInviteSentAt) {
         const lastMs = new Date(listing.lastInviteSentAt).getTime();
-        if (Date.now() - lastMs < COOLDOWN_MS) {
-          const minutes = Math.ceil(
-            (COOLDOWN_MS - (Date.now() - lastMs)) / 60000,
-          );
-          return res.status(429).json({
-            message: `A reminder was already sent recently. Try again in about ${minutes} minutes.`,
-            cooldownMinutes: minutes,
-            hadEmail,
-          });
-        }
+        const minutesSinceInvite = Math.max(
+          1,
+          Math.floor((Date.now() - lastMs) / 60000),
+        );
+        return res.status(409).json({
+          message:
+            "A setup invite was already sent for this listing. No repeat reminders are sent under the one-touch onboarding policy.",
+          noRepeatPolicy: true,
+          sentMinutesAgo: minutesSinceInvite,
+          cooldownMinutes: COOLDOWN_MS > 0 ? Math.ceil(COOLDOWN_MS / 60000) : 0,
+          hadEmail,
+        });
       }
 
       let inviteUser: any | null = null;
