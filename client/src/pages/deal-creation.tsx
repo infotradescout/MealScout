@@ -152,6 +152,10 @@ export default function DealCreation() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const isAdminOrStaffUser =
+    user?.userType === "admin" ||
+    user?.userType === "super_admin" ||
+    user?.userType === "staff";
   const queryClient = useQueryClient();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -205,15 +209,23 @@ export default function DealCreation() {
     const preferredId =
       (requestedRestaurantId && allIds.has(requestedRestaurantId)
         ? requestedRestaurantId
+        : requestedRestaurantId && isAdminOrStaffUser
+        ? requestedRestaurantId
         : "") ||
       (rememberedRestaurantId && allIds.has(rememberedRestaurantId)
         ? rememberedRestaurantId
         : "") ||
       String(restaurants[0]?.id || "").trim();
-    if (preferredId && preferredId !== manualRestaurantId) {
+    if (!manualRestaurantId && preferredId) {
       setManualRestaurantId(preferredId);
     }
-  }, [restaurants, requestedRestaurantId, rememberedRestaurantId, manualRestaurantId]);
+  }, [
+    restaurants,
+    requestedRestaurantId,
+    rememberedRestaurantId,
+    manualRestaurantId,
+    isAdminOrStaffUser,
+  ]);
 
   useEffect(() => {
     if (!manualRestaurantId) return;
@@ -235,8 +247,16 @@ export default function DealCreation() {
   }, [restaurants, manualRestaurantId]);
 
   const selectedRestaurantId = useMemo(() => {
-    return String(selectedRestaurant?.id || "").trim();
-  }, [selectedRestaurant]);
+    return String(manualRestaurantId || selectedRestaurant?.id || "").trim();
+  }, [manualRestaurantId, selectedRestaurant]);
+
+  const hasManualOutsideList = useMemo(() => {
+    if (!manualRestaurantId || !Array.isArray(restaurants)) return false;
+    return !restaurants.some(
+      (restaurant: any) =>
+        String(restaurant?.id || "").trim() === String(manualRestaurantId).trim(),
+    );
+  }, [manualRestaurantId, restaurants]);
 
   const buildDealShareMessage = (params: {
     dealTitle: string;
@@ -935,7 +955,8 @@ export default function DealCreation() {
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6 bg-[var(--bg-card)]/90 border border-[color:var(--border-subtle)] rounded-2xl px-4 py-5 shadow-clean"
           >
-            {Array.isArray(restaurants) && restaurants.length > 1 && (
+            {(Array.isArray(restaurants) && restaurants.length > 1) ||
+            (isAdminOrStaffUser && Boolean(requestedRestaurantId)) ? (
               <div className="space-y-2">
                 <Label htmlFor="deal-restaurant-selector">Post under</Label>
                 <select
@@ -947,6 +968,11 @@ export default function DealCreation() {
                   }
                   data-testid="select-deal-restaurant"
                 >
+                  {hasManualOutsideList && (
+                    <option value={manualRestaurantId}>
+                      Target business ({manualRestaurantId})
+                    </option>
+                  )}
                   {restaurants.map((restaurant: any) => (
                     <option
                       key={String(restaurant?.id || "")}
@@ -957,7 +983,7 @@ export default function DealCreation() {
                   ))}
                 </select>
               </div>
-            )}
+            ) : null}
 
             <FormField
               control={form.control}
