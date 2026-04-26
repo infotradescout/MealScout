@@ -157,6 +157,55 @@ const countBy = <T extends string>(values: T[]) =>
   );
 
 export function registerPublicDiscoveryRoutes(app: Express) {
+  const loadRecentPublicSignals = async (since: Date) => {
+    try {
+      const [recentRequests, recentShares, recentPosts, recentQueries] =
+        await Promise.all([
+          db
+            .select()
+            .from(requestLogs)
+            .where(gte(requestLogs.createdAt, since))
+            .orderBy(desc(requestLogs.createdAt))
+            .limit(5000),
+          db
+            .select()
+            .from(affiliateShareEvents)
+            .where(gte(affiliateShareEvents.createdAt, since))
+            .orderBy(desc(affiliateShareEvents.createdAt))
+            .limit(1500),
+          db
+            .select()
+            .from(socialPostQueue)
+            .where(gte(socialPostQueue.createdAt, since))
+            .orderBy(desc(socialPostQueue.createdAt))
+            .limit(1500),
+          db
+            .select()
+            .from(searchQueryEvents)
+            .where(gte(searchQueryEvents.createdAt, since))
+            .orderBy(desc(searchQueryEvents.createdAt))
+            .limit(3000),
+        ]);
+
+      return {
+        recentRequests,
+        recentShares,
+        recentPosts,
+        recentQueries,
+      };
+    } catch (error) {
+      console.warn("[public-evidence] Telemetry read failed; returning empty evidence", {
+        error,
+      });
+      return {
+        recentRequests: [],
+        recentShares: [],
+        recentPosts: [],
+        recentQueries: [],
+      };
+    }
+  };
+
   app.get("/api/public/canonical/:entity/:id", async (req, res) => {
     try {
       const entity = String(req.params.entity || "").toLowerCase().trim();
@@ -698,46 +747,34 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         ];
         const searchTokens = keywordTokens([row.name, row.cuisineType].join(" "));
 
-        const [recentRequests, recentShares, recentPosts, recentQueries, stories] =
-          await Promise.all([
-            db
-              .select()
-              .from(requestLogs)
-              .where(gte(requestLogs.createdAt, since))
-              .orderBy(desc(requestLogs.createdAt))
-              .limit(5000),
-            db
-              .select()
-              .from(affiliateShareEvents)
-              .where(gte(affiliateShareEvents.createdAt, since))
-              .orderBy(desc(affiliateShareEvents.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(socialPostQueue)
-              .where(gte(socialPostQueue.createdAt, since))
-              .orderBy(desc(socialPostQueue.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(searchQueryEvents)
-              .where(gte(searchQueryEvents.createdAt, since))
-              .orderBy(desc(searchQueryEvents.createdAt))
-              .limit(3000),
-            db
-              .select({
-                id: videoStories.id,
-                title: videoStories.title,
-                viewCount: videoStories.viewCount,
-                impressionCount: videoStories.impressionCount,
-                shareCount: videoStories.shareCount,
-                createdAt: videoStories.createdAt,
-              })
-              .from(videoStories)
-              .where(eq(videoStories.restaurantId, row.id))
-              .orderBy(desc(videoStories.createdAt))
-              .limit(12),
-          ]);
+        const {
+          recentRequests,
+          recentShares,
+          recentPosts,
+          recentQueries,
+        } = await loadRecentPublicSignals(since);
+        let stories: any[] = [];
+        try {
+          stories = await db
+            .select({
+              id: videoStories.id,
+              title: videoStories.title,
+              viewCount: videoStories.viewCount,
+              impressionCount: videoStories.impressionCount,
+              shareCount: videoStories.shareCount,
+              createdAt: videoStories.createdAt,
+            })
+            .from(videoStories)
+            .where(eq(videoStories.restaurantId, row.id))
+            .orderBy(desc(videoStories.createdAt))
+            .limit(12);
+        } catch (error) {
+          console.warn("[public-evidence] Story query failed; continuing", {
+            restaurantId: row.id,
+            error,
+          });
+          stories = [];
+        }
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -872,33 +909,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.name, row.hostName, row.description].filter(Boolean).join(" "),
         );
 
-        const [recentRequests, recentShares, recentPosts, recentQueries] =
-          await Promise.all([
-            db
-              .select()
-              .from(requestLogs)
-              .where(gte(requestLogs.createdAt, since))
-              .orderBy(desc(requestLogs.createdAt))
-              .limit(5000),
-            db
-              .select()
-              .from(affiliateShareEvents)
-              .where(gte(affiliateShareEvents.createdAt, since))
-              .orderBy(desc(affiliateShareEvents.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(socialPostQueue)
-              .where(gte(socialPostQueue.createdAt, since))
-              .orderBy(desc(socialPostQueue.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(searchQueryEvents)
-              .where(gte(searchQueryEvents.createdAt, since))
-              .orderBy(desc(searchQueryEvents.createdAt))
-              .limit(3000),
-          ]);
+        const {
+          recentRequests,
+          recentShares,
+          recentPosts,
+          recentQueries,
+        } = await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -1012,33 +1028,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.businessName, row.locationType, row.city, row.state].join(" "),
         );
 
-        const [recentRequests, recentShares, recentPosts, recentQueries] =
-          await Promise.all([
-            db
-              .select()
-              .from(requestLogs)
-              .where(gte(requestLogs.createdAt, since))
-              .orderBy(desc(requestLogs.createdAt))
-              .limit(5000),
-            db
-              .select()
-              .from(affiliateShareEvents)
-              .where(gte(affiliateShareEvents.createdAt, since))
-              .orderBy(desc(affiliateShareEvents.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(socialPostQueue)
-              .where(gte(socialPostQueue.createdAt, since))
-              .orderBy(desc(socialPostQueue.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(searchQueryEvents)
-              .where(gte(searchQueryEvents.createdAt, since))
-              .orderBy(desc(searchQueryEvents.createdAt))
-              .limit(3000),
-          ]);
+        const {
+          recentRequests,
+          recentShares,
+          recentPosts,
+          recentQueries,
+        } = await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -1130,33 +1125,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.title, row.description, row.restaurantName].join(" "),
         );
 
-        const [recentRequests, recentShares, recentPosts, recentQueries] =
-          await Promise.all([
-            db
-              .select()
-              .from(requestLogs)
-              .where(gte(requestLogs.createdAt, since))
-              .orderBy(desc(requestLogs.createdAt))
-              .limit(5000),
-            db
-              .select()
-              .from(affiliateShareEvents)
-              .where(gte(affiliateShareEvents.createdAt, since))
-              .orderBy(desc(affiliateShareEvents.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(socialPostQueue)
-              .where(gte(socialPostQueue.createdAt, since))
-              .orderBy(desc(socialPostQueue.createdAt))
-              .limit(1500),
-            db
-              .select()
-              .from(searchQueryEvents)
-              .where(gte(searchQueryEvents.createdAt, since))
-              .orderBy(desc(searchQueryEvents.createdAt))
-              .limit(3000),
-          ]);
+        const {
+          recentRequests,
+          recentShares,
+          recentPosts,
+          recentQueries,
+        } = await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
