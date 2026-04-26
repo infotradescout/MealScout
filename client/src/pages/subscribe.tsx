@@ -5,7 +5,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -52,6 +52,24 @@ const getStripePromise = () => {
 };
 
 const stripePromise = getStripePromise();
+
+function isNativeWrapperMode() {
+  if (typeof window === "undefined") return false;
+  const anyWindow = window as any;
+  const capacitor = anyWindow.Capacitor;
+  if (!capacitor) return false;
+  if (typeof capacitor.isNativePlatform === "function") {
+    try {
+      return Boolean(capacitor.isNativePlatform());
+    } catch {
+      // fall through to platform checks
+    }
+  }
+  const platform = String(
+    capacitor.getPlatform?.() || capacitor.platform || "",
+  ).toLowerCase();
+  return platform === "ios" || platform === "android";
+}
 
 type SubscriptionStatus =
   | "selecting"
@@ -742,6 +760,8 @@ export default function Subscribe() {
   const stripeReturnUrl = `${window.location.origin}/subscribe?next=${encodeURIComponent(
     nextPath,
   )}`;
+  const isNativeWrapper = useMemo(() => isNativeWrapperMode(), []);
+  const webBillingUrl = "https://www.mealscout.us/subscribe";
 
   useEffect(() => {
     // Stripe redirect (3DS/etc) lands back here with `redirect_status`.
@@ -784,6 +804,16 @@ export default function Subscribe() {
   });
 
   const initializeSubscription = async () => {
+    if (isNativeWrapper) {
+      toast({
+        title: "Open billing in browser",
+        description:
+          "Subscription checkout is handled on the web to keep app-store billing fees off this revenue stream.",
+      });
+      window.open(webBillingUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     setSubscriptionState({ status: "initializing" });
 
     try {
@@ -1051,8 +1081,35 @@ export default function Subscribe() {
           </CardContent>
         </Card>
 
+        {isNativeWrapper && (
+          <Card className="mt-4 bg-[color:var(--status-warning)]/10 border-[color:var(--status-warning)]/30 shadow-clean">
+            <CardHeader>
+              <CardTitle>Billing happens on the web</CardTitle>
+              <CardDescription>
+                This app keeps real-world bookings and supplier payments in-app,
+                while subscription checkout stays on the website to avoid
+                app-store revenue share.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
+                className="w-full"
+                onClick={() =>
+                  window.open(webBillingUrl, "_blank", "noopener,noreferrer")
+                }
+                data-testid="button-open-web-billing"
+              >
+                Open Web Billing
+              </Button>
+              <p className="text-xs text-[color:var(--text-secondary)]">
+                After checkout, come back here and refresh to see updated access.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* If user has active subscription and not in payment flow, show management */}
-        {showManagement && (
+        {!isNativeWrapper && showManagement && (
           <div className="space-y-6">
             <SubscriptionManagement />
 
@@ -1082,7 +1139,9 @@ export default function Subscribe() {
         )}
 
         {/* Show plan selection for new users or when changing plans */}
-        {subscriptionState.status === "selecting" && !showManagement && (
+        {!isNativeWrapper &&
+          subscriptionState.status === "selecting" &&
+          !showManagement && (
           <div className="space-y-6">
             {/* If user has active subscription, show note about changing plans */}
             {hasActiveSubscription && (
@@ -1157,7 +1216,7 @@ export default function Subscribe() {
           </div>
         )}
 
-        {subscriptionState.status === "initializing" && (
+        {!isNativeWrapper && subscriptionState.status === "initializing" && (
           <div className="flex items-center justify-center min-h-[50vh]">
             <div className="text-center">
               <div
@@ -1174,7 +1233,8 @@ export default function Subscribe() {
           </div>
         )}
 
-        {subscriptionState.status === "requires_payment" &&
+        {!isNativeWrapper &&
+          subscriptionState.status === "requires_payment" &&
           subscriptionState.clientSecret && (
             <Elements
               stripe={stripePromise}
@@ -1207,7 +1267,7 @@ export default function Subscribe() {
             </Elements>
           )}
 
-        {subscriptionState.status === "error" && (
+        {!isNativeWrapper && subscriptionState.status === "error" && (
           <div className="flex items-center justify-center min-h-[50vh]">
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
               <CardContent className="p-6 text-center">
