@@ -237,7 +237,15 @@ export default function DealDetail() {
   const distance = (deal as Deal)?.distance;
   const cvsScore = Math.max(
     0,
-    Math.min(100, Math.round(Number((trustStats as any)?.profileAccuracyScore || 0))),
+    Math.min(
+      100,
+      Math.round(
+        Number(
+          (trustStats as any)?.profileAccuracyScore ??
+            ((restaurant as any)?.isVerified ? 98 : 62),
+        ),
+      ),
+    ),
   );
 
   const offerSchema = {

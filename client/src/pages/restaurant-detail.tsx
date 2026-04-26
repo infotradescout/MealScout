@@ -378,7 +378,15 @@ export default function RestaurantDetailPage() {
 
   const cvsScore = Math.max(
     0,
-    Math.min(100, Math.round(Number((trustStats as any)?.profileAccuracyScore || 0))),
+    Math.min(
+      100,
+      Math.round(
+        Number(
+          (trustStats as any)?.profileAccuracyScore ??
+            ((restaurant as any)?.isVerified ? 98 : 62),
+        ),
+      ),
+    ),
   );
   const recommendationCount = recommendationRows.length;
 
@@ -396,6 +404,10 @@ export default function RestaurantDetailPage() {
   const restaurantName = (restaurant as any)?.name || "Restaurant";
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
   const profilePath = `/p/restaurant/${restaurantId}/${profileSlug}`;
+  const editRestaurantPath = `/edit-restaurant/${restaurantId}`;
+  const editRestaurantFocusPath = (focus: string) =>
+    `${editRestaurantPath}?src=concierge&focus=${encodeURIComponent(focus)}`;
+  const dealCreationPath = `/deal-creation?restaurantId=${encodeURIComponent(String(restaurantId || ""))}&src=concierge`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
   const orderPrimaryUrl = toExternalUrl(
@@ -491,6 +503,27 @@ export default function RestaurantDetailPage() {
       {/* Restaurant Info */}
       <div className="px-4 sm:px-6 pb-8 -mt-10 relative z-10">
         <div className="mb-6 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-xl">
+          {isStaffOrAdmin ? (
+            <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Managed Profile Controls
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link href={editRestaurantFocusPath("description") as any}>
+                  <Button variant="outline" size="sm">Manage Profile For Owner</Button>
+                </Link>
+                {isFoodTruck ? (
+                  <Link href={editRestaurantFocusPath("parking") as any}>
+                    <Button variant="outline" size="sm">Manage Parking Schedule</Button>
+                  </Link>
+                ) : null}
+                <Link href={dealCreationPath as any}>
+                  <Button variant="outline" size="sm">Manage Specials</Button>
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-start justify-between mb-2">
             <h1
               className="text-2xl font-bold text-foreground flex items-center space-x-2"
@@ -990,11 +1023,17 @@ export default function RestaurantDetailPage() {
                   defaultText="Parking Schedule"
                 />
               </h2>
-              <AdminEditButton
-                textKey="restaurant.detail.parking.title"
-                defaultText="Parking Schedule"
-                label="Parking schedule title"
-              />
+              {isStaffOrAdmin ? (
+                <Link href={editRestaurantFocusPath("parking") as any}>
+                  <Button size="sm" variant="outline">Manage Schedule</Button>
+                </Link>
+              ) : (
+                <AdminEditButton
+                  textKey="restaurant.detail.parking.title"
+                  defaultText="Parking Schedule"
+                  label="Parking schedule title"
+                />
+              )}
             </div>
             {scheduleLoading ? (
               <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
@@ -1032,11 +1071,17 @@ export default function RestaurantDetailPage() {
                 defaultText="Current Specials"
               />
             </h2>
-            <AdminEditButton
-              textKey="restaurant.detail.specials.title"
-              defaultText="Current Specials"
-              label="Current specials title"
-            />
+            {isStaffOrAdmin ? (
+              <Link href={dealCreationPath as any}>
+                <Button size="sm" variant="outline">Manage Specials</Button>
+              </Link>
+            ) : (
+              <AdminEditButton
+                textKey="restaurant.detail.specials.title"
+                defaultText="Current Specials"
+                label="Current specials title"
+              />
+            )}
           </div>
           {restaurantDeals.length > 0 ? (
             <div className="space-y-4">
@@ -1071,9 +1116,16 @@ export default function RestaurantDetailPage() {
         {/* Community Recommendations */}
         <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-foreground">
-              Community Recommendations
-            </h2>
+            <div className="inline-flex items-center gap-2">
+              <h2 className="text-xl font-bold text-foreground">
+                Community Recommendations
+              </h2>
+              {isStaffOrAdmin ? (
+                <Link href={editRestaurantFocusPath("recommendations") as any}>
+                  <Button size="sm" variant="outline">Manage Content</Button>
+                </Link>
+              ) : null}
+            </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline">
                 {recommendationCount} total

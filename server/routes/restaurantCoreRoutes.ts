@@ -926,21 +926,32 @@ export function registerRestaurantCoreRoutes(
         return res.status(404).json({ message: "Restaurant not found" });
       }
 
-      const caseRows = await db
-        .select({
-          caseId: moderationCases.id,
-          status: moderationCases.status,
-          createdAt: moderationCases.createdAt,
-          resolvedAt: moderationCases.resolvedAt,
-          outcome: moderationResolutions.outcome,
-        })
-        .from(moderationCases)
-        .leftJoin(
-          moderationResolutions,
-          eq(moderationResolutions.caseId, moderationCases.id),
-        )
-        .where(eq(moderationCases.restaurantId, restaurantId))
-        .orderBy(desc(moderationCases.createdAt));
+      const isVerified = Boolean((restaurant as any)?.isVerified);
+      const hasOwnerAttachment = Boolean((restaurant as any)?.ownerId);
+
+      let caseRows: any[] = [];
+      try {
+        caseRows = await db
+          .select({
+            caseId: moderationCases.id,
+            status: moderationCases.status,
+            createdAt: moderationCases.createdAt,
+            resolvedAt: moderationCases.resolvedAt,
+            outcome: moderationResolutions.outcome,
+          })
+          .from(moderationCases)
+          .leftJoin(
+            moderationResolutions,
+            eq(moderationResolutions.caseId, moderationCases.id),
+          )
+          .where(eq(moderationCases.restaurantId, restaurantId))
+          .orderBy(desc(moderationCases.createdAt));
+      } catch (error) {
+        console.warn("Failed to load moderation rows for trust stats", {
+          restaurantId,
+          error,
+        });
+      }
 
       const totalFlags = caseRows.length;
       const flagsUpheld = caseRows.filter((row: any) => row.outcome === "valid").length;
@@ -955,9 +966,16 @@ export function registerRestaurantCoreRoutes(
       const lastFlagDate = caseRows[0]?.createdAt
         ? new Date(caseRows[0].createdAt).toISOString()
         : null;
+      const verificationBaseline = isVerified ? 94 : 62;
+      const ownershipBonus = hasOwnerAttachment ? 4 : 0;
+      const moderationPenalty =
+        flagsUpheld * 15 + flagsPartial * 7 + activeDisputes * 5;
       const profileAccuracyScore = Math.max(
         0,
-        Math.min(100, 100 - flagsUpheld * 15 - flagsPartial * 7 - activeDisputes * 5),
+        Math.min(
+          100,
+          verificationBaseline + ownershipBonus - moderationPenalty,
+        ),
       );
       const recentWindowMs = 14 * 24 * 60 * 60 * 1000;
       const hasRecentFlag =
@@ -977,6 +995,8 @@ export function registerRestaurantCoreRoutes(
         flagsDismissed,
         flagsPartial,
         profileAccuracyScore,
+        isVerified,
+        hasOwnerAttachment,
         activeDisputes,
         resolvedDisputes,
         lastFlagDate,

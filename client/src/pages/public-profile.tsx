@@ -361,6 +361,8 @@ export default function PublicProfilePage() {
   const menuUrl = toExternalUrl((data as any).menuUrl);
   const websiteUrl = toExternalUrl(data.websiteUrl);
   const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
+  const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(String(profileId || ""))}?src=concierge&focus=description`;
+  const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(String(profileId || ""))}&src=concierge`;
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -657,6 +659,22 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {isStaffOrAdmin && data.entity === "restaurant" ? (
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Managed Profile Controls
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link href={conciergeEditPath as any}>
+                  <Button size="sm" variant="outline">Manage Profile For Owner</Button>
+                </Link>
+                <Link href={conciergeDealPath as any}>
+                  <Button size="sm" variant="outline">Manage Specials</Button>
+                </Link>
+              </div>
+            </div>
+          ) : null}
+
           {data.entity === "restaurant" && engagementState ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-lg border p-3">
