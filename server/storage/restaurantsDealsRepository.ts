@@ -1,6 +1,7 @@
 import {
   users,
   restaurants,
+  businessStaffMemberships,
   deals,
   dealClaims,
   dealViews,
@@ -18,7 +19,6 @@ import {
   desc,
   sql,
 } from "drizzle-orm";
-import { getBusinessAccessContext } from "../services/businessTeamAccess";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type RestaurantsDealsRepositoryDependencies = {
@@ -199,9 +199,27 @@ export function createRestaurantsDealsRepository(
       if (!requiredPermission) {
         return false;
       }
-      const context = await getBusinessAccessContext(userId);
-      const match = context.restaurants.find((row) => row.id === restaurantId);
-      return Boolean(match?.permissions?.[requiredPermission]);
+
+      // Use a direct membership lookup for this restaurant to avoid pulling the
+      // full access context, which can fail if unrelated legacy membership rows
+      // contain malformed restaurant IDs.
+      const [membership] = await db
+        .select({ permissions: businessStaffMemberships.permissions })
+        .from(businessStaffMemberships)
+        .where(
+          and(
+            eq(businessStaffMemberships.restaurantId, restaurantId),
+            eq(businessStaffMemberships.userId, userId),
+            eq(businessStaffMemberships.status, "active"),
+          ),
+        )
+        .limit(1);
+
+      const permissions =
+        membership?.permissions && typeof membership.permissions === "object"
+          ? (membership.permissions as Record<string, any>)
+          : {};
+      return permissions[requiredPermission] === true;
     },
 
     async createDeal(deal: InsertDeal): Promise<Deal> {
