@@ -195,9 +195,8 @@ export default function DealCreation() {
   }, [restaurants, requestedRestaurantId]);
 
   const selectedRestaurantId = useMemo(() => {
-    if (requestedRestaurantId) return requestedRestaurantId;
     return String(selectedRestaurant?.id || "").trim();
-  }, [requestedRestaurantId, selectedRestaurant]);
+  }, [selectedRestaurant]);
 
   const getShareRestaurantName = (value: unknown) => {
     const raw = String(value || "").trim();
@@ -642,6 +641,23 @@ export default function DealCreation() {
             </p>
             <Link href="/restaurant-signup">
               <Button className="w-full">Register Business</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (requestedRestaurantId && !selectedRestaurant) {
+    return (
+      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground mb-4">
+              The selected restaurant was not found in your account.
+            </p>
+            <Link href="/restaurant-owner-dashboard">
+              <Button className="w-full">Back to dashboard</Button>
             </Link>
           </CardContent>
         </Card>

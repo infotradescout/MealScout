@@ -563,6 +563,14 @@ export default function RestaurantOwnerDashboard() {
   const liveShareUrl = selectedRestaurant
     ? `/restaurant/${selectedRestaurant}?live=1`
     : "/map";
+  const dealCreationPath = selectedRestaurant
+    ? `/deal-creation?restaurantId=${encodeURIComponent(selectedRestaurant)}`
+    : "/deal-creation";
+  const subscribeDealCreationPath = selectedRestaurant
+    ? `/subscribe?next=${encodeURIComponent(
+        `/deal-creation?restaurantId=${selectedRestaurant}`,
+      )}&reason=create_deals`
+    : "/subscribe?next=/deal-creation&reason=create_deals";
   const liveShareTitle = currentRestaurant?.name
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
@@ -1388,7 +1396,7 @@ export default function RestaurantOwnerDashboard() {
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {canManageDeals ? (
               canCreateDealsNow ? (
-                <Link href="/deal-creation">
+                <Link href={dealCreationPath}>
                   <Button
                     data-testid="button-create-deal"
                     className="w-full sm:w-auto"
@@ -1398,7 +1406,7 @@ export default function RestaurantOwnerDashboard() {
                   </Button>
                 </Link>
               ) : (
-                <Link href="/subscribe?next=/deal-creation&reason=create_deals">
+                <Link href={subscribeDealCreationPath}>
                   <Button
                     variant="default"
                     data-testid="button-subscribe"
@@ -1587,7 +1595,7 @@ export default function RestaurantOwnerDashboard() {
           { label: "Address or service area set", done: hasAddress, href: `/edit-restaurant/${selectedRestaurant}?focus=address` },
           { label: "Phone number added", done: hasPhone, href: `/edit-restaurant/${selectedRestaurant}?focus=phone` },
           { label: "Online menu linked or built", done: hasMenu, href: `/menu-builder/${selectedRestaurant}` },
-          { label: "First special or deal created", done: hasDeal, href: "/deal-creation" },
+          { label: "First special or deal created", done: hasDeal, href: dealCreationPath },
         ];
         const completedCount = checklistItems.filter((i) => i.done).length;
         if (completedCount === checklistItems.length) return null;
@@ -1819,7 +1827,7 @@ export default function RestaurantOwnerDashboard() {
                   <p className="text-muted-foreground mb-4">
                     No active specials
                   </p>
-                  <Link href="/deal-creation">
+                  <Link href={dealCreationPath}>
                     <Button data-testid="button-create-first-deal">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Your First Special
