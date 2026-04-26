@@ -524,6 +524,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ? row.phone || row.googleFormattedPhone || null
             : null,
           websiteUrl: row.websiteUrl || null,
+          menuUrl: row.menuUrl || null,
+          orderUrl: row.orderUrl || null,
           imageUrl:
             row.coverImageUrl || row.logoUrl || importedGallery[0] || null,
           businessHours: row.operatingHours || null,

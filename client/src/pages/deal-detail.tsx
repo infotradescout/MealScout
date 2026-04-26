@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import DealClaimModal from "@/components/deal-claim-modal";
 import DealShareModal from "@/components/deal-share-modal";
 import { BackHeader } from "@/components/back-header";
-import { Tag, ArrowLeft, Share2 } from "lucide-react";
+import { Tag, Share2, Shield } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { authUrl } from "@/lib/api";
@@ -69,13 +69,19 @@ export default function DealDetail() {
     enabled: !!(deal as Deal)?.restaurantId,
   });
 
-  const { data: rating } = useQuery({
-    queryKey: [
-      "/api/reviews/restaurant",
-      (deal as Deal)?.restaurantId,
-      "rating",
-    ],
+  const { data: trustStats } = useQuery({
+    queryKey: ["restaurant-trust", (deal as Deal)?.restaurantId],
     enabled: !!(deal as Deal)?.restaurantId,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${(deal as Deal)?.restaurantId}/trust-stats`,
+      );
+      if (!response.ok) return null;
+      return response.json() as Promise<{
+        profileAccuracyScore?: number;
+      }>;
+    },
   });
 
   const { data: canonical } = useQuery({
@@ -229,6 +235,10 @@ export default function DealDetail() {
       : `Save $${discountValue}`
     : "Limited-time special";
   const distance = (deal as Deal)?.distance;
+  const cvsScore = Math.max(
+    0,
+    Math.min(100, Math.round(Number((trustStats as any)?.profileAccuracyScore || 0))),
+  );
 
   const offerSchema = {
     "@context": "https://schema.org",
@@ -341,16 +351,9 @@ export default function DealDetail() {
                 </div>
               )}
               <div className="flex items-center space-x-1">
-                <i className="fas fa-star text-[color:var(--status-warning)]"></i>
-                <span data-testid="text-restaurant-rating">
-                  {(rating as any)?.rating &&
-                  typeof (rating as any).rating === "number"
-                    ? (rating as any).rating.toFixed(1)
-                    : (rating as any)?.rating &&
-                        !isNaN(Number((rating as any).rating))
-                      ? Number((rating as any).rating).toFixed(1)
-                      : "New"}
-                  {Array.isArray(reviews) && ` (${reviews.length} reviews)`}
+                <Shield className="h-4 w-4 text-[color:var(--status-success)]" />
+                <span data-testid="text-restaurant-cvs">
+                  CVS {cvsScore}/100
                 </span>
               </div>
             </div>
@@ -520,7 +523,7 @@ export default function DealDetail() {
           </Card>
         </div>
 
-        {/* Reviews */}
+        {/* Community Notes */}
         {Array.isArray(reviews) && reviews.length > 0 && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
@@ -528,7 +531,7 @@ export default function DealDetail() {
                 className="font-semibold text-foreground"
                 data-testid="text-reviews-title"
               >
-                Recent Reviews
+                Community Notes
               </h3>
               <button
                 className="text-[color:var(--accent-text)] text-sm font-medium"
@@ -559,18 +562,6 @@ export default function DealDetail() {
                             >
                               {review.user?.firstName || "Anonymous"}
                             </p>
-                            <div className="flex text-[color:var(--status-warning)]">
-                              {[...Array(5)].map((_, i) => (
-                                <i
-                                  key={i}
-                                  className={`fas fa-star text-xs ${
-                                    i < review.rating
-                                      ? "text-[color:var(--status-warning)]"
-                                      : "text-muted-foreground"
-                                  }`}
-                                ></i>
-                              ))}
-                            </div>
                           </div>
                           <p
                             className="text-xs text-muted-foreground"

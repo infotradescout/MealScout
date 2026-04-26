@@ -20,6 +20,8 @@ type PublicProfile = {
   state?: string | null;
   phone?: string | null;
   websiteUrl?: string | null;
+  menuUrl?: string | null;
+  orderUrl?: string | null;
   imageUrl?: string | null;
   businessHours?: Record<string, { open?: string; close?: string }> | null;
   canonicalUrl: string;
@@ -136,6 +138,13 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
+
+const toExternalUrl = (value: string | null | undefined) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+};
 
 export default function PublicProfilePage() {
   const [, setLocation] = useLocation();
@@ -348,6 +357,10 @@ export default function PublicProfilePage() {
   const businessHours = formatBusinessHours(data.businessHours);
   const ctaLabel = profile.ctaLabel || (data.websiteUrl ? "Visit website" : "");
   const ctaUrl = profile.ctaUrl || data.websiteUrl || "";
+  const orderUrl = toExternalUrl((data as any).orderUrl);
+  const menuUrl = toExternalUrl((data as any).menuUrl);
+  const websiteUrl = toExternalUrl(data.websiteUrl);
+  const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -544,6 +557,45 @@ export default function PublicProfilePage() {
               ) : null}
 
               {data.entity === "restaurant" ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {orderUrl ? (
+                    <a href={orderUrl} target="_blank" rel="noreferrer noopener">
+                      <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
+                        Order Online
+                      </Button>
+                    </a>
+                  ) : null}
+                  {menuUrl ? (
+                    <a href={menuUrl} target="_blank" rel="noreferrer noopener">
+                      <Button className="h-9 bg-orange-600 text-white hover:bg-orange-700">
+                        View Menu
+                      </Button>
+                    </a>
+                  ) : null}
+                  {phoneHref ? (
+                    <a href={phoneHref}>
+                      <Button
+                        variant="outline"
+                        className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        Call
+                      </Button>
+                    </a>
+                  ) : null}
+                  {websiteUrl ? (
+                    <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                      <Button
+                        variant="outline"
+                        className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                      >
+                        Website
+                      </Button>
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {data.entity === "restaurant" ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -605,6 +657,27 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {data.entity === "restaurant" && engagementState ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Likes</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.likes}</div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Follows</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.follows}</div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Favorites</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.favorites}</div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Recs</div>
+                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.recommendations}</div>
+              </div>
+            </div>
+          ) : null}
+
           {isStaffOrAdmin && canonical ? (
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
