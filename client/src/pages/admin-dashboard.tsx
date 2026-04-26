@@ -35,6 +35,7 @@ import {
   Calendar,
   CreditCard,
   UserMinus,
+  Upload,
 } from "lucide-react";
 import { Link } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -2438,6 +2439,8 @@ export default function AdminDashboard() {
     businessType: "restaurant",
   });
   const [isCuisineDropdownOpen, setIsCuisineDropdownOpen] = useState(false);
+  const [selectedUserProfileImageFile, setSelectedUserProfileImageFile] =
+    useState<File | null>(null);
 
   const formatDateInput = (date: Date) => {
     const year = date.getFullYear();
@@ -5301,6 +5304,44 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const uploadSelectedUserProfileImage = useMutation({
+    mutationFn: async ({ userId, file }: { userId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("targetUserId", userId);
+
+      const response = await fetch("/api/upload/user-profile", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || "Failed to upload profile image");
+      }
+      return payload;
+    },
+    onSuccess: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setSelectedUser((prev: any) =>
+        prev ? { ...prev, profileImageUrl: payload?.url || prev.profileImageUrl } : prev,
+      );
+      setSelectedUserProfileImageFile(null);
+      toast({
+        title: "Profile Image Updated",
+        description: "User profile image uploaded successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Could not upload profile image.",
         variant: "destructive",
       });
     },
@@ -10332,26 +10373,68 @@ export default function AdminDashboard() {
               )}
 
               {/* Profile Image */}
-              {selectedUser.profileImageUrl && (
-                <div>
-                  <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
-                    <Users className="w-4 h-4 mr-2" />
-                    PROFILE IMAGE
-                  </h3>
-                  <img
-                    src={getOptimizedImageUrl(
-                      selectedUser.profileImageUrl,
-                      "large",
+              <div>
+                <h3 className="font-semibold mb-3 flex items-center text-sm text-muted-foreground">
+                  <Users className="w-4 h-4 mr-2" />
+                  PROFILE IMAGE
+                </h3>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    {selectedUser.profileImageUrl ? (
+                      <img
+                        src={getOptimizedImageUrl(
+                          selectedUser.profileImageUrl,
+                          "large",
+                        )}
+                        alt="Profile"
+                        className="w-24 h-24 rounded-full object-cover border-2"
+                        data-testid="img-user-profile"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full border-2 border-dashed border-[color:var(--border-subtle)] bg-muted/40 flex items-center justify-center text-xs text-muted-foreground">
+                        No image
+                      </div>
                     )}
-                    alt="Profile"
-                    className="w-24 h-24 rounded-full object-cover border-2"
-                    data-testid="img-user-profile"
-                    loading="lazy"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                  />
+                  </div>
+
+                  <div className="flex w-full flex-col gap-2 sm:w-auto">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        setSelectedUserProfileImageFile(e.target.files?.[0] || null)
+                      }
+                      className="text-sm"
+                      data-testid="input-admin-user-profile-image"
+                      disabled={!isAdminOrSuper || uploadSelectedUserProfileImage.isPending}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!selectedUser?.id || !selectedUserProfileImageFile) return;
+                        uploadSelectedUserProfileImage.mutate({
+                          userId: selectedUser.id,
+                          file: selectedUserProfileImageFile,
+                        });
+                      }}
+                      disabled={
+                        !isAdminOrSuper ||
+                        !selectedUserProfileImageFile ||
+                        uploadSelectedUserProfileImage.isPending
+                      }
+                      data-testid="button-admin-upload-user-profile-image"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadSelectedUserProfileImage.isPending
+                        ? "Uploading..."
+                        : "Upload New Image"}
+                    </Button>
+                  </div>
                 </div>
-              )}
+              </div>
 
               {/* Parking Pass Listings */}
               {parkingPasses.length > 0 && userHosts.length === 0 && (

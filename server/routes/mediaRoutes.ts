@@ -223,10 +223,25 @@ export function registerMediaRoutes(app: Express) {
           return res.status(400).json({ message: "No image file provided" });
         }
 
+        const requestedTargetUserId = String(req.body?.targetUserId || "").trim();
+        const hasTargetOverride = requestedTargetUserId.length > 0;
+        const targetUserId = hasTargetOverride
+          ? requestedTargetUserId
+          : String(req.user.id);
+
+        if (hasTargetOverride && !isAdminUser(req.user)) {
+          return res.status(403).json({ message: "Not authorized" });
+        }
+
+        const targetUser = await storage.getUser(targetUserId);
+        if (!targetUser) {
+          return res.status(404).json({ message: "Target user not found" });
+        }
+
         const result = await uploadToCloudinary(
           req.file.buffer,
           "user-profiles",
-          `user-${req.user.id}`,
+          `user-${targetUserId}`,
         );
 
         const imageUpload = await db
@@ -234,7 +249,7 @@ export function registerMediaRoutes(app: Express) {
           .values({
             uploadedByUserId: req.user.id,
             imageType: "user_profile",
-            entityId: req.user.id,
+            entityId: targetUserId,
             entityType: "user",
             cloudinaryPublicId: result.publicId,
             cloudinaryUrl: result.secureUrl,
@@ -246,12 +261,15 @@ export function registerMediaRoutes(app: Express) {
           })
           .returning();
 
-        await storage.upsertUser({
-          ...req.user,
+        await storage.updateUser(targetUserId, {
           profileImageUrl: result.secureUrl,
         });
 
-        res.json({ imageUpload: imageUpload[0], url: result.secureUrl });
+        res.json({
+          imageUpload: imageUpload[0],
+          url: result.secureUrl,
+          userId: targetUserId,
+        });
       } catch (error) {
         console.error("Error uploading user profile image:", error);
         res.status(500).json({ message: "Failed to upload image" });
