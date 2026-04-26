@@ -12,8 +12,8 @@ import { BackHeader } from "@/components/back-header";
 import {
   MapPin,
   Phone,
-  Star,
   Clock,
+  Shield,
   Navigation as DirectionsIcon,
   Heart,
   CheckCircle,
@@ -98,14 +98,17 @@ export default function RestaurantDetailPage() {
     enabled: !!restaurantId,
   });
 
-  const { data: reviews } = useQuery({
-    queryKey: ["/api/reviews/restaurant", restaurantId],
+  const { data: trustStats } = useQuery({
+    queryKey: ["restaurant-trust", restaurantId],
     enabled: !!restaurantId,
-  });
-
-  const { data: rating } = useQuery({
-    queryKey: ["/api/reviews/restaurant", restaurantId, "rating"],
-    enabled: !!restaurantId,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(`/api/restaurants/${restaurantId}/trust-stats`);
+      if (!response.ok) return null;
+      return response.json() as Promise<{
+        profileAccuracyScore?: number;
+      }>;
+    },
   });
 
   const { data: featuredDeals } = useQuery({
@@ -373,8 +376,10 @@ export default function RestaurantDetailPage() {
     (deal: any) => deal.restaurantId === restaurantId,
   );
 
-  const currentRating = (rating as any)?.rating || 0;
-  const reviewCount = Array.isArray(reviews) ? reviews.length : 0;
+  const cvsScore = Math.max(
+    0,
+    Math.min(100, Math.round(Number((trustStats as any)?.profileAccuracyScore || 0))),
+  );
   const recommendationCount = recommendationRows.length;
 
   const rightActions = (
@@ -405,7 +410,7 @@ export default function RestaurantDetailPage() {
       (restaurant as any)?.websiteUrl ||
       (restaurant as any)?.website,
   );
-  const description = `Visit ${restaurantName} and discover exclusive food deals. ${cuisineType} restaurant with ${restaurantDeals.length} active deals. ${currentRating > 0 ? `Rated ${currentRating.toFixed(1)} stars by ${reviewCount} customers.` : ""}`;
+  const description = `Visit ${restaurantName} and discover exclusive food deals. ${cuisineType} restaurant with ${restaurantDeals.length} active deals. Community Verification Score: ${cvsScore}/100.`;
 
   const localBusinessSchema = {
     "@context": "https://schema.org",
@@ -419,15 +424,14 @@ export default function RestaurantDetailPage() {
     telephone: (restaurant as any)?.phone || "",
     servesCuisine: cuisineType,
     url: `https://www.mealscout.us${profilePath}`,
-    ...(currentRating > 0 && reviewCount > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: currentRating.toFixed(1),
-            reviewCount: reviewCount,
-          },
-        }
-      : {}),
+    additionalProperty: [
+      {
+        "@type": "PropertyValue",
+        name: "Community Verification Score",
+        value: cvsScore,
+        unitText: "out of 100",
+      },
+    ],
   };
 
   const sourceOfTruthSchema = {
@@ -519,18 +523,18 @@ export default function RestaurantDetailPage() {
             />
           </div>
 
-          {/* Rating */}
+          {/* CVS */}
           <div className="flex items-center space-x-4 mb-4">
             <div className="flex items-center space-x-1">
-              <Star className="w-4 h-4 fill-[color:var(--status-warning)] text-[color:var(--status-warning)]" />
-              <span className="font-semibold" data-testid="text-rating">
-                {currentRating.toFixed(1)}
+              <Shield className="w-4 h-4 text-[color:var(--status-success)]" />
+              <span className="font-semibold" data-testid="text-cvs-score">
+                CVS {cvsScore}/100
               </span>
               <span
                 className="text-muted-foreground text-sm"
-                data-testid="text-review-count"
+                data-testid="text-cvs-label"
               >
-                ({reviewCount} ratings)
+                Community Verification Score
               </span>
             </div>
             <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
