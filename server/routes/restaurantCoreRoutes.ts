@@ -927,6 +927,7 @@ export function registerRestaurantCoreRoutes(
       }
 
       const isVerified = Boolean((restaurant as any)?.isVerified);
+      const isLive = Boolean((restaurant as any)?.isActive);
       const hasOwnerAttachment = Boolean((restaurant as any)?.ownerId);
 
       let caseRows: any[] = [];
@@ -966,15 +967,17 @@ export function registerRestaurantCoreRoutes(
       const lastFlagDate = caseRows[0]?.createdAt
         ? new Date(caseRows[0].createdAt).toISOString()
         : null;
-      const verificationBaseline = isVerified ? 94 : 62;
-      const ownershipBonus = hasOwnerAttachment ? 4 : 0;
+      // CVS policy: verified + live starts at a base of 50.
+      const verificationBaseline = isVerified && isLive ? 50 : 35;
+      const ownershipBonus = hasOwnerAttachment ? 8 : 0;
       const moderationPenalty =
         flagsUpheld * 15 + flagsPartial * 7 + activeDisputes * 5;
+      const rawScore = verificationBaseline + ownershipBonus - moderationPenalty;
       const profileAccuracyScore = Math.max(
         0,
         Math.min(
           100,
-          verificationBaseline + ownershipBonus - moderationPenalty,
+          rawScore,
         ),
       );
       const recentWindowMs = 14 * 24 * 60 * 60 * 1000;
@@ -997,6 +1000,13 @@ export function registerRestaurantCoreRoutes(
         profileAccuracyScore,
         isVerified,
         hasOwnerAttachment,
+        scoreBreakdown: {
+          verificationBaseline,
+          isLive,
+          ownerAttachmentBonus: ownershipBonus,
+          moderationPenalty,
+          rawScore,
+        },
         activeDisputes,
         resolvedDisputes,
         lastFlagDate,

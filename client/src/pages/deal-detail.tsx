@@ -242,7 +242,9 @@ export default function DealDetail() {
       Math.round(
         Number(
           (trustStats as any)?.profileAccuracyScore ??
-            ((restaurant as any)?.isVerified ? 98 : 62),
+            ((restaurant as any)?.isVerified && (restaurant as any)?.isActive
+              ? 50
+              : 35),
         ),
       ),
     ),
