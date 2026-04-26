@@ -368,6 +368,7 @@ export default function RestaurantDetailPage() {
 
   const currentRating = (rating as any)?.rating || 0;
   const reviewCount = Array.isArray(reviews) ? reviews.length : 0;
+  const recommendationCount = recommendationRows.length;
 
   const rightActions = (
     <Button
@@ -429,7 +430,7 @@ export default function RestaurantDetailPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
+    <div className="max-w-3xl mx-auto bg-[var(--bg-surface)] min-h-screen relative pb-24">
       <SEOHead
         title={`${restaurantName} - ${cuisineType} Restaurant | MealScout`}
         description={description}
@@ -446,22 +447,27 @@ export default function RestaurantDetailPage() {
       />
 
       {/* Header Image */}
-      <div className="relative h-48 bg-[linear-gradient(110deg,rgba(255,77,46,0.12),rgba(245,158,11,0.12))] overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
+      <div className="relative h-52 sm:h-64 bg-[linear-gradient(120deg,rgba(15,23,42,0.88),rgba(127,29,29,0.76),rgba(249,115,22,0.55))] overflow-hidden">
+        <div className="absolute inset-0 bg-black/30"></div>
 
         {/* Restaurant Image Placeholder */}
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-center text-white/80">
-            <div className="w-20 h-20 bg-[var(--bg-card)]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">--</span>
+            <div className="w-20 h-20 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+              <span className="text-3xl font-semibold tracking-wide">
+                {restaurantName.slice(0, 1).toUpperCase()}
+              </span>
             </div>
+            <p className="text-sm font-medium tracking-[0.12em] uppercase text-white/85">
+              {cuisineType}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Restaurant Info */}
-      <div className="px-4 sm:px-6 py-6">
-        <div className="mb-6">
+      <div className="px-4 sm:px-6 pb-8 -mt-10 relative z-10">
+        <div className="mb-6 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-xl">
           <div className="flex items-start justify-between mb-2">
             <h1
               className="text-2xl font-bold text-foreground flex items-center space-x-2"
@@ -505,7 +511,7 @@ export default function RestaurantDetailPage() {
                 className="text-muted-foreground text-sm"
                 data-testid="text-review-count"
               >
-                ({reviewCount} reviews)
+                ({reviewCount} ratings)
               </span>
             </div>
             <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
@@ -550,164 +556,173 @@ export default function RestaurantDetailPage() {
             </div>
           )}
 
-          {isStaffOrAdmin && canonical ? (
-            <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                      Source of Truth
-                    </p>
-                    <h2 className="text-sm font-semibold text-foreground">
-                      Canonical MealScout record
-                    </h2>
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-end">
-                    <Badge variant="outline">{canonical.machineReadiness}</Badge>
-                    <Badge variant="secondary">{canonical.freshness}</Badge>
-                    {canonical.verified ? (
-                      <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                        verified
-                      </Badge>
-                    ) : null}
-                  </div>
-                </div>
+          {isStaffOrAdmin && (canonical || evidence) ? (
+            <details className="mb-6 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/90">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground">
+                Admin Diagnostics
+              </summary>
+              <div className="space-y-3 px-4 pb-4">
+                {canonical ? (
+                  <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                            Source of Truth
+                          </p>
+                          <h2 className="text-sm font-semibold text-foreground">
+                            Canonical MealScout record
+                          </h2>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <Badge variant="outline">{canonical.machineReadiness}</Badge>
+                          <Badge variant="secondary">{canonical.freshness}</Badge>
+                          {canonical.verified ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                              verified
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div>
-                    Last updated{" "}
-                    <span className="text-foreground font-medium">
-                      {canonical.updatedAt
-                        ? new Date(canonical.updatedAt).toLocaleString()
-                        : "Unknown"}
-                    </span>
-                  </div>
-                  <div>
-                    Freshness window{" "}
-                    <span className="text-foreground font-medium">
-                      {canonical.freshnessHours != null
-                        ? `${canonical.freshnessHours}h ago`
-                        : "Unknown"}
-                    </span>
-                  </div>
-                  <div>
-                    Active deal signals{" "}
-                    <span className="text-foreground font-medium">
-                      {canonical.evidenceSummary?.activeDealCount ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Live location{" "}
-                    <span className="text-foreground font-medium">
-                      {canonical.evidenceSummary?.liveLocationActive ? "Yes" : "No"}
-                    </span>
-                  </div>
-                </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          Last updated{" "}
+                          <span className="text-foreground font-medium">
+                            {canonical.updatedAt
+                              ? new Date(canonical.updatedAt).toLocaleString()
+                              : "Unknown"}
+                          </span>
+                        </div>
+                        <div>
+                          Freshness window{" "}
+                          <span className="text-foreground font-medium">
+                            {canonical.freshnessHours != null
+                              ? `${canonical.freshnessHours}h ago`
+                              : "Unknown"}
+                          </span>
+                        </div>
+                        <div>
+                          Active deal signals{" "}
+                          <span className="text-foreground font-medium">
+                            {canonical.evidenceSummary?.activeDealCount ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Live location{" "}
+                          <span className="text-foreground font-medium">
+                            {canonical.evidenceSummary?.liveLocationActive ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      </div>
 
-                {Array.isArray(canonical.sourceTruthStatements) &&
-                canonical.sourceTruthStatements.length > 0 ? (
-                  <div className="space-y-1">
-                    {canonical.sourceTruthStatements.slice(0, 4).map((item: string) => (
-                      <p key={item} className="text-sm text-foreground">
-                        {item}
-                      </p>
-                    ))}
-                  </div>
+                      {Array.isArray(canonical.sourceTruthStatements) &&
+                      canonical.sourceTruthStatements.length > 0 ? (
+                        <div className="space-y-1">
+                          {canonical.sourceTruthStatements.slice(0, 4).map((item: string) => (
+                            <p key={item} className="text-sm text-foreground">
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {Array.isArray(canonical.knowledgeGaps) &&
+                      canonical.knowledgeGaps.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {canonical.knowledgeGaps.slice(0, 4).map((gap: string) => (
+                            <Badge key={gap} variant="outline" className="text-[11px]">
+                              gap: {gap.replace(/_/g, " ")}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
                 ) : null}
 
-                {Array.isArray(canonical.knowledgeGaps) &&
-                canonical.knowledgeGaps.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {canonical.knowledgeGaps.slice(0, 4).map((gap: string) => (
-                      <Badge key={gap} variant="outline" className="text-[11px]">
-                        gap: {gap.replace(/_/g, " ")}
-                      </Badge>
-                    ))}
-                  </div>
+                {evidence ? (
+                  <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                            External Evidence
+                          </p>
+                          <h2 className="text-sm font-semibold text-foreground">
+                            Discovery and distribution signals
+                          </h2>
+                        </div>
+                        <Badge variant="outline">
+                          {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          Crawler hits{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.externalPressure?.crawlerHits ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Human page hits{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.externalPressure?.humanPageHits ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Search demand{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.demand?.matchingSearchQueries ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Outbound posts{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.distribution?.outboundSocialPosts ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Affiliate shares{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.distribution?.affiliateShares ?? 0}
+                          </span>
+                        </div>
+                        <div>
+                          Story views{" "}
+                          <span className="text-foreground font-medium">
+                            {evidence.content?.totalViews ?? 0}
+                          </span>
+                        </div>
+                      </div>
+
+                      {Array.isArray(evidence.externalPressure?.topBots) &&
+                      evidence.externalPressure.topBots.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {evidence.externalPressure.topBots.map((bot: any) => (
+                            <Badge key={bot.label} variant="secondary" className="text-[11px]">
+                              {bot.label}: {bot.count}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {Array.isArray(evidence.demand?.topQueries) &&
+                      evidence.demand.topQueries.length > 0 ? (
+                        <div className="space-y-1">
+                          {evidence.demand.topQueries.slice(0, 3).map((query: any) => (
+                            <p key={query.query} className="text-sm text-foreground">
+                              demand: {query.query} ({query.count})
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
                 ) : null}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {isStaffOrAdmin && evidence ? (
-            <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                      External Evidence
-                    </p>
-                    <h2 className="text-sm font-semibold text-foreground">
-                      Discovery and distribution signals
-                    </h2>
-                  </div>
-                  <Badge variant="outline">
-                    {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div>
-                    Crawler hits{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.externalPressure?.crawlerHits ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Human page hits{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.externalPressure?.humanPageHits ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Search demand{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.demand?.matchingSearchQueries ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Outbound posts{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.distribution?.outboundSocialPosts ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Affiliate shares{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.distribution?.affiliateShares ?? 0}
-                    </span>
-                  </div>
-                  <div>
-                    Story views{" "}
-                    <span className="text-foreground font-medium">
-                      {evidence.content?.totalViews ?? 0}
-                    </span>
-                  </div>
-                </div>
-
-                {Array.isArray(evidence.externalPressure?.topBots) &&
-                evidence.externalPressure.topBots.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {evidence.externalPressure.topBots.map((bot: any) => (
-                      <Badge key={bot.label} variant="secondary" className="text-[11px]">
-                        {bot.label}: {bot.count}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-
-                {Array.isArray(evidence.demand?.topQueries) &&
-                evidence.demand.topQueries.length > 0 ? (
-                  <div className="space-y-1">
-                    {evidence.demand.topQueries.slice(0, 3).map((query: any) => (
-                      <p key={query.query} className="text-sm text-foreground">
-                        demand: {query.query} ({query.count})
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
+              </div>
+            </details>
           ) : null}
 
           {/* Action Buttons */}
@@ -871,7 +886,7 @@ export default function RestaurantDetailPage() {
               </Button>
             )}
           </div>
-          <div className="mt-1">
+          <div className="mt-2">
             <AdminEditButton
               textKey="restaurant.detail.actions.directions"
               defaultText="Directions"
@@ -881,7 +896,7 @@ export default function RestaurantDetailPage() {
         </div>
 
         {isFoodTruck && (
-          <div className="mb-8">
+          <div className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
             <div className="mb-4 inline-flex items-center gap-2">
               <h2 className="text-xl font-bold text-foreground">
                 <AdminEditableText
@@ -920,7 +935,10 @@ export default function RestaurantDetailPage() {
         )}
 
         {/* Current Specials */}
-        <div className="mb-8" id="restaurant-specials">
+        <div
+          className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean"
+          id="restaurant-specials"
+        >
           <div className="mb-4 inline-flex items-center gap-2">
             <h2 className="text-xl font-bold text-foreground">
               <AdminEditableText
@@ -957,64 +975,6 @@ export default function RestaurantDetailPage() {
           )}
         </div>
 
-        {/* Reviews */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-foreground">Reviews</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="button-write-review"
-            >
-              Write Review
-            </Button>
-          </div>
-
-          {Array.isArray(reviews) && reviews.length > 0 ? (
-            <div className="space-y-4">
-              {reviews.slice(0, 3).map((review: any) => (
-                <Card key={review.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-[color:var(--accent-text)]/12 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium">U</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="font-medium text-sm">User</span>
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                className={`w-3 h-3 ${star <= (review.rating || 0) ? "fill-[color:var(--status-warning)] text-[color:var(--status-warning)]" : "text-[color:var(--border-strong)]"}`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {review.comment}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Star className="w-6 h-6 text-muted-foreground" />
-                </div>
-                <p className="text-muted-foreground">No reviews yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Be the first to review this restaurant!
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
         {/* Restaurant Trust Panel */}
         {restaurantId && (
           <div className="mt-10">
@@ -1023,14 +983,14 @@ export default function RestaurantDetailPage() {
         )}
 
         {/* Community Recommendations */}
-        <div className="mt-10">
+        <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-foreground">
-              Community Recommendations
+              Guest Recommendations
             </h2>
             <div className="flex items-center gap-2">
               <Badge variant="outline">
-                {recommendationRows.length} total
+                {recommendationCount} total
               </Badge>
               {restaurantId && (
                 <FlagProfileContentDialog restaurantId={restaurantId} />
@@ -1132,7 +1092,7 @@ export default function RestaurantDetailPage() {
               },
               {
                 question: `What type of cuisine does ${restaurantName} serve?`,
-                answer: `${restaurantName} specializes in ${cuisineType} cuisine. Check the menu and reviews above for specific dishes and customer favorites.`,
+                answer: `${restaurantName} specializes in ${cuisineType} cuisine. Check the menu and community recommendations above for favorite picks and highlights.`,
               },
               {
                 question: `How do I get directions to ${restaurantName}?`,
