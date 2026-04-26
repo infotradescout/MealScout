@@ -45,6 +45,7 @@ import { registerMediaRoutes } from "./routes/mediaRoutes";
 import { registerDealDiscoveryRoutes } from "./routes/dealDiscoveryRoutes";
 import { registerHostPayoutAdminRoutes } from "./routes/hostPayoutAdminRoutes";
 import { registerGrowthRoutes } from "./routes/growthRoutes";
+import { registerMarketExpansionRoutes } from "./routes/marketExpansionRoutes";
 import { registerHostInterestRoutes } from "./routes/hostInterestRoutes";
 import { registerPublicDiscoveryRoutes } from "./routes/publicDiscoveryRoutes";
 import { registerPublicMapRoutes } from "./routes/publicMapRoutes";
@@ -190,6 +191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAdminManagementRoutes(app);
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
+  registerMarketExpansionRoutes(app);
   registerGrowthRoutes(app);
 
   // Business profile auto-population from Google Places

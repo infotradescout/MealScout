@@ -19,6 +19,7 @@ import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
+import { runMarketExpansionScoreRecompute } from "../services/marketExpansionAutomation";
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
@@ -661,6 +662,16 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.log(`✅ [vac-digest] Sent digest for ${entries.length} pending review(s)`);
     } catch (error) {
       console.error("❌ [vac-digest] Daily digest failed:", error);
+    }
+  });
+
+  // Market expansion recompute — daily 4:45 AM
+  cron.schedule("45 4 * * *", async () => {
+    try {
+      const result = await runMarketExpansionScoreRecompute();
+      console.log("[market-expansion] Daily recompute complete", result);
+    } catch (error) {
+      console.error("[market-expansion] Daily recompute failed:", error);
     }
   });
 
