@@ -30,6 +30,12 @@ interface RestaurantTrustStats {
   resolvedDisputes: number;
   lastFlagDate?: string;
   trend: "improving" | "declining" | "stable";
+  scoreBreakdown?: {
+    verificationBaseline?: number;
+    ownerAttachmentBonus?: number;
+    moderationPenalty?: number;
+    rawScore?: number;
+  };
 }
 
 export function RestaurantTrustPanel({
@@ -72,10 +78,27 @@ export function RestaurantTrustPanel({
   };
 
   const getTrustLevel = () => {
-    if (accuracyPercent >= 95) return "Excellent";
-    if (accuracyPercent >= 80) return "Good";
-    if (accuracyPercent >= 50) return "Average";
-    return "Needs Review";
+    if (accuracyPercent >= 81) return "Local Legends";
+    if (accuracyPercent >= 61) return "Hot Spot";
+    if (accuracyPercent >= 41) return "Average";
+    if (accuracyPercent >= 21) return "On The Rise";
+    return "Underdog";
+  };
+
+  const getTrustBadgeVariant = (): "default" | "secondary" | "destructive" | "outline" => {
+    if (accuracyPercent >= 81) return "default";
+    if (accuracyPercent >= 61) return "secondary";
+    if (accuracyPercent >= 41) return "outline";
+    if (accuracyPercent >= 21) return "outline";
+    return "destructive";
+  };
+
+  const getTrustBadgeClassName = () => {
+    if (accuracyPercent >= 81) return "";
+    if (accuracyPercent >= 61) return "";
+    if (accuracyPercent >= 41) return "border-amber-300 text-amber-700";
+    if (accuracyPercent >= 21) return "border-orange-300 text-orange-700";
+    return "";
   };
 
   return (
@@ -103,13 +126,8 @@ export function RestaurantTrustPanel({
               <div className="flex items-center gap-2">
                 {getTrendIcon()}
                 <Badge
-                  variant={
-                    accuracyPercent >= 80
-                      ? "default"
-                      : accuracyPercent >= 50
-                        ? "secondary"
-                        : "destructive"
-                  }
+                  variant={getTrustBadgeVariant()}
+                  className={getTrustBadgeClassName()}
                 >
                   {getTrustLevel()}
                 </Badge>
@@ -235,22 +253,43 @@ export function RestaurantTrustPanel({
           {/* Explanation */}
           <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm">
             <p className="font-medium text-blue-900 mb-2">
-              How We Calculate Trust
+              What This Score Means
             </p>
             <ul className="text-xs text-blue-800 space-y-1">
               <li>
-                ✓ Community members flag profile issues (spam, false info,
-                etc.)
-              </li>
-              <li>✓ Our moderators verify if content violates our policy</li>
-              <li>
-                ✓ Accuracy score reflects ratio of valid to dismissed flags
+                ✓ Community Verification Score (CVS) measures profile reliability on a 0-100 scale.
               </li>
               <li>
-                ✓ Higher score = more reliable profile information according
-                to community
+                ✓ Verified and live businesses start from a baseline score; unresolved or upheld issues reduce it.
+              </li>
+              <li>
+                ✓ Moderation outcomes and active disputes have the strongest negative impact.
+              </li>
+              <li>
+                ✓ Higher score means the community can trust the listing details more.
               </li>
             </ul>
+            <div className="mt-3 border-t border-blue-200 pt-3">
+              <p className="text-xs font-medium text-blue-900 mb-1">Tier Guide</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-blue-800">
+                <span>1-20: Underdog</span>
+                <span>21-40: On The Rise</span>
+                <span>41-60: Average</span>
+                <span>61-80: Hot Spot</span>
+                <span>81-100: Local Legends</span>
+              </div>
+            </div>
+            {stats.scoreBreakdown ? (
+              <div className="mt-3 border-t border-blue-200 pt-3 text-xs text-blue-800">
+                Baseline {stats.scoreBreakdown.verificationBaseline ?? 0}
+                {" + Bonus "}
+                {stats.scoreBreakdown.ownerAttachmentBonus ?? 0}
+                {" - Penalty "}
+                {stats.scoreBreakdown.moderationPenalty ?? 0}
+                {" = Raw "}
+                {stats.scoreBreakdown.rawScore ?? accuracyPercent}
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -274,9 +313,10 @@ export function RestaurantTrustBadge({ restaurantId }: { restaurantId: string })
   if (isLoading || !stats) return null;
 
   const getTrustColor = () => {
-    if (stats.profileAccuracyScore >= 95) return "text-green-600";
-    if (stats.profileAccuracyScore >= 80) return "text-blue-600";
-    if (stats.profileAccuracyScore >= 50) return "text-yellow-600";
+    if (stats.profileAccuracyScore >= 81) return "text-green-600";
+    if (stats.profileAccuracyScore >= 61) return "text-blue-600";
+    if (stats.profileAccuracyScore >= 41) return "text-yellow-600";
+    if (stats.profileAccuracyScore >= 21) return "text-orange-600";
     return "text-red-600";
   };
 
