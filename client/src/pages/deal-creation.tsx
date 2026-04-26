@@ -199,12 +199,6 @@ export default function DealCreation() {
     refetchOnWindowFocus: false,
   });
 
-  console.log("Deal Creation - Subscription Data:", subscription);
-  console.log(
-    "Deal Creation - Is Subscription Loading:",
-    isSubscriptionLoading
-  );
-
   // Fetch current deal count for limits
   const { data: currentDeals } = useQuery({
     queryKey: ["/api/deals/my-active"],

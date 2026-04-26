@@ -40,11 +40,41 @@ async function userHasLifetimeRestaurantAccess(userId: string): Promise<boolean>
       and(
         eq(restaurants.ownerId, ownerId),
         eq(restaurantSubscriptions.isLifetimeFree, true),
-        eq(restaurantSubscriptions.status, "active"),
+        eq(restaurantSubscriptions.canPostDeals, true),
       ),
     )
     .limit(1);
   return rows.length > 0;
+}
+
+async function userHasDealPostingEntitlement(userId: string): Promise<boolean> {
+  const ownerId = String(userId || "").trim();
+  if (!ownerId) return false;
+
+  const rows = await db
+    .select({ id: restaurantSubscriptions.id })
+    .from(restaurantSubscriptions)
+    .innerJoin(
+      restaurants,
+      eq(restaurantSubscriptions.restaurantId, restaurants.id),
+    )
+    .where(
+      and(
+        eq(restaurants.ownerId, ownerId),
+        eq(restaurantSubscriptions.canPostDeals, true),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+function hasAccountAgeTrialAccess(user: User | null): boolean {
+  if (!user?.createdAt) return false;
+  const createdAtMs = new Date(user.createdAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  const trialEndsAtMs = createdAtMs + 30 * 24 * 60 * 60 * 1000;
+  return trialEndsAtMs > Date.now();
 }
 
 export function registerSubscriptionRoutes(
@@ -471,12 +501,29 @@ export function registerSubscriptionRoutes(
       });
     }
 
+    if (hasAccountAgeTrialAccess(hydratedUser)) {
+      return res.json({
+        status: "active",
+        hasAccess: true,
+        trialAccess: true,
+        message: "30-day premium trial active",
+      });
+    }
+
     if (await userHasLifetimeRestaurantAccess(req.user.id)) {
       return res.json({
         status: "active",
         hasAccess: true,
         lifetimeAccess: true,
         message: "Lifetime premium partner access active",
+      });
+    }
+
+    if (await userHasDealPostingEntitlement(req.user.id)) {
+      return res.json({
+        status: "active",
+        hasAccess: true,
+        message: "Deal posting entitlement active",
       });
     }
 
