@@ -39,10 +39,45 @@ const buildSearchTerms = (query: string) => {
     .slice(0, 6);
 };
 
-const matchesAnySearchTerm = (fields: unknown[], terms: string[]) => {
-  if (terms.length === 0) return false;
+const firstSearchSegment = (query: string) =>
+  normalizeSearchTerm(String(query || "").split(",")[0] || "");
+
+const searchTokens = (term: string) =>
+  normalizeSearchTerm(term)
+    .split(" ")
+    .filter((token) => token.length >= 3 && token !== "the");
+
+const scoreSearchFields = (
+  fields: unknown[],
+  terms: string[],
+  primaryTerm: string,
+) => {
+  if (terms.length === 0 && !primaryTerm) return 0;
   const haystack = fields.map(normalizeSearchTerm).join(" ");
-  return terms.some((term) => haystack.includes(term));
+  let score = 0;
+  let primaryScore = 0;
+
+  if (primaryTerm) {
+    if (haystack.includes(primaryTerm)) {
+      primaryScore += 100;
+    } else {
+      const tokens = searchTokens(primaryTerm);
+      const hits = tokens.filter((token) => haystack.includes(token)).length;
+      const requiredHits = Math.min(2, tokens.length);
+      if (requiredHits > 0 && hits >= requiredHits) {
+        primaryScore += hits * 20;
+      }
+    }
+  }
+
+  if (primaryTerm && terms.length > 1 && primaryScore === 0) return 0;
+  score += primaryScore;
+
+  terms.forEach((term, index) => {
+    if (term && haystack.includes(term)) score += Math.max(1, 12 - index);
+  });
+
+  return score;
 };
 
 export function registerPublicSearchRoutes(app: Express) {
@@ -302,19 +337,27 @@ export function registerPublicSearchRoutes(app: Express) {
       const searchTerm = query.toLowerCase();
       const searchValue = `%${searchTerm}%`;
       const searchTerms = buildSearchTerms(query);
+      const primaryTerm = firstSearchSegment(query);
 
       const restaurantMatches = await storage.getAllRestaurants();
       const restaurantsOut = restaurantMatches
-        .filter((restaurant: any) => {
+        .map((restaurant: any) => {
           if (!restaurant?.isActive || !restaurant?.isVerified) return false;
           if (!isPublicBusinessVisible(restaurant)) return false;
           const name = String(restaurant.name || "").toLowerCase();
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
           const address = String(restaurant.address || "").toLowerCase();
-          return matchesAnySearchTerm([name, cuisine, address], searchTerms);
+          const score = scoreSearchFields(
+            [name, cuisine, address],
+            searchTerms,
+            primaryTerm,
+          );
+          return score > 0 ? { restaurant, score } : null;
         })
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.score - a.score)
         .slice(0, 12)
-        .map((restaurant: any) => ({
+        .map(({ restaurant }: any) => ({
           id: restaurant.id,
           name: restaurant.name,
           cuisineType: restaurant.cuisineType,
@@ -360,16 +403,10 @@ export function registerPublicSearchRoutes(app: Express) {
           and(
             eq(eventSeries.seriesType, "parking_pass"),
             eq(eventSeries.status, "published"),
-            or(
-              sql`lower(${hosts.businessName}) like ${searchValue}`,
-              sql`lower(${hosts.address}) like ${searchValue}`,
-              sql`lower(coalesce(${hosts.city}, '')) like ${searchValue}`,
-              sql`lower(coalesce(${hosts.state}, '')) like ${searchValue}`,
-            ),
           ),
         )
         .orderBy(desc(eventSeries.updatedAt))
-        .limit(50);
+        .limit(300);
 
       const bestHostById = new Map<string, any>();
       for (const row of hostSeriesRows) {
@@ -379,6 +416,11 @@ export function registerPublicSearchRoutes(app: Express) {
 
       const parkingPassHostsOut = Array.from(bestHostById.values())
         .map((row: any) => {
+          const matchScore = scoreSearchFields(
+            [row.businessName, row.address, row.city, row.state],
+            searchTerms,
+            primaryTerm,
+          );
           const qualityFlags = computeParkingPassQualityFlags({
             host: {
               address: row.address,
@@ -410,12 +452,16 @@ export function registerPublicSearchRoutes(app: Express) {
             longitude: row.longitude,
             spotImageUrl: row.spotImageUrl,
             qualityFlags,
+            matchScore,
           };
         })
         .filter(
           (row: any) =>
-            Array.isArray(row.qualityFlags) && row.qualityFlags.length === 0,
+            Array.isArray(row.qualityFlags) &&
+            row.qualityFlags.length === 0 &&
+            Number(row.matchScore || 0) > 0,
         )
+        .sort((a: any, b: any) => b.matchScore - a.matchScore)
         .slice(0, 12);
 
       const nowSql = sql`NOW()`;
