@@ -556,7 +556,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const slug = toSlug(row.name) || row.id;
-        const profilePath = `/p/restaurant/${row.id}/${slug}`;
+        const profilePath = `/restaurant/${row.id}/${slug}`;
         return res.json({
           entity: "restaurant",
           id: row.id,
@@ -623,7 +623,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
         const slug = toSlug(row.businessName) || row.id;
-        const profilePath = `/p/host/${row.id}/${slug}`;
+        const profilePath = `/location/${slug}--${row.id}`;
         return res.json({
           entity: "host",
           id: row.id,
@@ -681,7 +681,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ),
           );
         const slug = toSlug(row.businessName) || row.id;
-        const profilePath = `/p/supplier/${row.id}/${slug}`;
+        const profilePath = `/supplier/${slug}--${row.id}`;
         return res.json({
           entity: "supplier",
           id: row.id,

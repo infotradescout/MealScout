@@ -417,7 +417,7 @@ export function registerAuthAccountRoutes(app: Express) {
             entity: "restaurant",
             id: row.id,
             title: row.name,
-            path: `/p/restaurant/${row.id}/${toSlug(row.name) || row.id}`,
+            path: `/restaurant/${row.id}/${toSlug(row.name) || row.id}`,
           })),
         ...ownedHosts.map((row: any) => ({
           entity: "host",

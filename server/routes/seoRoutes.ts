@@ -257,7 +257,7 @@ export function registerSeoRoutes(app: Express) {
 
       restaurantRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(
+          `${baseUrl}/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(
             toSlug(row.name) || row.id,
           )}`,
           row.updatedAt,
@@ -266,18 +266,14 @@ export function registerSeoRoutes(app: Express) {
 
       hostRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/host/${encodeURIComponent(row.id)}/${encodeURIComponent(
-            toSlug(row.name) || row.id,
-          )}`,
+          `${baseUrl}/location/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
           row.updatedAt,
         );
       });
 
       supplierRows.forEach((row: any) => {
         mergeUrl(
-          `${baseUrl}/p/supplier/${encodeURIComponent(row.id)}/${encodeURIComponent(
-            toSlug(row.name) || row.id,
-          )}`,
+          `${baseUrl}/supplier/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
           row.updatedAt,
         );
       });
@@ -931,8 +927,8 @@ export function registerSeoRoutes(app: Express) {
         "Example: /food-trucks/pensacola-fl/bbq",
         "",
         "## Business Profile Pages",
-        "Pattern: /p/restaurant/{id}/{slug}",
-        "Pattern: /p/host/{id}/{slug}",
+        "Pattern: /restaurant/{id}/{slug}",
+        "Pattern: /location/{slug}--{id}",
         "Pattern: /supplier/{slug}--{id}",
         "",
         "## Policies",

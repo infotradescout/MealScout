@@ -30,7 +30,7 @@ import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
 import { publicResponseCache } from "./utils/responseCache";
-import { videoStories, restaurants, requestLogs } from "@shared/schema";
+import { videoStories, restaurants, requestLogs, users } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 
@@ -92,6 +92,86 @@ const privateNoIndexPrefixes = [
   "/supplier/dashboard",
   "/account-setup",
 ];
+
+const CUSTOM_DOMAIN_CACHE_TTL_MS = 5 * 60 * 1000;
+const customDomainProfileCache = new Map<
+  string,
+  { path: string | null; expiresAt: number }
+>();
+
+const toSeoSlug = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 90);
+
+const normalizeRequestHost = (req: Request) =>
+  String(req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+
+const isInternalPlatformHost = (host: string) => {
+  if (!host) return true;
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".localhost") ||
+    host.endsWith("mealscout.us") ||
+    host.endsWith("onrender.com") ||
+    host.endsWith("vercel.app")
+  );
+};
+
+async function resolveCustomDomainProfilePath(hostname: string): Promise<string | null> {
+  const now = Date.now();
+  const cached = customDomainProfileCache.get(hostname);
+  if (cached && cached.expiresAt > now) return cached.path;
+
+  try {
+    const rows = await db.execute(sql`
+      select
+        r.id as "restaurantId",
+        r.name as "restaurantName"
+      from users u
+      join restaurants r on r.owner_id = u.id
+      where
+        r.is_active = true
+        and lower(coalesce((u.account_settings->'customDomain'->>'hostname'), '')) = ${hostname}
+        and lower(coalesce((u.account_settings->'customDomain'->>'status'), 'unverified')) = 'verified'
+      order by coalesce(r.updated_at, r.created_at) desc
+      limit 1
+    `);
+
+    const row = (rows as any)?.rows?.[0] as
+      | { restaurantId?: string; restaurantName?: string | null }
+      | undefined;
+
+    const restaurantId = String(row?.restaurantId || "").trim();
+    const slug = toSeoSlug(row?.restaurantName) || restaurantId;
+    const path = restaurantId ? `/restaurant/${restaurantId}/${slug}` : null;
+
+    customDomainProfileCache.set(hostname, {
+      path,
+      expiresAt: now + CUSTOM_DOMAIN_CACHE_TTL_MS,
+    });
+
+    return path;
+  } catch (error) {
+    console.warn("[custom-domain] Failed to resolve custom domain host", {
+      hostname,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    customDomainProfileCache.set(hostname, {
+      path: null,
+      expiresAt: now + 30 * 1000,
+    });
+    return null;
+  }
+}
 
 async function ensureLaunchSchemaCompatibility() {
   if (!db) return;
@@ -155,6 +235,25 @@ app.use((req, res, next) => {
     return res.redirect(308, dest);
   }
 
+  return next();
+});
+
+// If a verified custom domain points here, serve its linked restaurant profile at root.
+app.use(async (req, _res, next) => {
+  if (!["GET", "HEAD"].includes(req.method)) return next();
+
+  const host = normalizeRequestHost(req);
+  if (isInternalPlatformHost(host)) return next();
+
+  const pathValue = String(req.path || "").trim();
+  if (pathValue !== "/" && pathValue !== "/index.html") return next();
+
+  const profilePath = await resolveCustomDomainProfilePath(host);
+  if (!profilePath) return next();
+
+  const queryIndex = String(req.url || "").indexOf("?");
+  const query = queryIndex >= 0 ? String(req.url || "").slice(queryIndex) : "";
+  req.url = `${profilePath}${query}`;
   return next();
 });
 

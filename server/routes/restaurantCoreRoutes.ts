@@ -116,6 +116,30 @@ const toFiniteCoordinate = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const toSeoSlug = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 90);
+
+const getVerifiedCustomDomainHost = (accountSettings: unknown): string | null => {
+  if (!accountSettings || typeof accountSettings !== "object") return null;
+  const customDomain = (accountSettings as any).customDomain;
+  if (!customDomain || typeof customDomain !== "object") return null;
+
+  const status = String(customDomain.status || "").toLowerCase();
+  if (status !== "verified") return null;
+
+  const hostname = String(customDomain.hostname || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.+$/, "");
+  if (!hostname || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(hostname)) return null;
+  return hostname;
+};
+
 const isPublicRestaurantVisible = (restaurant: any): boolean => {
   if (!restaurant?.isActive) return false;
   if (!restaurant?.isVerified) return false;
@@ -907,7 +931,15 @@ export function registerRestaurantCoreRoutes(
       if (!restaurant) {
         return res.status(404).json({ message: "Restaurant not found" });
       }
-      res.json(restaurant);
+      const owner = restaurant.ownerId
+        ? await storage.getUser(String(restaurant.ownerId))
+        : null;
+      const customDomainHost = getVerifiedCustomDomainHost(owner?.accountSettings);
+
+      res.json({
+        ...restaurant,
+        customDomainHost,
+      });
     } catch (error) {
       console.error("Error fetching restaurant:", error);
       res.status(500).json({ message: "Failed to fetch restaurant" });
@@ -1032,6 +1064,16 @@ export function registerRestaurantCoreRoutes(
           return res.status(404).json({ message: "Restaurant not found" });
         }
 
+        const owner = restaurant.ownerId
+          ? await storage.getUser(String(restaurant.ownerId))
+          : null;
+        const customDomainHost = getVerifiedCustomDomainHost(owner?.accountSettings);
+        const restaurantSlug = toSeoSlug(restaurant.name) || restaurantId;
+        const canonicalPath = `/restaurant/${restaurantId}/${restaurantSlug}`;
+        const canonicalUrl = customDomainHost
+          ? `https://${customDomainHost}`
+          : `https://www.mealscout.us${canonicalPath}`;
+
         const activeDealsResult = await db.execute(sql<{ count: number }>`
         select cast(count(*) as integer) as count
         from deals
@@ -1090,6 +1132,9 @@ export function registerRestaurantCoreRoutes(
 
         res.json({
           restaurantId,
+          canonicalPath,
+          canonicalUrl,
+          customDomainHost,
           updatedAt,
           verified: Boolean(restaurant.isVerified),
           machineReadiness:

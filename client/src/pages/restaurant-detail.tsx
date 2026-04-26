@@ -405,13 +405,22 @@ export default function RestaurantDetailPage() {
 
   const restaurantName = (restaurant as any)?.name || "Restaurant";
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
-  const profilePath = `/p/restaurant/${restaurantId}/${profileSlug}`;
+  const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
   const editRestaurantPath = `/edit-restaurant/${restaurantId}`;
   const editRestaurantFocusPath = (focus: string) =>
     `${editRestaurantPath}?src=concierge&focus=${encodeURIComponent(focus)}`;
   const dealCreationPath = `/deal-creation?restaurantId=${encodeURIComponent(String(restaurantId || ""))}&src=concierge`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
+  const city = String((restaurant as any)?.city || "").trim();
+  const state = String((restaurant as any)?.state || "").trim();
+  const locationLabel = [city, state].filter(Boolean).join(", ");
+  const customDomainHost = String((restaurant as any)?.customDomainHost || "")
+    .trim()
+    .toLowerCase();
+  const canonicalProfileUrl = customDomainHost
+    ? `https://${customDomainHost}`
+    : `https://www.mealscout.us${profilePath}`;
   const orderPrimaryUrl = toExternalUrl(
     (restaurant as any)?.orderUrl ||
       (restaurant as any)?.orderURL ||
@@ -424,7 +433,7 @@ export default function RestaurantDetailPage() {
       (restaurant as any)?.websiteUrl ||
       (restaurant as any)?.website,
   );
-  const description = `Visit ${restaurantName} and discover exclusive food deals. ${cuisineType} restaurant with ${restaurantDeals.length} active deals. Community Verification Score: ${cvsScore}/100.`;
+  const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const localBusinessSchema = {
     "@context": "https://schema.org",
@@ -437,7 +446,7 @@ export default function RestaurantDetailPage() {
     },
     telephone: (restaurant as any)?.phone || "",
     servesCuisine: cuisineType,
-    url: `https://www.mealscout.us${profilePath}`,
+    url: canonicalProfileUrl,
     additionalProperty: [
       {
         "@type": "PropertyValue",
@@ -452,7 +461,7 @@ export default function RestaurantDetailPage() {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: `${restaurantName} source of truth`,
-    url: `https://www.mealscout.us${profilePath}`,
+    url: canonicalProfileUrl,
     dateModified: canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
     about: {
       "@type": isFoodTruck ? "FoodTruck" : "Restaurant",
@@ -466,14 +475,44 @@ export default function RestaurantDetailPage() {
     },
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "MealScout",
+        item: "https://www.mealscout.us/",
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: locationLabel ? `${locationLabel} Food & Trucks` : "Restaurants",
+        item: locationLabel
+          ? `https://www.mealscout.us/search?location=${encodeURIComponent(locationLabel)}`
+          : "https://www.mealscout.us/search",
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: restaurantName,
+        item: canonicalProfileUrl,
+      },
+    ],
+  };
+
   return (
     <div className="max-w-3xl mx-auto bg-[var(--bg-surface)] min-h-screen relative pb-24">
       <SEOHead
-        title={`${restaurantName} - ${cuisineType} Restaurant | MealScout`}
+        title={`${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} | Menu, Deals & Hours`}
         description={description}
-        keywords={`${restaurantName}, ${cuisineType} restaurant, restaurant deals, ${address}, food discounts`}
-        canonicalUrl={`https://www.mealscout.us${profilePath}`}
-        schemaData={[localBusinessSchema, sourceOfTruthSchema]}
+        keywords={`${restaurantName}, ${cuisineType}, ${locationLabel || "local"} restaurant, menu, specials, order online, food truck`}
+        canonicalUrl={canonicalProfileUrl}
+        allowCanonicalHostOverride={Boolean(customDomainHost)}
+        ogType="restaurant"
+        ogImage={(restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl || undefined}
+        schemaData={[localBusinessSchema, sourceOfTruthSchema, breadcrumbSchema]}
       />
       <BackHeader
         title={restaurantName}

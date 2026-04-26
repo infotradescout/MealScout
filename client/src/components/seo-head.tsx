@@ -5,6 +5,7 @@ interface SEOHeadProps {
   description: string;
   keywords?: string;
   canonicalUrl?: string;
+  allowCanonicalHostOverride?: boolean;
   ogImage?: string;
   ogType?: string;
   schemaData?: object;
@@ -48,6 +49,7 @@ export function SEOHead({
   description,
   keywords,
   canonicalUrl,
+  allowCanonicalHostOverride = false,
   ogImage = "/og-default.jpg",
   ogType = "website",
   schemaData,
@@ -108,7 +110,9 @@ export function SEOHead({
         : "";
       absolute.hash = "";
       absolute.protocol = "https:";
-      absolute.hostname = "www.mealscout.us";
+      if (!allowCanonicalHostOverride) {
+        absolute.hostname = "www.mealscout.us";
+      }
       return absolute.toString();
     };
 
@@ -202,7 +206,7 @@ export function SEOHead({
       // Optional: Clean up when component unmounts
       // Usually not needed for SPAs, but good practice
     };
-  }, [title, description, keywords, canonicalUrl, ogImage, ogType, schemaData, noIndex]);
+  }, [title, description, keywords, canonicalUrl, allowCanonicalHostOverride, ogImage, ogType, schemaData, noIndex]);
 
   return null; // This component doesn't render anything
 }
