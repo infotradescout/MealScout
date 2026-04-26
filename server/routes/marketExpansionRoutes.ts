@@ -3,8 +3,11 @@ import { z } from "zod";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import {
   listMarketDirectory,
+  listMarketExpansionLifecycle,
   listMarketExpansionQueue,
+  listMarketExpansionUsage,
   runMarketExpansionScoreRecompute,
+  runMarketExpansionStateTransition,
   summarizeFastFoodChainPresence,
   upsertMarketDirectoryEntry,
 } from "../services/marketExpansionAutomation";
@@ -26,6 +29,16 @@ const upsertDirectorySchema = z.object({
   isActive: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   notes: z.string().max(5000).optional().nullable(),
+});
+
+const recomputeSchema = z.object({
+  limitCities: z.number().int().min(1).max(1000).optional(),
+  corridor: z.string().optional(),
+});
+
+const transitionSchema = z.object({
+  limitCities: z.number().int().min(1).max(1000).optional(),
+  maxActivations: z.number().int().min(1).max(25).optional(),
 });
 
 export function registerMarketExpansionRoutes(app: Express) {
@@ -54,11 +67,81 @@ export function registerMarketExpansionRoutes(app: Express) {
     isStaffOrAdmin,
     async (_req: any, res) => {
       try {
-        const result = await runMarketExpansionScoreRecompute();
+        const parsed = recomputeSchema.parse(_req.body || {});
+        const result = await runMarketExpansionScoreRecompute(parsed);
         res.json(result);
       } catch (error) {
+        if ((error as any)?.name === "ZodError") {
+          return res.status(400).json({
+            message: "Invalid recompute payload",
+            issues: (error as any).issues,
+          });
+        }
         console.error("[market-expansion] recompute failed:", error);
         res.status(500).json({ message: "Unable to recompute market expansion scores" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/market-expansion/advance",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const parsed = transitionSchema.parse(req.body || {});
+        const result = await runMarketExpansionStateTransition(parsed);
+        res.json(result);
+      } catch (error) {
+        if ((error as any)?.name === "ZodError") {
+          return res.status(400).json({
+            message: "Invalid transition payload",
+            issues: (error as any).issues,
+          });
+        }
+        console.error("[market-expansion] state transition failed:", error);
+        res.status(500).json({ message: "Unable to run market state transition" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/market-expansion/lifecycle",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const limit = Math.max(
+          1,
+          Math.min(500, Number.parseInt(String(req.query.limit || "200"), 10) || 200),
+        );
+        const rows = await listMarketExpansionLifecycle(limit);
+        res.json({ rows, count: rows.length });
+      } catch (error) {
+        console.error("[market-expansion] lifecycle failed:", error);
+        res.status(500).json({ message: "Unable to load lifecycle state" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/market-expansion/usage",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const limit = Math.max(
+          1,
+          Math.min(500, Number.parseInt(String(req.query.limit || "120"), 10) || 120),
+        );
+        const payload = await listMarketExpansionUsage({
+          jobName: String(req.query.jobName || ""),
+          limit,
+        });
+        res.json(payload);
+      } catch (error) {
+        console.error("[market-expansion] usage failed:", error);
+        res.status(500).json({ message: "Unable to load usage tracking" });
       }
     },
   );

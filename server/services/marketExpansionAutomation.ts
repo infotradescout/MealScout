@@ -1,6 +1,15 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 
+type MarketLifecycleStatus =
+  | "seeded"
+  | "filtered"
+  | "scored"
+  | "launch_ready"
+  | "active"
+  | "remediation_required"
+  | "saturated";
+
 type CityMetricsRow = {
   city: string;
   state: string;
@@ -31,6 +40,45 @@ type DirectoryRow = {
   tags: unknown;
   notes: string | null;
   updatedAt: Date | string | null;
+};
+
+type LifecycleRow = {
+  city: string;
+  state: string;
+  corridor: string;
+  seed_order: number;
+  gate_status: string;
+  gate_reasons: unknown;
+  final_score: number;
+  restaurants_total: number;
+  status: MarketLifecycleStatus;
+  ready_streak: number;
+  blocked_streak: number;
+  remediation_tasks: unknown;
+};
+
+type MarketExpansionJobRunRow = {
+  id: string;
+  job_name: string;
+  status: string;
+  batch_limit: number | null;
+  evaluated_count: number;
+  changed_count: number;
+  duration_ms: number;
+  details: unknown;
+  error_message: string | null;
+  started_at: Date | string;
+  finished_at: Date | string;
+};
+
+type RecomputeOptions = {
+  limitCities?: number;
+  corridor?: string;
+};
+
+type StateTransitionOptions = {
+  limitCities?: number;
+  maxActivations?: number;
 };
 
 const CHAIN_TOKENS = [
@@ -131,6 +179,64 @@ function buildCorridorLookup() {
   return lookup;
 }
 
+function corridorRank(corridor: string) {
+  switch (corridor) {
+    case "pensacola_core":
+      return 1;
+    case "gulf_to_dallas":
+      return 2;
+    case "east_coast_to_nj":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function normalizeBatchLimit(value: unknown, fallback: number, max = 500) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(max, Math.floor(parsed)));
+}
+
+async function recordMarketExpansionJobRun(input: {
+  jobName: string;
+  status: "ok" | "failed";
+  batchLimit?: number | null;
+  evaluatedCount?: number;
+  changedCount?: number;
+  durationMs?: number;
+  details?: unknown;
+  errorMessage?: string | null;
+}) {
+  try {
+    await db.execute(sql`
+      insert into market_expansion_job_runs (
+        job_name,
+        status,
+        batch_limit,
+        evaluated_count,
+        changed_count,
+        duration_ms,
+        details,
+        error_message,
+        finished_at
+      ) values (
+        ${input.jobName},
+        ${input.status},
+        ${input.batchLimit ?? null},
+        ${Math.max(0, Number(input.evaluatedCount || 0))},
+        ${Math.max(0, Number(input.changedCount || 0))},
+        ${Math.max(0, Number(input.durationMs || 0))},
+        ${JSON.stringify(input.details || {})}::jsonb,
+        ${input.errorMessage || null},
+        now()
+      )
+    `);
+  } catch (error) {
+    console.warn("[market-expansion] failed to record job run", error);
+  }
+}
+
 async function ensureExpansionTables() {
   await db.execute(sql`
     create table if not exists market_expansion_city_scores (
@@ -185,6 +291,37 @@ async function ensureExpansionTables() {
   `);
 
   await db.execute(sql`
+    create table if not exists market_expansion_city_lifecycle (
+      city varchar not null,
+      state varchar not null,
+      status varchar not null default 'seeded',
+      ready_streak integer not null default 0,
+      blocked_streak integer not null default 0,
+      remediation_tasks jsonb not null default '[]'::jsonb,
+      launched_at timestamp,
+      last_transition_at timestamp,
+      updated_at timestamp not null default now(),
+      primary key (city, state)
+    )
+  `);
+
+  await db.execute(sql`
+    create table if not exists market_expansion_job_runs (
+      id varchar primary key default gen_random_uuid(),
+      job_name varchar not null,
+      status varchar not null,
+      batch_limit integer,
+      evaluated_count integer not null default 0,
+      changed_count integer not null default 0,
+      duration_ms integer not null default 0,
+      details jsonb not null default '{}'::jsonb,
+      error_message text,
+      started_at timestamp not null default now(),
+      finished_at timestamp not null default now()
+    )
+  `);
+
+  await db.execute(sql`
     create index if not exists idx_market_expansion_city_scores_final
       on market_expansion_city_scores (corridor, seed_order, final_score desc)
   `);
@@ -192,6 +329,16 @@ async function ensureExpansionTables() {
   await db.execute(sql`
     create index if not exists idx_market_expansion_directory_city
       on market_expansion_directory (entity_type, state, city)
+  `);
+
+  await db.execute(sql`
+    create index if not exists idx_market_expansion_city_lifecycle_status
+      on market_expansion_city_lifecycle (status, updated_at desc)
+  `);
+
+  await db.execute(sql`
+    create index if not exists idx_market_expansion_job_runs_lookup
+      on market_expansion_job_runs (job_name, finished_at desc)
   `);
 }
 
@@ -309,8 +456,65 @@ function computeGateStatus(input: {
   };
 }
 
-export async function runMarketExpansionScoreRecompute() {
+function parseGateReasons(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function buildRemediationTasks(gateReasons: string[]) {
+  const unique = Array.from(new Set(gateReasons));
+  const tasks = unique.map((reason) => {
+    switch (reason) {
+      case "insufficient_truck_density":
+        return {
+          reason,
+          title: "Increase truck density",
+          owner: "growth_ops",
+          action:
+            "Run focused truck claim campaign and host-location outreach in this city for 2 weeks.",
+        };
+      case "truck_freshness_below_threshold":
+        return {
+          reason,
+          title: "Improve truck freshness",
+          owner: "activation_ops",
+          action:
+            "Push schedule/live-status activation and autopost onboarding for currently claimed trucks.",
+        };
+      case "independent_ratio_below_threshold":
+        return {
+          reason,
+          title: "Review chain exclusion",
+          owner: "admin_ops",
+          action:
+            "Run chain exclusion review queue and apply manual allow/exclude overrides.",
+        };
+      case "profile_readiness_below_threshold":
+        return {
+          reason,
+          title: "Raise profile readiness",
+          owner: "success_ops",
+          action:
+            "Complete profile enrichment for top businesses (description + social or website).",
+        };
+      default:
+        return {
+          reason,
+          title: "Investigate gate blocker",
+          owner: "growth_ops",
+          action: "Review city scorecard and resolve blocker.",
+        };
+    }
+  });
+
+  return tasks;
+}
+
+export async function runMarketExpansionScoreRecompute(options?: RecomputeOptions) {
   await ensureExpansionTables();
+  const startedAt = Date.now();
+  const batchLimit = normalizeBatchLimit(options?.limitCities, 120, 1000);
+  const corridorFilter = normalizeLocationToken(options?.corridor || "");
 
   const corridorLookup = buildCorridorLookup();
   const [cityMetrics, demandMap, partnerMap] = await Promise.all([
@@ -319,8 +523,28 @@ export async function runMarketExpansionScoreRecompute() {
     getPartnerCountsByCity(),
   ]);
 
+  const filteredMetrics = cityMetrics
+    .filter((row) => {
+      if (!corridorFilter) return true;
+      const key = `${normalizeLocationToken(row.city)}|${normalizeLocationToken(row.state)}`;
+      const corridor = corridorLookup.get(key)?.corridor || "radiate";
+      return corridor === corridorFilter;
+    })
+    .sort((a, b) => {
+      const keyA = `${normalizeLocationToken(a.city)}|${normalizeLocationToken(a.state)}`;
+      const keyB = `${normalizeLocationToken(b.city)}|${normalizeLocationToken(b.state)}`;
+      const infoA = corridorLookup.get(keyA);
+      const infoB = corridorLookup.get(keyB);
+      const rankDiff = corridorRank(infoA?.corridor || "radiate") - corridorRank(infoB?.corridor || "radiate");
+      if (rankDiff !== 0) return rankDiff;
+      const seedDiff = (infoA?.seedOrder || 9999) - (infoB?.seedOrder || 9999);
+      if (seedDiff !== 0) return seedDiff;
+      return keyA.localeCompare(keyB);
+    })
+    .slice(0, batchLimit);
+
   let upserted = 0;
-  for (const row of cityMetrics) {
+  for (const row of filteredMetrics) {
     const city = normalizeLocationToken(row.city);
     const state = normalizeLocationToken(row.state);
     if (!city || !state) continue;
@@ -434,13 +658,37 @@ export async function runMarketExpansionScoreRecompute() {
         computed_at = excluded.computed_at,
         updated_at = excluded.updated_at
     `);
+
+    await db.execute(sql`
+      insert into market_expansion_city_lifecycle (city, state, status, updated_at)
+      values (${city}, ${state}, 'seeded', now())
+      on conflict (city, state) do nothing
+    `);
+
     upserted += 1;
   }
+
+  const durationMs = Date.now() - startedAt;
+  await recordMarketExpansionJobRun({
+    jobName: "recompute",
+    status: "ok",
+    batchLimit,
+    evaluatedCount: filteredMetrics.length,
+    changedCount: upserted,
+    durationMs,
+    details: {
+      corridorFilter: corridorFilter || null,
+      sourceTotalCities: cityMetrics.length,
+    },
+  });
 
   return {
     ok: true,
     upserted,
-    evaluated: cityMetrics.length,
+    evaluated: filteredMetrics.length,
+    durationMs,
+    batchLimit,
+    sourceTotalCities: cityMetrics.length,
   };
 }
 
@@ -450,39 +698,263 @@ export async function listMarketExpansionQueue(limit = 100) {
 
   const result = await db.execute(sql`
     select
-      city,
-      state,
-      corridor,
-      seed_order,
-      restaurants_total,
-      trucks_total,
-      active_trucks_14d,
-      independent_ratio,
-      profile_ready_ratio,
-      demand_score,
-      partner_score,
-      truck_concentration_score,
-      freshness_score,
-      ops_score,
-      final_score,
-      gate_status,
-      gate_reasons,
-      computed_at
-    from market_expansion_city_scores
+      s.city,
+      s.state,
+      s.corridor,
+      s.seed_order,
+      s.restaurants_total,
+      s.trucks_total,
+      s.active_trucks_14d,
+      s.independent_ratio,
+      s.profile_ready_ratio,
+      s.demand_score,
+      s.partner_score,
+      s.truck_concentration_score,
+      s.freshness_score,
+      s.ops_score,
+      s.final_score,
+      s.gate_status,
+      s.gate_reasons,
+      s.computed_at,
+      coalesce(l.status, 'seeded') as status,
+      coalesce(l.ready_streak, 0) as ready_streak,
+      coalesce(l.blocked_streak, 0) as blocked_streak,
+      coalesce(l.remediation_tasks, '[]'::jsonb) as remediation_tasks,
+      l.launched_at,
+      l.last_transition_at
+    from market_expansion_city_scores s
+    left join market_expansion_city_lifecycle l
+      on l.city = s.city and l.state = s.state
     order by
-      case corridor
+      case s.corridor
         when 'pensacola_core' then 1
         when 'gulf_to_dallas' then 2
         when 'east_coast_to_nj' then 3
         else 4
       end,
-      seed_order asc,
-      final_score desc,
-      city asc
+      s.seed_order asc,
+      s.final_score desc,
+      s.city asc
     limit ${safeLimit}
   `);
 
   return ((result as any)?.rows || []) as Array<Record<string, unknown>>;
+}
+
+export async function listMarketExpansionLifecycle(limit = 200) {
+  await ensureExpansionTables();
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const result = await db.execute(sql`
+    select
+      s.city,
+      s.state,
+      s.corridor,
+      s.seed_order,
+      s.final_score,
+      s.gate_status,
+      s.gate_reasons,
+      coalesce(l.status, 'seeded') as status,
+      coalesce(l.ready_streak, 0) as ready_streak,
+      coalesce(l.blocked_streak, 0) as blocked_streak,
+      coalesce(l.remediation_tasks, '[]'::jsonb) as remediation_tasks,
+      l.launched_at,
+      l.last_transition_at,
+      l.updated_at
+    from market_expansion_city_scores s
+    left join market_expansion_city_lifecycle l
+      on l.city = s.city and l.state = s.state
+    order by
+      case s.corridor
+        when 'pensacola_core' then 1
+        when 'gulf_to_dallas' then 2
+        when 'east_coast_to_nj' then 3
+        else 4
+      end,
+      s.seed_order asc,
+      s.final_score desc,
+      s.city asc
+    limit ${safeLimit}
+  `);
+  return ((result as any)?.rows || []) as Array<Record<string, unknown>>;
+}
+
+export async function runMarketExpansionStateTransition(options?: StateTransitionOptions) {
+  await ensureExpansionTables();
+  const startedAt = Date.now();
+  const batchLimit = normalizeBatchLimit(options?.limitCities, 80, 1000);
+  const maxActivations = normalizeBatchLimit(options?.maxActivations, 1, 25);
+
+  const result = await db.execute(sql<LifecycleRow>`
+    select
+      s.city,
+      s.state,
+      s.corridor,
+      s.seed_order,
+      s.gate_status,
+      s.gate_reasons,
+      s.final_score,
+      s.restaurants_total,
+      coalesce(l.status, 'seeded') as status,
+      coalesce(l.ready_streak, 0) as ready_streak,
+      coalesce(l.blocked_streak, 0) as blocked_streak,
+      coalesce(l.remediation_tasks, '[]'::jsonb) as remediation_tasks
+    from market_expansion_city_scores s
+    left join market_expansion_city_lifecycle l
+      on l.city = s.city and l.state = s.state
+    order by
+      case s.corridor
+        when 'pensacola_core' then 1
+        when 'gulf_to_dallas' then 2
+        when 'east_coast_to_nj' then 3
+        else 4
+      end,
+      s.seed_order asc,
+      s.final_score desc,
+      s.city asc
+  `);
+
+  const rows = (((result as any)?.rows || []) as LifecycleRow[]).slice(0, batchLimit);
+  let transitioned = 0;
+  let activated = 0;
+  let remediationRaised = 0;
+  const finalStatuses: MarketLifecycleStatus[] = [];
+  let activationUsed = false;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const gateReady = String(row.gate_status) === "ready";
+    const gateReasons = parseGateReasons(row.gate_reasons);
+    const nextReadyStreak = gateReady ? Number(row.ready_streak || 0) + 1 : 0;
+    const nextBlockedStreak = gateReady ? 0 : Number(row.blocked_streak || 0) + 1;
+
+    let nextStatus = (row.status || "seeded") as MarketLifecycleStatus;
+    let transitionOccurred = false;
+    let launchedAtSql = sql`null`;
+    let lastTransitionAtSql = sql`null`;
+
+    if (nextStatus === "seeded" && Number(row.restaurants_total || 0) > 0) {
+      nextStatus = "filtered";
+      transitionOccurred = true;
+    }
+    if (nextStatus === "filtered" && Number(row.final_score || 0) >= 0) {
+      nextStatus = "scored";
+      transitionOccurred = true;
+    }
+    if (nextStatus === "scored" && gateReady && nextReadyStreak >= 2) {
+      nextStatus = "launch_ready";
+      transitionOccurred = true;
+    }
+
+    const predecessorsReady = finalStatuses.every(
+      (status) => status === "active" || status === "saturated",
+    );
+    if (
+      nextStatus === "launch_ready" &&
+      gateReady &&
+      nextReadyStreak >= 2 &&
+      predecessorsReady &&
+      (!activationUsed || activated < maxActivations)
+    ) {
+      nextStatus = "active";
+      transitionOccurred = true;
+      activationUsed = true;
+      activated += 1;
+      launchedAtSql = sql`coalesce((select launched_at from market_expansion_city_lifecycle where city = ${row.city} and state = ${row.state}), now())`;
+    }
+
+    if (nextStatus === "launch_ready" && !gateReady && nextBlockedStreak >= 2) {
+      nextStatus = "scored";
+      transitionOccurred = true;
+    }
+
+    if (nextStatus === "active" && !gateReady && nextBlockedStreak >= 2) {
+      nextStatus = "remediation_required";
+      transitionOccurred = true;
+      remediationRaised += 1;
+    }
+
+    if (nextStatus === "remediation_required" && gateReady && nextReadyStreak >= 2) {
+      nextStatus = "active";
+      transitionOccurred = true;
+    }
+
+    if (nextStatus === "active" && gateReady && nextReadyStreak >= 8) {
+      nextStatus = "saturated";
+      transitionOccurred = true;
+    }
+
+    if (transitionOccurred) {
+      transitioned += 1;
+      lastTransitionAtSql = sql`now()`;
+    }
+
+    const remediationTasks =
+      nextStatus === "remediation_required"
+        ? buildRemediationTasks(gateReasons)
+        : [];
+
+    await db.execute(sql`
+      insert into market_expansion_city_lifecycle (
+        city,
+        state,
+        status,
+        ready_streak,
+        blocked_streak,
+        remediation_tasks,
+        launched_at,
+        last_transition_at,
+        updated_at
+      )
+      values (
+        ${row.city},
+        ${row.state},
+        ${nextStatus},
+        ${nextReadyStreak},
+        ${nextBlockedStreak},
+        ${JSON.stringify(remediationTasks)}::jsonb,
+        ${launchedAtSql},
+        ${lastTransitionAtSql},
+        now()
+      )
+      on conflict (city, state)
+      do update set
+        status = excluded.status,
+        ready_streak = excluded.ready_streak,
+        blocked_streak = excluded.blocked_streak,
+        remediation_tasks = excluded.remediation_tasks,
+        launched_at = coalesce(market_expansion_city_lifecycle.launched_at, excluded.launched_at),
+        last_transition_at = coalesce(excluded.last_transition_at, market_expansion_city_lifecycle.last_transition_at),
+        updated_at = excluded.updated_at
+    `);
+
+    finalStatuses.push(nextStatus);
+  }
+
+  const durationMs = Date.now() - startedAt;
+  await recordMarketExpansionJobRun({
+    jobName: "state_transition",
+    status: "ok",
+    batchLimit,
+    evaluatedCount: rows.length,
+    changedCount: transitioned,
+    durationMs,
+    details: {
+      maxActivations,
+      activated,
+      remediationRaised,
+    },
+  });
+
+  return {
+    ok: true,
+    evaluated: rows.length,
+    transitioned,
+    activated,
+    remediationRaised,
+    durationMs,
+    batchLimit,
+    maxActivations,
+  };
 }
 
 export async function upsertMarketDirectoryEntry(input: {
@@ -655,4 +1127,70 @@ export async function summarizeFastFoodChainPresence(limit = 50) {
   }>).filter((row) => hasChainToken(row.name));
 
   return items.slice(0, safeLimit);
+}
+
+export async function listMarketExpansionUsage(params?: {
+  jobName?: string;
+  limit?: number;
+}) {
+  await ensureExpansionTables();
+  const jobName = normalizeLocationToken(params?.jobName || "");
+  const limit = Math.max(1, Math.min(500, Math.floor(Number(params?.limit || 120))));
+
+  const result = await db.execute(sql<MarketExpansionJobRunRow>`
+    select
+      id,
+      job_name,
+      status,
+      batch_limit,
+      evaluated_count,
+      changed_count,
+      duration_ms,
+      details,
+      error_message,
+      started_at,
+      finished_at
+    from market_expansion_job_runs
+    where (${jobName} = '' or lower(job_name) = ${jobName})
+    order by finished_at desc
+    limit ${limit}
+  `);
+
+  const rows = ((result as any)?.rows || []) as MarketExpansionJobRunRow[];
+  const aggregate = rows.reduce(
+    (acc, row) => {
+      acc.totalRuns += 1;
+      acc.totalEvaluated += Number(row.evaluated_count || 0);
+      acc.totalChanged += Number(row.changed_count || 0);
+      acc.totalDurationMs += Number(row.duration_ms || 0);
+      if (String(row.status || "") !== "ok") acc.failedRuns += 1;
+      return acc;
+    },
+    {
+      totalRuns: 0,
+      failedRuns: 0,
+      totalEvaluated: 0,
+      totalChanged: 0,
+      totalDurationMs: 0,
+    },
+  );
+
+  return {
+    rows,
+    aggregate: {
+      ...aggregate,
+      avgDurationMs:
+        aggregate.totalRuns > 0
+          ? Math.round(aggregate.totalDurationMs / aggregate.totalRuns)
+          : 0,
+      avgEvaluatedPerRun:
+        aggregate.totalRuns > 0
+          ? Math.round(aggregate.totalEvaluated / aggregate.totalRuns)
+          : 0,
+      avgChangedPerRun:
+        aggregate.totalRuns > 0
+          ? Math.round(aggregate.totalChanged / aggregate.totalRuns)
+          : 0,
+    },
+  };
 }

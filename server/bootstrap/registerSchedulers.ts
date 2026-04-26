@@ -19,7 +19,10 @@ import { remindIncompleteParkingPassHosts } from "../parkingPassReminder";
 import { runLocationDemandActivationCron } from "../services/locationDemandActivation";
 import { runSupplyMarketIntelCron } from "../services/supplyMarketIntel";
 import { runHostPartnerLeadDripCron } from "../services/hostPartnerLeadDrip";
-import { runMarketExpansionScoreRecompute } from "../services/marketExpansionAutomation";
+import {
+  runMarketExpansionScoreRecompute,
+  runMarketExpansionStateTransition,
+} from "../services/marketExpansionAutomation";
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
@@ -668,10 +671,23 @@ export async function registerSchedulers(app: Express): Promise<void> {
   // Market expansion recompute — daily 4:45 AM
   cron.schedule("45 4 * * *", async () => {
     try {
-      const result = await runMarketExpansionScoreRecompute();
+      const result = await runMarketExpansionScoreRecompute({ limitCities: 120 });
       console.log("[market-expansion] Daily recompute complete", result);
     } catch (error) {
       console.error("[market-expansion] Daily recompute failed:", error);
+    }
+  });
+
+  // Market expansion state transitions — daily 5:00 AM
+  cron.schedule("0 5 * * *", async () => {
+    try {
+      const result = await runMarketExpansionStateTransition({
+        limitCities: 80,
+        maxActivations: 1,
+      });
+      console.log("[market-expansion] Daily state transition complete", result);
+    } catch (error) {
+      console.error("[market-expansion] Daily state transition failed:", error);
     }
   });
 
