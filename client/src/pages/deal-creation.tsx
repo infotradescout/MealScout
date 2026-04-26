@@ -171,11 +171,39 @@ export default function DealCreation() {
     enabled: isAuthenticated,
   });
 
+  const requestedRestaurantId = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return (
+        new URLSearchParams(window.location.search)
+          .get("restaurantId")
+          ?.trim() || ""
+      );
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const selectedRestaurant = useMemo(() => {
+    if (!Array.isArray(restaurants) || restaurants.length === 0) return null;
+    if (!requestedRestaurantId) return restaurants[0];
+    return (
+      restaurants.find(
+        (restaurant: any) => String(restaurant?.id || "") === requestedRestaurantId,
+      ) || restaurants[0]
+    );
+  }, [restaurants, requestedRestaurantId]);
+
+  const getShareRestaurantName = (value: unknown) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "this restaurant";
+    const compact = raw.replace(/\s+/g, " ");
+    if (compact.length > 42) return `${compact.slice(0, 39)}...`;
+    return compact;
+  };
+
   const socialSettings = useMemo<SocialAutopostSettings>(() => {
-    const restaurant =
-      Array.isArray(restaurants) && restaurants.length > 0
-        ? restaurants[0]
-        : null;
+    const restaurant = selectedRestaurant;
     const existing =
       (restaurant?.socialAutopostSettings ||
         {}) as Partial<SocialAutopostSettings>;
@@ -191,7 +219,7 @@ export default function DealCreation() {
         ...(existing.triggers || {}),
       },
     };
-  }, [restaurants]);
+  }, [selectedRestaurant]);
 
   // Fetch subscription status for deal limits
   const {
@@ -373,7 +401,7 @@ export default function DealCreation() {
       const dealData = {
         ...data,
         category: data.category,
-        restaurantId: restaurants[0].id,
+        restaurantId: selectedRestaurant.id,
         dealType:
           data.category === "deal"
             ? data.dealType
@@ -417,15 +445,13 @@ export default function DealCreation() {
         selectedPlatforms.x;
       if (hasTrigger && hasPlatforms) {
         const restaurant =
-          Array.isArray(restaurants) && restaurants.length > 0
-            ? restaurants[0]
-            : null;
+          selectedRestaurant;
         const dealId = created?.id || created?.deal?.id;
         const link = dealId
           ? `${window.location.origin}/deal/${dealId}`
           : window.location.origin;
         const dealTitle = form.getValues("title") || "New deal";
-        const restaurantName = restaurant?.name || "our truck";
+        const restaurantName = getShareRestaurantName(restaurant?.name);
         const message = `New deal at ${restaurantName}: ${dealTitle}. Check it out on MealScout.`;
         if (!socialSettings.promptBeforePost) {
           void handleDealSharePost({ message, link, selectedPlatforms });
