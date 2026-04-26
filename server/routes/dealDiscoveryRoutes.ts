@@ -229,8 +229,14 @@ export function registerDealDiscoveryRoutes(
         return res.json([]);
       }
 
-      const activeDeals = (await storage.getDealsByRestaurant(restaurantId))
-        .filter((deal) => deal.isActive)
+      const requestedIncludeInactive =
+        String((req.query as any)?.includeInactive || "") === "1";
+      const canIncludeInactive =
+        isOwnerViewing || isAdminOrStaff || hasManageDealsPermission;
+      const includeInactive = requestedIncludeInactive && canIncludeInactive;
+
+      const scopedDeals = (await storage.getDealsByRestaurant(restaurantId))
+        .filter((deal) => includeInactive || deal.isActive)
         .map((deal) => ({
           ...deal,
           restaurant: {
@@ -245,7 +251,7 @@ export function registerDealDiscoveryRoutes(
         ETag: `"restaurant-deals-${restaurantId}-${Date.now()}"`,
       });
 
-      res.json(activeDeals);
+      res.json(scopedDeals);
     } catch (error: any) {
       console.error("Error fetching restaurant deals:", error);
       if (error.name === "ZodError") {

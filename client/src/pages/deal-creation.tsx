@@ -170,7 +170,6 @@ export default function DealCreation() {
     };
   } | null>(null);
   const [isSharingDeal, setIsSharingDeal] = useState(false);
-  const afterCreatePath = "/restaurant-owner-dashboard";
 
   const { data: restaurants } = useQuery({
     queryKey: ["/api/restaurants/my-restaurants"],
@@ -249,6 +248,11 @@ export default function DealCreation() {
   const selectedRestaurantId = useMemo(() => {
     return String(manualRestaurantId || selectedRestaurant?.id || "").trim();
   }, [manualRestaurantId, selectedRestaurant]);
+
+  const afterCreatePath = useMemo(() => {
+    if (!selectedRestaurantId) return "/restaurant-owner-dashboard";
+    return `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(selectedRestaurantId)}`;
+  }, [selectedRestaurantId]);
 
   const hasManualOutsideList = useMemo(() => {
     if (!manualRestaurantId || !Array.isArray(restaurants)) return false;

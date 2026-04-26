@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Card,
@@ -167,6 +167,18 @@ export default function RestaurantOwnerDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const requestedRestaurantId = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return (
+        new URLSearchParams(window.location.search)
+          .get("restaurantId")
+          ?.trim() || ""
+      );
+    } catch {
+      return "";
+    }
+  }, []);
   const [selectedRestaurant, setSelectedRestaurant] = useState<string>("");
   const [analyticsDateRange, setAnalyticsDateRange] = useState({
     start: format(subDays(new Date(), 30), "yyyy-MM-dd"),
@@ -353,7 +365,19 @@ export default function RestaurantOwnerDashboard() {
   // Fetch deals for selected restaurant
   const { data: deals = [], isLoading: loadingDeals } = useQuery<Deal[]>({
     queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
+    queryFn: async () => {
+      if (!selectedRestaurant) return [];
+      const res = await fetch(
+        `/api/deals/restaurant/${encodeURIComponent(selectedRestaurant)}?includeInactive=1`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      const payload = await res.json();
+      return Array.isArray(payload) ? payload : [];
+    },
     enabled: !!selectedRestaurant && canManageDeals,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: truckBookings = [], isLoading: loadingTruckBookings } =
@@ -544,10 +568,15 @@ export default function RestaurantOwnerDashboard() {
 
   // Set default restaurant
   useEffect(() => {
-    if (restaurants.length > 0 && !selectedRestaurant) {
+    if (selectedRestaurant) return;
+    if (requestedRestaurantId) {
+      setSelectedRestaurant(requestedRestaurantId);
+      return;
+    }
+    if (restaurants.length > 0) {
       setSelectedRestaurant(restaurants[0].id);
     }
-  }, [restaurants, selectedRestaurant]);
+  }, [restaurants, selectedRestaurant, requestedRestaurantId]);
 
   useEffect(() => {
     if (!selectedRestaurant) return;
