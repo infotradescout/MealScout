@@ -73,10 +73,9 @@ export function RestaurantTrustPanel({
 
   const getTrustLevel = () => {
     if (accuracyPercent >= 95) return "Excellent";
-    if (accuracyPercent >= 85) return "Good";
-    if (accuracyPercent >= 70) return "Fair";
-    if (accuracyPercent >= 50) return "Poor";
-    return "Low";
+    if (accuracyPercent >= 80) return "Good";
+    if (accuracyPercent >= 50) return "Average";
+    return "Needs Review";
   };
 
   return (
@@ -105,9 +104,9 @@ export function RestaurantTrustPanel({
                 {getTrendIcon()}
                 <Badge
                   variant={
-                    accuracyPercent >= 85
+                    accuracyPercent >= 80
                       ? "default"
-                      : accuracyPercent >= 70
+                      : accuracyPercent >= 50
                         ? "secondary"
                         : "destructive"
                   }
@@ -276,8 +275,8 @@ export function RestaurantTrustBadge({ restaurantId }: { restaurantId: string })
 
   const getTrustColor = () => {
     if (stats.profileAccuracyScore >= 95) return "text-green-600";
-    if (stats.profileAccuracyScore >= 85) return "text-blue-600";
-    if (stats.profileAccuracyScore >= 70) return "text-yellow-600";
+    if (stats.profileAccuracyScore >= 80) return "text-blue-600";
+    if (stats.profileAccuracyScore >= 50) return "text-yellow-600";
     return "text-red-600";
   };
 
