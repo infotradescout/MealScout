@@ -37,7 +37,7 @@ import {
   UserMinus,
   Upload,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
 import ShareHub from "@/components/share-hub";
@@ -82,6 +82,35 @@ const FOOD_TYPE_OPTIONS = [
   "Wings",
   "Other",
 ];
+
+const ADMIN_DASHBOARD_TABS = new Set([
+  "overview",
+  "restaurants",
+  "lisa",
+  "users",
+  "staff",
+  "deals",
+  "verifications",
+  "onboarding",
+  "imports",
+  "host-locations",
+  "share-portal",
+]);
+
+const readAdminDashboardQueryState = () => {
+  if (typeof window === "undefined") {
+    return { tab: "overview", q: "" };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const requestedTab = String(params.get("tab") || "").trim();
+  const requestedSearch = String(params.get("q") || "").trim();
+
+  return {
+    tab: ADMIN_DASHBOARD_TABS.has(requestedTab) ? requestedTab : "overview",
+    q: requestedSearch,
+  };
+};
 
 interface DashboardStats {
   totalUsers: number;
@@ -2350,9 +2379,12 @@ function StaffManagementTab() {
 }
 
 export default function AdminDashboard() {
+  const [location] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedTab, setSelectedTab] = useState("overview");
+  const [selectedTab, setSelectedTab] = useState(
+    () => readAdminDashboardQueryState().tab,
+  );
   const [briefStatus, setBriefStatus] = useState<
     Record<string, { until: number }>
   >(() => {
@@ -2376,7 +2408,9 @@ export default function AdminDashboard() {
     "type",
   );
   const [userSortDir, setUserSortDir] = useState<"asc" | "desc">("asc");
-  const [userSearch, setUserSearch] = useState("");
+  const [userSearch, setUserSearch] = useState(
+    () => readAdminDashboardQueryState().q,
+  );
   const [userTypeFilter, setUserTypeFilter] = useState("all");
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
   const [dealDetailsOpen, setDealDetailsOpen] = useState(false);
@@ -2462,6 +2496,16 @@ export default function AdminDashboard() {
   const handlePayoutFromDateChange = (value: string) => {
     setPayoutDateRange(value, payoutToDate);
   };
+
+  useEffect(() => {
+    const { tab, q } = readAdminDashboardQueryState();
+    if (tab !== selectedTab) {
+      setSelectedTab(tab);
+    }
+    if (q && q !== userSearch) {
+      setUserSearch(q);
+    }
+  }, [location, selectedTab, userSearch]);
 
   const handlePayoutToDateChange = (value: string) => {
     setPayoutDateRange(payoutFromDate, value);
@@ -6404,7 +6448,16 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <Tabs
+          value={selectedTab}
+          onValueChange={(value) => {
+            setSelectedTab(value);
+            if (typeof window === "undefined") return;
+            const url = new URL(window.location.href);
+            url.searchParams.set("tab", value);
+            window.history.replaceState({}, "", url.toString());
+          }}
+        >
           <TabsList className="w-full inline-flex h-auto flex-wrap gap-1 p-1">
             <TabsTrigger
               value="overview"

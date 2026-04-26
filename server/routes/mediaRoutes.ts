@@ -261,9 +261,10 @@ export function registerMediaRoutes(app: Express) {
           })
           .returning();
 
-        await storage.updateUser(targetUserId, {
+        await storage.upsertUser({
+          ...targetUser,
           profileImageUrl: result.secureUrl,
-        });
+        } as any);
 
         res.json({
           imageUpload: imageUpload[0],

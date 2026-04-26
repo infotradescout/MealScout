@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BetaDisclaimer } from "@/components/beta-disclaimer";
+import AdminQuickHeader from "@/components/admin-quick-header";
 import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
@@ -273,6 +274,7 @@ function Router() {
 
   return (
     <Suspense fallback={<PageLoader />}>
+      <AdminQuickHeader />
       <Switch>
         {shouldUseGuestRoutes ? (
           <>
