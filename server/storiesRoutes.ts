@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import { db } from './db';
-import { isAuthenticated, isRestaurantOwner } from './unifiedAuth';
+import { isAuthenticated, isRestaurantOwner, isStaffOrAdmin } from './unifiedAuth';
 import {
   videoStories,
   storyLikes,
@@ -46,286 +46,339 @@ const videoUpload = multer({
 });
 
 export default function setupStoriesRoutes(app: Express) {
+  const handleStoryUpload = async (
+    req: any,
+    res: any,
+    options?: {
+      targetUserId?: string;
+      actingUserId?: string;
+      isStaffOverride?: boolean;
+    },
+  ) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: 'No video file provided' });
+      }
+
+      const sessionUserId = req.user?.id;
+      const actingUserId = options?.actingUserId || sessionUserId;
+      const targetUserId = options?.targetUserId || sessionUserId;
+      const isStaffOverride = Boolean(options?.isStaffOverride);
+
+      if (!sessionUserId || !actingUserId || !targetUserId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      if (isStaffOverride && actingUserId !== targetUserId) {
+        const targetUser = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, targetUserId))
+          .limit(1);
+
+        if (targetUser.length === 0) {
+          return res.status(404).json({ message: 'Target user not found' });
+        }
+      }
+
+      // Validate request body
+      const bodyData = {
+        title: req.body.title,
+        description: req.body.description || null,
+        duration: parseInt(req.body.duration),
+        restaurantId: req.body.restaurantId || null,
+        hashtags: req.body.hashtags ? JSON.parse(req.body.hashtags) : [],
+        cuisine: req.body.cuisine || null,
+      };
+
+      // Enforce 30-second maximum duration
+      if (bodyData.duration > 30) {
+        return res.status(400).json({ message: 'Video duration must be 30 seconds or less' });
+      }
+
+      const hasRestaurant = Boolean(bodyData.restaurantId);
+      let existingRestaurantStoryId: string | null = null;
+
+      if (hasRestaurant && bodyData.restaurantId) {
+        const existingRestaurantStories = await db
+          .select({ id: videoStories.id })
+          .from(videoStories)
+          .where(
+            and(
+              eq(videoStories.userId, targetUserId),
+              eq(videoStories.restaurantId, bodyData.restaurantId),
+              isNull(videoStories.deletedAt),
+            ),
+          )
+          .orderBy(desc(videoStories.createdAt))
+          .limit(10);
+        existingRestaurantStoryId = existingRestaurantStories[0]?.id || null;
+
+        if (existingRestaurantStories.length > 1) {
+          const duplicateIds = existingRestaurantStories
+            .slice(1)
+            .map((row: any) => row.id)
+            .filter(Boolean);
+
+          if (duplicateIds.length > 0) {
+            await db
+              .update(videoStories)
+              .set({
+                deletedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(inArray(videoStories.id, duplicateIds));
+          }
+        }
+      }
+
+      // Check if this is a restaurant video and verify subscription (paid or lifetime)
+      if (bodyData.restaurantId) {
+        const subscription = await db
+          .select()
+          .from(restaurantSubscriptions)
+          .where(eq(restaurantSubscriptions.restaurantId, bodyData.restaurantId))
+          .limit(1);
+
+        if (subscription.length === 0) {
+          // No subscription - create free tier record but block posting
+          await db.insert(restaurantSubscriptions).values({
+            restaurantId: bodyData.restaurantId,
+            tier: 'free',
+            status: 'active',
+            priceCents: 0,
+            billingInterval: 'monthly',
+            canPostVideos: false,
+            canPostDeals: false,
+            canUseFeaturedSlots: false,
+            maxFeaturedSlots: 0,
+            hasAnalytics: false,
+            hasDealScheduling: false,
+          });
+          return res.status(403).json({
+            message: 'A paid plan is required to post restaurant videos. Current plan: $25/mo.',
+          });
+        }
+
+        const sub = subscription[0];
+        const isPaidTier = ['monthly', 'quarterly', 'yearly'].includes(sub.tier);
+        const hasLifetime = sub.isLifetimeFree === true;
+
+        if (!hasLifetime && !isPaidTier) {
+          return res.status(403).json({
+            message: 'Restaurant subscription does not allow video posts. Upgrade to Monthly ($25).',
+          });
+        }
+
+        // Ensure posting flag is enabled for paid/lifetime tiers
+        if (!sub.canPostVideos) {
+          await db
+            .update(restaurantSubscriptions)
+            .set({
+              canPostVideos: true,
+              canPostDeals: true,
+              canUseFeaturedSlots: true,
+              maxFeaturedSlots: 3,
+              hasAnalytics: true,
+              hasDealScheduling: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(restaurantSubscriptions.id, sub.id));
+        }
+      }
+
+      // Anti-spam rate limits (allow multi-part uploads but prevent spam)
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const [{ count: dayCount }] = await db
+        .select({ count: count() })
+        .from(videoStories)
+        .where(
+          and(
+            eq(videoStories.userId, targetUserId),
+            gte(videoStories.createdAt, oneDayAgo),
+          ),
+        );
+
+      // Limit: 3 uploads per user per rolling 24 hours
+      if ((dayCount || 0) >= 3) {
+        return res.status(429).json({ message: 'Upload limit reached: max 3 videos per 24 hours. Please try again later.' });
+      }
+
+      // Additional restaurant-level cap (if restaurantId provided)
+      if (bodyData.restaurantId && !existingRestaurantStoryId) {
+        const [{ count: restaurantDayCount }] = await db
+          .select({ count: count() })
+          .from(videoStories)
+          .where(
+            and(
+              eq(videoStories.restaurantId, bodyData.restaurantId),
+              gte(videoStories.createdAt, oneDayAgo),
+            ),
+          );
+
+        if ((restaurantDayCount || 0) >= 3) {
+          return res.status(429).json({ message: 'Restaurant daily limit reached: max 3 videos per day. Please wait ~6 hours before uploading again.' });
+        }
+      }
+
+      const validationResult = insertVideoStorySchema.safeParse(bodyData);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          message: 'Invalid input',
+          errors: validationResult.error.flatten(),
+        });
+      }
+
+      // Upload video to Cloudinary
+      const cloudinaryResult = await uploadToCloudinary(
+        req.file.buffer,
+        'video',
+        {
+          folder: 'mealscout/stories',
+          public_id: `story-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        } as any,
+      );
+
+      if (!cloudinaryResult.secureUrl) {
+        return res.status(500).json({ message: 'Failed to upload video' });
+      }
+
+      let story: any[] = [];
+
+      if (existingRestaurantStoryId) {
+        story = await db
+          .update(videoStories)
+          .set({
+            title: bodyData.title,
+            description: bodyData.description,
+            duration: bodyData.duration,
+            videoUrl: cloudinaryResult.secureUrl,
+            thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
+            cuisine: bodyData.cuisine,
+            hashtags: bodyData.hashtags,
+            status: 'ready',
+            updatedAt: new Date(),
+          })
+          .where(eq(videoStories.id, existingRestaurantStoryId))
+          .returning();
+      } else {
+        // Create story record in database
+        story = await db
+          .insert(videoStories)
+          .values({
+            userId: targetUserId,
+            restaurantId: bodyData.restaurantId,
+            title: bodyData.title,
+            description: bodyData.description,
+            duration: bodyData.duration,
+            videoUrl: cloudinaryResult.secureUrl,
+            thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
+            cuisine: bodyData.cuisine,
+            hashtags: bodyData.hashtags,
+            status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
+          })
+          .returning();
+      }
+
+      // Initialize reviewer level if user doesn't have one
+      const existingLevel = await db
+        .select()
+        .from(userReviewerLevels)
+        .where(eq(userReviewerLevels.userId, targetUserId))
+        .limit(1);
+
+      // Recalculate distinct recommended restaurants for durability
+      const [{ count: distinctRestaurants }] = await db
+        .select({ count: sql<number>`COUNT(DISTINCT ${videoStories.restaurantId})`.mapWith(Number) })
+        .from(videoStories)
+        .where(
+          and(
+            eq(videoStories.userId, targetUserId),
+            isNotNull(videoStories.restaurantId),
+          ),
+        );
+
+      if (existingLevel.length === 0) {
+        await db.insert(userReviewerLevels).values({
+          userId: targetUserId,
+          level: 1,
+          // totalStories = distinct restaurants ever recommended (durable)
+          totalStories: distinctRestaurants,
+        });
+      } else {
+        // Keep totalStories in sync with durable distinct restaurant recommendations
+        await db
+          .update(userReviewerLevels)
+          .set({
+            totalStories: distinctRestaurants,
+          })
+          .where(eq(userReviewerLevels.userId, targetUserId));
+      }
+
+      // LISA Phase 4A: Emit claim for video recommendation creation
+      storage.emitClaim({
+        subjectType: 'video',
+        subjectId: story[0].id,
+        actorType: 'user',
+        actorId: actingUserId,
+        app: 'mealscout',
+        claimType: LISA_CLAIM_TYPES.VIDEO_RECOMMENDATION_CREATED,
+        claimValue: {
+          restaurantId: bodyData.restaurantId,
+          cuisine: bodyData.cuisine,
+          hashtags: bodyData.hashtags,
+          duration: bodyData.duration,
+          postedForUserId: targetUserId,
+          postedByStaffOverride: isStaffOverride,
+        },
+        source: LISA_CLAIM_SOURCES.USER,
+      }).catch(err => console.error('Failed to emit LISA claim:', err));
+
+      return res.status(201).json({
+        message: existingRestaurantStoryId
+          ? 'Video recommendation updated successfully'
+          : 'Video story uploaded successfully',
+        story: story[0],
+        updated: Boolean(existingRestaurantStoryId),
+        postedForUserId: targetUserId,
+        postedByUserId: actingUserId,
+        postedByStaffOverride: isStaffOverride,
+      });
+    } catch (error) {
+      console.error('Error uploading video story:', error);
+      return res.status(500).json({ message: 'Failed to upload video story' });
+    }
+  };
+
   // POST - Upload video story
   app.post(
     '/api/stories/upload',
     isAuthenticated,
     videoUpload.single('video'),
+    async (req, res) => handleStoryUpload(req, res)
+  );
+
+  // POST - Staff/admin upload video on behalf of a user
+  app.post(
+    '/api/stories/upload-for-user',
+    isAuthenticated,
+    isStaffOrAdmin,
+    videoUpload.single('video'),
     async (req, res) => {
-      try {
-        if (!req.file) {
-          return res.status(400).json({ message: 'No video file provided' });
-        }
+      const actingUserId = (req as any).user?.id;
+      const targetUserId = String(req.body?.targetUserId || '').trim();
 
-        const userId = (req as any).user?.id;
-        if (!userId) {
-          return res.status(401).json({ message: 'Unauthorized' });
-        }
-
-        // Validate request body
-        const bodyData = {
-          title: req.body.title,
-          description: req.body.description || null,
-          duration: parseInt(req.body.duration),
-          restaurantId: req.body.restaurantId || null,
-          hashtags: req.body.hashtags ? JSON.parse(req.body.hashtags) : [],
-          cuisine: req.body.cuisine || null,
-        };
-
-        // Enforce 30-second maximum duration
-        if (bodyData.duration > 30) {
-          return res.status(400).json({ message: 'Video duration must be 30 seconds or less' });
-        }
-
-        const hasRestaurant = Boolean(bodyData.restaurantId);
-        let existingRestaurantStoryId: string | null = null;
-
-        if (hasRestaurant && bodyData.restaurantId) {
-          const existingRestaurantStories = await db
-            .select({ id: videoStories.id })
-            .from(videoStories)
-            .where(
-              and(
-                eq(videoStories.userId, userId),
-                eq(videoStories.restaurantId, bodyData.restaurantId),
-                isNull(videoStories.deletedAt),
-              ),
-            )
-            .orderBy(desc(videoStories.createdAt))
-            .limit(10);
-          existingRestaurantStoryId = existingRestaurantStories[0]?.id || null;
-
-          if (existingRestaurantStories.length > 1) {
-            const duplicateIds = existingRestaurantStories
-              .slice(1)
-              .map((row: any) => row.id)
-              .filter(Boolean);
-
-            if (duplicateIds.length > 0) {
-              await db
-                .update(videoStories)
-                .set({
-                  deletedAt: new Date(),
-                  updatedAt: new Date(),
-                })
-                .where(inArray(videoStories.id, duplicateIds));
-            }
-          }
-        }
-
-        // Check if this is a restaurant video and verify subscription (paid or lifetime)
-        if (bodyData.restaurantId) {
-          const subscription = await db
-            .select()
-            .from(restaurantSubscriptions)
-            .where(eq(restaurantSubscriptions.restaurantId, bodyData.restaurantId))
-            .limit(1);
-
-          if (subscription.length === 0) {
-            // No subscription - create free tier record but block posting
-            await db.insert(restaurantSubscriptions).values({
-              restaurantId: bodyData.restaurantId,
-              tier: 'free',
-              status: 'active',
-              priceCents: 0,
-              billingInterval: 'monthly',
-              canPostVideos: false,
-              canPostDeals: false,
-              canUseFeaturedSlots: false,
-              maxFeaturedSlots: 0,
-              hasAnalytics: false,
-              hasDealScheduling: false,
-            });
-            return res.status(403).json({
-              message: 'A paid plan is required to post restaurant videos. Current plan: $25/mo.',
-            });
-          }
-
-          const sub = subscription[0];
-          const isPaidTier = ['monthly', 'quarterly', 'yearly'].includes(sub.tier);
-          const hasLifetime = sub.isLifetimeFree === true;
-
-          if (!hasLifetime && !isPaidTier) {
-            return res.status(403).json({
-              message: 'Restaurant subscription does not allow video posts. Upgrade to Monthly ($25).',
-            });
-          }
-
-          // Ensure posting flag is enabled for paid/lifetime tiers
-          if (!sub.canPostVideos) {
-            await db
-              .update(restaurantSubscriptions)
-              .set({
-                canPostVideos: true,
-                canPostDeals: true,
-                canUseFeaturedSlots: true,
-                maxFeaturedSlots: 3,
-                hasAnalytics: true,
-                hasDealScheduling: false,
-                updatedAt: new Date(),
-              })
-              .where(eq(restaurantSubscriptions.id, sub.id));
-          }
-        }
-
-        // Anti-spam rate limits (allow multi-part uploads but prevent spam)
-        const now = new Date();
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-        const [{ count: dayCount }] = await db
-          .select({ count: count() })
-          .from(videoStories)
-          .where(
-            and(
-              eq(videoStories.userId, userId),
-              gte(videoStories.createdAt, oneDayAgo)
-            ),
-          );
-
-        // Limit: 3 uploads per user per rolling 24 hours
-        if ((dayCount || 0) >= 3) {
-          return res.status(429).json({ message: 'Upload limit reached: max 3 videos per 24 hours. Please try again later.' });
-        }
-
-        // Additional restaurant-level cap (if restaurantId provided)
-        if (bodyData.restaurantId && !existingRestaurantStoryId) {
-          const [{ count: restaurantDayCount }] = await db
-            .select({ count: count() })
-            .from(videoStories)
-            .where(
-              and(
-                eq(videoStories.restaurantId, bodyData.restaurantId),
-                gte(videoStories.createdAt, oneDayAgo)
-              )
-            );
-
-          if ((restaurantDayCount || 0) >= 3) {
-            return res.status(429).json({ message: 'Restaurant daily limit reached: max 3 videos per day. Please wait ~6 hours before uploading again.' });
-          }
-        }
-
-        const validationResult = insertVideoStorySchema.safeParse(bodyData);
-        if (!validationResult.success) {
-          return res.status(400).json({
-            message: 'Invalid input',
-            errors: validationResult.error.flatten(),
-          });
-        }
-
-        // Upload video to Cloudinary
-        const cloudinaryResult = await uploadToCloudinary(
-          req.file.buffer,
-          'video',
-          {
-            folder: 'mealscout/stories',
-            public_id: `story-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          } as any
-        );
-
-        if (!cloudinaryResult.secureUrl) {
-          return res.status(500).json({ message: 'Failed to upload video' });
-        }
-
-        let story: any[] = [];
-
-        if (existingRestaurantStoryId) {
-          story = await db
-            .update(videoStories)
-            .set({
-              title: bodyData.title,
-              description: bodyData.description,
-              duration: bodyData.duration,
-              videoUrl: cloudinaryResult.secureUrl,
-              thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
-              cuisine: bodyData.cuisine,
-              hashtags: bodyData.hashtags,
-              status: 'ready',
-              updatedAt: new Date(),
-            })
-            .where(eq(videoStories.id, existingRestaurantStoryId))
-            .returning();
-        } else {
-          // Create story record in database
-          story = await db
-            .insert(videoStories)
-            .values({
-              userId,
-              restaurantId: bodyData.restaurantId,
-              title: bodyData.title,
-              description: bodyData.description,
-              duration: bodyData.duration,
-              videoUrl: cloudinaryResult.secureUrl,
-              thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
-              cuisine: bodyData.cuisine,
-              hashtags: bodyData.hashtags,
-              status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
-            })
-            .returning();
-        }
-
-        // Initialize reviewer level if user doesn't have one
-        const existingLevel = await db
-          .select()
-          .from(userReviewerLevels)
-          .where(eq(userReviewerLevels.userId, userId))
-          .limit(1);
-
-        // Recalculate distinct recommended restaurants for durability
-        const [{ count: distinctRestaurants }] = await db
-          .select({ count: sql<number>`COUNT(DISTINCT ${videoStories.restaurantId})`.mapWith(Number) })
-          .from(videoStories)
-          .where(
-            and(
-              eq(videoStories.userId, userId),
-              isNotNull(videoStories.restaurantId),
-            ),
-          );
-
-        if (existingLevel.length === 0) {
-          await db.insert(userReviewerLevels).values({
-            userId,
-            level: 1,
-            // totalStories = distinct restaurants ever recommended (durable)
-            totalStories: distinctRestaurants,
-          });
-        } else {
-          // Keep totalStories in sync with durable distinct restaurant recommendations
-          await db
-            .update(userReviewerLevels)
-            .set({
-              totalStories: distinctRestaurants,
-            })
-            .where(eq(userReviewerLevels.userId, userId));
-        }
-
-        // LISA Phase 4A: Emit claim for video recommendation creation
-        storage.emitClaim({
-          subjectType: 'video',
-          subjectId: story[0].id,
-          actorType: 'user',
-          actorId: userId,
-          app: 'mealscout',
-          claimType: LISA_CLAIM_TYPES.VIDEO_RECOMMENDATION_CREATED,
-          claimValue: {
-            restaurantId: bodyData.restaurantId,
-            cuisine: bodyData.cuisine,
-            hashtags: bodyData.hashtags,
-            duration: bodyData.duration,
-          },
-          source: LISA_CLAIM_SOURCES.USER,
-        }).catch(err => console.error('Failed to emit LISA claim:', err));
-
-        res.status(201).json({
-          message: existingRestaurantStoryId
-            ? 'Video recommendation updated successfully'
-            : 'Video story uploaded successfully',
-          story: story[0],
-          updated: Boolean(existingRestaurantStoryId),
-        });
-      } catch (error) {
-        console.error('Error uploading video story:', error);
-        res.status(500).json({ message: 'Failed to upload video story' });
+      if (!targetUserId) {
+        return res.status(400).json({ message: 'targetUserId is required' });
       }
+
+      return handleStoryUpload(req, res, {
+        targetUserId,
+        actingUserId,
+        isStaffOverride: true,
+      });
     }
   );
 
