@@ -74,6 +74,13 @@ const SEARCH_FIELD_MASK = [
   "places.userRatingCount",
 ].join(",");
 
+const AUTOCOMPLETE_FIELD_MASK = [
+  "suggestions.placePrediction.placeId",
+  "suggestions.placePrediction.text.text",
+  "suggestions.placePrediction.structuredFormat.mainText.text",
+  "suggestions.placePrediction.structuredFormat.secondaryText.text",
+].join(",");
+
 const TOKEN_STOP_WORDS = new Set([
   "the",
   "and",
@@ -195,6 +202,91 @@ const placeMatchScore = (
   return score;
 };
 
+const autocompleteMatchScore = (
+  suggestion: any,
+  businessName: string,
+  locationQuery: string,
+): number => {
+  const prediction = suggestion?.placePrediction;
+  const mainText = normalizePlaceText(
+    prediction?.structuredFormat?.mainText?.text,
+  );
+  const secondaryText = normalizePlaceText(
+    prediction?.structuredFormat?.secondaryText?.text,
+  );
+  const fullText = normalizePlaceText(prediction?.text?.text);
+  const normalizedName = normalizePlaceText(businessName);
+  const nameTokens = significantTokens(businessName);
+  const locationTokens = significantTokens(locationQuery);
+
+  const nameHits = nameTokens.filter(
+    (token) => mainText.includes(token) || fullText.includes(token),
+  ).length;
+  const addressHits = locationTokens.filter(
+    (token) => secondaryText.includes(token) || fullText.includes(token),
+  ).length;
+
+  let score = nameHits * 12 + Math.min(addressHits, 5) * 3;
+  if (normalizedName && mainText.includes(normalizedName)) score += 30;
+  return score;
+};
+
+const findGooglePlaceByAutocomplete = async (
+  apiKey: string,
+  queryAttempts: string[],
+  businessName: string,
+  locationQuery: string,
+): Promise<{ placeId: string; score: number; query: string } | null> => {
+  let bestMatch: { placeId: string; score: number; query: string } | null =
+    null;
+
+  for (const input of queryAttempts) {
+    const response = await fetch(`${PLACES_API_BASE}/places:autocomplete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": AUTOCOMPLETE_FIELD_MASK,
+      },
+      body: JSON.stringify({
+        input,
+        includedRegionCodes: ["us"],
+        languageCode: "en",
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(
+        "[GoogleProfile] Autocomplete failed:",
+        response.status,
+        await response.text().catch(() => ""),
+      );
+      continue;
+    }
+
+    const data = (await response.json().catch(() => ({}))) as any;
+    const suggestions = data?.suggestions;
+    if (!Array.isArray(suggestions) || suggestions.length === 0) continue;
+
+    for (const suggestion of suggestions) {
+      const placeId = String(
+        suggestion?.placePrediction?.placeId || "",
+      ).trim();
+      if (!placeId) continue;
+      const score = autocompleteMatchScore(
+        suggestion,
+        businessName,
+        locationQuery,
+      );
+      if (!bestMatch || score > bestMatch.score) {
+        bestMatch = { placeId, score, query: input };
+      }
+    }
+  }
+
+  return bestMatch;
+};
+
 const buildLocationBias = (
   latitude?: string | number | null,
   longitude?: string | number | null,
@@ -292,6 +384,21 @@ export async function findGooglePlace(
         if (!bestMatch || score > bestMatch.score) {
           bestMatch = { placeId, score, query: textQuery };
         }
+      }
+    }
+
+    if (!bestMatch || bestMatch.score < 18) {
+      const autocompleteMatch = await findGooglePlaceByAutocomplete(
+        apiKey,
+        queryAttempts,
+        businessName,
+        locationQuery,
+      );
+      if (
+        autocompleteMatch &&
+        autocompleteMatch.score > (bestMatch?.score ?? 0)
+      ) {
+        bestMatch = autocompleteMatch;
       }
     }
 
