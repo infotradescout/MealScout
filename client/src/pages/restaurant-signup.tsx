@@ -56,7 +56,7 @@ import { authUrl } from "@/lib/api";
 const restaurantSchema = z
   .object({
     name: z.string().min(1, COPY.validation.restaurant.nameRequired),
-    address: z.string().min(1, COPY.validation.restaurant.addressRequired),
+    address: z.string().optional().or(z.literal("")),
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
     phone: z.string().optional().or(z.literal("")),
@@ -92,6 +92,17 @@ const restaurantSchema = z
         (val) => val === true,
         COPY.validation.restaurant.acceptTermsRequired
       ),
+  })
+  .superRefine((data, ctx) => {
+    const needsFixedAddress =
+      data.businessType === "restaurant" || data.businessType === "bar";
+    if (needsFixedAddress && !String(data.address || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: COPY.validation.restaurant.addressRequired,
+        path: ["address"],
+      });
+    }
   });
 
 const signupSchema = z
@@ -353,7 +364,7 @@ export default function RestaurantSignup() {
     mutationFn: async (data: RestaurantSubmissionData) => {
       const restaurantDataPayload: Record<string, any> = {
         name: data.name,
-        address: data.address,
+        address: String(data.address || "").trim(),
         city: data.city,
         state: data.state,
         businessType: data.businessType,
