@@ -303,6 +303,14 @@ export default function RestaurantOwnerDashboard() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const isOwnerOrFoodTruck = isRestaurantOwner || isFoodTruck;
+  const subscriptionHasAccess =
+    (subscription as any)?.status === "active" ||
+    (subscription as any)?.hasAccess === true;
+  const hasManagedDealAccess =
+    !isOwnerOrFoodTruck && businessAccess?.permissions?.manageDeals === true;
+  const canCreateDealsNow =
+    isAdmin || isStaff || subscriptionHasAccess || hasManagedDealAccess;
 
   const { data: onboardingCompletion, isLoading: loadingOnboardingCompletion } =
     useQuery<OnboardingCompletion>({
@@ -1367,8 +1375,7 @@ export default function RestaurantOwnerDashboard() {
         rightActions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             {canManageDeals ? (
-              (subscription as any)?.status === "active" ||
-              (subscription as any)?.hasAccess === true ? (
+              canCreateDealsNow ? (
                 <Link href="/deal-creation">
                   <Button
                     data-testid="button-create-deal"

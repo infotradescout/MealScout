@@ -604,14 +604,20 @@ export default function DealCreation() {
     user?.userType === "restaurant_owner" ||
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageProfile === true;
+  const isOwnerOrFoodTruck =
+    user?.userType === "restaurant_owner" || user?.userType === "food_truck";
+  const subscriptionHasAccess = Boolean(
+    subscription &&
+      ((subscription as any).status === "active" ||
+        (subscription as any).hasAccess === true),
+  );
+  const hasManagedDealAccess =
+    !isOwnerOrFoodTruck && businessAccess?.permissions?.manageDeals === true;
   const hasAccess =
     canManageDeals &&
     (Boolean(isAdminOrStaff) ||
-      Boolean(
-        subscription &&
-          ((subscription as any).status === "active" ||
-            (subscription as any).hasAccess === true),
-      ));
+      subscriptionHasAccess ||
+      hasManagedDealAccess);
 
   if (!isSubscriptionError && subscription && !hasAccess) {
     console.log(
@@ -923,20 +929,23 @@ export default function DealCreation() {
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
                     form.setValue("category", "deal");
-                    form.setValue("title", "Happy Hour Special");
+                    form.setValue("title", "After-Work Taco Hour");
                     form.setValue(
                       "description",
-                      "Enjoy discounted drinks and appetizers during our happy hour! Perfect for after-work relaxation."
+                      "$2 off any 3-taco combo from 4:00-6:30 PM. Dine-in and pickup only, while daily allotment lasts."
                     );
-                    form.setValue("dealType", "percentage");
-                    form.setValue("discountValue", "25");
+                    form.setValue("dealType", "fixed");
+                    form.setValue("discountValue", "2.00");
+                    form.setValue("minOrderAmount", "12.00");
                     form.setValue("startTime", "16:00");
-                    form.setValue("endTime", "18:00");
+                    form.setValue("endTime", "18:30");
+                    form.setValue("perCustomerLimit", "2");
+                    form.setValue("totalUsesLimit", "40");
                   }}
                   data-testid="template-happy-hour"
                 >
                   <Clock className="w-3 h-3 mr-2" />
-                  Happy Hour Special (25% off drinks)
+                  Taco Hour ($2 off combo)
                 </Button>
                 <Button
                   type="button"
@@ -945,21 +954,23 @@ export default function DealCreation() {
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
                     form.setValue("category", "deal");
-                    form.setValue("title", "Lunch Combo Deal");
+                    form.setValue("title", "Weekday Lunch Combo");
                     form.setValue(
                       "description",
-                      "Get a main dish, side, and drink for one great price during lunch hours!"
+                      "15% off bowls + drink combo Monday-Friday, 11 AM-2 PM. Excludes add-on proteins and family trays."
                     );
-                    form.setValue("dealType", "fixed");
-                    form.setValue("discountValue", "5");
-                    form.setValue("minOrderAmount", "15");
+                    form.setValue("dealType", "percentage");
+                    form.setValue("discountValue", "15");
+                    form.setValue("minOrderAmount", "14.00");
                     form.setValue("startTime", "11:00");
-                    form.setValue("endTime", "15:00");
+                    form.setValue("endTime", "14:00");
+                    form.setValue("perCustomerLimit", "1");
+                    form.setValue("totalUsesLimit", "60");
                   }}
                   data-testid="template-lunch-combo"
                 >
                   <DollarSign className="w-3 h-3 mr-2" />
-                  Lunch Combo ($5 off)
+                  Lunch Combo (15% off)
                 </Button>
                 <Button
                   type="button"
@@ -967,20 +978,24 @@ export default function DealCreation() {
                   size="sm"
                   className="justify-start text-xs h-auto py-2"
                   onClick={() => {
-                    form.setValue("category", "deal");
-                    form.setValue("title", "Family Night Special");
+                    form.setValue("category", "special");
+                    form.setValue("title", "Chef Plate Spotlight");
                     form.setValue(
                       "description",
-                      "Perfect for families! Kids eat free with adult entree purchase on weekends."
+                      "Limited run: smoked brisket mac plate. Today only while supplies last. Price shown is for one plate."
                     );
-                    form.setValue("dealType", "percentage");
-                    form.setValue("discountValue", "30");
+                    form.setValue("dealType", "fixed");
+                    form.setValue("discountValue", "11.50");
+                    form.setValue("minOrderAmount", "14.00");
+                    form.setValue("startTime", "12:00");
+                    form.setValue("endTime", "20:00");
                     form.setValue("perCustomerLimit", "2");
+                    form.setValue("totalUsesLimit", "35");
                   }}
                   data-testid="template-family-night"
                 >
                   <Users className="w-3 h-3 mr-2" />
-                  Family Night (30% off)
+                  Dish Spotlight (special pricing)
                 </Button>
               </div>
             </div>
