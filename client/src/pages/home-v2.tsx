@@ -605,30 +605,43 @@ export default function Home() {
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           {/* Main heading */}
           <div className="mb-6">
-            <div className="mb-2 inline-flex items-start gap-2">
-              <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight text-[color:var(--text-primary)]">
-              {firstName ? (
-                <>
-                  Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
-                </>
-              ) : (
-                <>
-                  <AdminEditableText
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="inline-flex items-start gap-2">
+                <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight text-[color:var(--text-primary)]">
+                {firstName ? (
+                  <>
+                    Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
+                  </>
+                ) : (
+                  <>
+                    <AdminEditableText
+                      textKey="home.hero.promptPrefix"
+                      defaultText="What's for"
+                    />{" "}
+                    <span className="text-[color:var(--accent-text)]">
+                      {mealPrompt}
+                    </span>
+                  </>
+                )}
+                </h1>
+                {!firstName && (
+                  <AdminEditButton
                     textKey="home.hero.promptPrefix"
                     defaultText="What's for"
-                  />{" "}
-                  <span className="text-[color:var(--accent-text)]">
-                    {mealPrompt}
-                  </span>
-                </>
-              )}
-              </h1>
-              {!firstName && (
-                <AdminEditButton
-                  textKey="home.hero.promptPrefix"
-                  defaultText="What's for"
-                  label="Home hero prefix"
-                />
+                    label="Home hero prefix"
+                  />
+                )}
+              </div>
+              {!isStandalone && (
+                <Link href="/install">
+                  <Button
+                    className="h-11 px-4 rounded-full font-bold text-sm shadow-clean-lg"
+                    data-testid="button-download-app-hero"
+                  >
+                    <ArrowDownToLine className="w-4 h-4 mr-2" />
+                    Download App
+                  </Button>
+                </Link>
               )}
             </div>
             <p className="text-sm font-medium text-[color:var(--text-secondary)] max-w-2xl leading-relaxed">
