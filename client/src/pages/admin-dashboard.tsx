@@ -51,6 +51,37 @@ import {
 import { getGroupedLocationTypes, getLocationTypeLabel } from "@shared/constants/locationTypes";
 const groupedLocationTypes = getGroupedLocationTypes();
 
+const FOOD_TYPE_OPTIONS = [
+  "American",
+  "Asian",
+  "BBQ",
+  "Bakery",
+  "Breakfast",
+  "Burgers",
+  "Cajun",
+  "Caribbean",
+  "Coffee & Cafe",
+  "Dessert",
+  "Greek",
+  "Healthy & Bowls",
+  "Indian",
+  "Italian",
+  "Korean",
+  "Latin",
+  "Mediterranean",
+  "Mexican",
+  "Pizza",
+  "Seafood",
+  "Soul Food",
+  "Sushi",
+  "Tacos",
+  "Thai",
+  "Vegan",
+  "Vegetarian",
+  "Wings",
+  "Other",
+];
+
 interface DashboardStats {
   totalUsers: number;
   totalRestaurants: number;
@@ -2393,8 +2424,10 @@ export default function AdminDashboard() {
     state: "",
     phone: "",
     cuisineType: "",
+    cuisineTypes: [],
     businessType: "restaurant",
   });
+  const [isCuisineDropdownOpen, setIsCuisineDropdownOpen] = useState(false);
 
   const formatDateInput = (date: Date) => {
     const year = date.getFullYear();
@@ -4690,6 +4723,7 @@ export default function AdminDashboard() {
       state: "",
       phone: "",
       cuisineType: "",
+      cuisineTypes: [],
       businessType: "restaurant",
     });
   }, [selectedUser]);
@@ -5518,8 +5552,10 @@ export default function AdminDashboard() {
         state: "",
         phone: "",
         cuisineType: "",
+        cuisineTypes: [],
         businessType: "restaurant",
       });
+      setIsCuisineDropdownOpen(false);
       toast({ title: "Business Profile Added" });
     },
     onError: (error: any) => {
@@ -9950,17 +9986,66 @@ export default function AdminDashboard() {
                           })
                         }
                       />
-                      <input
-                        className="w-full px-2 py-1 border rounded-md text-sm"
-                        placeholder="Cuisine Type"
-                        value={newRestaurantProfile.cuisineType}
-                        onChange={(e) =>
-                          setNewRestaurantProfile({
-                            ...newRestaurantProfile,
-                            cuisineType: e.target.value,
-                          })
-                        }
-                      />
+                      <div className="relative">
+                        <button
+                          type="button"
+                          className="flex min-h-9 w-full items-center justify-between rounded-md border bg-background px-2 py-1 text-left text-sm"
+                          onClick={() =>
+                            setIsCuisineDropdownOpen((open) => !open)
+                          }
+                        >
+                          <span className="truncate">
+                            {Array.isArray(newRestaurantProfile.cuisineTypes) &&
+                            newRestaurantProfile.cuisineTypes.length
+                              ? newRestaurantProfile.cuisineTypes.join(", ")
+                              : "Food types"}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {Array.isArray(newRestaurantProfile.cuisineTypes)
+                              ? newRestaurantProfile.cuisineTypes.length
+                              : 0}
+                          </span>
+                        </button>
+                        {isCuisineDropdownOpen && (
+                          <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-background p-2 shadow-lg">
+                            {FOOD_TYPE_OPTIONS.map((foodType) => {
+                              const selectedTypes = Array.isArray(
+                                newRestaurantProfile.cuisineTypes,
+                              )
+                                ? newRestaurantProfile.cuisineTypes
+                                : [];
+                              const isSelected =
+                                selectedTypes.includes(foodType);
+                              return (
+                                <label
+                                  key={foodType}
+                                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border"
+                                    checked={isSelected}
+                                    onChange={() => {
+                                      const nextTypes = isSelected
+                                        ? selectedTypes.filter(
+                                            (item: string) =>
+                                              item !== foodType,
+                                          )
+                                        : [...selectedTypes, foodType];
+                                      setNewRestaurantProfile({
+                                        ...newRestaurantProfile,
+                                        cuisineTypes: nextTypes,
+                                        cuisineType: nextTypes.join(", "),
+                                      });
+                                    }}
+                                  />
+                                  <span>{foodType}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <Button
                       size="sm"
@@ -9981,7 +10066,14 @@ export default function AdminDashboard() {
                         }
                         createRestaurantProfile.mutate({
                           userId: selectedUser.id,
-                          data: newRestaurantProfile,
+                          data: {
+                            ...newRestaurantProfile,
+                            cuisineType: Array.isArray(
+                              newRestaurantProfile.cuisineTypes,
+                            )
+                              ? newRestaurantProfile.cuisineTypes.join(", ")
+                              : newRestaurantProfile.cuisineType,
+                          },
                         });
                       }}
                       disabled={createRestaurantProfile.isPending || isStaff}

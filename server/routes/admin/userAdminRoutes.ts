@@ -10,7 +10,10 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
-import { populateHostProfile } from "../../services/googleProfileService";
+import {
+  populateHostProfile,
+  populateRestaurantProfile,
+} from "../../services/googleProfileService";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -35,6 +38,7 @@ import {
   users,
   verificationRequests,
 } from "@shared/schema";
+import { ZodError } from "zod";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -43,6 +47,23 @@ type BuildLocationKey = (
   city?: string | null,
   state?: string | null,
 ) => string;
+
+const normalizeCuisineTypes = (value: unknown): string | null => {
+  const values = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(",")
+        .map((item) => item.trim());
+  const unique = Array.from(
+    new Set(
+      values
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .slice(0, 8),
+    ),
+  );
+  return unique.length ? unique.join(", ") : null;
+};
 type HostPricingColumnsCheck = {
   hasAll: boolean;
   missing: string[];
@@ -1527,7 +1548,9 @@ export function registerUserAdminRoutes(
           city: String(req.body?.city || "").trim(),
           state: String(req.body?.state || "").trim(),
           phone: req.body?.phone || null,
-          cuisineType: req.body?.cuisineType || null,
+          cuisineType: normalizeCuisineTypes(
+            req.body?.cuisineTypes ?? req.body?.cuisineType,
+          ),
           businessType,
           isFoodTruck: businessType === "food_truck",
           isActive: req.body?.isActive ?? true,
@@ -1539,6 +1562,12 @@ export function registerUserAdminRoutes(
         });
 
         const created = await storage.createRestaurant(payload as any);
+        populateRestaurantProfile(created.id).catch((err) => {
+          console.warn(
+            "[admin.users] Google restaurant enrichment failed after manual create",
+            err,
+          );
+        });
 
         if (owner.userType === "customer") {
           const nextType =
@@ -1549,6 +1578,14 @@ export function registerUserAdminRoutes(
         res.status(201).json(created);
       } catch (error: any) {
         console.error("Error creating user restaurant profile:", error);
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message:
+              error.errors[0]?.message ||
+              "Please check the business profile fields.",
+            errors: error.errors,
+          });
+        }
         res.status(500).json({
           message: error?.message || "Failed to create business profile",
         });
