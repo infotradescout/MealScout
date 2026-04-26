@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "wouter";
 import { useEffect, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Phone, Globe, Store } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
@@ -82,6 +83,21 @@ type PublicEvidence = {
   };
 };
 
+type RestaurantEngagementState = {
+  counts: {
+    favorites: number;
+    follows: number;
+    likes: number;
+    recommendations: number;
+  };
+  viewer: {
+    isFavorited: boolean;
+    isFollowing: boolean;
+    isLiked: boolean;
+    hasRecommended: boolean;
+  };
+};
+
 const labelByEntity: Record<string, string> = {
   restaurant: "Restaurant Profile",
   host: "Host Profile",
@@ -124,6 +140,8 @@ const toSlug = (value: string | null | undefined) =>
 export default function PublicProfilePage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { profileType, profileId, profileSlug } = useParams<{
     profileType: string;
     profileId: string;
@@ -181,6 +199,108 @@ export default function PublicProfilePage() {
         throw new Error("Evidence not found");
       }
       return res.json();
+    },
+  });
+
+  const isRestaurantProfile = data?.entity === "restaurant" && !!profileId;
+
+  const { data: engagementState } = useQuery<RestaurantEngagementState>({
+    queryKey: ["/api/restaurants", profileId, "engagement-state"],
+    enabled: isRestaurantProfile,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/restaurants/${encodeURIComponent(String(profileId || ""))}/engagement-state`,
+        { credentials: "include" },
+      );
+      if (!res.ok) {
+        throw new Error("Failed to fetch engagement state");
+      }
+      return res.json();
+    },
+  });
+
+  const runEngagementAction = async (
+    type: "like" | "follow" | "favorite" | "recommend",
+    method: "POST" | "DELETE" = "POST",
+  ) => {
+    if (!profileId) return;
+    const res = await fetch(
+      `/api/restaurants/${encodeURIComponent(String(profileId))}/${type}`,
+      {
+        method,
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.message || `Failed to ${type}`);
+    }
+    return res.json().catch(() => ({ success: true }));
+  };
+
+  const invalidateEngagementState = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["/api/restaurants", profileId, "engagement-state"],
+    });
+
+  const likeMutation = useMutation({
+    mutationFn: () =>
+      runEngagementAction(
+        "like",
+        engagementState?.viewer?.isLiked ? "DELETE" : "POST",
+      ),
+    onSuccess: invalidateEngagementState,
+    onError: (error: any) => {
+      toast({
+        title: "Could not update like",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const followMutation = useMutation({
+    mutationFn: () =>
+      runEngagementAction(
+        "follow",
+        engagementState?.viewer?.isFollowing ? "DELETE" : "POST",
+      ),
+    onSuccess: invalidateEngagementState,
+    onError: (error: any) => {
+      toast({
+        title: "Could not update follow",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const favoriteMutation = useMutation({
+    mutationFn: () =>
+      runEngagementAction(
+        "favorite",
+        engagementState?.viewer?.isFavorited ? "DELETE" : "POST",
+      ),
+    onSuccess: invalidateEngagementState,
+    onError: (error: any) => {
+      toast({
+        title: "Could not update favorite",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const recommendMutation = useMutation({
+    mutationFn: () => runEngagementAction("recommend", "POST"),
+    onSuccess: invalidateEngagementState,
+    onError: (error: any) => {
+      toast({
+        title: "Could not submit recommendation",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -391,6 +511,14 @@ export default function PublicProfilePage() {
     .map((key) => sections.get(key))
     .filter(Boolean);
 
+  const handleAuthRequiredAction = (action: () => void) => {
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+    action();
+  };
+
   return (
     <div className={`mx-auto max-w-3xl px-4 py-8 ${fontClass}`}>
       <SEOHead
@@ -413,6 +541,49 @@ export default function PublicProfilePage() {
               <h1 className="text-4xl font-bold tracking-tight">{heroTitle}</h1>
               {heroSubtitle ? (
                 <p className="mt-2 max-w-2xl text-sm text-white/85">{heroSubtitle}</p>
+              ) : null}
+
+              {data.entity === "restaurant" ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={engagementState?.viewer?.isLiked ? "default" : "outline"}
+                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+                    onClick={() => handleAuthRequiredAction(() => likeMutation.mutate())}
+                  >
+                    {engagementState?.viewer?.isLiked ? "Liked" : "Like"} · {engagementState?.counts?.likes ?? 0}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={engagementState?.viewer?.isFollowing ? "default" : "outline"}
+                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+                    onClick={() =>
+                      handleAuthRequiredAction(() => followMutation.mutate())
+                    }
+                  >
+                    {engagementState?.viewer?.isFollowing ? "Following" : "Follow"} · {engagementState?.counts?.follows ?? 0}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={engagementState?.viewer?.isFavorited ? "default" : "outline"}
+                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+                    onClick={() =>
+                      handleAuthRequiredAction(() => favoriteMutation.mutate())
+                    }
+                  >
+                    {engagementState?.viewer?.isFavorited ? "Favorited" : "Favorite"} · {engagementState?.counts?.favorites ?? 0}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+                    onClick={() =>
+                      handleAuthRequiredAction(() => recommendMutation.mutate())
+                    }
+                  >
+                    {engagementState?.viewer?.hasRecommended ? "Update Recommendation" : "Recommend"} · {engagementState?.counts?.recommendations ?? 0}
+                  </Button>
+                </div>
               ) : null}
             </div>
             {ctaLabel && ctaUrl ? (

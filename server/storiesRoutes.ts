@@ -21,7 +21,7 @@ import {
   restaurants,
   users,
 } from '@shared/schema';
-import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull } from 'drizzle-orm';
+import { eq, desc, and, lte, sql, count, gte, like, or, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { uploadToCloudinary, deleteFromCloudinary } from './imageUpload';
 import { upload } from './imageUpload';
 import multer from 'multer';
@@ -78,6 +78,40 @@ export default function setupStoriesRoutes(app: Express) {
         }
 
         const hasRestaurant = Boolean(bodyData.restaurantId);
+        let existingRestaurantStoryId: string | null = null;
+
+        if (hasRestaurant && bodyData.restaurantId) {
+          const existingRestaurantStories = await db
+            .select({ id: videoStories.id })
+            .from(videoStories)
+            .where(
+              and(
+                eq(videoStories.userId, userId),
+                eq(videoStories.restaurantId, bodyData.restaurantId),
+                isNull(videoStories.deletedAt),
+              ),
+            )
+            .orderBy(desc(videoStories.createdAt))
+            .limit(10);
+          existingRestaurantStoryId = existingRestaurantStories[0]?.id || null;
+
+          if (existingRestaurantStories.length > 1) {
+            const duplicateIds = existingRestaurantStories
+              .slice(1)
+              .map((row: any) => row.id)
+              .filter(Boolean);
+
+            if (duplicateIds.length > 0) {
+              await db
+                .update(videoStories)
+                .set({
+                  deletedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(inArray(videoStories.id, duplicateIds));
+            }
+          }
+        }
 
         // Check if this is a restaurant video and verify subscription (paid or lifetime)
         if (bodyData.restaurantId) {
@@ -154,7 +188,7 @@ export default function setupStoriesRoutes(app: Express) {
         }
 
         // Additional restaurant-level cap (if restaurantId provided)
-        if (bodyData.restaurantId) {
+        if (bodyData.restaurantId && !existingRestaurantStoryId) {
           const [{ count: restaurantDayCount }] = await db
             .select({ count: count() })
             .from(videoStories)
@@ -192,22 +226,42 @@ export default function setupStoriesRoutes(app: Express) {
           return res.status(500).json({ message: 'Failed to upload video' });
         }
 
-        // Create story record in database
-        const story = await db
-          .insert(videoStories)
-          .values({
-            userId,
-            restaurantId: bodyData.restaurantId,
-            title: bodyData.title,
-            description: bodyData.description,
-            duration: bodyData.duration,
-            videoUrl: cloudinaryResult.secureUrl,
-            thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
-            cuisine: bodyData.cuisine,
-            hashtags: bodyData.hashtags,
-            status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
-          })
-          .returning();
+        let story: any[] = [];
+
+        if (existingRestaurantStoryId) {
+          story = await db
+            .update(videoStories)
+            .set({
+              title: bodyData.title,
+              description: bodyData.description,
+              duration: bodyData.duration,
+              videoUrl: cloudinaryResult.secureUrl,
+              thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
+              cuisine: bodyData.cuisine,
+              hashtags: bodyData.hashtags,
+              status: 'ready',
+              updatedAt: new Date(),
+            })
+            .where(eq(videoStories.id, existingRestaurantStoryId))
+            .returning();
+        } else {
+          // Create story record in database
+          story = await db
+            .insert(videoStories)
+            .values({
+              userId,
+              restaurantId: bodyData.restaurantId,
+              title: bodyData.title,
+              description: bodyData.description,
+              duration: bodyData.duration,
+              videoUrl: cloudinaryResult.secureUrl,
+              thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
+              cuisine: bodyData.cuisine,
+              hashtags: bodyData.hashtags,
+              status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
+            })
+            .returning();
+        }
 
         // Initialize reviewer level if user doesn't have one
         const existingLevel = await db
@@ -262,8 +316,11 @@ export default function setupStoriesRoutes(app: Express) {
         }).catch(err => console.error('Failed to emit LISA claim:', err));
 
         res.status(201).json({
-          message: 'Video story uploaded successfully',
+          message: existingRestaurantStoryId
+            ? 'Video recommendation updated successfully'
+            : 'Video story uploaded successfully',
           story: story[0],
+          updated: Boolean(existingRestaurantStoryId),
         });
       } catch (error) {
         console.error('Error uploading video story:', error);

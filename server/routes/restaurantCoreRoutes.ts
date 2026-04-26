@@ -154,10 +154,60 @@ export function registerRestaurantCoreRoutes(
     }
   };
 
+  const ensureRestaurantLikesTable = async () => {
+    try {
+      await db.execute(sql`
+        create table if not exists restaurant_likes (
+          id varchar primary key default gen_random_uuid(),
+          restaurant_id varchar not null references restaurants(id) on delete cascade,
+          user_id varchar not null references users(id) on delete cascade,
+          liked_at timestamp default now(),
+          created_at timestamp default now(),
+          unique (restaurant_id, user_id)
+        )
+      `);
+    } catch (error) {
+      console.error("Failed to ensure restaurant_likes table", error);
+    }
+  };
+
+  void ensureRestaurantLikesTable();
+
+  const ensureRestaurantLikeForEngagement = async (
+    userId: string,
+    restaurantId: string,
+    source: "favorite" | "follow" | "recommend",
+  ) => {
+    const safeUserId = String(userId || "").trim();
+    const safeRestaurantId = String(restaurantId || "").trim();
+    if (!safeUserId || !safeRestaurantId) return;
+
+    try {
+      await db.execute(sql`
+        insert into restaurant_likes (restaurant_id, user_id)
+        values (${safeRestaurantId}, ${safeUserId})
+        on conflict (restaurant_id, user_id) do nothing
+      `);
+      void trackEngagement(
+        "restaurant_like_auto_added",
+        safeUserId,
+        safeRestaurantId,
+        { source },
+      );
+    } catch (error) {
+      console.warn("Failed to auto-like after engagement", {
+        userId: safeUserId,
+        restaurantId: safeRestaurantId,
+        source,
+        error,
+      });
+    }
+  };
+
   const ensureRestaurantFollowForEngagement = async (
     userId: string,
     restaurantId: string,
-    source: "favorite" | "recommend",
+    source: "favorite" | "recommend" | "like",
   ) => {
     try {
       const followData = insertRestaurantFollowSchema.parse({
@@ -184,6 +234,155 @@ export function registerRestaurantCoreRoutes(
       });
     }
   };
+
+  const upsertRestaurantUserRecommendation = async (
+    userId: string,
+    restaurantId: string,
+  ) => {
+    const existing = await db
+      .select({ id: restaurantUserRecommendations.id })
+      .from(restaurantUserRecommendations)
+      .where(
+        and(
+          eq(restaurantUserRecommendations.restaurantId, restaurantId),
+          eq(restaurantUserRecommendations.userId, userId),
+        ),
+      )
+      .orderBy(desc(restaurantUserRecommendations.recommendedAt))
+      .limit(1);
+
+    if (existing[0]?.id) {
+      const updated = await db
+        .update(restaurantUserRecommendations)
+        .set({
+          recommendedAt: new Date(),
+        })
+        .where(eq(restaurantUserRecommendations.id, existing[0].id))
+        .returning();
+      return {
+        recommendation: updated[0],
+        updated: true,
+      };
+    }
+
+    const recommendationData = insertRestaurantUserRecommendationSchema.parse({
+      restaurantId,
+      userId,
+    });
+    const recommendation = await storage.createRestaurantUserRecommendation(
+      recommendationData,
+    );
+    return {
+      recommendation,
+      updated: false,
+    };
+  };
+
+  app.get(
+    "/api/restaurants/:restaurantId/engagement-state",
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params.restaurantId || "").trim();
+        if (!restaurantId) {
+          return res.status(400).json({ message: "Invalid restaurant id" });
+        }
+
+        const userId = String(req.user?.id || "").trim() || null;
+
+        const [favoriteCountResult, followCountResult, recommendationCountResult] =
+          await Promise.all([
+            db
+              .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
+              .from(restaurantFavorites)
+              .where(eq(restaurantFavorites.restaurantId, restaurantId)),
+            db
+              .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
+              .from(restaurantFollows)
+              .where(eq(restaurantFollows.restaurantId, restaurantId)),
+            db
+              .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
+              .from(restaurantUserRecommendations)
+              .where(eq(restaurantUserRecommendations.restaurantId, restaurantId)),
+          ]);
+
+        const likeCountSql = await db.execute(sql<{ count: number }>`
+          select cast(count(*) as integer) as count
+          from restaurant_likes
+          where restaurant_id = ${restaurantId}
+        `);
+
+        let isFavorited = false;
+        let isFollowing = false;
+        let isLiked = false;
+        let hasRecommended = false;
+
+        if (userId) {
+          const [fav, follow, rec] = await Promise.all([
+            db
+              .select({ id: restaurantFavorites.id })
+              .from(restaurantFavorites)
+              .where(
+                and(
+                  eq(restaurantFavorites.restaurantId, restaurantId),
+                  eq(restaurantFavorites.userId, userId),
+                ),
+              )
+              .limit(1),
+            db
+              .select({ id: restaurantFollows.id })
+              .from(restaurantFollows)
+              .where(
+                and(
+                  eq(restaurantFollows.restaurantId, restaurantId),
+                  eq(restaurantFollows.userId, userId),
+                ),
+              )
+              .limit(1),
+            db
+              .select({ id: restaurantUserRecommendations.id })
+              .from(restaurantUserRecommendations)
+              .where(
+                and(
+                  eq(restaurantUserRecommendations.restaurantId, restaurantId),
+                  eq(restaurantUserRecommendations.userId, userId),
+                ),
+              )
+              .limit(1),
+          ]);
+
+          const likeResult = await db.execute(sql<{ id: string }>`
+            select id
+            from restaurant_likes
+            where restaurant_id = ${restaurantId} and user_id = ${userId}
+            limit 1
+          `);
+
+          isFavorited = fav.length > 0;
+          isFollowing = follow.length > 0;
+          hasRecommended = rec.length > 0;
+          isLiked = (((likeResult as any)?.rows || [])[0]?.id || "") !== "";
+        }
+
+        res.json({
+          counts: {
+            favorites: favoriteCountResult[0]?.count ?? 0,
+            follows: followCountResult[0]?.count ?? 0,
+            likes: Number(((likeCountSql as any)?.rows || [])[0]?.count || 0),
+            recommendations: recommendationCountResult[0]?.count ?? 0,
+          },
+          viewer: {
+            isFavorited,
+            isFollowing,
+            isLiked,
+            hasRecommended,
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching restaurant engagement state:", error);
+        res.status(500).json({ message: "Failed to fetch engagement state" });
+      }
+    },
+  );
 
   app.post("/api/restaurants", isRestaurantOwner, async (req: any, res) => {
     try {
@@ -980,7 +1179,18 @@ export function registerRestaurantCoreRoutes(
 
         const favoriteCount =
           await storage.getUserRestaurantFavoritesCount(userId);
-        if (favoriteCount >= maxFavorites) {
+        const existingFavorite = await db
+          .select({ id: restaurantFavorites.id })
+          .from(restaurantFavorites)
+          .where(
+            and(
+              eq(restaurantFavorites.restaurantId, restaurantId),
+              eq(restaurantFavorites.userId, userId),
+            ),
+          )
+          .limit(1);
+
+        if (!existingFavorite[0]?.id && favoriteCount >= maxFavorites) {
           return res.status(400).json({
             message: `You can favorite up to ${maxFavorites} restaurants.`,
           });
@@ -997,12 +1207,18 @@ export function registerRestaurantCoreRoutes(
           restaurantId,
           "favorite",
         );
+        await ensureRestaurantLikeForEngagement(userId, restaurantId, "favorite");
         void trackEngagement("restaurant_favorite_added", userId, restaurantId);
         res.json(favorite);
       } catch (error: any) {
         console.error("Error adding restaurant favorite:", error);
         if (error.code === "23505") {
           await ensureRestaurantFollowForEngagement(
+            String(req.user?.id || ""),
+            String(req.params?.restaurantId || ""),
+            "favorite",
+          );
+          await ensureRestaurantLikeForEngagement(
             String(req.user?.id || ""),
             String(req.params?.restaurantId || ""),
             "favorite",
@@ -1099,6 +1315,7 @@ export function registerRestaurantCoreRoutes(
         });
 
         const follow = await storage.createRestaurantFollow(followData);
+        await ensureRestaurantLikeForEngagement(userId, restaurantId, "follow");
         void trackEngagement("restaurant_follow_added", userId, restaurantId);
         res.json(follow);
       } catch (error: any) {
@@ -1165,6 +1382,73 @@ export function registerRestaurantCoreRoutes(
   );
 
   app.post(
+    "/api/restaurants/:restaurantId/like",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:like:add`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        await db.execute(sql`
+          insert into restaurant_likes (restaurant_id, user_id)
+          values (${restaurantId}, ${userId})
+          on conflict (restaurant_id, user_id) do nothing
+        `);
+        await ensureRestaurantFollowForEngagement(userId, restaurantId, "like");
+        void trackEngagement("restaurant_like_added", userId, restaurantId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error adding restaurant like:", error);
+        res.status(500).json({ message: "Failed to like restaurant" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/restaurants/:restaurantId/like",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:like:remove`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before trying again.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
+
+        await db.execute(sql`
+          delete from restaurant_likes
+          where restaurant_id = ${restaurantId} and user_id = ${userId}
+        `);
+        void trackEngagement("restaurant_like_removed", userId, restaurantId);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error removing restaurant like:", error);
+        res.status(500).json({ message: "Failed to unlike restaurant" });
+      }
+    },
+  );
+
+  app.post(
     "/api/restaurants/:restaurantId/recommend",
     isAuthenticated,
     async (req: any, res) => {
@@ -1186,29 +1470,29 @@ export function registerRestaurantCoreRoutes(
           return res.status(404).json({ message: "Restaurant not found" });
         }
 
-        const recommendationData =
-          insertRestaurantUserRecommendationSchema.parse({
-            restaurantId,
-            userId,
-          });
-
-        const recommendation =
-          await storage.createRestaurantUserRecommendation(recommendationData);
+        const { recommendation, updated } =
+          await upsertRestaurantUserRecommendation(userId, restaurantId);
         await ensureRestaurantFollowForEngagement(
           userId,
           restaurantId,
           "recommend",
         );
+        await ensureRestaurantLikeForEngagement(userId, restaurantId, "recommend");
         void trackEngagement(
-          "restaurant_recommend_added",
+          updated ? "restaurant_recommend_updated" : "restaurant_recommend_added",
           userId,
           restaurantId,
         );
-        res.json(recommendation);
+        res.json({ ...recommendation, updated });
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
         if (error.code === "23505") {
           await ensureRestaurantFollowForEngagement(
+            String(req.user?.id || ""),
+            String(req.params?.restaurantId || ""),
+            "recommend",
+          );
+          await ensureRestaurantLikeForEngagement(
             String(req.user?.id || ""),
             String(req.params?.restaurantId || ""),
             "recommend",
