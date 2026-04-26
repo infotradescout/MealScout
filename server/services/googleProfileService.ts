@@ -59,8 +59,6 @@ const PROFILE_FIELD_MASK = [
   "dineIn",
   "takeout",
   "reservable",
-  "menuUri",
-  "orderUri",
 ].join(",");
 
 // Lighter field mask for text search matching
