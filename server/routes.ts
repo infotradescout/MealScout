@@ -58,6 +58,7 @@ import { registerSubscriptionRoutes } from "./routes/subscriptionRoutes";
 import { registerRuntimeBootstrapRoutes } from "./routes/runtimeBootstrapRoutes";
 import { registerStripeWebhookRoutes } from "./routes/stripeWebhookRoutes";
 import { registerTruckClaimRoutes } from "./routes/truckClaimRoutes";
+import { registerTruckSightingRoutes } from "./routes/truckSightingRoutes";
 import { registerProfileRoutes } from "./routes/profileRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
@@ -133,6 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     getLockedPriceForUser,
   });
   registerTruckClaimRoutes(app);
+  registerTruckSightingRoutes(app);
 
   registerPublicDiscoveryRoutes(app);
 

@@ -15,6 +15,16 @@ import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { BackHeader } from "@/components/back-header";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import { usePinZoomCardMode } from "@/components/maps/usePinZoomCardMode";
 import type {
@@ -40,6 +50,7 @@ import {
   trackGeoAdImpression,
 } from "@/utils/geoAds";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { getLocationTypeLabel } from "@shared/constants/locationTypes";
@@ -296,6 +307,19 @@ interface LiveTruck {
   isVerified?: boolean;
 }
 
+type CommunityTruckSighting = {
+  id: string;
+  truckName: string;
+  notes?: string | null;
+  latitude: number;
+  longitude: number;
+  locationLabel?: string | null;
+  reportCount: number;
+  lastReportedAt: string;
+  expiresAt: string;
+  status: string;
+};
+
 interface Deal {
   id: string;
   restaurantId: string;
@@ -324,8 +348,7 @@ type HostLocation = {
   id: string;
   hostId?: string | null;
   name: string;
-  businessName?: string;
-  address: string;
+  address?: string | null;
   city?: string | null;
   state?: string | null;
   spotImageUrl?: string | null;
@@ -1051,6 +1074,7 @@ export default function MapPage() {
   // Touch update to trigger deployment rebuild after map styling configuration changes.
   const mapBranding = useMemo(resolveMapBranding, []);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const isStandalone = useIsStandalone();
   const { user } = useAuth();
   const [userLocation, setUserLocation] = useState<{
@@ -1068,6 +1092,14 @@ export default function MapPage() {
     useState<ParkingPreviewSelection | null>(null);
   const [selectedHostCluster, setSelectedHostCluster] =
     useState<HostCluster | null>(null);
+  const [selectedSighting, setSelectedSighting] =
+    useState<CommunityTruckSighting | null>(null);
+  const [showReportTruckDialog, setShowReportTruckDialog] = useState(false);
+  const [reportTruckName, setReportTruckName] = useState("");
+  const [reportTruckNotes, setReportTruckNotes] = useState("");
+  const [reportLocationLabel, setReportLocationLabel] = useState("");
+  const [isSubmittingTruckSighting, setIsSubmittingTruckSighting] =
+    useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationAccuracyM, setLocationAccuracyM] = useState<number | null>(
     null,
@@ -1350,6 +1382,37 @@ export default function MapPage() {
 
   const liveTrucks = Array.isArray(liveTrucksData) ? liveTrucksData : [];
 
+  const { data: communitySightingsData = [] } = useQuery<CommunityTruckSighting[]>(
+    {
+      queryKey: userLocation
+        ? [
+            "/api/trucks/community-sightings/live",
+            userLocation.lat,
+            userLocation.lng,
+          ]
+        : ["community-truck-sightings", "none"],
+      queryFn: userLocation
+        ? async () => {
+            const response = await fetch(
+              apiUrl(
+                `/api/trucks/community-sightings/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=6`,
+              ),
+            );
+            if (!response.ok) throw new Error("Failed to fetch truck sightings");
+            return response.json();
+          }
+        : undefined,
+      enabled: !!userLocation,
+      staleTime: 10 * 1000,
+      refetchInterval: 30 * 1000,
+      refetchOnWindowFocus: true,
+    },
+  );
+
+  const communitySightings = Array.isArray(communitySightingsData)
+    ? communitySightingsData
+    : [];
+
   const adLocation = userLocation || mapCenter;
   const { data: geoAds = [] } = useQuery<GeoAd[]>({
     queryKey: ["/api/geo-ads", "map", adLocation?.lat, adLocation?.lng],
@@ -1419,6 +1482,16 @@ export default function MapPage() {
       return appliedMapBounds.contains([lat, lng]);
     });
   }, [liveTrucks, appliedMapBounds]);
+
+  const visibleCommunitySightings = useMemo(() => {
+    if (!appliedMapBounds) return communitySightings;
+    return communitySightings.filter((sighting) => {
+      const lat = toNumberOrNull(sighting.latitude);
+      const lng = toNumberOrNull(sighting.longitude);
+      if (lat === null || lng === null) return false;
+      return appliedMapBounds.contains([lat, lng]);
+    });
+  }, [communitySightings, appliedMapBounds]);
 
   const popularityRestaurantIds = useMemo(() => {
     const ids = new Set<string>();
@@ -2031,6 +2104,23 @@ export default function MapPage() {
     return visibleLiveTrucks.filter((truck) => !hostedTruckIds.has(truck.id));
   }, [visibleLiveTrucks, hostedTruckIds]);
 
+  const visibleUnhostedCommunitySightings = useMemo(() => {
+    return visibleCommunitySightings.filter((sighting) => {
+      const sightingCoords = {
+        lat: Number(sighting.latitude),
+        lng: Number(sighting.longitude),
+      };
+      for (const host of visibleHostLocations) {
+        const hostCoords = resolveHostCoords(host);
+        if (!hostCoords) continue;
+        if (haversineKm(sightingCoords, hostCoords) <= hostedRadiusKm) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [visibleCommunitySightings, visibleHostLocations, resolveHostCoords]);
+
   useEffect(() => {
     if (
       !activeMapLocations?.hostLocations?.length &&
@@ -2214,9 +2304,10 @@ export default function MapPage() {
 
   const hasLocation = !!userLocation;
   const liveTruckPins = visibleLiveTrucks.length;
+  const crowdSightingPins = visibleCommunitySightings.length;
   const hostPins = visibleHostLocations.length;
   const eventPins = visibleEventLocations.length;
-  const activityPins = liveTruckPins + hostPins + eventPins;
+  const activityPins = liveTruckPins + crowdSightingPins + hostPins + eventPins;
   const totalHostParkingLocations = effectiveBookableHostIds.size;
   const mapHostParkingLocations = visibleHostLocations.length;
   const isNightTheme =
@@ -2404,6 +2495,21 @@ export default function MapPage() {
       });
     });
 
+    visibleUnhostedCommunitySightings.forEach((sighting) => {
+      const lat = toNumberOrNull(sighting.latitude);
+      const lng = toNumberOrNull(sighting.longitude);
+      if (lat == null || lng == null) return;
+      next.push({
+        id: `truck_sighting:${sighting.id}`,
+        sourceId: `sighting:${sighting.id}`,
+        kind: "truck",
+        lat,
+        lng,
+        title: sighting.truckName,
+        subtitle: "Community sighting (1h)",
+      });
+    });
+
     visibleHostLocations.forEach((host) => {
       const coords = resolveHostCoords(host);
       if (!coords) return;
@@ -2415,7 +2521,7 @@ export default function MapPage() {
         lat: markerCoords.lat,
         lng: markerCoords.lng,
         title: host.name,
-        subtitle: host.address,
+        subtitle: host.address ?? undefined,
       });
     });
 
@@ -2438,6 +2544,7 @@ export default function MapPage() {
     visibleGeoAds,
     visibleDeals,
     visibleUnhostedTrucks,
+    visibleUnhostedCommunitySightings,
     visibleHostLocations,
     visibleEventLocations,
     hostMarkerCoordsById,
@@ -2595,6 +2702,19 @@ export default function MapPage() {
       }
 
       if (marker.kind === "truck") {
+        if (String(marker.sourceId).startsWith("sighting:")) {
+          const sightingId = String(marker.sourceId).replace("sighting:", "");
+          const sighting = visibleUnhostedCommunitySightings.find(
+            (item) => item.id === sightingId,
+          );
+          if (sighting) {
+            setSelectedDeal(null);
+            setSelectedParkingPreview(null);
+            setSelectedHostCluster(null);
+            setSelectedSighting(sighting);
+          }
+          return;
+        }
         window.location.href = `/restaurant/${marker.sourceId}`;
         return;
       }
@@ -2623,6 +2743,7 @@ export default function MapPage() {
       geoAds,
       visibleDeals,
       visibleGeoAds,
+      visibleUnhostedCommunitySightings,
       visibleHostLocations,
       visibleEventLocations,
       resolveEventCoords,
@@ -2935,6 +3056,20 @@ export default function MapPage() {
             </div>
           </div>
           <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowReportTruckDialog(true);
+                setSelectedDeal(null);
+                setSelectedParkingPreview(null);
+                setSelectedHostCluster(null);
+                setSelectedSighting(null);
+              }}
+              data-testid="button-report-truck-sighting"
+            >
+              Report Truck
+            </Button>
             {!isStandalone && (
               <Link href="/install">
                 <Button
@@ -3003,6 +3138,10 @@ export default function MapPage() {
               ` | ${liveTruckPins} truck${
                 liveTruckPins === 1 ? "" : "s"
               } nearby`}
+            {crowdSightingPins > 0 &&
+              ` | ${crowdSightingPins} community sighting${
+                crowdSightingPins === 1 ? "" : "s"
+              }`}
           </div>
         )}
         {showMapDiagnostics && (
@@ -3213,6 +3352,54 @@ export default function MapPage() {
                   Directions
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!selectedDeal && selectedSighting && (
+          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
+            <CardContent className="p-4">
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {selectedSighting.truckName}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Community sighting (temporary map pin)
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedSighting(null)}
+                  className="h-11 w-11"
+                  data-testid="button-close-selected-sighting"
+                  aria-label="Close selected sighting"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              {selectedSighting.notes && (
+                <p className="mb-2 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                  {selectedSighting.notes}
+                </p>
+              )}
+              <div className="mb-3 text-xs text-muted-foreground">
+                Reports: {selectedSighting.reportCount} · Expires from map at{" "}
+                {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
+              </div>
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={() =>
+                  window.open(
+                    `https://maps.google.com/?q=${selectedSighting.latitude},${selectedSighting.longitude}`,
+                    "_blank",
+                  )
+                }
+              >
+                Directions
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -3604,6 +3791,113 @@ export default function MapPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={showReportTruckDialog} onOpenChange={setShowReportTruckDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Report a food truck sighting</DialogTitle>
+            <DialogDescription>
+              This crowd pin stays public for 1 hour, then drops off the map. The report stays saved in admin history for due diligence.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={reportTruckName}
+              onChange={(e) => setReportTruckName(e.target.value)}
+              placeholder="Truck name (if known)"
+              maxLength={120}
+            />
+            <Input
+              value={reportLocationLabel}
+              onChange={(e) => setReportLocationLabel(e.target.value)}
+              placeholder="Location label (optional)"
+              maxLength={220}
+            />
+            <Textarea
+              value={reportTruckNotes}
+              onChange={(e) => setReportTruckNotes(e.target.value)}
+              placeholder="Notes (color, cross street, cuisine, etc.)"
+              maxLength={500}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowReportTruckDialog(false)}
+              disabled={isSubmittingTruckSighting}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isSubmittingTruckSighting ||
+                !reportTruckName.trim() ||
+                !(userLocation || mapCenter)
+              }
+              onClick={async () => {
+                try {
+                  const coords = userLocation || mapCenter;
+                  if (!coords) {
+                    toast({
+                      title: "Location required",
+                      description: "Enable location services to submit a truck sighting.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  setIsSubmittingTruckSighting(true);
+                  const res = await fetch(apiUrl("/api/public/truck-sightings"), {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({
+                      truckName: reportTruckName.trim(),
+                      latitude: coords.lat,
+                      longitude: coords.lng,
+                      notes: reportTruckNotes.trim() || undefined,
+                      locationLabel: reportLocationLabel.trim() || undefined,
+                      source: "map_user_ping",
+                      seenAt: new Date().toISOString(),
+                    }),
+                  });
+
+                  if (!res.ok) {
+                    const payload = await res.json().catch(() => ({}));
+                    throw new Error(payload?.message || "Failed to submit truck sighting");
+                  }
+
+                  setShowReportTruckDialog(false);
+                  setReportTruckName("");
+                  setReportTruckNotes("");
+                  setReportLocationLabel("");
+                  setSelectedSighting(null);
+                  queryClient.invalidateQueries({
+                    queryKey: ["/api/trucks/community-sightings/live"],
+                  });
+                  toast({
+                    title: "Truck sighting submitted",
+                    description:
+                      "Thanks. This temporary pin is live for 1 hour and saved for admin review.",
+                  });
+                } catch (error: any) {
+                  toast({
+                    title: "Unable to submit sighting",
+                    description: error?.message || "Please try again in a moment.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsSubmittingTruckSighting(false);
+                }
+              }}
+            >
+              {isSubmittingTruckSighting ? "Submitting..." : "Submit sighting"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <section className="px-4 sm:px-6 pb-4">
         <div className="mx-auto rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">

@@ -63,6 +63,7 @@ const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
 );
 const AdminGeoAds = lazy(() => import("@/pages/admin-geo-ads"));
+const AdminTruckSightings = lazy(() => import("@/pages/admin-truck-sightings"));
 const AffiliateEarnings = lazy(() => import("@/pages/AffiliateEarnings"));
 const EmptyCountyExperience = lazy(
   () => import("@/pages/EmptyCountyExperience"),
@@ -487,6 +488,7 @@ function Router() {
             <Route path="/admin/vac-logs" component={AdminVacLogs} />
             <Route path="/admin/telemetry" component={AdminTelemetry} />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
+            <Route path="/admin/truck-sightings" component={AdminTruckSightings} />
             <Route
               path="/admin/affiliates"
               component={AdminAffiliateManagement}
