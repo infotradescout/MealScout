@@ -84,7 +84,7 @@ export function createRouteAccessPolicyDependencies(
           and(
             eq(restaurants.ownerId, ownerId),
             eq(restaurantSubscriptions.isLifetimeFree, true),
-            eq(restaurantSubscriptions.status, "active"),
+            eq(restaurantSubscriptions.canPostDeals, true),
           ),
         )
         .limit(1);
@@ -98,13 +98,36 @@ export function createRouteAccessPolicyDependencies(
     }
   }
 
-  function hasAccountAgeTrialAccess(user: User | null): boolean {
-    if (!user?.createdAt) return false;
-    if (
-      !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
-    ) {
+  async function hasDealPostingEntitlement(userId: string): Promise<boolean> {
+    const ownerId = String(userId || "").trim();
+    if (!ownerId) return false;
+    try {
+      const rows = await db
+        .select({ id: restaurantSubscriptions.id })
+        .from(restaurantSubscriptions)
+        .innerJoin(
+          restaurants,
+          eq(restaurantSubscriptions.restaurantId, restaurants.id),
+        )
+        .where(
+          and(
+            eq(restaurants.ownerId, ownerId),
+            eq(restaurantSubscriptions.canPostDeals, true),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
+    } catch (error) {
+      console.warn("[subscription] Failed deal posting entitlement lookup", {
+        userId: ownerId,
+        error: (error as any)?.message || error,
+      });
       return false;
     }
+  }
+
+  function hasAccountAgeTrialAccess(user: User | null): boolean {
+    if (!user?.createdAt) return false;
     const createdAtMs = new Date(user.createdAt).getTime();
     if (!Number.isFinite(createdAtMs)) return false;
     const trialEndsAtMs =
@@ -192,6 +215,14 @@ export function createRouteAccessPolicyDependencies(
       }
 
       if (await hasLifetimeRestaurantAccess(userId)) {
+        return { isValid: true, currentCount: 0, maxDeals: 999 };
+      }
+
+      if (hasAccountAgeTrialAccess(hydratedUser)) {
+        return { isValid: true, currentCount: 0, maxDeals: 999 };
+      }
+
+      if (await hasDealPostingEntitlement(userId)) {
         return { isValid: true, currentCount: 0, maxDeals: 999 };
       }
 
