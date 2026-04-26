@@ -29,6 +29,34 @@ export function createRestaurantsDealsRepository(
   deps: RestaurantsDealsRepositoryDependencies,
 ) {
   const { ensureCityExists } = deps;
+  const isMissingRelationError = (error: unknown, tableName: string) => {
+    const code = String((error as any)?.code || "").toUpperCase();
+    const message = String((error as any)?.message || "").toLowerCase();
+    return (
+      code === "42P01" &&
+      (message.includes(`relation \"${tableName}\" does not exist`) ||
+        message.includes(`relation '${tableName}' does not exist`) ||
+        message.includes(`${tableName} does not exist`))
+    );
+  };
+
+  const deleteDealWithRelations = async (
+    id: string,
+    relationTables: Array<"deal_claims" | "deal_views" | "deal_feedback">,
+  ) => {
+    await db.transaction(async (tx: any) => {
+      if (relationTables.includes("deal_claims")) {
+        await tx.delete(dealClaims).where(eq(dealClaims.dealId, id));
+      }
+      if (relationTables.includes("deal_views")) {
+        await tx.delete(dealViews).where(eq(dealViews.dealId, id));
+      }
+      if (relationTables.includes("deal_feedback")) {
+        await tx.delete(dealFeedback).where(eq(dealFeedback.dealId, id));
+      }
+      await tx.delete(deals).where(eq(deals.id, id));
+    });
+  };
 
   return {
     async createRestaurant(restaurant: InsertRestaurant): Promise<Restaurant> {
@@ -253,12 +281,24 @@ export function createRestaurantsDealsRepository(
     },
 
     async deleteDeal(id: string): Promise<void> {
-      await db.transaction(async (tx: any) => {
-        await tx.delete(dealClaims).where(eq(dealClaims.dealId, id));
-        await tx.delete(dealViews).where(eq(dealViews.dealId, id));
-        await tx.delete(dealFeedback).where(eq(dealFeedback.dealId, id));
-        await tx.delete(deals).where(eq(deals.id, id));
-      });
+      const relationTables: Array<"deal_claims" | "deal_views" | "deal_feedback"> = [
+        "deal_claims",
+        "deal_views",
+        "deal_feedback",
+      ];
+      try {
+        await deleteDealWithRelations(id, relationTables);
+      } catch (error) {
+        // Some environments may lag schema migrations. Retry without missing
+        // child tables so deal deletion still works.
+        const filteredRelations = relationTables.filter(
+          (tableName) => !isMissingRelationError(error, tableName),
+        );
+        if (filteredRelations.length === relationTables.length) {
+          throw error;
+        }
+        await deleteDealWithRelations(id, filteredRelations);
+      }
     },
 
     async duplicateDeal(id: string): Promise<Deal> {

@@ -1090,6 +1090,14 @@ export default function RestaurantOwnerDashboard() {
         description: "Deal has been deleted successfully.",
       });
     },
+    onError: (error: any) => {
+      toast({
+        title: "Delete failed",
+        description:
+          error?.message || "Unable to delete this deal right now.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Update deal
