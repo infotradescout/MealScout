@@ -17,6 +17,8 @@ const PLACES_API_BASE = "https://places.googleapis.com/v1";
 const getApiKey = () =>
   String(
     process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_PLACES_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
       process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
       "",
   ).trim();
@@ -72,6 +74,143 @@ const SEARCH_FIELD_MASK = [
   "places.userRatingCount",
 ].join(",");
 
+const TOKEN_STOP_WORDS = new Set([
+  "the",
+  "and",
+  "usa",
+  "fl",
+  "florida",
+  "llc",
+  "inc",
+  "co",
+  "company",
+]);
+
+const normalizePlaceText = (value: unknown): string =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const significantTokens = (value: unknown): string[] =>
+  normalizePlaceText(value)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !TOKEN_STOP_WORDS.has(token));
+
+const expandAddressAbbreviations = (value: string): string =>
+  String(value || "")
+    .replace(/\bN\.?\b/gi, "North")
+    .replace(/\bS\.?\b/gi, "South")
+    .replace(/\bE\.?\b/gi, "East")
+    .replace(/\bW\.?\b/gi, "West")
+    .replace(/\bBlvd\.?\b/gi, "Boulevard")
+    .replace(/\bRd\.?\b/gi, "Road")
+    .replace(/\bSt\.?\b/gi, "Street")
+    .replace(/\bAve\.?\b/gi, "Avenue")
+    .replace(/\bDr\.?\b/gi, "Drive")
+    .replace(/\bLn\.?\b/gi, "Lane")
+    .replace(/\bHwy\.?\b/gi, "Highway")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const compactAddress = (value: string): string =>
+  String(value || "")
+    .replace(/\bNorth\b/gi, "N")
+    .replace(/\bSouth\b/gi, "S")
+    .replace(/\bEast\b/gi, "E")
+    .replace(/\bWest\b/gi, "W")
+    .replace(/\bBoulevard\b/gi, "Blvd")
+    .replace(/\bRoad\b/gi, "Rd")
+    .replace(/\bStreet\b/gi, "St")
+    .replace(/\bAvenue\b/gi, "Ave")
+    .replace(/\bDrive\b/gi, "Dr")
+    .replace(/\bLane\b/gi, "Ln")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const buildSearchQueries = (
+  businessName: string,
+  address: string,
+  city?: string | null,
+  state?: string | null,
+): string[] => {
+  const locationQuery = [address, city, state].filter(Boolean).join(", ");
+  const expandedLocation = expandAddressAbbreviations(locationQuery);
+  const compactLocation = compactAddress(locationQuery);
+  const cityState = [city, state].filter(Boolean).join(", ");
+
+  return Array.from(
+    new Set(
+      [
+        `${businessName} ${locationQuery}`,
+        `${businessName}, ${locationQuery}`,
+        `${businessName} ${expandedLocation}`,
+        `${businessName}, ${expandedLocation}`,
+        `${businessName} ${compactLocation}`,
+        cityState ? `${businessName}, ${cityState}` : "",
+        address ? `${businessName}, ${address}` : "",
+      ]
+        .map((query) => query.replace(/\s+/g, " ").trim())
+        .filter(Boolean),
+    ),
+  );
+};
+
+const placeMatchScore = (
+  place: any,
+  businessName: string,
+  locationQuery: string,
+): number => {
+  const displayName = normalizePlaceText(place?.displayName?.text);
+  const formattedAddress = normalizePlaceText(place?.formattedAddress);
+  const normalizedName = normalizePlaceText(businessName);
+  const nameTokens = significantTokens(businessName);
+  const locationTokens = significantTokens(locationQuery);
+
+  const nameHits = nameTokens.filter((token) =>
+    displayName.includes(token),
+  ).length;
+  const addressHits = locationTokens.filter((token) =>
+    formattedAddress.includes(token),
+  ).length;
+
+  let score = nameHits * 12 + Math.min(addressHits, 5) * 3;
+  if (normalizedName && displayName.includes(normalizedName)) score += 30;
+  if (
+    formattedAddress &&
+    normalizePlaceText(locationQuery).includes(formattedAddress)
+  ) {
+    score += 8;
+  }
+  if (typeof place?.rating === "number") score += 1;
+  if (
+    typeof place?.userRatingCount === "number" &&
+    place.userRatingCount > 0
+  ) {
+    score += 1;
+  }
+  return score;
+};
+
+const buildLocationBias = (
+  latitude?: string | number | null,
+  longitude?: string | number | null,
+) => {
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return {
+    circle: {
+      center: { latitude: lat, longitude: lng },
+      radius: 3000,
+    },
+  };
+};
+
 export type GoogleProfileData = {
   googlePlaceId: string;
   description: string | null;
@@ -102,6 +241,8 @@ export async function findGooglePlace(
   address: string,
   city?: string | null,
   state?: string | null,
+  latitude?: string | number | null,
+  longitude?: string | number | null,
 ): Promise<string | null> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -110,38 +251,73 @@ export async function findGooglePlace(
   }
 
   const locationQuery = [address, city, state].filter(Boolean).join(", ");
-  const textQuery = `${businessName} ${locationQuery}`;
+  const queryAttempts = buildSearchQueries(businessName, address, city, state);
+  const locationBias = buildLocationBias(latitude, longitude);
+  let bestMatch: { placeId: string; score: number; query: string } | null =
+    null;
 
   try {
-    const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
-      },
-      body: JSON.stringify({
-        textQuery,
-        maxResultCount: 3,
-      }),
-    });
+    for (const textQuery of queryAttempts) {
+      const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+        },
+        body: JSON.stringify({
+          textQuery,
+          maxResultCount: 5,
+          ...(locationBias ? { locationBias } : {}),
+        }),
+      });
 
-    if (!response.ok) {
-      console.error(
-        "[GoogleProfile] Text search failed:",
-        response.status,
-        await response.text().catch(() => ""),
-      );
+      if (!response.ok) {
+        console.error(
+          "[GoogleProfile] Text search failed:",
+          response.status,
+          await response.text().catch(() => ""),
+        );
+        continue;
+      }
+
+      const data = (await response.json()) as any;
+      const places = data?.places;
+      if (!Array.isArray(places) || places.length === 0) continue;
+
+      for (const place of places) {
+        const placeId = String(place?.id || "").trim();
+        if (!placeId) continue;
+        const score = placeMatchScore(place, businessName, locationQuery);
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { placeId, score, query: textQuery };
+        }
+      }
+    }
+
+    if (!bestMatch) {
+      console.warn("[GoogleProfile] No Google Places match candidates", {
+        businessName,
+        address,
+        city,
+        state,
+      });
       return null;
     }
 
-    const data = (await response.json()) as any;
-    const places = data?.places;
-    if (!Array.isArray(places) || places.length === 0) return null;
+    if (bestMatch.score < 18) {
+      console.warn("[GoogleProfile] Google Places match score too low", {
+        businessName,
+        address,
+        city,
+        state,
+        score: bestMatch.score,
+        query: bestMatch.query,
+      });
+      return null;
+    }
 
-    // Return the top match
-    const placeId = String(places[0].id || "").trim();
-    return placeId || null;
+    return bestMatch.placeId;
   } catch (err) {
     console.error("[GoogleProfile] Text search error:", err);
     return null;
@@ -348,6 +524,8 @@ export async function populateRestaurantProfile(
         restaurant.address,
         restaurant.city,
         restaurant.state,
+        restaurant.latitude,
+        restaurant.longitude,
       );
       if (!placeId) {
         return { success: false, error: "No Google Places match found" };
@@ -434,6 +612,8 @@ export async function populateHostProfile(
         host.address,
         host.city,
         host.state,
+        host.latitude,
+        host.longitude,
       );
       if (!placeId) {
         return { success: false, error: "No Google Places match found" };
