@@ -53,6 +53,11 @@ export function createRouteAccessPolicyDependencies(
     { hasAccess: boolean; expiresAt: number }
   >();
 
+  const hasStaffOrAdminBypass = (user: User | null | undefined) =>
+    ["staff", "admin", "super_admin"].includes(
+      String(user?.userType || "").toLowerCase(),
+    );
+
   async function getLockedPriceForUser(_userId: string): Promise<{
     locked: boolean;
     priceId: string;
@@ -148,6 +153,10 @@ export function createRouteAccessPolicyDependencies(
 
       const hydratedUser = await ensureTrialForUser(user);
 
+      if (hasStaffOrAdminBypass(hydratedUser)) {
+        return { hasAccess: true, subscriptionTier: "staff-admin-bypass" };
+      }
+
       if (isTrialActive(hydratedUser)) {
         return { hasAccess: true, subscriptionTier: "trial" };
       }
@@ -209,6 +218,10 @@ export function createRouteAccessPolicyDependencies(
       const hydratedUser = await ensureTrialForUser(user);
 
       console.log("🔍 validateSubscriptionLimits - User ID:", userId);
+
+      if (hasStaffOrAdminBypass(hydratedUser)) {
+        return { isValid: true, currentCount: 0, maxDeals: 999 };
+      }
 
       if (isTrialActive(hydratedUser)) {
         return { isValid: true, currentCount: 0, maxDeals: 999 };
@@ -303,7 +316,7 @@ export function createRouteAccessPolicyDependencies(
     try {
       const user = await storage.getUser(key);
       if (user) {
-        if (["admin", "super_admin"].includes(String(user.userType || ""))) {
+        if (hasStaffOrAdminBypass(user)) {
           hasAccess = true;
         } else if (hasAccountAgeTrialAccess(user)) {
           hasAccess = true;
@@ -407,7 +420,7 @@ export function createRouteAccessPolicyDependencies(
           const user = usersById.get(userId) || null;
           let hasAccess = false;
           if (user) {
-            if (["admin", "super_admin"].includes(String(user.userType || ""))) {
+            if (hasStaffOrAdminBypass(user)) {
               hasAccess = true;
             } else if (hasAccountAgeTrialAccess(user)) {
               hasAccess = true;
