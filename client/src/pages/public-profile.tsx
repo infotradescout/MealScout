@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "wouter";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,13 @@ type PublicProfile = {
     about?: string;
     highlights?: string[];
     featuredLinks?: Array<{ label: string; url: string }>;
+    merchItems?: Array<{
+      name: string;
+      price?: string;
+      buyUrl?: string;
+      imageUrl?: string;
+      description?: string;
+    }>;
     galleryUrls?: string[];
     sectionOrder?: Array<
       "about" | "highlights" | "links" | "gallery" | "contact" | "location" | "metrics"
@@ -182,6 +189,7 @@ export default function PublicProfilePage() {
     user?.userType === "staff" ||
     user?.userType === "admin" ||
     user?.userType === "super_admin";
+  const [restaurantTab, setRestaurantTab] = useState<"overview" | "specials" | "merch">("overview");
 
   const { data, isLoading } = useQuery<PublicProfile>({
     queryKey: ["/api/public/profiles", profileType, profileId],
@@ -386,6 +394,7 @@ export default function PublicProfilePage() {
   const about = profile.about || data.description || "";
   const highlights = Array.isArray(profile.highlights) ? profile.highlights : [];
   const featuredLinks = Array.isArray(profile.featuredLinks) ? profile.featuredLinks : [];
+  const merchItems = Array.isArray(profile.merchItems) ? profile.merchItems : [];
   const galleryUrls = Array.isArray(profile.galleryUrls) ? profile.galleryUrls : [];
   const businessHours = formatBusinessHours(data.businessHours);
   const ctaLabel = profile.ctaLabel || (data.websiteUrl ? "Visit website" : "");
@@ -410,6 +419,10 @@ export default function PublicProfilePage() {
         String(deal.restaurantId || "") === data.id && deal.isActive !== false,
     )
     .slice(0, 6);
+
+  useEffect(() => {
+    setRestaurantTab("overview");
+  }, [data?.id]);
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -816,6 +829,32 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
+          {data.entity === "restaurant" ? (
+            <div className="flex flex-wrap gap-2 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2">
+              <Button
+                size="sm"
+                variant={restaurantTab === "overview" ? "default" : "ghost"}
+                onClick={() => setRestaurantTab("overview")}
+              >
+                Overview
+              </Button>
+              <Button
+                size="sm"
+                variant={restaurantTab === "specials" ? "default" : "ghost"}
+                onClick={() => setRestaurantTab("specials")}
+              >
+                Specials
+              </Button>
+              <Button
+                size="sm"
+                variant={restaurantTab === "merch" ? "default" : "ghost"}
+                onClick={() => setRestaurantTab("merch")}
+              >
+                Merch
+              </Button>
+            </div>
+          ) : null}
+
           {isStaffOrAdmin && canonical ? (
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -896,7 +935,7 @@ export default function PublicProfilePage() {
                   </div>
                 ) : null}
 
-                {restaurantDeals.length > 0 ? (
+                {restaurantTab === "specials" && restaurantDeals.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-orange-500" />
@@ -932,7 +971,61 @@ export default function PublicProfilePage() {
                   </div>
                 ) : null}
 
-                {highlights.length > 0 ? (
+                {restaurantTab === "merch" ? (
+                  <div className="rounded-xl border p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-emerald-500" />
+                      <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                        Merch Shop
+                      </h2>
+                    </div>
+                    {merchItems.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {merchItems.map((item, idx) => (
+                          <div key={`${item.name}-${idx}`} className="rounded-lg border p-3">
+                            {item.imageUrl ? (
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                className="mb-3 h-32 w-full rounded-md object-cover"
+                                loading="lazy"
+                              />
+                            ) : null}
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-foreground">
+                                {item.name}
+                              </p>
+                              {item.price ? (
+                                <Badge variant="secondary">{item.price}</Badge>
+                              ) : null}
+                            </div>
+                            {item.description ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {item.description}
+                              </p>
+                            ) : null}
+                            {item.buyUrl ? (
+                              <a
+                                href={item.buyUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="mt-3 inline-flex items-center text-xs font-medium text-primary underline"
+                              >
+                                Buy now
+                              </a>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        No merch listed yet. Restaurant owners can add merch items in Profile Settings.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {restaurantTab === "overview" && highlights.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Highlights
@@ -947,7 +1040,7 @@ export default function PublicProfilePage() {
                   </div>
                 ) : null}
 
-                {galleryUrls.length > 0 ? (
+                {restaurantTab === "overview" && galleryUrls.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Gallery
@@ -966,7 +1059,7 @@ export default function PublicProfilePage() {
                   </div>
                 ) : null}
 
-                {featuredLinks.length > 0 ? (
+                {restaurantTab === "overview" && featuredLinks.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Useful Links

@@ -210,6 +210,18 @@ const publicProfileSettingsSchema = z.object({
     )
     .max(8)
     .optional(),
+  merchItems: z
+    .array(
+      z.object({
+        name: z.string().max(80),
+        price: z.string().max(24).optional(),
+        buyUrl: z.string().max(300).optional(),
+        imageUrl: z.string().max(500).optional(),
+        description: z.string().max(280).optional(),
+      }),
+    )
+    .max(24)
+    .optional(),
   galleryUrls: z.array(z.string().max(500)).max(12).optional(),
   sectionOrder: z
     .array(

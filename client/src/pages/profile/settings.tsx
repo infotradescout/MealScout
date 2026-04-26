@@ -58,6 +58,13 @@ type SettingsPayload = {
     about?: string;
     highlights?: string[];
     featuredLinks?: Array<{ label: string; url: string }>;
+    merchItems?: Array<{
+      name: string;
+      price?: string;
+      buyUrl?: string;
+      imageUrl?: string;
+      description?: string;
+    }>;
     galleryUrls?: string[];
     sectionOrder?: Array<
       | "about"
@@ -144,6 +151,7 @@ export default function SettingsPage() {
     about: "",
     highlights: "",
     featuredLinks: "",
+    merchItems: "",
     galleryUrls: "",
     sectionOrder: "about,location,contact,metrics,highlights,links,gallery",
     showAddress: true,
@@ -185,6 +193,20 @@ export default function SettingsPage() {
       highlights: Array.isArray(p.highlights) ? p.highlights.join("\n") : "",
       featuredLinks: Array.isArray(p.featuredLinks)
         ? p.featuredLinks.map((l) => `${l.label}|${l.url}`).join("\n")
+        : "",
+      merchItems: Array.isArray(p.merchItems)
+        ? p.merchItems
+            .map(
+              (item) =>
+                [
+                  item.name || "",
+                  item.price || "",
+                  item.buyUrl || "",
+                  item.imageUrl || "",
+                  item.description || "",
+                ].join("|"),
+            )
+            .join("\n")
         : "",
       galleryUrls: Array.isArray(p.galleryUrls) ? p.galleryUrls.join("\n") : "",
       sectionOrder: Array.isArray(p.sectionOrder)
@@ -275,6 +297,23 @@ export default function SettingsPage() {
           return { label: label || url, url: url || label };
         })
         .filter((row) => row.label && row.url);
+      const parsedMerchItems = profile.merchItems
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [name, price, buyUrl, imageUrl, description] = line
+            .split("|")
+            .map((s) => s.trim());
+          return {
+            name,
+            ...(price ? { price } : null),
+            ...(buyUrl ? { buyUrl } : null),
+            ...(imageUrl ? { imageUrl } : null),
+            ...(description ? { description } : null),
+          };
+        })
+        .filter((item) => item.name);
       const parsedSectionOrder = profile.sectionOrder
         .split(",")
         .map((v) => v.trim().toLowerCase())
@@ -317,6 +356,7 @@ export default function SettingsPage() {
             about: profile.about,
             highlights: parsedHighlights,
             featuredLinks: parsedLinks,
+            merchItems: parsedMerchItems,
             galleryUrls: parsedGallery,
             sectionOrder: parsedSectionOrder,
             showAddress: profile.showAddress,
@@ -930,6 +970,23 @@ export default function SettingsPage() {
                     rows={4}
                     placeholder={
                       "Menu|https://example.com/menu\nCatering|https://example.com/catering"
+                    }
+                  />
+                </div>
+
+                <div>
+                  <Label>Merch items (one per line: name|price|buyUrl|imageUrl|description)</Label>
+                  <Textarea
+                    value={profile.merchItems}
+                    onChange={(e) =>
+                      setProfile((prev) => ({
+                        ...prev,
+                        merchItems: e.target.value,
+                      }))
+                    }
+                    rows={5}
+                    placeholder={
+                      "Shirt|$25|https://shop.example.com/shirt|https://.../shirt.jpg|Soft cotton tee\nSticker Pack|$8|https://shop.example.com/stickers|https://.../stickers.jpg|Limited run"
                     }
                   />
                 </div>
