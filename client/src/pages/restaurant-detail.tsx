@@ -67,6 +67,13 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
 
+const toExternalUrl = (value: string | null | undefined) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw}`;
+};
+
 export default function RestaurantDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const [, setLocation] = useLocation();
@@ -386,6 +393,12 @@ export default function RestaurantDetailPage() {
   const profilePath = `/p/restaurant/${restaurantId}/${profileSlug}`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
+  const menuPrimaryUrl = toExternalUrl(
+    (restaurant as any)?.menuUrl ||
+      (restaurant as any)?.menuURL ||
+      (restaurant as any)?.websiteUrl ||
+      (restaurant as any)?.website,
+  );
   const description = `Visit ${restaurantName} and discover exclusive food deals. ${cuisineType} restaurant with ${restaurantDeals.length} active deals. ${currentRating > 0 ? `Rated ${currentRating.toFixed(1)} stars by ${reviewCount} customers.` : ""}`;
 
   const localBusinessSchema = {
@@ -895,6 +908,50 @@ export default function RestaurantDetailPage() {
           </div>
         </div>
 
+        {/* Menu */}
+        <section className="mb-8 rounded-3xl border border-orange-200 bg-gradient-to-r from-orange-50 via-amber-50 to-rose-50 p-5 sm:p-6 shadow-clean">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.16em] uppercase text-orange-700">
+                Start Here
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-foreground">Menu</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                See signature dishes and pricing before you visit.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:w-auto w-full">
+              {menuPrimaryUrl ? (
+                <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                    View Full Menu
+                  </Button>
+                </a>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled
+                  className="w-full sm:w-auto min-w-[13rem] font-semibold"
+                >
+                  Menu Coming Soon
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() =>
+                  document
+                    .getElementById("restaurant-specials")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+              >
+                Browse Current Specials
+              </Button>
+            </div>
+          </div>
+        </section>
+
         {isFoodTruck && (
           <div className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
             <div className="mb-4 inline-flex items-center gap-2">
@@ -986,7 +1043,7 @@ export default function RestaurantDetailPage() {
         <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-foreground">
-              Guest Recommendations
+              Community Recommendations
             </h2>
             <div className="flex items-center gap-2">
               <Badge variant="outline">
@@ -1072,7 +1129,7 @@ export default function RestaurantDetailPage() {
           ) : (
             <Card className="border border-[color:var(--border-subtle)]">
               <CardContent className="p-6 text-sm text-muted-foreground text-center">
-                No recommendations yet. Be the first to recommend this spot.
+                No community recommendations yet. Be the first to recommend this spot.
               </CardContent>
             </Card>
           )}
