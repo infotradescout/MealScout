@@ -210,11 +210,19 @@ export default function DealCreation() {
   const buildDealShareMessage = (params: {
     restaurantName: string;
     dealTitle: string;
+    dealDescription?: string;
     category: "deal" | "special";
   }) => {
     const intro =
-      params.category === "special" ? "New special from" : "Fresh deal from";
-    return `${intro} ${params.restaurantName}: ${params.dealTitle}. See details on MealScout.`;
+      params.category === "special"
+        ? `We're excited to share a new special at ${params.restaurantName}`
+        : `We're now running a fresh deal at ${params.restaurantName}`;
+    const headline = params.dealTitle ? `: ${params.dealTitle}.` : ".";
+    const detailsRaw = String(params.dealDescription || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const details = detailsRaw ? ` ${detailsRaw.slice(0, 120)}.` : "";
+    return `${intro}${headline}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   const socialSettings = useMemo<SocialAutopostSettings>(() => {
@@ -439,7 +447,12 @@ export default function DealCreation() {
         isOngoing: data.isOngoing,
       };
 
-      return await apiRequest("POST", "/api/deals", dealData);
+      const response = await apiRequest("POST", "/api/deals", dealData);
+      try {
+        return await response.json();
+      } catch {
+        return {};
+      }
     },
     onSuccess: (created: any) => {
       toast({
@@ -460,11 +473,12 @@ export default function DealCreation() {
         selectedPlatforms.x;
       if (hasTrigger && hasPlatforms) {
         const restaurant = selectedRestaurant;
-        const dealId = created?.id || created?.deal?.id;
+        const dealId = created?.id || created?.deal?.id || created?.data?.id;
         const link = dealId
           ? `${window.location.origin}/deal/${dealId}`
-          : window.location.origin;
+          : `${window.location.origin}/restaurant/${selectedRestaurantId}`;
         const dealTitle = form.getValues("title") || "New deal";
+        const dealDescription = form.getValues("description") || "";
         const restaurantName = getShareRestaurantName(restaurant?.name);
         const category = (form.getValues("category") || "deal") as
           | "deal"
@@ -472,6 +486,7 @@ export default function DealCreation() {
         const message = buildDealShareMessage({
           restaurantName,
           dealTitle,
+          dealDescription,
           category,
         });
         if (!socialSettings.promptBeforePost) {

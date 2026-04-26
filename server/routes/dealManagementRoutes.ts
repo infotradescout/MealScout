@@ -60,12 +60,19 @@ export function registerDealManagementRoutes(
   const buildDealAutopostMessage = (params: {
     restaurantName: string;
     dealTitle: string;
+    dealDescription?: string;
     category?: string | null;
   }) => {
-    const intro = String(params.category || "deal") === "special"
-      ? "New special from"
-      : "Fresh deal from";
-    return `${intro} ${params.restaurantName}: ${params.dealTitle}. See details on MealScout.`;
+    const isSpecial = String(params.category || "deal") === "special";
+    const intro = isSpecial
+      ? `We're excited to share a new special at ${params.restaurantName}`
+      : `We're now running a fresh deal at ${params.restaurantName}`;
+    const headline = params.dealTitle ? `: ${params.dealTitle}.` : ".";
+    const detailsRaw = String(params.dealDescription || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const details = detailsRaw ? ` ${detailsRaw.slice(0, 120)}.` : "";
+    return `${intro}${headline}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
@@ -387,6 +394,7 @@ export function registerDealManagementRoutes(
           const message = buildDealAutopostMessage({
             restaurantName: String(restaurant.name || "this restaurant"),
             dealTitle: String(deal.title || "New deal"),
+            dealDescription: String((deal as any)?.description || ""),
             category: String((deal as any)?.category || "deal"),
           });
 
