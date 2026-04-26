@@ -258,28 +258,35 @@ export default function DealCreation() {
     const headline = params.dealTitle ? ` ${params.dealTitle}.` : "";
     const rawValue = String(params.discountValue || "").trim();
     const numericValue = parseMoneyLike(rawValue);
-    let value = "";
+    let valuePart = "";
     if (numericValue != null) {
       if (params.category === "special") {
-        value = ` Now $${numericValue.toFixed(2)}.`;
+        valuePart = `$${numericValue.toFixed(2)}`;
       } else if (params.dealType === "percentage") {
-        value = ` ${numericValue}% off.`;
+        valuePart = `${numericValue}% off`;
       } else {
-        value = ` Save $${numericValue.toFixed(2)}.`;
+        valuePart = `save $${numericValue.toFixed(2)}`;
       }
     }
 
-    const availabilityDate = params.isOngoing
-      ? " Ongoing availability."
+    const availabilityDatePart = params.isOngoing
+      ? "ongoing"
       : params.startDate && params.endDate
-      ? ` Available ${params.startDate} to ${params.endDate}.`
+      ? `${params.startDate} to ${params.endDate}`
       : params.startDate
-      ? ` Starts ${params.startDate}.`
+      ? `starts ${params.startDate}`
       : "";
-    const availabilityTime = params.availableDuringBusinessHours
-      ? " During business hours."
+    const availabilityTimePart = params.availableDuringBusinessHours
+      ? "during business hours"
       : params.startTime && params.endTime
-      ? ` ${params.startTime}-${params.endTime}.`
+      ? `${params.startTime}-${params.endTime}`
+      : "";
+
+    const summaryParts = [valuePart, availabilityDatePart, availabilityTimePart].filter(
+      Boolean,
+    );
+    const summary = summaryParts.length
+      ? ` ${summaryParts.join(", ")}${summaryParts[0] === valuePart ? "." : ""}`
       : "";
 
     const detailsRaw = String(params.dealDescription || "")
@@ -290,7 +297,7 @@ export default function DealCreation() {
         ? ` ${detailsRaw}`
         : ` ${detailsRaw}.`
       : "";
-    return `${intro}${headline}${value}${availabilityDate}${availabilityTime}${details} Tap to see full details and the photo on MealScout.`;
+    return `${intro}${headline}${summary}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   const socialSettings = useMemo<SocialAutopostSettings>(() => {

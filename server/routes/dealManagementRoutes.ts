@@ -77,14 +77,14 @@ export function registerDealManagementRoutes(
     const headline = params.dealTitle ? ` ${params.dealTitle}.` : "";
 
     const parsedValue = Number.parseFloat(String(params.discountValue ?? ""));
-    let value = "";
+    let valuePart = "";
     if (Number.isFinite(parsedValue)) {
       if (isSpecial) {
-        value = ` Now $${parsedValue.toFixed(2)}.`;
+        valuePart = `$${parsedValue.toFixed(2)}`;
       } else if (String(params.dealType || "") === "percentage") {
-        value = ` ${parsedValue}% off.`;
+        valuePart = `${parsedValue}% off`;
       } else {
-        value = ` Save $${parsedValue.toFixed(2)}.`;
+        valuePart = `save $${parsedValue.toFixed(2)}`;
       }
     }
 
@@ -94,17 +94,23 @@ export function registerDealManagementRoutes(
     const endDate = params.endDate
       ? new Date(params.endDate).toISOString().split("T")[0]
       : "";
-    const availabilityDate = params.isOngoing
-      ? " Ongoing availability."
+    const availabilityDatePart = params.isOngoing
+      ? "ongoing"
       : startDate && endDate
-      ? ` Available ${startDate} to ${endDate}.`
+      ? `${startDate} to ${endDate}`
       : startDate
-      ? ` Starts ${startDate}.`
+      ? `starts ${startDate}`
       : "";
-    const availabilityTime = params.availableDuringBusinessHours
-      ? " During business hours."
+    const availabilityTimePart = params.availableDuringBusinessHours
+      ? "during business hours"
       : params.startTime && params.endTime
-      ? ` ${params.startTime}-${params.endTime}.`
+      ? `${params.startTime}-${params.endTime}`
+      : "";
+    const summaryParts = [valuePart, availabilityDatePart, availabilityTimePart].filter(
+      Boolean,
+    );
+    const summary = summaryParts.length
+      ? ` ${summaryParts.join(", ")}${summaryParts[0] === valuePart ? "." : ""}`
       : "";
 
     const detailsRaw = String(params.dealDescription || "")
@@ -115,7 +121,7 @@ export function registerDealManagementRoutes(
         ? ` ${detailsRaw}`
         : ` ${detailsRaw}.`
       : "";
-    return `${intro}${headline}${value}${availabilityDate}${availabilityTime}${details} Tap to see full details and the photo on MealScout.`;
+    return `${intro}${headline}${summary}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
