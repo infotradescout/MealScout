@@ -128,13 +128,22 @@ type SocialAutopostSettings = {
     booking: boolean;
     live: boolean;
     deal: boolean;
+    recommendation: boolean;
+    engagement: boolean;
   };
   promptBeforePost: boolean;
 };
 
 const defaultSocialAutopostSettings: SocialAutopostSettings = {
   platforms: { facebook: true, instagram: true, x: true },
-  triggers: { schedule: true, booking: true, live: true, deal: true },
+  triggers: {
+    schedule: true,
+    booking: true,
+    live: true,
+    deal: true,
+    recommendation: true,
+    engagement: true,
+  },
   promptBeforePost: true,
 };
 

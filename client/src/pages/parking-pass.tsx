@@ -249,6 +249,8 @@ type SocialAutopostSettings = {
     booking: boolean;
     live: boolean;
     deal: boolean;
+    recommendation: boolean;
+    engagement: boolean;
   };
   promptBeforePost: boolean;
 };
@@ -264,6 +266,8 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
     booking: true,
     live: true,
     deal: true,
+    recommendation: true,
+    engagement: true,
   },
   promptBeforePost: true,
 };
@@ -5201,6 +5205,14 @@ export default function ParkingPassPage() {
                         { key: "booking", label: "Parking pass bookings" },
                         { key: "live", label: "Go live" },
                         { key: "deal", label: "New deals" },
+                        {
+                          key: "recommendation",
+                          label: "New recommendations",
+                        },
+                        {
+                          key: "engagement",
+                          label: "Engagement milestones",
+                        },
                       ] as const
                     ).map((trigger) => (
                       <div

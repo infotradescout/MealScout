@@ -15,6 +15,7 @@ import {
   computeExternalReviewAdjustment,
   normalizeImportedReviews,
 } from "../services/externalReviewScoring";
+import { queueSocialPost } from "./dealRouteDependencies";
 import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
@@ -154,6 +155,8 @@ export function registerRestaurantCoreRoutes(
     getBusinessDistributionAccessByOwnerIds,
   }: RestaurantCoreRouteDependencies,
 ) {
+  const AUTOPROMO_SHARE_MILESTONES = new Set([5, 10, 25, 50]);
+
   const trackEngagement = async (
     eventName: string,
     userId: string | null | undefined,
@@ -175,6 +178,93 @@ export function registerRestaurantCoreRoutes(
       });
     } catch (error) {
       console.warn(`[telemetry] Failed to record ${eventName}:`, error);
+    }
+  };
+
+  const queueRestaurantAutopostForTrigger = async (params: {
+    restaurant: any;
+    trigger: "deal" | "recommendation" | "engagement";
+    message: string;
+    link: string;
+  }) => {
+    try {
+      const restaurant = params.restaurant;
+      const ownerId = String(restaurant?.ownerId || "").trim();
+      if (!ownerId) return;
+
+      const hasDistributionAccess = await hasBusinessDistributionAccess(ownerId);
+      if (!hasDistributionAccess) return;
+
+      const socialSettings =
+        restaurant?.socialAutopostSettings &&
+        typeof restaurant.socialAutopostSettings === "object"
+          ? (restaurant.socialAutopostSettings as Record<string, any>)
+          : {};
+      const triggers =
+        socialSettings.triggers && typeof socialSettings.triggers === "object"
+          ? (socialSettings.triggers as Record<string, any>)
+          : {};
+      const rawPlatforms =
+        socialSettings.platforms && typeof socialSettings.platforms === "object"
+          ? (socialSettings.platforms as Record<string, any>)
+          : {};
+
+      const triggerEnabled = triggers[params.trigger] !== false;
+      const shouldQueue = triggerEnabled && socialSettings.promptBeforePost === false;
+      if (!shouldQueue) return;
+
+      const platforms = {
+        facebook: rawPlatforms.facebook !== false,
+        instagram: rawPlatforms.instagram !== false,
+        x: rawPlatforms.x !== false,
+      };
+
+      const postJobs: Promise<void>[] = [];
+      if (platforms.facebook) {
+        postJobs.push(
+          queueSocialPost({
+            platform: "facebook",
+            target: restaurant.facebookPageUrl || "mealscout_page",
+            message: params.message,
+            link: params.link,
+          }),
+        );
+      }
+      if (platforms.instagram) {
+        postJobs.push(
+          queueSocialPost({
+            platform: "instagram",
+            target: restaurant.instagramUrl || null,
+            message: params.message,
+            link: params.link,
+          }),
+        );
+      }
+      if (platforms.x) {
+        postJobs.push(
+          queueSocialPost({
+            platform: "x",
+            target: restaurant.xUrl || null,
+            message: params.message,
+            link: params.link,
+          }),
+        );
+      }
+
+      if (postJobs.length > 0) {
+        void Promise.allSettled(postJobs).then((results) => {
+          results.forEach((result, index) => {
+            if (result.status === "rejected") {
+              console.error(
+                `Failed to queue social autopost [${params.trigger}:${index}]:`,
+                result.reason,
+              );
+            }
+          });
+        });
+      }
+    } catch (error) {
+      console.error("Failed to queue restaurant social autopost:", error);
     }
   };
 
@@ -1558,6 +1648,21 @@ export function registerRestaurantCoreRoutes(
           userId,
           restaurantId,
         );
+
+        if (!updated) {
+          const baseUrl = (
+            process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
+          ).replace(/\/+$/, "");
+          const slug = toSeoSlug(restaurant.name) || restaurantId;
+          const profileLink = `${baseUrl}/restaurant/${restaurantId}/${slug}`;
+          await queueRestaurantAutopostForTrigger({
+            restaurant,
+            trigger: "recommendation",
+            message: `${restaurant.name} just got a new community recommendation on MealScout.`,
+            link: profileLink,
+          });
+        }
+
         res.json({ ...recommendation, updated });
       } catch (error: any) {
         console.error("Error adding restaurant recommendation:", error);
@@ -1789,6 +1894,64 @@ export function registerRestaurantCoreRoutes(
         const shareCount = Number(
           ((shareCountResult as any)?.rows || [])[0]?.share_count || 0,
         );
+
+        if (AUTOPROMO_SHARE_MILESTONES.has(shareCount)) {
+          const recommendationMeta = await db.execute(sql<{
+            restaurant_id: string;
+            restaurant_name: string | null;
+            owner_id: string | null;
+            social_autopost_settings: unknown;
+            facebook_page_url: string | null;
+            instagram_url: string | null;
+            x_url: string | null;
+          }>`
+            select
+              rur.restaurant_id,
+              r.name as restaurant_name,
+              r.owner_id,
+              r.social_autopost_settings,
+              r.facebook_page_url,
+              r.instagram_url,
+              r.x_url
+            from restaurant_user_recommendations rur
+            inner join restaurants r on r.id = rur.restaurant_id
+            where rur.id = ${recommendationId}
+            limit 1
+          `);
+
+          const meta = ((recommendationMeta as any)?.rows || [])[0] as
+            | {
+                restaurant_id: string;
+                restaurant_name: string | null;
+                owner_id: string | null;
+                social_autopost_settings: unknown;
+                facebook_page_url: string | null;
+                instagram_url: string | null;
+                x_url: string | null;
+              }
+            | undefined;
+
+          if (meta?.restaurant_id && meta?.owner_id) {
+            const baseUrl = (
+              process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
+            ).replace(/\/+$/, "");
+            const slug = toSeoSlug(meta.restaurant_name) || meta.restaurant_id;
+            const profileLink = `${baseUrl}/restaurant/${meta.restaurant_id}/${slug}`;
+            await queueRestaurantAutopostForTrigger({
+              restaurant: {
+                ownerId: meta.owner_id,
+                name: meta.restaurant_name,
+                socialAutopostSettings: meta.social_autopost_settings,
+                facebookPageUrl: meta.facebook_page_url,
+                instagramUrl: meta.instagram_url,
+                xUrl: meta.x_url,
+              },
+              trigger: "engagement",
+              message: `${meta.restaurant_name || "This spot"} just hit ${shareCount} community shares on MealScout recommendations.`,
+              link: profileLink,
+            });
+          }
+        }
 
         res.json({ success: true, shareCount });
       } catch (error) {
