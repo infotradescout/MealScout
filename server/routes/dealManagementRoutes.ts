@@ -57,6 +57,17 @@ export function registerDealManagementRoutes(
     queueSocialPost,
   }: DealManagementRouteDependencies,
 ) {
+  const buildDealAutopostMessage = (params: {
+    restaurantName: string;
+    dealTitle: string;
+    category?: string | null;
+  }) => {
+    const intro = String(params.category || "deal") === "special"
+      ? "New special from"
+      : "Fresh deal from";
+    return `${intro} ${params.restaurantName}: ${params.dealTitle}. See details on MealScout.`;
+  };
+
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
     try {
       const claimedDeals = await storage.getUserDealClaimsWithDetails(req.user.id);
@@ -373,7 +384,11 @@ export function registerDealManagementRoutes(
             process.env.PUBLIC_BASE_URL || "https://www.mealscout.us"
           ).replace(/\/+$/, "");
           const link = `${baseUrl}/deal/${deal.id}`;
-          const message = `New deal at ${restaurant.name}: ${deal.title}. Check it out on MealScout.`;
+          const message = buildDealAutopostMessage({
+            restaurantName: String(restaurant.name || "this restaurant"),
+            dealTitle: String(deal.title || "New deal"),
+            category: String((deal as any)?.category || "deal"),
+          });
 
           const postJobs: Promise<void>[] = [];
           if (platforms.facebook) {

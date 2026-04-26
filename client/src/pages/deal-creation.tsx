@@ -207,6 +207,16 @@ export default function DealCreation() {
     return compact;
   };
 
+  const buildDealShareMessage = (params: {
+    restaurantName: string;
+    dealTitle: string;
+    category: "deal" | "special";
+  }) => {
+    const intro =
+      params.category === "special" ? "New special from" : "Fresh deal from";
+    return `${intro} ${params.restaurantName}: ${params.dealTitle}. See details on MealScout.`;
+  };
+
   const socialSettings = useMemo<SocialAutopostSettings>(() => {
     const restaurant = selectedRestaurant;
     const existing =
@@ -456,7 +466,14 @@ export default function DealCreation() {
           : window.location.origin;
         const dealTitle = form.getValues("title") || "New deal";
         const restaurantName = getShareRestaurantName(restaurant?.name);
-        const message = `New deal at ${restaurantName}: ${dealTitle}. Check it out on MealScout.`;
+        const category = (form.getValues("category") || "deal") as
+          | "deal"
+          | "special";
+        const message = buildDealShareMessage({
+          restaurantName,
+          dealTitle,
+          category,
+        });
         if (!socialSettings.promptBeforePost) {
           void handleDealSharePost({ message, link, selectedPlatforms });
           setLocation("/");
