@@ -403,8 +403,9 @@ export default function PublicProfilePage() {
   const menuUrl = toExternalUrl((data as any).menuUrl);
   const websiteUrl = toExternalUrl(data.websiteUrl);
   const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
-  const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(String(profileId || ""))}?src=concierge&focus=description`;
-  const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(String(profileId || ""))}&src=concierge`;
+  const resolvedRestaurantId = String(data.id || profileId || "").trim();
+  const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(resolvedRestaurantId)}?src=concierge&focus=description`;
+  const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(resolvedRestaurantId)}&src=concierge`;
   const directionsUrl = locationLine
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLine)}`
     : "";
