@@ -393,6 +393,12 @@ export default function RestaurantDetailPage() {
   const profilePath = `/p/restaurant/${restaurantId}/${profileSlug}`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
+  const orderPrimaryUrl = toExternalUrl(
+    (restaurant as any)?.orderUrl ||
+      (restaurant as any)?.orderURL ||
+      (restaurant as any)?.onlineOrderUrl ||
+      (restaurant as any)?.onlineOrderingUrl,
+  );
   const menuPrimaryUrl = toExternalUrl(
     (restaurant as any)?.menuUrl ||
       (restaurant as any)?.menuURL ||
@@ -915,13 +921,32 @@ export default function RestaurantDetailPage() {
               <p className="text-xs font-semibold tracking-[0.16em] uppercase text-orange-700">
                 Start Here
               </p>
-              <h2 className="mt-1 text-2xl font-black text-foreground">Menu</h2>
+              <div className="mt-1 inline-flex items-center gap-2">
+                <h2 className="text-2xl font-black text-foreground">
+                  <AdminEditableText
+                    textKey="restaurant.detail.menu.title"
+                    defaultText="Menu"
+                  />
+                </h2>
+                <AdminEditButton
+                  textKey="restaurant.detail.menu.title"
+                  defaultText="Menu"
+                  label="Menu section title"
+                />
+              </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 See signature dishes and pricing before you visit.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:w-auto w-full">
+              {orderPrimaryUrl ? (
+                <a href={orderPrimaryUrl} target="_blank" rel="noreferrer">
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                    Order Online
+                  </Button>
+                </a>
+              ) : null}
               {menuPrimaryUrl ? (
                 <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
                   <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
