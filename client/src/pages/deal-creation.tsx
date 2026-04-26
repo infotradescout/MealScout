@@ -546,6 +546,9 @@ export default function DealCreation() {
       queryClient.invalidateQueries({
         queryKey: [`/api/deals/restaurant/${selectedRestaurantId}`],
       });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/restaurants/${selectedRestaurantId}/stats`],
+      });
       const hasTrigger = socialSettings.triggers.deal;
       const selectedPlatforms = { ...socialSettings.platforms };
       const hasPlatforms =

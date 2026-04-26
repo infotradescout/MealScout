@@ -563,7 +563,9 @@ export default function RestaurantOwnerDashboard() {
     (r) => r.id === selectedRestaurant,
   );
   const showOnboardingPrompt = Boolean(
-    onboardingCompletion &&
+    !isAdmin &&
+      !isStaff &&
+      onboardingCompletion &&
       (onboardingCompletion.overallPct < 100 ||
         onboardingCompletion.verification.status !== "verified"),
   );
@@ -1474,7 +1476,7 @@ export default function RestaurantOwnerDashboard() {
         </div>
       )}
 
-      {(loadingOnboardingCompletion || showOnboardingPrompt) && (
+      {!isAdmin && !isStaff && (loadingOnboardingCompletion || showOnboardingPrompt) && (
         <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Onboarding Progress</CardTitle>
@@ -1602,7 +1604,7 @@ export default function RestaurantOwnerDashboard() {
       )}
 
       {/* Post-Upgrade Onboarding Checklist — shown to subscribed users until all items are complete */}
-      {subscription?.hasAccess && currentRestaurant && (() => {
+      {!isAdmin && !isStaff && subscription?.hasAccess && currentRestaurant && (() => {
         const hasPhoto = Boolean((currentRestaurant as any).imageUrl || (currentRestaurant as any).logoUrl);
         const hasMenu = ownerMenus.length > 0;
         const hasAddress = Boolean((currentRestaurant as any).address || (currentRestaurant as any).city);
