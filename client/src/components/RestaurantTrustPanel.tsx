@@ -257,13 +257,16 @@ export function RestaurantTrustPanel({
             </p>
             <ul className="text-xs text-blue-800 space-y-1">
               <li>
-                ✓ Community Verification Score (CVS) measures profile reliability on a 0-100 scale.
+                ✓ Community Verification Score (CVS) rates listing reliability on a 0-100 scale.
               </li>
               <li>
-                ✓ Verified and live businesses start from a baseline score; unresolved or upheld issues reduce it.
+                ✓ Verified and active businesses start with a baseline; reliability bonuses and moderation penalties adjust that baseline.
               </li>
               <li>
-                ✓ Moderation outcomes and active disputes have the strongest negative impact.
+                ✓ Upheld moderation outcomes reduce score more than active (still-open) disputes.
+              </li>
+              <li>
+                ✓ This is not a simple "flags received" count; final score reflects review outcomes over time.
               </li>
               <li>
                 ✓ Higher score means the community can trust the listing details more.

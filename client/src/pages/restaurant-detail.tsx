@@ -1117,8 +1117,8 @@ export default function RestaurantDetailPage() {
 
         {/* Community Recommendations */}
         <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
-          <div className="flex items-center justify-between mb-4">
-            <div className="inline-flex items-center gap-2">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold text-foreground">
                 Community Recommendations
               </h2>
@@ -1128,7 +1128,7 @@ export default function RestaurantDetailPage() {
                 </Link>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">
                 {recommendationCount} total
               </Badge>
