@@ -163,6 +163,7 @@ interface OwnerMenuSummary {
 }
 
 export default function RestaurantOwnerDashboard() {
+  const LAST_RESTAURANT_KEY = "mealscout:last-selected-restaurant-id";
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -547,6 +548,15 @@ export default function RestaurantOwnerDashboard() {
       setSelectedRestaurant(restaurants[0].id);
     }
   }, [restaurants, selectedRestaurant]);
+
+  useEffect(() => {
+    if (!selectedRestaurant) return;
+    try {
+      window.localStorage.setItem(LAST_RESTAURANT_KEY, selectedRestaurant);
+    } catch {
+      // ignore localStorage failures
+    }
+  }, [selectedRestaurant]);
 
   // Get current restaurant data
   const currentRestaurant = restaurants.find(

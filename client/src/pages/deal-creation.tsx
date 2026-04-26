@@ -148,6 +148,7 @@ const defaultSocialAutopostSettings: SocialAutopostSettings = {
 };
 
 export default function DealCreation() {
+  const LAST_RESTAURANT_KEY = "mealscout:last-selected-restaurant-id";
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -184,44 +185,105 @@ export default function DealCreation() {
     }
   }, []);
 
+  const rememberedRestaurantId = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return window.localStorage.getItem(LAST_RESTAURANT_KEY)?.trim() || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const [manualRestaurantId, setManualRestaurantId] = useState("");
+
+  useEffect(() => {
+    if (!Array.isArray(restaurants) || restaurants.length === 0) return;
+    const allIds = new Set(
+      restaurants.map((restaurant: any) => String(restaurant?.id || "").trim()),
+    );
+    const preferredId =
+      (requestedRestaurantId && allIds.has(requestedRestaurantId)
+        ? requestedRestaurantId
+        : "") ||
+      (rememberedRestaurantId && allIds.has(rememberedRestaurantId)
+        ? rememberedRestaurantId
+        : "") ||
+      String(restaurants[0]?.id || "").trim();
+    if (preferredId && preferredId !== manualRestaurantId) {
+      setManualRestaurantId(preferredId);
+    }
+  }, [restaurants, requestedRestaurantId, rememberedRestaurantId, manualRestaurantId]);
+
+  useEffect(() => {
+    if (!manualRestaurantId) return;
+    try {
+      window.localStorage.setItem(LAST_RESTAURANT_KEY, manualRestaurantId);
+    } catch {
+      // ignore localStorage failures
+    }
+  }, [manualRestaurantId]);
+
   const selectedRestaurant = useMemo(() => {
     if (!Array.isArray(restaurants) || restaurants.length === 0) return null;
-    if (!requestedRestaurantId) return restaurants[0];
+    if (!manualRestaurantId) return restaurants[0];
     return (
       restaurants.find(
-        (restaurant: any) => String(restaurant?.id || "") === requestedRestaurantId,
+        (restaurant: any) => String(restaurant?.id || "") === manualRestaurantId,
       ) || null
     );
-  }, [restaurants, requestedRestaurantId]);
+  }, [restaurants, manualRestaurantId]);
 
   const selectedRestaurantId = useMemo(() => {
     return String(selectedRestaurant?.id || "").trim();
   }, [selectedRestaurant]);
 
-  const getShareRestaurantName = (value: unknown) => {
-    const raw = String(value || "").trim();
-    if (!raw) return "this restaurant";
-    const compact = raw.replace(/\s+/g, " ");
-    if (compact.length > 42) return `${compact.slice(0, 39)}...`;
-    return compact;
-  };
-
   const buildDealShareMessage = (params: {
-    restaurantName: string;
     dealTitle: string;
     dealDescription?: string;
     category: "deal" | "special";
+    dealType?: "percentage" | "fixed";
+    discountValue?: string;
+    startDate?: string;
+    endDate?: string;
+    startTime?: string;
+    endTime?: string;
+    isOngoing?: boolean;
+    availableDuringBusinessHours?: boolean;
   }) => {
     const intro =
       params.category === "special"
-        ? `We're excited to share a new special at ${params.restaurantName}`
-        : `We're now running a fresh deal at ${params.restaurantName}`;
-    const headline = params.dealTitle ? `: ${params.dealTitle}.` : ".";
+        ? "We are excited to announce a new special!"
+        : "We are excited to announce a new deal!";
+    const headline = params.dealTitle ? ` ${params.dealTitle}.` : "";
+    const rawValue = String(params.discountValue || "").trim();
+    const numericValue = parseMoneyLike(rawValue);
+    let value = "";
+    if (numericValue != null) {
+      if (params.dealType === "percentage") {
+        value = ` ${numericValue}% off.`;
+      } else {
+        value = ` Save $${numericValue.toFixed(2)}.`;
+      }
+    }
+
+    const availabilityDate = params.isOngoing
+      ? " Ongoing availability."
+      : params.startDate && params.endDate
+      ? ` Available ${params.startDate} to ${params.endDate}.`
+      : params.startDate
+      ? ` Starts ${params.startDate}.`
+      : "";
+    const availabilityTime = params.availableDuringBusinessHours
+      ? " During business hours."
+      : params.startTime && params.endTime
+      ? ` ${params.startTime}-${params.endTime}.`
+      : "";
+
     const detailsRaw = String(params.dealDescription || "")
       .replace(/\s+/g, " ")
       .trim();
     const details = detailsRaw ? ` ${detailsRaw.slice(0, 120)}.` : "";
-    return `${intro}${headline}${details} Tap to see full details and the photo on MealScout.`;
+    return `${intro}${headline}${value}${availabilityDate}${availabilityTime}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   const socialSettings = useMemo<SocialAutopostSettings>(() => {
@@ -471,22 +533,29 @@ export default function DealCreation() {
         selectedPlatforms.instagram ||
         selectedPlatforms.x;
       if (hasTrigger && hasPlatforms) {
-        const restaurant = selectedRestaurant;
         const dealId = created?.id || created?.deal?.id || created?.data?.id;
         const link = dealId
           ? `${window.location.origin}/deal/${dealId}`
           : `${window.location.origin}/restaurant/${selectedRestaurantId}`;
         const dealTitle = form.getValues("title") || "New deal";
         const dealDescription = form.getValues("description") || "";
-        const restaurantName = getShareRestaurantName(restaurant?.name);
         const category = (form.getValues("category") || "deal") as
           | "deal"
           | "special";
         const message = buildDealShareMessage({
-          restaurantName,
           dealTitle,
           dealDescription,
           category,
+          dealType: form.getValues("dealType"),
+          discountValue: form.getValues("discountValue") || "",
+          startDate: form.getValues("startDate") || "",
+          endDate: form.getValues("endDate") || "",
+          startTime: form.getValues("startTime") || "",
+          endTime: form.getValues("endTime") || "",
+          isOngoing: Boolean(form.getValues("isOngoing")),
+          availableDuringBusinessHours: Boolean(
+            form.getValues("availableDuringBusinessHours"),
+          ),
         });
         if (!socialSettings.promptBeforePost) {
           void handleDealSharePost({ message, link, selectedPlatforms });
@@ -641,23 +710,6 @@ export default function DealCreation() {
             </p>
             <Link href="/restaurant-signup">
               <Button className="w-full">Register Business</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (requestedRestaurantId && !selectedRestaurant) {
-    return (
-      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <p className="text-muted-foreground mb-4">
-              The selected restaurant was not found in your account.
-            </p>
-            <Link href="/restaurant-owner-dashboard">
-              <Button className="w-full">Back to dashboard</Button>
             </Link>
           </CardContent>
         </Card>
@@ -860,6 +912,30 @@ export default function DealCreation() {
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6 bg-[var(--bg-card)]/90 border border-[color:var(--border-subtle)] rounded-2xl px-4 py-5 shadow-clean"
           >
+            {Array.isArray(restaurants) && restaurants.length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="deal-restaurant-selector">Post under</Label>
+                <select
+                  id="deal-restaurant-selector"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-background"
+                  value={selectedRestaurantId}
+                  onChange={(event) =>
+                    setManualRestaurantId(String(event.target.value || "").trim())
+                  }
+                  data-testid="select-deal-restaurant"
+                >
+                  {restaurants.map((restaurant: any) => (
+                    <option
+                      key={String(restaurant?.id || "")}
+                      value={String(restaurant?.id || "")}
+                    >
+                      {String(restaurant?.name || "Unnamed restaurant")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="category"
