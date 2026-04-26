@@ -151,6 +151,23 @@ export default function RestaurantDetailPage() {
     (restaurant as any)?.isFoodTruck ||
     (restaurant as any)?.businessType === "food_truck";
 
+  const restaurantNameForSlug = String((restaurant as any)?.name || "").trim();
+  const expectedRestaurantSlug = toSlug(restaurantNameForSlug);
+
+  useEffect(() => {
+    if (!restaurantId || !restaurant || !expectedRestaurantSlug) return;
+
+    const canonicalPath = `/restaurant/${restaurantId}/${expectedRestaurantSlug}`;
+    const currentPath = window.location.pathname.replace(/\/+$/, "");
+    const legacyPath = `/restaurant/${restaurantId}`;
+    const normalizedCanonicalPath = canonicalPath.replace(/\/+$/, "");
+
+    if (currentPath === normalizedCanonicalPath) return;
+    if (currentPath === legacyPath || currentPath.startsWith(`${legacyPath}/`)) {
+      setLocation(canonicalPath);
+    }
+  }, [restaurantId, restaurant, expectedRestaurantSlug, setLocation]);
+
   const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
     queryKey: ["/api/bookings/truck", restaurantId, "schedule"],
     enabled: !!restaurantId && !!isFoodTruck,
@@ -365,19 +382,6 @@ export default function RestaurantDetailPage() {
   const restaurantName = (restaurant as any)?.name || "Restaurant";
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
   const profilePath = `/p/restaurant/${restaurantId}/${profileSlug}`;
-  const cleanRestaurantPath = `/restaurant/${restaurantId}/${profileSlug}`;
-
-  useEffect(() => {
-    if (!restaurantId) return;
-    const currentPath = window.location.pathname.replace(/\/+$/, "");
-    const legacyPath = `/restaurant/${restaurantId}`;
-    const normalizedCleanPath = cleanRestaurantPath.replace(/\/+$/, "");
-
-    if (currentPath === normalizedCleanPath) return;
-    if (currentPath === legacyPath || currentPath.startsWith(`${legacyPath}/`)) {
-      setLocation(cleanRestaurantPath);
-    }
-  }, [restaurantId, cleanRestaurantPath, setLocation]);
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
   const description = `Visit ${restaurantName} and discover exclusive food deals. ${cuisineType} restaurant with ${restaurantDeals.length} active deals. ${currentRating > 0 ? `Rated ${currentRating.toFixed(1)} stars by ${reviewCount} customers.` : ""}`;
