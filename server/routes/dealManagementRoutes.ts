@@ -276,9 +276,39 @@ export function registerDealManagementRoutes(
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      const billingUserId = restaurant.ownerId;
-      const subscriptionValidation = await validateSubscriptionLimits(billingUserId);
-      console.log("📊 Subscription validation", subscriptionValidation);
+      const billingCandidates = Array.from(
+        new Set(
+          [
+            String(restaurant.ownerId || "").trim(),
+            String(userId || "").trim(),
+          ].filter(Boolean),
+        ),
+      );
+
+      let subscriptionValidation: Awaited<
+        ReturnType<typeof validateSubscriptionLimits>
+      > = {
+        isValid: false,
+        error: "Active subscription required to create deals. Please upgrade your plan.",
+        currentCount: 0,
+        maxDeals: 0,
+      };
+
+      for (const candidateUserId of billingCandidates) {
+        const candidateValidation = await validateSubscriptionLimits(
+          candidateUserId,
+        );
+        console.log("📊 Subscription validation", {
+          candidateUserId,
+          ...candidateValidation,
+        });
+        if (candidateValidation.isValid) {
+          subscriptionValidation = candidateValidation;
+          break;
+        }
+        subscriptionValidation = candidateValidation;
+      }
+
       if (!subscriptionValidation.isValid) {
         return res.status(402).json({
           message: subscriptionValidation.error,
