@@ -334,13 +334,47 @@ export function registerMenuRoutes(app: Express) {
     isAuthenticated,
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
-      await assertOwnsRestaurant(req.user.id, restaurantId, req.user?.userType);
+      const elevatedRole = ["admin", "super_admin", "staff"].includes(
+        String(req.user?.userType || ""),
+      );
 
-      const restaurantMenus = await db
-        .select()
-        .from(menus)
-        .where(eq(menus.restaurantId, restaurantId))
-        .orderBy(asc(menus.serviceType));
+      if (!elevatedRole) {
+        try {
+          const ownsRestaurant = await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "manageProfile",
+          );
+          if (!ownsRestaurant) {
+            return res.json({ menus: [] });
+          }
+        } catch (ownershipError) {
+          console.warn("[menuRoutes] Ownership check failed; returning empty owner menu list", {
+            userId: req.user?.id,
+            restaurantId,
+            error: (ownershipError as any)?.message || ownershipError,
+          });
+          return res.json({ menus: [] });
+        }
+      }
+
+      let restaurantMenus: any[] = [];
+      try {
+        restaurantMenus = await db
+          .select()
+          .from(menus)
+          .where(eq(menus.restaurantId, restaurantId))
+          .orderBy(asc(menus.serviceType));
+      } catch (menuQueryError) {
+        console.warn("[menuRoutes] Ordered owner menu query failed; falling back to unordered query", {
+          restaurantId,
+          error: (menuQueryError as any)?.message || menuQueryError,
+        });
+        restaurantMenus = await db
+          .select()
+          .from(menus)
+          .where(eq(menus.restaurantId, restaurantId));
+      }
 
       res.json({ menus: restaurantMenus });
     }),
