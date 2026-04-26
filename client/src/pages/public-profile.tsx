@@ -4,7 +4,18 @@ import { useEffect, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Phone, Globe, Store } from "lucide-react";
+import {
+  MapPin,
+  Phone,
+  Globe,
+  Store,
+  Navigation,
+  Share2,
+  Sparkles,
+  Clock3,
+  ExternalLink,
+  UtensilsCrossed,
+} from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +109,17 @@ type RestaurantEngagementState = {
     isLiked: boolean;
     hasRecommended: boolean;
   };
+};
+
+type PublicDeal = {
+  id: string;
+  restaurantId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  dealType?: string | null;
+  discountValue?: string | null;
+  imageUrl?: string | null;
+  isActive?: boolean | null;
 };
 
 const labelByEntity: Record<string, string> = {
@@ -225,6 +247,17 @@ export default function PublicProfilePage() {
         throw new Error("Failed to fetch engagement state");
       }
       return res.json();
+    },
+  });
+
+  const { data: featuredDeals = [] } = useQuery<PublicDeal[]>({
+    queryKey: ["/api/deals/featured"],
+    enabled: data?.entity === "restaurant",
+    queryFn: async () => {
+      const res = await fetch("/api/deals/featured");
+      if (!res.ok) return [];
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
     },
   });
 
@@ -363,6 +396,20 @@ export default function PublicProfilePage() {
   const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
   const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(String(profileId || ""))}?src=concierge&focus=description`;
   const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(String(profileId || ""))}&src=concierge`;
+  const directionsUrl = locationLine
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLine)}`
+    : "";
+  const socialLinks = [
+    { label: "Instagram", url: toExternalUrl(data.social?.instagramUrl) },
+    { label: "Facebook", url: toExternalUrl(data.social?.facebookPageUrl) },
+    { label: "X", url: toExternalUrl(data.social?.xUrl) },
+  ].filter((item) => item.url);
+  const restaurantDeals = featuredDeals
+    .filter(
+      (deal) =>
+        String(deal.restaurantId || "") === data.id && deal.isActive !== false,
+    )
+    .slice(0, 6);
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -534,8 +581,43 @@ export default function PublicProfilePage() {
     action();
   };
 
+  const handleShareProfile = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: data.title,
+          text: `Check out ${data.title} on MealScout`,
+          url: data.canonicalUrl,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(data.canonicalUrl);
+      toast({
+        title: "Profile link copied",
+        description: "Share this page anywhere.",
+      });
+    } catch {
+      // Ignore canceled share flow.
+    }
+  };
+
+  const restaurantActionCards = [
+    orderUrl
+      ? { label: "Order Online", href: orderUrl, icon: UtensilsCrossed }
+      : null,
+    menuUrl
+      ? { label: "View Menu", href: menuUrl, icon: Sparkles }
+      : null,
+    phoneHref ? { label: "Call", href: phoneHref, icon: Phone } : null,
+    directionsUrl
+      ? { label: "Directions", href: directionsUrl, icon: Navigation }
+      : null,
+  ].filter(Boolean) as Array<{ label: string; href: string; icon: any }>;
+
   return (
-    <div className={`mx-auto max-w-3xl px-4 py-8 ${fontClass}`}>
+    <div
+      className={`mx-auto max-w-3xl px-4 py-8 ${data.entity === "restaurant" ? "pb-28" : ""} ${fontClass}`}
+    >
       <SEOHead
         title={title}
         description={description}
@@ -696,6 +778,44 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
+          {data.entity === "restaurant" ? (
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    Website Actions
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    Everything guests need, in one profile
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={handleShareProfile}>
+                  <Share2 className="mr-1.5 h-3.5 w-3.5" />
+                  Share
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {restaurantActionCards.map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <a
+                      key={card.label}
+                      href={card.href}
+                      target={card.href.startsWith("http") ? "_blank" : undefined}
+                      rel={card.href.startsWith("http") ? "noreferrer noopener" : undefined}
+                      className="rounded-lg border bg-[var(--bg-card)] px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span>{card.label}</span>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {isStaffOrAdmin && canonical ? (
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -764,27 +884,233 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
-          {data.websiteUrl ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Globe className="h-4 w-4 text-muted-foreground" />
-              <a
-                href={data.websiteUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-primary underline"
-              >
-                {data.websiteUrl}
-              </a>
-            </div>
-          ) : null}
+          {data.entity === "restaurant" ? (
+            <div className="grid gap-6 lg:grid-cols-[1.65fr_1fr]">
+              <div className="space-y-5">
+                {about ? (
+                  <div className="rounded-xl border p-4">
+                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      About
+                    </div>
+                    <p className="text-sm leading-relaxed text-foreground">{about}</p>
+                  </div>
+                ) : null}
 
-          {renderedSections}
+                {restaurantDeals.length > 0 ? (
+                  <div className="rounded-xl border p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-orange-500" />
+                      <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                        Current Specials
+                      </h2>
+                    </div>
+                    <div className="space-y-3">
+                      {restaurantDeals.map((deal) => (
+                        <div key={deal.id} className="rounded-lg border p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">
+                                {deal.title || "Special"}
+                              </p>
+                              {deal.description ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {deal.description}
+                                </p>
+                              ) : null}
+                            </div>
+                            {(deal.discountValue || deal.dealType) ? (
+                              <Badge variant="secondary" className="shrink-0">
+                                {deal.discountValue
+                                  ? `${deal.discountValue}${deal.dealType === "percentage" ? "%" : ""}`
+                                  : String(deal.dealType || "deal")}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {highlights.length > 0 ? (
+                  <div className="rounded-xl border p-4">
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Highlights
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      {highlights.map((item, idx) => (
+                        <Badge key={`${item}-${idx}`} variant="outline" style={accentStyle}>
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {galleryUrls.length > 0 ? (
+                  <div className="rounded-xl border p-4">
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Gallery
+                    </h2>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                      {galleryUrls.map((url, idx) => (
+                        <img
+                          key={`${url}-${idx}`}
+                          src={url}
+                          alt={`${data.title} gallery ${idx + 1}`}
+                          className="h-32 w-full rounded-md object-cover"
+                          loading="lazy"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {featuredLinks.length > 0 ? (
+                  <div className="rounded-xl border p-4">
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Useful Links
+                    </h2>
+                    <div className="grid gap-2">
+                      {featuredLinks.map((link, idx) => (
+                        <a
+                          key={`${link.url}-${idx}`}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                        >
+                          <span>{link.label}</span>
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-4">
+                {(locationLine || data.phone || businessHours.length > 0) ? (
+                  <div className="rounded-xl border p-4">
+                    <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Contact & Visit
+                    </h2>
+                    <div className="space-y-3 text-sm">
+                      {locationLine ? (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                          <span>{locationLine}</span>
+                        </div>
+                      ) : null}
+                      {data.phone ? (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span>{data.phone}</span>
+                        </div>
+                      ) : null}
+                      {businessHours.length > 0 ? (
+                        <div className="rounded-md border p-3">
+                          <div className="mb-1 inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+                            <Clock3 className="h-3.5 w-3.5" />
+                            Hours
+                          </div>
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            {businessHours.map((item) => (
+                              <div key={item}>{item}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {socialLinks.length > 0 ? (
+                  <div className="rounded-xl border p-4">
+                    <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Social
+                    </h2>
+                    <div className="grid gap-2">
+                      {socialLinks.map((item) => (
+                        <a
+                          key={item.label}
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                        >
+                          <span>{item.label}</span>
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {websiteUrl ? (
+                  <div className="rounded-xl border p-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      External Website
+                    </div>
+                    <a
+                      href={websiteUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-2 text-sm text-primary underline"
+                    >
+                      <Globe className="h-4 w-4" />
+                      Visit external site
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            renderedSections
+          )}
 
           <div className="border-t pt-4 text-xs text-muted-foreground">
             Permanent profile link: {data.canonicalUrl}
           </div>
         </CardContent>
       </Card>
+
+      {data.entity === "restaurant" ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-[hsl(var(--background))/0.96] p-3 backdrop-blur md:hidden">
+          <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2">
+            <Button
+              size="sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={!orderUrl}
+              onClick={() => {
+                if (orderUrl) window.open(orderUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              Order
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!menuUrl}
+              onClick={() => {
+                if (menuUrl) window.open(menuUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
+              Menu
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!phoneHref}
+              onClick={() => {
+                if (phoneHref) window.location.href = phoneHref;
+              }}
+            >
+              Call
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
