@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type BusinessType = "restaurant" | "bar" | "food_truck";
@@ -103,6 +104,7 @@ const toForm = (restaurant?: RestaurantProfile | null): ProfileForm => {
 export default function EditRestaurantPage() {
   const { restaurantId } = useParams<{ restaurantId: string }>();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const focusedOnceRef = useRef(false);
   const fieldRefs = {
@@ -121,12 +123,35 @@ export default function EditRestaurantPage() {
     queryKey: ["/api/restaurants/my-restaurants"],
   });
 
+  const isStaffOrAdmin =
+    user?.userType === "staff" ||
+    user?.userType === "admin" ||
+    user?.userType === "super_admin";
+
+  const adminRestaurantQuery = useQuery<RestaurantProfile | null>({
+    queryKey: ["/api/restaurants", restaurantId, "admin-edit-fallback"],
+    enabled: Boolean(isStaffOrAdmin && restaurantId),
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(String(restaurantId || ""))}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return null;
+      return (await response.json()) as RestaurantProfile;
+    },
+  });
+
   const restaurant = useMemo(
-    () =>
-      (restaurantsQuery.data ?? []).find(
+    () => {
+      const ownedOrCollaborator = (restaurantsQuery.data ?? []).find(
         (item) => item.id === String(restaurantId || ""),
-      ) ?? null,
-    [restaurantsQuery.data, restaurantId],
+      );
+      if (ownedOrCollaborator) return ownedOrCollaborator;
+      if (isStaffOrAdmin && adminRestaurantQuery.data) return adminRestaurantQuery.data;
+      return null;
+    },
+    [restaurantsQuery.data, restaurantId, isStaffOrAdmin, adminRestaurantQuery.data],
   );
 
   useEffect(() => {
@@ -194,7 +219,7 @@ export default function EditRestaurantPage() {
     saveMutation.mutate();
   };
 
-  if (restaurantsQuery.isLoading) {
+  if (restaurantsQuery.isLoading || (isStaffOrAdmin && adminRestaurantQuery.isLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-layered)]">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -211,7 +236,7 @@ export default function EditRestaurantPage() {
             <CardHeader>
               <CardTitle>Business not found</CardTitle>
               <CardDescription>
-                This business is not available on your account.
+                This business is not accessible from your current account context.
               </CardDescription>
             </CardHeader>
             <CardContent>

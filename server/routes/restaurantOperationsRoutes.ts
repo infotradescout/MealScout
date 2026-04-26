@@ -445,11 +445,17 @@ export function registerRestaurantOperationsRoutes(
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
-        const isAuthorized = await storage.verifyRestaurantOwnership(
-          restaurantId,
-          req.user.id,
-          "manageProfile",
-        );
+        const isAdminOrStaff =
+          req.user?.userType === "admin" ||
+          req.user?.userType === "super_admin" ||
+          req.user?.userType === "staff";
+        const isAuthorized =
+          isAdminOrStaff ||
+          (await storage.verifyRestaurantOwnership(
+            restaurantId,
+            req.user.id,
+            "manageProfile",
+          ));
         if (!isAuthorized) {
           return res.status(403).json({
             message:
