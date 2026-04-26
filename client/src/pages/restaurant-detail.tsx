@@ -111,9 +111,18 @@ export default function RestaurantDetailPage() {
     },
   });
 
-  const { data: featuredDeals } = useQuery({
-    queryKey: ["/api/deals/featured"],
-    enabled: true,
+  const { data: featuredDeals = [] } = useQuery({
+    queryKey: ["/api/deals/restaurant", restaurantId],
+    enabled: !!restaurantId,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/deals/restaurant/${encodeURIComponent(String(restaurantId || ""))}`,
+        { credentials: "include" },
+      );
+      if (!res.ok) return [];
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
+    },
   });
   const { data: recommendationRows = [], refetch: refetchRecommendations } =
     useQuery<PublicRecommendation[]>({
@@ -370,11 +379,8 @@ export default function RestaurantDetailPage() {
     );
   }
 
-  // Filter deals for this restaurant
-  const allDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
-  const restaurantDeals = allDeals.filter(
-    (deal: any) => deal.restaurantId === restaurantId,
-  );
+  // Deals endpoint is restaurant-scoped already.
+  const restaurantDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
 
   const cvsScore = Math.max(
     0,

@@ -259,10 +259,15 @@ export default function PublicProfilePage() {
   });
 
   const { data: featuredDeals = [] } = useQuery<PublicDeal[]>({
-    queryKey: ["/api/deals/featured"],
-    enabled: data?.entity === "restaurant",
+    queryKey: ["/api/deals/restaurant", data?.id],
+    enabled: data?.entity === "restaurant" && Boolean(data?.id),
     queryFn: async () => {
-      const res = await fetch("/api/deals/featured");
+      const restaurantId = String(data?.id || "").trim();
+      if (!restaurantId) return [];
+      const res = await fetch(
+        `/api/deals/restaurant/${encodeURIComponent(restaurantId)}`,
+        { credentials: "include" },
+      );
       if (!res.ok) return [];
       const rows = await res.json();
       return Array.isArray(rows) ? rows : [];
