@@ -1,6 +1,18 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api";
 
+export class ApiError extends Error {
+  status: number;
+  payload?: unknown;
+
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 async function getErrorMessage(res: Response) {
   const text = (await res.text()) || "";
   if (!text) {
@@ -23,8 +35,27 @@ async function getErrorMessage(res: Response) {
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const message = await getErrorMessage(res);
-    throw new Error(message);
+    const text = (await res.text()) || "";
+    let payload: unknown = undefined;
+    let message = res.statusText || "Request failed";
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+        const json = payload as any;
+        message =
+          json?.message ||
+          json?.error?.message ||
+          (typeof json?.error === "string" ? json.error : undefined) ||
+          json?.errors?.[0]?.message ||
+          res.statusText ||
+          "Request failed";
+      } catch {
+        payload = text;
+        message = text;
+      }
+    }
+
+    throw new ApiError(message, res.status, payload);
   }
 }
 
@@ -97,7 +128,18 @@ export const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 minutes for most queries
       gcTime: 30 * 60 * 1000, // 30 minutes garbage collection
       retry: (failureCount, error: any) => {
-        // Don't retry on 4xx errors (except 408, 429)
+        // Don't retry on client errors (except 408 timeout and 429 rate limit).
+        if (
+          typeof error?.status === "number" &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 408 &&
+          error.status !== 429
+        ) {
+          return false;
+        }
+
+        // Backward compatibility for older thrown errors without status.
         if (
           error.message?.includes("4") &&
           !error.message?.includes("408") &&

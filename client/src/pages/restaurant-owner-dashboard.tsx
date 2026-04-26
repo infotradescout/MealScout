@@ -333,6 +333,8 @@ export default function RestaurantOwnerDashboard() {
         analyticsDateRange,
       ],
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
+      retry: false,
+      refetchOnWindowFocus: false,
     });
 
   // Fetch recommendations analytics for paid users
@@ -343,6 +345,8 @@ export default function RestaurantOwnerDashboard() {
         analyticsDateRange,
       ],
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
+      retry: false,
+      refetchOnWindowFocus: false,
     });
 
   // Fetch deals for selected restaurant
@@ -389,6 +393,8 @@ export default function RestaurantOwnerDashboard() {
       analyticsDateRange,
     ],
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: analyticsTimeseries } = useQuery({
@@ -399,6 +405,8 @@ export default function RestaurantOwnerDashboard() {
       analyticsDateRange,
     ],
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: customerInsights } = useQuery({
@@ -409,6 +417,8 @@ export default function RestaurantOwnerDashboard() {
       analyticsDateRange,
     ],
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: comparison } = useQuery({
@@ -437,6 +447,8 @@ export default function RestaurantOwnerDashboard() {
       );
     },
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Calculate distance between two GPS coordinates
