@@ -58,21 +58,64 @@ export function registerDealManagementRoutes(
   }: DealManagementRouteDependencies,
 ) {
   const buildDealAutopostMessage = (params: {
-    restaurantName: string;
     dealTitle: string;
     dealDescription?: string;
     category?: string | null;
+    dealType?: string | null;
+    discountValue?: string | number | null;
+    startDate?: Date | string | null;
+    endDate?: Date | string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    isOngoing?: boolean | null;
+    availableDuringBusinessHours?: boolean | null;
   }) => {
     const isSpecial = String(params.category || "deal") === "special";
     const intro = isSpecial
-      ? `We're excited to share a new special at ${params.restaurantName}`
-      : `We're now running a fresh deal at ${params.restaurantName}`;
-    const headline = params.dealTitle ? `: ${params.dealTitle}.` : ".";
+      ? "We are excited to announce a new special!"
+      : "We are excited to announce a new deal!";
+    const headline = params.dealTitle ? ` ${params.dealTitle}.` : "";
+
+    const parsedValue = Number.parseFloat(String(params.discountValue ?? ""));
+    let value = "";
+    if (Number.isFinite(parsedValue)) {
+      if (isSpecial) {
+        value = ` Now $${parsedValue.toFixed(2)}.`;
+      } else if (String(params.dealType || "") === "percentage") {
+        value = ` ${parsedValue}% off.`;
+      } else {
+        value = ` Save $${parsedValue.toFixed(2)}.`;
+      }
+    }
+
+    const startDate = params.startDate
+      ? new Date(params.startDate).toISOString().split("T")[0]
+      : "";
+    const endDate = params.endDate
+      ? new Date(params.endDate).toISOString().split("T")[0]
+      : "";
+    const availabilityDate = params.isOngoing
+      ? " Ongoing availability."
+      : startDate && endDate
+      ? ` Available ${startDate} to ${endDate}.`
+      : startDate
+      ? ` Starts ${startDate}.`
+      : "";
+    const availabilityTime = params.availableDuringBusinessHours
+      ? " During business hours."
+      : params.startTime && params.endTime
+      ? ` ${params.startTime}-${params.endTime}.`
+      : "";
+
     const detailsRaw = String(params.dealDescription || "")
       .replace(/\s+/g, " ")
       .trim();
-    const details = detailsRaw ? ` ${detailsRaw.slice(0, 120)}.` : "";
-    return `${intro}${headline}${details} Tap to see full details and the photo on MealScout.`;
+    const details = detailsRaw
+      ? /[.!?]$/.test(detailsRaw)
+        ? ` ${detailsRaw}`
+        : ` ${detailsRaw}.`
+      : "";
+    return `${intro}${headline}${value}${availabilityDate}${availabilityTime}${details} Tap to see full details and the photo on MealScout.`;
   };
 
   app.get("/api/deals/claimed", isAuthenticated, async (req: any, res) => {
@@ -392,10 +435,19 @@ export function registerDealManagementRoutes(
           ).replace(/\/+$/, "");
           const link = `${baseUrl}/deal/${deal.id}`;
           const message = buildDealAutopostMessage({
-            restaurantName: String(restaurant.name || "this restaurant"),
             dealTitle: String(deal.title || "New deal"),
             dealDescription: String((deal as any)?.description || ""),
             category: String((deal as any)?.category || "deal"),
+            dealType: String((deal as any)?.dealType || ""),
+            discountValue: (deal as any)?.discountValue ?? null,
+            startDate: (deal as any)?.startDate ?? null,
+            endDate: (deal as any)?.endDate ?? null,
+            startTime: String((deal as any)?.startTime || ""),
+            endTime: String((deal as any)?.endTime || ""),
+            isOngoing: Boolean((deal as any)?.isOngoing),
+            availableDuringBusinessHours: Boolean(
+              (deal as any)?.availableDuringBusinessHours,
+            ),
           });
 
           const postJobs: Promise<void>[] = [];

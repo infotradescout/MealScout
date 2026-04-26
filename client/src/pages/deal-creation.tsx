@@ -166,6 +166,7 @@ export default function DealCreation() {
     };
   } | null>(null);
   const [isSharingDeal, setIsSharingDeal] = useState(false);
+  const afterCreatePath = "/restaurant-owner-dashboard";
 
   const { data: restaurants } = useQuery({
     queryKey: ["/api/restaurants/my-restaurants"],
@@ -259,7 +260,9 @@ export default function DealCreation() {
     const numericValue = parseMoneyLike(rawValue);
     let value = "";
     if (numericValue != null) {
-      if (params.dealType === "percentage") {
+      if (params.category === "special") {
+        value = ` Now $${numericValue.toFixed(2)}.`;
+      } else if (params.dealType === "percentage") {
         value = ` ${numericValue}% off.`;
       } else {
         value = ` Save $${numericValue.toFixed(2)}.`;
@@ -282,7 +285,11 @@ export default function DealCreation() {
     const detailsRaw = String(params.dealDescription || "")
       .replace(/\s+/g, " ")
       .trim();
-    const details = detailsRaw ? ` ${detailsRaw.slice(0, 120)}.` : "";
+    const details = detailsRaw
+      ? /[.!?]$/.test(detailsRaw)
+        ? ` ${detailsRaw}`
+        : ` ${detailsRaw}.`
+      : "";
     return `${intro}${headline}${value}${availabilityDate}${availabilityTime}${details} Tap to see full details and the photo on MealScout.`;
   };
 
@@ -447,7 +454,7 @@ export default function DealCreation() {
       }
       if (shouldClear) {
         setDealSharePrompt(null);
-        setLocation("/");
+        setLocation(afterCreatePath);
       }
     } catch (error) {
       toast({
@@ -526,6 +533,12 @@ export default function DealCreation() {
         // ignore
       }
       queryClient.invalidateQueries({ queryKey: ["/api/deals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/active"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/featured"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/deals/my-active"] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/deals/restaurant/${selectedRestaurantId}`],
+      });
       const hasTrigger = socialSettings.triggers.deal;
       const selectedPlatforms = { ...socialSettings.platforms };
       const hasPlatforms =
@@ -559,13 +572,13 @@ export default function DealCreation() {
         });
         if (!socialSettings.promptBeforePost) {
           void handleDealSharePost({ message, link, selectedPlatforms });
-          setLocation("/");
+          setLocation(afterCreatePath);
           return;
         }
         setDealSharePrompt({ message, link, selectedPlatforms });
         return;
       }
-      setLocation("/");
+      setLocation(afterCreatePath);
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -1702,6 +1715,26 @@ export default function DealCreation() {
                 variant="outline"
                 className="py-3 px-4"
                 disabled={!canManageDeals}
+                onClick={() => {
+                  try {
+                    const snapshot = form.getValues();
+                    const { imageUrl, ...rest } = snapshot;
+                    window.localStorage.setItem(
+                      DEAL_DRAFT_KEY,
+                      JSON.stringify(rest),
+                    );
+                    toast({
+                      title: "Draft saved",
+                      description: "Your special draft is saved on this device.",
+                    });
+                  } catch {
+                    toast({
+                      title: "Save failed",
+                      description: "Unable to save draft right now.",
+                      variant: "destructive",
+                    });
+                  }
+                }}
                 data-testid="button-save-draft"
               >
                 Save Draft
@@ -1726,7 +1759,7 @@ export default function DealCreation() {
         onOpenChange={(open) => {
           if (!open) {
             setDealSharePrompt(null);
-            setLocation("/");
+            setLocation(afterCreatePath);
           }
         }}
       >
@@ -1787,7 +1820,7 @@ export default function DealCreation() {
               variant="outline"
               onClick={() => {
                 setDealSharePrompt(null);
-                setLocation("/");
+                setLocation(afterCreatePath);
               }}
             >
               Skip
