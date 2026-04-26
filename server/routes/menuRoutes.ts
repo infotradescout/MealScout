@@ -146,6 +146,17 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
   };
 }
 
+function isMissingRelationError(error: unknown, relationName: string): boolean {
+  const code = String((error as any)?.code || "").toUpperCase();
+  const message = String((error as any)?.message || "").toLowerCase();
+  return (
+    code === "42P01" &&
+    (message.includes(`relation \"${relationName}\" does not exist`) ||
+      message.includes(`relation '${relationName}' does not exist`) ||
+      message.includes(`${relationName} does not exist`))
+  );
+}
+
 function normalizeMenuServiceType(value: unknown): string {
   const normalized = String(value ?? "")
     .trim()
@@ -370,10 +381,25 @@ export function registerMenuRoutes(app: Express) {
           restaurantId,
           error: (menuQueryError as any)?.message || menuQueryError,
         });
-        restaurantMenus = await db
-          .select()
-          .from(menus)
-          .where(eq(menus.restaurantId, restaurantId));
+        try {
+          restaurantMenus = await db
+            .select()
+            .from(menus)
+            .where(eq(menus.restaurantId, restaurantId));
+        } catch (fallbackQueryError) {
+          if (isMissingRelationError(fallbackQueryError, "menus")) {
+            console.warn(
+              "[menuRoutes] menus relation missing; returning empty owner menu list",
+              {
+                restaurantId,
+                error:
+                  (fallbackQueryError as any)?.message || fallbackQueryError,
+              },
+            );
+            return res.json({ menus: [] });
+          }
+          throw fallbackQueryError;
+        }
       }
 
       res.json({ menus: restaurantMenus });
