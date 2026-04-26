@@ -190,9 +190,14 @@ export default function DealCreation() {
     return (
       restaurants.find(
         (restaurant: any) => String(restaurant?.id || "") === requestedRestaurantId,
-      ) || restaurants[0]
+      ) || null
     );
   }, [restaurants, requestedRestaurantId]);
+
+  const selectedRestaurantId = useMemo(() => {
+    if (requestedRestaurantId) return requestedRestaurantId;
+    return String(selectedRestaurant?.id || "").trim();
+  }, [requestedRestaurantId, selectedRestaurant]);
 
   const getShareRestaurantName = (value: unknown) => {
     const raw = String(value || "").trim();
@@ -392,7 +397,7 @@ export default function DealCreation() {
 
   const createDealMutation = useMutation({
     mutationFn: async (data: DealFormData) => {
-      if (!Array.isArray(restaurants) || restaurants.length === 0) {
+      if (!selectedRestaurantId) {
         throw new Error(
           "No restaurant found. Please register a restaurant first."
         );
@@ -401,7 +406,7 @@ export default function DealCreation() {
       const dealData = {
         ...data,
         category: data.category,
-        restaurantId: selectedRestaurant.id,
+        restaurantId: selectedRestaurantId,
         dealType:
           data.category === "deal"
             ? data.dealType
@@ -444,8 +449,7 @@ export default function DealCreation() {
         selectedPlatforms.instagram ||
         selectedPlatforms.x;
       if (hasTrigger && hasPlatforms) {
-        const restaurant =
-          selectedRestaurant;
+        const restaurant = selectedRestaurant;
         const dealId = created?.id || created?.deal?.id;
         const link = dealId
           ? `${window.location.origin}/deal/${dealId}`
