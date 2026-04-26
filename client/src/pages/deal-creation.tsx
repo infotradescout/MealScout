@@ -108,6 +108,15 @@ const dealSchema = z
 
 type DealFormData = z.infer<typeof dealSchema>;
 
+function parseMoneyLike(value?: string | null): number | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/[^0-9.\-]/g, "");
+  if (!normalized) return null;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 type SocialAutopostSettings = {
   platforms: {
     facebook: boolean;
@@ -356,14 +365,14 @@ export default function DealCreation() {
         ...data,
         category: data.category,
         restaurantId: restaurants[0].id,
-        dealType: data.category === "deal" ? data.dealType : null,
-        discountValue:
-          data.category === "deal" && data.discountValue
-            ? parseFloat(data.discountValue)
-            : null,
-        minOrderAmount: data.minOrderAmount
-          ? parseFloat(data.minOrderAmount)
-          : null,
+        dealType:
+          data.category === "deal"
+            ? data.dealType
+            : data.discountValue
+              ? "fixed"
+              : null,
+        discountValue: parseMoneyLike(data.discountValue),
+        minOrderAmount: parseMoneyLike(data.minOrderAmount),
         totalUsesLimit: data.totalUsesLimit
           ? parseInt(data.totalUsesLimit)
           : null,
@@ -707,7 +716,10 @@ export default function DealCreation() {
 
                 <div className="absolute bottom-2 right-2 bg-[linear-gradient(110deg,rgba(255,77,46,0.9),rgba(245,158,11,0.9))] text-white px-2 py-1 rounded-md text-sm font-bold shadow-clean">
                   {dealPreviewData.category === "special"
-                    ? "Limited Time"
+                    ? dealPreviewData.discountValue &&
+                      Number.parseFloat(dealPreviewData.discountValue) > 0
+                      ? `$${dealPreviewData.discountValue}`
+                      : "Limited Time"
                     : dealPreviewData.dealType === "percentage"
                       ? `${dealPreviewData.discountValue}% OFF`
                       : `$${dealPreviewData.discountValue} OFF`}
@@ -737,7 +749,11 @@ export default function DealCreation() {
                   {dealPreviewData.minOrderAmount && (
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <DollarSign className="w-3 h-3" />
-                      <span>Min ${dealPreviewData.minOrderAmount}</span>
+                      <span>
+                        {dealPreviewData.category === "special"
+                          ? `Was $${dealPreviewData.minOrderAmount}`
+                          : `Min $${dealPreviewData.minOrderAmount}`}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -764,9 +780,8 @@ export default function DealCreation() {
                       onValueChange={(value) => {
                         field.onChange(value);
                         if (value === "special") {
-                          form.setValue("discountValue", "", {
+                          form.setValue("dealType", "fixed", {
                             shouldDirty: true,
-                            shouldValidate: true,
                           });
                         } else if (!form.getValues("dealType")) {
                           form.setValue("dealType", "percentage", {
@@ -1101,7 +1116,8 @@ export default function DealCreation() {
                         <FormControl>
                           <div className="relative">
                             <Input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               placeholder="25"
                               {...field}
                               data-testid="input-discount-value"
@@ -1129,7 +1145,8 @@ export default function DealCreation() {
                               $
                             </span>
                             <Input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               placeholder="15.00"
                               className="pl-8"
                               {...field}
@@ -1143,6 +1160,68 @@ export default function DealCreation() {
                   />
                 </div>
               </>
+            )}
+
+            {selectedCategory === "special" && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="discountValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel data-testid="label-special-price">
+                        Special Price
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="9.99"
+                            className="pl-8"
+                            {...field}
+                            data-testid="input-special-price"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="minOrderAmount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel data-testid="label-original-price">
+                        Original Price
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                            $
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="12.99"
+                            className="pl-8"
+                            {...field}
+                            data-testid="input-original-price"
+                          />
+                        </div>
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Optional compare-at price
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             )}
 
             {/* Timing */}

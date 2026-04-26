@@ -22,6 +22,7 @@ interface Deal {
   restaurantId: string;
   title: string;
   description: string;
+  category?: "deal" | "special";
   dealType?: string | null;
   discountValue?: string | null;
   minOrderAmount?: string;
@@ -207,6 +208,9 @@ export default function DealDetail() {
     if (!deal.discountValue) {
       return "Limited Time";
     }
+    if (deal.category === "special") {
+      return `$${deal.discountValue}`;
+    }
     if (deal.dealType === "percentage") {
       return `${deal.discountValue}% OFF`;
     } else {
@@ -230,9 +234,11 @@ export default function DealDetail() {
   const discountValue = (deal as Deal)?.discountValue || "";
   const dealType = (deal as Deal)?.dealType || "";
   const discountDescription = discountValue
-    ? dealType === "percentage"
-      ? `Get ${discountValue}% off`
-      : `Save $${discountValue}`
+    ? (deal as Deal)?.category === "special"
+      ? `Special price: $${discountValue}`
+      : dealType === "percentage"
+        ? `Get ${discountValue}% off`
+        : `Save $${discountValue}`
     : "Limited-time special";
   const distance = (deal as Deal)?.distance;
   const cvsScore = Math.max(
@@ -257,12 +263,21 @@ export default function DealDetail() {
     description: dealDescription,
     url: `https://www.mealscout.us/deals/${dealId}`,
     priceCurrency: "USD",
-    price: dealType === "fixed" && discountValue ? discountValue : "0",
+    price:
+      (deal as Deal)?.category === "special" && discountValue
+        ? discountValue
+        : dealType === "fixed" && discountValue
+          ? discountValue
+          : "0",
     ...(discountValue
-      ? {
-          discount:
-            dealType === "percentage" ? `${discountValue}%` : `$${discountValue}`,
-        }
+      ? (deal as Deal)?.category === "special"
+        ? {}
+        : {
+            discount:
+              dealType === "percentage"
+                ? `${discountValue}%`
+                : `$${discountValue}`,
+          }
       : {}),
     seller: {
       "@type": "Restaurant",
@@ -401,7 +416,9 @@ export default function DealDetail() {
                 <div className="flex items-center space-x-1">
                   <i className="fas fa-dollar-sign text-muted-foreground"></i>
                   <span data-testid="text-min-order">
-                    Min. order ${(deal as Deal).minOrderAmount}
+                    {(deal as Deal)?.category === "special"
+                      ? `Was $${(deal as Deal).minOrderAmount}`
+                      : `Min. order $${(deal as Deal).minOrderAmount}`}
                   </span>
                 </div>
               )}
