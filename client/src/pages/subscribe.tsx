@@ -38,6 +38,10 @@ import {
   AlertCircle,
   CheckCircle,
   ExternalLink,
+  ArrowRight,
+  ShieldCheck,
+  Sparkles,
+  Wallet,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -228,35 +232,84 @@ const PlanSelector = ({
 }) => {
   const getPricingDisplay = () =>
     "Locked-in promo pricing at $25/month (normally $50).";
-  const getPricingAmount = () => (
-    <>
-      <span className="mr-2 text-xl text-[color:var(--text-muted)] line-through">
-        $50
-      </span>
-      $25
-    </>
-  );
 
   return (
-    <div className="space-y-6">
-      {/* Monthly Only */}
-      <Card className="bg-[linear-gradient(110deg,rgba(34,197,94,0.12),rgba(20,184,166,0.12))] border-[color:var(--border-subtle)] shadow-clean">
+    <div className="space-y-5">
+      <Card className="border-[color:var(--border-subtle)] bg-[linear-gradient(115deg,rgba(20,184,166,0.16),rgba(245,158,11,0.16))] shadow-clean">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-[color:var(--text-secondary)]">
+                Premium launch pricing
+              </div>
+              <h3 className="text-lg font-bold text-[color:var(--text-primary)]">
+                Keep your growth tools in one place
+              </h3>
+            </div>
+            <Badge className="bg-[color:var(--status-success)]/15 text-[color:var(--status-success)] border-0">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+              Locked In
+            </Badge>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2 text-center">
+              <div className="text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                Regular
+              </div>
+              <div className="text-sm font-semibold text-[color:var(--text-secondary)] line-through">
+                $50
+              </div>
+            </div>
+            <div className="rounded-lg border border-[color:var(--status-success)]/35 bg-[color:var(--status-success)]/10 p-2 text-center">
+              <div className="text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                Today
+              </div>
+              <div className="text-sm font-bold text-[color:var(--status-success)]">
+                $25/mo
+              </div>
+            </div>
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2 text-center">
+              <div className="text-[10px] uppercase tracking-wide text-[color:var(--text-muted)]">
+                Cancel
+              </div>
+              <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                Anytime
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Monthly plan */}
+      <Card className="bg-[linear-gradient(110deg,rgba(45,212,191,0.14),rgba(251,191,36,0.12))] border-[color:var(--border-subtle)] shadow-clean">
         <CardContent className="p-6">
-          <h3 className="text-xl font-bold text-[color:var(--text-primary)] mb-4 text-center">
-            Choose Your Plan
-          </h3>
-          <div className="grid grid-cols-1 gap-4">
-            <div
-              className="border rounded-lg p-4 text-center border-[color:var(--status-success)]/40 bg-[color:var(--status-success)]/10 shadow-clean"
-              onClick={() => onBillingIntervalChange("month")}
-              data-testid="card-billing-monthly"
-            >
-              <div className="font-semibold text-[color:var(--text-primary)] mb-1">
+          <div
+            className="border rounded-xl p-4 border-[color:var(--status-success)]/35 bg-[var(--bg-card)] shadow-clean"
+            onClick={() => onBillingIntervalChange("month")}
+            data-testid="card-billing-monthly"
+          >
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="font-semibold text-[color:var(--text-primary)]">
                 Monthly Premium
               </div>
-              <div className="text-sm text-[color:var(--text-secondary)]">
-                Cancel anytime
-              </div>
+              <Badge className="bg-[color:var(--status-success)]/15 text-[color:var(--status-success)] border-0">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Best value
+              </Badge>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-xl text-[color:var(--text-muted)] line-through">
+                $50
+              </span>
+              <span className="text-3xl font-bold text-[color:var(--accent-text)]">
+                $25
+              </span>
+              <span className="text-sm text-[color:var(--text-secondary)]">
+                /month
+              </span>
+            </div>
+            <div className="text-sm text-[color:var(--text-secondary)] mt-1">
+              Cancel anytime. No annual lock-in.
             </div>
           </div>
         </CardContent>
@@ -286,8 +339,30 @@ const PlanSelector = ({
         </CardContent>
       </Card>
 
+      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">What is always free</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <ul className="space-y-2 text-sm text-[color:var(--text-secondary)]">
+            <li className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[color:var(--status-success)]" />
+              Parking pass bookings
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[color:var(--status-success)]" />
+              Public menu browsing
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[color:var(--status-success)]" />
+              Basic map visibility
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+
       {/* Summary and Continue */}
-      <Card className="bg-[linear-gradient(110deg,rgba(59,130,246,0.12),rgba(99,102,241,0.12))] border-[color:var(--border-subtle)] shadow-clean">
+      <Card className="bg-[linear-gradient(110deg,rgba(14,116,144,0.14),rgba(245,158,11,0.12))] border-[color:var(--border-subtle)] shadow-clean">
         <CardContent className="p-6">
           <div className="text-center">
             <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-2">
@@ -300,7 +375,10 @@ const PlanSelector = ({
               </span>
             </div>
             <div className="text-3xl font-bold text-[color:var(--accent-text)] mb-2">
-              {getPricingAmount()}
+              <span className="mr-2 text-xl text-[color:var(--text-muted)] line-through">
+                $50
+              </span>
+              $25
             </div>
             <div className="text-sm text-[color:var(--text-secondary)] mb-4">
               {getPricingDisplay()}
@@ -310,16 +388,22 @@ const PlanSelector = ({
                 Promo code: {promoCode}
               </div>
             )}
-            <p className="text-xs text-[color:var(--text-muted)] mb-4">
-              Parking pass bookings and menu browsing are always free for
-              verified trucks. Premium unlocks online ordering, schedule
-              management, live location, and more.
-            </p>
+            <div className="grid grid-cols-2 gap-2 text-left mb-4">
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2 text-xs text-[color:var(--text-secondary)]">
+                <Wallet className="w-3.5 h-3.5 mb-1 text-[color:var(--accent-text)]" />
+                Online ordering + payouts
+              </div>
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2 text-xs text-[color:var(--text-secondary)]">
+                <Calendar className="w-3.5 h-3.5 mb-1 text-[color:var(--accent-text)]" />
+                Off-platform scheduling
+              </div>
+            </div>
             <Button
               onClick={onContinue}
               className="w-full py-3 font-semibold text-sm"
               data-testid="button-continue-to-payment"
             >
+              <ArrowRight className="w-4 h-4 mr-2" />
               Continue to Checkout
             </Button>
           </div>
@@ -1023,16 +1107,19 @@ export default function Subscribe() {
       />
 
       <div className="px-4 py-6">
-        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
+        <Card className="bg-[linear-gradient(115deg,rgba(14,116,144,0.12),rgba(16,185,129,0.12))] border-[color:var(--border-subtle)] shadow-clean">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                  Start free, upgrade when you're ready
+                <div className="text-xs font-bold uppercase tracking-wide text-[color:var(--text-secondary)]">
+                  Plans and billing
                 </div>
-                <div className="text-xs text-[color:var(--text-secondary)]">
-                  Premium helps you publish deals and track performance.
-                  Parking Pass booking fees stay separate for food trucks.
+                <div className="text-lg font-bold text-[color:var(--text-primary)]">
+                  Start free. Upgrade when growth demands it.
+                </div>
+                <div className="text-sm text-[color:var(--text-secondary)] mt-1">
+                  Parking pass fees remain separate. Premium is for advanced
+                  business operations.
                 </div>
               </div>
               <Button
@@ -1044,7 +1131,7 @@ export default function Subscribe() {
                 Skip for now
               </Button>
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Link href="/parking-pass">
                 <Button
                   variant="secondary"
@@ -1066,7 +1153,7 @@ export default function Subscribe() {
             </div>
             {(currentSubscription as any)?.trialAccess &&
               (currentSubscription as any)?.trialEndsAt && (
-                <div className="text-xs text-[color:var(--status-success)]">
+                <div className="rounded-lg border border-[color:var(--status-success)]/30 bg-[color:var(--status-success)]/10 p-2 text-xs text-[color:var(--status-success)]">
                   Your free trial ends{" "}
                   {new Date(
                     (currentSubscription as any).trialEndsAt,
