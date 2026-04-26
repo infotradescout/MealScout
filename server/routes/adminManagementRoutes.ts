@@ -1199,6 +1199,8 @@ export function registerAdminManagementRoutes(app: Express) {
 
         const isRestaurantProvisionType =
           userType === "restaurant_owner" || userType === "food_truck";
+        const isAddressRequiredForProvision =
+          userType === "restaurant_owner";
         const isHostProvisionType =
           userType === "host" || userType === "event_coordinator";
         const isSupplierProvisionType = userType === "supplier";
@@ -1212,12 +1214,18 @@ export function registerAdminManagementRoutes(app: Express) {
             isHostProvisionType ||
             isSupplierProvisionType) &&
           (!normalizedBusinessName ||
-            !normalizedAddress ||
+            ((isAddressRequiredForProvision ||
+              isHostProvisionType ||
+              isSupplierProvisionType) &&
+              !normalizedAddress) ||
             !normalizedCity ||
             !normalizedState)
         ) {
           return res.status(400).json({
-            message: `businessName, address, city, and state are required for ${userType} provisioning`,
+            message:
+              userType === "food_truck"
+                ? `businessName, city, and state are required for ${userType} provisioning`
+                : `businessName, address, city, and state are required for ${userType} provisioning`,
           });
         }
 
@@ -1291,7 +1299,8 @@ export function registerAdminManagementRoutes(app: Express) {
         }
 
         const shouldDeriveCoordinates =
-          (isRestaurantProvisionType || isHostProvisionType) &&
+          ((isHostProvisionType || userType === "restaurant_owner") ||
+            (userType === "food_truck" && Boolean(normalizedAddress))) &&
           parsedLatitude === null &&
           parsedLongitude === null;
         if (shouldDeriveCoordinates) {

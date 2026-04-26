@@ -1408,17 +1408,24 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       formData.userType === "host" ||
       formData.userType === "event_coordinator";
 
+    const addressRequiredForType =
+      formData.userType === "restaurant_owner" ||
+      formData.userType === "supplier" ||
+      formData.userType === "host" ||
+      formData.userType === "event_coordinator";
+
     if (
       needsBusinessProfile &&
       (!formData.businessName.trim() ||
-        !formData.address.trim() ||
+        (addressRequiredForType && !formData.address.trim()) ||
         !formData.city.trim() ||
         !formData.state.trim())
     ) {
       toast({
         title: "Missing required fields",
-        description:
-          "Business/location name, address, city, and state are required.",
+        description: addressRequiredForType
+          ? "Business/location name, address, city, and state are required."
+          : "Business/location name, city, and state are required.",
         variant: "destructive",
       });
       return;
@@ -1755,7 +1762,10 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                   <label className="text-sm font-medium">Address</label>
                   <input
                     type="text"
-                    required
+                    required={
+                      formData.userType === "restaurant_owner" ||
+                      formData.userType === "supplier"
+                    }
                     value={formData.address}
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
@@ -10050,16 +10060,20 @@ export default function AdminDashboard() {
                     <Button
                       size="sm"
                       onClick={() => {
+                        const profileNeedsAddress =
+                          newRestaurantProfile.businessType === "restaurant" ||
+                          newRestaurantProfile.businessType === "bar";
                         if (
                           !newRestaurantProfile.name.trim() ||
-                          !newRestaurantProfile.address.trim() ||
+                          (profileNeedsAddress && !newRestaurantProfile.address.trim()) ||
                           !newRestaurantProfile.city.trim() ||
                           !newRestaurantProfile.state.trim()
                         ) {
                           toast({
                             title: "Missing fields",
-                            description:
-                              "Name, address, city, and state are required.",
+                            description: profileNeedsAddress
+                              ? "Name, address, city, and state are required."
+                              : "Name, city, and state are required.",
                             variant: "destructive",
                           });
                           return;
