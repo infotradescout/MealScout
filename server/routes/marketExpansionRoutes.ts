@@ -56,6 +56,7 @@ const directoryAutopopulateSchema = z.object({
   minQualityScore: z.number().int().min(0).max(100).optional(),
   includeCommissary: z.boolean().optional(),
   includeDelivery: z.boolean().optional(),
+  includeTruckCommissary: z.boolean().optional(),
 });
 
 export function registerMarketExpansionRoutes(app: Express) {

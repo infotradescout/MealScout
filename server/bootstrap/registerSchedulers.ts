@@ -701,6 +701,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
         minQualityScore: 60,
         includeCommissary: true,
         includeDelivery: true,
+        includeTruckCommissary: true,
       });
       console.log("[market-expansion] Daily directory autopopulate complete", result);
     } catch (error) {

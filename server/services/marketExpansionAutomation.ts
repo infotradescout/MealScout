@@ -84,6 +84,7 @@ type DirectoryAutopopulateOptions = {
   minQualityScore?: number;
   includeCommissary?: boolean;
   includeDelivery?: boolean;
+  includeTruckCommissary?: boolean;
 };
 
 type OnboardingCandidateRow = {
@@ -132,6 +133,17 @@ type HostLeadCandidateRow = {
   locationType: string;
   parkingSpots: number | null;
   notes: string | null;
+};
+
+type TruckCommissaryCandidateRow = {
+  restaurantId: string;
+  truckName: string;
+  address: string;
+  city: string;
+  state: string;
+  phone: string | null;
+  websiteUrl: string | null;
+  isVerified: boolean;
 };
 
 type RecomputeOptions = {
@@ -265,6 +277,19 @@ function normalizeDirectoryText(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizePhoneForDirectory(value: unknown) {
+  return String(value || "").replace(/[^0-9]/g, "");
+}
+
+function normalizeWebsiteForDirectory(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/+$/, "");
+}
+
 function toTagArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -299,8 +324,12 @@ async function upsertDirectoryByNaturalKey(input: {
 }) {
   const entityType = normalizeDirectoryText(input.entityType);
   const businessName = String(input.businessName || "").trim();
+  const normalizedBusinessName = normalizeDirectoryText(businessName);
   const city = normalizeDirectoryText(input.city);
   const state = normalizeDirectoryText(input.state);
+  const normalizedEmail = normalizeDirectoryText(input.contactEmail);
+  const normalizedPhone = normalizePhoneForDirectory(input.contactPhone);
+  const normalizedWebsite = normalizeWebsiteForDirectory(input.websiteUrl);
   if (!entityType || !businessName || !city || !state) {
     return { skipped: true };
   }
@@ -310,9 +339,17 @@ async function upsertDirectoryByNaturalKey(input: {
     from market_expansion_directory
     where
       lower(entity_type) = ${entityType} and
-      lower(business_name) = ${normalizeDirectoryText(businessName)} and
       lower(coalesce(city, '')) = ${city} and
-      lower(coalesce(state, '')) = ${state}
+      lower(coalesce(state, '')) = ${state} and
+      (
+        lower(business_name) = ${normalizedBusinessName}
+        or (${normalizedEmail !== ""} and lower(coalesce(contact_email, '')) = ${normalizedEmail})
+        or (${normalizedPhone !== ""} and regexp_replace(coalesce(contact_phone, ''), '[^0-9]', '', 'g') = ${normalizedPhone})
+        or (
+          ${normalizedWebsite !== ""} and
+          lower(regexp_replace(regexp_replace(coalesce(website_url, ''), '^https?://(www\\.)?', ''), '/+$', '')) = ${normalizedWebsite}
+        )
+      )
     limit 1
   `);
 
@@ -1534,6 +1571,7 @@ export async function autoPopulateDirectoryForActiveCities(
   const minQualityScore = normalizeBatchLimit(options?.minQualityScore, 60, 100);
   const includeCommissary = options?.includeCommissary !== false;
   const includeDelivery = options?.includeDelivery !== false;
+  const includeTruckCommissary = options?.includeTruckCommissary !== false;
 
   const cities = await getActiveUserCities(limitCities);
   let created = 0;
@@ -1696,6 +1734,66 @@ export async function autoPopulateDirectoryForActiveCities(
         }
       }
     }
+
+    if (includeTruckCommissary) {
+      const truckResult = await db.execute(sql<TruckCommissaryCandidateRow>`
+        select
+          r.id as "restaurantId",
+          r.name as "truckName",
+          trim(coalesce(r.address, '')) as address,
+          lower(trim(coalesce(r.city, ''))) as city,
+          lower(trim(coalesce(r.state, ''))) as state,
+          r.phone,
+          r.website_url as "websiteUrl",
+          coalesce(r.is_verified, false) as "isVerified"
+        from restaurants r
+        where
+          coalesce(r.is_active, true) = true and
+          (
+            coalesce(r.is_food_truck, false) = true or
+            lower(coalesce(r.business_type, '')) = 'food_truck'
+          ) and
+          lower(trim(coalesce(r.city, ''))) = ${city} and
+          lower(trim(coalesce(r.state, ''))) = ${state} and
+          trim(coalesce(r.address, '')) <> ''
+        order by r.updated_at desc nulls last, r.created_at desc nulls last
+        limit ${limitPerCity}
+      `);
+
+      const truckRows = ((truckResult as any)?.rows || []) as TruckCommissaryCandidateRow[];
+      for (const truck of truckRows) {
+        const addressName = String(truck.address || "").trim();
+        if (!addressName) continue;
+
+        const truckCommissaryScore = clampScore(
+          52 +
+            (truck.isVerified ? 16 : 0) +
+            (truck.phone ? 8 : 0) +
+            (truck.websiteUrl ? 8 : 0) +
+            (/commissary|kitchen/i.test(addressName) ? 10 : 0),
+        );
+
+        if (truckCommissaryScore >= minQualityScore) {
+          const truckCommissaryResult = await upsertDirectoryByNaturalKey({
+            entityType: "commissary_kitchen",
+            businessName: addressName,
+            city,
+            state,
+            contactPhone: truck.phone || null,
+            websiteUrl: truck.websiteUrl || null,
+            servesFoodTrucks: true,
+            verificationStatus: truck.isVerified ? "verified" : "unverified",
+            qualityScore: truckCommissaryScore,
+            source: "autopopulate:truck_profile_address",
+            isActive: true,
+            tags: ["commissary", "truck_self_reported", "food_truck", `truck:${truck.restaurantId}`],
+            notes: `Auto-populated from active food truck profile address (${String(truck.truckName || "unknown truck")}).`,
+          });
+          if ((truckCommissaryResult as any).created) created += 1;
+          if ((truckCommissaryResult as any).updated) updated += 1;
+        }
+      }
+    }
   }
 
   const durationMs = Date.now() - startedAt;
@@ -1711,6 +1809,7 @@ export async function autoPopulateDirectoryForActiveCities(
       minQualityScore,
       includeCommissary,
       includeDelivery,
+      includeTruckCommissary,
       created,
       updated,
     },
