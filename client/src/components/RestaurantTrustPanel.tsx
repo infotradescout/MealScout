@@ -250,49 +250,18 @@ export function RestaurantTrustPanel({
             </div>
           </div>
 
-          {/* Explanation */}
+          {/* Help Link */}
           <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm">
-            <p className="font-medium text-blue-900 mb-2">
-              What This Score Means
+            <p className="font-medium text-blue-900 mb-1">Need score details?</p>
+            <p className="text-xs text-blue-800">
+              CVS explanation, tiers, and scoring formula are now in Help.
+              <a
+                href="/faq#community-verification-score"
+                className="ml-1 font-semibold underline underline-offset-2"
+              >
+                View CVS help
+              </a>
             </p>
-            <ul className="text-xs text-blue-800 space-y-1">
-              <li>
-                ✓ Community Verification Score (CVS) rates listing reliability on a 0-100 scale.
-              </li>
-              <li>
-                ✓ Verified and active businesses start with a baseline; reliability bonuses and moderation penalties adjust that baseline.
-              </li>
-              <li>
-                ✓ Upheld moderation outcomes reduce score more than active (still-open) disputes.
-              </li>
-              <li>
-                ✓ This is not a simple "flags received" count; final score reflects review outcomes over time.
-              </li>
-              <li>
-                ✓ Higher score means the community can trust the listing details more.
-              </li>
-            </ul>
-            <div className="mt-3 border-t border-blue-200 pt-3">
-              <p className="text-xs font-medium text-blue-900 mb-1">Tier Guide</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-blue-800">
-                <span>1-20: Underdog</span>
-                <span>21-40: On The Rise</span>
-                <span>41-60: Average</span>
-                <span>61-80: Hot Spot</span>
-                <span>81-100: Local Legends</span>
-              </div>
-            </div>
-            {stats.scoreBreakdown ? (
-              <div className="mt-3 border-t border-blue-200 pt-3 text-xs text-blue-800">
-                Baseline {stats.scoreBreakdown.verificationBaseline ?? 0}
-                {" + Bonus "}
-                {stats.scoreBreakdown.ownerAttachmentBonus ?? 0}
-                {" - Penalty "}
-                {stats.scoreBreakdown.moderationPenalty ?? 0}
-                {" = Raw "}
-                {stats.scoreBreakdown.rawScore ?? accuracyPercent}
-              </div>
-            ) : null}
           </div>
         </CardContent>
       </Card>

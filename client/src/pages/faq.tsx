@@ -219,6 +219,16 @@ export default function FAQ() {
           answer: "Bookings only appear after successful payment. If payment went through and it’s missing, contact support with the booking details."
         }
       ]
+    },
+    {
+      category: "Trust & Verification",
+      questions: [
+        {
+          question: "What does Community Verification Score (CVS) mean?",
+          answer:
+            "CVS rates listing reliability on a 0-100 scale. Verified and active businesses start from a baseline, then reliability bonuses and moderation penalties adjust that baseline. Upheld moderation outcomes reduce the score more than active (still-open) disputes. This is not a simple flags-received count; the score reflects moderation outcomes over time. Tier guide: 1-20 Underdog, 21-40 On The Rise, 41-60 Average, 61-80 Hot Spot, 81-100 Local Legends.",
+        },
+      ]
     }
   ];
 
@@ -253,7 +263,11 @@ export default function FAQ() {
 
         {/* FAQ Sections */}
         {faqs.map((section, sectionIndex) => (
-          <Card key={sectionIndex} className="mb-8 bg-[var(--bg-surface)]/90 backdrop-blur-sm shadow-clean-lg">
+          <Card
+            key={sectionIndex}
+            id={section.category === "Trust & Verification" ? "community-verification-score" : undefined}
+            className="mb-8 bg-[var(--bg-surface)]/90 backdrop-blur-sm shadow-clean-lg"
+          >
             <CardHeader>
               <CardTitle className="text-2xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
                 {section.category === "Getting Started" && <Clock className="w-6 h-6 text-[color:var(--accent-text)]" />}
@@ -262,6 +276,7 @@ export default function FAQ() {
                 {section.category === "Restaurants & Bars" && <Shield className="w-6 h-6 text-purple-600" />}
                 {section.category === "Events" && <CalendarDays className="w-6 h-6 text-indigo-600" />}
                 {section.category === "Accounts & Affiliates" && <Users className="w-6 h-6 text-pink-600" />}
+                {section.category === "Trust & Verification" && <Shield className="w-6 h-6 text-sky-600" />}
                 {section.category === "Troubleshooting" && <HelpCircle className="w-6 h-6 text-[color:var(--text-muted)]" />}
                 {section.category}
               </CardTitle>
