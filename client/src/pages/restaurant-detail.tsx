@@ -381,6 +381,9 @@ export default function RestaurantDetailPage() {
 
   // Deals endpoint is restaurant-scoped already.
   const restaurantDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
+  const isVerifiedMemberProfile =
+    Boolean((restaurant as any)?.isVerified) &&
+    Boolean((restaurant as any)?.isActive);
 
   const cvsScore = Math.max(
     0,
@@ -389,9 +392,7 @@ export default function RestaurantDetailPage() {
       Math.round(
         Number(
           (trustStats as any)?.profileAccuracyScore ??
-            ((restaurant as any)?.isVerified && (restaurant as any)?.isActive
-              ? 50
-              : 35),
+            50,
         ),
       ),
     ),
@@ -453,14 +454,16 @@ export default function RestaurantDetailPage() {
     telephone: (restaurant as any)?.phone || "",
     servesCuisine: cuisineType,
     url: canonicalProfileUrl,
-    additionalProperty: [
-      {
-        "@type": "PropertyValue",
-        name: "Community Verification Score",
-        value: cvsScore,
-        unitText: "out of 100",
-      },
-    ],
+    additionalProperty: isVerifiedMemberProfile
+      ? [
+          {
+            "@type": "PropertyValue",
+            name: "Community Verification Score",
+            value: cvsScore,
+            unitText: "out of 100",
+          },
+        ]
+      : [],
   };
 
   const sourceOfTruthSchema = {
@@ -590,6 +593,16 @@ export default function RestaurantDetailPage() {
               </Badge>
             )}
           </div>
+          {!isVerifiedMemberProfile ? (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+              <p className="text-sm font-semibold text-amber-300">
+                Unclaimed listing - Not a MealScout member profile yet
+              </p>
+              <p className="text-xs text-amber-200/90">
+                Business details may be incomplete until the owner claims and verifies this page.
+              </p>
+            </div>
+          ) : null}
           <div className="mb-3">
             <ShareButton
               url={profilePath}
@@ -603,20 +616,26 @@ export default function RestaurantDetailPage() {
             />
           </div>
 
-          {/* CVS */}
           <div className="flex items-center space-x-4 mb-4">
-            <div className="flex items-center space-x-1">
-              <Shield className="w-4 h-4 text-[color:var(--status-success)]" />
-              <span className="font-semibold" data-testid="text-cvs-score">
-                CVS {cvsScore}/100
-              </span>
-              <span
-                className="text-muted-foreground text-sm"
-                data-testid="text-cvs-label"
-              >
-                Community Verification Score
-              </span>
-            </div>
+            {isVerifiedMemberProfile ? (
+              <div className="flex items-center space-x-1">
+                <Shield className="w-4 h-4 text-[color:var(--status-success)]" />
+                <span className="font-semibold" data-testid="text-cvs-score">
+                  CVS {cvsScore}/100
+                </span>
+                <span
+                  className="text-muted-foreground text-sm"
+                  data-testid="text-cvs-label"
+                >
+                  Community Verification Score
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1 text-sm text-amber-300">
+                <Store className="w-4 h-4" />
+                <span data-testid="text-unclaimed-label">Unclaimed listing</span>
+              </div>
+            )}
             <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
               <Clock className="w-4 h-4" />
               <span>
@@ -1154,7 +1173,7 @@ export default function RestaurantDetailPage() {
         </div>
 
         {/* Restaurant Trust Panel */}
-        {restaurantId && (
+        {restaurantId && isVerifiedMemberProfile && (
           <div className="mt-10">
             <RestaurantTrustPanel restaurantId={restaurantId} />
           </div>

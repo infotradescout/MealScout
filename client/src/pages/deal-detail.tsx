@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import DealClaimModal from "@/components/deal-claim-modal";
 import DealShareModal from "@/components/deal-share-modal";
 import { BackHeader } from "@/components/back-header";
-import { Tag, Share2, Shield } from "lucide-react";
+import { Tag, Share2, Shield, Store } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { authUrl } from "@/lib/api";
@@ -241,6 +241,9 @@ export default function DealDetail() {
         : `Save $${discountValue}`
     : "Limited-time special";
   const distance = (deal as Deal)?.distance;
+  const isVerifiedMemberProfile =
+    Boolean((restaurant as any)?.isVerified) &&
+    Boolean((restaurant as any)?.isActive);
   const cvsScore = Math.max(
     0,
     Math.min(
@@ -248,9 +251,7 @@ export default function DealDetail() {
       Math.round(
         Number(
           (trustStats as any)?.profileAccuracyScore ??
-            ((restaurant as any)?.isVerified && (restaurant as any)?.isActive
-              ? 50
-              : 35),
+            50,
         ),
       ),
     ),
@@ -375,12 +376,19 @@ export default function DealDetail() {
                   </span>
                 </div>
               )}
-              <div className="flex items-center space-x-1">
-                <Shield className="h-4 w-4 text-[color:var(--status-success)]" />
-                <span data-testid="text-restaurant-cvs">
-                  CVS {cvsScore}/100
-                </span>
-              </div>
+              {isVerifiedMemberProfile ? (
+                <div className="flex items-center space-x-1">
+                  <Shield className="h-4 w-4 text-[color:var(--status-success)]" />
+                  <span data-testid="text-restaurant-cvs">
+                    CVS {cvsScore}/100
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1 text-amber-300">
+                  <Store className="h-4 w-4" />
+                  <span data-testid="text-restaurant-unclaimed">Unclaimed listing</span>
+                </div>
+              )}
             </div>
           </div>
           <div className="w-16 h-16 bg-[color:var(--accent-text)] rounded-full flex items-center justify-center">
