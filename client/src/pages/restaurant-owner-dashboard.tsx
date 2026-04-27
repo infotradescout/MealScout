@@ -175,6 +175,18 @@ const normalizeDealImageUrl = (value: unknown): string => {
   return `https://${raw}`;
 };
 
+const getDealImageUrl = (deal: any): string => {
+  const candidate = [
+    deal?.imageUrl,
+    deal?.image_url,
+    deal?.photoUrl,
+    deal?.thumbnailUrl,
+    deal?.mediaUrl,
+  ].find((value) => String(value || "").trim().length > 0);
+
+  return normalizeDealImageUrl(candidate);
+};
+
 export default function RestaurantOwnerDashboard() {
   const LAST_RESTAURANT_KEY = "mealscout:last-selected-restaurant-id";
   const { user } = useAuth();
@@ -1810,10 +1822,10 @@ export default function RestaurantOwnerDashboard() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex flex-1 items-start gap-4 min-w-0">
                         <img
-                          src={normalizeDealImageUrl((deal as any).imageUrl)}
+                          src={getDealImageUrl(deal)}
                           alt={`${deal.title} image`}
                           loading="lazy"
-                          className="h-20 w-20 rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
+                          className="h-20 w-20 flex-none rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
                           onError={(event) => {
                             event.currentTarget.src = DEAL_IMAGE_FALLBACK;
                           }}
@@ -1948,10 +1960,10 @@ export default function RestaurantOwnerDashboard() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex flex-1 items-start gap-4 min-w-0">
                       <img
-                        src={normalizeDealImageUrl((deal as any).imageUrl)}
+                        src={getDealImageUrl(deal)}
                         alt={`${deal.title} image`}
                         loading="lazy"
-                        className="h-20 w-20 rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
+                        className="h-20 w-20 flex-none rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
                         onError={(event) => {
                           event.currentTarget.src = DEAL_IMAGE_FALLBACK;
                         }}
