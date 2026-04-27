@@ -616,7 +616,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <TimeOfDayBackground />
-        <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10">
+        <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10 pb-[calc(var(--mobile-nav-offset)+env(safe-area-inset-bottom))] lg:pb-0">
           <Toaster />
           <BetaDisclaimer />
           <AdminInlineCopyProvider>
