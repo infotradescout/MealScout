@@ -74,7 +74,16 @@ export function registerDealAdminRoutes(app: Express) {
       try {
         const clonedDeal = await storage.duplicateDeal(req.params.dealId);
         res.json(clonedDeal);
-      } catch (error) {
+      } catch (error: any) {
+        if (
+          error?.code === "DEAL_DUPLICATE_OVERLAP" ||
+          String(error?.message || "").includes("same time window")
+        ) {
+          return res.status(409).json({
+            message:
+              "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+          });
+        }
         console.error("Error cloning deal:", error);
         res.status(500).json({ message: "Failed to clone deal" });
       }
@@ -90,7 +99,16 @@ export function registerDealAdminRoutes(app: Express) {
         const { isActive } = req.body;
         await storage.updateDeal(req.params.dealId, { isActive });
         res.json({ message: "Deal status updated successfully" });
-      } catch (error) {
+      } catch (error: any) {
+        if (
+          error?.code === "DEAL_DUPLICATE_OVERLAP" ||
+          String(error?.message || "").includes("same time window")
+        ) {
+          return res.status(409).json({
+            message:
+              "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+          });
+        }
         console.error("Error updating deal status:", error);
         res.status(500).json({ message: "Failed to update deal status" });
       }

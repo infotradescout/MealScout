@@ -57,6 +57,110 @@ export function registerDealManagementRoutes(
     queueSocialPost,
   }: DealManagementRouteDependencies,
 ) {
+  const normalizeText = (value: unknown) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const normalizeMoney = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return "";
+    const parsed = Number.parseFloat(String(value));
+    return Number.isFinite(parsed) ? parsed.toFixed(2) : normalizeText(value);
+  };
+
+  const toDateMs = (value: unknown, fallback = Number.NaN) => {
+    if (!value) return fallback;
+    const date = value instanceof Date ? value : new Date(String(value));
+    const ms = date.getTime();
+    return Number.isFinite(ms) ? ms : fallback;
+  };
+
+  const toTimeMinutes = (value: unknown) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return null;
+    const [hoursRaw, minutesRaw] = raw.split(":");
+    const hours = Number.parseInt(hoursRaw || "", 10);
+    const minutes = Number.parseInt(minutesRaw || "", 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  };
+
+  const windowsOverlap = (
+    aStart: number,
+    aEnd: number,
+    bStart: number,
+    bEnd: number,
+  ) => Math.max(aStart, bStart) <= Math.min(aEnd, bEnd);
+
+  const timeWindowsOverlap = (a: any, b: any) => {
+    if (a.availableDuringBusinessHours || b.availableDuringBusinessHours) {
+      return true;
+    }
+
+    const aStart = toTimeMinutes(a.startTime);
+    const aEnd = toTimeMinutes(a.endTime);
+    const bStart = toTimeMinutes(b.startTime);
+    const bEnd = toTimeMinutes(b.endTime);
+
+    if (aStart == null || aEnd == null || bStart == null || bEnd == null) {
+      return true;
+    }
+
+    return windowsOverlap(aStart, aEnd, bStart, bEnd);
+  };
+
+  const dealFingerprint = (deal: any) =>
+    JSON.stringify({
+      title: normalizeText(deal.title),
+      description: normalizeText(deal.description),
+      dealType: normalizeText(deal.dealType),
+      discountValue: normalizeMoney(deal.discountValue),
+      minOrderAmount: normalizeMoney(deal.minOrderAmount),
+    });
+
+  const hasOverlappingDuplicate = (
+    existingDeals: any[],
+    candidateDeal: any,
+    excludeDealId?: string,
+  ) => {
+    if (candidateDeal.isActive === false) {
+      return false;
+    }
+
+    const candidateStart = toDateMs(candidateDeal.startDate);
+    const candidateEnd =
+      candidateDeal.isOngoing || !candidateDeal.endDate
+        ? Number.POSITIVE_INFINITY
+        : toDateMs(candidateDeal.endDate, Number.POSITIVE_INFINITY);
+
+    if (!Number.isFinite(candidateStart)) {
+      return false;
+    }
+
+    const fingerprint = dealFingerprint(candidateDeal);
+
+    return existingDeals.some((existingDeal: any) => {
+      if (!existingDeal || existingDeal.id === excludeDealId) return false;
+      if (existingDeal.isActive === false) return false;
+      if (dealFingerprint(existingDeal) !== fingerprint) return false;
+
+      const existingStart = toDateMs(existingDeal.startDate);
+      const existingEnd =
+        existingDeal.isOngoing || !existingDeal.endDate
+          ? Number.POSITIVE_INFINITY
+          : toDateMs(existingDeal.endDate, Number.POSITIVE_INFINITY);
+
+      if (!Number.isFinite(existingStart)) return false;
+      if (!windowsOverlap(candidateStart, candidateEnd, existingStart, existingEnd)) {
+        return false;
+      }
+
+      return timeWindowsOverlap(candidateDeal, existingDeal);
+    });
+  };
+
   const buildDealAutopostMessage = (params: {
     dealTitle: string;
     dealDescription?: string;
@@ -156,6 +260,20 @@ export function registerDealManagementRoutes(
           return res.status(404).json({ message: "Deal not found" });
         }
 
+        const candidateDeal = {
+          ...currentDeal,
+          ...req.body,
+        };
+        const siblingDeals = await storage.getDealsByRestaurant(
+          currentDeal.restaurantId,
+        );
+        if (hasOverlappingDuplicate(siblingDeals, candidateDeal, dealId)) {
+          return res.status(409).json({
+            message:
+              "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+          });
+        }
+
         if (req.body.isActive === true && !currentDeal.isActive) {
           const subscriptionValidation = await validateSubscriptionLimits(
             req.user.id,
@@ -172,8 +290,17 @@ export function registerDealManagementRoutes(
 
         const updatedDeal = await storage.updateDeal(dealId, req.body);
         res.json(updatedDeal);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error updating deal:", error);
+        if (
+          error?.code === "DEAL_DUPLICATE_OVERLAP" ||
+          String(error?.message || "").includes("same time window")
+        ) {
+          return res.status(409).json({
+            message:
+              "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+          });
+        }
         res.status(500).json({ message: "Failed to update deal" });
       }
     },
@@ -343,6 +470,16 @@ export function registerDealManagementRoutes(
         return res.status(403).json({ message: "Unauthorized" });
       }
 
+      const restaurantDeals = await storage.getDealsByRestaurant(
+        dealData.restaurantId,
+      );
+      if (hasOverlappingDuplicate(restaurantDeals, dealData)) {
+        return res.status(409).json({
+          message:
+            "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+        });
+      }
+
       const billingCandidates = Array.from(
         new Set(
           [
@@ -509,6 +646,15 @@ export function registerDealManagementRoutes(
       console.error("❌ Error creating deal:", error?.message || error);
       if (error?.stack) {
         console.error(error.stack);
+      }
+      if (
+        error?.code === "DEAL_DUPLICATE_OVERLAP" ||
+        String(error?.message || "").includes("same time window")
+      ) {
+        return res.status(409).json({
+          message:
+            "A matching deal/special already exists for the same time window. You can run it again in a future window.",
+        });
       }
       res
         .status(400)
