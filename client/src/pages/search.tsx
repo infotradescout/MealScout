@@ -1010,43 +1010,53 @@ export default function SearchPage() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {mergedRestaurants.map((restaurant: any) => (
-                <RestaurantCard
+                <div
                   key={restaurant.id}
-                  restaurant={{
-                    id: String(restaurant.id),
-                    name: String(restaurant.name || "Local Spot"),
-                    address: String(restaurant.address || ""),
-                    cuisineType: String(restaurant.cuisineType || ""),
-                    isActive: true,
-                    isVerified: Boolean(restaurant.isVerified),
-                    isFoodTruck: Boolean(restaurant.isFoodTruck),
-                    rating:
-                      typeof restaurant.rating === "number"
-                        ? restaurant.rating
-                        : null,
-                    operatingHours:
-                      restaurant.operatingHours ??
-                      restaurant.businessHours ??
-                      null,
-                    mobileOnline: Boolean(restaurant.mobileOnline),
-                    currentLatitude:
-                      typeof restaurant.currentLatitude === "number"
-                        ? restaurant.currentLatitude
-                        : undefined,
-                    currentLongitude:
-                      typeof restaurant.currentLongitude === "number"
-                        ? restaurant.currentLongitude
-                        : undefined,
-                    lastBroadcastAt:
-                      typeof restaurant.lastBroadcastAt === "string"
-                        ? restaurant.lastBroadcastAt
-                        : undefined,
-                    distance:
-                      typeof restaurant.distance === "number"
-                        ? restaurant.distance
-                        : undefined,
+                  onPointerDown={() => {
+                    trackUxEvent("search_restaurant_card_clicked", {
+                      restaurantId: String(restaurant.id),
+                      searchQuery: searchQuery || null,
+                      surface: "search_results",
+                    });
                   }}
-                />
+                >
+                  <RestaurantCard
+                    restaurant={{
+                      id: String(restaurant.id),
+                      name: String(restaurant.name || "Local Spot"),
+                      address: String(restaurant.address || ""),
+                      cuisineType: String(restaurant.cuisineType || ""),
+                      isActive: true,
+                      isVerified: Boolean(restaurant.isVerified),
+                      isFoodTruck: Boolean(restaurant.isFoodTruck),
+                      rating:
+                        typeof restaurant.rating === "number"
+                          ? restaurant.rating
+                          : null,
+                      operatingHours:
+                        restaurant.operatingHours ??
+                        restaurant.businessHours ??
+                        null,
+                      mobileOnline: Boolean(restaurant.mobileOnline),
+                      currentLatitude:
+                        typeof restaurant.currentLatitude === "number"
+                          ? restaurant.currentLatitude
+                          : undefined,
+                      currentLongitude:
+                        typeof restaurant.currentLongitude === "number"
+                          ? restaurant.currentLongitude
+                          : undefined,
+                      lastBroadcastAt:
+                        typeof restaurant.lastBroadcastAt === "string"
+                          ? restaurant.lastBroadcastAt
+                          : undefined,
+                      distance:
+                        typeof restaurant.distance === "number"
+                          ? restaurant.distance
+                          : undefined,
+                    }}
+                  />
+                </div>
               ))}
             </div>
           </div>

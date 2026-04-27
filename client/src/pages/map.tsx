@@ -995,6 +995,10 @@ function HostMarkerLayer({
                         size="sm"
                         className="w-full"
                         onClick={() => {
+                          trackUxEvent("map_restaurant_nav_click", {
+                            restaurantId: hostedTruck.truck.id,
+                            source: "host_popup",
+                          });
                           window.location.href = `/restaurant/${hostedTruck.truck.id}`;
                         }}
                       >
@@ -2770,6 +2774,10 @@ export default function MapPage() {
           }
           return;
         }
+        trackUxEvent("map_restaurant_nav_click", {
+          restaurantId: String(marker.sourceId),
+          source: "truck_pin",
+        });
         window.location.href = `/restaurant/${marker.sourceId}`;
         return;
       }
