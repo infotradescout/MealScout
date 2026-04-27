@@ -46,6 +46,25 @@ type SentimentAlertsResponse = {
   }>;
 };
 
+type SentimentSnapshotSummary = {
+  windowDays?: number;
+  generatedAt?: string;
+  overview?: {
+    sampleCount?: number;
+    avgScore100?: number;
+    avgDelta100?: number;
+    positiveShare?: number;
+  };
+};
+
+type DailyReportsResponse = {
+  reports?: Array<{
+    id: string;
+    reportDate: string;
+    summary?: SentimentSnapshotSummary | null;
+  }>;
+};
+
 export default function AdminSentimentIntelligence() {
   const [windowDays, setWindowDays] = useState(90);
   const normalizedWindowDays = useMemo(
@@ -84,6 +103,40 @@ export default function AdminSentimentIntelligence() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: dailySnapshots, isLoading: loadingDailySnapshots } =
+    useQuery<DailyReportsResponse>({
+      queryKey: ["/api/admin/daily-reports", "sentiment_snapshot_daily"],
+      queryFn: async () => {
+        const response = await fetch(
+          "/api/admin/daily-reports?type=sentiment_snapshot_daily&limit=1",
+          { credentials: "include" },
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch daily sentiment snapshot");
+        }
+        return response.json();
+      },
+      refetchOnWindowFocus: false,
+      retry: false,
+    });
+
+  const { data: weeklySnapshots, isLoading: loadingWeeklySnapshots } =
+    useQuery<DailyReportsResponse>({
+      queryKey: ["/api/admin/daily-reports", "sentiment_snapshot_weekly"],
+      queryFn: async () => {
+        const response = await fetch(
+          "/api/admin/daily-reports?type=sentiment_snapshot_weekly&limit=1",
+          { credentials: "include" },
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch weekly sentiment snapshot");
+        }
+        return response.json();
+      },
+      refetchOnWindowFocus: false,
+      retry: false,
+    });
+
   const handleExportCsv = () => {
     const url = `/api/admin/insights/sentiment-opportunities/export?windowDays=${normalizedWindowDays}&minSamples=6&format=csv`;
     window.open(url, "_blank", "noopener,noreferrer");
@@ -92,6 +145,8 @@ export default function AdminSentimentIntelligence() {
   const overview = signals?.overview;
   const atRisk = Array.isArray(alerts?.atRisk) ? alerts!.atRisk.slice(0, 8) : [];
   const rising = Array.isArray(alerts?.rising) ? alerts!.rising.slice(0, 8) : [];
+  const latestDailySnapshot = dailySnapshots?.reports?.[0];
+  const latestWeeklySnapshot = weeklySnapshots?.reports?.[0];
 
   if (loadingSignals) {
     return (
@@ -287,6 +342,74 @@ export default function AdminSentimentIntelligence() {
                 </span>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Daily Snapshot</CardTitle>
+            <CardDescription>Auto-saved 30-day sentiment summary.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingDailySnapshots ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : !latestDailySnapshot ? (
+              <p className="text-sm text-muted-foreground">No daily snapshot saved yet.</p>
+            ) : (
+              <div className="space-y-1 text-sm">
+                <p>
+                  Samples: {Number(latestDailySnapshot.summary?.overview?.sampleCount || 0)}
+                </p>
+                <p>
+                  Avg score: {Number(latestDailySnapshot.summary?.overview?.avgScore100 || 0).toFixed(1)}
+                </p>
+                <p className={
+                  Number(latestDailySnapshot.summary?.overview?.avgDelta100 || 0) >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }>
+                  Avg delta: {Number(latestDailySnapshot.summary?.overview?.avgDelta100 || 0).toFixed(2)}
+                </p>
+                <p>
+                  Positive share: {(Number(latestDailySnapshot.summary?.overview?.positiveShare || 0) * 100).toFixed(1)}%
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Latest Weekly Snapshot</CardTitle>
+            <CardDescription>Auto-saved 90-day sentiment summary.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingWeeklySnapshots ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : !latestWeeklySnapshot ? (
+              <p className="text-sm text-muted-foreground">No weekly snapshot saved yet.</p>
+            ) : (
+              <div className="space-y-1 text-sm">
+                <p>
+                  Samples: {Number(latestWeeklySnapshot.summary?.overview?.sampleCount || 0)}
+                </p>
+                <p>
+                  Avg score: {Number(latestWeeklySnapshot.summary?.overview?.avgScore100 || 0).toFixed(1)}
+                </p>
+                <p className={
+                  Number(latestWeeklySnapshot.summary?.overview?.avgDelta100 || 0) >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }>
+                  Avg delta: {Number(latestWeeklySnapshot.summary?.overview?.avgDelta100 || 0).toFixed(2)}
+                </p>
+                <p>
+                  Positive share: {(Number(latestWeeklySnapshot.summary?.overview?.positiveShare || 0) * 100).toFixed(1)}%
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

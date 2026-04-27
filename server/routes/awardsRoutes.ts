@@ -841,11 +841,35 @@ export function registerAwardsRoutes(app: Express) {
           order by avg_delta_100 asc
         `);
 
-        const rows = Array.isArray((rowsResult as any)?.rows)
-          ? (rowsResult as any).rows
+        type SentimentAlertRow = {
+          restaurant_id: string;
+          restaurant_name: string;
+          cuisine_type: string | null;
+          city: string | null;
+          state: string | null;
+          sample_count: number;
+          avg_score_100: number;
+          avg_delta_100: number;
+          positive_share: number;
+        };
+
+        type SentimentAlertEntry = {
+          restaurantId: string;
+          restaurantName: string;
+          cuisineType: string | null;
+          city: string | null;
+          state: string | null;
+          sampleCount: number;
+          avgScore100: number;
+          avgDelta100: number;
+          positiveShare: number;
+        };
+
+        const rows: SentimentAlertRow[] = Array.isArray((rowsResult as any)?.rows)
+          ? ((rowsResult as any).rows as SentimentAlertRow[])
           : [];
 
-        const normalized = rows.map((row: any) => ({
+        const normalized: SentimentAlertEntry[] = rows.map((row) => ({
           restaurantId: String(row.restaurant_id || ""),
           restaurantName: String(row.restaurant_name || "Restaurant"),
           cuisineType: row.cuisine_type || null,
