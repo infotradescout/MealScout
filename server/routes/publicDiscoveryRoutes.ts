@@ -560,6 +560,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.json({
           entity: "restaurant",
           id: row.id,
+          isVerified: Boolean(row.isVerified),
           title: row.name,
           subtitle:
             row.cuisineType || (row.isFoodTruck ? "Food Truck" : "Restaurant"),

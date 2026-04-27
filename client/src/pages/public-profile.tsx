@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
   id: string;
+  isVerified?: boolean;
   title: string;
   subtitle?: string | null;
   description?: string | null;
@@ -409,8 +410,17 @@ export default function PublicProfilePage() {
   const websiteUrl = toExternalUrl(data.websiteUrl);
   const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
   const resolvedRestaurantId = String(data.id || profileId || "").trim();
+  const isRestaurantUnclaimed =
+    data.entity === "restaurant" && data.isVerified !== true;
   const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(resolvedRestaurantId)}?src=concierge&focus=description`;
   const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(resolvedRestaurantId)}&src=concierge`;
+  const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
+    String(data.subtitle || "").toLowerCase().includes("truck")
+      ? "food_truck"
+      : "restaurant",
+  )}&claim=1&q=${encodeURIComponent(String(data.title || "").trim())}&redirect=${encodeURIComponent(
+    data.profilePath || `/p/restaurant/${encodeURIComponent(resolvedRestaurantId)}`,
+  )}`;
   const directionsUrl = locationLine
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLine)}`
     : "";
@@ -738,6 +748,24 @@ export default function PublicProfilePage() {
                   >
                     {engagementState?.viewer?.hasRecommended ? "Update Recommendation" : "Recommend"} · {engagementState?.counts?.recommendations ?? 0}
                   </Button>
+                </div>
+              ) : null}
+
+              {isRestaurantUnclaimed ? (
+                <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-500/10 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                    Unclaimed listing
+                  </p>
+                  <p className="mt-1 text-sm text-amber-50/95">
+                    This profile is not yet a verified MealScout member page.
+                  </p>
+                  <div className="mt-2">
+                    <Link href={claimBusinessPath as any}>
+                      <Button className="h-9 bg-amber-500 text-black hover:bg-amber-600 font-semibold">
+                        Claim Business & Verify
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               ) : null}
             </div>

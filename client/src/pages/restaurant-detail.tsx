@@ -413,6 +413,11 @@ export default function RestaurantDetailPage() {
   const restaurantName = (restaurant as any)?.name || "Restaurant";
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
   const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
+  const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
+    isFoodTruck ? "food_truck" : "restaurant",
+  )}&claim=1&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(
+    profilePath,
+  )}`;
   const editRestaurantPath = `/edit-restaurant/${restaurantId}`;
   const editRestaurantFocusPath = (focus: string) =>
     `${editRestaurantPath}?src=concierge&focus=${encodeURIComponent(focus)}`;
@@ -601,6 +606,13 @@ export default function RestaurantDetailPage() {
               <p className="text-xs text-amber-200/90">
                 Business details may be incomplete until the owner claims and verifies this page.
               </p>
+              <div className="mt-2">
+                <Link href={claimBusinessPath as any}>
+                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                    Claim Business & Verify
+                  </Button>
+                </Link>
+              </div>
             </div>
           ) : null}
           <div className="mb-3">
