@@ -115,6 +115,14 @@ interface JourneySnapshot {
     addFavorite?: number;
     addRecommendationContext?: number;
   };
+  activeQuest?: {
+    id?: string;
+    title?: string;
+    target?: number;
+    current?: number;
+    completed?: boolean;
+    rewardPoints?: number;
+  };
 }
 
 function formatRelativeTime(value?: string | null): string | null {
@@ -618,6 +626,10 @@ export default function DealCard({
     try {
       setRecommendSubmitting(true);
       setRecommendError("");
+      const earnedPoints = scorePreviewDelta;
+      const questUnlocked = unlocksQuestBonus;
+      const unlockedQuestTitle =
+        journeySnapshot?.activeQuest?.title || "Weekly quest";
 
       // Sync follow state
       if (followSelection !== isRestaurantFollowed) {
@@ -660,6 +672,14 @@ export default function DealCard({
           description: "You'll get notified when new specials go live.",
         });
       }
+      if (earnedPoints > 0) {
+        toast({
+          title: `+${earnedPoints} Scout Score`,
+          description: questUnlocked
+            ? `${unlockedQuestTitle} completed. Bonus unlocked.`
+            : "Nice move. Your recommendation journey just leveled up.",
+        });
+      }
     } catch (error) {
       console.error("Recommendation submit failed:", error);
       setRecommendError(
@@ -671,10 +691,24 @@ export default function DealCard({
   };
 
   const actionPoints = journeySnapshot?.actionPoints || {};
-  const scorePreviewDelta =
-    (recommendSelection && !isRestaurantRecommended
+  const recommendationGain =
+    recommendSelection && !isRestaurantRecommended
       ? Number(actionPoints.recommendRestaurant || 0)
-      : 0) +
+      : 0;
+  const projectedRecommendationCount =
+    Number(journeySnapshot?.activeQuest?.current || 0) +
+    (recommendSelection && !isRestaurantRecommended ? 1 : 0);
+  const unlocksQuestBonus =
+    Boolean(journeySnapshot?.activeQuest) &&
+    !Boolean(journeySnapshot?.activeQuest?.completed) &&
+    recommendationGain > 0 &&
+    projectedRecommendationCount >=
+      Number(journeySnapshot?.activeQuest?.target || Number.MAX_SAFE_INTEGER);
+  const questBonusGain = unlocksQuestBonus
+    ? Number(journeySnapshot?.activeQuest?.rewardPoints || 0)
+    : 0;
+  const scorePreviewDelta =
+    recommendationGain +
     (followSelection && !isRestaurantFollowed
       ? Number(actionPoints.followRestaurant || 0)
       : 0) +
@@ -683,7 +717,8 @@ export default function DealCard({
       : 0) +
     (recommendationText.trim().length >= 20
       ? Number(actionPoints.addRecommendationContext || 0)
-      : 0);
+      : 0) +
+    questBonusGain;
 
   return (
     <div>
@@ -934,6 +969,11 @@ export default function DealCard({
                       ? ` · ${journeySnapshot.level.pointsToNext} to ${journeySnapshot.level.next.label}`
                       : ""}
                   </div>
+                  {unlocksQuestBonus && (
+                    <div className="mt-1 text-xs font-semibold text-yellow-900">
+                      Quest bonus ready: +{questBonusGain} points
+                    </div>
+                  )}
                   {typeof journeySnapshot.futureCreditPreview?.estimatedCreditDollars ===
                     "number" && (
                     <div className="mt-1 text-xs text-yellow-800/80">

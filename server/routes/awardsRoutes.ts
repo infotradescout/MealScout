@@ -33,6 +33,14 @@ const SCOUT_SCORE_ACTION_POINTS = {
   addRecommendationContext: 5,
 } as const;
 
+const WEEKLY_RECOMMENDATION_QUEST = {
+  id: "weekly_recommendation_sprint",
+  title: "Weekly Recommendation Sprint",
+  description: "Recommend 3 spots this week to unlock a bonus.",
+  target: 3,
+  rewardPoints: 60,
+} as const;
+
 const SCOUT_LEVELS = [
   { level: 1, label: "Scout", minScore: 0 },
   { level: 2, label: "Neighborhood Regular", minScore: 120 },
@@ -66,6 +74,15 @@ const getConsecutiveWeeklyStreak = (dates: Date[]) => {
   }
 
   return streak;
+};
+
+const getCurrentWeekRecommendationCount = (dates: Date[]) => {
+  if (!dates.length) return 0;
+  const currentWeek = getIsoWeekKey(new Date());
+  return dates.reduce(
+    (count, value) => (getIsoWeekKey(value) === currentWeek ? count + 1 : count),
+    0,
+  );
 };
 
 const getScoutLevel = (score: number) => {
@@ -168,6 +185,20 @@ export function registerAwardsRoutes(app: Express) {
           .filter((row: Date | null): row is Date => Boolean(row)),
       ];
       const weeklyRecommendationStreak = getConsecutiveWeeklyStreak(recommendationDates);
+      const currentWeekRecommendations = getCurrentWeekRecommendationCount(
+        recommendationDates,
+      );
+
+      const weeklyQuestCompleted =
+        currentWeekRecommendations >= WEEKLY_RECOMMENDATION_QUEST.target;
+      const weeklyQuestRemaining = Math.max(
+        0,
+        WEEKLY_RECOMMENDATION_QUEST.target - currentWeekRecommendations,
+      );
+      const weeklyQuestProgress = Math.max(
+        0,
+        Math.min(1, currentWeekRecommendations / WEEKLY_RECOMMENDATION_QUEST.target),
+      );
 
       const level = getScoutLevel(scoutScore);
 
@@ -209,6 +240,19 @@ export function registerAwardsRoutes(app: Express) {
         },
         weeklyRecommendationStreak,
         milestoneProgress,
+        activeQuest: {
+          ...WEEKLY_RECOMMENDATION_QUEST,
+          current: currentWeekRecommendations,
+          remaining: weeklyQuestRemaining,
+          completed: weeklyQuestCompleted,
+          progress: weeklyQuestProgress,
+          rewardCreditPreviewDollars: Number(
+            (
+              WEEKLY_RECOMMENDATION_QUEST.rewardPoints /
+              100
+            ).toFixed(2),
+          ),
+        },
         futureCreditPreview: {
           // Backward-compatible placeholder mapping for future rewards conversion.
           pointsPerDollar: 100,

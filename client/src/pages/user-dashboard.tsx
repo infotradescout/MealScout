@@ -68,6 +68,18 @@ interface UserJourneyStats {
     videoRecommendations: { current: number; target: number; completed: boolean };
     reviews: { current: number; target: number; completed: boolean };
   };
+  activeQuest?: {
+    id: string;
+    title: string;
+    description: string;
+    target: number;
+    current: number;
+    remaining: number;
+    completed: boolean;
+    progress: number;
+    rewardPoints: number;
+    rewardCreditPreviewDollars: number;
+  };
   futureCreditPreview: {
     pointsPerDollar: number;
     estimatedCreditDollars: number;
@@ -365,6 +377,42 @@ export default function UserDashboard() {
                   </div>
                 </div>
               </div>
+
+              {userJourney.activeQuest && (
+                <div className="mt-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-foreground">
+                      {userJourney.activeQuest.title}
+                    </div>
+                    <Badge
+                      className={
+                        userJourney.activeQuest.completed
+                          ? "bg-[color:var(--status-success)]/15 text-[color:var(--status-success)]"
+                          : "bg-[color:var(--status-warning)]/15 text-[color:var(--status-warning)]"
+                      }
+                    >
+                      {userJourney.activeQuest.completed ? "Completed" : "In Progress"}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {userJourney.activeQuest.description}
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-[var(--bg-surface-muted)] overflow-hidden">
+                    <div
+                      className="h-full bg-[linear-gradient(90deg,#f59e0b,#fb923c)]"
+                      style={{ width: `${Math.round((userJourney.activeQuest.progress || 0) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {userJourney.activeQuest.current}/{userJourney.activeQuest.target} this week
+                    </span>
+                    <span>
+                      Reward: +{userJourney.activeQuest.rewardPoints} points (~${userJourney.activeQuest.rewardCreditPreviewDollars.toFixed(2)} future credits)
+                    </span>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
