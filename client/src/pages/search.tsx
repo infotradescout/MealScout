@@ -1020,6 +1020,16 @@ export default function SearchPage() {
                     isActive: true,
                     isVerified: Boolean(restaurant.isVerified),
                     isFoodTruck: Boolean(restaurant.isFoodTruck),
+                    rating:
+                      typeof restaurant.rating === "number"
+                        ? restaurant.rating
+                        : typeof restaurant.googleRating === "number"
+                          ? restaurant.googleRating
+                          : null,
+                    operatingHours:
+                      restaurant.operatingHours ??
+                      restaurant.businessHours ??
+                      null,
                     mobileOnline: Boolean(restaurant.mobileOnline),
                     currentLatitude:
                       typeof restaurant.currentLatitude === "number"

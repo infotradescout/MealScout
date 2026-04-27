@@ -382,6 +382,16 @@ export function registerPublicSearchRoutes(app: Express) {
           address: restaurant.address,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
+          rating:
+            typeof restaurant.googleRating === "number"
+              ? restaurant.googleRating
+              : Number.isFinite(Number(restaurant.googleRating))
+                ? Number(restaurant.googleRating)
+                : null,
+          operatingHours:
+            restaurant.operatingHours ??
+            restaurant.businessHours ??
+            null,
         }));
 
       const dealsOut = (

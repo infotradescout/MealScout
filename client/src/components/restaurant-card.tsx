@@ -9,6 +9,8 @@ interface Restaurant {
   address: string;
   phone?: string;
   cuisineType?: string;
+  rating?: number | null;
+  operatingHours?: unknown;
   isActive: boolean;
   isVerified?: boolean;
   isFoodTruck?: boolean;
@@ -32,6 +34,47 @@ const toSlug = (value: string | null | undefined) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
     .slice(0, 80);
+
+const getHoursPreview = (value: unknown): string | null => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (typeof value === "object") {
+    const hours = value as Record<string, unknown>;
+    const dayOrder = [
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+      "sunday",
+    ];
+    for (const day of dayOrder) {
+      const slot = hours[day];
+      if (!slot) continue;
+      if (typeof slot === "string") {
+        const s = slot.trim();
+        if (s) return s;
+      }
+      if (Array.isArray(slot) && slot.length > 0) {
+        const first = String(slot[0] || "").trim();
+        if (first) return first;
+      }
+      if (typeof slot === "object") {
+        const fromTo = (slot as any)?.from && (slot as any)?.to
+          ? `${String((slot as any).from)}-${String((slot as any).to)}`
+          : "";
+        if (fromTo) return fromTo;
+      }
+    }
+  }
+
+  return null;
+};
 
 export default function RestaurantCard({ restaurant, userLocation, showDistance = false }: RestaurantCardProps) {
   // Calculate distance if user location is available
@@ -58,6 +101,11 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
   const isLiveFoodTruck = restaurant.isFoodTruck && restaurant.mobileOnline && restaurant.isActive;
   const isRecentlyActive = restaurant.lastBroadcastAt && 
     (Date.now() - new Date(restaurant.lastBroadcastAt).getTime()) < 300000; // 5 minutes
+  const rating =
+    typeof restaurant.rating === "number" && Number.isFinite(restaurant.rating)
+      ? Math.max(0, Math.min(5, restaurant.rating))
+      : null;
+  const hoursPreview = getHoursPreview(restaurant.operatingHours);
   const profileSlug = toSlug(restaurant.name) || String(restaurant.id || "");
   return (
     <Link href={`/restaurant/${restaurant.id}/${profileSlug}`}>
@@ -100,6 +148,12 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
               <p className="text-xs text-muted-foreground" data-testid={`text-restaurant-address-${restaurant.id}`}>
                 {restaurant.address}
               </p>
+              {hoursPreview && (
+                <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1" data-testid={`text-restaurant-hours-${restaurant.id}`}>
+                  <Clock className="w-3 h-3" />
+                  <span>{hoursPreview}</span>
+                </p>
+              )}
             </div>
             <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
               restaurant.isFoodTruck ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-primary'
@@ -146,7 +200,9 @@ export default function RestaurantCard({ restaurant, userLocation, showDistance 
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-1">
                 <i className="fas fa-star text-yellow-400 text-xs"></i>
-                <span className="text-xs text-muted-foreground" data-testid={`text-rating-${restaurant.id}`}>4.5</span>
+                <span className="text-xs text-muted-foreground" data-testid={`text-rating-${restaurant.id}`}>
+                  {rating != null ? rating.toFixed(1) : "N/A"}
+                </span>
               </div>
               {restaurant.isFoodTruck && distance && (
                 <div className="flex items-center space-x-1">
