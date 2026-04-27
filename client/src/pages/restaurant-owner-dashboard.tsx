@@ -568,11 +568,14 @@ export default function RestaurantOwnerDashboard() {
 
   // Set default restaurant
   useEffect(() => {
-    if (selectedRestaurant) return;
-    if (requestedRestaurantId) {
+    if (
+      requestedRestaurantId &&
+      selectedRestaurant !== requestedRestaurantId
+    ) {
       setSelectedRestaurant(requestedRestaurantId);
       return;
     }
+    if (selectedRestaurant) return;
     if (restaurants.length > 0) {
       setSelectedRestaurant(restaurants[0].id);
     }

@@ -189,6 +189,20 @@ export default function DealCreation() {
     }
   }, []);
 
+  const requestedSource = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return (
+        new URLSearchParams(window.location.search)
+          .get("src")
+          ?.trim()
+          .toLowerCase() || ""
+      );
+    } catch {
+      return "";
+    }
+  }, []);
+
   const rememberedRestaurantId = useMemo(() => {
     if (typeof window === "undefined") return "";
     try {
@@ -249,10 +263,22 @@ export default function DealCreation() {
     return String(manualRestaurantId || selectedRestaurant?.id || "").trim();
   }, [manualRestaurantId, selectedRestaurant]);
 
+  const redirectRestaurantId = useMemo(() => {
+    if (isAdminOrStaffUser && requestedRestaurantId) {
+      return requestedRestaurantId;
+    }
+    return selectedRestaurantId;
+  }, [isAdminOrStaffUser, requestedRestaurantId, selectedRestaurantId]);
+
   const afterCreatePath = useMemo(() => {
-    if (!selectedRestaurantId) return "/restaurant-owner-dashboard";
-    return `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(selectedRestaurantId)}`;
-  }, [selectedRestaurantId]);
+    if (!redirectRestaurantId) return "/restaurant-owner-dashboard";
+    const params = new URLSearchParams();
+    params.set("restaurantId", redirectRestaurantId);
+    if (requestedSource === "concierge") {
+      params.set("src", "concierge");
+    }
+    return `/restaurant-owner-dashboard?${params.toString()}`;
+  }, [redirectRestaurantId, requestedSource]);
 
   const hasManualOutsideList = useMemo(() => {
     if (!manualRestaurantId || !Array.isArray(restaurants)) return false;
