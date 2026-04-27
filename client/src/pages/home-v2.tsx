@@ -316,6 +316,10 @@ export default function Home() {
   const [navigateTo, setNavigateTo] = useState("");
   const [, navigate] = useLocation();
   const mealPrompt = useMemo(() => getMealPrompt(), []);
+  const firstName =
+    (user as any)?.firstName?.trim() ||
+    (user as any)?.name?.split?.(" ")?.[0] ||
+    "";
 
   useEffect(() => {
     if (navigateTo) {
@@ -604,7 +608,14 @@ export default function Home() {
             <div className="mb-2 flex items-start justify-between gap-2 sm:gap-3">
               <div className="inline-flex items-start gap-2">
                 <h1 className="text-3xl sm:text-5xl font-black leading-[0.95] sm:leading-tight tracking-tight text-[color:var(--text-primary)]">
-                  <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
+                  {firstName ? (
+                    <>
+                      Hey {firstName},{" "}
+                      <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
+                    </>
+                  ) : (
+                    <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
+                  )}
                 </h1>
               </div>
               {!isStandalone && (

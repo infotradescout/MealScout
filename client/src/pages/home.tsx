@@ -906,7 +906,7 @@ export default function Home() {
           <div className="home-hero-panel">
             <div className="mb-4 sm:mb-5">
               <h1 className="hero-title text-4xl sm:text-5xl font-black mb-2 leading-tight tracking-tight">
-                {firstName ? `Hey ${firstName}! ${mealPrompt}` : mealPrompt}
+                {firstName ? `Hey ${firstName}, ${mealPrompt}` : mealPrompt}
               </h1>
               <p className="hero-subtitle text-base sm:text-lg text-muted-foreground leading-relaxed">
                 Discover food trucks, restaurants & deals{" "}
