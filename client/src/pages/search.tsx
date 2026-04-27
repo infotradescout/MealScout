@@ -1023,9 +1023,7 @@ export default function SearchPage() {
                     rating:
                       typeof restaurant.rating === "number"
                         ? restaurant.rating
-                        : typeof restaurant.googleRating === "number"
-                          ? restaurant.googleRating
-                          : null,
+                        : null,
                     operatingHours:
                       restaurant.operatingHours ??
                       restaurant.businessHours ??

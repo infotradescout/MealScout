@@ -354,7 +354,7 @@ export function registerPublicSearchRoutes(app: Express) {
       const primaryTerm = firstSearchSegment(query);
 
       const restaurantMatches = await storage.getAllRestaurants();
-      const restaurantsOut = restaurantMatches
+      const restaurantsBase = restaurantMatches
         .map((restaurant: any) => {
           if (!restaurant?.isActive) return false;
           if (!isPublicBusinessVisible(restaurant)) return false;
@@ -382,17 +382,32 @@ export function registerPublicSearchRoutes(app: Express) {
           address: restaurant.address,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
-          rating:
-            typeof restaurant.googleRating === "number"
-              ? restaurant.googleRating
-              : Number.isFinite(Number(restaurant.googleRating))
-                ? Number(restaurant.googleRating)
-                : null,
           operatingHours:
             restaurant.operatingHours ??
             restaurant.businessHours ??
             null,
         }));
+
+      const restaurantsOut = await Promise.all(
+        restaurantsBase.map(async (restaurant: any) => {
+          let rating: number | null = null;
+          try {
+            const avg = await storage.getRestaurantAverageRating(
+              String(restaurant.id),
+            );
+            if (Number.isFinite(avg) && avg > 0) {
+              rating = Number(avg);
+            }
+          } catch {
+            rating = null;
+          }
+
+          return {
+            ...restaurant,
+            rating,
+          };
+        }),
+      );
 
       const dealsOut = (
         await storage.searchDeals({
