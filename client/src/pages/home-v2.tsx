@@ -604,23 +604,8 @@ export default function Home() {
             <div className="mb-2 flex items-start justify-between gap-2 sm:gap-3">
               <div className="inline-flex items-start gap-2">
                 <h1 className="text-3xl sm:text-5xl font-black leading-[0.95] sm:leading-tight tracking-tight text-[color:var(--text-primary)]">
-                <>
-                  <AdminEditableText
-                    textKey="home.hero.promptPrefix"
-                    defaultText="What's for"
-                  />{" "}
-                  <span className="text-[color:var(--accent-text)]">
-                    {mealPrompt}
-                  </span>
-                </>
+                  <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
                 </h1>
-                <div className="hidden sm:block">
-                  <AdminEditButton
-                    textKey="home.hero.promptPrefix"
-                    defaultText="What's for"
-                    label="Home hero prefix"
-                  />
-                </div>
               </div>
               {!isStandalone && (
                 <Link href="/install">
