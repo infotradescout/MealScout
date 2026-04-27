@@ -598,12 +598,12 @@ export default function Home() {
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[color:var(--accent-text)]/10 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-12">
           {/* Main heading */}
-          <div className="mb-6">
-            <div className="mb-2 flex items-start justify-between gap-3">
+          <div className="mb-4 sm:mb-6">
+            <div className="mb-2 flex items-start justify-between gap-2 sm:gap-3">
               <div className="inline-flex items-start gap-2">
-                <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight text-[color:var(--text-primary)]">
+                <h1 className="text-3xl sm:text-5xl font-black leading-[0.95] sm:leading-tight tracking-tight text-[color:var(--text-primary)]">
                 <>
                   <AdminEditableText
                     textKey="home.hero.promptPrefix"
@@ -614,31 +614,33 @@ export default function Home() {
                   </span>
                 </>
                 </h1>
-                <AdminEditButton
-                  textKey="home.hero.promptPrefix"
-                  defaultText="What's for"
-                  label="Home hero prefix"
-                />
+                <div className="hidden sm:block">
+                  <AdminEditButton
+                    textKey="home.hero.promptPrefix"
+                    defaultText="What's for"
+                    label="Home hero prefix"
+                  />
+                </div>
               </div>
               {!isStandalone && (
                 <Link href="/install">
                   <Button
-                    className="h-11 px-4 rounded-full font-bold text-sm shadow-clean-lg"
+                    className="h-9 sm:h-11 px-3 sm:px-4 rounded-full font-bold text-xs sm:text-sm shadow-clean-lg"
                     data-testid="button-download-app-hero"
                   >
-                    <ArrowDownToLine className="w-4 h-4 mr-2" />
+                    <ArrowDownToLine className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                     Download App
                   </Button>
                 </Link>
               )}
             </div>
-            <p className="text-sm font-medium text-[color:var(--text-secondary)] max-w-2xl leading-relaxed">
+            <p className="text-sm font-medium text-[color:var(--text-secondary)] max-w-2xl leading-snug sm:leading-relaxed">
               <AdminEditableText
                 textKey="home.hero.subtitle"
                 defaultText="Discover live food trucks, trending deals, and local gems happening right now"
               />
             </p>
-            <div className="mt-1">
+            <div className="mt-1 hidden sm:block">
               <AdminEditButton
                 textKey="home.hero.subtitle"
                 defaultText="Discover live food trucks, trending deals, and local gems happening right now"
@@ -648,7 +650,7 @@ export default function Home() {
           </div>
 
           {/* Search bar */}
-          <div className="mb-4 max-w-2xl">
+          <div className="mb-3 sm:mb-4 max-w-2xl">
             <SmartSearch
               value={searchQuery}
               onChange={setSearchQuery}
@@ -660,25 +662,25 @@ export default function Home() {
           </div>
 
           {/* Quick action buttons */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
             <Button
               onClick={retryLocation}
               disabled={isLoadingLocation}
-              className="action-primary h-10 px-4 rounded-full font-semibold text-sm"
+              className="action-primary h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm"
               size="sm"
             >
-              <MapPin className="w-4 h-4 mr-2" />
+              <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
               {isLoadingLocation ? "Finding..." : "My Location"}
             </Button>
             <Link href="/map">
-              <Button variant="outline" className="h-10 px-4 rounded-full font-semibold text-sm" size="sm">
-                <MapIcon className="w-4 h-4 mr-2" />
+              <Button variant="outline" className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm" size="sm">
+                <MapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                 Map
               </Button>
             </Link>
             <Link href="/deals/featured">
-              <Button variant="outline" className="h-10 px-4 rounded-full font-semibold text-sm" size="sm">
-                <Zap className="w-4 h-4 mr-2" />
+              <Button variant="outline" className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm" size="sm">
+                <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                 Deals
               </Button>
             </Link>
