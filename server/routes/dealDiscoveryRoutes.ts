@@ -363,10 +363,28 @@ export function registerDealDiscoveryRoutes(
         Boolean(req.isAuthenticated?.()) &&
         String((req as any)?.user?.id || "") ===
           String((restaurant as any).ownerId || "");
+      const currentUserType = String((req as any)?.user?.userType || "");
+      const isAdminOrStaff =
+        currentUserType === "admin" ||
+        currentUserType === "super_admin" ||
+        currentUserType === "staff";
+      const isAuthenticatedUser = Boolean(req.isAuthenticated?.());
+      const hasManageDealsPermission = isAuthenticatedUser
+        ? await hasBusinessPermissionForRestaurant(
+            String((req as any)?.user?.id || ""),
+            String((deal as any).restaurantId || ""),
+            "manageDeals",
+          )
+        : false;
       const ownerHasAccess = await hasBusinessDistributionAccess(
         String((restaurant as any).ownerId || ""),
       );
-      if (!ownerHasAccess && !isOwnerViewing) {
+      if (
+        !ownerHasAccess &&
+        !isOwnerViewing &&
+        !isAdminOrStaff &&
+        !hasManageDealsPermission
+      ) {
         return res.status(404).json({ message: "Deal not found" });
       }
 
