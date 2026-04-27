@@ -27,6 +27,7 @@ export function AdminInlineCopyProvider({
   const { user, authState } = useAuth();
   const [overrides, setOverrides] = useState<CopyOverrides>({});
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -60,10 +61,33 @@ export function AdminInlineCopyProvider({
     window.localStorage.setItem(EDIT_MODE_STORAGE_KEY, isEditMode ? "1" : "0");
   }, [isEditMode]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setIsDesktopViewport(media.matches);
+    sync();
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+
+    media.addListener(sync);
+    return () => media.removeListener(sync);
+  }, []);
+
   const userType = String(user?.userType || "").toLowerCase();
   const canEdit =
     authState === "authenticated" &&
+    isDesktopViewport &&
     (userType === "admin" || userType === "super_admin" || userType === "staff");
+
+  useEffect(() => {
+    if (canEdit) return;
+    if (!isEditMode) return;
+    setIsEditMode(false);
+  }, [canEdit, isEditMode]);
 
   const value = useMemo<AdminInlineCopyContextValue>(
     () => ({

@@ -158,7 +158,7 @@ export default function AdminQuickHeader() {
   const isAdminSurface = pathOnly.startsWith("/admin");
 
   return (
-    <div className="sticky top-0 z-[70] border-b border-[color:var(--border-subtle)] bg-amber-50/95 backdrop-blur supports-[backdrop-filter]:bg-amber-50/80">
+    <div className="sticky top-0 z-[70] hidden border-b border-[color:var(--border-subtle)] bg-amber-50/95 backdrop-blur supports-[backdrop-filter]:bg-amber-50/80 lg:block">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-3 py-2">
         <div className="hidden items-center gap-2 text-xs font-semibold text-amber-900 sm:flex">
           <Shield className="h-4 w-4" />
