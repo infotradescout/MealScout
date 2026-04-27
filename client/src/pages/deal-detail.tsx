@@ -16,6 +16,7 @@ import { Tag, Share2, Shield, Store } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { authUrl } from "@/lib/api";
+import { trackUxEvent } from "@/utils/uxTelemetry";
 
 interface Deal {
   id: string;
@@ -54,6 +55,7 @@ export default function DealDetail() {
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const viewTimerRef = useRef<number | null>(null);
+  const detailTelemetrySentRef = useRef(false);
 
   const {
     data: deal,
@@ -148,6 +150,34 @@ export default function DealDetail() {
     staleTime: 300_000,
   });
 
+  const dealErrorStatus =
+    dealError instanceof ApiError ? Number(dealError.status || 0) : 0;
+
+  useEffect(() => {
+    if (!dealId || dealLoading || detailTelemetrySentRef.current) return;
+
+    detailTelemetrySentRef.current = true;
+
+    if (deal) {
+      void trackUxEvent("deal_detail_loaded", {
+        dealId,
+        restaurantId: (deal as Deal)?.restaurantId || null,
+      });
+      return;
+    }
+
+    void trackUxEvent("deal_detail_error", {
+      dealId,
+      status: dealErrorStatus || 404,
+      reason:
+        dealErrorStatus === 401 || dealErrorStatus === 403
+          ? "auth"
+          : dealErrorStatus >= 500
+            ? "server"
+            : "not_found",
+    });
+  }, [deal, dealErrorStatus, dealId, dealLoading]);
+
   // Track deal view when deal is loaded
   useEffect(() => {
     if (!dealId || !deal || dealLoading) return;
@@ -171,6 +201,9 @@ export default function DealDetail() {
       return await apiRequest("POST", `/api/deals/${dealId}/claim`, {});
     },
     onSuccess: () => {
+      void trackUxEvent("deal_claim_success", {
+        dealId,
+      });
       toast({
         title: "Special Claimed!",
         description:
@@ -179,6 +212,11 @@ export default function DealDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/deals", dealId] });
     },
     onError: (error) => {
+      const status = error instanceof ApiError ? Number(error.status || 0) : 0;
+      void trackUxEvent("deal_claim_failed", {
+        dealId,
+        status: status || null,
+      });
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -212,9 +250,6 @@ export default function DealDetail() {
       </div>
     );
   }
-
-  const dealErrorStatus =
-    dealError instanceof ApiError ? Number(dealError.status || 0) : 0;
 
   if (!deal) {
     const isAuthRestricted = dealErrorStatus === 401 || dealErrorStatus === 403;
@@ -317,7 +352,7 @@ export default function DealDetail() {
     "@type": "Offer",
     name: dealTitle,
     description: dealDescription,
-    url: `https://www.mealscout.us/deals/${dealId}`,
+    url: `https://www.mealscout.us/deal/${dealId}`,
     priceCurrency: "USD",
     price:
       (deal as Deal)?.category === "special" && discountValue
@@ -353,7 +388,7 @@ export default function DealDetail() {
         keywords={`${restaurantName}, ${dealTitle}, food special, restaurant discount, ${
           (restaurant as Restaurant)?.cuisineType || "food"
         }`}
-        canonicalUrl={`https://www.mealscout.us/deals/${dealId}`}
+        canonicalUrl={`https://www.mealscout.us/deal/${dealId}`}
         schemaData={offerSchema}
       />
       <BackHeader
@@ -734,7 +769,10 @@ export default function DealDetail() {
         <div className="flex items-center space-x-3">
           <Button
             className="flex-1 py-3 font-semibold text-sm food-gradient-primary border-0 shadow-clean"
-            onClick={() => setShowClaimModal(true)}
+            onClick={() => {
+              void trackUxEvent("deal_claim_intent", { dealId });
+              setShowClaimModal(true);
+            }}
             disabled={!isAuthenticated}
             data-testid="button-claim-deal"
           >
