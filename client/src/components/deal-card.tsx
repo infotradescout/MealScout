@@ -99,6 +99,24 @@ interface DealCardProps {
   onOpen?: (dealId: string) => void;
 }
 
+interface JourneySnapshot {
+  scoutScore?: number;
+  level?: {
+    current?: { label?: string };
+    next?: { label?: string } | null;
+    pointsToNext?: number;
+  };
+  futureCreditPreview?: {
+    estimatedCreditDollars?: number;
+  };
+  actionPoints?: {
+    recommendRestaurant?: number;
+    followRestaurant?: number;
+    addFavorite?: number;
+    addRecommendationContext?: number;
+  };
+}
+
 function formatRelativeTime(value?: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
@@ -232,6 +250,9 @@ export default function DealCard({
   const [isRestaurantRecommended, setIsRestaurantRecommended] = useState(false);
   const [recommendError, setRecommendError] = useState("");
   const [recommendSubmitting, setRecommendSubmitting] = useState(false);
+  const [journeySnapshot, setJourneySnapshot] = useState<JourneySnapshot | null>(
+    null
+  );
   const isGoldenForkUser = Boolean(
     (user as any)?.influenceScore && (user as any)?.influenceScore > 0
   );
@@ -294,6 +315,12 @@ export default function DealCard({
           apiRequest("GET", "/api/following/restaurants"),
           apiRequest("GET", "/api/recommendations/restaurants"),
         ]);
+        try {
+          const journey = await apiRequest("GET", "/api/awards/journey/me");
+          setJourneySnapshot(journey as JourneySnapshot);
+        } catch {
+          setJourneySnapshot(null);
+        }
         const list = Array.isArray(favorites) ? favorites : [];
         const isFav = list.some(
           (fav: any) =>
@@ -643,6 +670,21 @@ export default function DealCard({
     }
   };
 
+  const actionPoints = journeySnapshot?.actionPoints || {};
+  const scorePreviewDelta =
+    (recommendSelection && !isRestaurantRecommended
+      ? Number(actionPoints.recommendRestaurant || 0)
+      : 0) +
+    (followSelection && !isRestaurantFollowed
+      ? Number(actionPoints.followRestaurant || 0)
+      : 0) +
+    (favoriteSelection && !isRestaurantFavorite
+      ? Number(actionPoints.addFavorite || 0)
+      : 0) +
+    (recommendationText.trim().length >= 20
+      ? Number(actionPoints.addRecommendationContext || 0)
+      : 0);
+
   return (
     <div>
       <Card
@@ -872,6 +914,36 @@ export default function DealCard({
             </div>
 
             <div className="bg-[var(--bg-surface)] px-5 pb-5 pt-4">
+              {journeySnapshot && (
+                <div className="mb-3 rounded-xl border border-yellow-200 bg-yellow-50/70 p-3">
+                  <div className="text-xs font-semibold text-yellow-900 uppercase tracking-wide">
+                    Scout Journey
+                  </div>
+                  <div className="mt-1 text-sm text-yellow-900">
+                    {journeySnapshot.level?.current?.label || "Scout"}
+                    {typeof journeySnapshot.scoutScore === "number"
+                      ? ` · ${journeySnapshot.scoutScore.toLocaleString()} points`
+                      : ""}
+                  </div>
+                  <div className="mt-1 text-xs text-yellow-800/90">
+                    {scorePreviewDelta > 0
+                      ? `This action set adds +${scorePreviewDelta} Scout Score`
+                      : "Choose actions below to earn Scout Score"}
+                    {journeySnapshot.level?.next &&
+                    typeof journeySnapshot.level?.pointsToNext === "number"
+                      ? ` · ${journeySnapshot.level.pointsToNext} to ${journeySnapshot.level.next.label}`
+                      : ""}
+                  </div>
+                  {typeof journeySnapshot.futureCreditPreview?.estimatedCreditDollars ===
+                    "number" && (
+                    <div className="mt-1 text-xs text-yellow-800/80">
+                      Future MealScout credits preview: $
+                      {journeySnapshot.futureCreditPreview.estimatedCreditDollars.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label className="block text-sm font-semibold text-primary mb-1">
                 Add context (optional)
               </label>

@@ -50,6 +50,31 @@ interface UserStats {
   dealsThisMonth: number;
 }
 
+interface UserJourneyStats {
+  scoutScore: number;
+  influenceScore: number;
+  recommendationCount: number;
+  weightedRecommendationScore: number;
+  hasGoldenFork: boolean;
+  weeklyRecommendationStreak: number;
+  level: {
+    current: { level: number; label: string; minScore: number };
+    next: { level: number; label: string; minScore: number } | null;
+    progressToNext: number;
+    pointsToNext: number;
+  };
+  milestoneProgress: {
+    recommendations: { current: number; target: number; completed: boolean };
+    videoRecommendations: { current: number; target: number; completed: boolean };
+    reviews: { current: number; target: number; completed: boolean };
+  };
+  futureCreditPreview: {
+    pointsPerDollar: number;
+    estimatedCreditDollars: number;
+    note: string;
+  };
+}
+
 export default function UserDashboard() {
   const { user } = useAuth();
   const [routeLocation] = useLocation();
@@ -147,6 +172,11 @@ export default function UserDashboard() {
     (Deal & { restaurant: Restaurant })[]
   >({
     queryKey: ["/api/deals/recommended"],
+    enabled: !!user,
+  });
+
+  const { data: userJourney } = useQuery<UserJourneyStats>({
+    queryKey: ["/api/awards/journey/me"],
     enabled: !!user,
   });
 
@@ -272,6 +302,72 @@ export default function UserDashboard() {
             </CardHeader>
           </Card>
         </div>
+
+        {userJourney && (
+          <Card className="mb-6 border-[color:var(--border-subtle)] bg-[linear-gradient(120deg,rgba(245,158,11,0.15),rgba(249,115,22,0.10))] shadow-clean">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+                    Your Scout Journey
+                  </div>
+                  <div className="mt-1 text-xl font-bold text-foreground">
+                    Level {userJourney.level.current.level}: {userJourney.level.current.label}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {userJourney.scoutScore.toLocaleString()} Scout Score · Influence {userJourney.influenceScore.toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-sm text-right">
+                  <div className="font-semibold text-foreground">
+                    {userJourney.weeklyRecommendationStreak} week streak
+                  </div>
+                  <div className="text-muted-foreground">
+                    Future credit preview: ${userJourney.futureCreditPreview.estimatedCreditDollars.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="h-2.5 rounded-full bg-[var(--bg-surface-muted)] overflow-hidden">
+                  <div
+                    className="h-full bg-[linear-gradient(90deg,#f59e0b,#f97316)]"
+                    style={{ width: `${Math.round((userJourney.level.progressToNext || 0) * 100)}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{userJourney.level.current.label}</span>
+                  <span>
+                    {userJourney.level.next
+                      ? `${userJourney.level.pointsToNext} points to ${userJourney.level.next.label}`
+                      : "Max level reached"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Recommendations</div>
+                  <div className="font-semibold text-foreground">
+                    {userJourney.milestoneProgress.recommendations.current}/{userJourney.milestoneProgress.recommendations.target}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Video Recs</div>
+                  <div className="font-semibold text-foreground">
+                    {userJourney.milestoneProgress.videoRecommendations.current}/{userJourney.milestoneProgress.videoRecommendations.target}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Reviews</div>
+                  <div className="font-semibold text-foreground">
+                    {userJourney.milestoneProgress.reviews.current}/{userJourney.milestoneProgress.reviews.target}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Dashboard Content */}
