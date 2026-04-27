@@ -6,6 +6,13 @@ import DealCard from "@/components/deal-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { RestaurantTrustPanel } from "@/components/RestaurantTrustPanel";
 import { FlagRecommendationDialog, FlagProfileContentDialog } from "@/components/moderation/FlagDialogs";
 import { BackHeader } from "@/components/back-header";
@@ -59,6 +66,27 @@ type PublicRecommendation = {
   viewerReaction: "like" | "dislike" | null;
 };
 
+type PublicMenuItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  priceCents: number;
+  isAvailable: boolean;
+};
+
+type PublicMenuCategory = {
+  id: string;
+  name: string;
+  items: PublicMenuItem[];
+};
+
+type PublicMenu = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  categories: PublicMenuCategory[];
+};
+
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
     .toLowerCase()
@@ -73,6 +101,9 @@ const toExternalUrl = (value: string | null | undefined) => {
   if (/^https?:\/\//i.test(raw)) return raw;
   return `https://${raw}`;
 };
+
+const formatMoney = (cents: number) =>
+  `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
 export default function RestaurantDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
@@ -122,6 +153,25 @@ export default function RestaurantDetailPage() {
       if (!res.ok) return [];
       const rows = await res.json();
       return Array.isArray(rows) ? rows : [];
+    },
+  });
+  const { data: publicMenusData } = useQuery<{
+    menus: PublicMenu[];
+    orderingEnabled: boolean;
+  }>({
+    queryKey: ["/api/menus", restaurantId],
+    enabled: !!restaurantId,
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/menus/${encodeURIComponent(String(restaurantId || ""))}`,
+      );
+      if (!res.ok) return { menus: [], orderingEnabled: false };
+      const data = await res.json();
+      return {
+        menus: Array.isArray(data?.menus) ? data.menus : [],
+        orderingEnabled: Boolean(data?.orderingEnabled),
+      };
     },
   });
   const { data: recommendationRows = [], refetch: refetchRecommendations } =
@@ -381,6 +431,14 @@ export default function RestaurantDetailPage() {
 
   // Deals endpoint is restaurant-scoped already.
   const restaurantDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
+  const activeOnsiteMenus = Array.isArray(publicMenusData?.menus)
+    ? publicMenusData.menus.filter((menu) => menu?.isActive)
+    : [];
+  const primaryOnsiteMenu = activeOnsiteMenus[0] || null;
+  const onsiteMenuCategories = Array.isArray(primaryOnsiteMenu?.categories)
+    ? primaryOnsiteMenu.categories
+    : [];
+  const hasOnsiteMenu = onsiteMenuCategories.length > 0;
   const isVerifiedMemberProfile =
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
@@ -1029,15 +1087,18 @@ export default function RestaurantDetailPage() {
           </div>
         </div>
 
-        {/* Menu */}
-        <section className="mb-8 rounded-3xl border border-orange-200 bg-gradient-to-r from-orange-50 via-amber-50 to-rose-50 p-5 sm:p-6 shadow-clean">
+        {/* Menu + Specials */}
+        <section
+          className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[linear-gradient(160deg,rgba(10,10,14,0.98),rgba(17,17,22,0.96))] p-5 sm:p-6 shadow-clean"
+          id="restaurant-specials"
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-semibold tracking-[0.16em] uppercase text-orange-700">
+              <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[color:var(--accent-text)]">
                 Start Here
               </p>
               <div className="mt-1 inline-flex items-center gap-2">
-                <h2 className="text-2xl font-black text-foreground">
+                <h2 className="text-2xl font-black text-white">
                   <AdminEditableText
                     textKey="restaurant.detail.menu.title"
                     defaultText="Menu"
@@ -1049,7 +1110,7 @@ export default function RestaurantDetailPage() {
                   label="Menu section title"
                 />
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-white/70">
                 See signature dishes and pricing before you visit.
               </p>
             </div>
@@ -1079,10 +1140,10 @@ export default function RestaurantDetailPage() {
               )}
               <Button
                 variant="outline"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10"
                 onClick={() =>
                   document
-                    .getElementById("restaurant-specials")
+                    .getElementById("restaurant-specials-list")
                     ?.scrollIntoView({ behavior: "smooth" })
                 }
               >
@@ -1090,6 +1151,126 @@ export default function RestaurantDetailPage() {
               </Button>
             </div>
           </div>
+
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
+                Deals & Specials
+              </h3>
+              {restaurantDeals.length > 0 ? (
+                <Badge variant="outline" className="border-white/20 text-white/80">
+                  {restaurantDeals.length} live
+                </Badge>
+              ) : null}
+            </div>
+
+            {restaurantDeals.length > 0 ? (
+              <Carousel
+                opts={{ align: "start", loop: restaurantDeals.length > 2 }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-3">
+                  {restaurantDeals.map((deal: any) => (
+                    <CarouselItem
+                      key={deal.id}
+                      className="pl-3 basis-[88%] sm:basis-1/2 lg:basis-1/3"
+                    >
+                      <div className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                          {String(deal.category || "deal").toLowerCase() === "special"
+                            ? "Special"
+                            : "Deal"}
+                        </p>
+                        <h4 className="mt-1 line-clamp-2 text-base font-semibold text-white">
+                          {deal.title || "Special offer"}
+                        </h4>
+                        {deal.description ? (
+                          <p className="mt-2 line-clamp-3 text-sm text-white/70">
+                            {deal.description}
+                          </p>
+                        ) : null}
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          {deal.discountValue ? (
+                            <Badge className="bg-[color:var(--accent-text)] text-black hover:bg-[color:var(--accent-text)]">
+                              {deal.dealType === "percentage"
+                                ? `${deal.discountValue}% off`
+                                : `$${deal.discountValue} off`}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-white/20 text-white/75">
+                              Limited time
+                            </Badge>
+                          )}
+                          <Link href={`/deal/${deal.id}`}>
+                            <Button size="sm" variant="secondary" className="text-xs">
+                              View
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {restaurantDeals.length > 1 ? (
+                  <>
+                    <CarouselPrevious className="left-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
+                    <CarouselNext className="right-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
+                  </>
+                ) : null}
+              </Carousel>
+            ) : (
+              <Card className="border-white/10 bg-white/[0.03]">
+                <CardContent className="p-4 text-sm text-white/70">
+                  No current specials available. Check back soon.
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {hasOnsiteMenu ? (
+            <div className="mt-6 border-t border-white/10 pt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
+                  Full Onsite Menu
+                </h3>
+                <Link href={`/menu/${encodeURIComponent(String(restaurantId || ""))}`}>
+                  <Button size="sm" variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10">
+                    Open Menu Page
+                  </Button>
+                </Link>
+              </div>
+              <div className="space-y-4">
+                {onsiteMenuCategories.map((category) => (
+                  <div key={category.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <h4 className="text-base font-semibold text-white">{category.name}</h4>
+                    <div className="mt-3 space-y-3">
+                      {(Array.isArray(category.items) ? category.items : []).map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-start justify-between gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-white">{item.name}</p>
+                            {item.description ? (
+                              <p className="mt-0.5 text-xs text-white/65">{item.description}</p>
+                            ) : null}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-[color:var(--accent-text)]">
+                              {formatMoney(item.priceCents)}
+                            </p>
+                            {!item.isAvailable ? (
+                              <p className="text-[11px] text-amber-300">Unavailable</p>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {isFoodTruck && (
@@ -1140,7 +1321,7 @@ export default function RestaurantDetailPage() {
         {/* Current Specials */}
         <div
           className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean"
-          id="restaurant-specials"
+          id="restaurant-specials-list"
         >
           <div className="mb-4 inline-flex items-center gap-2">
             <h2 className="text-xl font-bold text-foreground">
