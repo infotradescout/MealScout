@@ -585,10 +585,6 @@ export default function Home() {
   }, [featuredBusinesses]);
 
   const shortLocation = locationName?.split(",")[0] || "your area";
-  const firstName =
-    (user as any)?.firstName?.trim() ||
-    (user as any)?.name?.split?.(" ")?.[0] ||
-    "";
 
   return (
     <>
@@ -608,29 +604,21 @@ export default function Home() {
             <div className="mb-2 flex items-start justify-between gap-3">
               <div className="inline-flex items-start gap-2">
                 <h1 className="text-4xl sm:text-5xl font-black leading-tight tracking-tight text-[color:var(--text-primary)]">
-                {firstName ? (
-                  <>
-                    Hey <span className="text-[color:var(--accent-text)]">{firstName}</span>
-                  </>
-                ) : (
-                  <>
-                    <AdminEditableText
-                      textKey="home.hero.promptPrefix"
-                      defaultText="What's for"
-                    />{" "}
-                    <span className="text-[color:var(--accent-text)]">
-                      {mealPrompt}
-                    </span>
-                  </>
-                )}
-                </h1>
-                {!firstName && (
-                  <AdminEditButton
+                <>
+                  <AdminEditableText
                     textKey="home.hero.promptPrefix"
                     defaultText="What's for"
-                    label="Home hero prefix"
-                  />
-                )}
+                  />{" "}
+                  <span className="text-[color:var(--accent-text)]">
+                    {mealPrompt}
+                  </span>
+                </>
+                </h1>
+                <AdminEditButton
+                  textKey="home.hero.promptPrefix"
+                  defaultText="What's for"
+                  label="Home hero prefix"
+                />
               </div>
               {!isStandalone && (
                 <Link href="/install">
