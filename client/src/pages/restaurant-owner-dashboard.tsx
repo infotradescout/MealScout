@@ -1779,16 +1779,16 @@ export default function RestaurantOwnerDashboard() {
 
       {/* Deals Management */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="w-full">
-          {canManageDeals ? <TabsTrigger value="active">Active Specials</TabsTrigger> : null}
-          {canManageDeals ? <TabsTrigger value="inactive">Inactive Specials</TabsTrigger> : null}
-          {canViewAnalytics ? <TabsTrigger value="analytics">Analytics</TabsTrigger> : null}
-          {canManageBilling ? <TabsTrigger value="credits">
+        <TabsList className="w-full h-auto justify-start overflow-x-auto whitespace-nowrap">
+          {canManageDeals ? <TabsTrigger value="active" className="px-3 text-xs sm:text-sm">Active Specials</TabsTrigger> : null}
+          {canManageDeals ? <TabsTrigger value="inactive" className="px-3 text-xs sm:text-sm">Inactive Specials</TabsTrigger> : null}
+          {canViewAnalytics ? <TabsTrigger value="analytics" className="px-3 text-xs sm:text-sm">Analytics</TabsTrigger> : null}
+          {canManageBilling ? <TabsTrigger value="credits" className="px-3 text-xs sm:text-sm">
             <CreditCard className="mr-1 hidden h-4 w-4 sm:block" />
             MealScout Credits
           </TabsTrigger> : null}
-          {canManageParkingPass ? <TabsTrigger value="bookings">Bookings</TabsTrigger> : null}
-          {canManageParkingPass ? <TabsTrigger value="foodtruck" data-testid="tab-food-truck">
+          {canManageParkingPass ? <TabsTrigger value="bookings" className="px-3 text-xs sm:text-sm">Bookings</TabsTrigger> : null}
+          {canManageParkingPass ? <TabsTrigger value="foodtruck" className="px-3 text-xs sm:text-sm" data-testid="tab-food-truck">
             <Truck className="mr-1 hidden h-4 w-4 sm:block" />
             Food Truck
           </TabsTrigger> : null}
@@ -1807,7 +1807,7 @@ export default function RestaurantOwnerDashboard() {
               .map((deal) => (
                 <Card key={deal.id}>
                   <CardContent className="p-6">
-                    <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex flex-1 items-start gap-4 min-w-0">
                         <img
                           src={normalizeDealImageUrl((deal as any).imageUrl)}
@@ -1819,8 +1819,8 @@ export default function RestaurantOwnerDashboard() {
                           }}
                         />
                         <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold min-w-0 break-words">
                             {deal.title}
                           </h3>
                           <Badge className={getDealTypeColor(deal.dealType)}>
@@ -1864,7 +1864,7 @@ export default function RestaurantOwnerDashboard() {
                       </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex w-full flex-wrap gap-2 lg:w-auto lg:justify-end">
                         <Link href={`/deal/${deal.id}`}>
                           <Button
                             variant="ghost"
@@ -1945,7 +1945,7 @@ export default function RestaurantOwnerDashboard() {
             .map((deal) => (
               <Card key={deal.id} className="opacity-75">
                 <CardContent className="p-6">
-                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex flex-1 items-start gap-4 min-w-0">
                       <img
                         src={normalizeDealImageUrl((deal as any).imageUrl)}
@@ -1957,8 +1957,8 @@ export default function RestaurantOwnerDashboard() {
                         }}
                       />
                       <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold">{deal.title}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h3 className="text-lg font-semibold min-w-0 break-words">{deal.title}</h3>
                         <Badge variant="secondary">Inactive</Badge>
                       </div>
                       <p className="text-muted-foreground mb-3">
@@ -1967,7 +1967,7 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex w-full flex-wrap gap-2 lg:w-auto lg:justify-end">
                       <Button
                         variant="outline"
                         size="sm"
