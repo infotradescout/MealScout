@@ -249,11 +249,11 @@ function BusinessDealsCard({
 
 function getMealPrompt(date = new Date()) {
   const hour = date.getHours();
-  if (hour >= 21 || hour < 5) return "What's for late night snack?";
-  if (hour < 10) return "What's for breakfast?";
-  if (hour < 12) return "What's for brunch?";
-  if (hour < 16) return "What's for lunch?";
-  return "What's for dinner?";
+  if (hour >= 21 || hour < 5) return "Late Night Snack?";
+  if (hour < 10) return "Breakfast?";
+  if (hour < 12) return "Brunch?";
+  if (hour < 16) return "Lunch?";
+  return "Dinner?";
 }
 
 export default function Home() {
