@@ -96,6 +96,7 @@ interface DealCardProps {
     color: string;
     score: number;
   } | null;
+  onOpen?: (dealId: string) => void;
 }
 
 function formatRelativeTime(value?: string | null): string | null {
@@ -199,7 +200,11 @@ const getDefaultImage = (cuisineType?: string, title?: string) => {
   return images.default;
 };
 
-export default function DealCard({ deal, popularity = null }: DealCardProps) {
+export default function DealCard({
+  deal,
+  popularity = null,
+  onOpen,
+}: DealCardProps) {
   const { user, isGuest } = useAuth();
   const isLiveTruck =
     !!deal.restaurant?.isFoodTruck && !!deal.restaurant?.mobileOnline;
@@ -431,6 +436,7 @@ export default function DealCard({ deal, popularity = null }: DealCardProps) {
   };
 
   const handleCardClick = () => {
+    onOpen?.(deal.id);
     setShowDealsDrawer(true);
   };
 

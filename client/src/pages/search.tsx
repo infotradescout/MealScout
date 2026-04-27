@@ -1208,7 +1208,17 @@ export default function SearchPage() {
         ) : filteredDeals.length > 0 ? (
           <div className="space-y-4 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-6 lg:space-y-0">
             {filteredDeals.map((deal: any) => (
-              <DealCard key={deal.id} deal={deal} />
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                onOpen={(dealId) => {
+                  trackUxEvent("search_deal_card_opened", {
+                    dealId,
+                    searchQuery: searchQuery || null,
+                    surface: searchQuery ? "search_results" : "search_popular",
+                  });
+                }}
+              />
             ))}
           </div>
         ) : (

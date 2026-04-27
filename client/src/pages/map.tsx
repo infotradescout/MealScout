@@ -2333,6 +2333,10 @@ export default function MapPage() {
   };
 
   const handleDealClick = (deal: Deal) => {
+    trackUxEvent("map_deal_pin_tap", {
+      dealId: deal.id,
+      restaurantId: deal.restaurantId || null,
+    });
     setSelectedDeal(deal);
     setSelectedParkingPreview(null);
     setSelectedHostCluster(null);
@@ -3384,6 +3388,10 @@ export default function MapPage() {
                   className="w-full sm:w-auto"
                   data-testid="button-view-deal"
                   onClick={() => {
+                    trackUxEvent("map_deal_view_click", {
+                      dealId: selectedDeal.id,
+                      restaurantId: selectedDeal.restaurantId || null,
+                    });
                     window.location.href = `/deal/${selectedDeal.id}`;
                   }}
                 >
