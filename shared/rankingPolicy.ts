@@ -10,13 +10,19 @@ export const HOME_RANKING_WEIGHTS = {
 } as const;
 
 export const AWARD_RANKING_WEIGHTS = {
-  manualRecommendation: 50,
-  videoRecommendation: 150,
-  favorites: 35,
-  follows: 20,
-  avgRating: 20,
-  totalDealClaims: 10,
+  // Action hierarchy: clicks/views < claims < likes < shares < follows < recommendations < favorites
   totalDealViews: 1,
+  totalDealClaims: 2,
+  likes: 4,
+  shares: 6,
+  follows: 8,
+  recommendations: 10,
+  favorites: 12,
+
+  // Legacy/detail weights retained for compatibility in other score surfaces.
+  manualRecommendation: 10,
+  videoRecommendation: 3,
+  avgRating: 20,
   communityActivity: 8,
 } as const;
 

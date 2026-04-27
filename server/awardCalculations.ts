@@ -23,6 +23,17 @@ const GOLDEN_PLATE_CRITERIA = {
   topPercentage: 0.1, // Top 10% per area
 };
 
+const GOLDEN_FORK_ACTION_MULTIPLIER = 1.15;
+
+const applyGoldenForkBoost = (
+  count: number,
+  goldenForkCount: number,
+): number => {
+  const base = Number(count || 0);
+  const golden = Math.max(0, Math.min(base, Number(goldenForkCount || 0)));
+  return base + golden * (GOLDEN_FORK_ACTION_MULTIPLIER - 1);
+};
+
 /**
  * Get authoritative recommendation count for a user based on video stories.
  * A recommendation credit is earned per distinct restaurantId the user has
@@ -228,42 +239,151 @@ export async function awardGoldenFork(userId: string): Promise<boolean> {
 
 /**
  * Calculate ranking score for a restaurant
- * Formula: (manualRecommendations * 50) + (videoRecommendations * 150)
- *   + (favoritesCount * 35) + (followCount * 20)
- *   + (avgRating * 20) + (totalDealClaims * 10) + (totalDealViews * 1)
+ * Action hierarchy:
+ * - Lowest: clicks/views, then claims
+ * - Mid: likes, shares, follows, recommendations
+ * - Highest: favorites
+ * Golden Fork actions receive a modest weighting boost.
  */
 export async function calculateRestaurantRankingScore(restaurantId: string): Promise<number> {
   // Get restaurant data
   const restaurant = await storage.getRestaurant(restaurantId);
   if (!restaurant) return 0;
 
-  // Manual/button recommendations
-  const manualRecommendations = await db.query.restaurantUserRecommendations.findMany({
-    where: (rec: any) => eq(rec.restaurantId, restaurantId),
-  });
-  const manualRecommendationCount = manualRecommendations.length;
+  const [
+    recommendationRows,
+    videoRecommendationRows,
+    favoriteRows,
+    followRows,
+    directLikeRows,
+    reactionRows,
+    shareRows,
+  ] = await Promise.all([
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        count(*)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from restaurant_user_recommendations rur
+      join users u on u.id = rur.user_id
+      where rur.restaurant_id = ${restaurantId}
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        count(*)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from video_stories vs
+      join users u on u.id = vs.user_id
+      where vs.restaurant_id = ${restaurantId}
+        and vs.status = 'ready'
+        and vs.deleted_at is null
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        count(*)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from restaurant_favorites rf
+      join users u on u.id = rf.user_id
+      where rf.restaurant_id = ${restaurantId}
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        count(*)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from restaurant_follows rf
+      join users u on u.id = rf.user_id
+      where rf.restaurant_id = ${restaurantId}
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        count(*)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from restaurant_likes rl
+      join users u on u.id = rl.user_id
+      where rl.restaurant_id = ${restaurantId}
+    `),
+    db.execute(sql<{
+      like_count: number;
+      dislike_count: number;
+      golden_like_count: number;
+      golden_dislike_count: number;
+    }>`
+      select
+        coalesce(sum(case when rr.reaction_type = 'like' then 1 else 0 end), 0)::int as like_count,
+        coalesce(sum(case when rr.reaction_type = 'dislike' then 1 else 0 end), 0)::int as dislike_count,
+        coalesce(sum(case when rr.reaction_type = 'like' and u.has_golden_fork then 1 else 0 end), 0)::int as golden_like_count,
+        coalesce(sum(case when rr.reaction_type = 'dislike' and u.has_golden_fork then 1 else 0 end), 0)::int as golden_dislike_count
+      from recommendation_reactions rr
+      join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
+      join users u on u.id = rr.user_id
+      where rur.restaurant_id = ${restaurantId}
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        coalesce(count(*), 0)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from recommendation_shares rs
+      join restaurant_user_recommendations rur on rur.id = rs.recommendation_id
+      join users u on u.id = rs.user_id
+      where rur.restaurant_id = ${restaurantId}
+    `),
+  ]);
 
-  // Video recommendations: stories tagged to the restaurant
-  const videoRecommendations = await db.query.videoStories.findMany({
-    where: (story: any) =>
-      and(
-        eq(story.restaurantId, restaurantId),
-        eq(story.status, 'ready'),
-        isNull(story.deletedAt),
-      ),
-  });
-  const videoRecommendationCount = videoRecommendations.length;
+  const recommendationRow = Array.isArray((recommendationRows as any).rows)
+    ? (recommendationRows as any).rows[0]
+    : null;
+  const videoRecommendationRow = Array.isArray((videoRecommendationRows as any).rows)
+    ? (videoRecommendationRows as any).rows[0]
+    : null;
+  const favoriteRow = Array.isArray((favoriteRows as any).rows)
+    ? (favoriteRows as any).rows[0]
+    : null;
+  const followRow = Array.isArray((followRows as any).rows)
+    ? (followRows as any).rows[0]
+    : null;
+  const directLikeRow = Array.isArray((directLikeRows as any).rows)
+    ? (directLikeRows as any).rows[0]
+    : null;
+  const reactionRow = Array.isArray((reactionRows as any).rows)
+    ? (reactionRows as any).rows[0]
+    : null;
+  const shareRow = Array.isArray((shareRows as any).rows)
+    ? (shareRows as any).rows[0]
+    : null;
 
-  // Get favorites count
-  const favorites = await db.query.restaurantFavorites.findMany({
-    where: (fav: any) => eq(fav.restaurantId, restaurantId),
-  });
-  const favoritesCount = favorites.length;
+  const manualRecommendationCount = Number(recommendationRow?.count || 0);
+  const manualRecommendationGoldenCount = Number(
+    recommendationRow?.golden_count || 0,
+  );
+  const videoRecommendationCount = Number(videoRecommendationRow?.count || 0);
+  const videoRecommendationGoldenCount = Number(
+    videoRecommendationRow?.golden_count || 0,
+  );
 
-  const follows = await db.query.restaurantFollows.findMany({
-    where: (follow: any) => eq(follow.restaurantId, restaurantId),
-  });
-  const followCount = follows.length;
+  const recommendationsCount = manualRecommendationCount + videoRecommendationCount;
+  const recommendationsGoldenCount =
+    manualRecommendationGoldenCount + videoRecommendationGoldenCount;
+
+  const favoritesCount = Number(favoriteRow?.count || 0);
+  const favoritesGoldenCount = Number(favoriteRow?.golden_count || 0);
+  const followCount = Number(followRow?.count || 0);
+  const followGoldenCount = Number(followRow?.golden_count || 0);
+
+  const directLikeCount = Number(directLikeRow?.count || 0);
+  const directLikeGoldenCount = Number(directLikeRow?.golden_count || 0);
+  const reactionLikeCount = Math.max(
+    0,
+    Number(reactionRow?.like_count || 0) - Number(reactionRow?.dislike_count || 0),
+  );
+  const reactionLikeGoldenCount = Math.max(
+    0,
+    Number(reactionRow?.golden_like_count || 0) -
+      Number(reactionRow?.golden_dislike_count || 0),
+  );
+  const likesCount = directLikeCount + reactionLikeCount;
+  const likesGoldenCount = directLikeGoldenCount + reactionLikeGoldenCount;
+
+  const shareCount = Number(shareRow?.count || 0);
+  const shareGoldenCount = Number(shareRow?.golden_count || 0);
 
   // Get average rating
   const reviews = await db.query.reviews.findMany({
@@ -290,43 +410,29 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     totalDealViews += views.length;
   }
 
-  // Community activity across recommendation interactions + video engagement.
-  const activityRows = await db.execute(sql<{
-    reaction_score: number | null;
-    share_count: number | null;
-    video_engagement: number | null;
-  }>`
-    select
-      coalesce(sum(case rr.reaction_type when 'like' then 1 when 'dislike' then -1 else 0 end), 0)::int as reaction_score,
-      coalesce((select count(*)::int from recommendation_shares rs
-        join restaurant_user_recommendations rur2 on rur2.id = rs.recommendation_id
-        where rur2.restaurant_id = ${restaurantId}), 0)::int as share_count,
-      coalesce((select sum(coalesce(vs.like_count,0) + coalesce(vs.comment_count,0) + coalesce(vs.share_count,0))::int
-        from video_stories vs
-        where vs.restaurant_id = ${restaurantId}
-          and vs.status = 'ready'
-          and vs.deleted_at is null), 0)::int as video_engagement
-    from recommendation_reactions rr
-    join restaurant_user_recommendations rur on rur.id = rr.recommendation_id
-    where rur.restaurant_id = ${restaurantId}
-  `);
-  const activityRow = Array.isArray((activityRows as any).rows)
-    ? (activityRows as any).rows[0]
-    : null;
-  const communityActivityScore =
-    Number(activityRow?.reaction_score || 0) +
-    Number(activityRow?.share_count || 0) +
-    Number(activityRow?.video_engagement || 0);
+  const boostedLikes = applyGoldenForkBoost(likesCount, likesGoldenCount);
+  const boostedShares = applyGoldenForkBoost(shareCount, shareGoldenCount);
+  const boostedFollows = applyGoldenForkBoost(followCount, followGoldenCount);
+  const boostedRecommendations = applyGoldenForkBoost(
+    recommendationsCount,
+    recommendationsGoldenCount,
+  );
+  const boostedFavorites = applyGoldenForkBoost(
+    favoritesCount,
+    favoritesGoldenCount,
+  );
 
   const rankingScore =
-    manualRecommendationCount * AWARD_RANKING_WEIGHTS.manualRecommendation +
-    videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation +
-    favoritesCount * AWARD_RANKING_WEIGHTS.favorites +
-    followCount * AWARD_RANKING_WEIGHTS.follows +
-    Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
-    totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
     totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
-    communityActivityScore * AWARD_RANKING_WEIGHTS.communityActivity;
+    totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
+    boostedLikes * AWARD_RANKING_WEIGHTS.likes +
+    boostedShares * AWARD_RANKING_WEIGHTS.shares +
+    boostedFollows * AWARD_RANKING_WEIGHTS.follows +
+    boostedRecommendations * AWARD_RANKING_WEIGHTS.recommendations +
+    boostedFavorites * AWARD_RANKING_WEIGHTS.favorites +
+    Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
+    // Keep minor signal from recommendation content volume via existing fields.
+    videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation;
 
   return rankingScore;
 }
