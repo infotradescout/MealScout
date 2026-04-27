@@ -46,6 +46,20 @@ const videoUpload = multer({
 });
 
 export default function setupStoriesRoutes(app: Express) {
+  void (async () => {
+    try {
+      // Non-breaking rollout: ensure reply chain column exists even before migrations run.
+      await db.execute(
+        sql`ALTER TABLE video_stories ADD COLUMN IF NOT EXISTS reply_to_story_id varchar`,
+      );
+      await db.execute(
+        sql`CREATE INDEX IF NOT EXISTS "IDX_video_stories_reply_to_story" ON video_stories (reply_to_story_id, created_at DESC)`,
+      );
+    } catch (error) {
+      console.warn('Could not ensure reply chain schema for video stories:', error);
+    }
+  })();
+
   const handleStoryUpload = async (
     req: any,
     res: any,
@@ -87,9 +101,28 @@ export default function setupStoriesRoutes(app: Express) {
         description: req.body.description || null,
         duration: parseInt(req.body.duration),
         restaurantId: req.body.restaurantId || null,
+        replyToStoryId: req.body.replyToStoryId || null,
         hashtags: req.body.hashtags ? JSON.parse(req.body.hashtags) : [],
         cuisine: req.body.cuisine || null,
       };
+
+      if (bodyData.replyToStoryId) {
+        const parentStory = await db
+          .select({ id: videoStories.id })
+          .from(videoStories)
+          .where(
+            and(
+              eq(videoStories.id, bodyData.replyToStoryId),
+              eq(videoStories.status, 'ready'),
+              isNull(videoStories.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (parentStory.length === 0) {
+          return res.status(404).json({ message: 'Reply target story not found' });
+        }
+      }
 
       // Enforce 30-second maximum duration
       if (bodyData.duration > 30) {
@@ -258,6 +291,7 @@ export default function setupStoriesRoutes(app: Express) {
             thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
             cuisine: bodyData.cuisine,
             hashtags: bodyData.hashtags,
+            replyToStoryId: bodyData.replyToStoryId,
             status: 'ready',
             updatedAt: new Date(),
           })
@@ -277,6 +311,7 @@ export default function setupStoriesRoutes(app: Express) {
             thumbnailUrl: cloudinaryResult.thumbnailUrl || undefined,
             cuisine: bodyData.cuisine,
             hashtags: bodyData.hashtags,
+            replyToStoryId: bodyData.replyToStoryId,
             status: 'ready', // For MVP, we skip encoding - use Cloudinary's optimization
           })
           .returning();
@@ -539,9 +574,20 @@ export default function setupStoriesRoutes(app: Express) {
               )
             );
 
+          let replyToStory: { id: string; title: string } | null = null;
+          if (story.replyToStoryId) {
+            const parentStory = await db
+              .select({ id: videoStories.id, title: videoStories.title })
+              .from(videoStories)
+              .where(eq(videoStories.id, story.replyToStoryId))
+              .limit(1);
+            replyToStory = parentStory[0] || null;
+          }
+
           return {
             ...story,
             userLiked: (userLiked[0]?.count || 0) > 0,
+            replyToStory,
           };
         })
       );
@@ -632,6 +678,36 @@ export default function setupStoriesRoutes(app: Express) {
         userLiked = likeCheck.length > 0;
       }
 
+      const replyToStory = story[0].replyToStoryId
+        ? (
+            await db
+              .select({ id: videoStories.id, title: videoStories.title })
+              .from(videoStories)
+              .where(eq(videoStories.id, story[0].replyToStoryId))
+              .limit(1)
+          )[0] || null
+        : null;
+
+      const replies = await db
+        .select({
+          id: videoStories.id,
+          title: videoStories.title,
+          videoUrl: videoStories.videoUrl,
+          thumbnailUrl: videoStories.thumbnailUrl,
+          createdAt: videoStories.createdAt,
+          userId: videoStories.userId,
+        })
+        .from(videoStories)
+        .where(
+          and(
+            eq(videoStories.replyToStoryId, storyId),
+            eq(videoStories.status, 'ready'),
+            isNull(videoStories.deletedAt),
+          ),
+        )
+        .orderBy(desc(videoStories.createdAt))
+        .limit(20);
+
       res.json({
         story: story[0],
         creator: creator[0],
@@ -640,10 +716,48 @@ export default function setupStoriesRoutes(app: Express) {
         comments,
         awards,
         userLiked,
+        replyToStory,
+        replies,
       });
     } catch (error) {
       console.error('Error fetching story details:', error);
       res.status(500).json({ message: 'Failed to fetch story' });
+    }
+  });
+
+  // GET - Replies for a story (content chain)
+  app.get('/api/stories/:storyId/replies', async (req, res) => {
+    try {
+      const { storyId } = req.params;
+      const limit = Math.max(1, Math.min(50, Number.parseInt(String(req.query.limit || '20'), 10) || 20));
+
+      const replies = await db
+        .select({
+          id: videoStories.id,
+          userId: videoStories.userId,
+          title: videoStories.title,
+          description: videoStories.description,
+          videoUrl: videoStories.videoUrl,
+          thumbnailUrl: videoStories.thumbnailUrl,
+          createdAt: videoStories.createdAt,
+          likeCount: videoStories.likeCount,
+          commentCount: videoStories.commentCount,
+        })
+        .from(videoStories)
+        .where(
+          and(
+            eq(videoStories.replyToStoryId, storyId),
+            eq(videoStories.status, 'ready'),
+            isNull(videoStories.deletedAt),
+          ),
+        )
+        .orderBy(desc(videoStories.createdAt))
+        .limit(limit);
+
+      res.json({ replies });
+    } catch (error) {
+      console.error('Error fetching story replies:', error);
+      res.status(500).json({ message: 'Failed to fetch story replies' });
     }
   });
 

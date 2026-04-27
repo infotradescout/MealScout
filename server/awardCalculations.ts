@@ -9,6 +9,7 @@ import {
 } from '@shared/schema';
 import { eq, and, or, like, sql, isNotNull, isNull } from 'drizzle-orm';
 import { AWARD_RANKING_WEIGHTS } from '@shared/rankingPolicy';
+import { evaluateTrustBonuses } from '@shared/trustBonuses';
 
 // Golden Fork Award Criteria
 const GOLDEN_FORK_CRITERIA = {
@@ -422,6 +423,18 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     favoritesGoldenCount,
   );
 
+  const trustBonus = evaluateTrustBonuses({
+    communityBuilderEnabled: Number(restaurant.communityBuilderBonusPoints || 0) > 0,
+    actions: {
+      likes: likesCount,
+      shares: shareCount,
+      follows: followCount,
+      recommendations: recommendationsCount,
+      favorites: favoritesCount,
+      reviews: reviews.length,
+    },
+  });
+
   const rankingScore =
     totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
     totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
@@ -430,6 +443,7 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     boostedFollows * AWARD_RANKING_WEIGHTS.follows +
     boostedRecommendations * AWARD_RANKING_WEIGHTS.recommendations +
     boostedFavorites * AWARD_RANKING_WEIGHTS.favorites +
+    trustBonus.totalPoints * AWARD_RANKING_WEIGHTS.trustBonus +
     Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
     // Keep minor signal from recommendation content volume via existing fields.
     videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation;

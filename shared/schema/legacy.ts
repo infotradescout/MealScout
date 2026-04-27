@@ -226,6 +226,14 @@ export const restaurants = pgTable("restaurants", {
   goldenPlateEarnedAt: timestamp("golden_plate_earned_at"),
   goldenPlateCount: integer("golden_plate_count").default(0), // Total times awarded (permanent record)
   rankingScore: integer("ranking_score").default(0), // Calculated from recommendations, favorites, reviews, deal usage
+  // Manual admin bonus for restaurants with notable local community impact.
+  communityBuilderBonusPoints: integer("community_builder_bonus_points").default(0),
+  communityBuilderBonusReason: text("community_builder_bonus_reason"),
+  communityBuilderBonusSetAt: timestamp("community_builder_bonus_set_at"),
+  communityBuilderBonusSetByUserId: varchar("community_builder_bonus_set_by_user_id").references(
+    () => users.id,
+    { onDelete: "set null" },
+  ),
   // Pricing lock (IMMUTABLE RULE: $25/month if claimed before April 1, 2026)
   lockedPriceCents: integer("locked_price_cents"), // Price is stored, never recalculated
   priceLockDate: timestamp("price_lock_date"), // When the price lock was applied
@@ -1177,8 +1185,11 @@ export const reviews = pgTable("reviews", {
     .notNull()
     .references(() => users.id),
   rating: integer("rating").notNull(),
+  ratingScore100: integer("rating_score_100").notNull().default(50),
+  menuItemName: varchar("menu_item_name", { length: 140 }),
   comment: text("comment"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const verificationRequests = pgTable("verification_requests", {
@@ -1295,8 +1306,11 @@ export const restaurantUserRecommendations = pgTable(
     userId: varchar("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    sentimentScore100: integer("sentiment_score_100").notNull().default(70),
+    menuItemName: varchar("menu_item_name", { length: 140 }),
     recommendedAt: timestamp("recommended_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
   },
   (table) => [
     index("IDX_restaurant_user_recommendations_restaurant").on(
@@ -1310,6 +1324,49 @@ export const restaurantUserRecommendations = pgTable(
     index("IDX_restaurant_user_recommendations_unique").on(
       table.restaurantId,
       table.userId,
+    ),
+  ],
+);
+
+export const sentimentSignalEvents = pgTable(
+  "sentiment_signal_events",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    restaurantId: varchar("restaurant_id")
+      .notNull()
+      .references(() => restaurants.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    source: varchar("source", { length: 24 }).notNull(),
+    score100: integer("score_100").notNull(),
+    previousScore100: integer("previous_score_100"),
+    deltaScore100: integer("delta_score_100"),
+    menuItemName: varchar("menu_item_name", { length: 140 }),
+    cuisineType: varchar("cuisine_type", { length: 120 }),
+    city: varchar("city", { length: 120 }),
+    state: varchar("state", { length: 80 }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_sentiment_signal_events_created").on(table.createdAt.desc()),
+    index("IDX_sentiment_signal_events_restaurant_created").on(
+      table.restaurantId,
+      table.createdAt.desc(),
+    ),
+    index("IDX_sentiment_signal_events_source_created").on(
+      table.source,
+      table.createdAt.desc(),
+    ),
+    index("IDX_sentiment_signal_events_city_created").on(
+      table.city,
+      table.createdAt.desc(),
+    ),
+    index("IDX_sentiment_signal_events_cuisine_created").on(
+      table.cuisineType,
+      table.createdAt.desc(),
     ),
   ],
 );
@@ -1669,6 +1726,12 @@ export const videoStories = pgTable(
     restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
       onDelete: "set null",
     }), // Nullable for personal reviews
+    replyToStoryId: varchar("reply_to_story_id").references(
+      (): any => videoStories.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     title: varchar("title").notNull(),
     description: text("description"),
     // Video metadata
@@ -1711,6 +1774,10 @@ export const videoStories = pgTable(
     index("IDX_video_stories_user").on(table.userId, table.createdAt.desc()),
     index("IDX_video_stories_restaurant").on(
       table.restaurantId,
+      table.createdAt.desc(),
+    ),
+    index("IDX_video_stories_reply_to_story").on(
+      table.replyToStoryId,
       table.createdAt.desc(),
     ),
     index("IDX_video_stories_expires").on(table.expiresAt),
@@ -2429,6 +2496,11 @@ export const insertDealViewSchema = createInsertSchema(dealViews).omit({
 export const insertReviewSchema = createInsertSchema(reviews).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+}).extend({
+  rating: z.number().int().min(1).max(5),
+  ratingScore100: z.number().int().min(1).max(100).optional(),
+  menuItemName: z.string().trim().min(1).max(140).optional(),
 });
 
 export const insertVerificationRequestSchema = createInsertSchema(
@@ -2506,7 +2578,29 @@ export const insertRestaurantUserRecommendationSchema = createInsertSchema(
   id: true,
   recommendedAt: true,
   createdAt: true,
+  updatedAt: true,
+}).extend({
+  sentimentScore100: z.number().int().min(1).max(100).optional(),
+  menuItemName: z.string().trim().min(1).max(140).optional(),
 });
+
+export const insertSentimentSignalEventSchema = createInsertSchema(
+  sentimentSignalEvents,
+)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    source: z.enum(["recommend", "review"]),
+    score100: z.number().int().min(1).max(100),
+    previousScore100: z.number().int().min(1).max(100).nullable().optional(),
+    deltaScore100: z.number().int().min(-99).max(99).nullable().optional(),
+    menuItemName: z.string().trim().min(1).max(140).optional().nullable(),
+    cuisineType: z.string().trim().min(1).max(120).optional().nullable(),
+    city: z.string().trim().min(1).max(120).optional().nullable(),
+    state: z.string().trim().min(1).max(80).optional().nullable(),
+  });
 
 export const insertBusinessStaffInviteSchema = createInsertSchema(
   businessStaffInvites,
@@ -2704,6 +2798,7 @@ export const insertVideoStorySchema = createInsertSchema(videoStories)
       .array(z.string().regex(/^#/, "Hashtags must start with #"))
       .max(10, "Maximum 10 hashtags allowed")
       .optional(),
+    replyToStoryId: z.string().optional().nullable(),
   });
 
 export const insertStoryLikeSchema = createInsertSchema(storyLikes).omit({
@@ -2845,6 +2940,11 @@ export type InsertRestaurantUserRecommendation = z.infer<
 >;
 export type RestaurantUserRecommendation =
   typeof restaurantUserRecommendations.$inferSelect;
+
+export type InsertSentimentSignalEvent = z.infer<
+  typeof insertSentimentSignalEventSchema
+>;
+export type SentimentSignalEvent = typeof sentimentSignalEvents.$inferSelect;
 
 export type InsertBusinessStaffInvite = z.infer<
   typeof insertBusinessStaffInviteSchema

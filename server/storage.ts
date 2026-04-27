@@ -557,6 +557,8 @@ export interface IStorage {
   createRestaurantUserRecommendation(recommendation: {
     restaurantId: string;
     userId: string;
+    sentimentScore100?: number;
+    menuItemName?: string;
   }): Promise<any>;
   getUserRestaurantRecommendations(userId: string): Promise<any[]>;
   getRestaurantFavoritesAnalytics(
@@ -2786,8 +2788,11 @@ export class DatabaseStorage implements IStorage {
         restaurantId: reviews.restaurantId,
         userId: reviews.userId,
         rating: reviews.rating,
+        ratingScore100: reviews.ratingScore100,
+        menuItemName: reviews.menuItemName,
         reviewText: reviews.comment,
         createdAt: reviews.createdAt,
+        updatedAt: reviews.updatedAt,
         user: {
           firstName: users.firstName,
           lastName: users.lastName,
@@ -4512,6 +4517,8 @@ export class DatabaseStorage implements IStorage {
   async createRestaurantUserRecommendation(recommendation: {
     restaurantId: string;
     userId: string;
+    sentimentScore100?: number;
+    menuItemName?: string;
   }): Promise<RestaurantUserRecommendation> {
     const [result] = await db
       .insert(restaurantUserRecommendations)
@@ -4528,8 +4535,11 @@ export class DatabaseStorage implements IStorage {
         id: restaurantUserRecommendations.id,
         restaurantId: restaurantUserRecommendations.restaurantId,
         userId: restaurantUserRecommendations.userId,
+        sentimentScore100: restaurantUserRecommendations.sentimentScore100,
+        menuItemName: restaurantUserRecommendations.menuItemName,
         recommendedAt: restaurantUserRecommendations.recommendedAt,
         createdAt: restaurantUserRecommendations.createdAt,
+        updatedAt: restaurantUserRecommendations.updatedAt,
         restaurant: restaurants,
       })
       .from(restaurantUserRecommendations)

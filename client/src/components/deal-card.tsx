@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Flame, Clock, Star, UserPlus } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Flame, Clock, Star, UserPlus, Frown, Smile } from "lucide-react";
 import { GoldenForkIcon } from "@/components/award-badges";
 import { apiRequest } from "@/lib/queryClient";
 import { trackDealViewOnce } from "@/lib/dealViewTracking";
@@ -256,6 +257,7 @@ export default function DealCard({
   const { toast } = useToast();
   const [recommendSelection, setRecommendSelection] = useState(false);
   const [isRestaurantRecommended, setIsRestaurantRecommended] = useState(false);
+  const [recommendMood, setRecommendMood] = useState(78);
   const [recommendError, setRecommendError] = useState("");
   const [recommendSubmitting, setRecommendSubmitting] = useState(false);
   const [journeySnapshot, setJourneySnapshot] = useState<JourneySnapshot | null>(
@@ -346,6 +348,14 @@ export default function DealCard({
           (rec: any) =>
             (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId
         );
+        const existingRecommendation = recommendationList.find(
+          (rec: any) =>
+            (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId
+        );
+        const existingMood = Number(existingRecommendation?.sentimentScore100);
+        if (Number.isFinite(existingMood)) {
+          setRecommendMood(Math.max(1, Math.min(100, existingMood)));
+        }
         setFavoriteCount(list.length);
         setIsRestaurantFavorite(isFav);
         setFavoriteSelection(isFav);
@@ -643,12 +653,15 @@ export default function DealCard({
         if (!favoriteOk) return;
       }
 
-      // Register recommendation (one per restaurant)
-      if (recommendSelection && !isRestaurantRecommended) {
+      // Register recommendation or update existing recommendation sentiment.
+      if (recommendSelection || isRestaurantRecommended) {
         await apiRequest(
           "POST",
           `/api/restaurants/${deal.restaurantId}/recommend`,
-          {}
+          {
+            sentimentScore100: recommendMood,
+            menuItemName: deal.title,
+          }
         );
         setIsRestaurantRecommended(true);
         setRecommendSelection(true);
@@ -658,7 +671,10 @@ export default function DealCard({
       if (recommendationText.trim().length > 0) {
         await apiRequest("POST", "/api/reviews", {
           restaurantId: deal.restaurantId,
-          rating: 5,
+          rating: Math.max(1, Math.min(5, Math.round(recommendMood / 20))),
+          ratingScore100: recommendMood,
+          menuItemName: deal.title,
+          replaceLatest: true,
           comment: recommendationText.trim(),
         });
       }
@@ -990,6 +1006,39 @@ export default function DealCard({
               <p className="text-xs text-secondary mb-2">
                 What makes this spot worth recommending?
               </p>
+              <div className="mb-3 rounded-xl border border-subtle bg-surface-muted p-3">
+                <div className="mb-1 flex items-center justify-between text-xs font-medium text-secondary">
+                  <span>How did this feel?</span>
+                  <span className="rounded-full bg-card px-2 py-0.5 text-[11px] text-primary">
+                    {recommendMood >= 75
+                      ? "Loved it"
+                      : recommendMood >= 50
+                        ? "Pretty good"
+                        : recommendMood >= 30
+                          ? "Mixed"
+                          : "Not great"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Frown className="h-4 w-4 text-muted" aria-hidden="true" />
+                  <Slider
+                    value={[recommendMood]}
+                    min={1}
+                    max={100}
+                    step={1}
+                    onValueChange={(value) => {
+                      const next = Number(value?.[0] ?? recommendMood);
+                      if (!Number.isFinite(next)) return;
+                      setRecommendMood(Math.max(1, Math.min(100, Math.round(next))));
+                    }}
+                    aria-label="Recommendation mood"
+                  />
+                  <Smile
+                    className="h-4 w-4 text-[color:var(--accent-text)]"
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
               <textarea
                 className="w-full rounded-xl border border-subtle focus:border-[color:var(--action-primary)] focus:ring-2 focus:ring-[color:var(--action-hover)] text-sm p-3 min-h-[96px] resize-none"
                 placeholder="Great food, fair prices, fast service, friendly owner…"

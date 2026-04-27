@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, like, isNotNull } from "drizzle-orm";
+import { and, desc, eq, like, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -14,6 +14,11 @@ import {
   getUserRecommendationCount,
   getUserWeightedRecommendationScore,
 } from "../awardCalculations";
+import {
+  evaluateTrustBonuses,
+  getCommunityBuilderBonusPoints,
+  TRUST_BONUS_POLICY,
+} from "@shared/trustBonuses";
 import {
   awardHistory,
   restaurants,
@@ -413,11 +418,34 @@ export function registerAwardsRoutes(app: Express) {
       const rankingScore = await calculateRestaurantRankingScore(
         req.params.restaurantId,
       );
+      const trustBonuses = evaluateTrustBonuses({
+        communityBuilderEnabled:
+          Number(restaurant.communityBuilderBonusPoints || 0) > 0,
+        actions: {
+          likes: 0,
+          shares: 0,
+          follows: 0,
+          recommendations: 0,
+          favorites: 0,
+          reviews: 0,
+        },
+      });
       res.json({
         restaurantId: restaurant.id,
         hasGoldenPlate: restaurant.hasGoldenPlate,
         goldenPlateCount: restaurant.goldenPlateCount || 0,
         goldenPlateEarnedAt: restaurant.goldenPlateEarnedAt,
+        communityBuilderBonusPoints: Number(
+          restaurant.communityBuilderBonusPoints || 0,
+        ),
+        communityBuilderBonusReason:
+          restaurant.communityBuilderBonusReason || null,
+        communityBuilderBonusSetAt:
+          restaurant.communityBuilderBonusSetAt || null,
+        communityBuilderBonusSetByUserId:
+          restaurant.communityBuilderBonusSetByUserId || null,
+        trustBonusPolicy: TRUST_BONUS_POLICY,
+        trustBonuses,
         rankingScore,
       });
     } catch (error) {
@@ -439,6 +467,330 @@ export function registerAwardsRoutes(app: Express) {
       } catch (error) {
         console.error("Error awarding Golden Plates:", error);
         res.status(500).json({ message: "Failed to award Golden Plates" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/restaurants/:restaurantId/community-builder-bonus",
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params.restaurantId || "").trim();
+        const enabledRaw = req.body?.enabled;
+        const enabled =
+          typeof enabledRaw === "boolean"
+            ? enabledRaw
+            : Number(req.body?.points) > 0;
+        const points = enabled ? getCommunityBuilderBonusPoints() : 0;
+        const reason = String(req.body?.reason || "").trim();
+
+        if (!restaurantId) {
+          return res.status(400).json({ message: "restaurantId is required" });
+        }
+        if (enabled && reason.length < 8) {
+          return res
+            .status(400)
+            .json({ message: "reason is required when granting bonus" });
+        }
+
+        const existing = await storage.getRestaurant(restaurantId);
+        if (!existing) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const [updated] = await db
+          .update(restaurants)
+          .set({
+            communityBuilderBonusPoints: points,
+            communityBuilderBonusReason: points > 0 ? reason : null,
+            communityBuilderBonusSetAt: points > 0 ? new Date() : null,
+            communityBuilderBonusSetByUserId:
+              points > 0 ? String(req.user?.id || "") : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, restaurantId))
+          .returning();
+
+        const rankingScore = await calculateRestaurantRankingScore(restaurantId);
+
+        await db
+          .update(restaurants)
+          .set({ rankingScore, updatedAt: new Date() })
+          .where(eq(restaurants.id, restaurantId));
+
+        res.json({
+          message:
+            points > 0
+              ? "Community Builder Bonus enabled"
+              : "Community Builder Bonus removed",
+          restaurantId,
+          communityBuilderBonusEnabled: enabled,
+          communityBuilderBonusPoints: points,
+          communityBuilderBonusReason:
+            points > 0 ? updated.communityBuilderBonusReason || reason : null,
+          communityBuilderBonusSetAt:
+            points > 0 ? updated.communityBuilderBonusSetAt || new Date() : null,
+          communityBuilderBonusSetByUserId:
+            points > 0
+              ? updated.communityBuilderBonusSetByUserId || String(req.user?.id || "")
+              : null,
+          trustBonusPolicy: TRUST_BONUS_POLICY,
+          rankingScore,
+        });
+      } catch (error) {
+        console.error("Error updating Community Builder Bonus:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to update Community Builder Bonus" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/restaurants/:restaurantId/community-builder-bonus",
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params.restaurantId || "").trim();
+        if (!restaurantId) {
+          return res.status(400).json({ message: "restaurantId is required" });
+        }
+
+        const existing = await storage.getRestaurant(restaurantId);
+        if (!existing) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        await db
+          .update(restaurants)
+          .set({
+            communityBuilderBonusPoints: 0,
+            communityBuilderBonusReason: null,
+            communityBuilderBonusSetAt: null,
+            communityBuilderBonusSetByUserId: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, restaurantId));
+
+        const rankingScore = await calculateRestaurantRankingScore(restaurantId);
+        await db
+          .update(restaurants)
+          .set({ rankingScore, updatedAt: new Date() })
+          .where(eq(restaurants.id, restaurantId));
+
+        res.json({
+          message: "Community Builder Bonus removed",
+          restaurantId,
+          communityBuilderBonusEnabled: false,
+          communityBuilderBonusPoints: 0,
+          trustBonusPolicy: TRUST_BONUS_POLICY,
+          rankingScore,
+        });
+      } catch (error) {
+        console.error("Error removing Community Builder Bonus:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to remove Community Builder Bonus" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/insights/sentiment-signals",
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const windowDays = Math.max(
+          7,
+          Math.min(365, Number.parseInt(String(req.query.windowDays || "90"), 10) || 90),
+        );
+        const sourceFilterRaw = String(req.query.source || "").trim().toLowerCase();
+        const sourceFilter =
+          sourceFilterRaw === "recommend" || sourceFilterRaw === "review"
+            ? sourceFilterRaw
+            : null;
+        const restaurantId = String(req.query.restaurantId || "").trim() || null;
+        const cityFilter = String(req.query.city || "").trim() || null;
+        const cuisineFilter = String(req.query.cuisineType || "").trim() || null;
+        const minSamples = Math.max(
+          1,
+          Math.min(200, Number.parseInt(String(req.query.minSamples || "5"), 10) || 5),
+        );
+
+        const [overviewResult, dailyResult, cuisineResult, cityResult, menuResult] =
+          await Promise.all([
+            db.execute(sql<{
+              sample_count: number;
+              avg_score_100: number;
+              avg_delta_100: number;
+              positive_share: number;
+              improved_share: number;
+              declined_share: number;
+              changed_count: number;
+            }>`
+              select
+                count(*)::int as sample_count,
+                coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+                coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100,
+                coalesce(avg(case when sse.score_100 >= 70 then 1 else 0 end), 0)::float as positive_share,
+                coalesce(avg(case when sse.delta_score_100 > 0 then 1 else 0 end), 0)::float as improved_share,
+                coalesce(avg(case when sse.delta_score_100 < 0 then 1 else 0 end), 0)::float as declined_share,
+                count(*) filter (where sse.delta_score_100 is not null and sse.delta_score_100 <> 0)::int as changed_count
+              from sentiment_signal_events sse
+              where sse.created_at >= now() - (${windowDays} * interval '1 day')
+                and (${sourceFilter}::text is null or sse.source = ${sourceFilter})
+                and (${restaurantId}::text is null or sse.restaurant_id = ${restaurantId})
+                and (${cityFilter}::text is null or sse.city = ${cityFilter})
+                and (${cuisineFilter}::text is null or sse.cuisine_type = ${cuisineFilter})
+            `),
+            db.execute(sql<{
+              bucket: Date;
+              sample_count: number;
+              avg_score_100: number;
+              avg_delta_100: number;
+            }>`
+              select
+                date_trunc('day', sse.created_at) as bucket,
+                count(*)::int as sample_count,
+                coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+                coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100
+              from sentiment_signal_events sse
+              where sse.created_at >= now() - (${windowDays} * interval '1 day')
+                and (${sourceFilter}::text is null or sse.source = ${sourceFilter})
+                and (${restaurantId}::text is null or sse.restaurant_id = ${restaurantId})
+                and (${cityFilter}::text is null or sse.city = ${cityFilter})
+                and (${cuisineFilter}::text is null or sse.cuisine_type = ${cuisineFilter})
+              group by 1
+              order by 1 asc
+            `),
+            db.execute(sql<{
+              key: string | null;
+              sample_count: number;
+              avg_score_100: number;
+              avg_delta_100: number;
+            }>`
+              select
+                sse.cuisine_type as key,
+                count(*)::int as sample_count,
+                coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+                coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100
+              from sentiment_signal_events sse
+              where sse.created_at >= now() - (${windowDays} * interval '1 day')
+                and sse.cuisine_type is not null
+                and (${sourceFilter}::text is null or sse.source = ${sourceFilter})
+                and (${restaurantId}::text is null or sse.restaurant_id = ${restaurantId})
+                and (${cityFilter}::text is null or sse.city = ${cityFilter})
+                and (${cuisineFilter}::text is null or sse.cuisine_type = ${cuisineFilter})
+              group by 1
+              order by avg_delta_100 desc, sample_count desc
+              limit 20
+            `),
+            db.execute(sql<{
+              key: string | null;
+              sample_count: number;
+              avg_score_100: number;
+              avg_delta_100: number;
+            }>`
+              select
+                sse.city as key,
+                count(*)::int as sample_count,
+                coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+                coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100
+              from sentiment_signal_events sse
+              where sse.created_at >= now() - (${windowDays} * interval '1 day')
+                and sse.city is not null
+                and (${sourceFilter}::text is null or sse.source = ${sourceFilter})
+                and (${restaurantId}::text is null or sse.restaurant_id = ${restaurantId})
+                and (${cityFilter}::text is null or sse.city = ${cityFilter})
+                and (${cuisineFilter}::text is null or sse.cuisine_type = ${cuisineFilter})
+              group by 1
+              order by avg_delta_100 desc, sample_count desc
+              limit 20
+            `),
+            db.execute(sql<{
+              key: string | null;
+              sample_count: number;
+              avg_score_100: number;
+              avg_delta_100: number;
+            }>`
+              select
+                sse.menu_item_name as key,
+                count(*)::int as sample_count,
+                coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+                coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100
+              from sentiment_signal_events sse
+              where sse.created_at >= now() - (${windowDays} * interval '1 day')
+                and sse.menu_item_name is not null
+                and (${sourceFilter}::text is null or sse.source = ${sourceFilter})
+                and (${restaurantId}::text is null or sse.restaurant_id = ${restaurantId})
+                and (${cityFilter}::text is null or sse.city = ${cityFilter})
+                and (${cuisineFilter}::text is null or sse.cuisine_type = ${cuisineFilter})
+              group by 1
+              order by avg_delta_100 desc, sample_count desc
+              limit 20
+            `),
+          ]);
+
+        const overviewRow = ((overviewResult as any)?.rows || [])[0] || {
+          sample_count: 0,
+          avg_score_100: 0,
+          avg_delta_100: 0,
+          positive_share: 0,
+          improved_share: 0,
+          declined_share: 0,
+          changed_count: 0,
+        };
+        const coerceRows = (result: any) =>
+          (Array.isArray(result?.rows) ? result.rows : []).map((row: any) => ({
+            key: typeof row.key === "string" ? row.key : null,
+            bucket: row.bucket || null,
+            sampleCount: Number(row.sample_count) || 0,
+            avgScore100: Number(row.avg_score_100) || 0,
+            avgDelta100: Number(row.avg_delta_100) || 0,
+          }));
+
+        const filteredCuisine = coerceRows(cuisineResult)
+          .filter((row: any) => row.sampleCount >= minSamples)
+          .slice(0, 12);
+        const filteredCities = coerceRows(cityResult)
+          .filter((row: any) => row.sampleCount >= minSamples)
+          .slice(0, 12);
+        const filteredMenu = coerceRows(menuResult)
+          .filter((row: any) => row.sampleCount >= minSamples)
+          .slice(0, 12);
+
+        res.json({
+          filters: {
+            windowDays,
+            source: sourceFilter,
+            restaurantId,
+            city: cityFilter,
+            cuisineType: cuisineFilter,
+            minSamples,
+          },
+          overview: {
+            sampleCount: Number(overviewRow.sample_count) || 0,
+            changedCount: Number(overviewRow.changed_count) || 0,
+            avgScore100: Number(overviewRow.avg_score_100) || 0,
+            avgDelta100: Number(overviewRow.avg_delta_100) || 0,
+            positiveShare: Number(overviewRow.positive_share) || 0,
+            improvedShare: Number(overviewRow.improved_share) || 0,
+            declinedShare: Number(overviewRow.declined_share) || 0,
+          },
+          dailyTrend: coerceRows(dailyResult).map((row: any) => ({
+            day: row.bucket,
+            sampleCount: row.sampleCount,
+            avgScore100: row.avgScore100,
+            avgDelta100: row.avgDelta100,
+          })),
+          topByCuisine: filteredCuisine,
+          topByCity: filteredCities,
+          topByMenuItem: filteredMenu,
+        });
+      } catch (error) {
+        console.error("Error fetching sentiment signal insights:", error);
+        res.status(500).json({ message: "Failed to fetch sentiment insights" });
       }
     },
   );

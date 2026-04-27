@@ -21,11 +21,13 @@ import {
   insertRestaurantFavoriteSchema,
   insertRestaurantFollowSchema,
   insertRestaurantUserRecommendationSchema,
+  insertSentimentSignalEventSchema,
   insertVerificationRequestSchema,
   deals,
   restaurantFavorites,
   restaurantFollows,
   restaurantUserRecommendations,
+  sentimentSignalEvents,
   videoStories,
   users,
   telemetryEvents,
@@ -352,9 +354,25 @@ export function registerRestaurantCoreRoutes(
   const upsertRestaurantUserRecommendation = async (
     userId: string,
     restaurantId: string,
+    input?: {
+      sentimentScore100?: number;
+      menuItemName?: string;
+    },
   ) => {
+    const sentimentScore100 = Math.max(
+      1,
+      Math.min(100, Number(input?.sentimentScore100 ?? 70) || 70),
+    );
+    const menuItemName =
+      typeof input?.menuItemName === "string"
+        ? input.menuItemName.trim().slice(0, 140)
+        : "";
+
     const existing = await db
-      .select({ id: restaurantUserRecommendations.id })
+      .select({
+        id: restaurantUserRecommendations.id,
+        sentimentScore100: restaurantUserRecommendations.sentimentScore100,
+      })
       .from(restaurantUserRecommendations)
       .where(
         and(
@@ -370,18 +388,24 @@ export function registerRestaurantCoreRoutes(
         .update(restaurantUserRecommendations)
         .set({
           recommendedAt: new Date(),
+          updatedAt: new Date(),
+          sentimentScore100,
+          menuItemName: menuItemName || null,
         })
         .where(eq(restaurantUserRecommendations.id, existing[0].id))
         .returning();
       return {
         recommendation: updated[0],
         updated: true,
+        previousScore100: Number(existing[0].sentimentScore100 || 0) || null,
       };
     }
 
     const recommendationData = insertRestaurantUserRecommendationSchema.parse({
       restaurantId,
       userId,
+      sentimentScore100,
+      menuItemName: menuItemName || undefined,
     });
     const recommendation = await storage.createRestaurantUserRecommendation(
       recommendationData,
@@ -389,6 +413,7 @@ export function registerRestaurantCoreRoutes(
     return {
       recommendation,
       updated: false,
+      previousScore100: null as number | null,
     };
   };
 
@@ -453,7 +478,10 @@ export function registerRestaurantCoreRoutes(
               )
               .limit(1),
             db
-              .select({ id: restaurantUserRecommendations.id })
+              .select({
+                id: restaurantUserRecommendations.id,
+                sentimentScore100: restaurantUserRecommendations.sentimentScore100,
+              })
               .from(restaurantUserRecommendations)
               .where(
                 and(
@@ -1636,8 +1664,41 @@ export function registerRestaurantCoreRoutes(
           return res.status(404).json({ message: "Restaurant not found" });
         }
 
-        const { recommendation, updated } =
-          await upsertRestaurantUserRecommendation(userId, restaurantId);
+        const recommendPayloadSchema = z.object({
+          sentimentScore100: z.number().int().min(1).max(100).optional(),
+          menuItemName: z.string().trim().min(1).max(140).optional(),
+        });
+        const payload = recommendPayloadSchema.parse(req.body || {});
+
+        const { recommendation, updated, previousScore100 } =
+          await upsertRestaurantUserRecommendation(userId, restaurantId, payload);
+
+        try {
+          const nextScore100 = Math.max(
+            1,
+            Math.min(100, Number((recommendation as any)?.sentimentScore100) || 70),
+          );
+          const priorScore100 =
+            typeof previousScore100 === "number" ? previousScore100 : null;
+          const signalEvent = insertSentimentSignalEventSchema.parse({
+            restaurantId,
+            userId,
+            source: "recommend",
+            score100: nextScore100,
+            previousScore100: priorScore100,
+            deltaScore100:
+              typeof priorScore100 === "number"
+                ? nextScore100 - priorScore100
+                : null,
+            menuItemName: payload.menuItemName || null,
+            cuisineType: restaurant.cuisineType || null,
+            city: restaurant.city || null,
+            state: restaurant.state || null,
+          });
+          await db.insert(sentimentSignalEvents).values(signalEvent);
+        } catch (signalError) {
+          console.warn("Failed to track recommendation sentiment signal:", signalError);
+        }
         await ensureRestaurantFollowForEngagement(
           userId,
           restaurantId,
@@ -1730,6 +1791,9 @@ export function registerRestaurantCoreRoutes(
           id: string;
           user_id: string;
           created_at: Date;
+          updated_at: Date | null;
+          sentiment_score_100: number | null;
+          menu_item_name: string | null;
           first_name: string | null;
           last_name: string | null;
           like_count: number;
@@ -1741,6 +1805,9 @@ export function registerRestaurantCoreRoutes(
             rur.id,
             rur.user_id,
             rur.created_at,
+            rur.updated_at,
+            rur.sentiment_score_100,
+            rur.menu_item_name,
             u.first_name,
             u.last_name,
             coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
@@ -1752,7 +1819,7 @@ export function registerRestaurantCoreRoutes(
           left join recommendation_reactions rr on rr.recommendation_id = rur.id
           left join recommendation_shares rs on rs.recommendation_id = rur.id
           where rur.restaurant_id = ${restaurantId}
-          group by rur.id, rur.user_id, rur.created_at, u.first_name, u.last_name
+          group by rur.id, rur.user_id, rur.created_at, rur.updated_at, rur.sentiment_score_100, rur.menu_item_name, u.first_name, u.last_name
           order by rur.created_at desc
           limit ${limit}
         `);
@@ -1764,6 +1831,15 @@ export function registerRestaurantCoreRoutes(
           id: String(row.id || ""),
           userId: String(row.user_id || ""),
           createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          sentimentScore100: Math.max(
+            1,
+            Math.min(100, Number(row.sentiment_score_100) || 70),
+          ),
+          menuItemName:
+            typeof row.menu_item_name === "string" && row.menu_item_name.trim()
+              ? row.menu_item_name.trim()
+              : null,
           authorName:
             String(
               [row.first_name, row.last_name].filter(Boolean).join(" ").trim(),

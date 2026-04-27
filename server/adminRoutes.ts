@@ -21,8 +21,10 @@ import {
   users,
   requestLogs,
   adminDailyReports,
+  restaurants,
+  sentimentSignalEvents,
 } from "@shared/schema";
-import { eq, desc, and, or, gte, lte, like, isNull } from "drizzle-orm";
+import { eq, desc, and, or, gte, lte, like, isNull, inArray, sql } from "drizzle-orm";
 import { isAdmin, isStaffOrAdmin } from "./unifiedAuth";
 import { logAudit } from "./auditLogger";
 import { storage } from "./storage";
@@ -184,6 +186,16 @@ function classifyTrafficLog(log: {
     isLLM: false,
     isSearchCrawler: false,
   };
+}
+
+const RESTAURANT_PATH_ID_REGEX =
+  /^\/restaurant\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|$)/i;
+
+function extractRestaurantIdFromPath(pathValue: unknown): string | null {
+  const path = String(pathValue || "").trim();
+  if (!path) return null;
+  const match = path.match(RESTAURANT_PATH_ID_REGEX);
+  return match?.[1] ? String(match[1]).toLowerCase() : null;
 }
 
 /**
@@ -633,6 +645,13 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       ? Math.max(1, Math.min(24 * 14, Math.trunc(rawHours)))
       : 48;
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const rawSentimentWindowDays = Number(req.query.sentimentWindowDays || 90);
+    const sentimentWindowDays = Number.isFinite(rawSentimentWindowDays)
+      ? Math.max(14, Math.min(365, Math.trunc(rawSentimentWindowDays)))
+      : 90;
+    const sentimentSince = new Date(
+      Date.now() - sentimentWindowDays * 24 * 60 * 60 * 1000,
+    );
 
     const logs = await db
       .select(requestLogLegacySelect)
@@ -674,6 +693,7 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       }
     >();
     const uniqueIps = new Set<string>();
+    const restaurantCrawlerHits = new Map<string, number>();
 
     for (const log of logs) {
       const classified = classifyTrafficLog(log);
@@ -690,6 +710,16 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       if (classified.isSearchCrawler) totals.searchCrawlerRequests += 1;
       if (classified.category === "browser_human") totals.humanBrowserRequests += 1;
       if (classified.category === "automation_script") totals.automationRequests += 1;
+
+      if (classified.isBot) {
+        const restaurantId = extractRestaurantIdFromPath(pathKey);
+        if (restaurantId) {
+          restaurantCrawlerHits.set(
+            restaurantId,
+            (restaurantCrawlerHits.get(restaurantId) || 0) + 1,
+          );
+        }
+      }
 
       const existingAgent = agentMap.get(agentKey) || {
         label: classified.label,
@@ -723,13 +753,6 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
     totals.uniqueIps = uniqueIps.size;
 
     const topAgents = Array.from(agentMap.values())
-      .map((agent) => ({
-        ...agent,
-        topPaths: Object.entries(agent.topPaths)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([path, hits]) => ({ path, hits })),
-      }))
       .sort((a, b) => b.hits - a.hits)
       .slice(0, 20);
 
@@ -737,6 +760,181 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
       .map(([path, stats]) => ({ path, ...stats }))
       .sort((a, b) => b.hits - a.hits)
       .slice(0, 20);
+
+    const crawledRestaurantIds = Array.from(restaurantCrawlerHits.keys());
+    let reverseEngineeredFromCrawls: any = {
+      sentimentWindowDays,
+      restaurantsAnalyzed: 0,
+      totalCrawlerRestaurantHits: 0,
+      topRestaurantMomentum: [],
+      topCuisineHoldUp: [],
+      topAreaHoldUp: [],
+    };
+
+    if (crawledRestaurantIds.length > 0) {
+      const sentimentRows = await db
+        .select({
+          restaurantId: sentimentSignalEvents.restaurantId,
+          restaurantName: restaurants.name,
+          cuisineType: restaurants.cuisineType,
+          city: restaurants.city,
+          state: restaurants.state,
+          sampleCount: sql<number>`count(*)`.mapWith(Number),
+          avgScore100: sql<number>`coalesce(avg(${sentimentSignalEvents.score100}), 0)`.mapWith(Number),
+          avgDelta100: sql<number>`coalesce(avg(${sentimentSignalEvents.deltaScore100}), 0)`.mapWith(Number),
+          positiveShare: sql<number>`coalesce(avg(case when ${sentimentSignalEvents.score100} >= 70 then 1 else 0 end), 0)`.mapWith(Number),
+          improvedShare: sql<number>`coalesce(avg(case when ${sentimentSignalEvents.deltaScore100} > 0 then 1 else 0 end), 0)`.mapWith(Number),
+          declinedShare: sql<number>`coalesce(avg(case when ${sentimentSignalEvents.deltaScore100} < 0 then 1 else 0 end), 0)`.mapWith(Number),
+        })
+        .from(sentimentSignalEvents)
+        .innerJoin(restaurants, eq(restaurants.id, sentimentSignalEvents.restaurantId))
+        .where(
+          and(
+            inArray(sentimentSignalEvents.restaurantId, crawledRestaurantIds),
+            gte(sentimentSignalEvents.createdAt, sentimentSince),
+          ),
+        )
+        .groupBy(
+          sentimentSignalEvents.restaurantId,
+          restaurants.name,
+          restaurants.cuisineType,
+          restaurants.city,
+          restaurants.state,
+        );
+
+      const totalCrawlerRestaurantHits = Array.from(restaurantCrawlerHits.values()).reduce(
+        (sum, value) => sum + value,
+        0,
+      );
+
+      const restaurantMomentum = sentimentRows
+        .map((row: any) => {
+          const crawlerHits = restaurantCrawlerHits.get(String(row.restaurantId)) || 0;
+          const attentionShare =
+            totalCrawlerRestaurantHits > 0 ? crawlerHits / totalCrawlerRestaurantHits : 0;
+          const inferredMomentum = Number(row.avgDelta100 || 0) * attentionShare;
+          return {
+            restaurantId: row.restaurantId,
+            restaurantName: row.restaurantName,
+            cuisineType: row.cuisineType,
+            city: row.city,
+            state: row.state,
+            crawlerHits,
+            attentionShare,
+            sampleCount: Number(row.sampleCount) || 0,
+            avgScore100: Number(row.avgScore100) || 0,
+            avgDelta100: Number(row.avgDelta100) || 0,
+            positiveShare: Number(row.positiveShare) || 0,
+            improvedShare: Number(row.improvedShare) || 0,
+            declinedShare: Number(row.declinedShare) || 0,
+            inferredMomentum,
+          };
+        })
+        .filter((row: any) => row.sampleCount > 0)
+        .sort((a: any, b: any) => b.inferredMomentum - a.inferredMomentum);
+
+      const aggregateByKey = (
+        rows: typeof restaurantMomentum,
+        keyFn: (row: (typeof restaurantMomentum)[number]) => string | null,
+      ) => {
+        const buckets = new Map<
+          string,
+          {
+            key: string;
+            crawlerHits: number;
+            sampleCount: number;
+            weightedScore: number;
+            weightedDelta: number;
+          }
+        >();
+
+        for (const row of rows) {
+          const key = keyFn(row);
+          if (!key) continue;
+          const current = buckets.get(key) || {
+            key,
+            crawlerHits: 0,
+            sampleCount: 0,
+            weightedScore: 0,
+            weightedDelta: 0,
+          };
+          current.crawlerHits += row.crawlerHits;
+          current.sampleCount += row.sampleCount;
+          current.weightedScore += row.avgScore100 * row.sampleCount;
+          current.weightedDelta += row.avgDelta100 * row.sampleCount;
+          buckets.set(key, current);
+        }
+
+        return Array.from(buckets.values())
+          .map((bucket) => ({
+            key: bucket.key,
+            crawlerHits: bucket.crawlerHits,
+            sampleCount: bucket.sampleCount,
+            avgScore100:
+              bucket.sampleCount > 0 ? bucket.weightedScore / bucket.sampleCount : 0,
+            avgDelta100:
+              bucket.sampleCount > 0 ? bucket.weightedDelta / bucket.sampleCount : 0,
+          }))
+          .sort((a, b) => b.avgDelta100 - a.avgDelta100)
+          .slice(0, 12);
+      };
+
+      reverseEngineeredFromCrawls = {
+        sentimentWindowDays,
+        restaurantsAnalyzed: restaurantMomentum.length,
+        totalCrawlerRestaurantHits,
+        topRestaurantMomentum: restaurantMomentum.slice(0, 20),
+        topCuisineHoldUp: aggregateByKey(restaurantMomentum, (row) =>
+          row.cuisineType ? String(row.cuisineType) : null,
+        ),
+        topAreaHoldUp: aggregateByKey(restaurantMomentum, (row) => {
+          const city = row.city ? String(row.city).trim() : "";
+          const state = row.state ? String(row.state).trim() : "";
+          if (!city && !state) return null;
+          return [city, state].filter(Boolean).join(", ");
+        }),
+      };
+    }
+
+    const actionableSignals = {
+      priorityRestaurants: Array.isArray(
+        reverseEngineeredFromCrawls?.topRestaurantMomentum,
+      )
+        ? reverseEngineeredFromCrawls.topRestaurantMomentum.slice(0, 10).map((row: any) => ({
+            restaurantId: row.restaurantId,
+            restaurantName: row.restaurantName,
+            location: [row.city, row.state].filter(Boolean).join(", ") || null,
+            cuisineType: row.cuisineType || null,
+            momentum: row.inferredMomentum,
+            recommendation:
+              row.avgDelta100 >= 2
+                ? "Scale exposure and package into featured discovery placements"
+                : row.avgDelta100 <= -2
+                  ? "Intervene: menu, ops, or value perception may be slipping"
+                  : "Monitor: stable sentiment with moderate crawl attention",
+          }))
+        : [],
+      strongestCuisines: Array.isArray(reverseEngineeredFromCrawls?.topCuisineHoldUp)
+        ? reverseEngineeredFromCrawls.topCuisineHoldUp.slice(0, 8)
+        : [],
+      strongestAreas: Array.isArray(reverseEngineeredFromCrawls?.topAreaHoldUp)
+        ? reverseEngineeredFromCrawls.topAreaHoldUp.slice(0, 8)
+        : [],
+      crawlerMix: topAgents
+        .reduce((acc, agent) => {
+          acc[agent.category] = (acc[agent.category] || 0) + agent.hits;
+          return acc;
+        }, {} as Record<string, number>),
+      coverage: {
+        requestsAnalyzed: totals.requests,
+        restaurantsAnalyzed: Number(reverseEngineeredFromCrawls?.restaurantsAnalyzed || 0),
+        restaurantCoverageRatio:
+          totals.requests > 0
+            ? Number(reverseEngineeredFromCrawls?.totalCrawlerRestaurantHits || 0) /
+              totals.requests
+            : 0,
+      },
+    };
 
     res.json({
       ok: true,
@@ -750,12 +948,12 @@ router.get("/bot-traffic", isStaffOrAdmin, async (req, res) => {
         botShare: totals.requests > 0 ? totals.botRequests / totals.requests : 0,
       },
       categories: categoryCounts,
-      topAgents,
-      topPaths,
+      actionableSignals,
+      reverseEngineeredFromCrawls,
       notes: [
         "LLM crawler detection is signature-based from request user agents.",
-        "Browser traffic without authentication may still include bots or shared previews.",
-        "Static assets are excluded from request log capture, so this focuses on page and API demand.",
+        "This endpoint intentionally suppresses raw crawl artifacts and returns interpreted signals only.",
+        "Reverse-engineered crawl intelligence estimates momentum by pairing crawler attention with sentiment change signals.",
       ],
     });
   } catch (error) {

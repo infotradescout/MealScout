@@ -59,6 +59,9 @@ type PublicRecommendation = {
   id: string;
   userId: string;
   createdAt?: string;
+  updatedAt?: string;
+  sentimentScore100: number;
+  menuItemName: string | null;
   authorName: string;
   likeCount: number;
   dislikeCount: number;
@@ -1411,6 +1414,16 @@ export default function RestaurantDetailPage() {
                           {rec.createdAt
                             ? new Date(rec.createdAt).toLocaleDateString()
                             : "Recent"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {rec.menuItemName ? `Menu pick: ${rec.menuItemName} · ` : ""}
+                          {rec.sentimentScore100 >= 75
+                            ? "Very positive"
+                            : rec.sentimentScore100 >= 50
+                              ? "Positive"
+                              : rec.sentimentScore100 >= 30
+                                ? "Mixed"
+                                : "Negative"}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">

@@ -18,6 +18,7 @@ export const AWARD_RANKING_WEIGHTS = {
   follows: 8,
   recommendations: 10,
   favorites: 12,
+  trustBonus: 1,
 
   // Legacy/detail weights retained for compatibility in other score surfaces.
   manualRecommendation: 10,

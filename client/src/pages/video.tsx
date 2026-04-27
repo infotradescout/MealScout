@@ -10,6 +10,7 @@ import { BackHeader } from "@/components/back-header";
 export default function VideoPage() {
   const { authState, isAuthenticated, isGuest } = useAuth();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<{ id: string; title: string } | null>(null);
 
   const handleUploadClick = () => {
     if (isGuest) {
@@ -17,7 +18,22 @@ export default function VideoPage() {
       window.location.href = "/login";
       return;
     }
+    setReplyTarget(null);
     setIsUploadOpen(true);
+  };
+
+  const handleReplyToStory = (story: { id: string; title: string }) => {
+    if (isGuest) {
+      window.location.href = "/login";
+      return;
+    }
+    setReplyTarget(story);
+    setIsUploadOpen(true);
+  };
+
+  const handleCloseUpload = () => {
+    setIsUploadOpen(false);
+    setReplyTarget(null);
   };
 
   return (
@@ -54,14 +70,16 @@ export default function VideoPage() {
 
       {/* Feed */}
       <main className="px-0 pt-2 pb-4">
-        <VideoFeed onUploadClick={handleUploadClick} />
+        <VideoFeed onUploadClick={handleUploadClick} onReplyToStory={handleReplyToStory} />
       </main>
 
       {/* Upload modal (auth-only) */}
       {isAuthenticated && (
         <VideoUploadModal
           isOpen={isUploadOpen}
-          onClose={() => setIsUploadOpen(false)}
+          onClose={handleCloseUpload}
+          replyToStoryId={replyTarget?.id}
+          replyToStoryTitle={replyTarget?.title}
         />
       )}
 

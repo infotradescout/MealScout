@@ -10,6 +10,9 @@ import {
   cities,
   deals,
   insertReviewSchema,
+  insertSentimentSignalEventSchema,
+  reviews,
+  sentimentSignalEvents,
   restaurants,
 } from "@shared/schema";
 
@@ -397,12 +400,104 @@ export function registerDealDiscoveryRoutes(
 
   app.post("/api/reviews", isAuthenticated, async (req: any, res) => {
     try {
+      const reviewPayloadSchema = z.object({
+        restaurantId: z.string().trim().min(1),
+        rating: z.number().int().min(1).max(5).optional(),
+        ratingScore100: z.number().int().min(1).max(100).optional(),
+        sentimentScore100: z.number().int().min(1).max(100).optional(),
+        comment: z.string().trim().max(1500).optional().nullable(),
+        menuItemName: z.string().trim().min(1).max(140).optional(),
+        replaceLatest: z.boolean().optional(),
+      });
+      const payload = reviewPayloadSchema.parse(req.body || {});
+
+      const scoreFromPayload =
+        payload.sentimentScore100 ?? payload.ratingScore100 ?? null;
+      const normalizedScore = Math.max(
+        1,
+        Math.min(
+          100,
+          scoreFromPayload ?? Math.max(1, Math.min(5, payload.rating ?? 5)) * 20,
+        ),
+      );
+      const normalizedRating = Math.max(
+        1,
+        Math.min(5, Math.round(normalizedScore / 20)),
+      );
+      const menuItemName = payload.menuItemName?.trim() || null;
+
       const reviewData = insertReviewSchema.parse({
-        ...req.body,
+        restaurantId: payload.restaurantId,
         userId: req.user.id,
+        rating: normalizedRating,
+        ratingScore100: normalizedScore,
+        menuItemName: menuItemName || undefined,
+        comment: payload.comment || null,
       });
 
-      const review = await storage.createReview(reviewData);
+      const restaurant = await storage.getRestaurant(reviewData.restaurantId);
+
+      let review;
+      let previousScore100: number | null = null;
+      if (payload.replaceLatest) {
+        const existing = await db
+          .select({ id: reviews.id, ratingScore100: reviews.ratingScore100 })
+          .from(reviews)
+          .where(
+            and(
+              eq(reviews.restaurantId, reviewData.restaurantId),
+              eq(reviews.userId, reviewData.userId),
+              menuItemName
+                ? eq(reviews.menuItemName, menuItemName)
+                : isNull(reviews.menuItemName),
+            ),
+          )
+          .orderBy(desc(reviews.updatedAt), desc(reviews.createdAt))
+          .limit(1);
+
+        if (existing[0]?.id) {
+          previousScore100 = Number(existing[0].ratingScore100 || 0) || null;
+          const updatedRows = await db
+            .update(reviews)
+            .set({
+              rating: reviewData.rating,
+              ratingScore100: reviewData.ratingScore100,
+              menuItemName,
+              comment: reviewData.comment,
+              updatedAt: new Date(),
+            })
+            .where(eq(reviews.id, existing[0].id))
+            .returning();
+          review = updatedRows[0];
+        } else {
+          review = await storage.createReview(reviewData);
+        }
+      } else {
+        review = await storage.createReview(reviewData);
+      }
+
+      try {
+        const finalScore100 = Number(reviewData.ratingScore100 ?? normalizedScore) || normalizedScore;
+        const signalEvent = insertSentimentSignalEventSchema.parse({
+          restaurantId: reviewData.restaurantId,
+          userId: reviewData.userId,
+          source: "review",
+          score100: finalScore100,
+          previousScore100,
+          deltaScore100:
+            typeof previousScore100 === "number"
+              ? finalScore100 - previousScore100
+              : null,
+          menuItemName,
+          cuisineType: restaurant?.cuisineType || null,
+          city: restaurant?.city || null,
+          state: restaurant?.state || null,
+        });
+        await db.insert(sentimentSignalEvents).values(signalEvent);
+      } catch (signalError) {
+        console.warn("Failed to track review sentiment signal:", signalError);
+      }
+
       res.json(review);
     } catch (error: any) {
       console.error("Error creating review:", error);

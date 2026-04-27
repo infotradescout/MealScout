@@ -1,16 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { apiUrl } from '@/lib/api';
 
 interface VideoUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   restaurantId?: string;
+  replyToStoryId?: string;
+  replyToStoryTitle?: string;
 }
 
 export function VideoUploadModal({
   isOpen,
   onClose,
   restaurantId,
+  replyToStoryId,
+  replyToStoryTitle,
 }: VideoUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -37,7 +42,10 @@ export function VideoUploadModal({
     const checkRecommendationStatus = async () => {
       try {
         const response = await fetch(
-          `/api/stories/recommendation-status?restaurantId=${encodeURIComponent(restaurantId)}`
+          apiUrl(`/api/stories/recommendation-status?restaurantId=${encodeURIComponent(restaurantId)}`),
+          {
+            credentials: 'include',
+          }
         );
 
         if (!response.ok) {
@@ -124,11 +132,15 @@ export function VideoUploadModal({
       if (restaurantId) {
         formData.append('restaurantId', restaurantId);
       }
+      if (replyToStoryId) {
+        formData.append('replyToStoryId', replyToStoryId);
+      }
       formData.append('hashtags', JSON.stringify(hashtags));
 
-      const response = await fetch('/api/stories/upload', {
+      const response = await fetch(apiUrl('/api/stories/upload'), {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -175,6 +187,12 @@ export function VideoUploadModal({
           <p className="text-xs text-[color:var(--text-muted)]">
             Videos appear in MealScout for 7 days.
           </p>
+
+          {replyToStoryId && (
+            <p className="text-xs text-[color:var(--status-info)] bg-[color:var(--status-info)]/10 border border-[color:var(--status-info)]/30 rounded px-2 py-1">
+              Replying to: {replyToStoryTitle || 'Video story'}
+            </p>
+          )}
 
           {/* Duplicate recommendation notice (non-blocking) */}
           {restaurantId && alreadyRecommended && (

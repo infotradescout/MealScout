@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useReducer } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { VIDEO_FEED_COPY as COPY } from '@/copy/videoFeed.copy';
 import ShareButton from '@/components/share-button';
+import { apiUrl } from '@/lib/api';
 
 /**
  * Video Feed v1 - COPY + TYPE LOCK
@@ -69,6 +70,10 @@ interface ApiStory {
   isHouseAd?: boolean;
   isAffiliate?: boolean;
   affiliateName?: string | null;
+  replyToStory?: {
+    id: string;
+    title: string;
+  } | null;
 }
 
 type UserRecommendationVideo = {
@@ -88,6 +93,11 @@ type UserRecommendationVideo = {
   userLiked?: boolean;
   expiresAt?: string;
   isGoldenFork?: boolean;
+  userFollowsRestaurant?: boolean;
+  replyToStory?: {
+    id: string;
+    title: string;
+  } | null;
 };
 
 type RestaurantAdVideo = {
@@ -108,13 +118,18 @@ type FeedVideoItem = UserRecommendationVideo | RestaurantAdVideo;
 interface UserVideoCardProps {
   video: UserRecommendationVideo;
   isVisible: boolean;
+  onReplyToStory?: (story: { id: string; title: string }) => void;
 }
 
-function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
+function UserVideoCard({ video, isVisible, onReplyToStory }: UserVideoCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [liked, setLiked] = useState(!!video.userLiked);
   const [likeCount, setLikeCount] = useState(video.likeCount);
   const [isLoadingLike, setIsLoadingLike] = useState(false);
+  const [isFollowingRestaurant, setIsFollowingRestaurant] = useState(
+    !!video.userFollowsRestaurant,
+  );
+  const [isLoadingFollow, setIsLoadingFollow] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const watchStartRef = useRef<number>(0);
 
@@ -146,9 +161,10 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
   const handleEnded = async () => {
     const watchDuration = Math.round((Date.now() - watchStartRef.current) / 1000);
     try {
-      await fetch(`/api/stories/${video.videoId}/view`, {
+      await fetch(apiUrl(`/api/stories/${video.videoId}/view`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ watchDuration }),
       });
     } catch (err) {
@@ -159,8 +175,9 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
   const handleLike = async () => {
     setIsLoadingLike(true);
     try {
-      const response = await fetch(`/api/stories/${video.videoId}/like`, {
+      const response = await fetch(apiUrl(`/api/stories/${video.videoId}/like`), {
         method: 'POST',
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -175,9 +192,40 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
     }
   };
 
+  const handleFollowRestaurant = async () => {
+    if (!video.restaurantId) {
+      return;
+    }
+
+    setIsLoadingFollow(true);
+    try {
+      const method = isFollowingRestaurant ? 'DELETE' : 'POST';
+      const response = await fetch(
+        apiUrl(`/api/restaurants/${video.restaurantId}/follow`),
+        {
+          method,
+          credentials: 'include',
+        },
+      );
+
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+
+      if (response.ok) {
+        setIsFollowingRestaurant((prev) => !prev);
+      }
+    } catch (err) {
+      console.error('Error following restaurant from story:', err);
+    } finally {
+      setIsLoadingFollow(false);
+    }
+  };
+
   const trackShare = async () => {
     try {
-      await fetch(`/api/stories/${video.videoId}/share`, {
+      await fetch(apiUrl(`/api/stories/${video.videoId}/share`), {
         method: 'POST',
         credentials: 'include',
       });
@@ -211,6 +259,11 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
           </div>
         )}
         <h3 className="font-semibold text-lg mb-1">{video.title}</h3>
+        {video.replyToStory && (
+          <p className="text-xs text-[color:var(--text-secondary)] mb-2">
+            Replying to: {video.replyToStory.title}
+          </p>
+        )}
         {video.description && (
           <p className="text-[color:var(--text-muted)] text-sm mb-3 line-clamp-2">
             {video.description}
@@ -245,6 +298,23 @@ function UserVideoCard({ video, isVisible }: UserVideoCardProps) {
             className="flex-1 py-2 px-4 bg-[var(--bg-surface-muted)] hover:bg-[var(--bg-surface)] rounded font-medium transition"
           >
             {COPY.userVideo.actions.comment}
+          </button>
+          {video.restaurantId && (
+            <button
+              onClick={handleFollowRestaurant}
+              disabled={isLoadingFollow}
+              className="flex-1 py-2 px-4 bg-[var(--bg-surface-muted)] hover:bg-[var(--bg-surface)] rounded font-medium transition disabled:opacity-50"
+            >
+              {isFollowingRestaurant ? 'Following' : 'Follow'}
+            </button>
+          )}
+        </div>
+        <div className="mt-3">
+          <button
+            onClick={() => onReplyToStory?.({ id: video.videoId, title: video.title })}
+            className="w-full py-2 px-4 bg-[var(--bg-surface-muted)] hover:bg-[var(--bg-surface)] rounded font-medium transition"
+          >
+            Respond with video
           </button>
         </div>
         <div className="mt-3">
@@ -327,10 +397,32 @@ function RestaurantAdCard({ video }: RestaurantAdCardProps) {
 
 interface VideoFeedProps {
   onUploadClick?: () => void;
+  onReplyToStory?: (story: { id: string; title: string }) => void;
 }
 
-export function VideoFeed({ onUploadClick }: VideoFeedProps) {
+export function VideoFeed({ onUploadClick, onReplyToStory }: VideoFeedProps) {
   const [feedState, dispatch] = useReducer(videoFeedTransition, { state: 'idle' });
+
+  const { data: followingRestaurants = [] } = useQuery({
+    queryKey: ['following-restaurants'],
+    queryFn: async () => {
+      const response = await fetch(apiUrl('/api/following/restaurants'), {
+        credentials: 'include',
+      });
+      if (response.status === 401) {
+        return [] as Array<{ restaurantId: string }>;
+      }
+      if (!response.ok) {
+        throw new Error('Failed to load followed restaurants');
+      }
+      return (await response.json()) as Array<{ restaurantId: string }>;
+    },
+    retry: false,
+  });
+
+  const followedRestaurantIds = new Set(
+    (followingRestaurants || []).map((item) => item.restaurantId),
+  );
 
   const {
     data,
@@ -341,7 +433,9 @@ export function VideoFeed({ onUploadClick }: VideoFeedProps) {
   } = useInfiniteQuery({
     queryKey: ['stories-feed'],
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await fetch(`/api/stories/feed?page=${pageParam}`);
+      const response = await fetch(apiUrl(`/api/stories/feed?page=${pageParam}`), {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch stories');
       return response.json();
     },
@@ -446,6 +540,10 @@ export function VideoFeed({ onUploadClick }: VideoFeedProps) {
         createdAt: item.createdAt,
         userLiked: item.userLiked,
         expiresAt: item.expiresAt,
+        userFollowsRestaurant: item.restaurantId
+          ? followedRestaurantIds.has(item.restaurantId)
+          : false,
+        replyToStory: item.replyToStory ?? null,
       };
       acc.push(userVideo);
     }
@@ -484,7 +582,12 @@ export function VideoFeed({ onUploadClick }: VideoFeedProps) {
       {/* Stories Feed */}
       {feedItems.map((item) =>
         item.kind === 'user' ? (
-          <UserVideoCard key={item.videoId} video={item} isVisible={true} />
+          <UserVideoCard
+            key={item.videoId}
+            video={item}
+            isVisible={true}
+            onReplyToStory={onReplyToStory}
+          />
         ) : (
           <RestaurantAdCard key={item.videoId} video={item} />
         )
