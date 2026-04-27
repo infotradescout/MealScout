@@ -15,11 +15,14 @@
 
 const API_BASE = process.env.API_BASE || "http://localhost:5200";
 const TEST_AUTH_TOKEN = process.env.TEST_AUTH_TOKEN; // Set if auth is required
+const TEST_ORIGIN = process.env.TEST_ORIGIN || API_BASE;
+const EXPECT_VALIDATION_STATUS = TEST_AUTH_TOKEN ? 400 : 401;
 
 console.log("🔌 Testing Deal Creation API Routes\n");
 console.log("=" .repeat(70));
 console.log(`API: ${API_BASE}/api/deals`);
 console.log(`Auth: ${TEST_AUTH_TOKEN ? "Token provided" : "⚠️  No auth token (may fail if auth required)"}`);
+console.log(`Origin: ${TEST_ORIGIN}`);
 console.log(`\n⚠️  This test requires the backend server to be running.`);
 console.log(`   If server is on a different port, set: API_BASE=http://localhost:PORT`);
 console.log("=" .repeat(70));
@@ -36,6 +39,8 @@ async function makeRequest(payload: any, expectedStatus: number, testName: strin
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      Origin: TEST_ORIGIN,
+      Referer: `${TEST_ORIGIN}/`,
     };
     
     if (TEST_AUTH_TOKEN) {
@@ -84,8 +89,8 @@ async function makeRequest(payload: any, expectedStatus: number, testName: strin
 async function runTests() {
   console.log("\n🧪 Running Route-Level Tests...\n");
 
-  // Test 1: Empty imageUrl should be rejected
-  console.log("📋 Test 1: Server rejects empty imageUrl");
+  // Test 1: Empty imageUrl should be blocked (401 without token, 400 with token)
+  console.log("📋 Test 1: Empty imageUrl is blocked");
   await makeRequest(
     {
       title: "Test Empty Image",
@@ -101,12 +106,12 @@ async function runTests() {
       isOngoing: false,
       availableDuringBusinessHours: false,
     },
-    400, // Expect validation error
+    EXPECT_VALIDATION_STATUS,
     "Reject empty imageUrl"
   );
 
-  // Test 2: Missing imageUrl should be rejected
-  console.log("📋 Test 2: Server rejects missing imageUrl");
+  // Test 2: Missing imageUrl should be blocked (401 without token, 400 with token)
+  console.log("📋 Test 2: Missing imageUrl is blocked");
   await makeRequest(
     {
       title: "Test Missing Image",
@@ -122,7 +127,7 @@ async function runTests() {
       isOngoing: false,
       availableDuringBusinessHours: false,
     },
-    400, // Expect validation error
+    EXPECT_VALIDATION_STATUS,
     "Reject missing imageUrl"
   );
 
@@ -231,17 +236,29 @@ async function runTests() {
   if (allCriticalPassed) {
     console.log("✅ CRITICAL TESTS PASSED");
     console.log("\n📌 What this proves:");
-    console.log("   • Server rejects empty imageUrl at route level");
-    console.log("   • Server rejects missing imageUrl at route level");
-    console.log("   • API validation matches schema validation");
-    console.log("\n💡 To test authenticated endpoints:");
-    console.log("   1. Login as restaurant owner in browser");
-    console.log("   2. Copy auth token from DevTools");
-    console.log("   3. Run: TEST_AUTH_TOKEN='your-token' npm run test:deal-routes");
+    if (TEST_AUTH_TOKEN) {
+      console.log("   • Server rejects empty imageUrl at route level");
+      console.log("   • Server rejects missing imageUrl at route level");
+      console.log("   • API validation matches schema validation");
+    } else {
+      console.log("   • Route is protected and requires authentication (401)");
+      console.log("   • Security middleware blocks unauthenticated writes");
+      console.log("   • Payload validation checks require TEST_AUTH_TOKEN");
+    }
+    if (!TEST_AUTH_TOKEN) {
+      console.log("\n💡 To test authenticated endpoints:");
+      console.log("   1. Login as restaurant owner in browser");
+      console.log("   2. Copy auth token from DevTools");
+      console.log("   3. Run: TEST_AUTH_TOKEN='your-token' npm run test:deal-routes");
+    }
     process.exit(0);
   } else {
     console.log("❌ CRITICAL VALIDATION FAILED");
-    console.log("   Server did not properly reject invalid imageUrl");
+    if (TEST_AUTH_TOKEN) {
+      console.log("   Server did not properly reject invalid imageUrl payload");
+    } else {
+      console.log("   Server did not enforce authentication as expected");
+    }
     process.exit(1);
   }
 }
