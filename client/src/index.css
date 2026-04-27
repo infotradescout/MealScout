@@ -7,6 +7,7 @@
 
 :root {
   --mobile-nav-offset: 5.75rem;
+  --mobile-nav-height: calc(var(--mobile-nav-offset) + env(safe-area-inset-bottom));
   --font-sans:
     "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;

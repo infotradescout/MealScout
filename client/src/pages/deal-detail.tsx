@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
 import { trackDealViewOnce } from "@/lib/dealViewTracking";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -55,9 +55,34 @@ export default function DealDetail() {
   const [showShareModal, setShowShareModal] = useState(false);
   const viewTimerRef = useRef<number | null>(null);
 
-  const { data: deal, isLoading: dealLoading } = useQuery({
+  const {
+    data: deal,
+    isLoading: dealLoading,
+    error: dealError,
+    refetch: refetchDeal,
+  } = useQuery<Deal | null, Error>({
     queryKey: ["/api/deals", dealId],
     enabled: !!dealId,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(`/api/deals/${dealId}`, {
+        credentials: "include",
+      });
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message =
+          String((payload as any)?.message || "Failed to load special") ||
+          "Failed to load special";
+        throw new ApiError(message, response.status, payload);
+      }
+
+      return response.json();
+    },
   });
 
   const { data: restaurant, isLoading: restaurantLoading } = useQuery({
@@ -188,16 +213,46 @@ export default function DealDetail() {
     );
   }
 
+  const dealErrorStatus =
+    dealError instanceof ApiError ? Number(dealError.status || 0) : 0;
+
   if (!deal) {
+    const isAuthRestricted = dealErrorStatus === 401 || dealErrorStatus === 403;
+    const isServerFailure = dealErrorStatus >= 500;
+
     return (
       <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen flex items-center justify-center">
         <Card>
           <CardContent className="p-6 text-center">
             <i className="fas fa-exclamation-triangle text-muted-foreground text-3xl mb-4"></i>
-            <p className="text-muted-foreground mb-4">Special not found</p>
-            <Link href="/">
-              <Button>Back to Home</Button>
-            </Link>
+            <p className="text-muted-foreground mb-4">
+              {isAuthRestricted
+                ? "You need the right access to view this special"
+                : isServerFailure
+                  ? "We could not load this special right now"
+                  : "Special not found"}
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              {isAuthRestricted ? (
+                <Button
+                  onClick={() => {
+                    window.location.href = authUrl("/api/auth/google/customer");
+                  }}
+                >
+                  Sign In
+                </Button>
+              ) : null}
+              {isServerFailure ? (
+                <Button variant="outline" onClick={() => void refetchDeal()}>
+                  Try Again
+                </Button>
+              ) : null}
+              <Link href="/">
+                <Button variant={isAuthRestricted || isServerFailure ? "outline" : "default"}>
+                  Back to Home
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>

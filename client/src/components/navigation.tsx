@@ -743,7 +743,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       {/* ═══════════════════════════════════════════════════════════════
           MOBILE: Bottom nav bar with top 3 + share + more
           ═══════════════════════════════════════════════════════════════ */}
-      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 w-full border-t px-2 pt-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] z-[1100] lg:hidden">
+      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 h-[var(--mobile-nav-height)] w-full border-t px-2 pt-2 pb-[env(safe-area-inset-bottom)] z-[1100] lg:hidden">
         <div className="flex items-stretch justify-around w-full max-w-md mx-auto">
           {/* Top 3 role-specific items */}
           {topItems.map((item) => renderNavLink(item))}
