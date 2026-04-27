@@ -795,6 +795,249 @@ export function registerAwardsRoutes(app: Express) {
     },
   );
 
+  app.get(
+    "/api/admin/insights/sentiment-alerts",
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const windowDays = Math.max(
+          7,
+          Math.min(365, Number.parseInt(String(req.query.windowDays || "30"), 10) || 30),
+        );
+        const minSamples = Math.max(
+          3,
+          Math.min(200, Number.parseInt(String(req.query.minSamples || "8"), 10) || 8),
+        );
+        const declineThreshold = Number(req.query.declineThreshold || -2);
+        const riseThreshold = Number(req.query.riseThreshold || 2);
+        const positiveShareFloor = Number(req.query.positiveShareFloor || 0.5);
+
+        const rowsResult = await db.execute(sql<{
+          restaurant_id: string;
+          restaurant_name: string;
+          cuisine_type: string | null;
+          city: string | null;
+          state: string | null;
+          sample_count: number;
+          avg_score_100: number;
+          avg_delta_100: number;
+          positive_share: number;
+        }>`
+          select
+            sse.restaurant_id,
+            r.name as restaurant_name,
+            r.cuisine_type,
+            r.city,
+            r.state,
+            count(*)::int as sample_count,
+            coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+            coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100,
+            coalesce(avg(case when sse.score_100 >= 70 then 1 else 0 end), 0)::float as positive_share
+          from sentiment_signal_events sse
+          inner join restaurants r on r.id = sse.restaurant_id
+          where sse.created_at >= now() - (${windowDays} * interval '1 day')
+          group by sse.restaurant_id, r.name, r.cuisine_type, r.city, r.state
+          having count(*) >= ${minSamples}
+          order by avg_delta_100 asc
+        `);
+
+        const rows = Array.isArray((rowsResult as any)?.rows)
+          ? (rowsResult as any).rows
+          : [];
+
+        const normalized = rows.map((row: any) => ({
+          restaurantId: String(row.restaurant_id || ""),
+          restaurantName: String(row.restaurant_name || "Restaurant"),
+          cuisineType: row.cuisine_type || null,
+          city: row.city || null,
+          state: row.state || null,
+          sampleCount: Number(row.sample_count) || 0,
+          avgScore100: Number(row.avg_score_100) || 0,
+          avgDelta100: Number(row.avg_delta_100) || 0,
+          positiveShare: Number(row.positive_share) || 0,
+        }));
+
+        const atRisk = normalized
+          .filter(
+            (row) =>
+              row.avgDelta100 <= declineThreshold ||
+              row.positiveShare < positiveShareFloor,
+          )
+          .slice(0, 30)
+          .map((row) => ({
+            ...row,
+            severity:
+              row.avgDelta100 <= declineThreshold * 1.5 ||
+              row.positiveShare < positiveShareFloor - 0.1
+                ? "high"
+                : "medium",
+            recommendation:
+              row.avgDelta100 <= declineThreshold * 1.5
+                ? "Immediate intervention: menu/value/ops review"
+                : "Investigate sentiment drift and run targeted recovery",
+          }));
+
+        const rising = normalized
+          .filter((row) => row.avgDelta100 >= riseThreshold)
+          .sort((a, b) => b.avgDelta100 - a.avgDelta100)
+          .slice(0, 30)
+          .map((row) => ({
+            ...row,
+            recommendation: "Increase visibility and replicate successful pattern",
+          }));
+
+        res.json({
+          filters: {
+            windowDays,
+            minSamples,
+            declineThreshold,
+            riseThreshold,
+            positiveShareFloor,
+          },
+          counts: {
+            atRisk: atRisk.length,
+            rising: rising.length,
+          },
+          atRisk,
+          rising,
+        });
+      } catch (error) {
+        console.error("Error fetching sentiment alerts:", error);
+        res.status(500).json({ message: "Failed to fetch sentiment alerts" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/insights/sentiment-opportunities/export",
+    isAdmin,
+    async (req: any, res) => {
+      try {
+        const windowDays = Math.max(
+          7,
+          Math.min(365, Number.parseInt(String(req.query.windowDays || "90"), 10) || 90),
+        );
+        const minSamples = Math.max(
+          3,
+          Math.min(200, Number.parseInt(String(req.query.minSamples || "6"), 10) || 6),
+        );
+        const format = String(req.query.format || "json").toLowerCase();
+
+        const rowsResult = await db.execute(sql<{
+          restaurant_id: string;
+          restaurant_name: string;
+          cuisine_type: string | null;
+          city: string | null;
+          state: string | null;
+          sample_count: number;
+          avg_score_100: number;
+          avg_delta_100: number;
+          positive_share: number;
+        }>`
+          select
+            sse.restaurant_id,
+            r.name as restaurant_name,
+            r.cuisine_type,
+            r.city,
+            r.state,
+            count(*)::int as sample_count,
+            coalesce(avg(sse.score_100), 0)::float as avg_score_100,
+            coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100,
+            coalesce(avg(case when sse.score_100 >= 70 then 1 else 0 end), 0)::float as positive_share
+          from sentiment_signal_events sse
+          inner join restaurants r on r.id = sse.restaurant_id
+          where sse.created_at >= now() - (${windowDays} * interval '1 day')
+          group by sse.restaurant_id, r.name, r.cuisine_type, r.city, r.state
+          having count(*) >= ${minSamples}
+        `);
+
+        const rows = (Array.isArray((rowsResult as any)?.rows)
+          ? (rowsResult as any).rows
+          : []) as any[];
+
+        const opportunities = rows
+          .map((row) => {
+            const avgDelta100 = Number(row.avg_delta_100) || 0;
+            const positiveShare = Number(row.positive_share) || 0;
+            const motion = avgDelta100 >= 2 ? "growth" : avgDelta100 <= -2 ? "recovery" : "monitor";
+            return {
+              type: motion,
+              restaurantId: String(row.restaurant_id || ""),
+              restaurantName: String(row.restaurant_name || "Restaurant"),
+              cuisineType: row.cuisine_type || null,
+              city: row.city || null,
+              state: row.state || null,
+              sampleCount: Number(row.sample_count) || 0,
+              avgScore100: Number(row.avg_score_100) || 0,
+              avgDelta100,
+              positiveShare,
+              recommendedAction:
+                motion === "growth"
+                  ? "Scale promotional exposure and cross-market pattern"
+                  : motion === "recovery"
+                    ? "Recovery sprint: diagnose and fix quality/value gap"
+                    : "Monitor for change and gather more signal",
+            };
+          })
+          .sort((a, b) => b.avgDelta100 - a.avgDelta100);
+
+        if (format === "csv") {
+          const header = [
+            "type",
+            "restaurantId",
+            "restaurantName",
+            "cuisineType",
+            "city",
+            "state",
+            "sampleCount",
+            "avgScore100",
+            "avgDelta100",
+            "positiveShare",
+            "recommendedAction",
+          ];
+          const escapeCsv = (value: unknown) =>
+            `"${String(value ?? "").replace(/"/g, '""')}"`;
+          const lines = [
+            header.join(","),
+            ...opportunities.map((row) =>
+              [
+                row.type,
+                row.restaurantId,
+                row.restaurantName,
+                row.cuisineType,
+                row.city,
+                row.state,
+                row.sampleCount,
+                row.avgScore100.toFixed(2),
+                row.avgDelta100.toFixed(2),
+                row.positiveShare.toFixed(4),
+                row.recommendedAction,
+              ]
+                .map(escapeCsv)
+                .join(","),
+            ),
+          ];
+
+          res.setHeader("Content-Type", "text/csv; charset=utf-8");
+          res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="sentiment-opportunities-${windowDays}d.csv"`,
+          );
+          return res.status(200).send(lines.join("\n"));
+        }
+
+        return res.json({
+          filters: { windowDays, minSamples },
+          count: opportunities.length,
+          opportunities,
+        });
+      } catch (error) {
+        console.error("Error exporting sentiment opportunities:", error);
+        res.status(500).json({ message: "Failed to export sentiment opportunities" });
+      }
+    },
+  );
+
   app.get("/api/awards/history", async (req, res) => {
     try {
       const query = await db

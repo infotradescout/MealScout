@@ -34,6 +34,7 @@ import {
   CreditCard,
   MapPinned,
   Menu,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -403,6 +404,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         items.push(
           { path: "/admin/dashboard", icon: Shield, fallbackLabel: "Admin", group: "Admin" },
           { path: "/admin/control-center", icon: LayoutDashboard, fallbackLabel: "Control Center", group: "Admin" },
+          { path: "/admin/sentiment-intelligence", icon: TrendingUp, fallbackLabel: "Sentiment Intel", group: "Admin" },
           { path: "/admin/affiliates", icon: Users, fallbackLabel: "Affiliates", group: "Admin" },
           { path: "/admin/vac-logs", icon: Shield, fallbackLabel: "VAC Logs", group: "Admin" },
           { path: "/deals/featured", icon: Receipt, fallbackLabel: "Featured Specials", group: "Admin" },

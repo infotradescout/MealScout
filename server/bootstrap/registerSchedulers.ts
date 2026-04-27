@@ -29,7 +29,7 @@ import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { db } from "../db";
-import { requestLogs, adminDailyReports, cities } from "@shared/schema";
+import { requestLogs, adminDailyReports, cities, sentimentSignalEvents } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -497,6 +497,115 @@ export async function registerSchedulers(app: Express): Promise<void> {
       await db.delete(requestLogs).where(lt(requestLogs.createdAt, cutoff));
     } catch (error) {
       console.error("❌ Request log cleanup failed:", error);
+    }
+  });
+
+  const writeSentimentSnapshot = async (reportType: string, windowDays: number) => {
+    const reportDate = new Date();
+    const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const [overview] = await db
+      .select({
+        sampleCount: sql<number>`count(*)`.mapWith(Number),
+        avgScore100: sql<number>`coalesce(avg(${sentimentSignalEvents.score100}), 0)`.mapWith(Number),
+        avgDelta100: sql<number>`coalesce(avg(${sentimentSignalEvents.deltaScore100}), 0)`.mapWith(Number),
+        positiveShare: sql<number>`coalesce(avg(case when ${sentimentSignalEvents.score100} >= 70 then 1 else 0 end), 0)`.mapWith(Number),
+      })
+      .from(sentimentSignalEvents)
+      .where(gte(sentimentSignalEvents.createdAt, since));
+
+    const topCuisineRows = await db.execute(sql<{
+      key: string | null;
+      sample_count: number;
+      avg_delta_100: number;
+      avg_score_100: number;
+    }>`
+      select
+        sse.cuisine_type as key,
+        count(*)::int as sample_count,
+        coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100,
+        coalesce(avg(sse.score_100), 0)::float as avg_score_100
+      from sentiment_signal_events sse
+      where sse.created_at >= ${since}
+        and sse.cuisine_type is not null
+      group by 1
+      having count(*) >= 4
+      order by avg_delta_100 desc, sample_count desc
+      limit 12
+    `);
+
+    const topAreaRows = await db.execute(sql<{
+      city: string | null;
+      state: string | null;
+      sample_count: number;
+      avg_delta_100: number;
+      avg_score_100: number;
+    }>`
+      select
+        sse.city,
+        sse.state,
+        count(*)::int as sample_count,
+        coalesce(avg(sse.delta_score_100), 0)::float as avg_delta_100,
+        coalesce(avg(sse.score_100), 0)::float as avg_score_100
+      from sentiment_signal_events sse
+      where sse.created_at >= ${since}
+        and sse.city is not null
+      group by sse.city, sse.state
+      having count(*) >= 4
+      order by avg_delta_100 desc, sample_count desc
+      limit 12
+    `);
+
+    await db.insert(adminDailyReports).values({
+      reportDate,
+      reportType,
+      summary: {
+        windowDays,
+        generatedAt: reportDate.toISOString(),
+        overview: {
+          sampleCount: Number(overview?.sampleCount || 0),
+          avgScore100: Number(overview?.avgScore100 || 0),
+          avgDelta100: Number(overview?.avgDelta100 || 0),
+          positiveShare: Number(overview?.positiveShare || 0),
+        },
+        topByCuisine: (Array.isArray((topCuisineRows as any)?.rows)
+          ? (topCuisineRows as any).rows
+          : []
+        ).map((row: any) => ({
+          key: row.key,
+          sampleCount: Number(row.sample_count) || 0,
+          avgScore100: Number(row.avg_score_100) || 0,
+          avgDelta100: Number(row.avg_delta_100) || 0,
+        })),
+        topByArea: (Array.isArray((topAreaRows as any)?.rows)
+          ? (topAreaRows as any).rows
+          : []
+        ).map((row: any) => ({
+          key: [row.city, row.state].filter(Boolean).join(", "),
+          sampleCount: Number(row.sample_count) || 0,
+          avgScore100: Number(row.avg_score_100) || 0,
+          avgDelta100: Number(row.avg_delta_100) || 0,
+        })),
+      },
+    });
+  };
+
+  // Sentiment intelligence daily snapshot.
+  cron.schedule("20 6 * * *", async () => {
+    try {
+      await writeSentimentSnapshot("sentiment_snapshot_daily", 30);
+      console.log("✅ Sentiment Daily Snapshot Saved");
+    } catch (error) {
+      console.error("❌ Sentiment Daily Snapshot Failed:", error);
+    }
+  });
+
+  // Sentiment intelligence weekly snapshot.
+  cron.schedule("35 6 * * 1", async () => {
+    try {
+      await writeSentimentSnapshot("sentiment_snapshot_weekly", 90);
+      console.log("✅ Sentiment Weekly Snapshot Saved");
+    } catch (error) {
+      console.error("❌ Sentiment Weekly Snapshot Failed:", error);
     }
   });
 

@@ -6,8 +6,9 @@ import {
   awardHistory,
   videoStories,
   restaurantUserRecommendations,
+  sentimentSignalEvents,
 } from '@shared/schema';
-import { eq, and, or, like, sql, isNotNull, isNull } from 'drizzle-orm';
+import { eq, and, or, like, sql, isNotNull, isNull, gte } from 'drizzle-orm';
 import { AWARD_RANKING_WEIGHTS } from '@shared/rankingPolicy';
 import { evaluateTrustBonuses } from '@shared/trustBonuses';
 
@@ -34,6 +35,9 @@ const applyGoldenForkBoost = (
   const golden = Math.max(0, Math.min(base, Number(goldenForkCount || 0)));
   return base + golden * (GOLDEN_FORK_ACTION_MULTIPLIER - 1);
 };
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
 
 /**
  * Get authoritative recommendation count for a user based on video stories.
@@ -435,6 +439,34 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     },
   });
 
+  const sentimentSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [sentimentAggregate] = await db
+    .select({
+      sampleCount: sql<number>`count(*)`.mapWith(Number),
+      avgDelta100: sql<number>`coalesce(avg(${sentimentSignalEvents.deltaScore100}), 0)`.mapWith(Number),
+      avgAbsDelta100: sql<number>`coalesce(avg(abs(coalesce(${sentimentSignalEvents.deltaScore100}, 0))), 0)`.mapWith(Number),
+      positiveShare: sql<number>`coalesce(avg(case when ${sentimentSignalEvents.score100} >= 70 then 1 else 0 end), 0)`.mapWith(Number),
+    })
+    .from(sentimentSignalEvents)
+    .where(
+      and(
+        eq(sentimentSignalEvents.restaurantId, restaurantId),
+        gte(sentimentSignalEvents.createdAt, sentimentSince),
+      ),
+    );
+
+  let sentimentStabilityScore = 0;
+  const sentimentSamples = Number(sentimentAggregate?.sampleCount || 0);
+  if (sentimentSamples >= 5) {
+    const avgDelta100 = Number(sentimentAggregate?.avgDelta100 || 0);
+    const avgAbsDelta100 = Number(sentimentAggregate?.avgAbsDelta100 || 0);
+    const positiveShare = Number(sentimentAggregate?.positiveShare || 0);
+    const trend = clamp(avgDelta100, -5, 5);
+    const volatilityPenalty = clamp(avgAbsDelta100, 0, 10) * 0.35;
+    const positivityLift = clamp((positiveShare - 0.5) * 8, -2, 2);
+    sentimentStabilityScore = clamp(trend - volatilityPenalty + positivityLift, -5, 5);
+  }
+
   const rankingScore =
     totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
     totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
@@ -444,6 +476,7 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     boostedRecommendations * AWARD_RANKING_WEIGHTS.recommendations +
     boostedFavorites * AWARD_RANKING_WEIGHTS.favorites +
     trustBonus.totalPoints * AWARD_RANKING_WEIGHTS.trustBonus +
+    sentimentStabilityScore * AWARD_RANKING_WEIGHTS.sentimentStability +
     Math.round(avgRating * AWARD_RANKING_WEIGHTS.avgRating) +
     // Keep minor signal from recommendation content volume via existing fields.
     videoRecommendationCount * AWARD_RANKING_WEIGHTS.videoRecommendation;
