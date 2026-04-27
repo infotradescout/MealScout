@@ -1115,21 +1115,46 @@ export default function RestaurantOwnerDashboard() {
     mutationFn: async (dealId: string) => {
       return await apiRequest("DELETE", `/api/deals/${dealId}`);
     },
+    onMutate: async (dealId: string) => {
+      const key = [`/api/deals/restaurant/${selectedRestaurant}`] as const;
+      await queryClient.cancelQueries({ queryKey: key });
+      const previousDeals = queryClient.getQueryData<Deal[]>(key);
+
+      if (previousDeals) {
+        queryClient.setQueryData<Deal[]>(
+          key,
+          previousDeals.filter((deal) => deal.id !== dealId),
+        );
+      }
+
+      return { previousDeals, key };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/deals/restaurant"],
       });
       toast({
         title: "Deal Deleted",
         description: "Deal has been deleted successfully.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, _dealId, context) => {
+      if (context?.previousDeals && context?.key) {
+        queryClient.setQueryData(context.key, context.previousDeals);
+      }
       toast({
         title: "Delete failed",
         description:
           error?.message || "Unable to delete this deal right now.",
         variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/deals/restaurant/${selectedRestaurant}`],
       });
     },
   });
