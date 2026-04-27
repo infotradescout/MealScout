@@ -162,6 +162,19 @@ interface OwnerMenuSummary {
   isActive: boolean;
 }
 
+const DEAL_IMAGE_FALLBACK = "/og-default.jpg";
+
+const normalizeDealImageUrl = (value: unknown): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return DEAL_IMAGE_FALLBACK;
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  if (raw.startsWith("/")) return raw;
+  if (raw.startsWith("uploads/") || raw.startsWith("api/")) return `/${raw}`;
+  return `https://${raw}`;
+};
+
 export default function RestaurantOwnerDashboard() {
   const LAST_RESTAURANT_KEY = "mealscout:last-selected-restaurant-id";
   const { user } = useAuth();
@@ -1794,8 +1807,18 @@ export default function RestaurantOwnerDashboard() {
               .map((deal) => (
                 <Card key={deal.id}>
                   <CardContent className="p-6">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex flex-1 items-start gap-4 min-w-0">
+                        <img
+                          src={normalizeDealImageUrl((deal as any).imageUrl)}
+                          alt={`${deal.title} image`}
+                          loading="lazy"
+                          className="h-20 w-20 rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
+                          onError={(event) => {
+                            event.currentTarget.src = DEAL_IMAGE_FALLBACK;
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-semibold">
                             {deal.title}
@@ -1838,6 +1861,7 @@ export default function RestaurantOwnerDashboard() {
                             </div>
                           )}
                         </div>
+                      </div>
                       </div>
 
                       <div className="flex gap-2">
@@ -1921,8 +1945,18 @@ export default function RestaurantOwnerDashboard() {
             .map((deal) => (
               <Card key={deal.id} className="opacity-75">
                 <CardContent className="p-6">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-1 items-start gap-4 min-w-0">
+                      <img
+                        src={normalizeDealImageUrl((deal as any).imageUrl)}
+                        alt={`${deal.title} image`}
+                        loading="lazy"
+                        className="h-20 w-20 rounded-xl object-cover border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)]"
+                        onError={(event) => {
+                          event.currentTarget.src = DEAL_IMAGE_FALLBACK;
+                        }}
+                      />
+                      <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold">{deal.title}</h3>
                         <Badge variant="secondary">Inactive</Badge>
@@ -1930,6 +1964,7 @@ export default function RestaurantOwnerDashboard() {
                       <p className="text-muted-foreground mb-3">
                         {deal.description}
                       </p>
+                    </div>
                     </div>
 
                     <div className="flex gap-2">
