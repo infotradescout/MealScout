@@ -616,7 +616,8 @@ export function registerRestaurantCoreRoutes(
 
       const searchTerms = buildRestaurantSearchTerms(query);
       const restaurants = (await storage.getAllRestaurants()).filter(
-        (restaurant: any) => isPublicRestaurantVisible(restaurant),
+        (restaurant: any) =>
+          Boolean(restaurant?.isActive) && isPublicBusinessVisible(restaurant),
       );
 
       let filteredRestaurants = restaurants.filter(

@@ -98,12 +98,12 @@ export function registerPublicSearchRoutes(app: Express) {
           name: restaurants.name,
           cuisineType: restaurants.cuisineType,
           address: restaurants.address,
+          isVerified: restaurants.isVerified,
         })
         .from(restaurants)
         .where(
           and(
             eq(restaurants.isActive, true),
-            eq(restaurants.isVerified, true),
             or(
               sql`lower(${restaurants.name}) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.cuisineType}, '')) like ${searchValue}`,
@@ -111,10 +111,24 @@ export function registerPublicSearchRoutes(app: Express) {
             ),
           ),
         )
-        .limit(6);
+        .limit(20);
+
+      const rankedRestaurantRows = restaurantRows
+        .filter((row: any) =>
+          isPublicBusinessVisible({
+            name: row.name,
+            address: row.address,
+            cuisineType: row.cuisineType,
+          }),
+        )
+        .sort(
+          (a: any, b: any) =>
+            Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified)),
+        )
+        .slice(0, 6);
 
       const cuisineSuggestions = new Map<string, any>();
-      for (const row of restaurantRows) {
+      for (const row of rankedRestaurantRows) {
         suggestionsV2.push({
           id: `restaurant-${row.id}`,
           text: row.name,
@@ -342,7 +356,7 @@ export function registerPublicSearchRoutes(app: Express) {
       const restaurantMatches = await storage.getAllRestaurants();
       const restaurantsOut = restaurantMatches
         .map((restaurant: any) => {
-          if (!restaurant?.isActive || !restaurant?.isVerified) return false;
+          if (!restaurant?.isActive) return false;
           if (!isPublicBusinessVisible(restaurant)) return false;
           const name = String(restaurant.name || "").toLowerCase();
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
@@ -352,7 +366,11 @@ export function registerPublicSearchRoutes(app: Express) {
             searchTerms,
             primaryTerm,
           );
-          return score > 0 ? { restaurant, score } : null;
+          if (score <= 0) return null;
+          return {
+            restaurant,
+            score: score + (restaurant?.isVerified ? 3 : 0),
+          };
         })
         .filter(Boolean)
         .sort((a: any, b: any) => b.score - a.score)
