@@ -59,3 +59,5 @@ Record one entry before merge and one entry after deploy verification for each r
 - `Snapshot` must be `before` or `after`.
 - If any metric degrades, include rollback or mitigation notes in `Notes`.
 - Link to dashboards or evidence in `Notes` when available.
+| 2026-04-28 | PR-25 | phase-3-storage-split | before | PASS | PASS | PASS | <100ms | PASS | PASS | baseline | Truck live-ops storage extraction baseline: server/storage.ts 5458 lines |
+| 2026-04-28 | PR-25 | phase-3-storage-split | after | PASS | PASS | PASS | <100ms | PASS | PASS | no change | Extracted 12 truck/live-ops methods into server/storage/truckLiveOpsRepository.ts; DatabaseStorage delegates; IStorage signatures unchanged; npm run check passed; server/storage.ts reduced from 5458 to 5163 lines |

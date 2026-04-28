@@ -12,6 +12,7 @@ _nothing active_
 
 ## Merged
 
+- [x] [phase-3-storage-split] Extracted truck live-ops persistence methods (`createTruckManualSchedule`, `getTruckManualSchedules`, `deleteTruckManualSchedule`, `createTruckParkingReport`, `getTruckParkingReports`, `startTruckSession`, `endTruckSession`, `getActiveTruckSession`, `hasRecentLocationUpdate`, `upsertLiveLocation`, `getLiveTrucksNearby`, `getTruckLocationHistory`) from `server/storage.ts` into new `server/storage/truckLiveOpsRepository.ts`; `DatabaseStorage` delegates to the new repo; `IStorage` signatures unchanged - PR-25 - owner copilot - 2026-04-28
 - [x] [phase-5-oversized-route-splits] Extracted admin LISA remediations and brief-action endpoints (`GET/POST /api/admin/lisa/remediations`, `GET/POST /api/admin/lisa/brief-actions`) from `server/routes/adminManagementRoutes.ts` into `server/routes/admin/adminLisaActionsRoutes.ts` - PR-22 - owner codex - 2026-04-19
 - [x] [phase-5-oversized-route-splits] Extracted admin email endpoints (`GET /api/admin/email/status`, `POST /api/admin/email/test`, `GET /api/admin/email/attempts`) from `server/routes/adminManagementRoutes.ts` into `server/routes/admin/adminEmailRoutes.ts` - PR-21 - owner codex - 2026-04-19
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint (`GET /api/admin/supplier-orders`) from `server/routes/supplierMarketplaceRoutes.ts` into `server/routes/suppliers/adminOrdersRoutes.ts` - PR-20 - owner codex - 2026-04-17
@@ -37,6 +38,7 @@ _nothing active_
 
 ## Verified
 
+- [x] [phase-3-storage-split] Extracted truck live-ops persistence into `server/storage/truckLiveOpsRepository.ts`; verified with `npm run check` (passed); `IStorage` public surface unchanged; `server/storage.ts` reduced from 5458 to 5163 lines - PR-25 - owner copilot - 2026-04-28
 - [x] [phase-5-oversized-route-splits] Extracted admin LISA remediations/brief-action endpoints into `server/routes/admin/adminLisaActionsRoutes.ts`; verified with `npm run check`, `npm run build:server`, `npm run test:flows:with-server` (93.1% with known admin env gate) - PR-22 - owner codex - 2026-04-19
 - [x] [phase-5-oversized-route-splits] Extracted admin email endpoints into `server/routes/admin/adminEmailRoutes.ts`; verified with `npm run check`, `npm run build:server`, `npm run test:flows:with-server` (93.1% with known admin env gate) - PR-21 - owner codex - 2026-04-19
 - [x] [phase-5-oversized-route-splits] Extracted admin supplier-orders endpoint into `server/routes/suppliers/adminOrdersRoutes.ts`; verified with `npm run check`, `npm run build:server`, `npm run test:flows:with-server` (93.1% with known admin env gate) - PR-20 - owner codex - 2026-04-17
