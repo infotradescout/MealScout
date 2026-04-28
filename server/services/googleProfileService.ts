@@ -40,6 +40,8 @@ const PROFILE_FIELD_MASK = [
   "internationalPhoneNumber",
   "websiteUri",
   "googleMapsUri",
+  "menuUri",
+  "orderUri",
   "rating",
   "userRatingCount",
   "priceLevel",
@@ -723,7 +725,10 @@ export async function ensureGoogleRestaurantProfile(
     .from(restaurants)
     .where(eq(restaurants.googlePlaceId, normalizedPlaceId))
     .limit(1);
-  if (existing) return { restaurant: existing, created: false };
+  if (existing) {
+    const refreshed = await refreshGeneratedGoogleRestaurant(existing, normalizedPlaceId);
+    return { restaurant: refreshed || existing, created: false };
+  }
 
   const profile = await fetchGoogleProfile(normalizedPlaceId);
   if (!profile?.name || !profile?.formattedAddress) {
@@ -793,6 +798,59 @@ export async function ensureGoogleRestaurantProfile(
   });
 }
 
+async function refreshGeneratedGoogleRestaurant(
+  restaurant: typeof restaurants.$inferSelect,
+  placeId: string,
+): Promise<typeof restaurants.$inferSelect | null> {
+  if (!placeId || restaurant.profileSource !== "google") return null;
+
+  const profile = await fetchGoogleProfile(placeId);
+  if (!profile) return null;
+
+  const firstPhotoName = profile.googlePhotos?.[0]?.name || "";
+  const coverImageUrl = firstPhotoName ? getGooglePhotoUrl(firstPhotoName) : null;
+  const { businessType, isFoodTruck } = inferBusinessType(profile);
+
+  const updates: Record<string, any> = {
+    businessType,
+    isFoodTruck,
+    googlePlaceId: placeId,
+    googleRating: profile.googleRating,
+    googleReviewCount: profile.googleReviewCount,
+    googlePriceLevel: profile.googlePriceLevel,
+    googleBusinessStatus: profile.googleBusinessStatus,
+    googlePhotos: profile.googlePhotos,
+    googleCategories: profile.googleCategories,
+    googleFormattedPhone: profile.googleFormattedPhone,
+    menuUrl: profile.menuUrl,
+    orderUrl: profile.orderUrl,
+    operatingHours: profile.operatingHours,
+    amenities: profile.amenities,
+    profileSource: "google",
+    profileLastSynced: new Date(),
+  };
+
+  if (profile.name) updates.name = profile.name;
+  if (profile.formattedAddress) updates.address = profile.formattedAddress;
+  if (profile.city) updates.city = profile.city;
+  if (profile.state) updates.state = profile.state;
+  if (typeof profile.latitude === "number") updates.latitude = String(profile.latitude);
+  if (typeof profile.longitude === "number") updates.longitude = String(profile.longitude);
+  if (profile.description) updates.description = profile.description;
+  if (profile.websiteUrl) updates.websiteUrl = profile.websiteUrl;
+  if (profile.googleFormattedPhone) updates.phone = profile.googleFormattedPhone;
+  if (coverImageUrl) updates.coverImageUrl = coverImageUrl;
+  if (profile.googleCategories?.length) updates.cuisineType = fallbackCuisine(profile);
+
+  const [updated] = await db
+    .update(restaurants)
+    .set(updates)
+    .where(eq(restaurants.id, restaurant.id))
+    .returning();
+
+  return updated || null;
+}
+
 /**
  * Auto-populate a restaurant's profile from Google Places
  */
@@ -851,7 +909,14 @@ export async function populateRestaurantProfile(
     if (profile.googleCategories)
       updates.googleCategories = profile.googleCategories;
     if (!restaurant.phone && profile.googleFormattedPhone) {
+      updates.phone = profile.googleFormattedPhone;
       updates.googleFormattedPhone = profile.googleFormattedPhone;
+    } else if (profile.googleFormattedPhone) {
+      updates.googleFormattedPhone = profile.googleFormattedPhone;
+    }
+    const firstPhotoName = profile.googlePhotos?.[0]?.name || "";
+    if (!restaurant.coverImageUrl && firstPhotoName) {
+      updates.coverImageUrl = getGooglePhotoUrl(firstPhotoName);
     }
     if (!restaurant.operatingHours && profile.operatingHours) {
       updates.operatingHours = profile.operatingHours;

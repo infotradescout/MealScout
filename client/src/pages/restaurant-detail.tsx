@@ -28,6 +28,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Share2,
+  Star,
+  Globe,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -509,10 +511,16 @@ export default function RestaurantDetailPage() {
   );
   const menuPrimaryUrl = toExternalUrl(
     (restaurant as any)?.menuUrl ||
-      (restaurant as any)?.menuURL ||
-      (restaurant as any)?.websiteUrl ||
-      (restaurant as any)?.website,
+      (restaurant as any)?.menuURL,
   );
+  const websitePrimaryUrl = toExternalUrl(
+    (restaurant as any)?.websiteUrl || (restaurant as any)?.website,
+  );
+  const heroImageUrl = toExternalUrl(
+    (restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl,
+  );
+  const googleRating = Number((restaurant as any)?.googleRating || 0);
+  const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const phoneHref = toPhoneHref(phoneNumber);
   const lat = Number(
     (restaurant as any)?.currentLatitude || (restaurant as any)?.latitude,
@@ -625,16 +633,26 @@ export default function RestaurantDetailPage() {
 
       {/* Header Image */}
       <div className="relative h-52 sm:h-64 bg-[linear-gradient(120deg,rgba(15,23,42,0.88),rgba(127,29,29,0.76),rgba(249,115,22,0.55))] overflow-hidden">
-        <div className="absolute inset-0 bg-black/30"></div>
+        {heroImageUrl ? (
+          <img
+            src={heroImageUrl}
+            alt={`${restaurantName} exterior or food photo`}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="eager"
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-black/35"></div>
 
         {/* Restaurant Image Placeholder */}
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="relative w-full h-full flex items-center justify-center">
           <div className="text-center text-white/80">
-            <div className="w-20 h-20 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
-              <span className="text-3xl font-semibold tracking-wide">
-                {restaurantName.slice(0, 1).toUpperCase()}
-              </span>
-            </div>
+            {!heroImageUrl ? (
+              <div className="w-20 h-20 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+                <span className="text-3xl font-semibold tracking-wide">
+                  {restaurantName.slice(0, 1).toUpperCase()}
+                </span>
+              </div>
+            ) : null}
             <p className="text-sm font-medium tracking-[0.12em] uppercase text-white/85">
               {cuisineType}
             </p>
@@ -735,6 +753,15 @@ export default function RestaurantDetailPage() {
                 <span data-testid="text-unclaimed-label">Unclaimed listing</span>
               </div>
             )}
+            {!isVerifiedMemberProfile && googleRating > 0 ? (
+              <div className="flex items-center space-x-1 text-sm text-foreground">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span>
+                  Google {googleRating.toFixed(1)}
+                  {googleReviewCount > 0 ? ` (${googleReviewCount})` : ""}
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
               <Clock className="w-4 h-4" />
               <span>
@@ -1184,6 +1211,13 @@ export default function RestaurantDetailPage() {
                 <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
                   <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
                     View Full Menu
+                  </Button>
+                </a>
+              ) : websitePrimaryUrl ? (
+                <a href={websitePrimaryUrl} target="_blank" rel="noreferrer">
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                    <Globe className="mr-2 h-4 w-4" />
+                    Visit Website
                   </Button>
                 </a>
               ) : (
