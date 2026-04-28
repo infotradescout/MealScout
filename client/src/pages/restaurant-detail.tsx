@@ -569,6 +569,7 @@ export default function RestaurantDetailPage() {
   const heroImageUrl = toExternalUrl(
     (restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl,
   );
+  const heroImageSrc = heroImageUrl || "/backgrounds/night-market-plate.webp";
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
@@ -672,7 +673,7 @@ export default function RestaurantDetailPage() {
         canonicalUrl={canonicalProfileUrl}
         allowCanonicalHostOverride={Boolean(customDomainHost)}
         ogType="restaurant"
-        ogImage={(restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl || undefined}
+        ogImage={heroImageSrc}
         schemaData={[localBusinessSchema, sourceOfTruthSchema, breadcrumbSchema]}
       />
       <BackHeader
@@ -685,26 +686,17 @@ export default function RestaurantDetailPage() {
 
       {/* Header Image */}
       <div className="relative h-52 sm:h-64 bg-[linear-gradient(120deg,rgba(15,23,42,0.88),rgba(127,29,29,0.76),rgba(249,115,22,0.55))] overflow-hidden">
-        {heroImageUrl ? (
-          <img
-            src={heroImageUrl}
-            alt={`${restaurantName} exterior or food photo`}
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="eager"
-          />
-        ) : null}
+        <img
+          src={heroImageSrc}
+          alt={`${restaurantName} exterior or food photo`}
+          className="absolute inset-0 h-full w-full object-cover"
+          loading="eager"
+        />
         <div className="absolute inset-0 bg-black/35"></div>
 
         {/* Restaurant Image Placeholder */}
         <div className="relative w-full h-full flex items-center justify-center">
           <div className="text-center text-white/80">
-            {!heroImageUrl ? (
-              <div className="w-20 h-20 bg-white/15 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/20">
-                <span className="text-3xl font-semibold tracking-wide">
-                  {restaurantName.slice(0, 1).toUpperCase()}
-                </span>
-              </div>
-            ) : null}
             <p className="text-sm font-medium tracking-[0.12em] uppercase text-white/85">
               {cuisineType}
             </p>
