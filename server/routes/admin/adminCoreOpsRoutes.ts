@@ -795,10 +795,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         if (!user) {
           return res.status(404).json({ message: "User not found" });
         }
-        if (!user.email) {
-          return res
-            .status(400)
-            .json({ message: "User has no email on file" });
+
+        const requiresEmail =
+          action === "resend-verification" ||
+          action === "send-menu-nudge" ||
+          action === "send-help-offer";
+        if (requiresEmail && !user.email) {
+          return res.status(400).json({
+            message: "User has no email on file",
+          });
         }
 
         const adminId = req.user?.id || req.user?.claims?.sub || "admin";

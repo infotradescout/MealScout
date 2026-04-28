@@ -114,6 +114,17 @@ export default function OwnerOnboardingChecklist() {
   const blockers = (data.visibilityBlockers || []).map(
     (key) => blockerText[key] || key,
   );
+  const needsAdminHelp =
+    (data.visibilityBlockers || []).includes("inactive") ||
+    (data.visibilityBlockers || []).includes("unverified") ||
+    (data.visibilityBlockers || []).includes("flagged_test_data");
+  const supportEmail =
+    "info.mealscout@gmail.com?subject=" +
+    encodeURIComponent("Please help make my profile visible") +
+    "&body=" +
+    encodeURIComponent(
+      "Hi MealScout team, my profile is still not discoverable. Please help make it live. Thanks!",
+    );
 
   return (
     <Card className="mb-6 border-orange-300 bg-orange-50/30">
@@ -191,13 +202,25 @@ export default function OwnerOnboardingChecklist() {
                   {blockers.length > 0 ? `: ${blockers.join(" • ")}` : ""}.
                 </span>
               )}
+              {!data.isDiscoverable && needsAdminHelp && (
+                <div className="mt-1 text-orange-700">
+                  This part needs admin approval. We usually review quickly.
+                </div>
+              )}
             </div>
-            <Link href={data.publicPreviewUrl}>
-              <Button size="sm" variant="outline">
-                <Eye className="w-4 h-4 mr-1" />
-                Preview
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={data.publicPreviewUrl}>
+                <Button size="sm" variant="outline">
+                  <Eye className="w-4 h-4 mr-1" />
+                  Preview
+                </Button>
+              </Link>
+              {!data.isDiscoverable && needsAdminHelp && (
+                <Button size="sm" variant="outline" asChild>
+                  <a href={`mailto:${supportEmail}`}>Contact support</a>
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </CardContent>
