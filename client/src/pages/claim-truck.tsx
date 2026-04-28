@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
@@ -39,14 +39,34 @@ export default function ClaimTruckPage() {
 
   const normalizedQuery = useMemo(() => query.trim(), [query]);
 
-  const handleSearch = async () => {
-    const q = normalizedQuery;
+  // Pre-populate and auto-search if the user arrived from /search with ?q= or ?listingId=
+  const initialAutoSearchRan = useRef(false);
+  useEffect(() => {
+    if (initialAutoSearchRan.current) return;
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const initialQ = (params.get("q") || params.get("listingId") || "").trim();
+      if (initialQ) {
+        initialAutoSearchRan.current = true;
+        setQuery(initialQ);
+        // Defer to allow setQuery to flush before issuing the search.
+        setTimeout(() => {
+          void handleSearchWith(initialQ);
+        }, 0);
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSearchWith = async (q: string) => {
     if (!q) {
       setRows([]);
       setError("");
       return;
     }
-
     setLoading(true);
     setError("");
     try {
@@ -58,13 +78,19 @@ export default function ClaimTruckPage() {
       const next = Array.isArray(data) ? data : [];
       setRows(next);
       if (next.length === 0) {
-        setError("No matching businesses found. Try a shorter name or the license/external ID.");
+        setError(
+          "No matching businesses found. Try a shorter name or the license/external ID.",
+        );
       }
     } catch (err: any) {
       setError(err?.message || "Search failed. Try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async () => {
+    await handleSearchWith(normalizedQuery);
   };
 
   const handleRequest = async (listingId: string) => {

@@ -435,12 +435,18 @@ export default function SearchPage() {
   const searchedEvents = Array.isArray((unifiedResults as any)?.events)
     ? (unifiedResults as any).events
     : [];
+  const searchedUnclaimed = Array.isArray(
+    (unifiedResults as any)?.unclaimedListings,
+  )
+    ? (unifiedResults as any).unclaimedListings
+    : [];
   const totalStructuredMatches =
     mergedRestaurants.length +
     searchedParkingPassHosts.length +
     searchedVideos.length +
     searchedEvents.length +
-    searchedDeals.length;
+    searchedDeals.length +
+    searchedUnclaimed.length;
 
   const dealsForPage = searchQuery ? searchedDeals : allDeals;
   const queryGroups = buildQueryGroups(searchQuery);
@@ -993,6 +999,11 @@ export default function SearchPage() {
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
                 Parking: {searchedParkingPassHosts.length}
               </span>
+              {searchedUnclaimed.length > 0 && (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-800">
+                  Unclaimed: {searchedUnclaimed.length}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -1179,6 +1190,61 @@ export default function SearchPage() {
                   </Card>
                 </Link>
               ))}
+            </div>
+          </div>
+        )}
+
+        {searchQuery && searchedUnclaimed.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-semibold text-foreground">
+                Not on MealScout yet
+              </h2>
+              <span className="text-sm text-muted-foreground">
+                {searchedUnclaimed.length} unclaimed
+              </span>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">
+              We found {searchedUnclaimed.length === 1 ? "this place" : "these places"} on the web. Help us list {searchedUnclaimed.length === 1 ? "it" : "them"} by claiming the profile.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {searchedUnclaimed.map((listing: any) => {
+                const locationLine = [listing.city, listing.state]
+                  .filter(Boolean)
+                  .join(", ");
+                return (
+                  <Link
+                    key={listing.id}
+                    href={`/claim-truck?q=${encodeURIComponent(listing.name || "")}&listingId=${encodeURIComponent(listing.id)}`}
+                    data-testid={`card-unclaimed-${listing.id}`}
+                  >
+                    <Card className="border-amber-200 bg-amber-50/40 shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-foreground truncate">
+                              {listing.name}
+                            </h3>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate">
+                                {listing.address}
+                                {locationLine ? ` • ${locationLine}` : ""}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="text-xs rounded-full bg-amber-200/70 text-amber-900 px-2 py-1 whitespace-nowrap">
+                            {listing.autoSeeded ? "New" : "Unclaimed"}
+                          </div>
+                        </div>
+                        <div className="text-xs text-amber-900/80">
+                          Tap to claim this profile
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}

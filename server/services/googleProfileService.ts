@@ -787,3 +787,82 @@ export function getGooglePhotoUrl(
   if (!apiKey || !photoName) return null;
   return `${PLACES_API_BASE}/${photoName}/media?maxWidthPx=${maxWidth}&key=${apiKey}`;
 }
+
+export type GooglePlaceTextResult = {
+  placeId: string;
+  name: string;
+  formattedAddress: string;
+  latitude: number | null;
+  longitude: number | null;
+  types: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+};
+
+/**
+ * Run a freeform Google Places text search. Used when a user searches for a
+ * place that isn't in our DB yet so we can seed an unclaimed listing.
+ */
+export async function searchPlacesFreeText(
+  query: string,
+  maxResults = 5,
+): Promise<GooglePlaceTextResult[]> {
+  const apiKey = getApiKey();
+  const trimmed = String(query || "").trim();
+  if (!apiKey || trimmed.length < 3) return [];
+
+  try {
+    const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": SEARCH_FIELD_MASK,
+      },
+      body: JSON.stringify({
+        textQuery: trimmed,
+        maxResultCount: Math.max(1, Math.min(10, maxResults)),
+        includedRegionCodes: ["us"],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(
+        "[GoogleProfile] Free-text search failed:",
+        response.status,
+        await response.text().catch(() => ""),
+      );
+      return [];
+    }
+
+    const data = (await response.json().catch(() => ({}))) as any;
+    const places = Array.isArray(data?.places) ? data.places : [];
+
+    return places
+      .map((place: any): GooglePlaceTextResult => ({
+        placeId: String(place?.id || "").trim(),
+        name: String(place?.displayName?.text || "").trim(),
+        formattedAddress: String(place?.formattedAddress || "").trim(),
+        latitude:
+          typeof place?.location?.latitude === "number"
+            ? place.location.latitude
+            : null,
+        longitude:
+          typeof place?.location?.longitude === "number"
+            ? place.location.longitude
+            : null,
+        types: Array.isArray(place?.types)
+          ? place.types.map((t: any) => String(t))
+          : [],
+        rating: typeof place?.rating === "number" ? place.rating : null,
+        userRatingCount:
+          typeof place?.userRatingCount === "number"
+            ? place.userRatingCount
+            : null,
+      }))
+      .filter((p: GooglePlaceTextResult) => p.placeId && p.name);
+  } catch (err) {
+    console.error("[GoogleProfile] Free-text search error:", err);
+    return [];
+  }
+}

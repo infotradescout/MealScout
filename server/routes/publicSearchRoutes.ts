@@ -1,18 +1,68 @@
 import type { Express } from "express";
-import { and, asc, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
 import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { searchPlacesFreeText } from "../services/googleProfileService";
 import {
   deals,
   eventSeries,
   events,
   hosts,
   restaurants,
+  truckImportListings,
   videoStories,
 } from "@shared/schema";
+
+const FOOD_PLACE_TYPE_ALLOWLIST = new Set([
+  "restaurant",
+  "food",
+  "meal_takeaway",
+  "meal_delivery",
+  "cafe",
+  "bakery",
+  "bar",
+  "night_club",
+  "food_court",
+  "ice_cream_shop",
+  "coffee_shop",
+  "sandwich_shop",
+  "pizza_restaurant",
+  "hamburger_restaurant",
+  "mexican_restaurant",
+  "italian_restaurant",
+  "chinese_restaurant",
+  "japanese_restaurant",
+  "thai_restaurant",
+  "indian_restaurant",
+  "american_restaurant",
+  "seafood_restaurant",
+  "steak_house",
+  "sushi_restaurant",
+  "vegetarian_restaurant",
+  "vegan_restaurant",
+  "breakfast_restaurant",
+  "barbecue_restaurant",
+  "fast_food_restaurant",
+  "diner",
+  "brewery",
+  "wine_bar",
+  "pub",
+]);
+
+const parseUSCityStateFromFormatted = (
+  formatted: string,
+): { city: string | null; state: string | null } => {
+  if (!formatted) return { city: null, state: null };
+  const m = formatted.match(
+    /,\s*([^,]+),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*,?\s*(?:USA|United States)?\s*$/,
+  );
+  if (m) return { city: m[1].trim(), state: m[2].trim() };
+  return { city: null, state: null };
+};
+
 
 const normalizeSearchTerm = (value: unknown) =>
   String(value || "")
@@ -345,6 +395,7 @@ export function registerPublicSearchRoutes(app: Express) {
           parkingPassHosts: [],
           videos: [],
           events: [],
+          unclaimedListings: [],
         });
       }
 
@@ -565,6 +616,172 @@ export function registerPublicSearchRoutes(app: Express) {
         .orderBy(asc(events.date))
         .limit(12);
 
+      // ----- Unclaimed listings (existing + auto-seed via Google Places) -----
+      const unclaimedSearchValue = `%${searchTerm}%`;
+      const existingUnclaimed = await db
+        .select({
+          id: truckImportListings.id,
+          name: truckImportListings.name,
+          address: truckImportListings.address,
+          city: truckImportListings.city,
+          state: truckImportListings.state,
+          phone: truckImportListings.phone,
+          externalId: truckImportListings.externalId,
+          confidenceScore: truckImportListings.confidenceScore,
+          email: truckImportListings.email,
+          invitedUserId: truckImportListings.invitedUserId,
+          source: truckImportListings.source,
+          status: truckImportListings.status,
+        })
+        .from(truckImportListings)
+        .where(
+          and(
+            inArray(truckImportListings.status, [
+              "unclaimed",
+              "claim_requested",
+            ] as any),
+            or(
+              sql`lower(${truckImportListings.name}) like ${unclaimedSearchValue}`,
+              sql`lower(coalesce(${truckImportListings.address}, '')) like ${unclaimedSearchValue}`,
+              sql`lower(coalesce(${truckImportListings.city}, '')) like ${unclaimedSearchValue}`,
+              sql`lower(coalesce(${truckImportListings.state}, '')) like ${unclaimedSearchValue}`,
+            ),
+          ),
+        )
+        .orderBy(desc(truckImportListings.confidenceScore))
+        .limit(6);
+
+      let unclaimedOut = existingUnclaimed.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        source: row.source || null,
+        status: row.status || "unclaimed",
+        autoSeeded: false,
+      }));
+
+      // If nothing matched in restaurants OR existing unclaimed listings, and
+      // the query is substantial enough, ask Google Places and seed an unclaimed
+      // profile so the user sees the place they were looking for and can claim it.
+      const SEED_MIN_QUERY_LEN = 5;
+      const shouldAutoSeed =
+        restaurantsOut.length === 0 &&
+        unclaimedOut.length === 0 &&
+        query.length >= SEED_MIN_QUERY_LEN &&
+        Boolean(
+          process.env.GOOGLE_MAPS_API_KEY ||
+            process.env.GOOGLE_PLACES_API_KEY ||
+            process.env.GOOGLE_API_KEY,
+        );
+
+      if (shouldAutoSeed) {
+        try {
+          const candidates = await searchPlacesFreeText(query, 5);
+          const foodCandidate = candidates.find((c) =>
+            c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
+          );
+
+          if (foodCandidate) {
+            const externalId = `google:${foodCandidate.placeId}`;
+            const [existing] = await db
+              .select({
+                id: truckImportListings.id,
+                name: truckImportListings.name,
+                address: truckImportListings.address,
+                city: truckImportListings.city,
+                state: truckImportListings.state,
+                source: truckImportListings.source,
+                status: truckImportListings.status,
+              })
+              .from(truckImportListings)
+              .where(eq(truckImportListings.externalId, externalId))
+              .limit(1);
+
+            if (existing) {
+              unclaimedOut = [
+                {
+                  id: existing.id,
+                  name: existing.name,
+                  address: existing.address,
+                  city: existing.city,
+                  state: existing.state,
+                  source: existing.source || "google_places",
+                  status: existing.status || "unclaimed",
+                  autoSeeded: false,
+                },
+              ];
+            } else {
+              const { city, state } = parseUSCityStateFromFormatted(
+                foodCandidate.formattedAddress,
+              );
+              const insertValues: any = {
+                source: "google_places",
+                externalId,
+                name: foodCandidate.name,
+                address: foodCandidate.formattedAddress || foodCandidate.name,
+                city,
+                state,
+                confidenceScore: Math.min(
+                  100,
+                  Math.round(
+                    50 +
+                      Math.min(20, (foodCandidate.userRatingCount || 0) / 50) +
+                      (foodCandidate.rating || 0) * 5,
+                  ),
+                ),
+                status: "unclaimed",
+                rawData: {
+                  placeId: foodCandidate.placeId,
+                  types: foodCandidate.types,
+                  rating: foodCandidate.rating,
+                  userRatingCount: foodCandidate.userRatingCount,
+                  seededFromQuery: query,
+                },
+              };
+              if (
+                Number.isFinite(foodCandidate.latitude) &&
+                Number.isFinite(foodCandidate.longitude)
+              ) {
+                insertValues.latitude = String(foodCandidate.latitude);
+                insertValues.longitude = String(foodCandidate.longitude);
+              }
+
+              const [inserted] = await db
+                .insert(truckImportListings)
+                .values(insertValues)
+                .returning({
+                  id: truckImportListings.id,
+                  name: truckImportListings.name,
+                  address: truckImportListings.address,
+                  city: truckImportListings.city,
+                  state: truckImportListings.state,
+                  source: truckImportListings.source,
+                  status: truckImportListings.status,
+                });
+
+              if (inserted) {
+                unclaimedOut = [
+                  {
+                    id: inserted.id,
+                    name: inserted.name,
+                    address: inserted.address,
+                    city: inserted.city,
+                    state: inserted.state,
+                    source: inserted.source || "google_places",
+                    status: inserted.status || "unclaimed",
+                    autoSeeded: true,
+                  },
+                ];
+              }
+            }
+          }
+        } catch (seedErr) {
+          console.warn("[search] auto-seed unclaimed listing failed:", seedErr);
+        }
+      }
+
       res.json({
         query,
         restaurants: restaurantsOut,
@@ -572,6 +789,7 @@ export function registerPublicSearchRoutes(app: Express) {
         parkingPassHosts: parkingPassHostsOut,
         videos: videoRows,
         events: eventsRows,
+        unclaimedListings: unclaimedOut,
       });
     } catch (error) {
       console.error("Unified search error:", error);
