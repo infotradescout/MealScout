@@ -12,6 +12,10 @@ import {
   eventSeries,
   foodTruckLocations,
   foodTruckSessions,
+  users,
+  restaurants,
+  menus,
+  menuItems,
 } from "@shared/schema";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -446,6 +450,171 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
+      }
+    },
+  );
+
+  // ── Launch Week ──────────────────────────────────────────────────────────────
+  // Operator-friendly snapshot of new business signups + their setup state.
+  // Designed for non-technical owners to triage support during launch week.
+  // GET /api/admin/launch-week?days=7
+  app.get(
+    "/api/admin/launch-week",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const days = Math.min(
+          90,
+          Math.max(1, Number(req.query?.days) || 7),
+        );
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        const today = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        // New business owner accounts in the window
+        const newOwners = await db
+          .select({
+            id: users.id,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            phone: users.phone,
+            userType: users.userType,
+            emailVerified: users.emailVerified,
+            createdAt: users.createdAt,
+            stripeSubscriptionId: users.stripeSubscriptionId,
+            trialEndsAt: users.trialEndsAt,
+          })
+          .from(users)
+          .where(
+            and(
+              gte(users.createdAt, cutoff),
+              sql`${users.userType} IN ('restaurant_owner','food_truck')`,
+            ),
+          )
+          .orderBy(sql`${users.createdAt} DESC`)
+          .limit(500);
+
+        // Their restaurants (joined separately to avoid Cartesian)
+        const ownerIds = newOwners.map((o: any) => o.id);
+        const restaurantsForOwners = ownerIds.length
+          ? await db
+              .select({
+                id: restaurants.id,
+                ownerId: restaurants.ownerId,
+                name: restaurants.name,
+                businessType: restaurants.businessType,
+                city: restaurants.city,
+                state: restaurants.state,
+                isVerified: restaurants.isVerified,
+                isActive: restaurants.isActive,
+                createdAt: restaurants.createdAt,
+              })
+              .from(restaurants)
+              .where(sql`${restaurants.ownerId} IN ${ownerIds}`)
+          : [];
+
+        // Menu + item counts per restaurant (1 query)
+        const restaurantIds = restaurantsForOwners.map((r: any) => r.id);
+        const menuCounts = restaurantIds.length
+          ? await db
+              .select({
+                restaurantId: menus.restaurantId,
+                menuCount: sql<number>`count(distinct ${menus.id})::int`,
+                itemCount: sql<number>`count(${menuItems.id})::int`,
+              })
+              .from(menus)
+              .leftJoin(menuItems, eq(menuItems.menuId, menus.id))
+              .where(sql`${menus.restaurantId} IN ${restaurantIds}`)
+              .groupBy(menus.restaurantId)
+          : [];
+        const countsByRestaurant = new Map<
+          string,
+          { menuCount: number; itemCount: number }
+        >();
+        for (const c of menuCounts as any[]) {
+          countsByRestaurant.set(c.restaurantId, {
+            menuCount: Number(c.menuCount || 0),
+            itemCount: Number(c.itemCount || 0),
+          });
+        }
+        const restaurantsByOwner = new Map<string, any[]>();
+        for (const r of restaurantsForOwners as any[]) {
+          const counts = countsByRestaurant.get(r.id) || {
+            menuCount: 0,
+            itemCount: 0,
+          };
+          const enriched = { ...r, ...counts };
+          const arr = restaurantsByOwner.get(r.ownerId) || [];
+          arr.push(enriched);
+          restaurantsByOwner.set(r.ownerId, arr);
+        }
+
+        const rows = newOwners.map((o: any) => {
+          const owned = restaurantsByOwner.get(o.id) || [];
+          const totalMenus = owned.reduce(
+            (s: number, r: any) => s + (r.menuCount || 0),
+            0,
+          );
+          const totalItems = owned.reduce(
+            (s: number, r: any) => s + (r.itemCount || 0),
+            0,
+          );
+          // Setup score = simple checklist for triage
+          const checklist = {
+            emailVerified: !!o.emailVerified,
+            hasBusiness: owned.length > 0,
+            hasMenu: totalMenus > 0,
+            hasItems: totalItems > 0,
+            isVerified: owned.some((r: any) => r.isVerified),
+            hasSubscription: !!o.stripeSubscriptionId,
+          };
+          const score = Object.values(checklist).filter(Boolean).length;
+          return {
+            ...o,
+            restaurants: owned,
+            totalMenus,
+            totalItems,
+            checklist,
+            setupScore: score,
+            stuck:
+              score < 3 &&
+              new Date(o.createdAt).getTime() < Date.now() - 6 * 60 * 60 * 1000,
+          };
+        });
+
+        // Aggregate counters
+        const summary = {
+          windowDays: days,
+          totalNewOwners: rows.length,
+          newToday: rows.filter(
+            (r: any) => new Date(r.createdAt) >= today,
+          ).length,
+          unverifiedEmails: rows.filter((r: any) => !r.emailVerified).length,
+          noBusinessYet: rows.filter((r: any) => !r.checklist.hasBusiness)
+            .length,
+          noMenuYet: rows.filter(
+            (r: any) => r.checklist.hasBusiness && !r.checklist.hasMenu,
+          ).length,
+          stuck: rows.filter((r: any) => r.stuck).length,
+          subscribed: rows.filter((r: any) => r.checklist.hasSubscription)
+            .length,
+          byType: {
+            restaurant_owner: rows.filter(
+              (r: any) => r.userType === "restaurant_owner",
+            ).length,
+            food_truck: rows.filter((r: any) => r.userType === "food_truck")
+              .length,
+          },
+        };
+
+        res.json({ summary, owners: rows });
+      } catch (error: any) {
+        console.error("[admin/launch-week] failed:", error);
+        res.status(500).json({
+          message: "Failed to load launch-week snapshot",
+          error: String(error?.message || error),
+        });
       }
     },
   );

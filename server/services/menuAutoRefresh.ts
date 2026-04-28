@@ -30,6 +30,10 @@ import {
 
 const STALE_DAYS = Number(process.env.MENU_AUTO_REFRESH_STALE_DAYS || 7);
 const BATCH = Number(process.env.MENU_AUTO_REFRESH_BATCH || 25);
+const PER_HOST_DELAY_MS = Number(
+  process.env.MENU_AUTO_REFRESH_PER_HOST_DELAY_MS || 4000,
+);
+const JITTER_MS = Number(process.env.MENU_AUTO_REFRESH_JITTER_MS || 1500);
 const REFRESHABLE_SOURCES = new Set([
   "url",
   "doordash",
@@ -80,6 +84,10 @@ export async function runMenuAutoRefreshCron(): Promise<MenuAutoRefreshSummary> 
 
   summary.scanned = candidates.length;
 
+  const lastHitByHost = new Map<string, number>();
+  const sleep = (ms: number) =>
+    new Promise<void>((r) => setTimeout(r, Math.max(0, ms)));
+
   for (const menu of candidates) {
     if (!menu.importUrl) {
       summary.skipped++;
@@ -90,6 +98,23 @@ export async function runMenuAutoRefreshCron(): Promise<MenuAutoRefreshSummary> 
       summary.skipped++;
       continue;
     }
+
+    // Be neighborly: throttle per-host so we don't hammer DoorDash/UberEats.
+    let host = "";
+    try {
+      host = new URL(menu.importUrl).hostname;
+    } catch {
+      host = "unknown";
+    }
+    const last = lastHitByHost.get(host) || 0;
+    const sinceLast = Date.now() - last;
+    if (sinceLast < PER_HOST_DELAY_MS) {
+      await sleep(PER_HOST_DELAY_MS - sinceLast);
+    }
+    if (JITTER_MS > 0) {
+      await sleep(Math.floor(Math.random() * JITTER_MS));
+    }
+    lastHitByHost.set(host, Date.now());
 
     try {
       const result = await refreshOneMenu(

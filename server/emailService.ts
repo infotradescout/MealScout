@@ -48,6 +48,45 @@ class EmailDeliveryAudit {
 
 export const emailDeliveryAudit = new EmailDeliveryAudit();
 
+// ── Brevo send-rate throttle ────────────────────────────────────────────────
+// Brevo's transactional API has per-second send caps that vary by plan.
+// During launch week (hundreds of new owners → digests + verifications +
+// notifications), we shape outgoing sends so we never burst over the cap.
+// Override via EMAIL_MAX_SENDS_PER_SECOND (default 10) and
+// EMAIL_MAX_BURST (default 20).
+const MAX_SENDS_PER_SECOND = Math.max(
+  1,
+  Number(process.env.EMAIL_MAX_SENDS_PER_SECOND || 10),
+);
+const MAX_BURST = Math.max(
+  1,
+  Number(process.env.EMAIL_MAX_BURST || 20),
+);
+let _emailTokens = MAX_BURST;
+let _emailLastRefill = Date.now();
+async function awaitEmailSendSlot(): Promise<void> {
+  while (true) {
+    const now = Date.now();
+    const elapsedSec = (now - _emailLastRefill) / 1000;
+    if (elapsedSec > 0) {
+      _emailTokens = Math.min(
+        MAX_BURST,
+        _emailTokens + elapsedSec * MAX_SENDS_PER_SECOND,
+      );
+      _emailLastRefill = now;
+    }
+    if (_emailTokens >= 1) {
+      _emailTokens -= 1;
+      return;
+    }
+    const waitMs = Math.max(
+      25,
+      Math.ceil(((1 - _emailTokens) / MAX_SENDS_PER_SECOND) * 1000),
+    );
+    await new Promise<void>((r) => setTimeout(r, waitMs));
+  }
+}
+
 // Check if Brevo is properly configured
 export const isEmailConfigured = (): boolean => {
   const apiKey = process.env.BREVO_API_KEY;
@@ -1216,6 +1255,7 @@ export class EmailService {
         emailData.attachment = params.attachments;
       }
 
+      await awaitEmailSendSlot();
       await transactionalEmailsApi.sendTransacEmail(emailData);
 
       console.log(`Email sent successfully to ${params.to}: ${params.subject}`);

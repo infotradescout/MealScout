@@ -39,6 +39,7 @@ const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
 const StaffDashboard = lazy(() => import("@/pages/staff-dashboard"));
 const AdminIncidents = lazy(() => import("@/pages/AdminIncidents"));
 const AdminControlCenter = lazy(() => import("@/pages/AdminControlCenter"));
+const AdminLaunchWeek = lazy(() => import("@/pages/AdminLaunchWeek"));
 const AdminSupportTickets = lazy(() => import("@/pages/AdminSupportTickets"));
 const AdminModerationEvents = lazy(
   () => import("@/pages/AdminModerationEvents"),
@@ -475,6 +476,7 @@ function Router() {
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/dashboard" component={AdminDashboard} />
             <Route path="/admin/incidents" component={AdminIncidents} />
+            <Route path="/admin/launch-week" component={AdminLaunchWeek} />
             <Route
               path="/admin/control-center"
               component={AdminControlCenter}
