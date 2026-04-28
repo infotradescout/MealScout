@@ -1217,9 +1217,13 @@ export class DatabaseStorage implements IStorage {
       `${has("updated_at") ? `${q("updated_at")} as "updatedAt"` : `null as "updatedAt"`}`,
     ];
 
-    const orderBy = has("created_at")
-      ? ` order by ${q("created_at")} desc`
-      : "";
+    const callerControlsOrderingOrLimit = /\border\s+by\b|\blimit\b/i.test(
+      whereSql,
+    );
+    const orderBy =
+      has("created_at") && !callerControlsOrderingOrLimit
+        ? ` order by ${q("created_at")} desc`
+        : "";
     const sqlText = `select ${select.join(", ")} from ${q(schema)}.${q("hosts")} ${whereSql}${orderBy}`;
     const result = await pool.query(sqlText, params);
     return result.rows || [];
