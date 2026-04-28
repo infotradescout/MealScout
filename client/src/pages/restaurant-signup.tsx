@@ -161,6 +161,15 @@ export default function RestaurantSignup() {
   const [claimSelection, setClaimSelection] = useState<any | null>(null);
   const [claimError, setClaimError] = useState("");
   const [claimRequestingId, setClaimRequestingId] = useState<string | null>(null);
+
+  const routeToVerifyEmail = (redirectAfterLogin: string) => {
+    const params = new URLSearchParams();
+    params.set("next", redirectAfterLogin);
+    params.set("source", "restaurant-signup");
+    params.set("accountType", "business");
+    params.set("businessType", selectedBusinessType);
+    window.location.href = `/verify-email?${params.toString()}`;
+  };
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
 
@@ -324,9 +333,7 @@ export default function RestaurantSignup() {
           signupForm.getValues("email") || "",
         );
       } catch {}
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        "/restaurant-signup",
-      )}&signup=1`;
+      routeToVerifyEmail("/restaurant-signup");
     },
     onError: (error) => {
       toast({
@@ -474,9 +481,7 @@ export default function RestaurantSignup() {
             signupForm.getValues("email") || "",
           );
         } catch {}
-        window.location.href = `/login?redirect=${encodeURIComponent(
-          "/restaurant-signup",
-        )}&signup=1`;
+        routeToVerifyEmail("/restaurant-signup");
         return;
       }
 

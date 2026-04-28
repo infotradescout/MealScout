@@ -21,6 +21,7 @@ import Home from "@/pages/home-v2";
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
 const RestaurantSignup = lazy(() => import("@/pages/restaurant-signup"));
+const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
 const CityLanding = lazy(() => import("@/pages/city-landing"));
 const CityDiscoveryPage = lazy(() => import("@/pages/city-discovery"));
 const DealCreation = lazy(() => import("@/pages/deal-creation"));
@@ -159,6 +160,7 @@ const publicRoutePrefixes = [
   "/",
   "/login",
   "/customer-signup",
+  "/verify-email",
   "/restaurant-signup",
   "/claim-truck",
   "/deal-creation",
@@ -287,6 +289,7 @@ function Router() {
             <Route path="/" component={Home} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
+            <Route path="/verify-email" component={VerifyEmailPage} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
             <Route path="/claim-truck" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />
@@ -414,6 +417,7 @@ function Router() {
             <Route path="/" component={Home} />
             <Route path="/login">{() => <Redirect to="/dashboard" />}</Route>
             <Route path="/customer-signup">{() => <Redirect to="/dashboard" />}</Route>
+            <Route path="/verify-email">{() => <Redirect to="/dashboard" />}</Route>
             <Route path="/restaurant-signup">{() => <Redirect to="/dashboard" />}</Route>
             <Route path="/claim-truck" component={ClaimTruckPage} />
             <Route path="/deal-creation" component={DealCreation} />

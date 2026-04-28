@@ -162,6 +162,22 @@ export default function CustomerSignup() {
     }
   }, [accountType]);
 
+  const routeToVerifyEmail = (
+    redirectAfterLogin: string,
+    source: string,
+    type: string,
+    subtype?: string,
+  ) => {
+    const params = new URLSearchParams();
+    params.set("next", redirectAfterLogin);
+    params.set("source", source);
+    params.set("accountType", type);
+    if (subtype) {
+      params.set("businessType", subtype);
+    }
+    window.location.href = `/verify-email?${params.toString()}`;
+  };
+
   const customerSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
@@ -206,9 +222,11 @@ export default function CustomerSignup() {
         stage: "redirect_to_login",
         redirectPath: redirectAfterLogin,
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
+      routeToVerifyEmail(
         redirectAfterLogin,
-      )}&signup=1`;
+        "customer-signup",
+        accountType === "host" ? "host" : "diner",
+      );
     },
     onError: (error) => {
       toast({
@@ -267,9 +285,12 @@ export default function CustomerSignup() {
         accountType: "business",
         businessSubType,
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
+      routeToVerifyEmail(
         businessRedirect,
-      )}&signup=1`;
+        "customer-signup",
+        "business",
+        businessSubType,
+      );
     },
     onError: (error) => {
       toast({
@@ -317,9 +338,7 @@ export default function CustomerSignup() {
         redirectPath: "/events",
         accountType: "event_organizer",
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        "/events",
-      )}&signup=1`;
+      routeToVerifyEmail("/events", "customer-signup", "event_organizer");
     },
     onError: (error) => {
       toast({
@@ -367,9 +386,11 @@ export default function CustomerSignup() {
         redirectPath: "/supplier/dashboard",
         accountType: "supplier",
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
+      routeToVerifyEmail(
         "/supplier/dashboard",
-      )}&signup=1`;
+        "customer-signup",
+        "supplier",
+      );
     },
     onError: (error) => {
       toast({
