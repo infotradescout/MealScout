@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -129,6 +130,40 @@ const candidateLooksLikeRequestedPlace = (
   );
   const hits = requestedTokens.filter((token) => haystack.includes(token)).length;
   return hits >= Math.min(2, requestedTokens.length);
+};
+
+const buildQuerySeedListing = (query: string) => {
+  const parts = String(query || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const fallbackName = parts[0] || String(query || "").trim();
+  const fallbackAddress =
+    parts.length >= 2 ? parts.slice(1).join(", ") : fallbackName;
+
+  let city: string | null = null;
+  let state: string | null = null;
+
+  const parsed = parseUSCityStateFromFormatted(parts.join(", "));
+  city = parsed.city;
+  state = parsed.state;
+
+  if (!city && parts.length >= 2) {
+    city = parts[parts.length - 2] || null;
+  }
+  if (!state) {
+    const maybeState = String(parts[parts.length - 1] || "").match(
+      /\b([A-Z]{2})\b/,
+    );
+    state = maybeState?.[1] || null;
+  }
+
+  return {
+    name: fallbackName || "Unclaimed listing",
+    address: fallbackAddress || fallbackName || "Address unavailable",
+    city,
+    state,
+  };
 };
 
 const scoreSearchFields = (
@@ -758,146 +793,81 @@ export function registerPublicSearchRoutes(app: Express) {
           process.env.GOOGLE_API_KEY ||
           process.env.VITE_GOOGLE_MAPS_WEB_API_KEY,
       );
-      const shouldAutoSeed =
+      const shouldAttemptAutoSeed =
         restaurantsOut.length === 0 &&
         unclaimedOut.length === 0 &&
-        query.length >= SEED_MIN_QUERY_LEN &&
-        hasPlacesApiKey;
+        query.length >= SEED_MIN_QUERY_LEN;
 
-      if (shouldAutoSeed) {
+      if (shouldAttemptAutoSeed) {
         try {
-          const candidates = await searchPlacesFreeText(query, 5, {
-            latitude: biasLat,
-            longitude: biasLng,
-          });
-          const foodCandidate =
-            candidates.find((c) =>
-              c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
-            ) ||
-            candidates.find(
-              (c) =>
-                !isGoogleLocalityOnly(c) &&
-                candidateLooksLikeRequestedPlace(c, primaryTerm),
-            ) ||
-            candidates.find((c) => !isGoogleLocalityOnly(c));
+          if (hasPlacesApiKey) {
+            const candidates = await searchPlacesFreeText(query, 5, {
+              latitude: biasLat,
+              longitude: biasLng,
+            });
+            const foodCandidate =
+              candidates.find((c) =>
+                c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
+              ) ||
+              candidates.find(
+                (c) =>
+                  !isGoogleLocalityOnly(c) &&
+                  candidateLooksLikeRequestedPlace(c, primaryTerm),
+              ) ||
+              candidates.find((c) => !isGoogleLocalityOnly(c));
 
-          if (foodCandidate) {
-            try {
-              const generated = await ensureGoogleRestaurantProfile(
-                foodCandidate.placeId,
-              );
-              const restaurant = generated.restaurant as any;
-              restaurantsOut = [
-                {
-                  id: restaurant.id,
-                  name: restaurant.name,
-                  cuisineType: restaurant.cuisineType,
-                  address: restaurant.address,
-                  isFoodTruck: Boolean(restaurant.isFoodTruck),
-                  isVerified: Boolean(restaurant.isVerified),
-                  operatingHours:
-                    restaurant.operatingHours ??
-                    restaurant.businessHours ??
-                    null,
-                  rating: restaurant.googleRating
-                    ? Number(restaurant.googleRating)
-                    : null,
-                  googleRating: restaurant.googleRating,
-                  googleReviewCount: restaurant.googleReviewCount,
-                },
-              ];
-              unclaimedOut = [];
-            } catch (profileErr) {
-              console.warn(
-                "[search] Google-backed restaurant profile generation failed; falling back to unclaimed listing:",
-                profileErr,
-              );
-            }
-
-            if (restaurantsOut.length > 0) {
-              res.setHeader("X-MealScout-Auto-Profile", "google");
-            }
-
-            if (restaurantsOut.length > 0) {
-              return res.json({
-                query,
-                restaurants: restaurantsOut,
-                deals: dealsOut,
-                parkingPassHosts: parkingPassHostsOut,
-                videos: videoRows,
-                events: eventsRows,
-                unclaimedListings: unclaimedOut,
-              });
-            }
-
-            const externalId = `google:${foodCandidate.placeId}`;
-            const [existing] = await db
-              .select({
-                id: truckImportListings.id,
-                name: truckImportListings.name,
-                address: truckImportListings.address,
-                city: truckImportListings.city,
-                state: truckImportListings.state,
-                source: truckImportListings.source,
-                status: truckImportListings.status,
-              })
-              .from(truckImportListings)
-              .where(eq(truckImportListings.externalId, externalId))
-              .limit(1);
-
-            if (existing) {
-              unclaimedOut = [
-                {
-                  id: existing.id,
-                  name: existing.name,
-                  address: existing.address,
-                  city: existing.city,
-                  state: existing.state,
-                  source: existing.source || "google_places",
-                  status: existing.status || "unclaimed",
-                  autoSeeded: false,
-                },
-              ];
-            } else {
-              const { city, state } = parseUSCityStateFromFormatted(
-                foodCandidate.formattedAddress,
-              );
-              const insertValues: any = {
-                source: "google_places",
-                externalId,
-                name: foodCandidate.name,
-                address: foodCandidate.formattedAddress || foodCandidate.name,
-                city,
-                state,
-                confidenceScore: Math.min(
-                  100,
-                  Math.round(
-                    50 +
-                      Math.min(20, (foodCandidate.userRatingCount || 0) / 50) +
-                      (foodCandidate.rating || 0) * 5,
-                  ),
-                ),
-                status: "unclaimed",
-                rawData: {
-                  placeId: foodCandidate.placeId,
-                  types: foodCandidate.types,
-                  rating: foodCandidate.rating,
-                  userRatingCount: foodCandidate.userRatingCount,
-                  seededFromQuery: query,
-                },
-              };
-              if (
-                Number.isFinite(foodCandidate.latitude) &&
-                Number.isFinite(foodCandidate.longitude)
-              ) {
-                insertValues.latitude = String(foodCandidate.latitude);
-                insertValues.longitude = String(foodCandidate.longitude);
+            if (foodCandidate) {
+              try {
+                const generated = await ensureGoogleRestaurantProfile(
+                  foodCandidate.placeId,
+                );
+                const restaurant = generated.restaurant as any;
+                restaurantsOut = [
+                  {
+                    id: restaurant.id,
+                    name: restaurant.name,
+                    cuisineType: restaurant.cuisineType,
+                    address: restaurant.address,
+                    isFoodTruck: Boolean(restaurant.isFoodTruck),
+                    isVerified: Boolean(restaurant.isVerified),
+                    operatingHours:
+                      restaurant.operatingHours ??
+                      restaurant.businessHours ??
+                      null,
+                    rating: restaurant.googleRating
+                      ? Number(restaurant.googleRating)
+                      : null,
+                    googleRating: restaurant.googleRating,
+                    googleReviewCount: restaurant.googleReviewCount,
+                  },
+                ];
+                unclaimedOut = [];
+              } catch (profileErr) {
+                console.warn(
+                  "[search] Google-backed restaurant profile generation failed; falling back to unclaimed listing:",
+                  profileErr,
+                );
               }
 
-              const [inserted] = await db
-                .insert(truckImportListings)
-                .values(insertValues)
-                .returning({
+              if (restaurantsOut.length > 0) {
+                res.setHeader("X-MealScout-Auto-Profile", "google");
+              }
+
+              if (restaurantsOut.length > 0) {
+                return res.json({
+                  query,
+                  restaurants: restaurantsOut,
+                  deals: dealsOut,
+                  parkingPassHosts: parkingPassHostsOut,
+                  videos: videoRows,
+                  events: eventsRows,
+                  unclaimedListings: unclaimedOut,
+                });
+              }
+
+              const externalId = `google:${foodCandidate.placeId}`;
+              const [existing] = await db
+                .select({
                   id: truckImportListings.id,
                   name: truckImportListings.name,
                   address: truckImportListings.address,
@@ -905,26 +875,178 @@ export function registerPublicSearchRoutes(app: Express) {
                   state: truckImportListings.state,
                   source: truckImportListings.source,
                   status: truckImportListings.status,
-                });
+                })
+                .from(truckImportListings)
+                .where(eq(truckImportListings.externalId, externalId))
+                .limit(1);
 
-              if (inserted) {
+              if (existing) {
                 unclaimedOut = [
                   {
-                    id: inserted.id,
-                    name: inserted.name,
-                    address: inserted.address,
-                    city: inserted.city,
-                    state: inserted.state,
-                    source: inserted.source || "google_places",
-                    status: inserted.status || "unclaimed",
-                    autoSeeded: true,
+                    id: existing.id,
+                    name: existing.name,
+                    address: existing.address,
+                    city: existing.city,
+                    state: existing.state,
+                    source: existing.source || "google_places",
+                    status: existing.status || "unclaimed",
+                    autoSeeded: false,
                   },
                 ];
+              } else {
+                const { city, state } = parseUSCityStateFromFormatted(
+                  foodCandidate.formattedAddress,
+                );
+                const insertValues: any = {
+                  source: "google_places",
+                  externalId,
+                  name: foodCandidate.name,
+                  address: foodCandidate.formattedAddress || foodCandidate.name,
+                  city,
+                  state,
+                  confidenceScore: Math.min(
+                    100,
+                    Math.round(
+                      50 +
+                        Math.min(
+                          20,
+                          (foodCandidate.userRatingCount || 0) / 50,
+                        ) +
+                        (foodCandidate.rating || 0) * 5,
+                    ),
+                  ),
+                  status: "unclaimed",
+                  rawData: {
+                    placeId: foodCandidate.placeId,
+                    types: foodCandidate.types,
+                    rating: foodCandidate.rating,
+                    userRatingCount: foodCandidate.userRatingCount,
+                    seededFromQuery: query,
+                  },
+                };
+                if (
+                  Number.isFinite(foodCandidate.latitude) &&
+                  Number.isFinite(foodCandidate.longitude)
+                ) {
+                  insertValues.latitude = String(foodCandidate.latitude);
+                  insertValues.longitude = String(foodCandidate.longitude);
+                }
+
+                const [inserted] = await db
+                  .insert(truckImportListings)
+                  .values(insertValues)
+                  .returning({
+                    id: truckImportListings.id,
+                    name: truckImportListings.name,
+                    address: truckImportListings.address,
+                    city: truckImportListings.city,
+                    state: truckImportListings.state,
+                    source: truckImportListings.source,
+                    status: truckImportListings.status,
+                  });
+
+                if (inserted) {
+                  unclaimedOut = [
+                    {
+                      id: inserted.id,
+                      name: inserted.name,
+                      address: inserted.address,
+                      city: inserted.city,
+                      state: inserted.state,
+                      source: inserted.source || "google_places",
+                      status: inserted.status || "unclaimed",
+                      autoSeeded: true,
+                    },
+                  ];
+                }
               }
             }
           }
         } catch (seedErr) {
           console.warn("[search] auto-seed unclaimed listing failed:", seedErr);
+        }
+
+        // Guaranteed fallback: even if Google APIs are unavailable or return
+        // no suitable places, create a query-backed unclaimed listing so users
+        // can still claim the profile they searched for.
+        if (restaurantsOut.length === 0 && unclaimedOut.length === 0) {
+          const seeded = buildQuerySeedListing(query);
+          const queryHash = crypto
+            .createHash("sha1")
+            .update(normalizeSearchTerm(query))
+            .digest("hex")
+            .slice(0, 24);
+          const externalId = `query_seed:${queryHash}`;
+
+          const [existingQuerySeed] = await db
+            .select({
+              id: truckImportListings.id,
+              name: truckImportListings.name,
+              address: truckImportListings.address,
+              city: truckImportListings.city,
+              state: truckImportListings.state,
+              source: truckImportListings.source,
+              status: truckImportListings.status,
+            })
+            .from(truckImportListings)
+            .where(eq(truckImportListings.externalId, externalId))
+            .limit(1);
+
+          if (existingQuerySeed) {
+            unclaimedOut = [
+              {
+                id: existingQuerySeed.id,
+                name: existingQuerySeed.name,
+                address: existingQuerySeed.address,
+                city: existingQuerySeed.city,
+                state: existingQuerySeed.state,
+                source: existingQuerySeed.source || "search_query_seed",
+                status: existingQuerySeed.status || "unclaimed",
+                autoSeeded: false,
+              },
+            ];
+          } else {
+            const [insertedQuerySeed] = await db
+              .insert(truckImportListings)
+              .values({
+                source: "search_query_seed",
+                externalId,
+                name: seeded.name,
+                address: seeded.address,
+                city: seeded.city,
+                state: seeded.state,
+                confidenceScore: 40,
+                status: "unclaimed",
+                rawData: {
+                  seededFromQuery: query,
+                  fallbackMode: "query_seed",
+                },
+              } as any)
+              .returning({
+                id: truckImportListings.id,
+                name: truckImportListings.name,
+                address: truckImportListings.address,
+                city: truckImportListings.city,
+                state: truckImportListings.state,
+                source: truckImportListings.source,
+                status: truckImportListings.status,
+              });
+
+            if (insertedQuerySeed) {
+              unclaimedOut = [
+                {
+                  id: insertedQuerySeed.id,
+                  name: insertedQuerySeed.name,
+                  address: insertedQuerySeed.address,
+                  city: insertedQuerySeed.city,
+                  state: insertedQuerySeed.state,
+                  source: insertedQuerySeed.source || "search_query_seed",
+                  status: insertedQuerySeed.status || "unclaimed",
+                  autoSeeded: true,
+                },
+              ];
+            }
+          }
         }
       }
 
