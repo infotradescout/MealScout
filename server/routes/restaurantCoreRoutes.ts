@@ -832,6 +832,23 @@ export function registerRestaurantCoreRoutes(
           ? `/restaurant/${previewRestaurant.id}`
           : null;
 
+        const visibilityBlockers: string[] = [];
+        if (!hasBusiness) visibilityBlockers.push("no_business");
+        if (!hasMenu) visibilityBlockers.push("no_menu");
+        if (!hasItems) visibilityBlockers.push("no_items");
+        if (!ownerRestaurants.some((r: any) => Boolean(r.isActive))) {
+          visibilityBlockers.push("inactive");
+        }
+        if (!ownerRestaurants.some((r: any) => Boolean(r.isVerified))) {
+          visibilityBlockers.push("unverified");
+        }
+        if (
+          previewRestaurant &&
+          !isPublicBusinessVisible(previewRestaurant as any)
+        ) {
+          visibilityBlockers.push("flagged_test_data");
+        }
+
         res.json({
           completed,
           total,
@@ -846,6 +863,7 @@ export function registerRestaurantCoreRoutes(
           },
           isDiscoverable,
           publicPreviewUrl,
+          visibilityBlockers,
         });
       } catch (error: any) {
         console.error("[owner/onboarding] failed:", error);

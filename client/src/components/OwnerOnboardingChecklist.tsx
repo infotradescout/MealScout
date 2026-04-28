@@ -34,7 +34,17 @@ interface OnboardingResponse {
   counts: { restaurants: number; menus: number; items: number };
   isDiscoverable: boolean;
   publicPreviewUrl: string | null;
+  visibilityBlockers: string[];
 }
+
+const blockerText: Record<string, string> = {
+  no_business: "Add your business profile",
+  no_menu: "Add a menu",
+  no_items: "Add at least one menu item",
+  inactive: "Business is not active",
+  unverified: "Business not verified yet",
+  flagged_test_data: "Profile looks like test data",
+};
 
 const DISMISS_KEY = "ms-onboarding-dismissed-complete";
 
@@ -101,6 +111,9 @@ export default function OwnerOnboardingChecklist() {
   if (collapsed) return null;
 
   const next = data.nextStep;
+  const blockers = (data.visibilityBlockers || []).map(
+    (key) => blockerText[key] || key,
+  );
 
   return (
     <Card className="mb-6 border-orange-300 bg-orange-50/30">
@@ -174,7 +187,8 @@ export default function OwnerOnboardingChecklist() {
                 </span>
               ) : (
                 <span className="text-muted-foreground">
-                  Not yet discoverable — finish the steps above to go live.
+                  Not yet discoverable
+                  {blockers.length > 0 ? `: ${blockers.join(" • ")}` : ""}.
                 </span>
               )}
             </div>

@@ -389,7 +389,7 @@ function useOwnerAction() {
         "resend-verification": "Verification email sent",
         "send-menu-nudge": "Menu nudge sent",
         "send-help-offer": "Help offer sent",
-        "verify-restaurants": `Verified ${data?.verified ?? 0} restaurant(s)`,
+        "verify-restaurants": `Made ${data?.verified ?? 0} restaurant(s) public`,
       };
       toast({
         title: labels[vars.action] || "Done",
@@ -586,14 +586,14 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
             </Button>
           )}
           {owner.restaurants.length > 0 &&
-            owner.restaurants.some((r) => !r.isVerified) && (
+            owner.restaurants.some((r) => !r.isVerified || !r.isActive) && (
               <Button
                 size="sm"
                 variant="outline"
                 disabled={busy}
                 onClick={() => run("verify-restaurants")}
               >
-                Mark verified
+                Make public
               </Button>
             )}
           {owner.email && (
