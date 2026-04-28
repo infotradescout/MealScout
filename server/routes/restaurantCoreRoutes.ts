@@ -708,6 +708,21 @@ export function registerRestaurantCoreRoutes(
         const nextStep = steps.find((s) => !s.done) || null;
         const allDone = completed === total;
 
+        // "Discoverable" = customers can actually find this business now.
+        // We require: at least one verified+active restaurant with a menu
+        // and at least one item. Stripe subscription is NOT required for
+        // discoverability — only for selling deals.
+        const firstDiscoverable = ownerRestaurants.find(
+          (r: any) => r.isVerified && r.isActive,
+        );
+        const isDiscoverable = Boolean(
+          firstDiscoverable && hasMenu && hasItems,
+        );
+        const previewRestaurant = firstDiscoverable || ownerRestaurants[0] || null;
+        const publicPreviewUrl = previewRestaurant
+          ? `/restaurant/${previewRestaurant.id}`
+          : null;
+
         res.json({
           completed,
           total,
@@ -720,6 +735,8 @@ export function registerRestaurantCoreRoutes(
             menus: menuRows.length,
             items: itemCount,
           },
+          isDiscoverable,
+          publicPreviewUrl,
         });
       } catch (error: any) {
         console.error("[owner/onboarding] failed:", error);

@@ -60,6 +60,7 @@ export default function SmartSearch({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [debouncedValue, setDebouncedValue] = useState(value);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isOpeningPlace, setIsOpeningPlace] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = "smart-search-listbox";
@@ -178,6 +179,41 @@ export default function SmartSearch({
       onSearch(query.trim());
       setIsOpen(false);
     }
+  };
+
+  const openPlaceProfile = async (suggestion: SearchSuggestion) => {
+    const placeId = suggestion.id.startsWith("place:")
+      ? suggestion.id.slice("place:".length)
+      : "";
+    if (!placeId) {
+      handleSearch(suggestion.text);
+      return;
+    }
+
+    setIsOpeningPlace(true);
+    try {
+      addToRecentSearches(suggestion.text);
+      const res = await fetch(
+        `/api/search/google-place/${encodeURIComponent(placeId)}/profile`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body?.profileUrl) {
+        window.location.href = String(body.profileUrl);
+        return;
+      }
+    } catch {
+      // Fall through to normal search if Google profile generation fails.
+    } finally {
+      setIsOpeningPlace(false);
+    }
+
+    onChange(suggestion.text);
+    handleSearch(suggestion.text);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,8 +357,13 @@ export default function SmartSearch({
                     key={suggestion.id}
                     onClick={() => {
                       onChange(suggestion.text);
-                      handleSearch(suggestion.text);
+                      if (suggestion.id.startsWith("place:")) {
+                        openPlaceProfile(suggestion);
+                      } else {
+                        handleSearch(suggestion.text);
+                      }
                     }}
+                    disabled={isOpeningPlace}
                     id={`smart-search-option-${index}`}
                     role="option"
                     aria-selected={activeIndex === index}

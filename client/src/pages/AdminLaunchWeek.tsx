@@ -21,6 +21,8 @@ import {
   Truck,
   Users as UsersIcon,
   CreditCard,
+  Eye,
+  FileWarning,
   Utensils,
   RefreshCw,
 } from "lucide-react";
@@ -55,6 +57,7 @@ interface OwnerRow {
   trialEndsAt: string | null;
   totalMenus: number;
   totalItems: number;
+  totalFailedImports: number;
   setupScore: number;
   stuck: boolean;
   checklist: {
@@ -75,6 +78,17 @@ interface OwnerRow {
     isActive: boolean;
     menuCount: number;
     itemCount: number;
+    publicPreviewUrl: string;
+    importAttempts: number;
+    failedImports: number;
+    lastImportFailure: {
+      source: string;
+      status: string;
+      itemsImported: number;
+      itemsSkipped: number;
+      errorCount: number;
+      createdAt: string | null;
+    } | null;
     createdAt: string;
   }>;
 }
@@ -87,6 +101,7 @@ interface LaunchWeekResponse {
     unverifiedEmails: number;
     noBusinessYet: number;
     noMenuYet: number;
+    failedImports: number;
     stuck: number;
     subscribed: number;
     byType: { restaurant_owner: number; food_truck: number };
@@ -109,9 +124,10 @@ const fmtDate = (iso: string) => {
 export default function AdminLaunchWeek() {
   const [days, setDays] = useState(7);
   const [filter, setFilter] = useState<
-    "all" | "stuck" | "noMenu" | "subscribed" | "today"
+    "all" | "stuck" | "noMenu" | "failedImport" | "subscribed" | "today"
   >("all");
   const [search, setSearch] = useState("");
+  const digest = useDailyDigestAction();
 
   const { data, isLoading, isError, refetch, isFetching } =
     useQuery<LaunchWeekResponse>({
@@ -130,6 +146,7 @@ export default function AdminLaunchWeek() {
     if (filter === "stuck" && !o.stuck) return false;
     if (filter === "noMenu" && (!o.checklist.hasBusiness || o.checklist.hasMenu))
       return false;
+    if (filter === "failedImport" && o.totalFailedImports <= 0) return false;
     if (filter === "subscribed" && !o.checklist.hasSubscription) return false;
     if (filter === "today") {
       const today = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -192,11 +209,20 @@ export default function AdminLaunchWeek() {
             />
             Refresh
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => digest.mutate()}
+            disabled={digest.isPending}
+          >
+            <Mail className="w-4 h-4 mr-1" />
+            Send digest
+          </Button>
         </div>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           icon={<UsersIcon className="w-4 h-4" />}
           label="New owners"
@@ -221,6 +247,15 @@ export default function AdminLaunchWeek() {
           active={filter === "noMenu"}
         />
         <SummaryCard
+          icon={<FileWarning className="w-4 h-4 text-red-500" />}
+          label="Import failed"
+          value={data?.summary.failedImports ?? 0}
+          sub="Needs manual help"
+          tone={data?.summary.failedImports ? "warn" : "ok"}
+          onClick={() => setFilter("failedImport")}
+          active={filter === "failedImport"}
+        />
+        <SummaryCard
           icon={<CreditCard className="w-4 h-4 text-emerald-500" />}
           label="Subscribed"
           value={data?.summary.subscribed ?? 0}
@@ -239,26 +274,35 @@ export default function AdminLaunchWeek() {
           className="max-w-sm"
         />
         <div className="flex gap-1 flex-wrap">
-          {(["all", "today", "stuck", "noMenu", "subscribed"] as const).map(
-            (k) => (
-              <Button
-                key={k}
-                size="sm"
-                variant={filter === k ? "default" : "outline"}
-                onClick={() => setFilter(k)}
-              >
-                {k === "all"
-                  ? "All"
-                  : k === "today"
-                    ? "Today"
-                    : k === "stuck"
-                      ? "Stuck"
-                      : k === "noMenu"
-                        ? "No menu"
+          {(
+            [
+              "all",
+              "today",
+              "stuck",
+              "noMenu",
+              "failedImport",
+              "subscribed",
+            ] as const
+          ).map((k) => (
+            <Button
+              key={k}
+              size="sm"
+              variant={filter === k ? "default" : "outline"}
+              onClick={() => setFilter(k)}
+            >
+              {k === "all"
+                ? "All"
+                : k === "today"
+                  ? "Today"
+                  : k === "stuck"
+                    ? "Stuck"
+                    : k === "noMenu"
+                      ? "No menu"
+                      : k === "failedImport"
+                        ? "Import failed"
                         : "Subscribed"}
-              </Button>
-            ),
-          )}
+            </Button>
+          ))}
         </div>
         <div className="ml-auto text-xs text-muted-foreground">
           Auto-refreshes every minute
@@ -293,6 +337,33 @@ export default function AdminLaunchWeek() {
       )}
     </div>
   );
+}
+
+function useDailyDigestAction() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(apiUrl("/api/admin/launch-week/digest/send"), {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Failed (${res.status})`);
+      return body;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Daily digest sent",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Digest failed",
+        description: err?.message || "Try again",
+        variant: "destructive",
+      });
+    },
+  });
 }
 
 function useOwnerAction() {
@@ -441,6 +512,34 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                     </span>
                     {r.isVerified && (
                       <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    )}
+                    {r.failedImports > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="border-red-300 text-red-700"
+                      >
+                        <FileWarning className="w-3 h-3 mr-1" />
+                        {r.failedImports} import failed
+                      </Badge>
+                    )}
+                    <Button size="sm" variant="ghost" asChild>
+                      <a href={r.publicPreviewUrl} target="_blank" rel="noreferrer">
+                        <Eye className="w-3 h-3 mr-1" />
+                        Preview
+                      </a>
+                    </Button>
+                    {r.lastImportFailure && (
+                      <span className="text-red-700">
+                        Last {r.lastImportFailure.source} import{" "}
+                        {r.lastImportFailure.createdAt
+                          ? fmtDate(r.lastImportFailure.createdAt)
+                          : "recently"}
+                        {r.lastImportFailure.errorCount > 0
+                          ? `, ${r.lastImportFailure.errorCount} error${
+                              r.lastImportFailure.errorCount === 1 ? "" : "s"
+                            }`
+                          : ""}
+                      </span>
                     )}
                   </div>
                 ))}

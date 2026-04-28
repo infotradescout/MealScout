@@ -29,6 +29,7 @@ import { runMenuAutoRefreshCron } from "../services/menuAutoRefresh";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
+import { sendAdminDailyDigest } from "../services/adminDailyDigest";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities, sentimentSignalEvents } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
@@ -72,6 +73,32 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.error("❌ Weekly Digest Cron Job Failed:", error);
     }
   });
+
+  // Admin Daily Digest — every morning at 8:00 AM UTC.
+  // Sends an ops summary to ADMIN_EMAIL: new owners, stuck, imports, etc.
+  // Disable with ADMIN_DAILY_DIGEST_ENABLED=false.
+  if (
+    String(process.env.ADMIN_DAILY_DIGEST_ENABLED || "true").toLowerCase() !==
+    "false"
+  ) {
+    cron.schedule("0 8 * * *", async () => {
+      console.log("⏰ Triggering Admin Daily Digest");
+      try {
+        const result = await sendAdminDailyDigest();
+        if (result.sent) {
+          console.log(
+            `✅ Admin Daily Digest sent (${result.snapshot?.newOwners ?? 0} new owners, ${result.snapshot?.totalStuck ?? 0} stuck)`,
+          );
+        } else {
+          console.warn(
+            `⚠️ Admin Daily Digest skipped: ${result.reason || "unknown"}`,
+          );
+        }
+      } catch (error) {
+        console.error("❌ Admin Daily Digest failed:", error);
+      }
+    });
+  }
 
   // Premium Weekly Summary — Monday 8:30 AM (subscribed trucks)
   cron.schedule("30 8 * * 1", async () => {

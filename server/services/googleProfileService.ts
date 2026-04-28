@@ -9,8 +9,8 @@
  */
 
 import { db } from "../db";
-import { restaurants, hosts } from "../../shared/schema/legacy";
-import { eq } from "drizzle-orm";
+import { restaurants, hosts, users } from "../../shared/schema/legacy";
+import { eq, sql } from "drizzle-orm";
 
 const PLACES_API_BASE = "https://places.googleapis.com/v1";
 
@@ -302,6 +302,13 @@ const buildLocationBias = (
 };
 
 export type GoogleProfileData = {
+  name: string | null;
+  formattedAddress: string | null;
+  city: string | null;
+  state: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  primaryTypeDisplayName: string | null;
   googlePlaceId: string;
   description: string | null;
   googleRating: string | null;
@@ -473,11 +480,27 @@ function normalizeGoogleProfile(
   placeId: string,
   raw: any,
 ): GoogleProfileData {
+  const components = Array.isArray(raw?.addressComponents)
+    ? raw.addressComponents
+    : [];
+  const findComponent = (
+    type: string,
+    field: "longText" | "shortText" = "longText",
+  ) => {
+    const match = components.find((component: any) =>
+      Array.isArray(component?.types) ? component.types.includes(type) : false,
+    );
+    return String(match?.[field] || match?.longText || match?.shortText || "")
+      .trim() || null;
+  };
+
   // Description
   const description =
     raw?.editorialSummary?.text ||
     raw?.primaryTypeDisplayName?.text ||
     null;
+  const primaryTypeDisplayName =
+    raw?.primaryTypeDisplayName?.text || null;
 
   // Rating
   const googleRating =
@@ -589,6 +612,22 @@ function normalizeGoogleProfile(
   }
 
   return {
+    name: raw?.displayName?.text || null,
+    formattedAddress: raw?.formattedAddress || null,
+    city:
+      findComponent("locality") ||
+      findComponent("postal_town") ||
+      findComponent("administrative_area_level_2"),
+    state: findComponent("administrative_area_level_1", "shortText"),
+    latitude:
+      typeof raw?.location?.latitude === "number"
+        ? raw.location.latitude
+        : null,
+    longitude:
+      typeof raw?.location?.longitude === "number"
+        ? raw.location.longitude
+        : null,
+    primaryTypeDisplayName,
     googlePlaceId: placeId,
     description,
     googleRating,
@@ -604,6 +643,154 @@ function normalizeGoogleProfile(
     orderUrl,
     amenities: Object.keys(amenities).length > 0 ? amenities : null,
   };
+}
+
+let importSystemUserIdPromise: Promise<string> | null = null;
+
+async function getOrCreateImportSystemUserId(): Promise<string> {
+  if (!importSystemUserIdPromise) {
+    importSystemUserIdPromise = (async () => {
+      const email =
+        process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us";
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (existing?.id) return existing.id;
+
+      await db
+        .insert(users)
+        .values({
+          email,
+          firstName: "System",
+          lastName: "Import",
+          userType: "admin",
+          emailVerified: true,
+        })
+        .onConflictDoNothing({ target: users.email });
+      const [created] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      return created.id;
+    })();
+  }
+  return await importSystemUserIdPromise;
+}
+
+const inferBusinessType = (profile: GoogleProfileData) => {
+  const categories = (profile.googleCategories || []).map((value) =>
+    String(value || "").toLowerCase(),
+  );
+  if (
+    categories.some((value) =>
+      ["bar", "pub", "night_club", "brewery", "wine_bar"].includes(value),
+    )
+  ) {
+    return { businessType: "bar", isFoodTruck: false };
+  }
+  return { businessType: "restaurant", isFoodTruck: false };
+};
+
+const fallbackCuisine = (profile: GoogleProfileData) => {
+  if (profile.primaryTypeDisplayName) return profile.primaryTypeDisplayName;
+  const category = (profile.googleCategories || []).find((value) =>
+    String(value || "").includes("restaurant"),
+  );
+  if (category) {
+    return String(category)
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  return "Restaurant";
+};
+
+export async function ensureGoogleRestaurantProfile(
+  placeId: string,
+): Promise<{
+  restaurant: typeof restaurants.$inferSelect;
+  created: boolean;
+}> {
+  const normalizedPlaceId = String(placeId || "").trim();
+  if (!normalizedPlaceId) {
+    throw new Error("placeId is required");
+  }
+
+  const [existing] = await db
+    .select()
+    .from(restaurants)
+    .where(eq(restaurants.googlePlaceId, normalizedPlaceId))
+    .limit(1);
+  if (existing) return { restaurant: existing, created: false };
+
+  const profile = await fetchGoogleProfile(normalizedPlaceId);
+  if (!profile?.name || !profile?.formattedAddress) {
+    throw new Error("Google profile was missing name or address");
+  }
+
+  const { businessType, isFoodTruck } = inferBusinessType(profile);
+  const firstPhotoName = profile.googlePhotos?.[0]?.name || "";
+  const coverImageUrl = firstPhotoName ? getGooglePhotoUrl(firstPhotoName) : null;
+
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`google-profile:${normalizedPlaceId}`}))`,
+    );
+
+    const [existingAfterLock] = await tx
+      .select()
+      .from(restaurants)
+      .where(eq(restaurants.googlePlaceId, normalizedPlaceId))
+      .limit(1);
+    if (existingAfterLock) {
+      return { restaurant: existingAfterLock, created: false };
+    }
+
+    const ownerId = await getOrCreateImportSystemUserId();
+    const [created] = await tx
+      .insert(restaurants)
+      .values({
+        ownerId,
+        name: profile.name,
+        address: profile.formattedAddress,
+        phone: profile.googleFormattedPhone,
+        businessType,
+        cuisineType: fallbackCuisine(profile),
+        city: profile.city,
+        state: profile.state,
+        latitude:
+          typeof profile.latitude === "number" ? String(profile.latitude) : null,
+        longitude:
+          typeof profile.longitude === "number"
+            ? String(profile.longitude)
+            : null,
+        description: profile.description,
+        websiteUrl: profile.websiteUrl,
+        coverImageUrl,
+        isFoodTruck,
+        isActive: true,
+        isVerified: false,
+        googlePlaceId: normalizedPlaceId,
+        googleRating: profile.googleRating,
+        googleReviewCount: profile.googleReviewCount,
+        googlePriceLevel: profile.googlePriceLevel,
+        googleBusinessStatus: profile.googleBusinessStatus,
+        googlePhotos: profile.googlePhotos,
+        googleCategories: profile.googleCategories,
+        googleFormattedPhone: profile.googleFormattedPhone,
+        menuUrl: profile.menuUrl,
+        orderUrl: profile.orderUrl,
+        operatingHours: profile.operatingHours,
+        amenities: profile.amenities,
+        profileSource: "google",
+        profileLastSynced: new Date(),
+      } as any)
+      .returning();
+
+    return { restaurant: created, created: true };
+  });
 }
 
 /**

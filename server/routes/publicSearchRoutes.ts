@@ -5,7 +5,10 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
-import { searchPlacesFreeText } from "../services/googleProfileService";
+import {
+  ensureGoogleRestaurantProfile,
+  searchPlacesFreeText,
+} from "../services/googleProfileService";
 import {
   deals,
   eventSeries,
@@ -131,6 +134,39 @@ const scoreSearchFields = (
 };
 
 export function registerPublicSearchRoutes(app: Express) {
+  app.post("/api/search/google-place/:placeId/profile", async (req, res) => {
+    try {
+      const placeId = String(req.params.placeId || "").trim();
+      if (!placeId) {
+        return res.status(400).json({ message: "placeId is required" });
+      }
+
+      const result = await ensureGoogleRestaurantProfile(placeId);
+      const restaurant = result.restaurant as any;
+      res.json({
+        restaurantId: restaurant.id,
+        profileUrl: `/restaurant/${restaurant.id}`,
+        created: result.created,
+        restaurant: {
+          id: restaurant.id,
+          name: restaurant.name,
+          address: restaurant.address,
+          cuisineType: restaurant.cuisineType,
+          isVerified: Boolean(restaurant.isVerified),
+          isFoodTruck: Boolean(restaurant.isFoodTruck),
+          googleRating: restaurant.googleRating,
+          googleReviewCount: restaurant.googleReviewCount,
+        },
+      });
+    } catch (error: any) {
+      console.error("[search/google-place/profile] failed:", error);
+      res.status(500).json({
+        message: "Failed to create Google-backed profile",
+        error: String(error?.message || error),
+      });
+    }
+  });
+
   app.get("/api/search/suggestions/:query", async (req, res) => {
     try {
       const { query } = req.params;
@@ -404,7 +440,20 @@ export function registerPublicSearchRoutes(app: Express) {
       const searchTerms = buildSearchTerms(query);
       const primaryTerm = firstSearchSegment(query);
 
-      const restaurantMatches = await storage.getAllRestaurants();
+      const restaurantMatches = await db
+        .select({
+          id: restaurants.id,
+          name: restaurants.name,
+          cuisineType: restaurants.cuisineType,
+          address: restaurants.address,
+          isActive: restaurants.isActive,
+          isFoodTruck: restaurants.isFoodTruck,
+          isVerified: restaurants.isVerified,
+          operatingHours: restaurants.operatingHours,
+          googleRating: restaurants.googleRating,
+          googleReviewCount: restaurants.googleReviewCount,
+        })
+        .from(restaurants);
       const restaurantsBase = restaurantMatches
         .map((restaurant: any) => {
           if (!restaurant?.isActive) return false;
@@ -437,9 +486,11 @@ export function registerPublicSearchRoutes(app: Express) {
             restaurant.operatingHours ??
             restaurant.businessHours ??
             null,
+          googleRating: restaurant.googleRating,
+          googleReviewCount: restaurant.googleReviewCount,
         }));
 
-      const restaurantsOut = await Promise.all(
+      let restaurantsOut = await Promise.all(
         restaurantsBase.map(async (restaurant: any) => {
           let rating: number | null = null;
           try {
@@ -455,7 +506,9 @@ export function registerPublicSearchRoutes(app: Express) {
 
           return {
             ...restaurant,
-            rating,
+            rating:
+              rating ??
+              (restaurant.googleRating ? Number(restaurant.googleRating) : null),
           };
         }),
       );
@@ -668,7 +721,6 @@ export function registerPublicSearchRoutes(app: Express) {
       const SEED_MIN_QUERY_LEN = 5;
       const shouldAutoSeed =
         restaurantsOut.length === 0 &&
-        unclaimedOut.length === 0 &&
         query.length >= SEED_MIN_QUERY_LEN &&
         Boolean(
           process.env.GOOGLE_MAPS_API_KEY ||
@@ -684,6 +736,54 @@ export function registerPublicSearchRoutes(app: Express) {
           );
 
           if (foodCandidate) {
+            try {
+              const generated = await ensureGoogleRestaurantProfile(
+                foodCandidate.placeId,
+              );
+              const restaurant = generated.restaurant as any;
+              restaurantsOut = [
+                {
+                  id: restaurant.id,
+                  name: restaurant.name,
+                  cuisineType: restaurant.cuisineType,
+                  address: restaurant.address,
+                  isFoodTruck: Boolean(restaurant.isFoodTruck),
+                  isVerified: Boolean(restaurant.isVerified),
+                  operatingHours:
+                    restaurant.operatingHours ??
+                    restaurant.businessHours ??
+                    null,
+                  rating: restaurant.googleRating
+                    ? Number(restaurant.googleRating)
+                    : null,
+                  googleRating: restaurant.googleRating,
+                  googleReviewCount: restaurant.googleReviewCount,
+                },
+              ];
+              unclaimedOut = [];
+            } catch (profileErr) {
+              console.warn(
+                "[search] Google-backed restaurant profile generation failed; falling back to unclaimed listing:",
+                profileErr,
+              );
+            }
+
+            if (restaurantsOut.length > 0) {
+              res.setHeader("X-MealScout-Auto-Profile", "google");
+            }
+
+            if (restaurantsOut.length > 0) {
+              return res.json({
+                query,
+                restaurants: restaurantsOut,
+                deals: dealsOut,
+                parkingPassHosts: parkingPassHostsOut,
+                videos: videoRows,
+                events: eventsRows,
+                unclaimedListings: unclaimedOut,
+              });
+            }
+
             const externalId = `google:${foodCandidate.placeId}`;
             const [existing] = await db
               .select({

@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import crypto from "crypto";
 import Stripe from "stripe";
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
 import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
 import { db } from "../../db";
 import { emailService, isEmailConfigured } from "../../emailService";
+import { sendAdminDailyDigest } from "../../services/adminDailyDigest";
 import {
   eventBookings,
   events,
@@ -18,6 +19,7 @@ import {
   restaurants,
   menus,
   menuItems,
+  menuImportLogs,
 } from "@shared/schema";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -513,7 +515,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 createdAt: restaurants.createdAt,
               })
               .from(restaurants)
-              .where(sql`${restaurants.ownerId} IN ${ownerIds}`)
+              .where(inArray(restaurants.ownerId, ownerIds))
           : [];
 
         // Menu + item counts per restaurant (1 query)
@@ -527,7 +529,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               })
               .from(menus)
               .leftJoin(menuItems, eq(menuItems.menuId, menus.id))
-              .where(sql`${menus.restaurantId} IN ${restaurantIds}`)
+              .where(inArray(menus.restaurantId, restaurantIds))
               .groupBy(menus.restaurantId)
           : [];
         const countsByRestaurant = new Map<
@@ -540,13 +542,88 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             itemCount: Number(c.itemCount || 0),
           });
         }
+
+        const importRows = restaurantIds.length
+          ? await db
+              .select({
+                restaurantId: menuImportLogs.restaurantId,
+                source: menuImportLogs.source,
+                status: menuImportLogs.status,
+                itemsImported: menuImportLogs.itemsImported,
+                itemsSkipped: menuImportLogs.itemsSkipped,
+                errors: menuImportLogs.errors,
+                createdAt: menuImportLogs.createdAt,
+              })
+              .from(menuImportLogs)
+              .where(
+                and(
+                  inArray(menuImportLogs.restaurantId, restaurantIds),
+                  gte(menuImportLogs.createdAt, cutoff),
+                ),
+              )
+              .orderBy(desc(menuImportLogs.createdAt))
+          : [];
+        const importsByRestaurant = new Map<
+          string,
+          {
+            attempts: number;
+            failed: number;
+            lastFailure: {
+              source: string;
+              status: string;
+              itemsImported: number;
+              itemsSkipped: number;
+              errorCount: number;
+              createdAt: Date | null;
+            } | null;
+          }
+        >();
+        for (const row of importRows as any[]) {
+          const current = importsByRestaurant.get(row.restaurantId) || {
+            attempts: 0,
+            failed: 0,
+            lastFailure: null,
+          };
+          const itemsImported = Number(row.itemsImported || 0);
+          const failed =
+            row.status === "failed" ||
+            (row.status === "complete" && itemsImported === 0);
+          current.attempts += 1;
+          if (failed) {
+            current.failed += 1;
+            if (!current.lastFailure) {
+              current.lastFailure = {
+                source: row.source || "unknown",
+                status: row.status || "unknown",
+                itemsImported,
+                itemsSkipped: Number(row.itemsSkipped || 0),
+                errorCount: Array.isArray(row.errors) ? row.errors.length : 0,
+                createdAt: row.createdAt || null,
+              };
+            }
+          }
+          importsByRestaurant.set(row.restaurantId, current);
+        }
+
         const restaurantsByOwner = new Map<string, any[]>();
         for (const r of restaurantsForOwners as any[]) {
           const counts = countsByRestaurant.get(r.id) || {
             menuCount: 0,
             itemCount: 0,
           };
-          const enriched = { ...r, ...counts };
+          const imports = importsByRestaurant.get(r.id) || {
+            attempts: 0,
+            failed: 0,
+            lastFailure: null,
+          };
+          const enriched = {
+            ...r,
+            ...counts,
+            publicPreviewUrl: `/restaurant/${r.id}`,
+            importAttempts: imports.attempts,
+            failedImports: imports.failed,
+            lastImportFailure: imports.lastFailure,
+          };
           const arr = restaurantsByOwner.get(r.ownerId) || [];
           arr.push(enriched);
           restaurantsByOwner.set(r.ownerId, arr);
@@ -560,6 +637,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           );
           const totalItems = owned.reduce(
             (s: number, r: any) => s + (r.itemCount || 0),
+            0,
+          );
+          const totalFailedImports = owned.reduce(
+            (s: number, r: any) => s + (r.failedImports || 0),
             0,
           );
           // Setup score = simple checklist for triage
@@ -577,6 +658,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             restaurants: owned,
             totalMenus,
             totalItems,
+            totalFailedImports,
             checklist,
             setupScore: score,
             stuck:
@@ -598,6 +680,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           noMenuYet: rows.filter(
             (r: any) => r.checklist.hasBusiness && !r.checklist.hasMenu,
           ).length,
+          failedImports: rows.filter((r: any) => r.totalFailedImports > 0)
+            .length,
           stuck: rows.filter((r: any) => r.stuck).length,
           subscribed: rows.filter((r: any) => r.checklist.hasSubscription)
             .length,
@@ -615,6 +699,43 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         console.error("[admin/launch-week] failed:", error);
         res.status(500).json({
           message: "Failed to load launch-week snapshot",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
+
+  // POST /api/admin/launch-week/digest/send
+  // Manual trigger for the daily digest so admins can verify email delivery.
+  app.post(
+    "/api/admin/launch-week/digest/send",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const result = await sendAdminDailyDigest();
+        console.log(
+          `[admin/launch-week/digest] requested by=${req.user?.id || req.user?.claims?.sub || "admin"} sent=${result.sent} reason=${result.reason || "ok"}`,
+        );
+
+        if (!result.sent) {
+          const status = result.reason === "email_not_configured" ? 503 : 400;
+          return res.status(status).json({
+            ok: false,
+            message:
+              result.reason === "email_not_configured"
+                ? "Email provider not configured"
+                : "Daily digest was not sent",
+            reason: result.reason,
+            snapshot: result.snapshot,
+          });
+        }
+
+        res.json({ ok: true, snapshot: result.snapshot });
+      } catch (error: any) {
+        console.error("[admin/launch-week/digest] failed:", error);
+        res.status(500).json({
+          message: "Failed to send daily digest",
           error: String(error?.message || error),
         });
       }

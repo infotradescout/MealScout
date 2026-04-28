@@ -9,7 +9,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { CheckCircle2, Circle, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Circle, Eye, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { apiUrl } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +32,8 @@ interface OnboardingResponse {
   nextStep: OnboardingStep | null;
   steps: OnboardingStep[];
   counts: { restaurants: number; menus: number; items: number };
+  isDiscoverable: boolean;
+  publicPreviewUrl: string | null;
 }
 
 const DISMISS_KEY = "ms-onboarding-dismissed-complete";
@@ -61,9 +63,9 @@ export default function OwnerOnboardingChecklist() {
   if (data.allDone) {
     return (
       <Card className="mb-6 border-emerald-300 bg-emerald-50/40">
-        <CardContent className="py-4 flex items-center gap-3">
+        <CardContent className="py-4 flex items-center gap-3 flex-wrap">
           <Sparkles className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          <div className="flex-1">
+          <div className="flex-1 min-w-[200px]">
             <div className="font-semibold text-emerald-900">
               You're all set up!
             </div>
@@ -73,6 +75,14 @@ export default function OwnerOnboardingChecklist() {
               Customers can now find you.
             </div>
           </div>
+          {data.publicPreviewUrl && (
+            <Link href={data.publicPreviewUrl}>
+              <Button size="sm" variant="outline">
+                <Eye className="w-4 h-4 mr-1" />
+                Preview your page
+              </Button>
+            </Link>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -152,6 +162,30 @@ export default function OwnerOnboardingChecklist() {
             </li>
           ))}
         </ul>
+
+        {/* Discoverable status + preview link */}
+        {data.publicPreviewUrl && (
+          <div className="mt-3 pt-3 border-t border-orange-200 flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-xs">
+              {data.isDiscoverable ? (
+                <span className="text-emerald-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  You're discoverable to customers
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  Not yet discoverable — finish the steps above to go live.
+                </span>
+              )}
+            </div>
+            <Link href={data.publicPreviewUrl}>
+              <Button size="sm" variant="outline">
+                <Eye className="w-4 h-4 mr-1" />
+                Preview
+              </Button>
+            </Link>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

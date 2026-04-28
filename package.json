@@ -72,6 +72,7 @@
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
     "smoke:launch-spike": "node scripts/launchSpikeSmoke.mjs",
     "check:launch-week": "node scripts/launchWeekReadiness.mjs",
+    "smoke:launch-week": "tsx scripts/launchWeekReadinessSmoke.ts",
     "launch:degraded:on": "node scripts/toggleLaunchMode.mjs on",
     "launch:degraded:off": "node scripts/toggleLaunchMode.mjs off",
     "launch:degraded:reset": "node scripts/toggleLaunchMode.mjs reset",
