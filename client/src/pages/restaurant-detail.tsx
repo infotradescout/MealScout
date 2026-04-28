@@ -105,6 +105,11 @@ const toExternalUrl = (value: string | null | undefined) => {
   return `https://${raw}`;
 };
 
+const toPhoneHref = (value: string | null | undefined) => {
+  const digits = String(value || "").replace(/[^\d+]/g, "");
+  return digits ? `tel:${digits}` : "";
+};
+
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
@@ -485,6 +490,8 @@ export default function RestaurantDetailPage() {
   const dealCreationPath = `/deal-creation?restaurantId=${encodeURIComponent(String(restaurantId || ""))}&src=concierge`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
+  const phoneNumber =
+    (restaurant as any)?.phone || (restaurant as any)?.googleFormattedPhone || "";
   const city = String((restaurant as any)?.city || "").trim();
   const state = String((restaurant as any)?.state || "").trim();
   const locationLabel = [city, state].filter(Boolean).join(", ");
@@ -506,6 +513,25 @@ export default function RestaurantDetailPage() {
       (restaurant as any)?.websiteUrl ||
       (restaurant as any)?.website,
   );
+  const phoneHref = toPhoneHref(phoneNumber);
+  const lat = Number(
+    (restaurant as any)?.currentLatitude || (restaurant as any)?.latitude,
+  );
+  const lng = Number(
+    (restaurant as any)?.currentLongitude || (restaurant as any)?.longitude,
+  );
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const mapsDestination =
+    (restaurant as any)?.googlePlaceId
+      ? `place_id:${(restaurant as any).googlePlaceId}`
+      : hasCoords
+        ? `${lat},${lng}`
+        : [restaurantName, address, city, state].filter(Boolean).join(", ");
+  const directionsUrl = mapsDestination
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        mapsDestination,
+      )}${(restaurant as any)?.googlePlaceId ? `&destination_place_id=${encodeURIComponent((restaurant as any).googlePlaceId)}` : ""}`
+    : "";
   const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const localBusinessSchema = {
@@ -739,14 +765,14 @@ export default function RestaurantDetailPage() {
           </div>
 
           {/* Contact Info */}
-          {(restaurant as any)?.phone && (
+          {phoneNumber && (
             <div className="flex items-center space-x-2 mb-6">
               <Phone className="w-4 h-4 text-muted-foreground" />
               <p
                 className="text-sm text-foreground"
                 data-testid="text-restaurant-phone"
               >
-                {(restaurant as any)?.phone}
+                {phoneNumber}
               </p>
             </div>
           )}
@@ -923,25 +949,53 @@ export default function RestaurantDetailPage() {
           {/* Action Buttons */}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
+              asChild={Boolean(directionsUrl)}
               className="w-full sm:flex-1"
+              disabled={!directionsUrl}
               data-testid="button-directions"
             >
-              <DirectionsIcon className="w-4 h-4 mr-2" />
-              <AdminEditableText
-                textKey="restaurant.detail.actions.directions"
-                defaultText="Directions"
-              />
+              {directionsUrl ? (
+                <a href={directionsUrl} target="_blank" rel="noreferrer">
+                  <DirectionsIcon className="w-4 h-4 mr-2" />
+                  <AdminEditableText
+                    textKey="restaurant.detail.actions.directions"
+                    defaultText="Directions"
+                  />
+                </a>
+              ) : (
+                <>
+                  <DirectionsIcon className="w-4 h-4 mr-2" />
+                  <AdminEditableText
+                    textKey="restaurant.detail.actions.directions"
+                    defaultText="Directions"
+                  />
+                </>
+              )}
             </Button>
             <Button
+              asChild={Boolean(phoneHref)}
               variant="outline"
               className="w-full sm:flex-1"
+              disabled={!phoneHref}
               data-testid="button-call-restaurant"
             >
-              <Phone className="w-4 h-4 mr-2" />
-              <AdminEditableText
-                textKey="restaurant.detail.actions.call"
-                defaultText="Call"
-              />
+              {phoneHref ? (
+                <a href={phoneHref}>
+                  <Phone className="w-4 h-4 mr-2" />
+                  <AdminEditableText
+                    textKey="restaurant.detail.actions.call"
+                    defaultText="Call"
+                  />
+                </a>
+              ) : (
+                <>
+                  <Phone className="w-4 h-4 mr-2" />
+                  <AdminEditableText
+                    textKey="restaurant.detail.actions.call"
+                    defaultText="Call"
+                  />
+                </>
+              )}
             </Button>
             {isFoodTruck && (
               <Dialog>
