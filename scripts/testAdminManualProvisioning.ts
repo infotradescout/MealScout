@@ -2,7 +2,7 @@
  * Admin manual provisioning + verification smoke checks.
  *
  * Usage (PowerShell):
- * $env:ADMIN_SMOKE_BASE_URL="http://127.0.0.1:5000"
+ * $env:ADMIN_SMOKE_BASE_URL="http://127.0.0.1:5200"
  * $env:ADMIN_SMOKE_EMAIL="admin@example.com"
  * $env:ADMIN_SMOKE_PASSWORD="..."
  * npm run test:admin-manual-provisioning
@@ -14,8 +14,8 @@ type TestCase = {
   details: string;
 };
 
-const BASE_URL = (process.env.ADMIN_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
-const ORIGIN = String(process.env.ADMIN_SMOKE_ORIGIN || "http://localhost:5000").trim();
+const BASE_URL = (process.env.ADMIN_SMOKE_BASE_URL || "http://127.0.0.1:5200").replace(/\/$/, "");
+const ORIGIN = String(process.env.ADMIN_SMOKE_ORIGIN || "http://localhost:5200").trim();
 const ADMIN_EMAIL = String(process.env.ADMIN_SMOKE_EMAIL || "").trim();
 const ADMIN_PASSWORD = String(process.env.ADMIN_SMOKE_PASSWORD || "").trim();
 const ADMIN_COOKIE = String(process.env.ADMIN_SMOKE_COOKIE || "").trim();
