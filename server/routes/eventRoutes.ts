@@ -1574,6 +1574,16 @@ export function registerEventRoutes(
     isRestaurantOwner,
     async (req: any, res) => {
       try {
+        const hasAccess = await hasBusinessDistributionAccess(req.user.id);
+        if (!hasAccess) {
+          return res.status(402).json({
+            message:
+              "Premium subscription required to respond to events. Subscribe to express interest in events.",
+            code: "subscription_required",
+            feature: "event_response",
+          });
+        }
+
         const { eventId } = req.params;
         const { restaurantId, message } = req.body;
 
