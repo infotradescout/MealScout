@@ -34,6 +34,8 @@ import {
   truckImportListings,
   moderationCases,
   moderationResolutions,
+  menus,
+  menuItems,
 } from "@shared/schema";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
@@ -607,6 +609,127 @@ export function registerRestaurantCoreRoutes(
       res.status(500).json({ message: "Failed to fetch restaurants" });
     }
   });
+
+  // GET /api/owner/onboarding
+  // Returns the owner's setup checklist + next-step CTA so the dashboard
+  // can show progress ("3 of 6 done") and guide them to the next action.
+  app.get(
+    "/api/owner/onboarding",
+    isRestaurantOwner,
+    async (req: any, res) => {
+      try {
+        const user = req.user;
+        const userId = user.id;
+
+        const ownerRestaurants = await storage.getRestaurantsByOwner(userId);
+        const restaurantIds = ownerRestaurants.map((r: any) => r.id);
+
+        let menuRows: Array<{ restaurantId: string; menuId: string }> = [];
+        let itemCount = 0;
+        if (restaurantIds.length > 0) {
+          menuRows = await db
+            .select({
+              restaurantId: menus.restaurantId,
+              menuId: menus.id,
+            })
+            .from(menus)
+            .where(inArray(menus.restaurantId, restaurantIds));
+
+          if (menuRows.length > 0) {
+            const menuIds = menuRows.map((m) => m.menuId);
+            const [{ count }] = await db
+              .select({ count: sql<number>`COUNT(*)::int` })
+              .from(menuItems)
+              .where(inArray(menuItems.menuId, menuIds));
+            itemCount = Number(count || 0);
+          }
+        }
+
+        const hasBusiness = ownerRestaurants.length > 0;
+        const hasMenu = menuRows.length > 0;
+        const hasItems = itemCount > 0;
+        const isVerified = ownerRestaurants.some((r: any) => r.isVerified);
+        const hasSubscription = Boolean(user.stripeSubscriptionId);
+        const emailVerified = Boolean(user.emailVerified);
+
+        const steps = [
+          {
+            id: "verify-email",
+            label: "Verify your email",
+            done: emailVerified,
+            href: "/restaurant/dashboard",
+            cta: "Resend verification",
+            why: "Lets us send you booking and review notifications.",
+          },
+          {
+            id: "add-business",
+            label: "Add your business",
+            done: hasBusiness,
+            href: "/restaurant/onboarding",
+            cta: "Add business",
+            why: "Name, type, and location so customers can find you.",
+          },
+          {
+            id: "add-menu",
+            label: "Add your menu",
+            done: hasMenu,
+            href: "/restaurant/menu",
+            cta: "Add menu",
+            why: "Paste a link to your existing menu \u2014 we'll import it.",
+          },
+          {
+            id: "add-items",
+            label: "Add at least one item",
+            done: hasItems,
+            href: "/restaurant/menu",
+            cta: "Add items",
+            why: "Without items, customers see an empty menu.",
+          },
+          {
+            id: "get-verified",
+            label: "Get verified",
+            done: isVerified,
+            href: "/restaurant/dashboard",
+            cta: "Request verification",
+            why: "Verified businesses appear in search and on the map.",
+          },
+          {
+            id: "subscribe",
+            label: "Activate subscription",
+            done: hasSubscription,
+            href: "/restaurant/billing",
+            cta: "Choose plan",
+            why: "Unlocks deals, analytics, and customer messaging.",
+          },
+        ];
+
+        const completed = steps.filter((s) => s.done).length;
+        const total = steps.length;
+        const nextStep = steps.find((s) => !s.done) || null;
+        const allDone = completed === total;
+
+        res.json({
+          completed,
+          total,
+          percent: Math.round((completed / total) * 100),
+          allDone,
+          nextStep,
+          steps,
+          counts: {
+            restaurants: ownerRestaurants.length,
+            menus: menuRows.length,
+            items: itemCount,
+          },
+        });
+      } catch (error: any) {
+        console.error("[owner/onboarding] failed:", error);
+        res.status(500).json({
+          message: "Failed to load onboarding status",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
 
   app.get(
     "/api/auth/restaurant/user",

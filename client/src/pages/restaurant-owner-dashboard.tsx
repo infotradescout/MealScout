@@ -87,6 +87,7 @@ import {
 import { z } from "zod";
 import type { Deal, Restaurant } from "@shared/schema";
 import { BackHeader } from "@/components/back-header";
+import OwnerOnboardingChecklist from "@/components/OwnerOnboardingChecklist";
 import { SEOHead } from "@/components/seo-head";
 
 interface DashboardStats {
@@ -1536,6 +1537,9 @@ export default function RestaurantOwnerDashboard() {
         }
         className="bg-[var(--bg-card)] border-b border-border mb-8"
       />
+
+      {/* Owner-facing setup progress (auto-hides when complete) */}
+      <OwnerOnboardingChecklist />
 
       {/* Restaurant Selector */}
       {restaurants.length > 1 && (
