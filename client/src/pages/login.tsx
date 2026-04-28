@@ -12,8 +12,8 @@ import { SEOHead } from "@/components/seo-head";
 import {
   FUNNEL_EVENTS,
   trackFunnelEvent,
-  trackFunnelEventOncePerSession,
 } from "@/utils/funnelTelemetry";
+import { trackUxEvent } from "@/utils/uxTelemetry";
 
 const getSafeRedirectPath = (): string | null => {
   try {
@@ -60,7 +60,7 @@ export default function Login() {
     });
 
   useEffect(() => {
-    trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "login_view", {
+    trackUxEvent("auth_login_view", {
       page: "login",
       stage: "login_view",
     });
@@ -96,7 +96,7 @@ export default function Login() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+    trackUxEvent("auth_login_submitted", {
       page: "login",
       stage: "email_login_submit",
     });
@@ -147,14 +147,9 @@ export default function Login() {
       // Small delay to ensure cookie/session propagation
       await new Promise((r) => setTimeout(r, 200));
       // Redirect after login (many flows pass `?redirect=` to /login)
-      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+      trackUxEvent("auth_login_success", {
         page: "login",
         stage: "login_success",
-        redirectPath: redirectPath || "/",
-      });
-      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
-        page: "login",
-        stage: "post_login_redirect",
         redirectPath: redirectPath || "/",
       });
       window.location.href = redirectPath || "/";
