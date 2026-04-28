@@ -311,6 +311,15 @@ const normalizePlaceDetails = (raw: any): PlaceDetailsResult => {
   };
 };
 
+const parseAutocompleteCoordinate = (
+  value: unknown,
+  maxAbs: number,
+): number | null => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) > maxAbs) return null;
+  return parsed;
+};
+
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/runtime", async (_req, res) => {
     try {
@@ -1151,7 +1160,14 @@ export function registerPublicMapRoutes(app: Express) {
     // ── Server-side cache check (5-minute TTL) ──────────────────────────────────
     // Cache key excludes sessionToken so the same query always hits the same entry.
     // sessionToken is only used for billing grouping, not for result differentiation.
-    const autocompleteCacheKey = input.toLowerCase();
+    const biasLat = parseAutocompleteCoordinate(req.query.lat, 90);
+    const biasLng = parseAutocompleteCoordinate(req.query.lng, 180);
+    const hasLocationBias = biasLat !== null && biasLng !== null;
+    const autocompleteCacheKey = [
+      input.toLowerCase(),
+      hasLocationBias ? biasLat.toFixed(2) : "no-lat",
+      hasLocationBias ? biasLng.toFixed(2) : "no-lng",
+    ].join(":");
     const acCached = placeAutocompleteCache.get(autocompleteCacheKey);
     if (acCached && acCached.expiresAt > Date.now()) {
       res.setHeader("Cache-Control", "public, max-age=300");
@@ -1168,9 +1184,27 @@ export function registerPublicMapRoutes(app: Express) {
         const payload: Record<string, unknown> = {
           input,
           includedRegionCodes: ["us"],
+          includedPrimaryTypes: [
+            "restaurant",
+            "cafe",
+            "bar",
+            "meal_takeaway",
+            "meal_delivery",
+          ],
           languageCode: "en",
         };
         if (sessionToken) payload.sessionToken = sessionToken;
+        if (hasLocationBias) {
+          payload.locationBias = {
+            circle: {
+              center: {
+                latitude: biasLat,
+                longitude: biasLng,
+              },
+              radius: 50_000,
+            },
+          };
+        }
         const response = await fetchWithTimeout(
           "https://places.googleapis.com/v1/places:autocomplete",
           {

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Search, Clock, TrendingUp, X, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { readDeviceLocation } from "@/lib/device-location";
 
 // Stable session token for the lifetime of the page — rotated on full navigation.
 // Sending this groups all autocomplete requests in a session into a single
@@ -99,6 +100,11 @@ export default function SmartSearch({
       const url = new URL("/api/map/place-autocomplete", window.location.origin);
       url.searchParams.set("input", debouncedValue);
       url.searchParams.set("sessionToken", _smartSearchSessionToken);
+      const deviceLocation = readDeviceLocation();
+      if (deviceLocation) {
+        url.searchParams.set("lat", String(deviceLocation.lat));
+        url.searchParams.set("lng", String(deviceLocation.lng));
+      }
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) return [];
       const data = (await res.json()) as {
