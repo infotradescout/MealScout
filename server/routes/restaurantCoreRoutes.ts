@@ -621,6 +621,18 @@ export function registerRestaurantCoreRoutes(
         if (!restaurantId || !userId) {
           return res.status(400).json({ message: "Missing restaurant or user" });
         }
+        const parsed = z
+          .object({
+            documents: z.array(z.string()).min(1).max(5),
+          })
+          .parse(req.body || {});
+        const documentValidation = validateDocuments(parsed.documents);
+        if (!documentValidation.valid) {
+          return res.status(400).json({
+            message: "Document validation failed",
+            errors: documentValidation.errors,
+          });
+        }
 
         const restaurant = await storage.getRestaurant(restaurantId);
         if (!restaurant) {
@@ -687,7 +699,7 @@ export function registerRestaurantCoreRoutes(
         if (!hasPending) {
           const request = await storage.createVerificationRequest({
             restaurantId,
-            documents: [],
+            documents: parsed.documents,
           });
           verificationRequestId = request.id;
         }

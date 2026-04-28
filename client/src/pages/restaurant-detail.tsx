@@ -50,6 +50,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import ShareButton from "@/components/share-button";
+import DocumentUpload from "@/components/document-upload";
 import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
@@ -133,6 +134,7 @@ export default function RestaurantDetailPage() {
     location: "",
     notes: "",
   });
+  const [claimDocuments, setClaimDocuments] = useState<string[]>([]);
 
   const { data: restaurant, isLoading: restaurantLoading } = useQuery({
     queryKey: ["/api/restaurants", restaurantId],
@@ -228,7 +230,7 @@ export default function RestaurantDetailPage() {
       const response = await apiRequest(
         "POST",
         `/api/restaurants/${encodeURIComponent(String(restaurantId))}/claim-generated`,
-        {},
+        { documents: claimDocuments },
       );
       return response.json();
     },
@@ -243,6 +245,7 @@ export default function RestaurantDetailPage() {
         description:
           "This page is now attached to your MealScout account. Verification is queued for review.",
       });
+      setClaimDocuments([]);
       window.location.assign(
         "/restaurant-owner-dashboard?src=claim&showOnboardingPrompt=1",
       );
@@ -759,20 +762,47 @@ export default function RestaurantDetailPage() {
               </p>
               <div className="mt-2">
                 {user && canClaimGeneratedProfile ? (
-                  <Button
-                    size="sm"
-                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
-                    disabled={claimGeneratedProfileMutation.isPending}
-                    onClick={() => claimGeneratedProfileMutation.mutate()}
-                  >
-                    {claimGeneratedProfileMutation.isPending
-                      ? "Claiming..."
-                      : "Claim Business & Verify"}
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+                      >
+                        Request to Claim
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Verify your business claim</DialogTitle>
+                        <DialogDescription>
+                          Upload a business license, health permit, seller permit, insurance certificate, tax document, or other document that connects you to this business.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DocumentUpload
+                        onDocumentsChange={setClaimDocuments}
+                        maxFiles={5}
+                        maxFileSize={10}
+                      />
+                      <DialogFooter>
+                        <Button
+                          className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+                          disabled={
+                            claimGeneratedProfileMutation.isPending ||
+                            claimDocuments.length === 0
+                          }
+                          onClick={() => claimGeneratedProfileMutation.mutate()}
+                        >
+                          {claimGeneratedProfileMutation.isPending
+                            ? "Submitting..."
+                            : "Submit Claim for Review"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 ) : (
                   <Link href={claimBusinessPath as any}>
                     <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
-                      Claim Business & Verify
+                      Request to Claim
                     </Button>
                   </Link>
                 )}
