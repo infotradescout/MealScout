@@ -449,6 +449,10 @@ export default function RestaurantDetailPage() {
     ? primaryOnsiteMenu.categories
     : [];
   const hasOnsiteMenu = onsiteMenuCategories.length > 0;
+  const onsiteMenuUrl = hasOnsiteMenu
+    ? `/menu/${encodeURIComponent(String(restaurantId || ""))}`
+    : "";
+  const onsiteOrderingEnabled = Boolean(publicMenusData?.orderingEnabled && hasOnsiteMenu);
   const isVerifiedMemberProfile =
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
@@ -509,10 +513,12 @@ export default function RestaurantDetailPage() {
       (restaurant as any)?.onlineOrderUrl ||
       (restaurant as any)?.onlineOrderingUrl,
   );
-  const menuPrimaryUrl = toExternalUrl(
+  const externalMenuUrl = toExternalUrl(
     (restaurant as any)?.menuUrl ||
       (restaurant as any)?.menuURL,
   );
+  const menuPrimaryUrl = onsiteMenuUrl || externalMenuUrl;
+  const menuPrimaryIsInternal = Boolean(onsiteMenuUrl);
   const websitePrimaryUrl = toExternalUrl(
     (restaurant as any)?.websiteUrl || (restaurant as any)?.website,
   );
@@ -1206,13 +1212,27 @@ export default function RestaurantDetailPage() {
                     Order Online
                   </Button>
                 </a>
+              ) : onsiteOrderingEnabled ? (
+                <Link href={onsiteMenuUrl}>
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                    Order Online
+                  </Button>
+                </Link>
               ) : null}
               {menuPrimaryUrl ? (
-                <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
-                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
-                    View Full Menu
-                  </Button>
-                </a>
+                menuPrimaryIsInternal ? (
+                  <Link href={menuPrimaryUrl}>
+                    <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                      View Full Menu
+                    </Button>
+                  </Link>
+                ) : (
+                  <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
+                    <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                      View Full Menu
+                    </Button>
+                  </a>
+                )
               ) : websitePrimaryUrl ? (
                 <a href={websitePrimaryUrl} target="_blank" rel="noreferrer">
                   <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
