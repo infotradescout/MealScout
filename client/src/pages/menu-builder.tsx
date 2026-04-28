@@ -1092,6 +1092,8 @@ function MenuItemDialog({
     inventoryQty: item?.inventoryQty ? String(item.inventoryQty) : "",
     dietaryTags: (item?.dietaryTags ?? []).join(", "),
     allergens: (item?.allergens ?? []).join(", "),
+    imageUrl: item?.imageUrl ?? "",
+    sku: (item as any)?.sku ?? "",
   });
 
   const save = async () => {
@@ -1124,6 +1126,8 @@ function MenuItemDialog({
               .map((a) => a.trim())
               .filter(Boolean)
           : [],
+        imageUrl: form.imageUrl.trim() || null,
+        sku: form.sku.trim() || null,
       };
 
       if (item) {
@@ -1230,6 +1234,32 @@ function MenuItemDialog({
                   setForm((f) => ({ ...f, allergens: e.target.value }))
                 }
                 placeholder="nuts, dairy, gluten"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>Photo URL</Label>
+              <Input
+                value={form.imageUrl}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, imageUrl: e.target.value }))
+                }
+                placeholder="https://… (paste an image link)"
+                type="url"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>
+                SKU{" "}
+                <span className="text-xs text-muted-foreground">
+                  (optional, for POS sync)
+                </span>
+              </Label>
+              <Input
+                value={form.sku}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, sku: e.target.value }))
+                }
+                placeholder="e.g. BURGER-CLASSIC-01"
               />
             </div>
           </div>
