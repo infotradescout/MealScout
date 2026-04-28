@@ -3332,7 +3332,7 @@ export default function MapPage() {
 
         {/* Selected Deal Info Card */}
         {selectedDeal && (
-          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
+          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
@@ -3424,7 +3424,7 @@ export default function MapPage() {
         )}
 
         {!selectedDeal && selectedSighting && (
-          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
+          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
             <CardContent className="p-4">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
@@ -3480,7 +3480,7 @@ export default function MapPage() {
         )}
 
         {!selectedDeal && selectedParkingHost && (
-          <Card className="absolute bottom-4 left-3 right-3 z-20 max-h-[56vh] overflow-hidden rounded-2xl shadow-clean-lg sm:left-4 sm:right-4">
+          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(360px,calc(100vw-1.5rem))] max-h-[56vh] -translate-x-1/2 overflow-hidden rounded-2xl shadow-clean-lg">
             <CardContent className="flex max-h-[56vh] flex-col p-0">
               <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
               <div className="mb-2 flex items-start gap-2">
@@ -3721,7 +3721,7 @@ export default function MapPage() {
         )}
 
         {!selectedDeal && !selectedParkingHost && selectedHostCluster && (
-          <Card className="absolute bottom-4 left-4 right-4 z-20 shadow-clean-lg">
+          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
             <CardContent className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div>

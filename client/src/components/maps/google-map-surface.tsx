@@ -24,6 +24,12 @@ type GoogleMapSurfaceProps = {
   onZoomChanged: (zoom: number) => void;
   onMarkerTap: (marker: MapAdapterMarker) => void;
   onFatalError?: (message: string) => void;
+  /** Lat/lng to anchor a floating popup card above the corresponding pin. */
+  popupAnchor?: GeoPoint | null;
+  /** Reports anchor screen pixel position relative to the map container, or null. */
+  onPopupAnchorPosition?: (
+    position: { x: number; y: number } | null,
+  ) => void;
 };
 
 type GoogleMapsWindow = Window & {
@@ -257,6 +263,8 @@ export function GoogleMapSurface({
   onZoomChanged,
   onMarkerTap,
   onFatalError,
+  popupAnchor = null,
+  onPopupAnchorPosition,
 }: GoogleMapSurfaceProps) {
   const effectiveMapId = String(mapId || BUILD_GOOGLE_MAP_ID || "").trim();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -270,6 +278,7 @@ export function GoogleMapSurface({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
+  const popupOverlayRef = useRef<any>(null);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((marker) => [marker.id, marker])),
@@ -618,6 +627,47 @@ export function GoogleMapSurface({
       }
     };
   }, []);
+
+  // ─── Pin-anchored popup position via OverlayView projection ────────────────
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+    if (!popupAnchor) {
+      if (popupOverlayRef.current) {
+        popupOverlayRef.current.setMap(null);
+        popupOverlayRef.current = null;
+      }
+      onPopupAnchorPosition?.(null);
+      return;
+    }
+
+    const OverlayCtor = googleMaps.OverlayView;
+    if (typeof OverlayCtor !== "function") return;
+
+    const overlay = new OverlayCtor();
+    overlay.onAdd = function () {
+      // no DOM needed; we just want draw() projection callbacks
+    };
+    overlay.draw = function () {
+      const projection = (this as any).getProjection?.();
+      if (!projection) return;
+      const point = projection.fromLatLngToContainerPixel(
+        new googleMaps.LatLng(popupAnchor.lat, popupAnchor.lng),
+      );
+      if (!point) return;
+      onPopupAnchorPosition?.({ x: point.x, y: point.y });
+    };
+    overlay.onRemove = function () {
+      onPopupAnchorPosition?.(null);
+    };
+    overlay.setMap(mapRef.current);
+    popupOverlayRef.current = overlay;
+
+    return () => {
+      overlay.setMap(null);
+      popupOverlayRef.current = null;
+    };
+  }, [popupAnchor?.lat, popupAnchor?.lng, mapReadyVersion, onPopupAnchorPosition]);
 
   const controlClassName = isNightTheme
     ? "w-11 h-11 p-0 rounded-full bg-[var(--bg-card)]/90 border border-white/20 shadow-clean-lg backdrop-blur text-[color:var(--text-primary)]"
