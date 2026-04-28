@@ -446,6 +446,22 @@ const triggerFatalShutdown = (label: string, error: unknown) => {
 };
 
 process.on("uncaughtException", (error) => {
+  // Known transient bug in @neondatabase/serverless@0.10.x: when a Neon
+  // WebSocket connection fails, the driver tries to set `.message` on Node's
+  // read-only ErrorEvent and throws a TypeError. This is purely a connection
+  // hiccup (Neon free tier auto-suspends), not a real fatal — log and ignore
+  // so the server stays up. Real DB errors still surface via query rejections.
+  const msg = error instanceof Error ? error.message : String(error);
+  if (
+    msg.includes("Cannot set property message of #<ErrorEvent>") ||
+    msg.includes("which has only a getter")
+  ) {
+    console.warn(
+      "[neon] Ignoring transient driver ErrorEvent bug (connection hiccup):",
+      msg,
+    );
+    return;
+  }
   triggerFatalShutdown("uncaughtException", error);
 });
 

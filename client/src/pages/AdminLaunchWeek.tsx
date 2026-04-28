@@ -9,8 +9,9 @@
  */
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -294,6 +295,47 @@ export default function AdminLaunchWeek() {
   );
 }
 
+function useOwnerAction() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (vars: { userId: string; action: string }) => {
+      const res = await fetch(
+        apiUrl(`/api/admin/launch-week/owners/${vars.userId}/action`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: vars.action }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Failed (${res.status})`);
+      return body;
+    },
+    onSuccess: (data, vars) => {
+      const labels: Record<string, string> = {
+        "resend-verification": "Verification email sent",
+        "send-menu-nudge": "Menu nudge sent",
+        "send-help-offer": "Help offer sent",
+        "verify-restaurants": `Verified ${data?.verified ?? 0} restaurant(s)`,
+      };
+      toast({
+        title: labels[vars.action] || "Done",
+        description: data?.skipped ? `Skipped: ${data.skipped}` : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ["admin-launch-week"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Action failed",
+        description: err?.message || "Try again",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 function SummaryCard({
   icon,
   label,
@@ -338,6 +380,10 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
     owner.email ||
     "(no name)";
   const isFoodTruck = owner.userType === "food_truck";
+  const action = useOwnerAction();
+  const run = (a: string) =>
+    action.mutate({ userId: owner.id, action: a });
+  const busy = action.isPending;
 
   return (
     <Card className={owner.stuck ? "border-orange-300 bg-orange-50/30" : ""}>
@@ -407,6 +453,55 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
               setup {owner.setupScore}/6
             </div>
           </div>
+        </div>
+        {/* One-click triage actions */}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {!owner.checklist.emailVerified && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => run("resend-verification")}
+            >
+              Resend verify email
+            </Button>
+          )}
+          {owner.checklist.hasBusiness && !owner.checklist.hasMenu && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => run("send-menu-nudge")}
+            >
+              Send menu nudge
+            </Button>
+          )}
+          {owner.stuck && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => run("send-help-offer")}
+            >
+              Offer to set it up
+            </Button>
+          )}
+          {owner.restaurants.length > 0 &&
+            owner.restaurants.some((r) => !r.isVerified) && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => run("verify-restaurants")}
+              >
+                Mark verified
+              </Button>
+            )}
+          {owner.email && (
+            <Button size="sm" variant="ghost" asChild>
+              <a href={`mailto:${owner.email}`}>Email directly</a>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

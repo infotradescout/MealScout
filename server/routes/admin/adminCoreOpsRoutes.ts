@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import Stripe from "stripe";
 import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
@@ -6,6 +7,7 @@ import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
 import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
 import { db } from "../../db";
+import { emailService, isEmailConfigured } from "../../emailService";
 import {
   eventBookings,
   events,
@@ -613,6 +615,159 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         console.error("[admin/launch-week] failed:", error);
         res.status(500).json({
           message: "Failed to load launch-week snapshot",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
+
+  // POST /api/admin/launch-week/owners/:userId/action
+  // Body: { action: "resend-verification" | "send-menu-nudge" | "send-help-offer" | "verify-restaurants" }
+  // One-click triage actions for owners flagged on the Launch Week dashboard.
+  app.post(
+    "/api/admin/launch-week/owners/:userId/action",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const userId = String(req.params.userId);
+        const action = String(req.body?.action || "");
+        const validActions = new Set([
+          "resend-verification",
+          "send-menu-nudge",
+          "send-help-offer",
+          "verify-restaurants",
+        ]);
+        if (!validActions.has(action)) {
+          return res.status(400).json({ message: "Invalid action" });
+        }
+
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+        if (!user.email) {
+          return res
+            .status(400)
+            .json({ message: "User has no email on file" });
+        }
+
+        const adminId = req.user?.id || req.user?.claims?.sub || "admin";
+        const baseUrl = (
+          process.env.PUBLIC_BASE_URL ||
+          `${req.protocol}://${req.get("host")}` ||
+          "http://localhost:5000"
+        ).replace(/\/+$/, "");
+
+        if (action === "resend-verification") {
+          if (user.emailVerified) {
+            return res.json({ ok: true, skipped: "already_verified" });
+          }
+          if (!isEmailConfigured()) {
+            return res
+              .status(503)
+              .json({ message: "Email provider not configured" });
+          }
+          const token = crypto.randomBytes(32).toString("hex");
+          const tokenHash = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
+          await storage.createEmailVerificationToken({
+            userId: user.id,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            requestIp: req.ip || undefined,
+            userAgent: req.get("User-Agent") || undefined,
+          });
+          const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+          const ok = await emailService.sendEmailVerificationEmail(
+            user as any,
+            verifyUrl,
+          );
+          console.log(
+            `[admin/launch-week] resend-verification by=${adminId} to=${user.email} ok=${ok}`,
+          );
+          return res.json({ ok });
+        }
+
+        if (action === "send-menu-nudge") {
+          const firstName = user.firstName || "there";
+          const dashUrl = `${baseUrl}/restaurant/dashboard`;
+          const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+              <h2>Hi ${firstName}, ready to add your menu?</h2>
+              <p>Welcome to MealScout! The fastest way to start getting discovered is to add your menu \u2014 it takes about 2 minutes.</p>
+              <p>You can paste a link to your existing menu (DoorDash, UberEats, or your own site) and we will import the items automatically.</p>
+              <p style="margin: 16px 0;">
+                <a href="${dashUrl}" style="background:#f97316;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;">
+                  Add Your Menu
+                </a>
+              </p>
+              <p>Stuck? Just reply to this email and we will help you import it.</p>
+              <p style="color:#6b7280;font-size:12px;">\u2014 The MealScout team</p>
+            </div>
+          `;
+          const text = `Hi ${firstName}, ready to add your menu? Visit ${dashUrl} to get started, or reply to this email and we'll help.`;
+          const ok = await emailService.sendBasicEmail(
+            user.email,
+            "Ready to add your menu? \uD83C\uDF7D\uFE0F",
+            html,
+            text,
+            "general",
+          );
+          console.log(
+            `[admin/launch-week] menu-nudge by=${adminId} to=${user.email} ok=${ok}`,
+          );
+          return res.json({ ok });
+        }
+
+        if (action === "send-help-offer") {
+          const firstName = user.firstName || "there";
+          const html = `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+              <h2>Hi ${firstName}, want us to set it up for you?</h2>
+              <p>I noticed you signed up for MealScout but haven't added a menu yet. No problem \u2014 we can do it for you.</p>
+              <p>Just reply to this email with a link to your existing menu (your website, DoorDash, UberEats, etc.) and we'll import everything for you within 24 hours.</p>
+              <p>Or if you'd rather, reply with a phone number and we'll call to walk you through it.</p>
+              <p style="color:#6b7280;font-size:12px;">\u2014 The MealScout team</p>
+            </div>
+          `;
+          const text = `Hi ${firstName}, reply with a link to your menu (website, DoorDash, UberEats, etc.) and we'll import it for you within 24 hours. Or send a phone number and we'll call.`;
+          const ok = await emailService.sendBasicEmail(
+            user.email,
+            "Want us to set up your menu for you?",
+            html,
+            text,
+            "general",
+          );
+          console.log(
+            `[admin/launch-week] help-offer by=${adminId} to=${user.email} ok=${ok}`,
+          );
+          return res.json({ ok });
+        }
+
+        if (action === "verify-restaurants") {
+          const result = await db
+            .update(restaurants)
+            .set({ isVerified: true, isActive: true })
+            .where(eq(restaurants.ownerId, user.id))
+            .returning({ id: restaurants.id });
+          console.log(
+            `[admin/launch-week] verify-restaurants by=${adminId} owner=${user.id} count=${result.length}`,
+          );
+          return res.json({ ok: true, verified: result.length });
+        }
+
+        return res.status(400).json({ message: "Unhandled action" });
+      } catch (error: any) {
+        console.error("[admin/launch-week/action] failed:", error);
+        res.status(500).json({
+          message: "Action failed",
           error: String(error?.message || error),
         });
       }
