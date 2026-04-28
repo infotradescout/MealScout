@@ -91,6 +91,9 @@ export default function EventsPage() {
     weeklyPriceDollars: "",
     monthlyPriceDollars: "",
   });
+  const isPrivateEvent = formData.eventVisibility === "private";
+  const isRecurringEvent = !isPrivateEvent && formData.eventCadence === "recurring";
+  const showPricingFields = !isPrivateEvent && formData.requiresPayment;
 
   const parseDollarsToCents = (value: string) => {
     const trimmed = String(value || "").trim();
@@ -166,41 +169,54 @@ export default function EventsPage() {
 
   const createEvent = useMutation({
     mutationFn: async () => {
+      const payload = {
+        businessName: formData.organizationName,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        contactPhone: formData.contactPhone,
+        name: formData.eventName,
+        description: formData.description,
+        eventVisibility: formData.eventVisibility,
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        maxTrucks: Number(formData.maxTrucks),
+        eventCadence: isPrivateEvent ? "one_time" : formData.eventCadence,
+        recurringDaysOfWeek: isRecurringEvent
+          ? formData.recurringDaysOfWeek
+          : [],
+        recurrenceEndDate: isRecurringEvent
+          ? formData.recurrenceEndDate
+          : undefined,
+        requiresPayment: showPricingFields,
+        amenities: formData.amenities,
+        ...(showPricingFields
+          ? {
+              hostPriceCents: parseDollarsToCents(formData.hostPriceDollars),
+              breakfastPriceCents: parseDollarsToCents(
+                formData.breakfastPriceDollars,
+              ),
+              lunchPriceCents: parseDollarsToCents(formData.lunchPriceDollars),
+              dinnerPriceCents: parseDollarsToCents(
+                formData.dinnerPriceDollars,
+              ),
+              dailyPriceCents: parseDollarsToCents(formData.dailyPriceDollars),
+              weeklyPriceCents: parseDollarsToCents(
+                formData.weeklyPriceDollars,
+              ),
+              monthlyPriceCents: parseDollarsToCents(
+                formData.monthlyPriceDollars,
+              ),
+            }
+          : {}),
+      };
+
       const res = await fetch("/api/event-coordinator/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          businessName: formData.organizationName,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          contactPhone: formData.contactPhone,
-          name: formData.eventName,
-          description: formData.description,
-          eventVisibility: formData.eventVisibility,
-          date: formData.date,
-          startTime: formData.startTime,
-          endTime: formData.endTime,
-          maxTrucks: Number(formData.maxTrucks),
-          eventCadence: formData.eventCadence,
-          recurringDaysOfWeek: formData.recurringDaysOfWeek,
-          recurrenceEndDate:
-            formData.eventCadence === "recurring"
-              ? formData.recurrenceEndDate
-              : undefined,
-          requiresPayment: formData.requiresPayment,
-          amenities: formData.amenities,
-          hostPriceCents: parseDollarsToCents(formData.hostPriceDollars),
-          breakfastPriceCents: parseDollarsToCents(
-            formData.breakfastPriceDollars,
-          ),
-          lunchPriceCents: parseDollarsToCents(formData.lunchPriceDollars),
-          dinnerPriceCents: parseDollarsToCents(formData.dinnerPriceDollars),
-          dailyPriceCents: parseDollarsToCents(formData.dailyPriceDollars),
-          weeklyPriceCents: parseDollarsToCents(formData.weeklyPriceDollars),
-          monthlyPriceCents: parseDollarsToCents(formData.monthlyPriceDollars),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -255,7 +271,6 @@ export default function EventsPage() {
 
   const handleCreateEvent = (e: React.FormEvent) => {
     e.preventDefault();
-    const isPrivateEvent = formData.eventVisibility === "private";
     const hasAnyPricing = [
       formData.hostPriceDollars,
       formData.breakfastPriceDollars,
@@ -279,6 +294,86 @@ export default function EventsPage() {
       });
       return;
     }
+
+    if (!formData.organizationName.trim() || !formData.eventName.trim()) {
+      toast({
+        title: "Missing basic info",
+        description: "Add organization name and event name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      !formData.address.trim() ||
+      !formData.city.trim() ||
+      !formData.state.trim() ||
+      !formData.contactPhone.trim()
+    ) {
+      toast({
+        title: "Missing location or contact",
+        description: "Add address, city, state, and contact phone.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.date || !formData.startTime || !formData.endTime) {
+      toast({
+        title: "Missing schedule",
+        description: "Set date, start time, and end time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.startTime >= formData.endTime) {
+      toast({
+        title: "Invalid time range",
+        description: "End time must be later than start time.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isRecurringEvent && formData.recurringDaysOfWeek.length === 0) {
+      toast({
+        title: "Recurring days required",
+        description: "Pick at least one day for recurring events.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isRecurringEvent && !formData.recurrenceEndDate) {
+      toast({
+        title: "Recurring end date required",
+        description: "Set when the recurring schedule should stop.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      showPricingFields &&
+      ![
+        formData.hostPriceDollars,
+        formData.breakfastPriceDollars,
+        formData.lunchPriceDollars,
+        formData.dinnerPriceDollars,
+        formData.dailyPriceDollars,
+        formData.weeklyPriceDollars,
+        formData.monthlyPriceDollars,
+      ].some((value) => Number(String(value || "").trim() || 0) > 0)
+    ) {
+      toast({
+        title: "Pricing required",
+        description: "Add at least one pricing value for paid events.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!createEvent.isPending) {
       createEvent.mutate();
     }
@@ -776,7 +871,7 @@ export default function EventsPage() {
                         <input
                           type="checkbox"
                           checked={formData.requiresPayment}
-                          disabled={formData.eventVisibility === "private"}
+                          disabled={isPrivateEvent}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
@@ -823,37 +918,42 @@ export default function EventsPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Pricing (USD)</Label>
-                      <div className="grid md:grid-cols-3 gap-3">
-                        {[
-                          ["hostPriceDollars", "Host Fee"],
-                          ["breakfastPriceDollars", "Breakfast"],
-                          ["lunchPriceDollars", "Lunch"],
-                          ["dinnerPriceDollars", "Dinner"],
-                          ["dailyPriceDollars", "Daily"],
-                          ["weeklyPriceDollars", "Weekly"],
-                          ["monthlyPriceDollars", "Monthly"],
-                        ].map(([field, label]) => (
-                          <div key={field} className="space-y-1">
-                            <Label htmlFor={field}>{label}</Label>
-                            <Input
-                              id={field}
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={(formData as any)[field] || ""}
-                              onChange={(e) =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  [field]: e.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                        ))}
+                    {showPricingFields && (
+                      <div className="space-y-2 rounded-lg border border-[color:var(--border-subtle)] p-3">
+                        <Label>Pricing (USD)</Label>
+                        <p className="text-xs text-[color:var(--text-muted)]">
+                          Add one or more fees for paid public events.
+                        </p>
+                        <div className="grid md:grid-cols-3 gap-3">
+                          {[
+                            ["hostPriceDollars", "Host Fee"],
+                            ["breakfastPriceDollars", "Breakfast"],
+                            ["lunchPriceDollars", "Lunch"],
+                            ["dinnerPriceDollars", "Dinner"],
+                            ["dailyPriceDollars", "Daily"],
+                            ["weeklyPriceDollars", "Weekly"],
+                            ["monthlyPriceDollars", "Monthly"],
+                          ].map(([field, label]) => (
+                            <div key={field} className="space-y-1">
+                              <Label htmlFor={field}>{label}</Label>
+                              <Input
+                                id={field}
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={(formData as any)[field] || ""}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    [field]: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label htmlFor="description">Description</Label>
