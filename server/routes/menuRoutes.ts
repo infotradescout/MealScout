@@ -78,19 +78,106 @@ const MENU_URL_IMPORT_HEADERS = {
 };
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
+// Anthropic Claude vision only accepts jpeg/png/gif/webp; HEIC/HEIF are rejected
+// up-front so users get a clear error instead of a cryptic API failure.
+const SUPPORTED_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+const SUPPORTED_IMAGE_MIMES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB – modern phone photos can exceed 10 MB
   fileFilter(_req, file, cb) {
-    const allowed = [".csv", ".pdf", ".json", ".xlsx", ".xls"];
-    const imageExts = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
+    const allowed = [".csv", ".pdf", ".json", ".xlsx", ".xls", ".tsv"];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext) || imageExts.includes(ext) || file.mimetype?.startsWith("image/")) {
+    if (allowed.includes(ext)) return cb(null, true);
+    if (
+      SUPPORTED_IMAGE_EXTS.includes(ext) ||
+      SUPPORTED_IMAGE_MIMES.has(file.mimetype || "")
+    ) {
       return cb(null, true);
     }
-    cb(new Error("Unsupported file type. Allowed: csv, pdf, json, xlsx, xls, jpg, png, webp"));
+    if (ext === ".heic" || ext === ".heif" || file.mimetype === "image/heic" || file.mimetype === "image/heif") {
+      return cb(
+        new Error(
+          "HEIC/HEIF photos are not supported. Please export as JPEG or PNG and try again.",
+        ),
+      );
+    }
+    cb(
+      new Error(
+        "Unsupported file type. Allowed: csv, pdf, json, xlsx, xls, jpg, jpeg, png, webp, gif.",
+      ),
+    );
   },
 });
+
+/**
+ * Compute a meaningful audit-log status from import counts.
+ * - "failed":   nothing imported, errors present
+ * - "empty":    nothing imported, no errors (e.g., AI returned 0 items)
+ * - "partial":  some imported, but errors also present
+ * - "complete": fully successful
+ */
+function computeImportStatus(
+  importedCount: number,
+  errorCount: number,
+): "failed" | "empty" | "partial" | "complete" {
+  if (importedCount === 0) return errorCount > 0 ? "failed" : "empty";
+  return errorCount > 0 ? "partial" : "complete";
+}
+
+/**
+ * Resolve a list of category names to category IDs for a given menu, creating
+ * any that don't already exist. Used by AI menu importers that return a
+ * `categoryName` per item. Returns a Map keyed by lowercase trimmed name.
+ */
+async function resolveCategoryIds(
+  menuId: string,
+  restaurantId: string,
+  names: (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  const unique = Array.from(
+    new Set(
+      names
+        .map((n) => (typeof n === "string" ? n.trim() : ""))
+        .filter((n) => n.length > 0),
+    ),
+  );
+  const map = new Map<string, string>();
+  if (unique.length === 0) return map;
+
+  const existing = await db
+    .select({ id: menuCategories.id, name: menuCategories.name })
+    .from(menuCategories)
+    .where(eq(menuCategories.menuId, menuId));
+  for (const row of existing) {
+    map.set(row.name.trim().toLowerCase(), row.id);
+  }
+
+  const toCreate = unique.filter((n) => !map.has(n.toLowerCase()));
+  if (toCreate.length > 0) {
+    const baseSort = existing.length;
+    const inserted = await db
+      .insert(menuCategories)
+      .values(
+        toCreate.map((name, idx) => ({
+          menuId,
+          restaurantId,
+          name,
+          sortOrder: baseSort + idx,
+        })),
+      )
+      .returning({ id: menuCategories.id, name: menuCategories.name });
+    for (const row of inserted) {
+      map.set(row.name.trim().toLowerCase(), row.id);
+    }
+  }
+  return map;
+}
 
 // ── Ownership helper ──────────────────────────────────────────────────────────
 async function assertOwnsRestaurant(
@@ -760,8 +847,7 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status:
-          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status: computeImportStatus(imported.length, errors.length),
       });
 
       await db
@@ -805,19 +891,31 @@ export function registerMenuRoutes(app: Express) {
       );
 
       if (imported.length > 0) {
-        await db.insert(menuItems).values(imported);
+        // Resolve AI-extracted category names to category IDs (creating new
+        // categories as needed) so imported items aren't orphaned.
+        const catMap = await resolveCategoryIds(
+          menuId,
+          menu.restaurantId,
+          imported.map((it) => it.categoryName),
+        );
+        const itemsToInsert = imported.map(({ categoryName, ...rest }) => ({
+          ...rest,
+          categoryId: categoryName
+            ? catMap.get(categoryName.trim().toLowerCase()) ?? null
+            : null,
+        }));
+        await db.insert(menuItems).values(itemsToInsert);
       }
 
       await db.insert(menuImportLogs).values({
         restaurantId: menu.restaurantId,
         importedByUserId: req.user.id,
-        source: "pdf",
+        source: req.file.mimetype?.startsWith("image/") ? "image" : "pdf",
         fileName: req.file.originalname,
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status:
-          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status: computeImportStatus(imported.length, errors.length),
       });
 
       await db
@@ -875,8 +973,7 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status:
-          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status: computeImportStatus(imported.length, errors.length),
       });
 
       await db
@@ -993,8 +1090,7 @@ export function registerMenuRoutes(app: Express) {
         itemsImported: imported.length,
         itemsSkipped: skipped,
         errors: errors as any,
-        status:
-          errors.length > 0 && imported.length === 0 ? "failed" : "complete",
+        status: computeImportStatus(imported.length, errors.length),
       });
 
       await db

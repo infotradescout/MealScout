@@ -17,6 +17,7 @@ type ParsedMenuItem = {
   allergens: string[];
   isAvailable: boolean;
   sortOrder: number;
+  categoryName: string | null;
 };
 
 type ParseResult = {
@@ -33,12 +34,14 @@ Return ONLY a valid JSON array (no prose, no markdown) with this shape per item:
     "name": "string (required)",
     "description": "string or null",
     "price": number (USD dollars, e.g. 12.99),
+    "category": "string or null (e.g. Appetizers, Mains, Drinks, Desserts)",
     "dietary_tags": ["vegan", "gluten-free", etc.],
     "allergens": ["nuts", "dairy", etc.]
   }
 ]
 If a field is unknown, use null or []. Be conservative: only include items you are
-confident about. Do not invent items not present in the document.
+confident about. Do not invent items not present in the document. The category
+should match the section header the item appears under in the menu.
 `.trim();
 
 export async function parsePdfMenuWithAi(
@@ -179,6 +182,10 @@ export async function parsePdfMenuWithAi(
       allergens: Array.isArray(item.allergens) ? item.allergens : [],
       isAvailable: true,
       sortOrder: imported.length,
+      categoryName:
+        typeof item.category === "string" && item.category.trim()
+          ? item.category.trim().slice(0, 80)
+          : null,
     });
   });
 
