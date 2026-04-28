@@ -1301,7 +1301,23 @@ export function registerRestaurantCoreRoutes(
           const targetLat = toFiniteCoordinate(restaurant.latitude);
           const targetLng = toFiniteCoordinate(restaurant.longitude);
           if (targetLat === null || targetLng === null) {
-            return null;
+            // No coordinates — include without distance rather than hiding entirely
+            const restaurantId = String(restaurant.id || "");
+            return {
+              ...restaurant,
+              distance: null,
+              favoriteCount: favoritesByRestaurant.get(restaurantId) || 0,
+              followCount: followsByRestaurant.get(restaurantId) || 0,
+              recommendationCount:
+                recommendationsByRestaurant.get(restaurantId) || 0,
+              videoRecommendationCount:
+                videoRecommendationsByRestaurant.get(restaurantId) || 0,
+              communityActivityCount:
+                Number(reactionByRestaurant.get(restaurantId) || 0) +
+                Number(sharesByRestaurant.get(restaurantId) || 0) +
+                Number(videoEngagementByRestaurant.get(restaurantId) || 0),
+              activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
+            };
           }
 
           const earthRadiusKm = 6371;

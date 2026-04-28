@@ -89,7 +89,6 @@ export function createRouteAccessPolicyDependencies(
           and(
             eq(restaurants.ownerId, ownerId),
             eq(restaurantSubscriptions.isLifetimeFree, true),
-            eq(restaurantSubscriptions.canPostDeals, true),
           ),
         )
         .limit(1);
