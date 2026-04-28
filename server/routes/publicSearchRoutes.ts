@@ -8,6 +8,8 @@ import { computeParkingPassQualityFlags } from "../services/parkingPassQuality";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   ensureGoogleRestaurantProfile,
+  getGooglePhotoUrl,
+  type GooglePlaceTextResult,
   searchPlacesFreeText,
 } from "../services/googleProfileService";
 import {
@@ -204,9 +206,16 @@ async function getOrCreateImportSystemUserId(): Promise<string> {
   return importSystemUserIdPromise;
 }
 
-async function ensureSearchQueryRestaurantProfile(query: string) {
+async function ensureSearchQueryRestaurantProfile(
+  query: string,
+  candidate?: GooglePlaceTextResult | null,
+) {
   const seeded = buildQuerySeedListing(query);
   const ownerId = await getOrCreateImportSystemUserId();
+  const firstPhotoName = String(candidate?.photos?.[0]?.name || "").trim();
+  const candidateCoverImageUrl = firstPhotoName
+    ? getGooglePhotoUrl(firstPhotoName)
+    : null;
 
   const [existing] = await db
     .select()
@@ -222,6 +231,46 @@ async function ensureSearchQueryRestaurantProfile(query: string) {
     .limit(1);
 
   if (existing) {
+    const updates: any = {};
+    if (!existing.googlePlaceId && candidate?.placeId) {
+      updates.googlePlaceId = candidate.placeId;
+    }
+    if (!existing.coverImageUrl && candidateCoverImageUrl) {
+      updates.coverImageUrl = candidateCoverImageUrl;
+    }
+    if (
+      (!existing.googlePhotos ||
+        !Array.isArray(existing.googlePhotos) ||
+        existing.googlePhotos.length === 0) &&
+      candidate?.photos?.length
+    ) {
+      updates.googlePhotos = candidate.photos;
+    }
+    if (
+      (existing.googleRating == null || Number(existing.googleRating) <= 0) &&
+      typeof candidate?.rating === "number"
+    ) {
+      updates.googleRating = candidate.rating;
+    }
+    if (
+      (existing.googleReviewCount == null ||
+        Number(existing.googleReviewCount) <= 0) &&
+      typeof candidate?.userRatingCount === "number"
+    ) {
+      updates.googleReviewCount = candidate.userRatingCount;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      const [updated] = await db
+        .update(restaurants)
+        .set(updates)
+        .where(eq(restaurants.id, existing.id))
+        .returning();
+      if (updated) {
+        return { restaurant: updated, created: false };
+      }
+    }
+
     return { restaurant: existing, created: false };
   }
 
@@ -242,6 +291,15 @@ async function ensureSearchQueryRestaurantProfile(query: string) {
         "Auto-generated MealScout listing. Claim this profile to take ownership and complete your business details.",
       profileSource: "search_query_seed",
       profileLastSynced: new Date(),
+      googlePlaceId: candidate?.placeId || null,
+      coverImageUrl: candidateCoverImageUrl,
+      googlePhotos: candidate?.photos?.length ? candidate.photos : null,
+      googleRating:
+        typeof candidate?.rating === "number" ? candidate.rating : null,
+      googleReviewCount:
+        typeof candidate?.userRatingCount === "number"
+          ? candidate.userRatingCount
+          : null,
     } as any)
     .returning();
 
@@ -881,12 +939,17 @@ export function registerPublicSearchRoutes(app: Express) {
         query.length >= SEED_MIN_QUERY_LEN;
 
       if (shouldAttemptAutoSeed) {
+        let querySeedCandidate: GooglePlaceTextResult | null = null;
         try {
           if (hasPlacesApiKey) {
             const candidates = await searchPlacesFreeText(query, 5, {
               latitude: biasLat,
               longitude: biasLng,
             });
+            querySeedCandidate =
+              candidates.find((c) => !isGoogleLocalityOnly(c)) ||
+              candidates[0] ||
+              null;
             const foodCandidate =
               candidates.find((c) =>
                 c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
@@ -1052,7 +1115,10 @@ export function registerPublicSearchRoutes(app: Express) {
         // no suitable places, create a lightweight generated restaurant
         // profile so search behaves like the successful Steak House flow.
         if (restaurantsOut.length === 0 && unclaimedOut.length === 0) {
-          const generated = await ensureSearchQueryRestaurantProfile(query);
+          const generated = await ensureSearchQueryRestaurantProfile(
+            query,
+            querySeedCandidate,
+          );
           const restaurant = generated.restaurant as any;
           restaurantsOut = [
             {

@@ -72,6 +72,7 @@ const SEARCH_FIELD_MASK = [
   "places.types",
   "places.rating",
   "places.userRatingCount",
+  "places.photos",
 ].join(",");
 
 const AUTOCOMPLETE_FIELD_MASK = [
@@ -1049,6 +1050,7 @@ export type GooglePlaceTextResult = {
   types: string[];
   rating: number | null;
   userRatingCount: number | null;
+  photos: Array<{ name: string; widthPx?: number | null; heightPx?: number | null }>;
 };
 
 /**
@@ -1114,6 +1116,16 @@ export async function searchPlacesFreeText(
           typeof place?.userRatingCount === "number"
             ? place.userRatingCount
             : null,
+        photos: Array.isArray(place?.photos)
+          ? place.photos
+              .map((p: any) => ({
+                name: String(p?.name || "").trim(),
+                widthPx: typeof p?.widthPx === "number" ? p.widthPx : null,
+                heightPx: typeof p?.heightPx === "number" ? p.heightPx : null,
+              }))
+              .filter((p: any) => p.name)
+              .slice(0, 10)
+          : [],
       }))
       .filter((p: GooglePlaceTextResult) => p.placeId && p.name);
   } catch (err) {
