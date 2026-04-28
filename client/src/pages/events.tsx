@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, MapPin, Users, Clock } from "lucide-react";
+import { useLocation } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ type EventIntakeResponse = {
 
 export default function EventsPage() {
   const { user, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isEventCoordinator = Boolean(
@@ -142,8 +144,25 @@ export default function EventsPage() {
   const truckDirectory = (Array.isArray(businesses) ? businesses : []).filter(
     (business) => Boolean(business?.isFoodTruck),
   );
+  const discoverEvents = (Array.isArray(events) ? events : []).filter(
+    (event: any) => String(event?.status || "") === "published",
+  );
+  const eventCountLabel =
+    discoverEvents.length === 1
+      ? "1 upcoming event"
+      : `${discoverEvents.length} upcoming events`;
   const intakeItems = Array.isArray(intakeData?.items) ? intakeData.items : [];
   const hasOperationsTools = isStaffOrAdmin || isEventCoordinator;
+
+  const toEventSlug = (event: any) => {
+    const id = String(event?.id || "").trim();
+    const name = String(event?.name || "event")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)+/g, "")
+      .slice(0, 80);
+    return `${id}-${name || "event"}`;
+  };
 
   const createEvent = useMutation({
     mutationFn: async () => {
@@ -866,7 +885,7 @@ export default function EventsPage() {
         </div>
 
         {/* Events Grid */}
-        {activeView === "discover" && events.length === 0 ? (
+        {activeView === "discover" && discoverEvents.length === 0 ? (
           <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
             <CardContent className="p-12 text-center">
               <Calendar className="w-16 h-16 text-[color:var(--text-muted)] mx-auto mb-4" />
@@ -879,23 +898,29 @@ export default function EventsPage() {
             </CardContent>
           </Card>
         ) : activeView === "discover" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {events.map((event) => (
+          <>
+            <p className="text-sm text-[color:var(--text-muted)]">{eventCountLabel}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {discoverEvents.map((event: any) => (
               <Card
                 key={event.id}
                 className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => setLocation(`/event/${toEventSlug(event)}`)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setLocation(`/event/${toEventSlug(event)}`);
+                  }
+                }}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-lg line-clamp-2">
                       {event.name || "Food Truck Event"}
                     </CardTitle>
-                    {event.status === "published" && (
-                      <Badge variant="default">Open</Badge>
-                    )}
-                    {event.status === "draft" && (
-                      <Badge variant="outline">Draft</Badge>
-                    )}
+                    <Badge variant="default">Open</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -956,10 +981,25 @@ export default function EventsPage() {
                       {event.series.name}
                     </Badge>
                   )}
+
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/event/${toEventSlug(event)}`);
+                      }}
+                    >
+                      View details
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
-          </div>
+            </div>
+          </>
         ) : null}
 
         {activeView === "discover" ? (
