@@ -319,9 +319,18 @@ export default function SearchPage() {
   });
 
   const { data: unifiedResults, isLoading: unifiedLoading } = useQuery({
-    queryKey: ["/api/search", debouncedSearchQuery],
+    queryKey: [
+      "/api/search",
+      debouncedSearchQuery,
+      userLocation?.lat ?? null,
+      userLocation?.lng ?? null,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({ q: debouncedSearchQuery });
+      if (userLocation) {
+        params.set("lat", String(userLocation.lat));
+        params.set("lng", String(userLocation.lng));
+      }
       const res = await fetch(`/api/search?${params}`);
       if (!res.ok) throw new Error("Failed to search");
       return res.json();

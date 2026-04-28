@@ -1058,10 +1058,12 @@ export type GooglePlaceTextResult = {
 export async function searchPlacesFreeText(
   query: string,
   maxResults = 5,
+  opts?: { latitude?: string | number | null; longitude?: string | number | null },
 ): Promise<GooglePlaceTextResult[]> {
   const apiKey = getApiKey();
   const trimmed = String(query || "").trim();
   if (!apiKey || trimmed.length < 3) return [];
+  const locationBias = buildLocationBias(opts?.latitude, opts?.longitude);
 
   try {
     const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
@@ -1075,6 +1077,7 @@ export async function searchPlacesFreeText(
         textQuery: trimmed,
         maxResultCount: Math.max(1, Math.min(10, maxResults)),
         includedRegionCodes: ["us"],
+        ...(locationBias ? { locationBias } : {}),
       }),
     });
 

@@ -100,6 +100,37 @@ const searchTokens = (term: string) =>
     .split(" ")
     .filter((token) => token.length >= 3 && token !== "the");
 
+const toSearchCoordinate = (value: unknown, maxAbs: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) > maxAbs) return null;
+  return parsed;
+};
+
+const isGoogleLocalityOnly = (candidate: {
+  types?: string[];
+  formattedAddress?: string | null;
+}) => {
+  const types = Array.isArray(candidate.types) ? candidate.types : [];
+  return types.some((type) =>
+    ["locality", "political", "administrative_area_level_1", "country"].includes(
+      type,
+    ),
+  );
+};
+
+const candidateLooksLikeRequestedPlace = (
+  candidate: { name?: string | null; formattedAddress?: string | null },
+  primaryTerm: string,
+) => {
+  const requestedTokens = searchTokens(primaryTerm);
+  if (requestedTokens.length === 0) return false;
+  const haystack = normalizeSearchTerm(
+    `${candidate.name || ""} ${candidate.formattedAddress || ""}`,
+  );
+  const hits = requestedTokens.filter((token) => haystack.includes(token)).length;
+  return hits >= Math.min(2, requestedTokens.length);
+};
+
 const scoreSearchFields = (
   fields: unknown[],
   terms: string[],
@@ -439,6 +470,8 @@ export function registerPublicSearchRoutes(app: Express) {
       const searchValue = `%${searchTerm}%`;
       const searchTerms = buildSearchTerms(query);
       const primaryTerm = firstSearchSegment(query);
+      const biasLat = toSearchCoordinate(req.query.lat, 90);
+      const biasLng = toSearchCoordinate(req.query.lng, 180);
 
       const restaurantMatches = await db
         .select({
@@ -730,10 +763,19 @@ export function registerPublicSearchRoutes(app: Express) {
 
       if (shouldAutoSeed) {
         try {
-          const candidates = await searchPlacesFreeText(query, 5);
-          const foodCandidate = candidates.find((c) =>
-            c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
-          );
+          const candidates = await searchPlacesFreeText(query, 5, {
+            latitude: biasLat,
+            longitude: biasLng,
+          });
+          const foodCandidate =
+            candidates.find((c) =>
+              c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
+            ) ||
+            candidates.find(
+              (c) =>
+                !isGoogleLocalityOnly(c) &&
+                candidateLooksLikeRequestedPlace(c, primaryTerm),
+            );
 
           if (foodCandidate) {
             try {
