@@ -46,6 +46,7 @@ import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
 import { uploadToCloudinary, isCloudinaryConfigured } from "../imageUpload";
+import { distributedRateLimit } from "../middleware/distributedRateLimit";
 
 const EXTERNAL_MENU_SOURCES = [
   "ubereats",
@@ -264,6 +265,24 @@ function normalizeMenuServiceType(value: unknown): string {
 }
 
 export function registerMenuRoutes(app: Express) {
+  // ── Rate limiters for expensive owner-side endpoints. ────────────────────
+  // Keyed by user id when authenticated, else IP, so they survive a launch-
+  // week burst of new owners hammering imports + photo uploads.
+  const ownerKey = (req: any) =>
+    String(req.user?.id || req.ip || "anon");
+  const menuImportLimiter = distributedRateLimit({
+    scope: "menu-import",
+    limit: 20,
+    windowMs: 5 * 60 * 1000,
+    key: ownerKey,
+  });
+  const menuPhotoUploadLimiter = distributedRateLimit({
+    scope: "menu-photo-upload",
+    limit: 60,
+    windowMs: 5 * 60 * 1000,
+    key: ownerKey,
+  });
+
   // ── ─────────────────────────────────────────────────────────────────────────
   // PUBLIC: customer-facing menu view
   // ── ─────────────────────────────────────────────────────────────────────────
@@ -817,6 +836,7 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menu-items/:itemId/photo",
     isAuthenticated,
+    menuPhotoUploadLimiter,
     upload.single("file"),
     wrap(async (req, res) => {
       const { itemId } = req.params;
@@ -953,6 +973,7 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/csv",
     isAuthenticated,
+    menuImportLimiter,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
@@ -1009,6 +1030,7 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/pdf",
     isAuthenticated,
+    menuImportLimiter,
     upload.single("file"),
     wrap(async (req, res) => {
       const { menuId } = req.params;
@@ -1077,6 +1099,7 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/external",
     isAuthenticated,
+    menuImportLimiter,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
@@ -1132,6 +1155,7 @@ export function registerMenuRoutes(app: Express) {
   app.post(
     "/api/owner/menus/:menuId/import/url",
     isAuthenticated,
+    menuImportLimiter,
     wrap(async (req, res) => {
       const { menuId } = req.params;
       const menu = await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
