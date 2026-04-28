@@ -147,6 +147,7 @@ import { createPaymentsSubscriptionsRepository } from "./storage/paymentsSubscri
 import { createAnalyticsRepository } from "./storage/analyticsRepository";
 import { createParkingPassRepository } from "./storage/parkingPassRepository";
 import { createTruckLiveOpsRepository } from "./storage/truckLiveOpsRepository";
+import { createSocialPreferenceRepository } from "./storage/socialPreferenceRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -792,6 +793,7 @@ export class DatabaseStorage implements IStorage {
     getAllHosts: () => this.getAllHosts(),
   });
   private readonly truckLiveOpsRepository = createTruckLiveOpsRepository();
+  private readonly socialPreferenceRepository = createSocialPreferenceRepository();
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -4123,104 +4125,52 @@ export class DatabaseStorage implements IStorage {
     restaurantId: string;
     userId: string;
   }): Promise<RestaurantFavorite> {
-    const [result] = await db
-      .insert(restaurantFavorites)
-      .values(favorite)
-      .returning();
-    return result;
+    return this.socialPreferenceRepository.createRestaurantFavorite(favorite);
   }
 
   async removeRestaurantFavorite(
     restaurantId: string,
     userId: string,
   ): Promise<void> {
-    await db
-      .delete(restaurantFavorites)
-      .where(
-        and(
-          eq(restaurantFavorites.restaurantId, restaurantId),
-          eq(restaurantFavorites.userId, userId),
-        ),
-      );
+    return this.socialPreferenceRepository.removeRestaurantFavorite(
+      restaurantId,
+      userId,
+    );
   }
 
   async getUserRestaurantFavorites(
     userId: string,
   ): Promise<(RestaurantFavorite & { restaurant: Restaurant })[]> {
-    const result = await db
-      .select({
-        id: restaurantFavorites.id,
-        restaurantId: restaurantFavorites.restaurantId,
-        userId: restaurantFavorites.userId,
-        favoritedAt: restaurantFavorites.favoritedAt,
-        createdAt: restaurantFavorites.createdAt,
-        restaurant: restaurants,
-      })
-      .from(restaurantFavorites)
-      .innerJoin(
-        restaurants,
-        eq(restaurantFavorites.restaurantId, restaurants.id),
-      )
-      .where(eq(restaurantFavorites.userId, userId))
-      .orderBy(desc(restaurantFavorites.favoritedAt));
-
-    return result;
+    return this.socialPreferenceRepository.getUserRestaurantFavorites(userId);
   }
 
   async getUserRestaurantFavoritesCount(userId: string): Promise<number> {
-    const result = await db
-      .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
-      .from(restaurantFavorites)
-      .where(eq(restaurantFavorites.userId, userId));
-    return result[0]?.count ?? 0;
+    return this.socialPreferenceRepository.getUserRestaurantFavoritesCount(
+      userId,
+    );
   }
 
   async createRestaurantFollow(follow: {
     restaurantId: string;
     userId: string;
   }): Promise<RestaurantFollow> {
-    const [result] = await db
-      .insert(restaurantFollows)
-      .values(follow)
-      .returning();
-    return result;
+    return this.socialPreferenceRepository.createRestaurantFollow(follow);
   }
 
   async removeRestaurantFollow(
     restaurantId: string,
     userId: string,
   ): Promise<void> {
-    await db
-      .delete(restaurantFollows)
-      .where(
-        and(
-          eq(restaurantFollows.restaurantId, restaurantId),
-          eq(restaurantFollows.userId, userId),
-        ),
-      );
+    return this.socialPreferenceRepository.removeRestaurantFollow(
+      restaurantId,
+      userId,
+    );
   }
 
   async getUserRestaurantFollows(
     userId: string,
   ): Promise<(RestaurantFollow & { restaurant: Restaurant })[]> {
-    const result = await db
-      .select({
-        id: restaurantFollows.id,
-        restaurantId: restaurantFollows.restaurantId,
-        userId: restaurantFollows.userId,
-        followedAt: restaurantFollows.followedAt,
-        createdAt: restaurantFollows.createdAt,
-        restaurant: restaurants,
-      })
-      .from(restaurantFollows)
-      .innerJoin(
-        restaurants,
-        eq(restaurantFollows.restaurantId, restaurants.id),
-      )
-      .where(eq(restaurantFollows.userId, userId))
-      .orderBy(desc(restaurantFollows.followedAt));
-
-    return result;
+    return this.socialPreferenceRepository.getUserRestaurantFollows(userId);
   }
 
   async createRestaurantUserRecommendation(recommendation: {
@@ -4229,37 +4179,17 @@ export class DatabaseStorage implements IStorage {
     sentimentScore100?: number;
     menuItemName?: string;
   }): Promise<RestaurantUserRecommendation> {
-    const [result] = await db
-      .insert(restaurantUserRecommendations)
-      .values(recommendation)
-      .returning();
-    return result;
+    return this.socialPreferenceRepository.createRestaurantUserRecommendation(
+      recommendation,
+    );
   }
 
   async getUserRestaurantRecommendations(
     userId: string,
   ): Promise<(RestaurantUserRecommendation & { restaurant: Restaurant })[]> {
-    const result = await db
-      .select({
-        id: restaurantUserRecommendations.id,
-        restaurantId: restaurantUserRecommendations.restaurantId,
-        userId: restaurantUserRecommendations.userId,
-        sentimentScore100: restaurantUserRecommendations.sentimentScore100,
-        menuItemName: restaurantUserRecommendations.menuItemName,
-        recommendedAt: restaurantUserRecommendations.recommendedAt,
-        createdAt: restaurantUserRecommendations.createdAt,
-        updatedAt: restaurantUserRecommendations.updatedAt,
-        restaurant: restaurants,
-      })
-      .from(restaurantUserRecommendations)
-      .innerJoin(
-        restaurants,
-        eq(restaurantUserRecommendations.restaurantId, restaurants.id),
-      )
-      .where(eq(restaurantUserRecommendations.userId, userId))
-      .orderBy(desc(restaurantUserRecommendations.recommendedAt));
-
-    return result;
+    return this.socialPreferenceRepository.getUserRestaurantRecommendations(
+      userId,
+    );
   }
 
   async getRestaurantFavoritesAnalytics(
