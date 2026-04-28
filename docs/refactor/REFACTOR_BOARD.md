@@ -12,6 +12,7 @@ _nothing active_
 
 ## Merged
 
+- [x] [phase-3-storage-split] Extracted host-location-claim persistence methods (createHostLocationClaim, convertHostLocationClaim) from server/storage.ts into new server/storage/hostLocationClaimRepository.ts; DatabaseStorage delegates; IStorage signatures unchanged - PR-28 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted review/deal-feedback persistence methods (createReview, getRestaurantReviews, getRestaurantAverageRating, createDealFeedback, getDealFeedback, getUserDealFeedback, getDealAverageRating, getDealFeedbackStats) from server/storage.ts into new server/storage/dealFeedbackRepository.ts; DatabaseStorage delegates; IStorage signatures unchanged - PR-27 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted favorites/follows/user-recommendations persistence methods (`createRestaurantFavorite`, `removeRestaurantFavorite`, `getUserRestaurantFavorites`, `getUserRestaurantFavoritesCount`, `createRestaurantFollow`, `removeRestaurantFollow`, `getUserRestaurantFollows`, `createRestaurantUserRecommendation`, `getUserRestaurantRecommendations`) from `server/storage.ts` into new `server/storage/socialPreferenceRepository.ts`; `DatabaseStorage` delegates to the new repo; `IStorage` signatures unchanged - PR-26 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted truck live-ops persistence methods (`createTruckManualSchedule`, `getTruckManualSchedules`, `deleteTruckManualSchedule`, `createTruckParkingReport`, `getTruckParkingReports`, `startTruckSession`, `endTruckSession`, `getActiveTruckSession`, `hasRecentLocationUpdate`, `upsertLiveLocation`, `getLiveTrucksNearby`, `getTruckLocationHistory`) from `server/storage.ts` into new `server/storage/truckLiveOpsRepository.ts`; `DatabaseStorage` delegates to the new repo; `IStorage` signatures unchanged - PR-25 - owner copilot - 2026-04-28
@@ -40,6 +41,7 @@ _nothing active_
 
 ## Verified
 
+- [x] [phase-3-storage-split] Extracted host-location-claim persistence into server/storage/hostLocationClaimRepository.ts; verified with npm run check (passed); IStorage public surface unchanged - PR-28 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted review/deal-feedback persistence into server/storage/dealFeedbackRepository.ts; verified with npm run check (passed); IStorage public surface unchanged - PR-27 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted favorites/follows/user-recommendations persistence into `server/storage/socialPreferenceRepository.ts`; verified with `npm run check` (passed); `IStorage` public surface unchanged; `server/storage.ts` reduced from 5163 to 5093 lines - PR-26 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted truck live-ops persistence into `server/storage/truckLiveOpsRepository.ts`; verified with `npm run check` (passed); `IStorage` public surface unchanged; `server/storage.ts` reduced from 5458 to 5163 lines - PR-25 - owner copilot - 2026-04-28

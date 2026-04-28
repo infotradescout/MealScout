@@ -149,6 +149,7 @@ import { createParkingPassRepository } from "./storage/parkingPassRepository";
 import { createTruckLiveOpsRepository } from "./storage/truckLiveOpsRepository";
 import { createSocialPreferenceRepository } from "./storage/socialPreferenceRepository";
 import { createDealFeedbackRepository } from "./storage/dealFeedbackRepository";
+import { createHostLocationClaimRepository } from "./storage/hostLocationClaimRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -796,6 +797,7 @@ export class DatabaseStorage implements IStorage {
   private readonly truckLiveOpsRepository = createTruckLiveOpsRepository();
   private readonly socialPreferenceRepository = createSocialPreferenceRepository();
   private readonly dealFeedbackRepository = createDealFeedbackRepository();
+  private readonly hostLocationClaimRepository = createHostLocationClaimRepository();
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -4443,25 +4445,7 @@ export class DatabaseStorage implements IStorage {
   async createHostLocationClaim(
     claim: InsertHostLocationClaim,
   ): Promise<HostLocationClaim> {
-    const [created] = await db
-      .insert(hostLocationClaims)
-      .values({
-        ...claim,
-        message: claim.message?.trim() || null,
-      })
-      .returning();
-
-    await db
-      .update(locationRequests)
-      .set({ demandStatus: "claimed" })
-      .where(
-        and(
-          eq(locationRequests.id, claim.locationRequestId),
-          eq(locationRequests.status, "open"),
-        ),
-      );
-
-    return created;
+    return this.hostLocationClaimRepository.createHostLocationClaim(claim);
   }
 
   async convertHostLocationClaim(
@@ -4469,37 +4453,11 @@ export class DatabaseStorage implements IStorage {
     hostId: string,
     claimingUserId: string,
   ): Promise<void> {
-    await db.transaction(async (tx: any) => {
-      const [claim] = await tx
-        .select()
-        .from(hostLocationClaims)
-        .where(
-          and(
-            eq(hostLocationClaims.id, claimId),
-            eq(hostLocationClaims.claimedByUserId, claimingUserId),
-          ),
-        );
-      if (!claim) {
-        throw new Error("Host location claim not found");
-      }
-
-      await tx
-        .update(hostLocationClaims)
-        .set({
-          status: "converted",
-          hostId,
-          resolvedAt: new Date(),
-        })
-        .where(eq(hostLocationClaims.id, claimId));
-
-      await tx
-        .update(locationRequests)
-        .set({
-          status: "fulfilled",
-          demandStatus: "fulfilled",
-        })
-        .where(eq(locationRequests.id, claim.locationRequestId));
-    });
+    return this.hostLocationClaimRepository.convertHostLocationClaim(
+      claimId,
+      hostId,
+      claimingUserId,
+    );
   }
 
   // User address operations
