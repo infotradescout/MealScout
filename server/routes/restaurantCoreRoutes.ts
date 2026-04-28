@@ -10,6 +10,7 @@ import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import { forwardGeocode } from "../utils/geocoding";
 import {
   aggregateImportedReviews,
   computeExternalReviewAdjustment,
@@ -1276,6 +1277,50 @@ export function registerRestaurantCoreRoutes(
           Number(row.score) || 0,
         ]),
       );
+
+      // Opportunistically backfill coordinates for verified restaurants that
+      // never set lat/lng but at minimum carry a city/state. Cached + bounded
+      // so it doesn't stall the response.
+      const MAX_GEOCODE_BACKFILLS = 8;
+      const backfillTargets = homeEligibleRestaurants.filter(
+        (r: any) =>
+          (toFiniteCoordinate(r.latitude) === null ||
+            toFiniteCoordinate(r.longitude) === null) &&
+          (String(r.city || "").trim() ||
+            String(r.address || "").trim()),
+      );
+      if (backfillTargets.length > 0) {
+        await Promise.all(
+          backfillTargets.slice(0, MAX_GEOCODE_BACKFILLS).map(async (r: any) => {
+            try {
+              const parts = [r.address, r.city, r.state]
+                .map((v) => String(v || "").trim())
+                .filter(Boolean);
+              if (parts.length === 0) return;
+              const coords = await forwardGeocode(parts.join(", ")).catch(
+                () => null,
+              );
+              if (
+                coords &&
+                Number.isFinite(coords.lat) &&
+                Number.isFinite(coords.lng)
+              ) {
+                r.latitude = coords.lat;
+                r.longitude = coords.lng;
+                // Persist back asynchronously so subsequent loads are instant.
+                storage
+                  .updateRestaurant(String(r.id), {
+                    latitude: String(coords.lat),
+                    longitude: String(coords.lng),
+                  } as any)
+                  .catch(() => undefined);
+              }
+            } catch {
+              /* ignore */
+            }
+          }),
+        );
+      }
 
       const withDistance = homeEligibleRestaurants
         .map((restaurant: any) => {
