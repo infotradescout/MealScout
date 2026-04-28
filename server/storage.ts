@@ -148,6 +148,7 @@ import { createAnalyticsRepository } from "./storage/analyticsRepository";
 import { createParkingPassRepository } from "./storage/parkingPassRepository";
 import { createTruckLiveOpsRepository } from "./storage/truckLiveOpsRepository";
 import { createSocialPreferenceRepository } from "./storage/socialPreferenceRepository";
+import { createDealFeedbackRepository } from "./storage/dealFeedbackRepository";
 
 // Interface for storage operations
 export interface IStorage {
@@ -794,6 +795,7 @@ export class DatabaseStorage implements IStorage {
   });
   private readonly truckLiveOpsRepository = createTruckLiveOpsRepository();
   private readonly socialPreferenceRepository = createSocialPreferenceRepository();
+  private readonly dealFeedbackRepository = createDealFeedbackRepository();
   private userTableInfoPromise: Promise<{
     schema: string;
     columns: Set<string>;
@@ -2716,41 +2718,17 @@ export class DatabaseStorage implements IStorage {
 
   // Review operations
   async createReview(review: InsertReview): Promise<Review> {
-    const [newReview] = await db.insert(reviews).values(review).returning();
-    return newReview;
+    return this.dealFeedbackRepository.createReview(review);
   }
 
   async getRestaurantReviews(restaurantId: string): Promise<any[]> {
-    return await db
-      .select({
-        id: reviews.id,
-        restaurantId: reviews.restaurantId,
-        userId: reviews.userId,
-        rating: reviews.rating,
-        ratingScore100: reviews.ratingScore100,
-        menuItemName: reviews.menuItemName,
-        reviewText: reviews.comment,
-        createdAt: reviews.createdAt,
-        updatedAt: reviews.updatedAt,
-        user: {
-          firstName: users.firstName,
-          lastName: users.lastName,
-          profileImageUrl: users.profileImageUrl,
-        },
-      })
-      .from(reviews)
-      .leftJoin(users, eq(reviews.userId, users.id))
-      .where(eq(reviews.restaurantId, restaurantId))
-      .orderBy(desc(reviews.createdAt));
+    return this.dealFeedbackRepository.getRestaurantReviews(restaurantId);
   }
 
   async getRestaurantAverageRating(restaurantId: string): Promise<number> {
-    const [result] = await db
-      .select({ avg: sql<number>`avg(${reviews.rating})` })
-      .from(reviews)
-      .where(eq(reviews.restaurantId, restaurantId));
-
-    return result.avg || 0;
+    return this.dealFeedbackRepository.getRestaurantAverageRating(
+      restaurantId,
+    );
   }
 
   // Admin operations
@@ -4776,38 +4754,19 @@ export class DatabaseStorage implements IStorage {
   async createDealFeedback(
     feedback: InsertDealFeedback,
   ): Promise<DealFeedback> {
-    const [createdFeedback] = await db
-      .insert(dealFeedback)
-      .values(feedback)
-      .returning();
-    return createdFeedback;
+    return this.dealFeedbackRepository.createDealFeedback(feedback);
   }
 
   async getDealFeedback(dealId: string): Promise<DealFeedback[]> {
-    return await db
-      .select()
-      .from(dealFeedback)
-      .where(eq(dealFeedback.dealId, dealId))
-      .orderBy(desc(dealFeedback.createdAt));
+    return this.dealFeedbackRepository.getDealFeedback(dealId);
   }
 
   async getUserDealFeedback(userId: string): Promise<DealFeedback[]> {
-    return await db
-      .select()
-      .from(dealFeedback)
-      .where(eq(dealFeedback.userId, userId))
-      .orderBy(desc(dealFeedback.createdAt));
+    return this.dealFeedbackRepository.getUserDealFeedback(userId);
   }
 
   async getDealAverageRating(dealId: string): Promise<number> {
-    const result = await db
-      .select({
-        avgRating: sql<number>`AVG(${dealFeedback.rating})`,
-      })
-      .from(dealFeedback)
-      .where(eq(dealFeedback.dealId, dealId));
-
-    return result[0]?.avgRating || 0;
+    return this.dealFeedbackRepository.getDealAverageRating(dealId);
   }
 
   async getDealFeedbackStats(dealId: string): Promise<{
@@ -4815,37 +4774,7 @@ export class DatabaseStorage implements IStorage {
     totalFeedback: number;
     ratingDistribution: { [key: number]: number };
   }> {
-    const feedback = await db
-      .select()
-      .from(dealFeedback)
-      .where(eq(dealFeedback.dealId, dealId));
-
-    const totalFeedback = feedback.length;
-    const averageRating =
-      totalFeedback > 0
-        ? feedback.reduce((sum: number, f: any) => sum + f.rating, 0) /
-          totalFeedback
-        : 0;
-
-    const ratingDistribution: { [key: number]: number } = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-    };
-
-    feedback.forEach((f: any) => {
-      if (f.rating >= 1 && f.rating <= 5) {
-        ratingDistribution[f.rating] = (ratingDistribution[f.rating] || 0) + 1;
-      }
-    });
-
-    return {
-      averageRating: Math.round(averageRating * 10) / 10,
-      totalFeedback,
-      ratingDistribution,
-    };
+    return this.dealFeedbackRepository.getDealFeedbackStats(dealId);
   }
 
   // ============================================

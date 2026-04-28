@@ -12,6 +12,7 @@ _nothing active_
 
 ## Merged
 
+- [x] [phase-3-storage-split] Extracted review/deal-feedback persistence methods (createReview, getRestaurantReviews, getRestaurantAverageRating, createDealFeedback, getDealFeedback, getUserDealFeedback, getDealAverageRating, getDealFeedbackStats) from server/storage.ts into new server/storage/dealFeedbackRepository.ts; DatabaseStorage delegates; IStorage signatures unchanged - PR-27 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted favorites/follows/user-recommendations persistence methods (`createRestaurantFavorite`, `removeRestaurantFavorite`, `getUserRestaurantFavorites`, `getUserRestaurantFavoritesCount`, `createRestaurantFollow`, `removeRestaurantFollow`, `getUserRestaurantFollows`, `createRestaurantUserRecommendation`, `getUserRestaurantRecommendations`) from `server/storage.ts` into new `server/storage/socialPreferenceRepository.ts`; `DatabaseStorage` delegates to the new repo; `IStorage` signatures unchanged - PR-26 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted truck live-ops persistence methods (`createTruckManualSchedule`, `getTruckManualSchedules`, `deleteTruckManualSchedule`, `createTruckParkingReport`, `getTruckParkingReports`, `startTruckSession`, `endTruckSession`, `getActiveTruckSession`, `hasRecentLocationUpdate`, `upsertLiveLocation`, `getLiveTrucksNearby`, `getTruckLocationHistory`) from `server/storage.ts` into new `server/storage/truckLiveOpsRepository.ts`; `DatabaseStorage` delegates to the new repo; `IStorage` signatures unchanged - PR-25 - owner copilot - 2026-04-28
 - [x] [phase-5-oversized-route-splits] Extracted admin LISA remediations and brief-action endpoints (`GET/POST /api/admin/lisa/remediations`, `GET/POST /api/admin/lisa/brief-actions`) from `server/routes/adminManagementRoutes.ts` into `server/routes/admin/adminLisaActionsRoutes.ts` - PR-22 - owner codex - 2026-04-19
@@ -39,6 +40,7 @@ _nothing active_
 
 ## Verified
 
+- [x] [phase-3-storage-split] Extracted review/deal-feedback persistence into server/storage/dealFeedbackRepository.ts; verified with npm run check (passed); IStorage public surface unchanged - PR-27 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted favorites/follows/user-recommendations persistence into `server/storage/socialPreferenceRepository.ts`; verified with `npm run check` (passed); `IStorage` public surface unchanged; `server/storage.ts` reduced from 5163 to 5093 lines - PR-26 - owner copilot - 2026-04-28
 - [x] [phase-3-storage-split] Extracted truck live-ops persistence into `server/storage/truckLiveOpsRepository.ts`; verified with `npm run check` (passed); `IStorage` public surface unchanged; `server/storage.ts` reduced from 5458 to 5163 lines - PR-25 - owner copilot - 2026-04-28
 - [x] [phase-5-oversized-route-splits] Extracted admin LISA remediations/brief-action endpoints into `server/routes/admin/adminLisaActionsRoutes.ts`; verified with `npm run check`, `npm run build:server`, `npm run test:flows:with-server` (93.1% with known admin env gate) - PR-22 - owner codex - 2026-04-19
