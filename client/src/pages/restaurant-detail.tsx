@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import Navigation from "@/components/navigation";
@@ -55,7 +55,7 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type PublicRecommendation = {
   id: string;
@@ -219,6 +219,42 @@ export default function RestaurantDetailPage() {
       const res = await fetch(`/api/public/evidence/restaurant/${restaurantId}`);
       if (!res.ok) return null;
       return res.json();
+    },
+  });
+
+  const claimGeneratedProfileMutation = useMutation({
+    mutationFn: async () => {
+      if (!restaurantId) throw new Error("Missing restaurant");
+      const response = await apiRequest(
+        "POST",
+        `/api/restaurants/${encodeURIComponent(String(restaurantId))}/claim-generated`,
+        {},
+      );
+      return response.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurantId] });
+      toast({
+        title: "Profile claimed",
+        description:
+          "This page is now attached to your MealScout account. Verification is queued for review.",
+      });
+      window.location.assign(
+        "/restaurant-owner-dashboard?src=claim&showOnboardingPrompt=1",
+      );
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not claim profile",
+        description:
+          error?.message ||
+          "This profile may already be attached to another owner.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -487,7 +523,7 @@ export default function RestaurantDetailPage() {
   const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
   const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
     isFoodTruck ? "food_truck" : "restaurant",
-  )}&claim=1&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(
+  )}&claim=1&claimRestaurantId=${encodeURIComponent(String(restaurantId || ""))}&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(
     profilePath,
   )}`;
   const editRestaurantPath = `/edit-restaurant/${restaurantId}`;
@@ -527,6 +563,10 @@ export default function RestaurantDetailPage() {
   );
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
+  const canClaimGeneratedProfile =
+    !isVerifiedMemberProfile &&
+    (String((restaurant as any)?.profileSource || "") === "google" ||
+      Boolean((restaurant as any)?.googlePlaceId));
   const phoneHref = toPhoneHref(phoneNumber);
   const lat = Number(
     (restaurant as any)?.currentLatitude || (restaurant as any)?.latitude,
@@ -718,11 +758,24 @@ export default function RestaurantDetailPage() {
                 Business details may be incomplete until the owner claims and verifies this page.
               </p>
               <div className="mt-2">
-                <Link href={claimBusinessPath as any}>
-                  <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
-                    Claim Business & Verify
+                {user && canClaimGeneratedProfile ? (
+                  <Button
+                    size="sm"
+                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
+                    disabled={claimGeneratedProfileMutation.isPending}
+                    onClick={() => claimGeneratedProfileMutation.mutate()}
+                  >
+                    {claimGeneratedProfileMutation.isPending
+                      ? "Claiming..."
+                      : "Claim Business & Verify"}
                   </Button>
-                </Link>
+                ) : (
+                  <Link href={claimBusinessPath as any}>
+                    <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+                      Claim Business & Verify
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
           ) : null}

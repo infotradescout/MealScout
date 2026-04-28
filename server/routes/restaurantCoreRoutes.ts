@@ -34,6 +34,7 @@ import {
   truckImportListings,
   moderationCases,
   moderationResolutions,
+  restaurants,
   menus,
   menuItems,
 } from "@shared/schema";
@@ -609,6 +610,102 @@ export function registerRestaurantCoreRoutes(
       res.status(500).json({ message: "Failed to fetch restaurants" });
     }
   });
+
+  app.post(
+    "/api/restaurants/:id/claim-generated",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params.id || "").trim();
+        const userId = String(req.user?.id || "").trim();
+        if (!restaurantId || !userId) {
+          return res.status(400).json({ message: "Missing restaurant or user" });
+        }
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        if (String(restaurant.ownerId || "") === userId) {
+          return res.json({
+            restaurant,
+            alreadyOwner: true,
+            verificationPending: await storage.hasPendingVerificationRequest(
+              restaurantId,
+            ),
+          });
+        }
+
+        const importSystemEmail = String(
+          process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us",
+        )
+          .trim()
+          .toLowerCase();
+        const importSystemUser = importSystemEmail
+          ? await storage.getUserByEmail(importSystemEmail)
+          : null;
+        const isSystemOwned =
+          importSystemUser &&
+          String(restaurant.ownerId || "") === String(importSystemUser.id);
+        const isGeneratedProfile =
+          String((restaurant as any).profileSource || "") === "google" ||
+          Boolean((restaurant as any).googlePlaceId);
+
+        if (!isSystemOwned || !isGeneratedProfile) {
+          return res.status(409).json({
+            message:
+              "This listing is already attached to an owner. Ask support to transfer it.",
+          });
+        }
+
+        const userType = String(req.user?.userType || "");
+        if (userType === "customer") {
+          const nextType =
+            String((restaurant as any).businessType || "") === "food_truck" ||
+            Boolean((restaurant as any).isFoodTruck)
+              ? "food_truck"
+              : "restaurant_owner";
+          await storage.updateUserType(userId, nextType);
+        }
+
+        const [claimed] = await db
+          .update(restaurants)
+          .set({
+            ownerId: userId,
+            isVerified: false,
+            profileSource: "mixed",
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(restaurants.id, restaurantId))
+          .returning();
+
+        const hasPending = await storage.hasPendingVerificationRequest(
+          restaurantId,
+        );
+        let verificationRequestId: string | null = null;
+        if (!hasPending) {
+          const request = await storage.createVerificationRequest({
+            restaurantId,
+            documents: [],
+          });
+          verificationRequestId = request.id;
+        }
+
+        res.json({
+          restaurant: claimed,
+          claimed: true,
+          verificationPending: true,
+          verificationRequestId,
+        });
+      } catch (error: any) {
+        console.error("Error claiming generated restaurant profile:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to claim generated profile",
+        });
+      }
+    },
+  );
 
   // GET /api/owner/onboarding
   // Returns the owner's setup checklist + next-step CTA so the dashboard
