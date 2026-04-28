@@ -470,29 +470,29 @@ export function registerPublicMapRoutes(app: Express) {
       const MAX_GEOCODE_PER_REQUEST = launchDegradedMode
         ? 0
         : Math.max(0, Number(process.env.MAP_LOCATIONS_MAX_GEOCODE || 0) || 0) ||
-          (process.env.NODE_ENV === "production" ? 5 : 25);
+          (process.env.NODE_ENV === "production" ? 1 : 25);
       const GEOCODE_BUDGET_MS =
         Math.max(
           0,
           Number(process.env.MAP_LOCATIONS_GEOCODE_BUDGET_MS || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 1500 : 5000);
+        ) || (process.env.NODE_ENV === "production" ? 600 : 5000);
       const GEOCODE_TIMEOUT_MS =
         Math.max(
           0,
           Number(process.env.MAP_LOCATIONS_GEOCODE_TIMEOUT_MS || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 750 : 2000);
+        ) || (process.env.NODE_ENV === "production" ? 350 : 2000);
       const MAX_REVERSE_GEOCODE_PER_REQUEST = launchDegradedMode
         ? 0
         : Math.max(
             0,
             Number(process.env.MAP_LOCATIONS_MAX_REVERSE_GEOCODE || 0) || 0,
-          ) || (process.env.NODE_ENV === "production" ? 2 : 10);
+          ) || (process.env.NODE_ENV === "production" ? 1 : 10);
       const MAX_COORD_CALIBRATIONS_PER_REQUEST = launchDegradedMode
         ? 0
         : Math.max(
             0,
             Number(process.env.MAP_LOCATIONS_MAX_COORD_CALIBRATIONS || 0) || 0,
-          ) || (process.env.NODE_ENV === "production" ? 10 : 30);
+          ) || (process.env.NODE_ENV === "production" ? 3 : 30);
       const COORD_CALIBRATION_THRESHOLD_METERS =
         Math.max(
           0,

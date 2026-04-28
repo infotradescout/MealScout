@@ -40,7 +40,6 @@ const PROFILE_FIELD_MASK = [
   "internationalPhoneNumber",
   "websiteUri",
   "googleMapsUri",
-  "menuUri",
   "orderUri",
   "rating",
   "userRatingCount",

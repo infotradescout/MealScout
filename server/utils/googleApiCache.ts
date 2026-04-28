@@ -24,6 +24,7 @@ export type CacheType =
 // In-process L1 cache to avoid hitting Postgres on every hot path
 const l1: Map<string, { value: unknown; expiresAt: number | null }> = new Map();
 let dbCacheAvailable: boolean | null = null;
+let ensureCacheTablePromise: Promise<void> | null = null;
 
 function isMissingCacheTableError(error: unknown) {
   const message = String((error as any)?.message || "").toLowerCase();
@@ -45,6 +46,48 @@ function l1Key(cacheType: CacheType, cacheKey: string) {
   return `${cacheType}:${cacheKey}`;
 }
 
+async function ensureDbCacheTable(): Promise<void> {
+  if (dbCacheAvailable === false) return;
+  if (!ensureCacheTablePromise) {
+    ensureCacheTablePromise = (async () => {
+      try {
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS google_api_cache (
+            cache_key TEXT NOT NULL,
+            cache_type TEXT NOT NULL,
+            value JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ,
+            CONSTRAINT google_api_cache_pkey PRIMARY KEY (cache_key, cache_type)
+          )
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_google_api_cache_type_key
+          ON google_api_cache (cache_type, cache_key)
+        `);
+        await db.execute(sql`
+          CREATE INDEX IF NOT EXISTS idx_google_api_cache_expires
+          ON google_api_cache (expires_at)
+          WHERE expires_at IS NOT NULL
+        `);
+        dbCacheAvailable = true;
+      } catch (error: unknown) {
+        if (isMissingCacheTableError(error)) {
+          markDbCacheUnavailable(error);
+          return;
+        }
+        console.warn(
+          "[googleApiCache] Failed to ensure cache table (non-fatal):",
+          (error as any)?.message || String(error),
+        );
+      }
+    })().finally(() => {
+      ensureCacheTablePromise = null;
+    });
+  }
+  await ensureCacheTablePromise;
+}
+
 /**
  * Read a cached value. Returns `undefined` if not found or expired.
  */
@@ -63,6 +106,11 @@ export async function getCached<T>(
   }
 
   if (dbCacheAvailable === false) {
+    return undefined;
+  }
+
+  await ensureDbCacheTable();
+  if (dbCacheAvailable !== null && !dbCacheAvailable) {
     return undefined;
   }
 
@@ -109,6 +157,11 @@ export async function setCached(
   l1.set(k, { value, expiresAt });
 
   if (dbCacheAvailable === false) {
+    return;
+  }
+
+  await ensureDbCacheTable();
+  if (dbCacheAvailable !== null && !dbCacheAvailable) {
     return;
   }
 
