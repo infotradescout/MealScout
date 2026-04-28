@@ -30,6 +30,7 @@ import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { sendAdminDailyDigest } from "../services/adminDailyDigest";
+import { sendOwnerDiscoverabilityAlerts } from "../services/ownerDiscoverabilityAlerts";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities, sentimentSignalEvents } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
@@ -96,6 +97,32 @@ export async function registerSchedulers(app: Express): Promise<void> {
         }
       } catch (error) {
         console.error("❌ Admin Daily Digest failed:", error);
+      }
+    });
+  }
+
+  // Launch-week proactive alert: owners stuck and still not discoverable after 6h.
+  // Runs hourly and dedupes per owner via telemetry_events so no spam.
+  if (
+    String(
+      process.env.OWNER_DISCOVERABILITY_ALERTS_ENABLED || "true",
+    ).toLowerCase() !== "false"
+  ) {
+    cron.schedule("12 * * * *", async () => {
+      console.log("⏰ Triggering Owner Discoverability Alert scan");
+      try {
+        const result = await sendOwnerDiscoverabilityAlerts();
+        if (result.sent) {
+          console.log(
+            `✅ Owner Discoverability Alert sent (${result.alerted}/${result.considered})`,
+          );
+        } else {
+          console.log(
+            `ℹ️ Owner Discoverability Alert skipped: ${result.reason || "unknown"}`,
+          );
+        }
+      } catch (error) {
+        console.error("❌ Owner Discoverability Alert failed:", error);
       }
     });
   }

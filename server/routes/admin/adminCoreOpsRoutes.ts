@@ -9,6 +9,7 @@ import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
 import { db } from "../../db";
 import { emailService, isEmailConfigured } from "../../emailService";
 import { sendAdminDailyDigest } from "../../services/adminDailyDigest";
+import { sendOwnerDiscoverabilityAlerts } from "../../services/ownerDiscoverabilityAlerts";
 import {
   eventBookings,
   events,
@@ -736,6 +737,29 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         console.error("[admin/launch-week/digest] failed:", error);
         res.status(500).json({
           message: "Failed to send daily digest",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
+
+  // POST /api/admin/launch-week/alerts/discoverability/run
+  // Manual trigger for the hourly discoverability alert scan.
+  app.post(
+    "/api/admin/launch-week/alerts/discoverability/run",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const result = await sendOwnerDiscoverabilityAlerts();
+        console.log(
+          `[admin/launch-week/discoverability-alert] requested by=${req.user?.id || req.user?.claims?.sub || "admin"} sent=${result.sent} reason=${result.reason || "ok"} considered=${result.considered} alerted=${result.alerted}`,
+        );
+        res.json({ ok: true, ...result });
+      } catch (error: any) {
+        console.error("[admin/launch-week/discoverability-alert] failed:", error);
+        res.status(500).json({
+          message: "Failed to run discoverability alert scan",
           error: String(error?.message || error),
         });
       }

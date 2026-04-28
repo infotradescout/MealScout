@@ -128,6 +128,7 @@ export default function AdminLaunchWeek() {
   >("all");
   const [search, setSearch] = useState("");
   const digest = useDailyDigestAction();
+  const discoverabilityAlert = useDiscoverabilityAlertAction();
 
   const { data, isLoading, isError, refetch, isFetching } =
     useQuery<LaunchWeekResponse>({
@@ -217,6 +218,15 @@ export default function AdminLaunchWeek() {
           >
             <Mail className="w-4 h-4 mr-1" />
             Send digest
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => discoverabilityAlert.mutate()}
+            disabled={discoverabilityAlert.isPending}
+          >
+            <AlertTriangle className="w-4 h-4 mr-1" />
+            Run 6h alerts
           </Button>
         </div>
       </div>
@@ -359,6 +369,45 @@ function useDailyDigestAction() {
     onError: (err: any) => {
       toast({
         title: "Digest failed",
+        description: err?.message || "Try again",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+function useDiscoverabilityAlertAction() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch(
+        apiUrl("/api/admin/launch-week/alerts/discoverability/run"),
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Failed (${res.status})`);
+      return body;
+    },
+    onSuccess: (result: any) => {
+      const reason = String(result?.reason || "");
+      if (result?.sent) {
+        toast({
+          title: "6h alerts sent",
+          description: `${result.alerted ?? 0} owner(s) alerted`,
+        });
+      } else {
+        toast({
+          title: "6h alert scan complete",
+          description: reason || "No new owners needed alerts",
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast({
+        title: "6h alert scan failed",
         description: err?.message || "Try again",
         variant: "destructive",
       });
