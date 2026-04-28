@@ -25,6 +25,7 @@ import {
   runMarketExpansionStateTransition,
 } from "../services/marketExpansionAutomation";
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
+import { runMenuAutoRefreshCron } from "../services/menuAutoRefresh";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
@@ -817,6 +818,24 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.error("[market-expansion] Daily directory autopopulate failed:", error);
     }
   });
+
+  // Menu auto-refresh — re-scrape stale URL-imported menus.
+  // Default 4:30 AM daily; override with MENU_AUTO_REFRESH_CRON.
+  const menuRefreshSchedule = process.env.MENU_AUTO_REFRESH_CRON || "30 4 * * *";
+  if (cron.validate(menuRefreshSchedule)) {
+    cron.schedule(menuRefreshSchedule, async () => {
+      try {
+        const summary = await runMenuAutoRefreshCron();
+        console.log("[menu-auto-refresh] complete", summary);
+      } catch (error) {
+        console.error("[menu-auto-refresh] failed:", error);
+      }
+    });
+  } else {
+    console.warn(
+      `[menu-auto-refresh] invalid cron expression "${menuRefreshSchedule}" — skipping registration`,
+    );
+  }
 
   console.log("✅ All schedulers registered");
 }

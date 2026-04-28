@@ -5656,6 +5656,8 @@ export const menus = pgTable(
     importSource: varchar("import_source"),
     // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
     importedAt: timestamp("imported_at"),
+    importUrl: varchar("import_url"),
+    // Last URL used for url-based imports — enables one-click re-import.
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },

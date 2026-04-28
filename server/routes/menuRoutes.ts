@@ -45,6 +45,7 @@ import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
+import { uploadToCloudinary, isCloudinaryConfigured } from "../imageUpload";
 
 const EXTERNAL_MENU_SOURCES = [
   "ubereats",
@@ -70,7 +71,7 @@ const MENU_SERVICE_TYPES = new Set([
 
 type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
 
-const MENU_URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+export const MENU_URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 const MENU_URL_IMPORT_MAX_REDIRECTS = 5;
 const MENU_URL_IMPORT_HEADERS = {
   "User-Agent": "MealScoutMenuImporter/1.0 (+https://www.mealscout.us)",
@@ -122,7 +123,7 @@ const upload = multer({
  * - "partial":  some imported, but errors also present
  * - "complete": fully successful
  */
-function computeImportStatus(
+export function computeImportStatus(
   importedCount: number,
   errorCount: number,
 ): "failed" | "empty" | "partial" | "complete" {
@@ -806,6 +807,140 @@ export function registerMenuRoutes(app: Express) {
     }),
   );
 
+  // ── Item photo upload ──────────────────────────────────────────────────────
+
+  /**
+   * POST /api/owner/menu-items/:itemId/photo
+   * Upload a photo for a menu item. Stored in Cloudinary; the resulting URL is
+   * persisted as the item's imageUrl.
+   */
+  app.post(
+    "/api/owner/menu-items/:itemId/photo",
+    isAuthenticated,
+    upload.single("file"),
+    wrap(async (req, res) => {
+      const { itemId } = req.params;
+      await assertOwnsMenuItem(req.user.id, itemId, req.user?.userType);
+
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+      if (!req.file.mimetype?.startsWith("image/")) {
+        return res
+          .status(400)
+          .json({ message: "Only image uploads are allowed for item photos." });
+      }
+      if (!isCloudinaryConfigured()) {
+        return res.status(503).json({
+          message:
+            "Image hosting is not configured (Cloudinary credentials missing). " +
+            "Paste an image URL instead.",
+        });
+      }
+
+      const result = await uploadToCloudinary(req.file.buffer, "menu-items", itemId);
+
+      const [updated] = await db
+        .update(menuItems)
+        .set({ imageUrl: result.secureUrl, updatedAt: new Date() })
+        .where(eq(menuItems.id, itemId))
+        .returning();
+
+      res.json({
+        item: updated,
+        imageUrl: result.secureUrl,
+        thumbnailUrl: result.thumbnailUrl,
+      });
+    }),
+  );
+
+  // ── Reorder ─────────────────────────────────────────────────────────────────
+
+  /**
+   * PUT /api/owner/menus/:menuId/reorder/categories
+   * Body: { categoryIds: string[] }  (in the new desired order)
+   */
+  app.put(
+    "/api/owner/menus/:menuId/reorder/categories",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const { menuId } = req.params;
+      await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
+      const { categoryIds } = z
+        .object({ categoryIds: z.array(z.string().uuid()).max(200) })
+        .parse(req.body);
+
+      // Verify all IDs belong to this menu before updating.
+      const existing = await db
+        .select({ id: menuCategories.id })
+        .from(menuCategories)
+        .where(eq(menuCategories.menuId, menuId));
+      const valid = new Set(existing.map((r: { id: string }) => r.id));
+      for (const id of categoryIds) {
+        if (!valid.has(id)) {
+          return res.status(400).json({ message: "Invalid category id" });
+        }
+      }
+
+      await Promise.all(
+        categoryIds.map((id, idx) =>
+          db
+            .update(menuCategories)
+            .set({ sortOrder: idx, updatedAt: new Date() })
+            .where(eq(menuCategories.id, id)),
+        ),
+      );
+      res.json({ success: true });
+    }),
+  );
+
+  /**
+   * PUT /api/owner/menu-categories/:categoryId/reorder/items
+   * Body: { itemIds: string[] }  (in the new desired order, all in this category)
+   */
+  app.put(
+    "/api/owner/menu-categories/:categoryId/reorder/items",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const { categoryId } = req.params;
+      const [cat] = await db
+        .select()
+        .from(menuCategories)
+        .where(eq(menuCategories.id, categoryId));
+      if (!cat) return res.status(404).json({ message: "Category not found" });
+      await assertOwnsRestaurant(
+        req.user.id,
+        cat.restaurantId,
+        req.user?.userType,
+      );
+
+      const { itemIds } = z
+        .object({ itemIds: z.array(z.string().uuid()).max(500) })
+        .parse(req.body);
+
+      const existing = await db
+        .select({ id: menuItems.id })
+        .from(menuItems)
+        .where(eq(menuItems.categoryId, categoryId));
+      const valid = new Set(existing.map((r: { id: string }) => r.id));
+      for (const id of itemIds) {
+        if (!valid.has(id)) {
+          return res.status(400).json({ message: "Invalid item id" });
+        }
+      }
+
+      await Promise.all(
+        itemIds.map((id, idx) =>
+          db
+            .update(menuItems)
+            .set({ sortOrder: idx, updatedAt: new Date() })
+            .where(eq(menuItems.id, id)),
+        ),
+      );
+      res.json({ success: true });
+    }),
+  );
+
   // ── ─────────────────────────────────────────────────────────────────────────
   // MENU IMPORTS
   // ── ─────────────────────────────────────────────────────────────────────────
@@ -1098,6 +1233,7 @@ export function registerMenuRoutes(app: Express) {
         .set({
           importSource: resolvedSource,
           importedAt: new Date(),
+          importUrl: url,
           updatedAt: new Date(),
         })
         .where(eq(menus.id, menuId));
@@ -1156,7 +1292,7 @@ type NormalizedImportResult = {
  * Converts known third-party menu export formats into our normalized shape.
  * Each source has a slightly different field naming convention.
  */
-function normalizeExternalMenuData(
+export function normalizeExternalMenuData(
   rawData: Record<string, any>[],
   source: string,
   menuId: string,
@@ -1228,7 +1364,7 @@ function normalizeExternalMenuData(
   return { imported, skipped, errors };
 }
 
-function normalizeExternalSource(source?: string): ExternalMenuSource {
+export function normalizeExternalSource(source?: string): ExternalMenuSource {
   const normalized = String(source || "website").trim().toLowerCase();
   if ((EXTERNAL_MENU_SOURCES as readonly string[]).includes(normalized)) {
     return normalized as ExternalMenuSource;
@@ -1236,7 +1372,7 @@ function normalizeExternalSource(source?: string): ExternalMenuSource {
   return "website";
 }
 
-function detectSourceFromUrl(url: string): string {
+export function detectSourceFromUrl(url: string): string {
   const value = String(url || "").toLowerCase();
   if (value.includes("doordash")) return "doordash";
   if (value.includes("ubereats") || value.includes("uber.com")) return "ubereats";
@@ -1248,7 +1384,7 @@ function detectSourceFromUrl(url: string): string {
   return "website";
 }
 
-async function fetchPublicMenuUrl(
+export async function fetchPublicMenuUrl(
   initialUrl: URL,
   signal: AbortSignal,
 ): Promise<Response> {
@@ -1284,7 +1420,7 @@ async function fetchPublicMenuUrl(
   });
 }
 
-async function validatePublicImportUrl(url: URL): Promise<{
+export async function validatePublicImportUrl(url: URL): Promise<{
   ok: boolean;
   message: string;
 }> {
@@ -1369,7 +1505,7 @@ function isBlockedImportIp(address: string): boolean {
   return true;
 }
 
-function extractMenuRowsFromHtml(html: string): Record<string, any>[] {
+export function extractMenuRowsFromHtml(html: string): Record<string, any>[] {
   const rows: Record<string, any>[] = [];
 
   const pushRow = (name: string, priceRaw: unknown, description?: string) => {

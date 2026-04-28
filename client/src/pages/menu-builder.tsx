@@ -2,7 +2,7 @@
  * Menu Builder — Business dashboard page
  * Allows restaurant/bar/truck owners to create and manage their online menus.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,12 +48,18 @@ import {
   Trash2,
   Upload,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Loader2,
   UtensilsCrossed,
   DollarSign,
   Eye,
   EyeOff,
   Settings,
+  RefreshCw,
+  Clock,
+  GripVertical,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Link, useParams } from "wouter";
 
@@ -70,6 +76,9 @@ interface Menu {
   hidePlatformFee: boolean;
   availableFrom: string | null;
   availableTo: string | null;
+  importSource?: string | null;
+  importedAt?: string | null;
+  importUrl?: string | null;
 }
 
 interface MenuCategory {
@@ -388,6 +397,27 @@ export default function MenuBuilderPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            {selectedMenuId && selectedMenu?.importUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setImportType("url");
+                  setImportUrl(selectedMenu.importUrl || "");
+                  setImportSource(
+                    selectedMenu.importSource &&
+                      selectedMenu.importSource !== "url"
+                      ? selectedMenu.importSource
+                      : "auto",
+                  );
+                  setShowImportDialog(true);
+                }}
+                title={`Re-import from ${selectedMenu.importUrl}`}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Re-import
+              </Button>
+            )}
             {selectedMenuId && (
               <Button
                 variant="outline"
@@ -404,6 +434,40 @@ export default function MenuBuilderPage() {
             </Button>
           </div>
         </div>
+
+        {selectedMenu?.importedAt && (
+          <div className="mb-4 px-3 py-2 rounded-md bg-muted/50 border text-xs text-muted-foreground flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5" />
+            <span>
+              Last imported{" "}
+              <strong>
+                {new Date(selectedMenu.importedAt).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </strong>
+              {selectedMenu.importSource && (
+                <>
+                  {" "}via <strong>{selectedMenu.importSource}</strong>
+                </>
+              )}
+              {selectedMenu.importUrl && (
+                <>
+                  {" "}—{" "}
+                  <a
+                    href={selectedMenu.importUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground break-all"
+                  >
+                    {selectedMenu.importUrl}
+                  </a>
+                </>
+              )}
+            </span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left sidebar: menu list */}
@@ -725,6 +789,54 @@ function MenuEditor({
     }
   };
 
+  // ── Reorder helpers ────────────────────────────────────────────────────────
+  const moveCategory = async (idx: number, dir: -1 | 1) => {
+    const next = [...menu.categories];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    try {
+      await apiRequest(
+        "PUT",
+        `/api/owner/menus/${menu.id}/reorder/categories`,
+        { categoryIds: next.map((c) => c.id) },
+      );
+      onRefresh();
+    } catch (err: any) {
+      toast({
+        title: "Reorder failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const moveItem = async (
+    categoryId: string,
+    items: MenuItem[],
+    idx: number,
+    dir: -1 | 1,
+  ) => {
+    const next = [...items];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    try {
+      await apiRequest(
+        "PUT",
+        `/api/owner/menu-categories/${categoryId}/reorder/items`,
+        { itemIds: next.map((i) => i.id) },
+      );
+      onRefresh();
+    } catch (err: any) {
+      toast({
+        title: "Reorder failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Menu header */}
@@ -778,7 +890,7 @@ function MenuEditor({
               )}
 
               <Accordion type="multiple" className="space-y-2">
-                {menu.categories.map((cat) => (
+                {menu.categories.map((cat, catIdx) => (
                   <AccordionItem
                     key={cat.id}
                     value={cat.id}
@@ -792,6 +904,32 @@ function MenuEditor({
                         </Badge>
                       </AccordionTrigger>
                       <div className="flex gap-1 ml-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          disabled={catIdx === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveCategory(catIdx, -1);
+                          }}
+                          title="Move up"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          disabled={catIdx === menu.categories.length - 1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveCategory(catIdx, 1);
+                          }}
+                          title="Move down"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -821,10 +959,14 @@ function MenuEditor({
                     </div>
                     <AccordionContent className="px-4 pb-4">
                       <div className="space-y-2 mb-3">
-                        {cat.items.map((item) => (
+                        {cat.items.map((item, itemIdx) => (
                           <MenuItemRow
                             key={item.id}
                             item={item}
+                            canMoveUp={itemIdx > 0}
+                            canMoveDown={itemIdx < cat.items.length - 1}
+                            onMoveUp={() => moveItem(cat.id, cat.items, itemIdx, -1)}
+                            onMoveDown={() => moveItem(cat.id, cat.items, itemIdx, 1)}
                             onEdit={() => {
                               setEditingItem(item);
                               setActiveCategoryId(cat.id);
@@ -975,10 +1117,18 @@ function MenuItemRow({
   item,
   onEdit,
   onRefresh,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: {
   item: MenuItem;
   onEdit: () => void;
   onRefresh: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }) {
   const { toast } = useToast();
 
@@ -1031,6 +1181,30 @@ function MenuItemRow({
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        {onMoveUp && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+            title="Move up"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {onMoveDown && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+            title="Move down"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -1082,11 +1256,16 @@ function MenuItemDialog({
 }) {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: item?.name ?? "",
     description: item?.description ?? "",
     priceCents: item ? String(item.priceCents / 100) : "",
     calories: item?.calories ? String(item.calories) : "",
+    proteinG: (item as any)?.proteinG ? String((item as any).proteinG) : "",
+    carbsG: (item as any)?.carbsG ? String((item as any).carbsG) : "",
+    fatG: (item as any)?.fatG ? String((item as any).fatG) : "",
     isAvailable: item?.isAvailable ?? true,
     trackInventory: item?.trackInventory ?? false,
     inventoryQty: item?.inventoryQty ? String(item.inventoryQty) : "",
@@ -1108,6 +1287,9 @@ function MenuItemDialog({
         description: form.description.trim() || null,
         priceCents: Math.round(parseFloat(form.priceCents) * 100),
         calories: form.calories ? parseInt(form.calories) : null,
+        proteinG: form.proteinG ? form.proteinG : null,
+        carbsG: form.carbsG ? form.carbsG : null,
+        fatG: form.fatG ? form.fatG : null,
         isAvailable: form.isAvailable,
         trackInventory: form.trackInventory,
         inventoryQty:
@@ -1150,7 +1332,7 @@ function MenuItemDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? "Edit Item" : "Add Menu Item"}</DialogTitle>
         </DialogHeader>
@@ -1195,6 +1377,45 @@ function MenuItemDialog({
                 min="0"
               />
             </div>
+            <div>
+              <Label>Protein (g)</Label>
+              <Input
+                value={form.proteinG}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, proteinG: e.target.value }))
+                }
+                placeholder="e.g. 35"
+                type="number"
+                min="0"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <Label>Carbs (g)</Label>
+              <Input
+                value={form.carbsG}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, carbsG: e.target.value }))
+                }
+                placeholder="e.g. 50"
+                type="number"
+                min="0"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <Label>Fat (g)</Label>
+              <Input
+                value={form.fatG}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, fatG: e.target.value }))
+                }
+                placeholder="e.g. 28"
+                type="number"
+                min="0"
+                step="0.1"
+              />
+            </div>
             <div className="col-span-2">
               <Label>Description</Label>
               <Textarea
@@ -1237,15 +1458,88 @@ function MenuItemDialog({
               />
             </div>
             <div className="col-span-2">
-              <Label>Photo URL</Label>
-              <Input
-                value={form.imageUrl}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, imageUrl: e.target.value }))
-                }
-                placeholder="https://… (paste an image link)"
-                type="url"
-              />
+              <Label>Photo</Label>
+              {form.imageUrl && (
+                <div className="mt-1 mb-2">
+                  <img
+                    src={form.imageUrl}
+                    alt={form.name || "Menu item"}
+                    className="w-32 h-32 object-cover rounded-md border"
+                  />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={form.imageUrl}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, imageUrl: e.target.value }))
+                  }
+                  placeholder="https://… or upload below"
+                  type="url"
+                />
+                {item && (
+                  <>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !item) return;
+                        setIsUploadingPhoto(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          const res = await fetch(
+                            `/api/owner/menu-items/${item.id}/photo`,
+                            {
+                              method: "POST",
+                              body: fd,
+                              credentials: "include",
+                            },
+                          );
+                          const data = await res.json();
+                          if (!res.ok)
+                            throw new Error(data.message || "Upload failed");
+                          setForm((f) => ({
+                            ...f,
+                            imageUrl: data.imageUrl ?? f.imageUrl,
+                          }));
+                          toast({ title: "Photo uploaded" });
+                        } catch (err: any) {
+                          toast({
+                            title: "Upload failed",
+                            description: err.message,
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsUploadingPhoto(false);
+                          if (photoInputRef.current)
+                            photoInputRef.current.value = "";
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                    >
+                      {isUploadingPhoto ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {!item && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Save the item first, then upload a photo.
+                </p>
+              )}
             </div>
             <div className="col-span-2">
               <Label>
@@ -1298,6 +1592,26 @@ function MenuItemDialog({
               </div>
             )}
           </div>
+
+          {item && (
+            <div className="pt-4 border-t space-y-6">
+              <ItemVariantsEditor
+                itemId={item.id}
+                initial={item.variants ?? []}
+                onChanged={onSaved}
+              />
+              <ItemModifiersEditor
+                itemId={item.id}
+                initial={item.modifiers ?? []}
+                onChanged={onSaved}
+              />
+            </div>
+          )}
+          {!item && (
+            <p className="text-xs text-muted-foreground pt-2 border-t">
+              Save the item first to add size variants or add-on modifiers.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -1313,5 +1627,289 @@ function MenuItemDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ──────────────────────────── ItemVariantsEditor ──────────────────────────────
+function ItemVariantsEditor({
+  itemId,
+  initial,
+  onChanged,
+}: {
+  itemId: string;
+  initial: MenuItemVariant[];
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [variants, setVariants] = useState<MenuItemVariant[]>(
+    initial.map((v) => ({ ...v })),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const update = (idx: number, patch: Partial<MenuItemVariant>) =>
+    setVariants((arr) =>
+      arr.map((v, i) => (i === idx ? { ...v, ...patch } : v)),
+    );
+
+  const add = () =>
+    setVariants((arr) => [
+      ...arr,
+      { label: "", additionalCents: 0, isDefault: arr.length === 0 },
+    ]);
+
+  const remove = (idx: number) =>
+    setVariants((arr) => arr.filter((_, i) => i !== idx));
+
+  const save = async () => {
+    const cleaned = variants
+      .map((v) => ({ ...v, label: v.label.trim() }))
+      .filter((v) => v.label.length > 0);
+    setSaving(true);
+    try {
+      await apiRequest("PUT", `/api/owner/menu-items/${itemId}/variants`, {
+        variants: cleaned,
+      });
+      toast({ title: "Variants saved" });
+      onChanged();
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-semibold">
+          Size Variants{" "}
+          <span className="text-xs font-normal text-muted-foreground">
+            (e.g. Small, Medium, Large)
+          </span>
+        </Label>
+        <Button size="sm" variant="outline" onClick={add}>
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          Add
+        </Button>
+      </div>
+      {variants.length === 0 && (
+        <p className="text-xs text-muted-foreground py-2">
+          No size variants. Add one if this item comes in multiple sizes.
+        </p>
+      )}
+      {variants.map((v, idx) => (
+        <div
+          key={idx}
+          className="grid grid-cols-12 gap-2 items-center p-2 rounded-md border bg-muted/20"
+        >
+          <Input
+            className="col-span-5"
+            value={v.label}
+            onChange={(e) => update(idx, { label: e.target.value })}
+            placeholder="Label (e.g. Large)"
+          />
+          <div className="col-span-4 relative">
+            <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              className="pl-7"
+              type="number"
+              min="0"
+              step="0.01"
+              value={(v.additionalCents / 100).toFixed(2)}
+              onChange={(e) =>
+                update(idx, {
+                  additionalCents: Math.round(
+                    (parseFloat(e.target.value) || 0) * 100,
+                  ),
+                })
+              }
+              placeholder="0.00"
+            />
+          </div>
+          <label className="col-span-2 flex items-center gap-1 text-xs">
+            <input
+              type="radio"
+              checked={v.isDefault}
+              onChange={() =>
+                setVariants((arr) =>
+                  arr.map((vv, i) => ({ ...vv, isDefault: i === idx })),
+                )
+              }
+            />
+            Default
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="col-span-1 h-7 w-7 p-0 text-destructive"
+            onClick={() => remove(idx)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ))}
+      {variants.length > 0 && (
+        <div className="flex justify-end pt-1">
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+            Save Variants
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────── ItemModifiersEditor ─────────────────────────────
+function ItemModifiersEditor({
+  itemId,
+  initial,
+  onChanged,
+}: {
+  itemId: string;
+  initial: MenuItemModifier[];
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [mods, setMods] = useState<MenuItemModifier[]>(
+    initial.map((m) => ({ ...m })),
+  );
+  const [saving, setSaving] = useState(false);
+
+  const update = (idx: number, patch: Partial<MenuItemModifier>) =>
+    setMods((arr) => arr.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
+
+  const add = () =>
+    setMods((arr) => [
+      ...arr,
+      {
+        groupName: arr[arr.length - 1]?.groupName || "Add-ons",
+        label: "",
+        additionalCents: 0,
+        isRequired: false,
+        maxSelections: 1,
+      },
+    ]);
+
+  const remove = (idx: number) =>
+    setMods((arr) => arr.filter((_, i) => i !== idx));
+
+  const save = async () => {
+    const cleaned = mods
+      .map((m) => ({
+        ...m,
+        label: m.label.trim(),
+        groupName: m.groupName.trim() || "Add-ons",
+      }))
+      .filter((m) => m.label.length > 0);
+    setSaving(true);
+    try {
+      await apiRequest("PUT", `/api/owner/menu-items/${itemId}/modifiers`, {
+        modifiers: cleaned,
+      });
+      toast({ title: "Modifiers saved" });
+      onChanged();
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-semibold">
+          Modifiers{" "}
+          <span className="text-xs font-normal text-muted-foreground">
+            (e.g. Extra cheese, No onions, Sauce choice)
+          </span>
+        </Label>
+        <Button size="sm" variant="outline" onClick={add}>
+          <Plus className="w-3.5 h-3.5 mr-1" />
+          Add
+        </Button>
+      </div>
+      {mods.length === 0 && (
+        <p className="text-xs text-muted-foreground py-2">
+          No modifiers. Add toppings, sauces, or other add-ons.
+        </p>
+      )}
+      {mods.map((m, idx) => (
+        <div
+          key={idx}
+          className="grid grid-cols-12 gap-2 items-center p-2 rounded-md border bg-muted/20"
+        >
+          <Input
+            className="col-span-3"
+            value={m.groupName}
+            onChange={(e) => update(idx, { groupName: e.target.value })}
+            placeholder="Group"
+          />
+          <Input
+            className="col-span-4"
+            value={m.label}
+            onChange={(e) => update(idx, { label: e.target.value })}
+            placeholder="Label"
+          />
+          <div className="col-span-3 relative">
+            <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              className="pl-7"
+              type="number"
+              min="0"
+              step="0.01"
+              value={(m.additionalCents / 100).toFixed(2)}
+              onChange={(e) =>
+                update(idx, {
+                  additionalCents: Math.round(
+                    (parseFloat(e.target.value) || 0) * 100,
+                  ),
+                })
+              }
+              placeholder="0.00"
+            />
+          </div>
+          <label className="col-span-1 flex items-center justify-center text-xs">
+            <input
+              type="checkbox"
+              checked={m.isRequired}
+              onChange={(e) => update(idx, { isRequired: e.target.checked })}
+              title="Required"
+            />
+          </label>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="col-span-1 h-7 w-7 p-0 text-destructive"
+            onClick={() => remove(idx)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      ))}
+      {mods.length > 0 && (
+        <>
+          <p className="text-[11px] text-muted-foreground">
+            Group = the choice category (e.g. "Sauce"). Tick the checkbox to
+            require a selection from that group.
+          </p>
+          <div className="flex justify-end pt-1">
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />}
+              Save Modifiers
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
