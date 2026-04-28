@@ -17,6 +17,11 @@ import {
 } from "../services/externalReviewScoring";
 import { queueSocialPost } from "./dealRouteDependencies";
 import {
+  ensureGoogleRestaurantProfile,
+  getGooglePhotoUrl,
+  searchPlacesFreeText,
+} from "../services/googleProfileService";
+import {
   insertRestaurantSchema,
   insertRestaurantFavoriteSchema,
   insertRestaurantFollowSchema,
@@ -183,6 +188,15 @@ const isPublicRestaurantVisible = (restaurant: any): boolean => {
   if (!restaurant?.isActive) return false;
   if (!restaurant?.isVerified) return false;
   return isPublicBusinessVisible(restaurant);
+};
+
+const isGoogleLocalityOnly = (candidate: { types?: string[] }) => {
+  const types = Array.isArray(candidate?.types) ? candidate.types : [];
+  return types.some((type) =>
+    ["locality", "political", "administrative_area_level_1", "country"].includes(
+      type,
+    ),
+  );
 };
 
 export function registerRestaurantCoreRoutes(
@@ -1348,10 +1362,85 @@ export function registerRestaurantCoreRoutes(
 
   app.get("/api/restaurants/:id", async (req, res) => {
     try {
-      const restaurant = await storage.getRestaurant(req.params.id);
+      let restaurant: any = await storage.getRestaurant(req.params.id);
       if (!restaurant) {
         return res.status(404).json({ message: "Restaurant not found" });
       }
+
+      const profileSource = String((restaurant as any).profileSource || "");
+      const isGeneratedProfile =
+        profileSource === "google" ||
+        profileSource === "search_query_seed" ||
+        Boolean((restaurant as any).googlePlaceId);
+
+      // Opportunistically enrich generated profiles so detail pages get a real banner photo.
+      if (isGeneratedProfile && !restaurant.coverImageUrl) {
+        try {
+          const placeId = String((restaurant as any).googlePlaceId || "").trim();
+          if (placeId) {
+            const generated = await ensureGoogleRestaurantProfile(placeId);
+            if (generated?.restaurant) {
+              restaurant = generated.restaurant as any;
+            }
+          } else {
+            const lookupQuery = [
+              restaurant.name,
+              restaurant.address,
+              restaurant.city,
+              restaurant.state,
+            ]
+              .filter(Boolean)
+              .join(", ");
+            const candidates = await searchPlacesFreeText(lookupQuery, 5);
+            const bestCandidate =
+              candidates.find((c) => !isGoogleLocalityOnly(c)) || candidates[0];
+
+            if (bestCandidate) {
+              const firstPhotoName = String(bestCandidate.photos?.[0]?.name || "").trim();
+              const coverImageUrl = firstPhotoName
+                ? getGooglePhotoUrl(firstPhotoName)
+                : null;
+              const updates: any = {
+                googlePlaceId: bestCandidate.placeId,
+                profileLastSynced: new Date(),
+              };
+
+              if (coverImageUrl) updates.coverImageUrl = coverImageUrl;
+              if (Array.isArray(bestCandidate.photos) && bestCandidate.photos.length > 0) {
+                updates.googlePhotos = bestCandidate.photos;
+              }
+              if (
+                (restaurant.googleRating == null || Number(restaurant.googleRating) <= 0) &&
+                typeof bestCandidate.rating === "number"
+              ) {
+                updates.googleRating = bestCandidate.rating;
+              }
+              if (
+                (restaurant.googleReviewCount == null ||
+                  Number(restaurant.googleReviewCount) <= 0) &&
+                typeof bestCandidate.userRatingCount === "number"
+              ) {
+                updates.googleReviewCount = bestCandidate.userRatingCount;
+              }
+
+              const [updated] = await db
+                .update(restaurants)
+                .set(updates)
+                .where(eq(restaurants.id, String(restaurant.id)))
+                .returning();
+              if (updated) {
+                restaurant = updated as any;
+              }
+            }
+          }
+        } catch (enrichmentError) {
+          console.warn("[restaurant] generated profile banner enrichment failed", {
+            restaurantId: restaurant.id,
+            error: enrichmentError,
+          });
+        }
+      }
+
       const owner = restaurant.ownerId
         ? await storage.getUser(String(restaurant.ownerId))
         : null;
