@@ -752,14 +752,17 @@ export function registerPublicSearchRoutes(app: Express) {
       // the query is substantial enough, ask Google Places and seed an unclaimed
       // profile so the user sees the place they were looking for and can claim it.
       const SEED_MIN_QUERY_LEN = 5;
+      const hasPlacesApiKey = Boolean(
+        process.env.GOOGLE_MAPS_API_KEY ||
+          process.env.GOOGLE_PLACES_API_KEY ||
+          process.env.GOOGLE_API_KEY ||
+          process.env.VITE_GOOGLE_MAPS_WEB_API_KEY,
+      );
       const shouldAutoSeed =
         restaurantsOut.length === 0 &&
+        unclaimedOut.length === 0 &&
         query.length >= SEED_MIN_QUERY_LEN &&
-        Boolean(
-          process.env.GOOGLE_MAPS_API_KEY ||
-            process.env.GOOGLE_PLACES_API_KEY ||
-            process.env.GOOGLE_API_KEY,
-        );
+        hasPlacesApiKey;
 
       if (shouldAutoSeed) {
         try {
@@ -775,7 +778,8 @@ export function registerPublicSearchRoutes(app: Express) {
               (c) =>
                 !isGoogleLocalityOnly(c) &&
                 candidateLooksLikeRequestedPlace(c, primaryTerm),
-            );
+            ) ||
+            candidates.find((c) => !isGoogleLocalityOnly(c));
 
           if (foodCandidate) {
             try {

@@ -52,18 +52,51 @@ const normalizeRestaurantSearchTerm = (value: unknown) =>
 
 const buildRestaurantSearchTerms = (query: string) => {
   const terms = new Set<string>();
+  const ignoredTokens = new Set([
+    "usa",
+    "united",
+    "states",
+    "street",
+    "st",
+    "avenue",
+    "ave",
+    "road",
+    "rd",
+    "boulevard",
+    "blvd",
+    "drive",
+    "dr",
+    "lane",
+    "ln",
+    "highway",
+    "hwy",
+    "north",
+    "south",
+    "east",
+    "west",
+  ]);
+
   const normalized = normalizeRestaurantSearchTerm(query);
   if (normalized) terms.add(normalized);
 
-  String(query || "")
+  const commaParts = String(query || "")
     .split(",")
     .map(normalizeRestaurantSearchTerm)
     .filter((part) => part.length >= 2)
-    .forEach((part) => terms.add(part));
+    .slice(0, 8);
+
+  commaParts.forEach((part) => {
+    terms.add(part);
+    part
+      .split(" ")
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3 && !ignoredTokens.has(token))
+      .forEach((token) => terms.add(token));
+  });
 
   return Array.from(terms)
     .filter((term) => term.length >= 2)
-    .slice(0, 6);
+    .slice(0, 20);
 };
 
 const matchesRestaurantSearchTerms = (restaurant: any, terms: string[]) => {
