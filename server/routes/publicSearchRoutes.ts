@@ -17,6 +17,7 @@ import {
   hosts,
   restaurants,
   truckImportListings,
+  users,
   videoStories,
 } from "@shared/schema";
 
@@ -165,6 +166,87 @@ const buildQuerySeedListing = (query: string) => {
     state,
   };
 };
+
+let importSystemUserIdPromise: Promise<string> | null = null;
+
+async function getOrCreateImportSystemUserId(): Promise<string> {
+  if (!importSystemUserIdPromise) {
+    importSystemUserIdPromise = (async () => {
+      const email =
+        process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us";
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      if (existing?.id) return existing.id;
+
+      await db
+        .insert(users)
+        .values({
+          email,
+          firstName: "System",
+          lastName: "Import",
+          userType: "admin",
+          emailVerified: true,
+        } as any)
+        .onConflictDoNothing({ target: users.email });
+
+      const [created] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+      return created.id;
+    })();
+  }
+
+  return importSystemUserIdPromise;
+}
+
+async function ensureSearchQueryRestaurantProfile(query: string) {
+  const seeded = buildQuerySeedListing(query);
+  const ownerId = await getOrCreateImportSystemUserId();
+
+  const [existing] = await db
+    .select()
+    .from(restaurants)
+    .where(
+      and(
+        eq(restaurants.ownerId, ownerId),
+        sql`lower(${restaurants.name}) = lower(${seeded.name})`,
+        sql`lower(${restaurants.address}) = lower(${seeded.address})`,
+        eq(restaurants.profileSource, "search_query_seed" as any),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    return { restaurant: existing, created: false };
+  }
+
+  const [created] = await db
+    .insert(restaurants)
+    .values({
+      ownerId,
+      name: seeded.name,
+      address: seeded.address,
+      city: seeded.city,
+      state: seeded.state,
+      businessType: "restaurant",
+      cuisineType: "Restaurant",
+      isFoodTruck: false,
+      isActive: true,
+      isVerified: false,
+      description:
+        "Auto-generated MealScout listing. Claim this profile to take ownership and complete your business details.",
+      profileSource: "search_query_seed",
+      profileLastSynced: new Date(),
+    } as any)
+    .returning();
+
+  return { restaurant: created, created: true };
+}
 
 const scoreSearchFields = (
   fields: unknown[],
@@ -967,86 +1049,28 @@ export function registerPublicSearchRoutes(app: Express) {
         }
 
         // Guaranteed fallback: even if Google APIs are unavailable or return
-        // no suitable places, create a query-backed unclaimed listing so users
-        // can still claim the profile they searched for.
+        // no suitable places, create a lightweight generated restaurant
+        // profile so search behaves like the successful Steak House flow.
         if (restaurantsOut.length === 0 && unclaimedOut.length === 0) {
-          const seeded = buildQuerySeedListing(query);
-          const queryHash = crypto
-            .createHash("sha1")
-            .update(normalizeSearchTerm(query))
-            .digest("hex")
-            .slice(0, 24);
-          const externalId = `query_seed:${queryHash}`;
-
-          const [existingQuerySeed] = await db
-            .select({
-              id: truckImportListings.id,
-              name: truckImportListings.name,
-              address: truckImportListings.address,
-              city: truckImportListings.city,
-              state: truckImportListings.state,
-              source: truckImportListings.source,
-              status: truckImportListings.status,
-            })
-            .from(truckImportListings)
-            .where(eq(truckImportListings.externalId, externalId))
-            .limit(1);
-
-          if (existingQuerySeed) {
-            unclaimedOut = [
-              {
-                id: existingQuerySeed.id,
-                name: existingQuerySeed.name,
-                address: existingQuerySeed.address,
-                city: existingQuerySeed.city,
-                state: existingQuerySeed.state,
-                source: existingQuerySeed.source || "search_query_seed",
-                status: existingQuerySeed.status || "unclaimed",
-                autoSeeded: false,
-              },
-            ];
-          } else {
-            const [insertedQuerySeed] = await db
-              .insert(truckImportListings)
-              .values({
-                source: "search_query_seed",
-                externalId,
-                name: seeded.name,
-                address: seeded.address,
-                city: seeded.city,
-                state: seeded.state,
-                confidenceScore: 40,
-                status: "unclaimed",
-                rawData: {
-                  seededFromQuery: query,
-                  fallbackMode: "query_seed",
-                },
-              } as any)
-              .returning({
-                id: truckImportListings.id,
-                name: truckImportListings.name,
-                address: truckImportListings.address,
-                city: truckImportListings.city,
-                state: truckImportListings.state,
-                source: truckImportListings.source,
-                status: truckImportListings.status,
-              });
-
-            if (insertedQuerySeed) {
-              unclaimedOut = [
-                {
-                  id: insertedQuerySeed.id,
-                  name: insertedQuerySeed.name,
-                  address: insertedQuerySeed.address,
-                  city: insertedQuerySeed.city,
-                  state: insertedQuerySeed.state,
-                  source: insertedQuerySeed.source || "search_query_seed",
-                  status: insertedQuerySeed.status || "unclaimed",
-                  autoSeeded: true,
-                },
-              ];
-            }
-          }
+          const generated = await ensureSearchQueryRestaurantProfile(query);
+          const restaurant = generated.restaurant as any;
+          restaurantsOut = [
+            {
+              id: restaurant.id,
+              name: restaurant.name,
+              cuisineType: restaurant.cuisineType,
+              address: restaurant.address,
+              isFoodTruck: Boolean(restaurant.isFoodTruck),
+              isVerified: Boolean(restaurant.isVerified),
+              operatingHours:
+                restaurant.operatingHours ?? restaurant.businessHours ?? null,
+              rating: null,
+              googleRating: restaurant.googleRating,
+              googleReviewCount: restaurant.googleReviewCount,
+            },
+          ];
+          unclaimedOut = [];
+          res.setHeader("X-MealScout-Auto-Profile", "query-seed");
         }
       }
 

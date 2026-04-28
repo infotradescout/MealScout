@@ -695,6 +695,8 @@ export function registerRestaurantCoreRoutes(
           String(restaurant.ownerId || "") === String(importSystemUser.id);
         const isGeneratedProfile =
           String((restaurant as any).profileSource || "") === "google" ||
+          String((restaurant as any).profileSource || "") ===
+            "search_query_seed" ||
           Boolean((restaurant as any).googlePlaceId);
 
         if (!isSystemOwned || !isGeneratedProfile) {

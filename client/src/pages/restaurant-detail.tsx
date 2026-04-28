@@ -495,6 +495,11 @@ export default function RestaurantDetailPage() {
   const isVerifiedMemberProfile =
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
+  const isGeneratedProfile =
+    String((restaurant as any)?.profileSource || "") === "google" ||
+    String((restaurant as any)?.profileSource || "") ===
+      "search_query_seed" ||
+    Boolean((restaurant as any)?.googlePlaceId);
 
   const cvsScore = Math.max(
     0,
@@ -567,9 +572,7 @@ export default function RestaurantDetailPage() {
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
-    !isVerifiedMemberProfile &&
-    (String((restaurant as any)?.profileSource || "") === "google" ||
-      Boolean((restaurant as any)?.googlePlaceId));
+    !isVerifiedMemberProfile && isGeneratedProfile;
   const phoneHref = toPhoneHref(phoneNumber);
   const lat = Number(
     (restaurant as any)?.currentLatitude || (restaurant as any)?.latitude,
