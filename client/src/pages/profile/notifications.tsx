@@ -25,6 +25,11 @@ import {
 import { BackHeader } from "@/components/back-header";
 import { useToast } from "@/hooks/use-toast";
 import { locationNotificationService } from "@/services/location-notifications";
+import {
+  sendPushTest,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "@/services/push-notifications";
 
 type NotificationPrefs = {
   channels: {
@@ -139,6 +144,7 @@ export default function NotificationsPage() {
   const { toast } = useToast();
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [saving, setSaving] = useState(false);
+  const [sendingPushTest, setSendingPushTest] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<SettingsResponse>({
@@ -240,9 +246,11 @@ export default function NotificationsPage() {
     setChannels({ push: enabled });
     if (!enabled) {
       locationNotificationService.stopMonitoring();
+      await unsubscribeFromPush().catch(() => {});
       return;
     }
     try {
+      await subscribeToPush();
       const granted = await locationNotificationService.requestPermission();
       if (!granted) {
         toast({
@@ -253,8 +261,33 @@ export default function NotificationsPage() {
       } else if (prefs.location.enabled) {
         await locationNotificationService.startMonitoring();
       }
-    } catch {
-      // Best effort only.
+    } catch (error: any) {
+      toast({
+        title: "Push setup failed",
+        description:
+          error?.message ||
+          "Unable to register push notifications. Check browser permissions and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const triggerPushTest = async () => {
+    setSendingPushTest(true);
+    try {
+      const result = await sendPushTest();
+      toast({
+        title: "Push test sent",
+        description: `Delivered to ${Number(result?.sent || 0)} subscription(s).`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Push test failed",
+        description: error?.message || "Unable to send push test.",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingPushTest(false);
     }
   };
 
@@ -354,6 +387,22 @@ export default function NotificationsPage() {
                 onCheckedChange={(next) => setChannels({ sms: next })}
                 data-testid="switch-sms"
               />
+            </div>
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={triggerPushTest}
+                disabled={!prefs.channels.push || sendingPushTest}
+                data-testid="button-send-push-test"
+              >
+                {sendingPushTest ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Smartphone className="h-4 w-4 mr-2" />
+                )}
+                Send push test
+              </Button>
             </div>
           </CardContent>
         </Card>
