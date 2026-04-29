@@ -558,6 +558,37 @@ const distanceMiles = (from: GeoPoint | null, to: GeoPoint | null) => {
   return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+const parkingTrafficWeightFromLabel = (value?: string | null) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return 42;
+
+  const numeric = Number(normalized.replace(/[^0-9.]/g, ""));
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return Math.max(18, Math.min(100, Math.round(numeric)));
+  }
+
+  if (
+    normalized.includes("very") ||
+    normalized.includes("heavy") ||
+    normalized.includes("high") ||
+    normalized.includes("busy")
+  ) {
+    return 82;
+  }
+  if (normalized.includes("medium") || normalized.includes("moderate")) {
+    return 58;
+  }
+  if (normalized.includes("low") || normalized.includes("light")) {
+    return 28;
+  }
+  return 46;
+};
+
+const roundTrafficCoord = (value: number) =>
+  Math.round(value * 10_000) / 10_000;
+
 export default function ParkingPassPage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -3508,6 +3539,59 @@ export default function ParkingPassPage() {
     () => buildParkingAdapterMarkers(fallbackHostPinsForRender),
     [buildParkingAdapterMarkers, fallbackHostPinsForRender],
   );
+  const parkingPassSupplyTrafficCells = useMemo(() => {
+    const visibleParkingPins =
+      mapPinsForRender.length > 0
+        ? mapPinsForRender.map((pin) => ({
+            key: pin.key,
+            coords: pin.coords,
+            weight: Math.max(
+              parkingTrafficWeightFromLabel(pin.group.host.expectedFootTraffic),
+              Math.min(100, 34 + pin.group.listings.length * 4),
+            ),
+          }))
+        : fallbackHostPinsForRender.map((pin) => ({
+            key: pin.key,
+            coords: pin.coords,
+            weight: 38,
+          }));
+
+    const buckets = new Map<
+      string,
+      { lat: number; lng: number; weight: number; count: number }
+    >();
+
+    visibleParkingPins.forEach((pin) => {
+      if (!pointInBounds(parkingMapBounds, pin.coords)) return;
+      const lat = roundTrafficCoord(pin.coords.lat);
+      const lng = roundTrafficCoord(pin.coords.lng);
+      const key = `${lat}:${lng}`;
+      const existing = buckets.get(key) || {
+        lat,
+        lng,
+        weight: 0,
+        count: 0,
+      };
+      existing.weight = Math.max(existing.weight, pin.weight);
+      existing.count += 1;
+      buckets.set(key, existing);
+    });
+
+    return Array.from(buckets.entries()).map(([key, bucket]) => ({
+      id: `parking-pass:${key}`,
+      lat: bucket.lat,
+      lng: bucket.lng,
+      weight: Math.max(18, Math.min(100, bucket.weight + bucket.count * 5)),
+      source: "supply_signal" as const,
+      count: bucket.count,
+      uniqueActors: bucket.count,
+    }));
+  }, [
+    fallbackHostPinsForRender,
+    mapPinsForRender,
+    parkingMapBounds,
+    pointInBounds,
+  ]);
   const activeParkingMapPin = useMemo(() => {
     if (!activeParkingPinKey) return null;
     return (
@@ -3614,11 +3698,22 @@ export default function ParkingPassPage() {
         west: String(parkingMapBounds.west),
         windowMinutes: "720",
         mode: "avg",
-        includeGoogle: "false",
+        includeGoogle: "true",
       });
       const res = await fetch(`/api/map/foot-traffic?${params.toString()}`);
-      if (!res.ok) throw new Error("Failed to load parking-pass foot traffic");
-      return res.json();
+      if (res.ok) return res.json();
+
+      params.set("includeGoogle", "false");
+      const fallbackRes = await fetch(
+        `/api/map/foot-traffic?${params.toString()}`,
+      );
+      if (fallbackRes.ok) return fallbackRes.json();
+
+      return {
+        generatedAt: new Date().toISOString(),
+        windowMinutes: 720,
+        cells: [],
+      };
     },
     staleTime: 5 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
@@ -3627,10 +3722,22 @@ export default function ParkingPassPage() {
 
   const parkingTrafficCells = useMemo(() => {
     if (!showFootTraffic || viewMode !== "map") return [] as MapTrafficCell[];
-    return Array.isArray(parkingFootTrafficData?.cells)
-      ? parkingFootTrafficData.cells
-      : [];
-  }, [showFootTraffic, viewMode, parkingFootTrafficData]);
+    const cellsById = new Map<string, MapTrafficCell>();
+    if (Array.isArray(parkingFootTrafficData?.cells)) {
+      parkingFootTrafficData.cells.forEach((cell) =>
+        cellsById.set(cell.id, cell),
+      );
+    }
+    parkingPassSupplyTrafficCells.forEach((cell) =>
+      cellsById.set(cell.id, cell),
+    );
+    return Array.from(cellsById.values());
+  }, [
+    showFootTraffic,
+    viewMode,
+    parkingFootTrafficData,
+    parkingPassSupplyTrafficCells,
+  ]);
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
