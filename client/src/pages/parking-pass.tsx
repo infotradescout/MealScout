@@ -14,18 +14,25 @@ import {
   AlertCircle,
   Calendar,
   Clock,
+  LocateFixed,
   Loader2,
+  MapPin,
   Plus,
   Share2,
   Truck,
 } from "lucide-react";
 import { Calendar as DatePickerCalendar } from "@/components/ui/calendar";
+import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import { GoogleMapPicker } from "@/components/maps/GoogleMapPicker";
 import type {
   MapPickerBounds,
   MapPickerPin,
 } from "@/components/maps/GoogleMapPicker";
-import type { MapTrafficCell } from "@/components/maps/map-adapter.types";
+import type {
+  MapAdapterMarker,
+  MapBoundsLike,
+  MapTrafficCell,
+} from "@/components/maps/map-adapter.types";
 import { usePinZoomCardMode } from "@/components/maps/usePinZoomCardMode";
 import { BookingPaymentModal } from "@/components/booking-payment-modal";
 import { EditOccurrenceDialog } from "@/components/edit-occurrence-dialog";
@@ -86,6 +93,11 @@ interface FootTrafficResponse {
   windowMinutes: number;
   cells: MapTrafficCell[];
 }
+
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
+};
 
 interface HostPassListing {
   id: string;
@@ -507,6 +519,45 @@ const defaultMapCenter = {
   lng: -98.5795,
 };
 
+const PARKING_PASS_LOCATION_CACHE_KEY =
+  "mealscout:parking-pass:userLocation:v1";
+
+const readCachedParkingPassLocation = (): GeoPoint | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const urlLat = Number(params.get("lat"));
+    const urlLng = Number(params.get("lng"));
+    if (Number.isFinite(urlLat) && Number.isFinite(urlLng)) {
+      return { lat: urlLat, lng: urlLng };
+    }
+
+    const raw = localStorage.getItem(PARKING_PASS_LOCATION_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { lat?: unknown; lng?: unknown };
+    const lat = Number(parsed?.lat);
+    const lng = Number(parsed?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+};
+
+const distanceMiles = (from: GeoPoint | null, to: GeoPoint | null) => {
+  if (!from || !to) return Number.POSITIVE_INFINITY;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const deltaLat = toRad(to.lat - from.lat);
+  const deltaLng = toRad(to.lng - from.lng);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 export default function ParkingPassPage() {
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -691,9 +742,20 @@ export default function ParkingPassPage() {
   >([]);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [parkingMapZoom, setParkingMapZoom] = useState(13);
+  const [parkingUserLocation, setParkingUserLocation] =
+    useState<GeoPoint | null>(() => readCachedParkingPassLocation());
+  const [parkingSearchCenter, setParkingSearchCenter] =
+    useState<GeoPoint | null>(null);
+  const [isResolvingParkingLocation, setIsResolvingParkingLocation] =
+    useState(false);
   const [showFootTraffic, setShowFootTraffic] = useState(true);
   const [parkingMapBounds, setParkingMapBounds] =
     useState<MapPickerBounds | null>(null);
+  const [parkingMapCalloutAnchorPosition, setParkingMapCalloutAnchorPosition] =
+    useState<{ x: number; y: number } | null>(null);
+  const [activeParkingPinKey, setActiveParkingPinKey] = useState<string | null>(
+    null,
+  );
   const [activeLocationKey, setActiveLocationKey] = useState<string | null>(
     null,
   );
@@ -710,7 +772,26 @@ export default function ParkingPassPage() {
   const [parkingCoords, setParkingCoords] = useState<Record<string, GeoPoint>>(
     {},
   );
-  const effectiveGoogleMapsApiKey = GOOGLE_MAPS_WEB_API_KEY;
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const res = await fetch("/api/map/runtime");
+      if (!res.ok) return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const runtimeGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const effectiveGoogleMapsApiKey =
+    GOOGLE_MAPS_WEB_API_KEY || runtimeGoogleMapsApiKey;
+  const effectiveGoogleMapsMapId = String(
+    (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
+  ).trim();
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -1995,6 +2076,97 @@ export default function ParkingPassPage() {
     return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
   };
 
+  const focusParkingMapAt = (point: GeoPoint, zoom = 14) => {
+    setActiveLocationKey(null);
+    setActiveParkingPinKey(null);
+    setParkingMapCalloutAnchorPosition(null);
+    setParkingMapBounds(null);
+    setParkingMapZoom(zoom);
+    setParkingSearchCenter(point);
+    setViewMode("map");
+  };
+
+  const handleUseParkingUserLocation = async () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Location unavailable",
+        description: "This browser does not support current location.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResolvingParkingLocation(true);
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            maximumAge: 60_000,
+            timeout: 12_000,
+          });
+        },
+      );
+      const next = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      setParkingUserLocation(next);
+      setCityQuery("");
+      focusParkingMapAt(next, 14);
+      try {
+        localStorage.setItem(
+          PARKING_PASS_LOCATION_CACHE_KEY,
+          JSON.stringify({ ...next, updatedAt: Date.now() }),
+        );
+      } catch {
+        // ignore localStorage issues
+      }
+      toast({
+        title: "Map centered nearby",
+        description: "Parking pass spots are sorted from your location.",
+      });
+    } catch (error) {
+      toast({
+        title: "Location blocked",
+        description:
+          error instanceof GeolocationPositionError || error instanceof Error
+            ? error.message
+            : "Allow location access or search by city/address instead.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResolvingParkingLocation(false);
+    }
+  };
+
+  const handleParkingSearchSubmit = async () => {
+    const query = cityQuery.trim();
+    if (!query) {
+      setParkingSearchCenter(parkingUserLocation);
+      if (parkingUserLocation) {
+        focusParkingMapAt(parkingUserLocation, 14);
+      }
+      return;
+    }
+
+    setIsResolvingParkingLocation(true);
+    try {
+      const coords = await geocodeAddress(query).catch(() => null);
+      if (!coords) {
+        toast({
+          title: "Search kept as text",
+          description:
+            "I could not center the map on that place, so results are filtered by the words you typed.",
+        });
+        return;
+      }
+      focusParkingMapAt(coords, 13);
+    } finally {
+      setIsResolvingParkingLocation(false);
+    }
+  };
+
   const handleAmenitiesSave = async () => {
     if (!host) return;
     setIsSavingAmenities(true);
@@ -2969,6 +3141,7 @@ export default function ParkingPassPage() {
     }
   }, [availableTabs, canHostTab, isTruckViewUser, topTab]);
   const normalizedCityQuery = cityQuery.trim().toLowerCase();
+  const parkingDistanceCenter = parkingSearchCenter ?? parkingUserLocation;
   const locationGroups = useMemo(() => {
     const byHost = new Map<string, ParkingPassLocationGroup>();
     passListings.forEach((listing) => {
@@ -2989,7 +3162,7 @@ export default function ParkingPassPage() {
   }, [passListings]);
 
   const filteredLocations = useMemo(() => {
-    const filtered = normalizedCityQuery
+    const textMatches = normalizedCityQuery
       ? locationGroups.filter((group) => {
           const locationText = [
             group.host.city,
@@ -3003,8 +3176,23 @@ export default function ParkingPassPage() {
           return locationText.includes(normalizedCityQuery);
         })
       : locationGroups;
+    const filtered =
+      textMatches.length > 0 || !parkingDistanceCenter
+        ? textMatches
+        : locationGroups;
 
     return [...filtered].sort((a, b) => {
+      if (parkingDistanceCenter) {
+        const distanceA = distanceMiles(
+          parkingDistanceCenter,
+          parkingCoords[a.key] || getLocationCoords(a.host),
+        );
+        const distanceB = distanceMiles(
+          parkingDistanceCenter,
+          parkingCoords[b.key] || getLocationCoords(b.host),
+        );
+        if (distanceA !== distanceB) return distanceA - distanceB;
+      }
       const cityA = (a.host.city || "").toLowerCase();
       const cityB = (b.host.city || "").toLowerCase();
       if (cityA && cityB && cityA !== cityB) {
@@ -3012,13 +3200,19 @@ export default function ParkingPassPage() {
       }
       return a.host.businessName.localeCompare(b.host.businessName);
     });
-  }, [locationGroups, normalizedCityQuery]);
+  }, [
+    locationGroups,
+    normalizedCityQuery,
+    parkingCoords,
+    parkingDistanceCenter,
+  ]);
 
   const activeLocation =
     filteredLocations.find((group) => group.key === activeLocationKey) || null;
 
   const focusLocation = (key: string, scroll = false) => {
     setActiveLocationKey(key);
+    setActiveParkingPinKey((current) => current ?? key);
     if (!scroll) return;
     requestAnimationFrame(() => {
       document
@@ -3026,6 +3220,49 @@ export default function ParkingPassPage() {
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
+
+  const handleParkingMapBoundsChanged = useCallback((bounds: MapBoundsLike) => {
+    setParkingMapBounds(bounds);
+  }, []);
+
+  const buildParkingAdapterMarkers = useCallback(
+    (
+      pins: Array<{
+        key: string;
+        coords: GeoPoint;
+        addressLabel: string;
+        group?: ParkingPassLocationGroup;
+        name?: string;
+      }>,
+    ): MapAdapterMarker[] => {
+      const next: MapAdapterMarker[] = parkingUserLocation
+        ? [
+            {
+              id: "user:self",
+              sourceId: "self",
+              kind: "user",
+              lat: parkingUserLocation.lat,
+              lng: parkingUserLocation.lng,
+              title: "You are here",
+            },
+          ]
+        : [];
+
+      pins.forEach((pin) => {
+        next.push({
+          id: `parking:${pin.key}`,
+          sourceId: pin.key,
+          kind: "parking",
+          lat: pin.coords.lat,
+          lng: pin.coords.lng,
+          title: pin.group?.host.businessName || pin.name || "Parking pass",
+          subtitle: pin.addressLabel,
+        });
+      });
+      return next;
+    },
+    [parkingUserLocation],
+  );
 
   const activeListingDateKeys = useMemo(() => {
     if (!activeLocation) return [];
@@ -3235,8 +3472,15 @@ export default function ParkingPassPage() {
             addressLabel: string;
             spotImageUrl: string | null;
           } => item !== null,
-        ),
-    [paidMapLocations, normalizedCityQuery],
+        )
+        .sort((a, b) => {
+          if (!parkingDistanceCenter) return a.name.localeCompare(b.name);
+          const distanceA = distanceMiles(parkingDistanceCenter, a.coords);
+          const distanceB = distanceMiles(parkingDistanceCenter, b.coords);
+          if (distanceA !== distanceB) return distanceA - distanceB;
+          return a.name.localeCompare(b.name);
+        }),
+    [paidMapLocations, normalizedCityQuery, parkingDistanceCenter],
   );
   const fallbackPinCandidatesForCards = useMemo(() => {
     const inView = fallbackHostPins.filter((pin) =>
@@ -3256,14 +3500,64 @@ export default function ParkingPassPage() {
     maxCards: 6,
   });
   const fallbackHostPinsForRender = fallbackHostPins;
+  const parkingBrowseMarkers = useMemo(
+    () => buildParkingAdapterMarkers(mapPinsForRender),
+    [buildParkingAdapterMarkers, mapPinsForRender],
+  );
+  const fallbackParkingBrowseMarkers = useMemo(
+    () => buildParkingAdapterMarkers(fallbackHostPinsForRender),
+    [buildParkingAdapterMarkers, fallbackHostPinsForRender],
+  );
+  const activeParkingMapPin = useMemo(() => {
+    if (!activeParkingPinKey) return null;
+    return (
+      mapPins.find((pin) => pin.key === activeParkingPinKey) ||
+      mapPins.find((pin) => pin.group.key === activeParkingPinKey) ||
+      null
+    );
+  }, [activeParkingPinKey, mapPins]);
+  const activeFallbackParkingMapPin = useMemo(() => {
+    if (!activeParkingPinKey) return null;
+    return (
+      fallbackHostPins.find((pin) => pin.key === activeParkingPinKey) || null
+    );
+  }, [activeParkingPinKey, fallbackHostPins]);
+  const activeParkingMapAnchor =
+    activeParkingMapPin?.coords || activeFallbackParkingMapPin?.coords || null;
+  const handleParkingBrowseMarkerTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      if (marker.kind !== "parking") return;
+      const pinKey = String(marker.sourceId || "");
+      const hit = mapPins.find((pin) => pin.key === pinKey);
+      if (!hit) return;
+      setActiveParkingPinKey(hit.key);
+      setActiveLocationKey(hit.group.key);
+      pinZoomCardMode.setActiveCardId(hit.key);
+    },
+    [mapPins, pinZoomCardMode],
+  );
+  const handleFallbackParkingBrowseMarkerTap = useCallback(
+    (marker: MapAdapterMarker) => {
+      if (marker.kind !== "parking") return;
+      const pinKey = String(marker.sourceId || "");
+      const hit = fallbackHostPins.find((pin) => pin.key === pinKey);
+      if (!hit) return;
+      setActiveParkingPinKey(hit.key);
+      fallbackPinZoomCardMode.setActiveCardId(hit.key);
+    },
+    [fallbackHostPins, fallbackPinZoomCardMode],
+  );
   const fallbackMapCenter = useMemo(() => {
     const requestedPin = requestedHostId
       ? fallbackHostPins.find((pin) => pin.hostId === requestedHostId)
       : null;
     return (
-      requestedPin?.coords || fallbackHostPins[0]?.coords || defaultMapCenter
+      requestedPin?.coords ||
+      parkingDistanceCenter ||
+      fallbackHostPins[0]?.coords ||
+      defaultMapCenter
     );
-  }, [fallbackHostPins, requestedHostId]);
+  }, [fallbackHostPins, parkingDistanceCenter, requestedHostId]);
   const mapCenter = useMemo(() => {
     const activeHostLocations = activeLocation
       ? hostLocationsByHostId.get(activeLocation.host.id)
@@ -3277,8 +3571,19 @@ export default function ParkingPassPage() {
       (activeHostLocations && activeHostLocations.length > 0
         ? activeHostLocations[0].coords
         : null);
-    return activeCoords || mapPins[0]?.coords || defaultMapCenter;
-  }, [activeLocation, hostLocationsByHostId, mapPins, parkingCoords]);
+    return (
+      activeCoords ||
+      parkingDistanceCenter ||
+      mapPins[0]?.coords ||
+      defaultMapCenter
+    );
+  }, [
+    activeLocation,
+    hostLocationsByHostId,
+    mapPins,
+    parkingCoords,
+    parkingDistanceCenter,
+  ]);
 
   const parkingTrafficQueryKey = parkingMapBounds
     ? [
@@ -3574,7 +3879,9 @@ export default function ParkingPassPage() {
                       : "Go live + share"}
                 </Button>
               </div>
-              {(truck?.instagramUrl || truck?.facebookPageUrl || truck?.xUrl) && (
+              {(truck?.instagramUrl ||
+                truck?.facebookPageUrl ||
+                truck?.xUrl) && (
                 <div className="flex flex-wrap gap-2">
                   {truck?.instagramUrl && (
                     <Button
@@ -3589,7 +3896,9 @@ export default function ParkingPassPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(truck.facebookPageUrl, "_blank")}
+                      onClick={() =>
+                        window.open(truck.facebookPageUrl, "_blank")
+                      }
                     >
                       Open Facebook
                     </Button>
@@ -5733,13 +6042,56 @@ export default function ParkingPassPage() {
                       <p className="text-[11px] font-semibold text-[color:var(--text-muted)]">
                         City or address
                       </p>
-                      <Input
-                        type="text"
-                        className="pp-field"
-                        placeholder="Austin, TX or 123 Main St"
-                        value={cityQuery}
-                        onChange={(event) => setCityQuery(event.target.value)}
-                      />
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          type="text"
+                          className="pp-field sm:flex-1"
+                          placeholder="Austin, TX or 123 Main St"
+                          value={cityQuery}
+                          onChange={(event) => setCityQuery(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void handleParkingSearchSubmit();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => void handleParkingSearchSubmit()}
+                          disabled={isResolvingParkingLocation}
+                        >
+                          {isResolvingParkingLocation ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Search area
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="w-full justify-center"
+                        onClick={() => void handleUseParkingUserLocation()}
+                        disabled={isResolvingParkingLocation}
+                      >
+                        {isResolvingParkingLocation ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <LocateFixed className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Use my location
+                      </Button>
+                      {parkingDistanceCenter && (
+                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                          Showing nearest parking pass spots first.
+                        </p>
+                      )}
                     </div>
                     <div className="flex sm:hidden items-center gap-2">
                       <Button
@@ -5785,53 +6137,118 @@ export default function ParkingPassPage() {
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                           <div className="relative h-72 w-full bg-slate-100/60">
-                            <GoogleMapPicker
-                              center={fallbackMapCenter}
-                              zoom={parkingMapZoom}
-                              interactionsEnabled={mapInteractionsEnabled}
-                              onBoundsChanged={setParkingMapBounds}
-                              onZoomChanged={setParkingMapZoom}
-                              trafficCells={parkingTrafficCells}
-                              onPinClick={(pinKey) => {
-                                fallbackPinZoomCardMode.setActiveCardId(pinKey);
-                              }}
-                              pins={fallbackHostPinsForRender.map(
-                                ({
-                                  key,
-                                  name,
-                                  coords,
-                                  addressLabel,
-                                  spotImageUrl,
-                                }) =>
+                            {effectiveGoogleMapsApiKey ? (
+                              <GoogleMapSurface
+                                apiKey={effectiveGoogleMapsApiKey}
+                                mapId={effectiveGoogleMapsMapId || undefined}
+                                center={fallbackMapCenter}
+                                zoom={parkingMapZoom}
+                                markers={fallbackParkingBrowseMarkers}
+                                trafficCells={parkingTrafficCells}
+                                showRoadTrafficLayer={false}
+                                userLocation={parkingUserLocation}
+                                isNightTheme={true}
+                                onBoundsChanged={handleParkingMapBoundsChanged}
+                                onZoomChanged={setParkingMapZoom}
+                                onMarkerTap={
+                                  handleFallbackParkingBrowseMarkerTap
+                                }
+                                popupAnchor={
+                                  activeFallbackParkingMapPin?.coords || null
+                                }
+                                onPopupAnchorPosition={
+                                  setParkingMapCalloutAnchorPosition
+                                }
+                              />
+                            ) : (
+                              <GoogleMapPicker
+                                center={fallbackMapCenter}
+                                zoom={parkingMapZoom}
+                                interactionsEnabled={mapInteractionsEnabled}
+                                onBoundsChanged={setParkingMapBounds}
+                                onZoomChanged={setParkingMapZoom}
+                                circleRadiusMetres={
+                                  parkingDistanceCenter ? 1609 : undefined
+                                }
+                                trafficCells={parkingTrafficCells}
+                                onPinClick={(pinKey) => {
+                                  setActiveParkingPinKey(pinKey);
+                                  fallbackPinZoomCardMode.setActiveCardId(
+                                    pinKey,
+                                  );
+                                }}
+                                pins={fallbackHostPinsForRender.map(
                                   ({
                                     key,
-                                    position: coords,
-                                    popup: (
-                                      <div className="space-y-2 text-xs">
-                                        <p className="font-semibold text-orange-600">
-                                          {name}
-                                        </p>
-                                        <p className="text-[color:var(--text-muted)]">
-                                          {addressLabel}
-                                        </p>
-                                        {spotImageUrl && (
-                                          <img
-                                            src={spotImageUrl}
-                                            alt={`${name} parking spot`}
-                                            className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                                          No active parking pass listing is open
-                                          here right now.
-                                        </p>
-                                      </div>
-                                    ),
-                                  }) satisfies MapPickerPin,
+                                    name,
+                                    coords,
+                                    addressLabel,
+                                    spotImageUrl,
+                                  }) =>
+                                    ({
+                                      key,
+                                      position: coords,
+                                      popup: (
+                                        <div className="space-y-2 text-xs">
+                                          <p className="font-semibold text-orange-600">
+                                            {name}
+                                          </p>
+                                          <p className="text-[color:var(--text-muted)]">
+                                            {addressLabel}
+                                          </p>
+                                          {spotImageUrl && (
+                                            <img
+                                              src={spotImageUrl}
+                                              alt={`${name} parking spot`}
+                                              className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                              loading="lazy"
+                                            />
+                                          )}
+                                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                                            No active parking pass listing is
+                                            open here right now.
+                                          </p>
+                                        </div>
+                                      ),
+                                    }) satisfies MapPickerPin,
+                                )}
+                                className="h-full w-full"
+                              />
+                            )}
+                            {effectiveGoogleMapsApiKey &&
+                              activeFallbackParkingMapPin &&
+                              parkingMapCalloutAnchorPosition && (
+                                <div
+                                  className="absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]"
+                                  style={{
+                                    left: parkingMapCalloutAnchorPosition.x,
+                                    top: parkingMapCalloutAnchorPosition.y,
+                                  }}
+                                >
+                                  <div className="map-callout-card max-w-[260px] space-y-2 p-3 text-xs">
+                                    <p className="font-semibold text-foreground">
+                                      {activeFallbackParkingMapPin.name}
+                                    </p>
+                                    <p className="text-[color:var(--text-muted)]">
+                                      {activeFallbackParkingMapPin.addressLabel}
+                                    </p>
+                                    <Button
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() =>
+                                        setLocation(
+                                          `/parking-pass?hostId=${encodeURIComponent(
+                                            activeFallbackParkingMapPin.hostId,
+                                          )}`,
+                                        )
+                                      }
+                                    >
+                                      Check parking pass
+                                    </Button>
+                                  </div>
+                                  <div className="map-callout-tail" />
+                                </div>
                               )}
-                              className="h-full w-full"
-                            />
                           </div>
                           <div className="border-t border-[color:var(--border-subtle)] px-4 py-2 text-xs text-[color:var(--text-muted)]">
                             {fallbackPinZoomCardMode.showCards
@@ -5854,275 +6271,363 @@ export default function ParkingPassPage() {
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                         <div className="relative h-72 w-full bg-slate-100/60">
-                          <GoogleMapPicker
-                            center={mapCenter}
-                            zoom={parkingMapZoom}
-                            interactionsEnabled={mapInteractionsEnabled}
-                            onBoundsChanged={setParkingMapBounds}
-                            onZoomChanged={setParkingMapZoom}
-                            trafficCells={parkingTrafficCells}
-                            onPinClick={(pinKey) => {
-                              const hit = mapPins.find((p) => p.key === pinKey);
-                              if (hit) {
-                                pinZoomCardMode.setActiveCardId(hit.key);
-                                setActiveLocationKey(hit.group.key);
+                          {effectiveGoogleMapsApiKey ? (
+                            <GoogleMapSurface
+                              apiKey={effectiveGoogleMapsApiKey}
+                              mapId={effectiveGoogleMapsMapId || undefined}
+                              center={mapCenter}
+                              zoom={parkingMapZoom}
+                              markers={parkingBrowseMarkers}
+                              trafficCells={parkingTrafficCells}
+                              showRoadTrafficLayer={false}
+                              userLocation={parkingUserLocation}
+                              isNightTheme={true}
+                              onBoundsChanged={handleParkingMapBoundsChanged}
+                              onZoomChanged={setParkingMapZoom}
+                              onMarkerTap={handleParkingBrowseMarkerTap}
+                              popupAnchor={activeParkingMapAnchor}
+                              onPopupAnchorPosition={
+                                setParkingMapCalloutAnchorPosition
                               }
-                            }}
-                            pins={mapPinsForRender.map(
-                              ({
-                                key,
-                                group,
-                                coords,
-                                addressLabel,
-                                spotImageUrl,
-                              }) => {
-                                const effectiveDateKey =
-                                  group.key === activeLocationKey
-                                    ? selectedDate
-                                    : nextBookableDateByGroup.get(group.key);
-                                const listingForDate = effectiveDateKey
-                                  ? group.listings.find(
-                                      (listing) =>
-                                        getListingDateKey(listing.date) ===
-                                        effectiveDateKey,
-                                    )
-                                  : null;
-                                const fallbackDateKey =
-                                  effectiveDateKey || todayDateKey;
-                                const displayListing =
-                                  listingForDate ||
-                                  group.listings.find(
-                                    (listing) =>
-                                      getListingDateKey(listing.date) >=
-                                      fallbackDateKey,
-                                  ) ||
-                                  group.listings[0] ||
-                                  null;
-                                const bookingListing =
-                                  listingForDate || displayListing;
-                                const paymentsReady = Boolean(
-                                  platformPaymentsReady,
+                            />
+                          ) : (
+                            <GoogleMapPicker
+                              center={mapCenter}
+                              zoom={parkingMapZoom}
+                              interactionsEnabled={mapInteractionsEnabled}
+                              onBoundsChanged={setParkingMapBounds}
+                              onZoomChanged={setParkingMapZoom}
+                              circleRadiusMetres={
+                                parkingDistanceCenter ? 1609 : undefined
+                              }
+                              trafficCells={parkingTrafficCells}
+                              onPinClick={(pinKey) => {
+                                const hit = mapPins.find(
+                                  (p) => p.key === pinKey,
                                 );
-                                const bookings = Array.isArray(
-                                  bookingListing?.bookings,
-                                )
-                                  ? (bookingListing?.bookings ?? [])
-                                  : [];
-                                const slotOptions = listingForDate
-                                  ? buildSlotOptions(listingForDate)
-                                  : [];
-                                const selectedSlots = listingForDate
-                                  ? selectedSlotsByListing[listingForDate.id] ||
-                                    []
-                                  : [];
-                                const selectedTotalCents = selectedSlots.reduce(
-                                  (sum, slot) => {
-                                    const price =
-                                      slotOptions.find(
-                                        (item) => item.type === slot,
-                                      )?.priceCents || 0;
-                                    return sum + price;
-                                  },
-                                  0,
-                                );
-                                const selectedFeeCents =
-                                  getFeeCentsForSlots(selectedSlots);
-                                const selectedTotalWithFee =
-                                  selectedTotalCents > 0
-                                    ? selectedTotalCents + selectedFeeCents
-                                    : 0;
-                                const availability = listingForDate
-                                  ? listingForDate.availableSpotNumbers
-                                    ? listingForDate.availableSpotNumbers
-                                        .length > 0
-                                      ? `Open spots: ${listingForDate.availableSpotNumbers.join(
-                                          ", ",
-                                        )}`
-                                      : "Fully booked"
-                                    : listingForDate.status === "open"
-                                      ? "Open"
-                                      : "Closed"
-                                  : "Choose this spot to see available dates";
-                                const hasAvailability = Boolean(
-                                  listingForDate &&
-                                  listingHasAvailability(listingForDate),
-                                );
-                                const canBook = Boolean(
-                                  paymentsReady && hasAvailability,
-                                );
-
-                                const pinPopup = (
-                                  <div className="space-y-2 text-xs">
-                                    <p className="font-semibold text-orange-600">
-                                      {group.host.businessName}
-                                    </p>
-                                    <p className="text-[color:var(--text-muted)]">
-                                      {addressLabel}
-                                    </p>
-                                    {spotImageUrl && (
-                                      <img
-                                        src={spotImageUrl}
-                                        alt={`${group.host.businessName} parking spot`}
-                                        className="h-24 w-full rounded-lg border border-border/50 object-cover"
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    {displayListing && (
-                                      <p className="text-[color:var(--text-muted)]">
-                                        {formatListingDateLocal(
-                                          displayListing.date,
-                                          "EEE, MMM d",
-                                        )}{" "}
-                                        -{" "}
-                                        {displayListing.startTime === "00:00" &&
-                                        displayListing.endTime === "23:59"
-                                          ? "Any time"
-                                          : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                      </p>
-                                    )}
-                                    {!listingForDate && (
-                                      <p className="text-[11px] text-amber-700">
-                                        {group.key === activeLocationKey
-                                          ? `No slots on ${format(
-                                              new Date(
-                                                `${selectedDate}T00:00:00`,
-                                              ),
-                                              "EEE, MMM d",
-                                            )}.`
-                                          : "No open dates right now."}
-                                      </p>
-                                    )}
-                                    <p className="text-[color:var(--text-muted)]">
-                                      {availability}
-                                    </p>
-                                    {(() => {
-                                      const lastConfirmedAt =
-                                        listingForDate?.lastConfirmedAt ??
-                                        displayListing?.lastConfirmedAt ??
-                                        null;
-                                      const relative = lastConfirmedAt
-                                        ? formatRelativeTime(lastConfirmedAt)
-                                        : null;
-                                      if (!relative) return null;
-                                      return (
-                                        <p className="text-[11px] text-[color:var(--text-muted)]">
-                                          Last confirmed: {relative}
-                                        </p>
-                                      );
-                                    })()}
-                                    {listingForDate &&
-                                    slotOptions.length > 0 ? (
-                                      <div className="space-y-2">
-                                        <div className="grid grid-cols-2 gap-2">
-                                          {slotOptions.map((slot) => {
-                                            const feeCents =
-                                              getFeeCentsForSlots([slot.type]);
-                                            const totalPrice =
-                                              ((slot.priceCents || 0) +
-                                                feeCents) /
-                                              100;
-                                            const isSelected =
-                                              selectedSlots.includes(slot.type);
-                                            return (
-                                              <Button
-                                                key={slot.type}
-                                                variant={
-                                                  isSelected
-                                                    ? "default"
-                                                    : "outline"
-                                                }
-                                                size="sm"
-                                                className="justify-between text-[11px]"
-                                                disabled={!canBook}
-                                                onClick={() =>
-                                                  handleSelect(
-                                                    listingForDate,
-                                                    slot.type,
-                                                  )
-                                                }
-                                              >
-                                                <span>{slot.label}</span>
-                                                <span>
-                                                  ${totalPrice.toFixed(2)}
-                                                </span>
-                                              </Button>
-                                            );
-                                          })}
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[11px] text-[color:var(--text-muted)]">
-                                            Includes a $10/day MealScout fee.
-                                            Cleanup time is 30 minutes after the
-                                            end time.
-                                          </span>
-                                          <Button
-                                            size="sm"
-                                            onClick={() =>
-                                              handleBookSelected(listingForDate)
-                                            }
-                                            disabled={
-                                              !paymentsReady ||
-                                              selectedSlots.length === 0
-                                            }
-                                          >
-                                            Book spot
-                                            {selectedTotalWithFee > 0 && (
-                                              <span className="ml-2 text-[11px]">
-                                                $
-                                                {(
-                                                  (selectedTotalWithFee || 0) /
-                                                  100
-                                                ).toFixed(2)}
-                                              </span>
-                                            )}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <p className="text-[11px] text-[color:var(--text-muted)]">
-                                        Choose a day with availability.
-                                      </p>
-                                    )}
-                                    {!platformPaymentsReady && (
-                                      <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
-                                        Payments are temporarily unavailable.
-                                      </p>
-                                    )}
-                                    {bookings.length > 0 ? (
-                                      <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
-                                        {bookings.slice(0, 3).map((booking) => (
-                                          <div
-                                            key={`${booking.truckId}-${booking.slotType || "slot"}`}
-                                          >
-                                            {booking.truckName}
-                                            {booking.slotType
-                                              ? ` - ${formatSlotLabel(
-                                                  booking.slotType,
-                                                )}`
-                                              : ""}
-                                          </div>
-                                        ))}
-                                        {bookings.length > 3 && (
-                                          <div>+{bookings.length - 3} more</div>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
-                                        No bookings yet
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                                return {
+                                if (hit) {
+                                  setActiveParkingPinKey(hit.key);
+                                  pinZoomCardMode.setActiveCardId(hit.key);
+                                  setActiveLocationKey(hit.group.key);
+                                }
+                              }}
+                              pins={mapPinsForRender.map(
+                                ({
                                   key,
-                                  position: coords,
-                                  occupied: bookings.length > 0,
-                                  popup: pinPopup,
-                                } satisfies MapPickerPin;
-                              },
+                                  group,
+                                  coords,
+                                  addressLabel,
+                                  spotImageUrl,
+                                }) => {
+                                  const effectiveDateKey =
+                                    group.key === activeLocationKey
+                                      ? selectedDate
+                                      : nextBookableDateByGroup.get(group.key);
+                                  const listingForDate = effectiveDateKey
+                                    ? group.listings.find(
+                                        (listing) =>
+                                          getListingDateKey(listing.date) ===
+                                          effectiveDateKey,
+                                      )
+                                    : null;
+                                  const fallbackDateKey =
+                                    effectiveDateKey || todayDateKey;
+                                  const displayListing =
+                                    listingForDate ||
+                                    group.listings.find(
+                                      (listing) =>
+                                        getListingDateKey(listing.date) >=
+                                        fallbackDateKey,
+                                    ) ||
+                                    group.listings[0] ||
+                                    null;
+                                  const bookingListing =
+                                    listingForDate || displayListing;
+                                  const paymentsReady = Boolean(
+                                    platformPaymentsReady,
+                                  );
+                                  const bookings = Array.isArray(
+                                    bookingListing?.bookings,
+                                  )
+                                    ? (bookingListing?.bookings ?? [])
+                                    : [];
+                                  const slotOptions = listingForDate
+                                    ? buildSlotOptions(listingForDate)
+                                    : [];
+                                  const selectedSlots = listingForDate
+                                    ? selectedSlotsByListing[
+                                        listingForDate.id
+                                      ] || []
+                                    : [];
+                                  const selectedTotalCents =
+                                    selectedSlots.reduce((sum, slot) => {
+                                      const price =
+                                        slotOptions.find(
+                                          (item) => item.type === slot,
+                                        )?.priceCents || 0;
+                                      return sum + price;
+                                    }, 0);
+                                  const selectedFeeCents =
+                                    getFeeCentsForSlots(selectedSlots);
+                                  const selectedTotalWithFee =
+                                    selectedTotalCents > 0
+                                      ? selectedTotalCents + selectedFeeCents
+                                      : 0;
+                                  const availability = listingForDate
+                                    ? listingForDate.availableSpotNumbers
+                                      ? listingForDate.availableSpotNumbers
+                                          .length > 0
+                                        ? `Open spots: ${listingForDate.availableSpotNumbers.join(
+                                            ", ",
+                                          )}`
+                                        : "Fully booked"
+                                      : listingForDate.status === "open"
+                                        ? "Open"
+                                        : "Closed"
+                                    : "Choose this spot to see available dates";
+                                  const hasAvailability = Boolean(
+                                    listingForDate &&
+                                    listingHasAvailability(listingForDate),
+                                  );
+                                  const canBook = Boolean(
+                                    paymentsReady && hasAvailability,
+                                  );
+
+                                  const pinPopup = (
+                                    <div className="space-y-2 text-xs">
+                                      <p className="font-semibold text-orange-600">
+                                        {group.host.businessName}
+                                      </p>
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {addressLabel}
+                                      </p>
+                                      {spotImageUrl && (
+                                        <img
+                                          src={spotImageUrl}
+                                          alt={`${group.host.businessName} parking spot`}
+                                          className="h-24 w-full rounded-lg border border-border/50 object-cover"
+                                          loading="lazy"
+                                        />
+                                      )}
+                                      {displayListing && (
+                                        <p className="text-[color:var(--text-muted)]">
+                                          {formatListingDateLocal(
+                                            displayListing.date,
+                                            "EEE, MMM d",
+                                          )}{" "}
+                                          -{" "}
+                                          {displayListing.startTime ===
+                                            "00:00" &&
+                                          displayListing.endTime === "23:59"
+                                            ? "Any time"
+                                            : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                        </p>
+                                      )}
+                                      {!listingForDate && (
+                                        <p className="text-[11px] text-amber-700">
+                                          {group.key === activeLocationKey
+                                            ? `No slots on ${format(
+                                                new Date(
+                                                  `${selectedDate}T00:00:00`,
+                                                ),
+                                                "EEE, MMM d",
+                                              )}.`
+                                            : "No open dates right now."}
+                                        </p>
+                                      )}
+                                      <p className="text-[color:var(--text-muted)]">
+                                        {availability}
+                                      </p>
+                                      {(() => {
+                                        const lastConfirmedAt =
+                                          listingForDate?.lastConfirmedAt ??
+                                          displayListing?.lastConfirmedAt ??
+                                          null;
+                                        const relative = lastConfirmedAt
+                                          ? formatRelativeTime(lastConfirmedAt)
+                                          : null;
+                                        if (!relative) return null;
+                                        return (
+                                          <p className="text-[11px] text-[color:var(--text-muted)]">
+                                            Last confirmed: {relative}
+                                          </p>
+                                        );
+                                      })()}
+                                      {listingForDate &&
+                                      slotOptions.length > 0 ? (
+                                        <div className="space-y-2">
+                                          <div className="grid grid-cols-2 gap-2">
+                                            {slotOptions.map((slot) => {
+                                              const feeCents =
+                                                getFeeCentsForSlots([
+                                                  slot.type,
+                                                ]);
+                                              const totalPrice =
+                                                ((slot.priceCents || 0) +
+                                                  feeCents) /
+                                                100;
+                                              const isSelected =
+                                                selectedSlots.includes(
+                                                  slot.type,
+                                                );
+                                              return (
+                                                <Button
+                                                  key={slot.type}
+                                                  variant={
+                                                    isSelected
+                                                      ? "default"
+                                                      : "outline"
+                                                  }
+                                                  size="sm"
+                                                  className="justify-between text-[11px]"
+                                                  disabled={!canBook}
+                                                  onClick={() =>
+                                                    handleSelect(
+                                                      listingForDate,
+                                                      slot.type,
+                                                    )
+                                                  }
+                                                >
+                                                  <span>{slot.label}</span>
+                                                  <span>
+                                                    ${totalPrice.toFixed(2)}
+                                                  </span>
+                                                </Button>
+                                              );
+                                            })}
+                                          </div>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[11px] text-[color:var(--text-muted)]">
+                                              Includes a $10/day MealScout fee.
+                                              Cleanup time is 30 minutes after
+                                              the end time.
+                                            </span>
+                                            <Button
+                                              size="sm"
+                                              onClick={() =>
+                                                handleBookSelected(
+                                                  listingForDate,
+                                                )
+                                              }
+                                              disabled={
+                                                !paymentsReady ||
+                                                selectedSlots.length === 0
+                                              }
+                                            >
+                                              Book spot
+                                              {selectedTotalWithFee > 0 && (
+                                                <span className="ml-2 text-[11px]">
+                                                  $
+                                                  {(
+                                                    (selectedTotalWithFee ||
+                                                      0) / 100
+                                                  ).toFixed(2)}
+                                                </span>
+                                              )}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                                          Choose a day with availability.
+                                        </p>
+                                      )}
+                                      {!platformPaymentsReady && (
+                                        <p className="pt-1 text-[11px] text-[color:var(--status-error)]">
+                                          Payments are temporarily unavailable.
+                                        </p>
+                                      )}
+                                      {bookings.length > 0 ? (
+                                        <div className="pt-1 text-[11px] text-[color:var(--text-muted)] space-y-1">
+                                          {bookings
+                                            .slice(0, 3)
+                                            .map((booking) => (
+                                              <div
+                                                key={`${booking.truckId}-${booking.slotType || "slot"}`}
+                                              >
+                                                {booking.truckName}
+                                                {booking.slotType
+                                                  ? ` - ${formatSlotLabel(
+                                                      booking.slotType,
+                                                    )}`
+                                                  : ""}
+                                              </div>
+                                            ))}
+                                          {bookings.length > 3 && (
+                                            <div>
+                                              +{bookings.length - 3} more
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <p className="pt-1 text-[11px] text-[color:var(--text-muted)]">
+                                          No bookings yet
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                  return {
+                                    key,
+                                    position: coords,
+                                    occupied: bookings.length > 0,
+                                    popup: pinPopup,
+                                  } satisfies MapPickerPin;
+                                },
+                              )}
+                              className="h-full w-full"
+                            />
+                          )}
+                          {effectiveGoogleMapsApiKey &&
+                            activeParkingMapPin &&
+                            parkingMapCalloutAnchorPosition && (
+                              <div
+                                className="absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]"
+                                style={{
+                                  left: parkingMapCalloutAnchorPosition.x,
+                                  top: parkingMapCalloutAnchorPosition.y,
+                                }}
+                              >
+                                <div className="map-callout-card max-w-[280px] space-y-2 p-3 text-xs">
+                                  <p className="font-semibold text-foreground">
+                                    {
+                                      activeParkingMapPin.group.host
+                                        .businessName
+                                    }
+                                  </p>
+                                  <p className="text-[color:var(--text-muted)]">
+                                    {activeParkingMapPin.addressLabel}
+                                  </p>
+                                  {(() => {
+                                    const nextDate =
+                                      nextBookableDateByGroup.get(
+                                        activeParkingMapPin.group.key,
+                                      ) || selectedDate;
+                                    return (
+                                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                                        Parking pass availability for{" "}
+                                        {format(
+                                          new Date(`${nextDate}T00:00:00`),
+                                          "EEE, MMM d",
+                                        )}
+                                      </p>
+                                    );
+                                  })()}
+                                  <Button
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() =>
+                                      focusLocation(
+                                        activeParkingMapPin.group.key,
+                                        true,
+                                      )
+                                    }
+                                  >
+                                    Book parking pass
+                                  </Button>
+                                </div>
+                                <div className="map-callout-tail" />
+                              </div>
                             )}
-                            className="h-full w-full"
-                          />
                           {mapPins.length === 0 && (
                             <div className="absolute inset-0 flex items-center justify-center text-sm text-[color:var(--text-muted)] pointer-events-none">
                               No mappable locations yet.
@@ -6137,336 +6642,344 @@ export default function ParkingPassPage() {
                       </div>
                       {!pinZoomCardMode.showCards && (
                         <div className="space-y-2">
-                        {filteredLocations.map((group) => {
-                          const effectiveDateKey =
-                            group.key === activeLocationKey
-                              ? selectedDate
-                              : nextBookableDateByGroup.get(group.key);
-                          const groupDateKeys = Array.from(
-                            new Set(
-                              group.listings
-                                .filter((listing) =>
-                                  listingDayIsSelectable(listing),
+                          {filteredLocations.map((group) => {
+                            const effectiveDateKey =
+                              group.key === activeLocationKey
+                                ? selectedDate
+                                : nextBookableDateByGroup.get(group.key);
+                            const groupDateKeys = Array.from(
+                              new Set(
+                                group.listings
+                                  .filter((listing) =>
+                                    listingDayIsSelectable(listing),
+                                  )
+                                  .map((listing) =>
+                                    getListingDateKey(listing.date),
+                                  )
+                                  .filter(Boolean),
+                              ),
+                            ).sort();
+                            const selectedGroupDateKey =
+                              effectiveDateKey ||
+                              nextBookableDateByGroup.get(group.key) ||
+                              groupDateKeys[0] ||
+                              selectedDate;
+                            const listingForDate = effectiveDateKey
+                              ? group.listings.find(
+                                  (listing) =>
+                                    getListingDateKey(listing.date) ===
+                                    effectiveDateKey,
                                 )
-                                .map((listing) =>
-                                  getListingDateKey(listing.date),
-                                )
-                                .filter(Boolean),
-                            ),
-                          ).sort();
-                          const selectedGroupDateKey =
-                            effectiveDateKey ||
-                            nextBookableDateByGroup.get(group.key) ||
-                            groupDateKeys[0] ||
-                            selectedDate;
-                          const listingForDate = effectiveDateKey
-                            ? group.listings.find(
+                              : null;
+                            const fallbackDateKey =
+                              effectiveDateKey || todayDateKey;
+                            const displayListing =
+                              listingForDate ||
+                              group.listings.find(
                                 (listing) =>
-                                  getListingDateKey(listing.date) ===
-                                  effectiveDateKey,
-                              )
-                            : null;
-                          const fallbackDateKey =
-                            effectiveDateKey || todayDateKey;
-                          const displayListing =
-                            listingForDate ||
-                            group.listings.find(
-                              (listing) =>
-                                getListingDateKey(listing.date) >=
-                                fallbackDateKey,
-                            ) ||
-                            group.listings[0] ||
-                            null;
-                          const bookingListing =
-                            listingForDate || displayListing;
-                          const paymentsReady = Boolean(platformPaymentsReady);
-                          const slotOptions = listingForDate
-                            ? buildSlotOptions(listingForDate)
-                            : [];
-                          const selectedSlots = listingForDate
-                            ? selectedSlotsByListing[listingForDate.id] || []
-                            : [];
-                          const selectedTotalCents = selectedSlots.reduce(
-                            (sum, slot) => {
-                              const price =
-                                slotOptions.find((item) => item.type === slot)
-                                  ?.priceCents || 0;
-                              return sum + price;
-                            },
-                            0,
-                          );
-                          const selectedFeeCents =
-                            getFeeCentsForSlots(selectedSlots);
-                          const selectedTotalWithFee =
-                            selectedTotalCents > 0
-                              ? selectedTotalCents + selectedFeeCents
-                              : 0;
-                          const hasAvailability = Boolean(
-                            listingForDate &&
-                            listingHasAvailability(listingForDate),
-                          );
-                          const canBook = Boolean(
-                            paymentsReady && hasAvailability,
-                          );
-                          const bookings = Array.isArray(
-                            bookingListing?.bookings,
-                          )
-                            ? (bookingListing?.bookings ?? [])
-                            : [];
-                          const hostLocations = hostLocationsByHostId.get(
-                            group.host.id,
-                          );
-                          const hostPreviewAddress =
-                            (hostLocations && hostLocations.length > 0
-                              ? hostLocations[0].addressLabel
-                              : null) ||
-                            buildAddressLabel(
-                              group.host.address,
-                              group.host.city ?? "",
-                              group.host.state ?? "",
+                                  getListingDateKey(listing.date) >=
+                                  fallbackDateKey,
+                              ) ||
+                              group.listings[0] ||
+                              null;
+                            const bookingListing =
+                              listingForDate || displayListing;
+                            const paymentsReady = Boolean(
+                              platformPaymentsReady,
                             );
-                          const hostCardPhotoUrl =
-                            group.host.spotImageUrl || null;
-                          const hostMapPreviewUrl = buildGoogleLocationPhotoUrl(
-                            hostPreviewAddress || null,
-                          );
-                          const hostPlaceImageUrl =
-                            hostCardPhotoUrl ||
-                            buildGooglePlaceImageUrl(hostPreviewAddress || null) ||
-                            hostMapPreviewUrl;
-                          const isActive = activeLocation?.key === group.key;
-                          const shareDate = displayListing
-                            ? getListingDateKey(displayListing.date)
-                            : selectedDate;
-                          const shareListingId = displayListing?.id || "";
+                            const slotOptions = listingForDate
+                              ? buildSlotOptions(listingForDate)
+                              : [];
+                            const selectedSlots = listingForDate
+                              ? selectedSlotsByListing[listingForDate.id] || []
+                              : [];
+                            const selectedTotalCents = selectedSlots.reduce(
+                              (sum, slot) => {
+                                const price =
+                                  slotOptions.find((item) => item.type === slot)
+                                    ?.priceCents || 0;
+                                return sum + price;
+                              },
+                              0,
+                            );
+                            const selectedFeeCents =
+                              getFeeCentsForSlots(selectedSlots);
+                            const selectedTotalWithFee =
+                              selectedTotalCents > 0
+                                ? selectedTotalCents + selectedFeeCents
+                                : 0;
+                            const hasAvailability = Boolean(
+                              listingForDate &&
+                              listingHasAvailability(listingForDate),
+                            );
+                            const canBook = Boolean(
+                              paymentsReady && hasAvailability,
+                            );
+                            const bookings = Array.isArray(
+                              bookingListing?.bookings,
+                            )
+                              ? (bookingListing?.bookings ?? [])
+                              : [];
+                            const hostLocations = hostLocationsByHostId.get(
+                              group.host.id,
+                            );
+                            const hostPreviewAddress =
+                              (hostLocations && hostLocations.length > 0
+                                ? hostLocations[0].addressLabel
+                                : null) ||
+                              buildAddressLabel(
+                                group.host.address,
+                                group.host.city ?? "",
+                                group.host.state ?? "",
+                              );
+                            const hostCardPhotoUrl =
+                              group.host.spotImageUrl || null;
+                            const hostMapPreviewUrl =
+                              buildGoogleLocationPhotoUrl(
+                                hostPreviewAddress || null,
+                              );
+                            const hostPlaceImageUrl =
+                              hostCardPhotoUrl ||
+                              buildGooglePlaceImageUrl(
+                                hostPreviewAddress || null,
+                              ) ||
+                              hostMapPreviewUrl;
+                            const isActive = activeLocation?.key === group.key;
+                            const shareDate = displayListing
+                              ? getListingDateKey(displayListing.date)
+                              : selectedDate;
+                            const shareListingId = displayListing?.id || "";
 
-                          return (
-                            <div
-                              key={group.key}
-                              role="button"
-                              tabIndex={0}
-                              aria-pressed={isActive}
-                              onClick={() => focusLocation(group.key)}
-                              onKeyDown={(keyboardEvent) => {
-                                if (
-                                  keyboardEvent.key === "Enter" ||
-                                  keyboardEvent.key === " "
-                                ) {
-                                  keyboardEvent.preventDefault();
-                                  setActiveLocationKey(group.key);
-                                }
-                              }}
-                              className={`w-full rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
-                                isActive
-                                  ? "border-orange-300 pp-glass ring-2 ring-orange-200"
-                                  : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[15px] font-semibold text-orange-500 font-display">
-                                  {group.host.businessName}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    focusLocation(group.key);
-                                  }}
-                                >
-                                  {isActive ? "Selected" : "Select spot"}
-                                </Button>
-                              </div>
-                              {isActive && groupDateKeys.length > 1 && (
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] text-[color:var(--text-muted)]">
-                                    Booking date
+                            return (
+                              <div
+                                key={group.key}
+                                role="button"
+                                tabIndex={0}
+                                aria-pressed={isActive}
+                                onClick={() => focusLocation(group.key)}
+                                onKeyDown={(keyboardEvent) => {
+                                  if (
+                                    keyboardEvent.key === "Enter" ||
+                                    keyboardEvent.key === " "
+                                  ) {
+                                    keyboardEvent.preventDefault();
+                                    setActiveLocationKey(group.key);
+                                  }
+                                }}
+                                className={`w-full rounded-2xl border px-4 py-3 space-y-2 transition cursor-pointer shadow-clean ${
+                                  isActive
+                                    ? "border-orange-300 pp-glass ring-2 ring-orange-200"
+                                    : "border-[color:var(--border-subtle)] pp-glass-muted hover:opacity-95"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[15px] font-semibold text-orange-500 font-display">
+                                    {group.host.businessName}
                                   </span>
-                                  <select
-                                    className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
-                                    value={selectedGroupDateKey}
-                                    onClick={(event) => event.stopPropagation()}
-                                    onChange={(event) => {
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(event) => {
                                       event.stopPropagation();
-                                      setSelectedDate(event.target.value);
                                       focusLocation(group.key);
                                     }}
                                   >
-                                    {groupDateKeys.slice(0, 14).map((key) => (
-                                      <option key={key} value={key}>
-                                        {format(
-                                          new Date(`${key}T00:00:00`),
-                                          "EEE, MMM d",
-                                        )}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    {isActive ? "Selected" : "Select spot"}
+                                  </Button>
                                 </div>
-                              )}
-                              <div className="flex items-start gap-3">
-                                <div className="min-w-0 flex-1 text-xs text-slate-700 space-y-1">
-                                  <p>{group.host.address}</p>
-                                  {displayListing && (
-                                    <p>
-                                      {displayListing.startTime === "00:00" &&
-                                      displayListing.endTime === "23:59"
-                                        ? "Any time"
-                                        : `${displayListing.startTime} - ${displayListing.endTime}`}
-                                    </p>
-                                  )}
-                                  {!listingForDate && (
-                                    <p className="text-[11px] text-amber-700">
-                                      {effectiveDateKey
-                                        ? `No slots on ${format(
-                                            new Date(
-                                              `${effectiveDateKey}T00:00:00`,
-                                            ),
+                                {isActive && groupDateKeys.length > 1 && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-[color:var(--text-muted)]">
+                                      Booking date
+                                    </span>
+                                    <select
+                                      className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[color:var(--text-primary)]"
+                                      value={selectedGroupDateKey}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      onChange={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedDate(event.target.value);
+                                        focusLocation(group.key);
+                                      }}
+                                    >
+                                      {groupDateKeys.slice(0, 14).map((key) => (
+                                        <option key={key} value={key}>
+                                          {format(
+                                            new Date(`${key}T00:00:00`),
                                             "EEE, MMM d",
-                                          )}.`
-                                        : "No open dates right now."}
-                                    </p>
-                                  )}
-                                  {listingForDate?.availableSpotNumbers && (
-                                    <p className="text-[11px] text-[color:var(--text-muted)]">
-                                      {listingForDate.availableSpotNumbers
-                                        .length > 0
-                                        ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
-                                        : "Fully booked"}
-                                    </p>
-                                  )}
-                                  {bookings.length > 0 ? (
-                                    <div className="text-[11px] text-[color:var(--text-muted)]">
-                                      Booked trucks:{" "}
-                                      {bookings
-                                        .slice(0, 2)
-                                        .map((booking) => booking.truckName)
-                                        .join(", ")}
-                                      {bookings.length > 2
-                                        ? ` +${bookings.length - 2} more`
-                                        : ""}
-                                    </div>
-                                  ) : (
-                                    <div className="text-[11px] text-[color:var(--text-muted)]">
-                                      No bookings yet
-                                    </div>
+                                          )}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-3">
+                                  <div className="min-w-0 flex-1 text-xs text-slate-700 space-y-1">
+                                    <p>{group.host.address}</p>
+                                    {displayListing && (
+                                      <p>
+                                        {displayListing.startTime === "00:00" &&
+                                        displayListing.endTime === "23:59"
+                                          ? "Any time"
+                                          : `${displayListing.startTime} - ${displayListing.endTime}`}
+                                      </p>
+                                    )}
+                                    {!listingForDate && (
+                                      <p className="text-[11px] text-amber-700">
+                                        {effectiveDateKey
+                                          ? `No slots on ${format(
+                                              new Date(
+                                                `${effectiveDateKey}T00:00:00`,
+                                              ),
+                                              "EEE, MMM d",
+                                            )}.`
+                                          : "No open dates right now."}
+                                      </p>
+                                    )}
+                                    {listingForDate?.availableSpotNumbers && (
+                                      <p className="text-[11px] text-[color:var(--text-muted)]">
+                                        {listingForDate.availableSpotNumbers
+                                          .length > 0
+                                          ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
+                                          : "Fully booked"}
+                                      </p>
+                                    )}
+                                    {bookings.length > 0 ? (
+                                      <div className="text-[11px] text-[color:var(--text-muted)]">
+                                        Booked trucks:{" "}
+                                        {bookings
+                                          .slice(0, 2)
+                                          .map((booking) => booking.truckName)
+                                          .join(", ")}
+                                        {bookings.length > 2
+                                          ? ` +${bookings.length - 2} more`
+                                          : ""}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[11px] text-[color:var(--text-muted)]">
+                                        No bookings yet
+                                      </div>
+                                    )}
+                                  </div>
+                                  {!isActive && hostMapPreviewUrl && (
+                                    <img
+                                      src={hostMapPreviewUrl}
+                                      alt={`${group.host.businessName} map snapshot`}
+                                      className="h-24 w-28 shrink-0 rounded-xl border border-border/60 object-cover"
+                                      loading="lazy"
+                                    />
                                   )}
                                 </div>
-                                {!isActive && hostMapPreviewUrl && (
+                                {shareListingId && (
+                                  <div>
+                                    <ShareButton
+                                      url={`/parking-pass?date=${encodeURIComponent(
+                                        shareDate,
+                                      )}&pass=${shareListingId}`}
+                                      title={`Parking Pass at ${group.host.businessName}`}
+                                      description={`${group.host.address}${
+                                        group.host.city
+                                          ? `, ${group.host.city}`
+                                          : ""
+                                      }${group.host.state ? `, ${group.host.state}` : ""}`}
+                                      size="sm"
+                                      variant="outline"
+                                    />
+                                  </div>
+                                )}
+                                {!isActive && hostPlaceImageUrl && (
                                   <img
-                                    src={hostMapPreviewUrl}
-                                    alt={`${group.host.businessName} map snapshot`}
-                                    className="h-24 w-28 shrink-0 rounded-xl border border-border/60 object-cover"
+                                    src={hostPlaceImageUrl}
+                                    alt={`${group.host.businessName} place image`}
+                                    className="h-28 w-full rounded-xl border border-border/60 object-cover"
                                     loading="lazy"
                                   />
                                 )}
-                              </div>
-                              {shareListingId && (
-                                <div>
-                                  <ShareButton
-                                    url={`/parking-pass?date=${encodeURIComponent(
-                                      shareDate,
-                                    )}&pass=${shareListingId}`}
-                                    title={`Parking Pass at ${group.host.businessName}`}
-                                    description={`${group.host.address}${
-                                      group.host.city
-                                        ? `, ${group.host.city}`
-                                        : ""
-                                    }${group.host.state ? `, ${group.host.state}` : ""}`}
-                                    size="sm"
-                                    variant="outline"
-                                  />
-                                </div>
-                              )}
-                              {!isActive && hostPlaceImageUrl && (
-                                <img
-                                  src={hostPlaceImageUrl}
-                                  alt={`${group.host.businessName} place image`}
-                                  className="h-28 w-full rounded-xl border border-border/60 object-cover"
-                                  loading="lazy"
-                                />
-                              )}
-                              {isActive &&
-                                listingForDate &&
-                                slotOptions.length > 0 && (
-                                  <div className="grid grid-cols-2 gap-2 pt-1">
-                                    {slotOptions.map((slot) => {
-                                      const feeCents = getFeeCentsForSlots([
-                                        slot.type,
-                                      ]);
-                                      const totalPrice =
-                                        ((slot.priceCents || 0) + feeCents) /
-                                        100;
-                                      const isSelected = selectedSlots.includes(
-                                        slot.type,
-                                      );
-                                      return (
-                                        <Button
-                                          key={slot.type}
-                                          variant={
-                                            isSelected ? "default" : "outline"
-                                          }
-                                          size="sm"
-                                          className="justify-between"
-                                          disabled={!canBook}
-                                          onClick={() =>
-                                            handleSelect(
-                                              listingForDate,
-                                              slot.type,
-                                            )
-                                          }
-                                        >
-                                          <span>{slot.label}</span>
-                                          <span>${totalPrice.toFixed(2)}</span>
-                                        </Button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              {hasAvailability ? (
-                                <div className="flex items-center justify-between gap-3 pt-2">
-                                  <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    Includes a $10/day MealScout fee per host.
-                                    Cleanup time is 30 minutes after the end
-                                    time.
-                                  </p>
-                                  {isActive && listingForDate && (
-                                    <Button
-                                      size="sm"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleBookSelected(listingForDate);
-                                      }}
-                                      disabled={selectedSlots.length === 0}
-                                    >
-                                      Add to cart
-                                      {selectedTotalWithFee > 0 && (
-                                        <span className="ml-2 text-xs">
-                                          $
-                                          {(
-                                            (selectedTotalWithFee || 0) / 100
-                                          ).toFixed(2)}
-                                        </span>
-                                      )}
-                                    </Button>
+                                {isActive &&
+                                  listingForDate &&
+                                  slotOptions.length > 0 && (
+                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                      {slotOptions.map((slot) => {
+                                        const feeCents = getFeeCentsForSlots([
+                                          slot.type,
+                                        ]);
+                                        const totalPrice =
+                                          ((slot.priceCents || 0) + feeCents) /
+                                          100;
+                                        const isSelected =
+                                          selectedSlots.includes(slot.type);
+                                        return (
+                                          <Button
+                                            key={slot.type}
+                                            variant={
+                                              isSelected ? "default" : "outline"
+                                            }
+                                            size="sm"
+                                            className="justify-between"
+                                            disabled={!canBook}
+                                            onClick={() =>
+                                              handleSelect(
+                                                listingForDate,
+                                                slot.type,
+                                              )
+                                            }
+                                          >
+                                            <span>{slot.label}</span>
+                                            <span>
+                                              ${totalPrice.toFixed(2)}
+                                            </span>
+                                          </Button>
+                                        );
+                                      })}
+                                    </div>
                                   )}
-                                </div>
-                              ) : (
-                                <p className="text-[11px] text-[color:var(--text-muted)]">
-                                  {listingForDate
-                                    ? "Fully booked."
-                                    : "No open dates right now."}
-                                </p>
-                              )}
+                                {hasAvailability ? (
+                                  <div className="flex items-center justify-between gap-3 pt-2">
+                                    <p className="text-[11px] text-[color:var(--text-muted)]">
+                                      Includes a $10/day MealScout fee per host.
+                                      Cleanup time is 30 minutes after the end
+                                      time.
+                                    </p>
+                                    {isActive && listingForDate && (
+                                      <Button
+                                        size="sm"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          handleBookSelected(listingForDate);
+                                        }}
+                                        disabled={selectedSlots.length === 0}
+                                      >
+                                        Add to cart
+                                        {selectedTotalWithFee > 0 && (
+                                          <span className="ml-2 text-xs">
+                                            $
+                                            {(
+                                              (selectedTotalWithFee || 0) / 100
+                                            ).toFixed(2)}
+                                          </span>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-[11px] text-[color:var(--text-muted)]">
+                                    {listingForDate
+                                      ? "Fully booked."
+                                      : "No open dates right now."}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {filteredLocations.length === 0 && (
+                            <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
+                              No locations match that search.
                             </div>
-                          );
-                        })}
-                        {filteredLocations.length === 0 && (
-                          <div className="rounded-2xl pp-glass-muted p-6 text-center text-sm text-slate-700">
-                            No locations match that search.
-                          </div>
-                        )}
+                          )}
                         </div>
                       )}
                     </div>
@@ -6563,7 +7076,9 @@ export default function ParkingPassPage() {
                         );
                         const hostPlaceImageUrl =
                           hostCardPhotoUrl ||
-                          buildGooglePlaceImageUrl(hostPreviewAddress || null) ||
+                          buildGooglePlaceImageUrl(
+                            hostPreviewAddress || null,
+                          ) ||
                           hostMapPreviewUrl;
                         const isActive = activeLocation?.key === group.key;
                         const shareDate = displayListing
@@ -6678,8 +7193,8 @@ export default function ParkingPassPage() {
                                   )}
                                 {listingForDate?.availableSpotNumbers && (
                                   <p className="text-[11px] text-[color:var(--text-muted)]">
-                                    {listingForDate.availableSpotNumbers.length >
-                                    0
+                                    {listingForDate.availableSpotNumbers
+                                      .length > 0
                                       ? `Open spot${listingForDate.availableSpotNumbers.length > 1 ? "s" : ""}: ${listingForDate.availableSpotNumbers.join(", ")}`
                                       : "Fully booked"}
                                   </p>
