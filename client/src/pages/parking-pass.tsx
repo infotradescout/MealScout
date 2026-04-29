@@ -980,6 +980,8 @@ export default function ParkingPassPage() {
     if (serverIds.length > 0) return new Set(serverIds.map((id) => String(id)));
     return cachedBookableHostIds;
   }, [bookableHostIdPayload, cachedBookableHostIds]);
+  const hasParkingPassMapSignals =
+    passListings.length > 0 || bookableHostIds.size > 0;
 
   const paidMapLocations = useMemo(() => {
     const listingHostIds = new Set(
@@ -3539,7 +3541,7 @@ export default function ParkingPassPage() {
   const fallbackPinZoomCardMode = usePinZoomCardMode<
     (typeof fallbackHostPins)[number]
   >({
-    enabled: viewMode === "map",
+    enabled: viewMode === "map" && hasParkingPassMapSignals,
     zoom: parkingMapZoom,
     cardsAtOrAboveZoom: 15,
     markers: fallbackPinCandidatesForCards,
@@ -3547,7 +3549,9 @@ export default function ParkingPassPage() {
     dedupeKey: (marker) => marker.hostId,
     maxCards: 6,
   });
-  const fallbackHostPinsForRender = fallbackHostPins;
+  const fallbackHostPinsForRender = hasParkingPassMapSignals
+    ? fallbackHostPins
+    : fallbackHostPins.slice(0, 40);
   const parkingBrowseMarkers = useMemo(
     () => buildParkingAdapterMarkers(mapPinsForRender),
     [buildParkingAdapterMarkers, mapPinsForRender],
@@ -3557,21 +3561,14 @@ export default function ParkingPassPage() {
     [buildParkingAdapterMarkers, fallbackHostPinsForRender],
   );
   const parkingPassSupplyTrafficCells = useMemo(() => {
-    const visibleParkingPins =
-      mapPinsForRender.length > 0
-        ? mapPinsForRender.map((pin) => ({
-            key: pin.key,
-            coords: pin.coords,
-            weight: Math.max(
-              parkingTrafficWeightFromLabel(pin.group.host.expectedFootTraffic),
-              Math.min(100, 34 + pin.group.listings.length * 4),
-            ),
-          }))
-        : fallbackHostPinsForRender.map((pin) => ({
-            key: pin.key,
-            coords: pin.coords,
-            weight: 38,
-          }));
+    const visibleParkingPins = mapPinsForRender.map((pin) => ({
+      key: pin.key,
+      coords: pin.coords,
+      weight: Math.max(
+        parkingTrafficWeightFromLabel(pin.group.host.expectedFootTraffic),
+        Math.min(100, 34 + pin.group.listings.length * 4),
+      ),
+    }));
 
     const buckets = new Map<
       string,
@@ -3603,12 +3600,7 @@ export default function ParkingPassPage() {
       count: bucket.count,
       uniqueActors: bucket.count,
     }));
-  }, [
-    fallbackHostPinsForRender,
-    mapPinsForRender,
-    parkingMapBounds,
-    pointInBounds,
-  ]);
+  }, [mapPinsForRender, parkingMapBounds, pointInBounds]);
   const activeParkingMapPin = useMemo(() => {
     if (!activeParkingPinKey) return null;
     return (
@@ -3755,6 +3747,9 @@ export default function ParkingPassPage() {
     parkingFootTrafficData,
     parkingPassSupplyTrafficCells,
   ]);
+  const hasMeaningfulParkingTrafficCells = parkingTrafficCells.length > 0;
+  const isShowingGenericHostFallbackMap =
+    !hasParkingPassMapSignals && fallbackHostPinsForRender.length > 0;
 
   useEffect(() => {
     if (geocodeInFlight.current) return;
@@ -6156,9 +6151,11 @@ export default function ParkingPassPage() {
                           variant={showFootTraffic ? "default" : "outline"}
                           onClick={() => setShowFootTraffic((prev) => !prev)}
                         >
-                          {showFootTraffic
-                            ? "Foot traffic on"
-                            : "Foot traffic off"}
+                          {showFootTraffic && !hasMeaningfulParkingTrafficCells
+                            ? "No traffic signals"
+                            : showFootTraffic
+                              ? "Foot traffic on"
+                              : "Foot traffic off"}
                         </Button>
                       </div>
                     </div>
@@ -6242,11 +6239,21 @@ export default function ParkingPassPage() {
                         variant={showFootTraffic ? "default" : "outline"}
                         onClick={() => setShowFootTraffic((prev) => !prev)}
                       >
-                        {showFootTraffic
-                          ? "Foot traffic on"
-                          : "Foot traffic off"}
+                        {showFootTraffic && !hasMeaningfulParkingTrafficCells
+                          ? "No traffic signals"
+                          : showFootTraffic
+                            ? "Foot traffic on"
+                            : "Foot traffic off"}
                       </Button>
                     </div>
+                    {showFootTraffic &&
+                      isShowingGenericHostFallbackMap &&
+                      !hasMeaningfulParkingTrafficCells && (
+                        <p className="text-[11px] text-[color:var(--text-muted)]">
+                          Host locations are shown without heat until traffic or
+                          parking-pass signals are available.
+                        </p>
+                      )}
                   </div>
 
                   {isLoading ? (
