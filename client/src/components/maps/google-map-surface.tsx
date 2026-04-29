@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navigation as NavigationIcon } from "lucide-react";
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
+import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -432,6 +432,22 @@ export function GoogleMapSurface({
             }
           });
 
+          // Clear any hover preview as soon as the user starts interacting.
+          mapRef.current.addListener("zoom_changed", () => {
+            try {
+              onMarkerHoverRef.current?.(null, null);
+            } catch {
+              // ignore
+            }
+          });
+          mapRef.current.addListener("dragstart", () => {
+            try {
+              onMarkerHoverRef.current?.(null, null);
+            } catch {
+              // ignore
+            }
+          });
+
           // Ensure marker sync runs after first map instance initialization.
           setMapReadyVersion((prev) => prev + 1);
         } else {
@@ -657,6 +673,13 @@ export function GoogleMapSurface({
         clustererRef.current = new MarkerClusterer({
           map: mapRef.current,
           markers: [],
+          // Only cluster at lower zoom levels so individual pins do not
+          // appear/disappear when the user zooms in/out within detail zoom.
+          algorithm: new SuperClusterAlgorithm({
+            maxZoom: 13,
+            radius: 80,
+            minPoints: 3,
+          }),
           onClusterClick: (event: any, cluster: any, map: any) => {
             try {
               const bounds = cluster.bounds;
