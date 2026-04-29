@@ -3705,7 +3705,7 @@ export default function MapPage() {
         {/* Selected Deal Info Card */}
         {selectedDeal && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
@@ -3744,7 +3744,7 @@ export default function MapPage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setSelectedDeal(null)}
-                  className="h-11 w-11"
+                  className="h-10 w-10"
                   data-testid="button-close-selected-deal"
                   aria-label="Close selected deal"
                 >
@@ -3803,7 +3803,7 @@ export default function MapPage() {
 
         {!selectedDeal && selectedSighting && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
@@ -3821,7 +3821,7 @@ export default function MapPage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setSelectedSighting(null)}
-                  className="h-11 w-11"
+                  className="h-10 w-10"
                   data-testid="button-close-selected-sighting"
                   aria-label="Close selected sighting"
                 >
@@ -3837,7 +3837,7 @@ export default function MapPage() {
                 <img
                   src={selectedSighting.photoUrl}
                   alt={`${selectedSighting.truckName} sighting`}
-                  className="mb-2 h-28 w-full rounded-lg border border-border/60 object-cover"
+                  className="mb-2 h-24 w-full rounded-lg border border-border/60 object-cover"
                   loading="lazy"
                 />
               )}
@@ -3880,11 +3880,11 @@ export default function MapPage() {
 
         {!selectedDeal && selectedParkingHost && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(360px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(320px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
-          <Card className="map-callout-card w-full max-h-[56vh] overflow-hidden rounded-2xl">
-            <CardContent className="flex max-h-[56vh] flex-col p-0">
+          <Card className="map-callout-card w-full max-h-[44vh] overflow-hidden rounded-2xl">
+            <CardContent className="flex max-h-[44vh] flex-col p-0">
               <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
               <div className="mb-2 flex items-start gap-2">
                 <Button
@@ -3927,7 +3927,7 @@ export default function MapPage() {
                   <img
                     src={imgUrl}
                     alt={`${selectedParkingHost.host.name} place image`}
-                    className="mb-3 h-24 w-full rounded-xl border border-border/60 object-cover sm:h-28"
+                    className="mb-3 h-20 w-full rounded-xl border border-border/60 object-cover sm:h-24"
                     loading="lazy"
                   />
                 ) : null;
@@ -4099,7 +4099,7 @@ export default function MapPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-11 rounded-full"
+                  className="h-10 rounded-full"
                   onClick={() =>
                     window.open(
                       `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
@@ -4111,7 +4111,7 @@ export default function MapPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="h-11 rounded-full"
+                  className="h-10 rounded-full"
                   onClick={() => {
                     window.location.href = selectedParkingHost.publicProfileHref;
                   }}
@@ -4127,7 +4127,7 @@ export default function MapPage() {
 
         {!selectedDeal && !selectedParkingHost && selectedHostCluster && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
