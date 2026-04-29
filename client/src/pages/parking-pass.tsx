@@ -97,6 +97,8 @@ interface FootTrafficResponse {
 type MapRuntimeResponse = {
   hasGoogleMapsKey: boolean;
   googleMapsApiKey?: string | null;
+  hasGoogleMapsMapId?: boolean;
+  googleMapsMapId?: string | null;
 };
 
 interface HostPassListing {
@@ -819,11 +821,16 @@ export default function ParkingPassPage() {
   const runtimeGoogleMapsApiKey = String(
     mapRuntime?.googleMapsApiKey || "",
   ).trim();
-  const effectiveGoogleMapsApiKey =
-    GOOGLE_MAPS_WEB_API_KEY || runtimeGoogleMapsApiKey;
-  const effectiveGoogleMapsMapId = String(
+  const runtimeGoogleMapsMapId = String(
+    mapRuntime?.googleMapsMapId || "",
+  ).trim();
+  const buildGoogleMapsMapId = String(
     (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
   ).trim();
+  const effectiveGoogleMapsMapId =
+    runtimeGoogleMapsMapId || buildGoogleMapsMapId;
+  const effectiveGoogleMapsApiKey =
+    runtimeGoogleMapsApiKey || GOOGLE_MAPS_WEB_API_KEY;
   const shouldUseParkingGoogleSurface = Boolean(
     effectiveGoogleMapsApiKey && !forceLegacyParkingMap,
   );

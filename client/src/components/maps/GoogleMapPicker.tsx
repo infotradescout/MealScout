@@ -773,8 +773,8 @@ function LeafletRenderer({
       center={[center.lat, center.lng]}
       zoom={zoom}
       zoomControl={false}
-      zoomAnimation={false}
-      markerZoomAnimation={false}
+      zoomAnimation={true}
+      markerZoomAnimation={true}
       scrollWheelZoom={interactionsEnabled}
       dragging={interactionsEnabled}
       touchZoom={interactionsEnabled}
