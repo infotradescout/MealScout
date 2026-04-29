@@ -782,6 +782,7 @@ export default function ParkingPassPage() {
   const [showFootTraffic, setShowFootTraffic] = useState(true);
   const [parkingMapBounds, setParkingMapBounds] =
     useState<MapPickerBounds | null>(null);
+  const [forceLegacyParkingMap, setForceLegacyParkingMap] = useState(false);
   const [parkingMapCalloutAnchorPosition, setParkingMapCalloutAnchorPosition] =
     useState<{ x: number; y: number } | null>(null);
   const [activeParkingPinKey, setActiveParkingPinKey] = useState<string | null>(
@@ -823,6 +824,19 @@ export default function ParkingPassPage() {
   const effectiveGoogleMapsMapId = String(
     (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
   ).trim();
+  const shouldUseParkingGoogleSurface = Boolean(
+    effectiveGoogleMapsApiKey && !forceLegacyParkingMap,
+  );
+
+  const handleParkingGoogleMapsFatalError = useCallback(() => {
+    setParkingMapCalloutAnchorPosition(null);
+    setForceLegacyParkingMap(true);
+  }, []);
+
+  useEffect(() => {
+    if (!effectiveGoogleMapsApiKey) return;
+    setForceLegacyParkingMap(false);
+  }, [effectiveGoogleMapsApiKey]);
 
   useEffect(() => {
     if (viewMode !== "map") {
@@ -6244,7 +6258,7 @@ export default function ParkingPassPage() {
                       <div className="space-y-3">
                         <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                           <div className="relative h-72 w-full bg-slate-100/60">
-                            {effectiveGoogleMapsApiKey ? (
+                            {shouldUseParkingGoogleSurface ? (
                               <GoogleMapSurface
                                 apiKey={effectiveGoogleMapsApiKey}
                                 mapId={effectiveGoogleMapsMapId || undefined}
@@ -6266,6 +6280,7 @@ export default function ParkingPassPage() {
                                 onPopupAnchorPosition={
                                   setParkingMapCalloutAnchorPosition
                                 }
+                                onFatalError={handleParkingGoogleMapsFatalError}
                               />
                             ) : (
                               <GoogleMapPicker
@@ -6322,7 +6337,7 @@ export default function ParkingPassPage() {
                                 className="h-full w-full"
                               />
                             )}
-                            {effectiveGoogleMapsApiKey &&
+                            {shouldUseParkingGoogleSurface &&
                               activeFallbackParkingMapPin &&
                               parkingMapCalloutAnchorPosition && (
                                 <div
@@ -6378,7 +6393,7 @@ export default function ParkingPassPage() {
                     <div className="space-y-3">
                       <div className="rounded-2xl pp-glass shadow-clean overflow-hidden">
                         <div className="relative h-72 w-full bg-slate-100/60">
-                          {effectiveGoogleMapsApiKey ? (
+                          {shouldUseParkingGoogleSurface ? (
                             <GoogleMapSurface
                               apiKey={effectiveGoogleMapsApiKey}
                               mapId={effectiveGoogleMapsMapId || undefined}
@@ -6396,6 +6411,7 @@ export default function ParkingPassPage() {
                               onPopupAnchorPosition={
                                 setParkingMapCalloutAnchorPosition
                               }
+                              onFatalError={handleParkingGoogleMapsFatalError}
                             />
                           ) : (
                             <GoogleMapPicker
@@ -6684,7 +6700,7 @@ export default function ParkingPassPage() {
                               className="h-full w-full"
                             />
                           )}
-                          {effectiveGoogleMapsApiKey &&
+                          {shouldUseParkingGoogleSurface &&
                             activeParkingMapPin &&
                             parkingMapCalloutAnchorPosition && (
                               <div
