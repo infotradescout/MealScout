@@ -14,9 +14,15 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 import { RestaurantTrustPanel } from "@/components/RestaurantTrustPanel";
-import { FlagRecommendationDialog, FlagProfileContentDialog } from "@/components/moderation/FlagDialogs";
-import { BackHeader } from "@/components/back-header";
 import {
+  FlagRecommendationDialog,
+  FlagProfileContentDialog,
+} from "@/components/moderation/FlagDialogs";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Flame,
+  List,
   MapPin,
   Phone,
   Clock,
@@ -30,10 +36,14 @@ import {
   Share2,
   Star,
   Globe,
+  UtensilsCrossed,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
-import { AdminEditableText, AdminEditButton } from "@/components/admin-inline-copy";
+import {
+  AdminEditableText,
+  AdminEditButton,
+} from "@/components/admin-inline-copy";
 import { generateRestaurantSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -146,7 +156,9 @@ export default function RestaurantDetailPage() {
     enabled: !!restaurantId,
     retry: false,
     queryFn: async () => {
-      const response = await fetch(`/api/restaurants/${restaurantId}/trust-stats`);
+      const response = await fetch(
+        `/api/restaurants/${restaurantId}/trust-stats`,
+      );
       if (!response.ok) return null;
       return response.json() as Promise<{
         profileAccuracyScore?: number;
@@ -207,7 +219,9 @@ export default function RestaurantDetailPage() {
     enabled: !!restaurantId,
     retry: false,
     queryFn: async () => {
-      const res = await fetch(`/api/public/canonical/restaurant/${restaurantId}`);
+      const res = await fetch(
+        `/api/public/canonical/restaurant/${restaurantId}`,
+      );
       if (!res.ok) return null;
       return res.json();
     },
@@ -218,7 +232,9 @@ export default function RestaurantDetailPage() {
     enabled: !!restaurantId,
     retry: false,
     queryFn: async () => {
-      const res = await fetch(`/api/public/evidence/restaurant/${restaurantId}`);
+      const res = await fetch(
+        `/api/public/evidence/restaurant/${restaurantId}`,
+      );
       if (!res.ok) return null;
       return res.json();
     },
@@ -239,7 +255,9 @@ export default function RestaurantDetailPage() {
       await queryClient.invalidateQueries({
         queryKey: ["/api/restaurants/my-restaurants"],
       });
-      await queryClient.invalidateQueries({ queryKey: ["/api/restaurants", restaurantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants", restaurantId],
+      });
       toast({
         title: "Profile claimed",
         description:
@@ -282,7 +300,10 @@ export default function RestaurantDetailPage() {
     const normalizedCanonicalPath = canonicalPath.replace(/\/+$/, "");
 
     if (currentPath === normalizedCanonicalPath) return;
-    if (currentPath === legacyPath || currentPath.startsWith(`${legacyPath}/`)) {
+    if (
+      currentPath === legacyPath ||
+      currentPath.startsWith(`${legacyPath}/`)
+    ) {
       setLocation(canonicalPath);
     }
   }, [restaurantId, restaurant, expectedRestaurantSlug, setLocation]);
@@ -322,7 +343,8 @@ export default function RestaurantDetailPage() {
             .join(", "),
           type: "manual" as const,
           isPublic: true,
-          lastConfirmedAt: item.manual.lastConfirmedAt || item.createdAt || null,
+          lastConfirmedAt:
+            item.manual.lastConfirmedAt || item.createdAt || null,
         };
       }
 
@@ -411,9 +433,13 @@ export default function RestaurantDetailPage() {
       return;
     }
     try {
-      await apiRequest("POST", `/api/recommendations/${recommendationId}/reaction`, {
-        reaction: current === next ? "clear" : next,
-      });
+      await apiRequest(
+        "POST",
+        `/api/recommendations/${recommendationId}/reaction`,
+        {
+          reaction: current === next ? "clear" : next,
+        },
+      );
       await refetchRecommendations();
     } catch (error: any) {
       toast({
@@ -442,7 +468,11 @@ export default function RestaurantDetailPage() {
         await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
       }
 
-      await apiRequest("POST", `/api/recommendations/${recommendationId}/share`, {});
+      await apiRequest(
+        "POST",
+        `/api/recommendations/${recommendationId}/share`,
+        {},
+      );
       await refetchRecommendations();
     } catch {
       // Ignore user-cancelled share actions.
@@ -491,26 +521,22 @@ export default function RestaurantDetailPage() {
   const onsiteMenuUrl = hasOnsiteMenu
     ? `/menu/${encodeURIComponent(String(restaurantId || ""))}`
     : "";
-  const onsiteOrderingEnabled = Boolean(publicMenusData?.orderingEnabled && hasOnsiteMenu);
+  const onsiteOrderingEnabled = Boolean(
+    publicMenusData?.orderingEnabled && hasOnsiteMenu,
+  );
   const isVerifiedMemberProfile =
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
   const isGeneratedProfile =
     String((restaurant as any)?.profileSource || "") === "google" ||
-    String((restaurant as any)?.profileSource || "") ===
-      "search_query_seed" ||
+    String((restaurant as any)?.profileSource || "") === "search_query_seed" ||
     Boolean((restaurant as any)?.googlePlaceId);
 
   const cvsScore = Math.max(
     0,
     Math.min(
       100,
-      Math.round(
-        Number(
-          (trustStats as any)?.profileAccuracyScore ??
-            50,
-        ),
-      ),
+      Math.round(Number((trustStats as any)?.profileAccuracyScore ?? 50)),
     ),
   );
   const recommendationCount = recommendationRows.length;
@@ -541,7 +567,9 @@ export default function RestaurantDetailPage() {
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
   const phoneNumber =
-    (restaurant as any)?.phone || (restaurant as any)?.googleFormattedPhone || "";
+    (restaurant as any)?.phone ||
+    (restaurant as any)?.googleFormattedPhone ||
+    "";
   const city = String((restaurant as any)?.city || "").trim();
   const state = String((restaurant as any)?.state || "").trim();
   const locationLabel = [city, state].filter(Boolean).join(", ");
@@ -558,8 +586,7 @@ export default function RestaurantDetailPage() {
       (restaurant as any)?.onlineOrderingUrl,
   );
   const externalMenuUrl = toExternalUrl(
-    (restaurant as any)?.menuUrl ||
-      (restaurant as any)?.menuURL,
+    (restaurant as any)?.menuUrl || (restaurant as any)?.menuURL,
   );
   const menuPrimaryUrl = onsiteMenuUrl || externalMenuUrl;
   const menuPrimaryIsInternal = Boolean(onsiteMenuUrl);
@@ -582,17 +609,36 @@ export default function RestaurantDetailPage() {
     (restaurant as any)?.currentLongitude || (restaurant as any)?.longitude,
   );
   const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-  const mapsDestination =
-    (restaurant as any)?.googlePlaceId
-      ? `place_id:${(restaurant as any).googlePlaceId}`
-      : hasCoords
-        ? `${lat},${lng}`
-        : [restaurantName, address, city, state].filter(Boolean).join(", ");
+  const mapsDestination = (restaurant as any)?.googlePlaceId
+    ? `place_id:${(restaurant as any).googlePlaceId}`
+    : hasCoords
+      ? `${lat},${lng}`
+      : [restaurantName, address, city, state].filter(Boolean).join(", ");
   const directionsUrl = mapsDestination
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
         mapsDestination,
       )}${(restaurant as any)?.googlePlaceId ? `&destination_place_id=${encodeURIComponent((restaurant as any).googlePlaceId)}` : ""}`
     : "";
+  const primaryDeal = restaurantDeals[0] as any | undefined;
+  const popularMenuItems = onsiteMenuCategories
+    .flatMap((category) =>
+      Array.isArray(category.items) ? category.items : [],
+    )
+    .filter((item) => item?.isAvailable !== false)
+    .slice(0, 3);
+  const profileTypeLabel = isFoodTruck
+    ? "Food Truck"
+    : String(cuisineType || "Restaurant");
+  const locationDisplay = [address, city, state].filter(Boolean).join(", ");
+  const nextStop = parkingScheduleItems[0];
+  const locationTitle = isFoodTruck ? "Today's Location" : "Location";
+  const locationName = nextStop?.title || locationLabel || restaurantName;
+  const locationSubtitle =
+    nextStop?.subtitle || locationDisplay || "Location coming soon";
+  const hoursLabel =
+    nextStop?.startTime && nextStop?.endTime
+      ? `${nextStop.startTime} - ${nextStop.endTime}`
+      : "Open now";
   const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const localBusinessSchema = {
@@ -624,7 +670,8 @@ export default function RestaurantDetailPage() {
     "@type": "WebPage",
     name: `${restaurantName} source of truth`,
     url: canonicalProfileUrl,
-    dateModified: canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
+    dateModified:
+      canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
     about: {
       "@type": isFoodTruck ? "FoodTruck" : "Restaurant",
       name: restaurantName,
@@ -665,7 +712,7 @@ export default function RestaurantDetailPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-[var(--bg-surface)] min-h-screen relative pb-24">
+    <div className="max-w-md lg:max-w-3xl mx-auto bg-[#0b0b0c] min-h-screen relative pb-24 text-white">
       <SEOHead
         title={`${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} | Menu, Deals & Hours`}
         description={description}
@@ -674,774 +721,760 @@ export default function RestaurantDetailPage() {
         allowCanonicalHostOverride={Boolean(customDomainHost)}
         ogType="restaurant"
         ogImage={heroImageSrc}
-        schemaData={[localBusinessSchema, sourceOfTruthSchema, breadcrumbSchema]}
+        schemaData={[
+          localBusinessSchema,
+          sourceOfTruthSchema,
+          breadcrumbSchema,
+        ]}
       />
-      <BackHeader
-        title={restaurantName}
-        fallbackHref="/"
-        icon={Store}
-        rightActions={rightActions}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
-      />
-
-      {/* Header Image */}
-      <div className="relative h-52 sm:h-64 bg-[linear-gradient(120deg,rgba(15,23,42,0.88),rgba(127,29,29,0.76),rgba(249,115,22,0.55))] overflow-hidden">
+      <section className="relative min-h-[24rem] overflow-hidden bg-black">
         <img
           src={heroImageSrc}
           alt={`${restaurantName} exterior or food photo`}
           className="absolute inset-0 h-full w-full object-cover"
           loading="eager"
         />
-        <div className="absolute inset-0 bg-black/35"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.25)_32%,rgba(0,0,0,0.94)_100%)]" />
 
-        {/* Restaurant Image Placeholder */}
-        <div className="relative w-full h-full flex items-center justify-center">
-          <div className="text-center text-white/80">
-            <p className="text-sm font-medium tracking-[0.12em] uppercase text-white/85">
-              {cuisineType}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Restaurant Info */}
-      <div className="px-4 sm:px-6 pb-8 -mt-10 relative z-10">
-        <div className="mb-6 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-xl">
-          {isStaffOrAdmin ? (
-            <div className="mb-4 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Managed Profile Controls
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Link href={editRestaurantFocusPath("description") as any}>
-                  <Button variant="outline" size="sm">Manage Profile For Owner</Button>
-                </Link>
-                {isFoodTruck ? (
-                  <Link href={editRestaurantFocusPath("parking") as any}>
-                    <Button variant="outline" size="sm">Manage Parking Schedule</Button>
-                  </Link>
-                ) : null}
-                <Link href={dealCreationPath as any}>
-                  <Button variant="outline" size="sm">Manage Specials</Button>
-                </Link>
-              </div>
+        <div className="relative z-10 flex min-h-[24rem] flex-col justify-between px-5 pb-6 pt-[calc(1rem+env(safe-area-inset-top))]">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11 rounded-full border border-white/15 bg-black/40 text-white backdrop-blur hover:bg-black/55"
+              onClick={() =>
+                window.history.length > 1
+                  ? window.history.back()
+                  : setLocation("/")
+              }
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm font-black uppercase tracking-tight text-white backdrop-blur">
+              <MapPin className="h-5 w-5 text-[color:var(--accent-text)]" />
+              Meal<span className="text-[color:var(--accent-text)]">Scout</span>
             </div>
-          ) : null}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11 rounded-full border border-white/15 bg-black/40 text-white backdrop-blur hover:bg-black/55"
+              data-testid="button-save-restaurant"
+              aria-label="Save restaurant"
+            >
+              <Heart className="h-5 w-5" />
+            </Button>
+          </div>
 
-          <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[color:var(--accent-text)]/45 bg-black/45 px-3 py-2 text-xs font-bold text-[color:var(--accent-text)] backdrop-blur">
+              <Star className="h-4 w-4" />
+              {isVerifiedMemberProfile ? "Crowd Favorite" : "Local listing"}
+            </div>
             <h1
-              className="text-2xl font-bold text-foreground flex items-center space-x-2"
+              className="max-w-[22rem] text-4xl font-black uppercase leading-[0.92] tracking-normal sm:text-5xl"
               data-testid="text-restaurant-name"
             >
-              <span>{(restaurant as any)?.name}</span>
-              {(restaurant as any)?.isVerified && (
-                <CheckCircle
-                  className="w-5 h-5 text-[color:var(--status-success)]"
-                  data-testid="icon-verified-restaurant"
-                />
-              )}
+              {restaurantName}
             </h1>
-            {(restaurant as any)?.cuisineType && (
-              <Badge variant="secondary" data-testid="badge-cuisine-type">
-                {(restaurant as any)?.cuisineType}
-              </Badge>
-            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/85">
+              <span>{profileTypeLabel}</span>
+              {cuisineType ? <span>•</span> : null}
+              {cuisineType ? <span>{cuisineType}</span> : null}
+              {hasCoords ? (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-4 w-4 text-[color:var(--accent-text)]" />
+                    Nearby
+                  </span>
+                </>
+              ) : null}
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 text-[color:var(--status-success)]">
+                <span className="h-2 w-2 rounded-full bg-[color:var(--status-success)]" />
+                Open Now
+              </span>
+            </div>
           </div>
-          {!isVerifiedMemberProfile ? (
-            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-              <p className="text-sm font-semibold text-amber-300">
-                Unclaimed listing - Not a MealScout member profile yet
-              </p>
-              <p className="text-xs text-amber-200/90">
-                Business details may be incomplete until the owner claims and verifies this page.
-              </p>
-              <div className="mt-2">
-                {user && canClaimGeneratedProfile ? (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
-                      >
-                        Request to Claim
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>Verify your business claim</DialogTitle>
-                        <DialogDescription>
-                          Upload a business license, health permit, seller permit, insurance certificate, tax document, or other document that connects you to this business.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DocumentUpload
-                        onDocumentsChange={setClaimDocuments}
-                        maxFiles={5}
-                        maxFileSize={10}
-                      />
-                      <DialogFooter>
-                        <Button
-                          className="bg-amber-500 hover:bg-amber-600 text-black font-semibold"
-                          disabled={
-                            claimGeneratedProfileMutation.isPending ||
-                            claimDocuments.length === 0
-                          }
-                          onClick={() => claimGeneratedProfileMutation.mutate()}
-                        >
-                          {claimGeneratedProfileMutation.isPending
-                            ? "Submitting..."
-                            : "Submit Claim for Review"}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                ) : (
-                  <Link href={claimBusinessPath as any}>
-                    <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-semibold">
+        </div>
+      </section>
+
+      <div className="relative z-10 -mt-2 space-y-4 px-4 pb-8 sm:px-5">
+        <div className="grid grid-cols-3 gap-3">
+          <Button
+            asChild={Boolean(directionsUrl)}
+            variant="outline"
+            disabled={!directionsUrl}
+            className="h-12 rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+            data-testid="button-directions"
+          >
+            {directionsUrl ? (
+              <a href={directionsUrl} target="_blank" rel="noreferrer">
+                <DirectionsIcon className="mr-2 h-4 w-4" />
+                Directions
+              </a>
+            ) : (
+              <>
+                <DirectionsIcon className="mr-2 h-4 w-4" />
+                Directions
+              </>
+            )}
+          </Button>
+          {menuPrimaryUrl ? (
+            menuPrimaryIsInternal ? (
+              <Link href={menuPrimaryUrl}>
+                <Button className="h-12 w-full rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90">
+                  <List className="mr-2 h-4 w-4" />
+                  Menu
+                </Button>
+              </Link>
+            ) : (
+              <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
+                <Button className="h-12 w-full rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90">
+                  <List className="mr-2 h-4 w-4" />
+                  Menu
+                </Button>
+              </a>
+            )
+          ) : (
+            <Button
+              className="h-12 rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90"
+              onClick={() =>
+                document
+                  .getElementById("restaurant-specials")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              <List className="mr-2 h-4 w-4" />
+              Menu
+            </Button>
+          )}
+          <ShareButton
+            url={profilePath}
+            title={`Check out ${restaurantName} on MealScout`}
+            description={
+              (restaurant as any)?.description ||
+              "Discover this location on MealScout."
+            }
+            size="default"
+            variant="outline"
+            className="h-12 rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+          />
+        </div>
+
+        {!isVerifiedMemberProfile ? (
+          <div className="rounded-2xl border border-amber-500/45 bg-amber-500/10 p-4">
+            <p className="text-sm font-black text-amber-300">
+              Unclaimed listing
+            </p>
+            <p className="mt-1 text-xs text-amber-100/85">
+              Business details may be incomplete until the owner claims and
+              verifies this page.
+            </p>
+            <div className="mt-3">
+              {user && canClaimGeneratedProfile ? (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      className="bg-amber-500 font-semibold text-black hover:bg-amber-600"
+                    >
                       Request to Claim
                     </Button>
-                  </Link>
-                )}
-              </div>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Verify your business claim</DialogTitle>
+                      <DialogDescription>
+                        Upload a business license, health permit, seller permit,
+                        insurance certificate, tax document, or other document
+                        that connects you to this business.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DocumentUpload
+                      onDocumentsChange={setClaimDocuments}
+                      maxFiles={5}
+                      maxFileSize={10}
+                    />
+                    <DialogFooter>
+                      <Button
+                        className="bg-amber-500 font-semibold text-black hover:bg-amber-600"
+                        disabled={
+                          claimGeneratedProfileMutation.isPending ||
+                          claimDocuments.length === 0
+                        }
+                        onClick={() => claimGeneratedProfileMutation.mutate()}
+                      >
+                        {claimGeneratedProfileMutation.isPending
+                          ? "Submitting..."
+                          : "Submit Claim for Review"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <Link href={claimBusinessPath as any}>
+                  <Button
+                    size="sm"
+                    className="bg-amber-500 font-semibold text-black hover:bg-amber-600"
+                  >
+                    Request to Claim
+                  </Button>
+                </Link>
+              )}
             </div>
-          ) : null}
-          <div className="mb-3">
-            <ShareButton
-              url={profilePath}
-              title={`Check out ${(restaurant as any)?.name || "this spot"} on MealScout`}
-              description={
-                (restaurant as any)?.description ||
-                "Discover this location on MealScout."
-              }
-              size="sm"
-              variant="outline"
-            />
           </div>
+        ) : null}
 
-          <div className="flex items-center space-x-4 mb-4">
-            {isVerifiedMemberProfile ? (
-              <div className="flex items-center space-x-1">
-                <Shield className="w-4 h-4 text-[color:var(--status-success)]" />
-                <span className="font-semibold" data-testid="text-cvs-score">
-                  CVS {cvsScore}/100
-                </span>
-                <span
-                  className="text-muted-foreground text-sm"
-                  data-testid="text-cvs-label"
-                >
-                  Community Verification Score
-                </span>
+        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+          <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
+                <MapPin className="h-5 w-5" />
+                <h2 className="text-lg font-black uppercase tracking-normal">
+                  {locationTitle}
+                </h2>
               </div>
-            ) : (
-              <div className="flex items-center space-x-1 text-sm text-amber-300">
-                <Store className="w-4 h-4" />
-                <span data-testid="text-unclaimed-label">Unclaimed listing</span>
+              <p className="text-lg font-semibold text-white">{locationName}</p>
+              <p className="mt-1 text-sm text-white/70">{locationSubtitle}</p>
+              <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[color:var(--status-success)]">
+                <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />
+                {hoursLabel}
+              </p>
+            </div>
+            <a
+              href={
+                directionsUrl ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationSubtitle || restaurantName)}`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="relative min-h-[7.5rem] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(30,41,59,0.95),rgba(2,6,23,0.95))]"
+            >
+              <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.09)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.09)_1px,transparent_1px)] [background-size:22px_22px]" />
+              <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[color:var(--accent-text)] text-black shadow-xl">
+                <MapPin className="h-7 w-7 fill-current" />
               </div>
-            )}
-            {!isVerifiedMemberProfile && googleRating > 0 ? (
-              <div className="flex items-center space-x-1 text-sm text-foreground">
-                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                <span>
-                  Google {googleRating.toFixed(1)}
-                  {googleReviewCount > 0 ? ` (${googleReviewCount})` : ""}
-                </span>
+            </a>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+          <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
+                <Star className="h-5 w-5" />
+                <h2 className="text-lg font-black uppercase tracking-normal">
+                  Tonight's Special
+                </h2>
               </div>
-            ) : null}
-            <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
-              <Clock className="w-4 h-4" />
-              <span>
-                <AdminEditableText
-                  textKey="restaurant.detail.status.openNow"
-                  defaultText="Open now"
-                />
-              </span>
-              <AdminEditButton
-                textKey="restaurant.detail.status.openNow"
-                defaultText="Open now"
-                label="Restaurant status label"
+              <p className="text-lg font-semibold text-white">
+                {primaryDeal?.title || "Specials coming soon"}
+              </p>
+              <p className="mt-1 text-sm text-white/75">
+                {primaryDeal?.discountValue
+                  ? primaryDeal.dealType === "percentage"
+                    ? `${primaryDeal.discountValue}% off`
+                    : `$${primaryDeal.discountValue} off`
+                  : primaryDeal?.description ||
+                    "Check back for fresh deals and limited-time offers."}
+              </p>
+            </div>
+            <div className="min-h-[6.5rem] overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+              <img
+                src={primaryDeal?.imageUrl || heroImageSrc}
+                alt={primaryDeal?.title || `${restaurantName} special`}
+                className="h-full min-h-[6.5rem] w-full object-cover"
+                loading="lazy"
               />
             </div>
           </div>
+        </section>
 
-          {/* Address */}
-          <div className="flex items-start space-x-2 mb-4">
-            <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
-            <div>
-              <p
-                className="text-sm text-foreground"
-                data-testid="text-restaurant-address"
-              >
-                {(restaurant as any)?.address}
-              </p>
-            </div>
+        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+          <div className="mb-3 flex items-center gap-2 text-[color:var(--accent-text)]">
+            <Flame className="h-5 w-5" />
+            <h2 className="text-lg font-black uppercase tracking-normal">
+              Popular Items
+            </h2>
           </div>
-
-          {/* Contact Info */}
-          {phoneNumber && (
-            <div className="flex items-center space-x-2 mb-6">
-              <Phone className="w-4 h-4 text-muted-foreground" />
-              <p
-                className="text-sm text-foreground"
-                data-testid="text-restaurant-phone"
+          <div className="divide-y divide-white/10">
+            {(popularMenuItems.length > 0
+              ? popularMenuItems
+              : [
+                  { id: "menu", name: "View full menu", description: null },
+                  {
+                    id: "special",
+                    name: "Current specials",
+                    description: null,
+                  },
+                  { id: "visit", name: "Visit or order", description: null },
+                ]
+            ).map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 py-3"
               >
-                {phoneNumber}
-              </p>
-            </div>
-          )}
-
-          {isStaffOrAdmin && (canonical || evidence) ? (
-            <details className="mb-6 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/90">
-              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground">
-                Admin Diagnostics
-              </summary>
-              <div className="space-y-3 px-4 pb-4">
-                {canonical ? (
-                  <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                            Source of Truth
-                          </p>
-                          <h2 className="text-sm font-semibold text-foreground">
-                            Canonical MealScout record
-                          </h2>
-                        </div>
-                        <div className="flex flex-wrap gap-2 justify-end">
-                          <Badge variant="outline">{canonical.machineReadiness}</Badge>
-                          <Badge variant="secondary">{canonical.freshness}</Badge>
-                          {canonical.verified ? (
-                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                              verified
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div>
-                          Last updated{" "}
-                          <span className="text-foreground font-medium">
-                            {canonical.updatedAt
-                              ? new Date(canonical.updatedAt).toLocaleString()
-                              : "Unknown"}
-                          </span>
-                        </div>
-                        <div>
-                          Freshness window{" "}
-                          <span className="text-foreground font-medium">
-                            {canonical.freshnessHours != null
-                              ? `${canonical.freshnessHours}h ago`
-                              : "Unknown"}
-                          </span>
-                        </div>
-                        <div>
-                          Active deal signals{" "}
-                          <span className="text-foreground font-medium">
-                            {canonical.evidenceSummary?.activeDealCount ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Live location{" "}
-                          <span className="text-foreground font-medium">
-                            {canonical.evidenceSummary?.liveLocationActive ? "Yes" : "No"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {Array.isArray(canonical.sourceTruthStatements) &&
-                      canonical.sourceTruthStatements.length > 0 ? (
-                        <div className="space-y-1">
-                          {canonical.sourceTruthStatements.slice(0, 4).map((item: string) => (
-                            <p key={item} className="text-sm text-foreground">
-                              {item}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {Array.isArray(canonical.knowledgeGaps) &&
-                      canonical.knowledgeGaps.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {canonical.knowledgeGaps.slice(0, 4).map((gap: string) => (
-                            <Badge key={gap} variant="outline" className="text-[11px]">
-                              gap: {gap.replace(/_/g, " ")}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                ) : null}
-
-                {evidence ? (
-                  <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                            External Evidence
-                          </p>
-                          <h2 className="text-sm font-semibold text-foreground">
-                            Discovery and distribution signals
-                          </h2>
-                        </div>
-                        <Badge variant="outline">
-                          {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div>
-                          Crawler hits{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.externalPressure?.crawlerHits ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Human page hits{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.externalPressure?.humanPageHits ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Search demand{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.demand?.matchingSearchQueries ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Outbound posts{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.distribution?.outboundSocialPosts ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Affiliate shares{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.distribution?.affiliateShares ?? 0}
-                          </span>
-                        </div>
-                        <div>
-                          Story views{" "}
-                          <span className="text-foreground font-medium">
-                            {evidence.content?.totalViews ?? 0}
-                          </span>
-                        </div>
-                      </div>
-
-                      {Array.isArray(evidence.externalPressure?.topBots) &&
-                      evidence.externalPressure.topBots.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {evidence.externalPressure.topBots.map((bot: any) => (
-                            <Badge key={bot.label} variant="secondary" className="text-[11px]">
-                              {bot.label}: {bot.count}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {Array.isArray(evidence.demand?.topQueries) &&
-                      evidence.demand.topQueries.length > 0 ? (
-                        <div className="space-y-1">
-                          {evidence.demand.topQueries.slice(0, 3).map((query: any) => (
-                            <p key={query.query} className="text-sm text-foreground">
-                              demand: {query.query} ({query.count})
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                ) : null}
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--accent-text)]/15 text-[color:var(--accent-text)]">
+                    <UtensilsCrossed className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">{item.name}</p>
+                    {item.description ? (
+                      <p className="text-xs text-white/55">
+                        {item.description}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <ExternalLink className="h-4 w-4 text-white/35" />
               </div>
-            </details>
-          ) : null}
+            ))}
+          </div>
+        </section>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              asChild={Boolean(directionsUrl)}
-              className="w-full sm:flex-1"
-              disabled={!directionsUrl}
-              data-testid="button-directions"
-            >
-              {directionsUrl ? (
-                <a href={directionsUrl} target="_blank" rel="noreferrer">
-                  <DirectionsIcon className="w-4 h-4 mr-2" />
-                  <AdminEditableText
-                    textKey="restaurant.detail.actions.directions"
-                    defaultText="Directions"
-                  />
-                </a>
-              ) : (
-                <>
-                  <DirectionsIcon className="w-4 h-4 mr-2" />
-                  <AdminEditableText
-                    textKey="restaurant.detail.actions.directions"
-                    defaultText="Directions"
-                  />
-                </>
-              )}
-            </Button>
-            <Button
-              asChild={Boolean(phoneHref)}
-              variant="outline"
-              className="w-full sm:flex-1"
-              disabled={!phoneHref}
-              data-testid="button-call-restaurant"
-            >
-              {phoneHref ? (
-                <a href={phoneHref}>
-                  <Phone className="w-4 h-4 mr-2" />
-                  <AdminEditableText
-                    textKey="restaurant.detail.actions.call"
-                    defaultText="Call"
-                  />
-                </a>
-              ) : (
-                <>
-                  <Phone className="w-4 h-4 mr-2" />
-                  <AdminEditableText
-                    textKey="restaurant.detail.actions.call"
-                    defaultText="Call"
-                  />
-                </>
-              )}
-            </Button>
-            {isFoodTruck && (
-              <Dialog>
-                <DialogTrigger asChild>
+        {isStaffOrAdmin ? (
+          <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-white/80">
+              Admin tools
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href={editRestaurantFocusPath("description") as any}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-white/15 bg-black/35 text-white hover:bg-white/10"
+                >
+                  Manage Profile For Owner
+                </Button>
+              </Link>
+              {isFoodTruck ? (
+                <Link href={editRestaurantFocusPath("parking") as any}>
                   <Button
                     variant="outline"
-                    className="w-full sm:flex-1"
-                    data-testid="button-book-truck"
+                    size="sm"
+                    className="border-white/15 bg-black/35 text-white hover:bg-white/10"
                   >
-                    <AdminEditableText
-                      textKey="restaurant.detail.actions.bookTruck"
-                      defaultText="Book This Truck"
-                    />
+                    Manage Parking Schedule
                   </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Book {restaurantName}</DialogTitle>
-                    <DialogDescription>
-                      Share your event details and the truck owner will follow up.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="name">Your Name</Label>
-                      <Input
-                        id="name"
-                        name="name"
-                        value={bookingForm.name}
-                        onChange={handleBookingFieldChange}
-                      />
+                </Link>
+              ) : null}
+              <Link href={dealCreationPath as any}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-white/15 bg-black/35 text-white hover:bg-white/10"
+                >
+                  Manage Specials
+                </Button>
+              </Link>
+            </div>
+          </details>
+        ) : null}
+
+        {isStaffOrAdmin && (canonical || evidence) ? (
+          <details className="rounded-2xl border border-white/10 bg-white/[0.03]">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white/80">
+              Admin diagnostics
+            </summary>
+            <div className="space-y-3 px-4 pb-4">
+              {canonical ? (
+                <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                          Source of Truth
+                        </p>
+                        <h2 className="text-sm font-semibold text-foreground">
+                          Canonical MealScout record
+                        </h2>
+                      </div>
+                      <div className="flex flex-wrap gap-2 justify-end">
+                        <Badge variant="outline">
+                          {canonical.machineReadiness}
+                        </Badge>
+                        <Badge variant="secondary">{canonical.freshness}</Badge>
+                        {canonical.verified ? (
+                          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                            verified
+                          </Badge>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={bookingForm.email}
-                        onChange={handleBookingFieldChange}
-                      />
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {evidence ? (
+                <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                          External Evidence
+                        </p>
+                        <h2 className="text-sm font-semibold text-foreground">
+                          Discovery and distribution signals
+                        </h2>
+                      </div>
+                      <Badge variant="outline">
+                        {evidence.windowHours
+                          ? `${Math.round(evidence.windowHours / 24)}d window`
+                          : "window"}
+                      </Badge>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input
-                        id="phone"
-                        name="phone"
-                        value={bookingForm.phone}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="expectedGuests">Expected Guests</Label>
-                      <Input
-                        id="expectedGuests"
-                        name="expectedGuests"
-                        value={bookingForm.expectedGuests}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="date">Date</Label>
-                      <Input
-                        id="date"
-                        name="date"
-                        type="date"
-                        value={bookingForm.date}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="startTime">Start Time</Label>
-                      <Input
-                        id="startTime"
-                        name="startTime"
-                        type="time"
-                        value={bookingForm.startTime}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="endTime">End Time</Label>
-                      <Input
-                        id="endTime"
-                        name="endTime"
-                        type="time"
-                        value={bookingForm.endTime}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="location">Location</Label>
-                      <Input
-                        id="location"
-                        name="location"
-                        value={bookingForm.location}
-                        onChange={handleBookingFieldChange}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="notes">Notes</Label>
-                      <Textarea
-                        id="notes"
-                        name="notes"
-                        value={bookingForm.notes}
-                        onChange={handleBookingFieldChange}
-                        rows={4}
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={handleSubmitBookingRequest}
-                      disabled={isSubmittingBooking}
-                    >
-                      {isSubmittingBooking ? "Sending..." : "Send Request"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-            {!isFoodTruck && (
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+
+        {isFoodTruck ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="h-12 w-full rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90">
+                Book This Truck
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Book {restaurantName}</DialogTitle>
+                <DialogDescription>
+                  Share your event details and the truck owner will follow up.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Your Name</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    value={bookingForm.name}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={bookingForm.email}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    value={bookingForm.phone}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="expectedGuests">Expected Guests</Label>
+                  <Input
+                    id="expectedGuests"
+                    name="expectedGuests"
+                    value={bookingForm.expectedGuests}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Input
+                    id="date"
+                    name="date"
+                    type="date"
+                    value={bookingForm.date}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="startTime">Start Time</Label>
+                  <Input
+                    id="startTime"
+                    name="startTime"
+                    type="time"
+                    value={bookingForm.startTime}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="endTime">End Time</Label>
+                  <Input
+                    id="endTime"
+                    name="endTime"
+                    type="time"
+                    value={bookingForm.endTime}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    name="location"
+                    value={bookingForm.location}
+                    onChange={handleBookingFieldChange}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    name="notes"
+                    value={bookingForm.notes}
+                    onChange={handleBookingFieldChange}
+                    rows={4}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={handleSubmitBookingRequest}
+                  disabled={isSubmittingBooking}
+                >
+                  {isSubmittingBooking ? "Sending..." : "Send Request"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+
+        {phoneHref ? (
+          <Button
+            asChild
+            variant="outline"
+            className="h-12 w-full rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+          >
+            <a href={phoneHref}>
+              <Phone className="mr-2 h-4 w-4" />
+              Call
+            </a>
+          </Button>
+        ) : null}
+      </div>
+
+      {/* Menu + Specials */}
+      <section
+        className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[linear-gradient(160deg,rgba(10,10,14,0.98),rgba(17,17,22,0.96))] p-5 sm:p-6 shadow-clean"
+        id="restaurant-specials"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[color:var(--accent-text)]">
+              Start Here
+            </p>
+            <div className="mt-1 inline-flex items-center gap-2">
+              <h2 className="text-2xl font-black text-white">
+                <AdminEditableText
+                  textKey="restaurant.detail.menu.title"
+                  defaultText="Menu"
+                />
+              </h2>
+              <AdminEditButton
+                textKey="restaurant.detail.menu.title"
+                defaultText="Menu"
+                label="Menu section title"
+              />
+            </div>
+            <p className="mt-1 text-sm text-white/70">
+              See signature dishes and pricing before you visit.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:w-auto w-full">
+            {orderPrimaryUrl ? (
+              <a href={orderPrimaryUrl} target="_blank" rel="noreferrer">
+                <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                  Order Online
+                </Button>
+              </a>
+            ) : onsiteOrderingEnabled ? (
+              <Link href={onsiteMenuUrl}>
+                <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                  Order Online
+                </Button>
+              </Link>
+            ) : null}
+            {menuPrimaryUrl ? (
+              menuPrimaryIsInternal ? (
+                <Link href={menuPrimaryUrl}>
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                    View Full Menu
+                  </Button>
+                </Link>
+              ) : (
+                <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
+                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                    View Full Menu
+                  </Button>
+                </a>
+              )
+            ) : websitePrimaryUrl ? (
+              <a href={websitePrimaryUrl} target="_blank" rel="noreferrer">
+                <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Visit Website
+                </Button>
+              </a>
+            ) : (
               <Button
                 variant="outline"
-                className="w-full sm:flex-1"
-                data-testid="button-view-specials"
-                onClick={() =>
-                  document
-                    .getElementById("restaurant-specials")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
+                disabled
+                className="w-full sm:w-auto min-w-[13rem] font-semibold"
               >
-                <AdminEditableText
-                  textKey="restaurant.detail.actions.viewSpecials"
-                  defaultText="View Specials"
-                />
+                Menu Coming Soon
               </Button>
             )}
-          </div>
-          <div className="mt-2">
-            <AdminEditButton
-              textKey="restaurant.detail.actions.directions"
-              defaultText="Directions"
-              label="Directions button label"
-            />
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10"
+              onClick={() =>
+                document
+                  .getElementById("restaurant-specials-list")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              Browse Current Specials
+            </Button>
           </div>
         </div>
 
-        {/* Menu + Specials */}
-        <section
-          className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[linear-gradient(160deg,rgba(10,10,14,0.98),rgba(17,17,22,0.96))] p-5 sm:p-6 shadow-clean"
-          id="restaurant-specials"
-        >
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[color:var(--accent-text)]">
-                Start Here
-              </p>
-              <div className="mt-1 inline-flex items-center gap-2">
-                <h2 className="text-2xl font-black text-white">
-                  <AdminEditableText
-                    textKey="restaurant.detail.menu.title"
-                    defaultText="Menu"
-                  />
-                </h2>
-                <AdminEditButton
-                  textKey="restaurant.detail.menu.title"
-                  defaultText="Menu"
-                  label="Menu section title"
-                />
-              </div>
-              <p className="mt-1 text-sm text-white/70">
-                See signature dishes and pricing before you visit.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:w-auto w-full">
-              {orderPrimaryUrl ? (
-                <a href={orderPrimaryUrl} target="_blank" rel="noreferrer">
-                  <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
-                    Order Online
-                  </Button>
-                </a>
-              ) : onsiteOrderingEnabled ? (
-                <Link href={onsiteMenuUrl}>
-                  <Button className="w-full sm:w-auto min-w-[13rem] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
-                    Order Online
-                  </Button>
-                </Link>
-              ) : null}
-              {menuPrimaryUrl ? (
-                menuPrimaryIsInternal ? (
-                  <Link href={menuPrimaryUrl}>
-                    <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
-                      View Full Menu
-                    </Button>
-                  </Link>
-                ) : (
-                  <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
-                    <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
-                      View Full Menu
-                    </Button>
-                  </a>
-                )
-              ) : websitePrimaryUrl ? (
-                <a href={websitePrimaryUrl} target="_blank" rel="noreferrer">
-                  <Button className="w-full sm:w-auto min-w-[13rem] bg-orange-600 hover:bg-orange-700 text-white font-semibold">
-                    <Globe className="mr-2 h-4 w-4" />
-                    Visit Website
-                  </Button>
-                </a>
-              ) : (
-                <Button
-                  variant="outline"
-                  disabled
-                  className="w-full sm:w-auto min-w-[13rem] font-semibold"
-                >
-                  Menu Coming Soon
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto border-white/20 bg-white/5 text-white hover:bg-white/10"
-                onClick={() =>
-                  document
-                    .getElementById("restaurant-specials-list")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-              >
-                Browse Current Specials
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-6 border-t border-white/10 pt-5">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
-                Deals & Specials
-              </h3>
-              {restaurantDeals.length > 0 ? (
-                <Badge variant="outline" className="border-white/20 text-white/80">
-                  {restaurantDeals.length} live
-                </Badge>
-              ) : null}
-            </div>
-
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
+              Deals & Specials
+            </h3>
             {restaurantDeals.length > 0 ? (
-              <Carousel
-                opts={{ align: "start", loop: restaurantDeals.length > 2 }}
-                className="w-full"
+              <Badge
+                variant="outline"
+                className="border-white/20 text-white/80"
               >
-                <CarouselContent className="-ml-3">
-                  {restaurantDeals.map((deal: any) => (
-                    <CarouselItem
-                      key={deal.id}
-                      className="pl-3 basis-[88%] sm:basis-1/2 lg:basis-1/3"
-                    >
-                      <div className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                        <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
-                          {String(deal.category || "deal").toLowerCase() === "special"
-                            ? "Special"
-                            : "Deal"}
-                        </p>
-                        <h4 className="mt-1 line-clamp-2 text-base font-semibold text-white">
-                          {deal.title || "Special offer"}
-                        </h4>
-                        {deal.description ? (
-                          <p className="mt-2 line-clamp-3 text-sm text-white/70">
-                            {deal.description}
-                          </p>
-                        ) : null}
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          {deal.discountValue ? (
-                            <Badge className="bg-[color:var(--accent-text)] text-black hover:bg-[color:var(--accent-text)]">
-                              {deal.dealType === "percentage"
-                                ? `${deal.discountValue}% off`
-                                : `$${deal.discountValue} off`}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-white/20 text-white/75">
-                              Limited time
-                            </Badge>
-                          )}
-                          <Link href={`/deal/${deal.id}`}>
-                            <Button size="sm" variant="secondary" className="text-xs">
-                              View
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                {restaurantDeals.length > 1 ? (
-                  <>
-                    <CarouselPrevious className="left-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
-                    <CarouselNext className="right-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
-                  </>
-                ) : null}
-              </Carousel>
-            ) : (
-              <Card className="border-white/10 bg-white/[0.03]">
-                <CardContent className="p-4 text-sm text-white/70">
-                  No current specials available. Check back soon.
-                </CardContent>
-              </Card>
-            )}
+                {restaurantDeals.length} live
+              </Badge>
+            ) : null}
           </div>
 
-          {hasOnsiteMenu ? (
-            <div className="mt-6 border-t border-white/10 pt-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
-                  Full Onsite Menu
-                </h3>
-                <Link href={`/menu/${encodeURIComponent(String(restaurantId || ""))}`}>
-                  <Button size="sm" variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10">
-                    Open Menu Page
-                  </Button>
-                </Link>
-              </div>
-              <div className="space-y-4">
-                {onsiteMenuCategories.map((category) => (
-                  <div key={category.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <h4 className="text-base font-semibold text-white">{category.name}</h4>
-                    <div className="mt-3 space-y-3">
-                      {(Array.isArray(category.items) ? category.items : []).map((item) => (
+          {restaurantDeals.length > 0 ? (
+            <Carousel
+              opts={{ align: "start", loop: restaurantDeals.length > 2 }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-3">
+                {restaurantDeals.map((deal: any) => (
+                  <CarouselItem
+                    key={deal.id}
+                    className="pl-3 basis-[88%] sm:basis-1/2 lg:basis-1/3"
+                  >
+                    <div className="h-full rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                        {String(deal.category || "deal").toLowerCase() ===
+                        "special"
+                          ? "Special"
+                          : "Deal"}
+                      </p>
+                      <h4 className="mt-1 line-clamp-2 text-base font-semibold text-white">
+                        {deal.title || "Special offer"}
+                      </h4>
+                      {deal.description ? (
+                        <p className="mt-2 line-clamp-3 text-sm text-white/70">
+                          {deal.description}
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        {deal.discountValue ? (
+                          <Badge className="bg-[color:var(--accent-text)] text-black hover:bg-[color:var(--accent-text)]">
+                            {deal.dealType === "percentage"
+                              ? `${deal.discountValue}% off`
+                              : `$${deal.discountValue} off`}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-white/20 text-white/75"
+                          >
+                            Limited time
+                          </Badge>
+                        )}
+                        <Link href={`/deal/${deal.id}`}>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            View
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {restaurantDeals.length > 1 ? (
+                <>
+                  <CarouselPrevious className="left-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
+                  <CarouselNext className="right-2 h-8 w-8 border-white/20 bg-black/60 text-white hover:bg-black/80" />
+                </>
+              ) : null}
+            </Carousel>
+          ) : (
+            <Card className="border-white/10 bg-white/[0.03]">
+              <CardContent className="p-4 text-sm text-white/70">
+                No current specials available. Check back soon.
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {hasOnsiteMenu ? (
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-white/80">
+                Full Onsite Menu
+              </h3>
+              <Link
+                href={`/menu/${encodeURIComponent(String(restaurantId || ""))}`}
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 bg-white/5 text-white hover:bg-white/10"
+                >
+                  Open Menu Page
+                </Button>
+              </Link>
+            </div>
+            <div className="space-y-4">
+              {onsiteMenuCategories.map((category) => (
+                <div
+                  key={category.id}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                >
+                  <h4 className="text-base font-semibold text-white">
+                    {category.name}
+                  </h4>
+                  <div className="mt-3 space-y-3">
+                    {(Array.isArray(category.items) ? category.items : []).map(
+                      (item) => (
                         <div
                           key={item.id}
                           className="flex items-start justify-between gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
                         >
                           <div>
-                            <p className="text-sm font-medium text-white">{item.name}</p>
+                            <p className="text-sm font-medium text-white">
+                              {item.name}
+                            </p>
                             {item.description ? (
-                              <p className="mt-0.5 text-xs text-white/65">{item.description}</p>
+                              <p className="mt-0.5 text-xs text-white/65">
+                                {item.description}
+                              </p>
                             ) : null}
                           </div>
                           <div className="text-right">
@@ -1449,257 +1482,265 @@ export default function RestaurantDetailPage() {
                               {formatMoney(item.priceCents)}
                             </p>
                             {!item.isAvailable ? (
-                              <p className="text-[11px] text-amber-300">Unavailable</p>
+                              <p className="text-[11px] text-amber-300">
+                                Unavailable
+                              </p>
                             ) : null}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      ),
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ) : null}
-        </section>
-
-        {isFoodTruck && (
-          <div className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
-            <div className="mb-4 inline-flex items-center gap-2">
-              <h2 className="text-xl font-bold text-foreground">
-                <AdminEditableText
-                  textKey="restaurant.detail.parking.title"
-                  defaultText="Parking Schedule"
-                />
-              </h2>
-              {isStaffOrAdmin ? (
-                <Link href={editRestaurantFocusPath("parking") as any}>
-                  <Button size="sm" variant="outline">Manage Schedule</Button>
-                </Link>
-              ) : (
-                <AdminEditButton
-                  textKey="restaurant.detail.parking.title"
-                  defaultText="Parking Schedule"
-                  label="Parking schedule title"
-                />
-              )}
-            </div>
-            {scheduleLoading ? (
-              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  Loading schedule...
-                </CardContent>
-              </Card>
-            ) : parkingScheduleItems.length > 0 ? (
-              <ParkingScheduleCalendar
-                items={parkingScheduleItems}
-                subtitle="Auto-updated by Parking Pass bookings and public manual stops."
-              />
-            ) : (
-              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  <AdminEditableText
-                    textKey="restaurant.detail.parking.empty"
-                    defaultText="No upcoming parking schedule yet."
-                  />
-                </CardContent>
-              </Card>
-            )}
           </div>
-        )}
+        ) : null}
+      </section>
 
-        {/* Current Specials */}
-        <div
-          className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean"
-          id="restaurant-specials-list"
-        >
+      {isFoodTruck && (
+        <div className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
           <div className="mb-4 inline-flex items-center gap-2">
             <h2 className="text-xl font-bold text-foreground">
               <AdminEditableText
-                textKey="restaurant.detail.specials.title"
-                defaultText="Current Specials"
+                textKey="restaurant.detail.parking.title"
+                defaultText="Parking Schedule"
               />
             </h2>
             {isStaffOrAdmin ? (
-              <Link href={dealCreationPath as any}>
-                <Button size="sm" variant="outline">Manage Specials</Button>
+              <Link href={editRestaurantFocusPath("parking") as any}>
+                <Button size="sm" variant="outline">
+                  Manage Schedule
+                </Button>
               </Link>
             ) : (
               <AdminEditButton
-                textKey="restaurant.detail.specials.title"
-                defaultText="Current Specials"
-                label="Current specials title"
+                textKey="restaurant.detail.parking.title"
+                defaultText="Parking Schedule"
+                label="Parking schedule title"
               />
             )}
           </div>
-          {restaurantDeals.length > 0 ? (
-            <div className="space-y-4">
-              {restaurantDeals.map((deal: any) => (
-                <DealCard key={deal.id} deal={deal} />
-              ))}
-            </div>
+          {scheduleLoading ? (
+            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+              <CardContent className="p-6 text-center text-muted-foreground">
+                Loading schedule...
+              </CardContent>
+            </Card>
+          ) : parkingScheduleItems.length > 0 ? (
+            <ParkingScheduleCalendar
+              items={parkingScheduleItems}
+              subtitle="Auto-updated by Parking Pass bookings and public manual stops."
+            />
           ) : (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">-</span>
-                </div>
-                <p className="text-muted-foreground">
-                  No current specials available
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Check back soon!
-                </p>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                <AdminEditableText
+                  textKey="restaurant.detail.parking.empty"
+                  defaultText="No upcoming parking schedule yet."
+                />
               </CardContent>
             </Card>
           )}
         </div>
+      )}
 
-        {/* Restaurant Trust Panel */}
-        {restaurantId && isVerifiedMemberProfile && (
-          <div className="mt-10">
-            <RestaurantTrustPanel restaurantId={restaurantId} />
-          </div>
-        )}
-
-        {/* Community Recommendations */}
-        <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-foreground">
-                Community Recommendations
-              </h2>
-              {isStaffOrAdmin ? (
-                <Link href={editRestaurantFocusPath("recommendations") as any}>
-                  <Button size="sm" variant="outline">Manage Content</Button>
-                </Link>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">
-                {recommendationCount} total
-              </Badge>
-              {restaurantId && (
-                <FlagProfileContentDialog restaurantId={restaurantId} />
-              )}
-            </div>
-          </div>
-          {recommendationRows.length > 0 ? (
-            <div className="space-y-3">
-              {recommendationRows.map((rec) => (
-                <Card
-                  key={rec.id}
-                  className="border border-[color:var(--border-subtle)]"
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-sm text-foreground">
-                          Recommended by {rec.authorName}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {rec.createdAt
-                            ? new Date(rec.createdAt).toLocaleDateString()
-                            : "Recent"}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {rec.menuItemName ? `Menu pick: ${rec.menuItemName} · ` : ""}
-                          {rec.sentimentScore100 >= 75
-                            ? "Very positive"
-                            : rec.sentimentScore100 >= 50
-                              ? "Positive"
-                              : rec.sentimentScore100 >= 30
-                                ? "Mixed"
-                                : "Negative"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant={
-                            rec.viewerReaction === "like" ? "default" : "outline"
-                          }
-                          className="h-8 px-2"
-                          onClick={() =>
-                            handleRecommendationReaction(
-                              rec.id,
-                              rec.viewerReaction,
-                              "like",
-                            )
-                          }
-                        >
-                          <ThumbsUp className="w-3.5 h-3.5 mr-1" />
-                          {rec.likeCount}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={
-                            rec.viewerReaction === "dislike"
-                              ? "destructive"
-                              : "outline"
-                          }
-                          className="h-8 px-2"
-                          onClick={() =>
-                            handleRecommendationReaction(
-                              rec.id,
-                              rec.viewerReaction,
-                              "dislike",
-                            )
-                          }
-                        >
-                          <ThumbsDown className="w-3.5 h-3.5 mr-1" />
-                          {rec.dislikeCount}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-2"
-                          onClick={() => handleRecommendationShare(rec.id)}
-                        >
-                          <Share2 className="w-3.5 h-3.5 mr-1" />
-                          {rec.shareCount}
-                        </Button>
-                        <FlagRecommendationDialog recommendationId={rec.id} />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+      {/* Current Specials */}
+      <div
+        className="mb-8 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean"
+        id="restaurant-specials-list"
+      >
+        <div className="mb-4 inline-flex items-center gap-2">
+          <h2 className="text-xl font-bold text-foreground">
+            <AdminEditableText
+              textKey="restaurant.detail.specials.title"
+              defaultText="Current Specials"
+            />
+          </h2>
+          {isStaffOrAdmin ? (
+            <Link href={dealCreationPath as any}>
+              <Button size="sm" variant="outline">
+                Manage Specials
+              </Button>
+            </Link>
           ) : (
-            <Card className="border border-[color:var(--border-subtle)]">
-              <CardContent className="p-6 text-sm text-muted-foreground text-center">
-                No community recommendations yet. Be the first to recommend this spot.
-              </CardContent>
-            </Card>
+            <AdminEditButton
+              textKey="restaurant.detail.specials.title"
+              defaultText="Current Specials"
+              label="Current specials title"
+            />
           )}
         </div>
-
-        {/* FAQ Section - SEO optimized, minimal UI */}
-        <div className="mt-12 pt-8 border-t border-[color:var(--border-subtle)]">
-          <MinimalFAQ
-            items={[
-              {
-                question: `How do I order from ${restaurantName}?`,
-                answer: `Check ${restaurantName}'s menu and current MealScout profile details, or contact them directly at ${(restaurant as any)?.phone || "their phone number"} for pickup and ordering options.`,
-              },
-              {
-                question: `What are the current specials at ${restaurantName}?`,
-                answer: `${restaurantName} has ${restaurantDeals.length} active specials available on MealScout. View all current specials and claim offers directly from this page.`,
-              },
-              {
-                question: `What type of cuisine does ${restaurantName} serve?`,
-                answer: `${restaurantName} specializes in ${cuisineType} cuisine. Check the menu and community recommendations above for favorite picks and highlights.`,
-              },
-              {
-                question: `How do I get directions to ${restaurantName}?`,
-                answer: `${restaurantName} is located at ${address}. Click the Directions button above to open navigation in your maps app.`,
-              },
-            ]}
-            className="mt-6"
-          />
-        </div>
+        {restaurantDeals.length > 0 ? (
+          <div className="space-y-4">
+            {restaurantDeals.map((deal: any) => (
+              <DealCard key={deal.id} deal={deal} />
+            ))}
+          </div>
+        ) : (
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">-</span>
+              </div>
+              <p className="text-muted-foreground">
+                No current specials available
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Check back soon!
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
+      {/* Restaurant Trust Panel */}
+      {restaurantId && isVerifiedMemberProfile && (
+        <div className="mt-10">
+          <RestaurantTrustPanel restaurantId={restaurantId} />
+        </div>
+      )}
+
+      {/* Community Recommendations */}
+      <div className="mt-10 rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 sm:p-6 shadow-clean">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl font-bold text-foreground">
+              Community Recommendations
+            </h2>
+            {isStaffOrAdmin ? (
+              <Link href={editRestaurantFocusPath("recommendations") as any}>
+                <Button size="sm" variant="outline">
+                  Manage Content
+                </Button>
+              </Link>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{recommendationCount} total</Badge>
+            {restaurantId && (
+              <FlagProfileContentDialog restaurantId={restaurantId} />
+            )}
+          </div>
+        </div>
+        {recommendationRows.length > 0 ? (
+          <div className="space-y-3">
+            {recommendationRows.map((rec) => (
+              <Card
+                key={rec.id}
+                className="border border-[color:var(--border-subtle)]"
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-sm text-foreground">
+                        Recommended by {rec.authorName}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {rec.createdAt
+                          ? new Date(rec.createdAt).toLocaleDateString()
+                          : "Recent"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {rec.menuItemName
+                          ? `Menu pick: ${rec.menuItemName} · `
+                          : ""}
+                        {rec.sentimentScore100 >= 75
+                          ? "Very positive"
+                          : rec.sentimentScore100 >= 50
+                            ? "Positive"
+                            : rec.sentimentScore100 >= 30
+                              ? "Mixed"
+                              : "Negative"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant={
+                          rec.viewerReaction === "like" ? "default" : "outline"
+                        }
+                        className="h-8 px-2"
+                        onClick={() =>
+                          handleRecommendationReaction(
+                            rec.id,
+                            rec.viewerReaction,
+                            "like",
+                          )
+                        }
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5 mr-1" />
+                        {rec.likeCount}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={
+                          rec.viewerReaction === "dislike"
+                            ? "destructive"
+                            : "outline"
+                        }
+                        className="h-8 px-2"
+                        onClick={() =>
+                          handleRecommendationReaction(
+                            rec.id,
+                            rec.viewerReaction,
+                            "dislike",
+                          )
+                        }
+                      >
+                        <ThumbsDown className="w-3.5 h-3.5 mr-1" />
+                        {rec.dislikeCount}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2"
+                        onClick={() => handleRecommendationShare(rec.id)}
+                      >
+                        <Share2 className="w-3.5 h-3.5 mr-1" />
+                        {rec.shareCount}
+                      </Button>
+                      <FlagRecommendationDialog recommendationId={rec.id} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-[color:var(--border-subtle)]">
+            <CardContent className="p-6 text-sm text-muted-foreground text-center">
+              No community recommendations yet. Be the first to recommend this
+              spot.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* FAQ Section - SEO optimized, minimal UI */}
+      <div className="mt-12 pt-8 border-t border-[color:var(--border-subtle)]">
+        <MinimalFAQ
+          items={[
+            {
+              question: `How do I order from ${restaurantName}?`,
+              answer: `Check ${restaurantName}'s menu and current MealScout profile details, or contact them directly at ${(restaurant as any)?.phone || "their phone number"} for pickup and ordering options.`,
+            },
+            {
+              question: `What are the current specials at ${restaurantName}?`,
+              answer: `${restaurantName} has ${restaurantDeals.length} active specials available on MealScout. View all current specials and claim offers directly from this page.`,
+            },
+            {
+              question: `What type of cuisine does ${restaurantName} serve?`,
+              answer: `${restaurantName} specializes in ${cuisineType} cuisine. Check the menu and community recommendations above for favorite picks and highlights.`,
+            },
+            {
+              question: `How do I get directions to ${restaurantName}?`,
+              answer: `${restaurantName} is located at ${address}. Click the Directions button above to open navigation in your maps app.`,
+            },
+          ]}
+          className="mt-6"
+        />
+      </div>
       <Navigation />
     </div>
   );
