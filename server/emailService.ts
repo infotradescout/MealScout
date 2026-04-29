@@ -126,6 +126,7 @@ export const getEmailConfigSummary = () => {
     mode,
     disabled,
     missing,
+    authorizedIpsUrl: "https://app.brevo.com/security/authorised_ips",
     fromEmail: EMAIL_CONFIG.fromEmail,
     fromName: EMAIL_CONFIG.fromName,
     adminEmail: EMAIL_CONFIG.adminEmail,
@@ -1288,7 +1289,23 @@ export class EmailService {
           : typeof anyError?.response?.body?.code === "string"
             ? anyError.response.body.code
             : undefined;
-      const errorMessage = (() => {
+      const providerBodyMessage = (() => {
+        const bodyMessage = anyError?.response?.body?.message;
+        if (Array.isArray(bodyMessage) && bodyMessage.length > 0) {
+          return bodyMessage
+            .map((item) => (typeof item === "string" ? item : JSON.stringify(item)))
+            .join(" | ");
+        }
+        if (typeof bodyMessage === "string" && bodyMessage.trim()) {
+          return bodyMessage.trim();
+        }
+        const nestedError = anyError?.response?.body?.error;
+        if (typeof nestedError === "string" && nestedError.trim()) {
+          return nestedError.trim();
+        }
+        return "";
+      })();
+      const baseErrorMessage = (() => {
         try {
           if (!error) return "Unknown error";
           if (typeof anyError?.message === "string" && anyError.message.trim()) {
@@ -1299,6 +1316,45 @@ export class EmailService {
           return String(error);
         }
       })();
+      const errorMessage = providerBodyMessage
+        ? `${baseErrorMessage} | Brevo: ${providerBodyMessage}`
+        : baseErrorMessage;
+      const diagnosticHint = (() => {
+        const normalized = `${errorMessage} ${providerErrorCode || ""}`.toLowerCase();
+        if (providerStatusCode === 401) {
+          return "Verify BREVO_API_KEY and Brevo authorized IP settings for this server.";
+        }
+        if (providerStatusCode === 403) {
+          return "Brevo rejected permissions for this API key. Check key scope/account restrictions.";
+        }
+        if (providerStatusCode === 429) {
+          return "Brevo rate limit hit. Reduce email burst or increase plan limits.";
+        }
+        if (
+          normalized.includes("sender") &&
+          (normalized.includes("invalid") ||
+            normalized.includes("not valid") ||
+            normalized.includes("not verified"))
+        ) {
+          return "The sender email/domain is not verified in Brevo. Set EMAIL_FROM to a verified sender.";
+        }
+        if (providerStatusCode === 400) {
+          return "Brevo rejected request payload. Check recipient format, sender identity, and content fields.";
+        }
+        return "";
+      })();
+      const diagnostic =
+        providerStatusCode === 401
+          ? `${errorMessage} | Brevo rejected the request with 401.`
+          : errorMessage;
+      const finalDiagnostic = diagnosticHint
+        ? `${diagnostic} | Hint: ${diagnosticHint}`
+        : diagnostic;
+      if (providerStatusCode === 401) {
+        console.error(
+          "Brevo email authentication failed with 401. Verify BREVO_API_KEY and whitelist the current server IP in Brevo authorized IP settings.",
+        );
+      }
       emailDeliveryAudit.add({
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -1306,7 +1362,7 @@ export class EmailService {
         subject: params.subject,
         category: params.category || "general",
         status: "failed",
-        error: errorMessage,
+        error: finalDiagnostic,
         providerStatusCode,
         providerErrorCode,
         provider: "brevo",

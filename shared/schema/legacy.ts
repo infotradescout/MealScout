@@ -5654,7 +5654,7 @@ export const menus = pgTable(
     hidePlatformFee: boolean("hide_platform_fee").notNull().default(false),
     // If true the $1 fee is absorbed by the business (not shown to customer)
     importSource: varchar("import_source"),
-    // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
+    // 'manual' | 'csv' | 'ubereats' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
     importedAt: timestamp("imported_at"),
     importUrl: varchar("import_url"),
     // Last URL used for url-based imports — enables one-click re-import.
@@ -5809,7 +5809,7 @@ export const menuImportLogs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     source: varchar("source").notNull(),
-    // 'manual' | 'csv' | 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
+    // 'manual' | 'csv' | 'ubereats' | 'clover' | 'toast' | 'square' | 'gmb' | 'pdf'
     fileName: varchar("file_name"),
     itemsImported: integer("items_imported").default(0),
     itemsSkipped: integer("items_skipped").default(0),

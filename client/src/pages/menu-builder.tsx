@@ -136,6 +136,11 @@ const MENU_SERVICE_TYPE_OPTIONS = [
   { value: "weekend_brunch", label: "Weekend Brunch" },
 ] as const;
 
+const MENU_SERVICE_TYPE_LABELS = MENU_SERVICE_TYPE_OPTIONS.reduce(
+  (labels, option) => ({ ...labels, [option.value]: option.label }),
+  {} as Record<string, string>,
+);
+
 function normalizeMenuServiceType(value: string): string {
   const normalized = String(value || "")
     .trim()
@@ -159,7 +164,17 @@ interface RestaurantOption {
   id: string;
   name: string;
   businessType?: string | null;
+  menuUrl?: string | null;
+  orderUrl?: string | null;
+  websiteUrl?: string | null;
 }
+
+type MenuImportResult = {
+  imported: number;
+  skipped: number;
+  source?: string;
+  errors: Array<{ row?: number; reason: string }>;
+};
 
 // ──────────────────────────────── helpers ─────────────────────────────────────
 function useRestaurantId(restaurants: RestaurantOption[]): string | null {
@@ -198,10 +213,32 @@ export default function MenuBuilderPage() {
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuServiceType, setNewMenuServiceType] = useState("all");
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importType, setImportType] = useState<"csv" | "pdf" | "image" | "url">("csv");
+  const [importType, setImportType] = useState<"csv" | "pdf" | "image" | "url">(
+    "csv",
+  );
   const [importUrl, setImportUrl] = useState("");
   const [importSource, setImportSource] = useState("auto");
   const [isImporting, setIsImporting] = useState(false);
+  const [lastImportResult, setLastImportResult] =
+    useState<MenuImportResult | null>(null);
+
+  const profileImportUrl = useMemo(() => {
+    const candidates = [
+      activeRestaurant?.menuUrl,
+      activeRestaurant?.orderUrl,
+      activeRestaurant?.websiteUrl,
+    ];
+    return candidates.find((value) => String(value || "").trim()) || "";
+  }, [activeRestaurant?.menuUrl, activeRestaurant?.orderUrl, activeRestaurant?.websiteUrl]);
+
+  const openImportDialog = (urlOverride?: string | null) => {
+    const nextUrl = String(urlOverride || importUrl || profileImportUrl || "").trim();
+    if (nextUrl) {
+      setImportType("url");
+      setImportUrl(nextUrl);
+    }
+    setShowImportDialog(true);
+  };
 
   // fetch menus list
   const menusQuery = useQuery<Menu[]>({
@@ -221,11 +258,11 @@ export default function MenuBuilderPage() {
 
   // fetch full menu with categories + items
   const fullMenuQuery = useQuery<FullMenu>({
-    queryKey: ["/api/menus", selectedMenuId],
+    queryKey: ["/api/owner/menus/full", restaurantId, selectedMenuId],
     queryFn: async () => {
       if (!selectedMenuId || !restaurantId) throw new Error("No menu selected");
       const res = await fetch(
-        `/api/menus/${encodeURIComponent(restaurantId)}?menuId=${encodeURIComponent(selectedMenuId)}`,
+        `/api/owner/menus/${encodeURIComponent(restaurantId)}/full?menuId=${encodeURIComponent(selectedMenuId)}`,
         { credentials: "include" },
       );
       if (!res.ok) throw new Error("Failed to load menu");
@@ -270,6 +307,7 @@ export default function MenuBuilderPage() {
       queryClient.invalidateQueries({
         queryKey: ["/api/owner/menus", restaurantId],
       });
+      queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
       if (menu?.id) setSelectedMenuId(menu.id);
       setShowNewMenuDialog(false);
       setNewMenuName("");
@@ -327,9 +365,19 @@ export default function MenuBuilderPage() {
           })()
         : {};
       if (!res.ok) throw new Error(data.message || "Import failed");
-      queryClient.invalidateQueries({
-        queryKey: ["/api/menus", selectedMenuId],
+      setLastImportResult({
+        imported: Number(data.imported ?? data.inserted ?? 0),
+        skipped: Number(data.skipped ?? 0),
+        source: data.source,
+        errors: Array.isArray(data.errors) ? data.errors : [],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/owner/menus/full", restaurantId, selectedMenuId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/owner/menus", restaurantId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
       setShowImportDialog(false);
       setImportFile(null);
       setImportUrl("");
@@ -402,15 +450,13 @@ export default function MenuBuilderPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setImportType("url");
-                  setImportUrl(selectedMenu.importUrl || "");
                   setImportSource(
                     selectedMenu.importSource &&
                       selectedMenu.importSource !== "url"
                       ? selectedMenu.importSource
                       : "auto",
                   );
-                  setShowImportDialog(true);
+                  openImportDialog(selectedMenu.importUrl);
                 }}
                 title={`Re-import from ${selectedMenu.importUrl}`}
               >
@@ -422,7 +468,7 @@ export default function MenuBuilderPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowImportDialog(true)}
+                onClick={() => openImportDialog()}
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Import Items
@@ -469,6 +515,46 @@ export default function MenuBuilderPage() {
           </div>
         )}
 
+        {lastImportResult && (
+          <div className="mb-4 rounded-md border bg-card px-3 py-2 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-medium">
+                  Imported {lastImportResult.imported} item
+                  {lastImportResult.imported === 1 ? "" : "s"}
+                </span>
+                <span className="text-muted-foreground">
+                  {" "}• skipped {lastImportResult.skipped}
+                  {lastImportResult.source ? ` • source ${lastImportResult.source}` : ""}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLastImportResult(null)}
+              >
+                Dismiss
+              </Button>
+            </div>
+            {lastImportResult.errors.length > 0 && (
+              <div className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                <div className="font-medium">
+                  {lastImportResult.errors.length} import issue
+                  {lastImportResult.errors.length === 1 ? "" : "s"}
+                </div>
+                <ul className="mt-1 space-y-1">
+                  {lastImportResult.errors.slice(0, 5).map((error, index) => (
+                    <li key={`${error.row ?? index}-${error.reason}`}>
+                      {error.row != null ? `Row ${error.row}: ` : ""}
+                      {error.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left sidebar: menu list */}
           <div className="lg:col-span-1 space-y-2">
@@ -492,7 +578,8 @@ export default function MenuBuilderPage() {
               >
                 <div className="font-medium truncate">{menu.name}</div>
                 <div className="text-xs opacity-70 capitalize">
-                  {menu.serviceType.replace("_", " ")}
+                  {MENU_SERVICE_TYPE_LABELS[menu.serviceType] ??
+                    menu.serviceType.replace("_", " ")}
                 </div>
                 {!menu.isActive && (
                   <Badge variant="secondary" className="text-xs mt-1">
@@ -530,10 +617,17 @@ export default function MenuBuilderPage() {
                 restaurantId={restaurantId}
                 onRefresh={() => {
                   queryClient.invalidateQueries({
-                    queryKey: ["/api/menus", selectedMenuId],
+                    queryKey: [
+                      "/api/owner/menus/full",
+                      restaurantId,
+                      selectedMenuId,
+                    ],
                   });
                   queryClient.invalidateQueries({
                     queryKey: ["/api/owner/menus", restaurantId],
+                  });
+                  queryClient.invalidateQueries({
+                    queryKey: ["owner-onboarding"],
                   });
                 }}
               />
@@ -607,35 +701,55 @@ export default function MenuBuilderPage() {
             <div>
               <Label>Import Format</Label>
               <div className="flex gap-2 mt-2">
-                {(["csv", "pdf", "image", "url"] as const).map((t) => (
+                {(["url", "csv", "pdf", "image"] as const).map((t) => (
                   <Button
                     key={t}
                     variant={importType === t ? "default" : "outline"}
                     size="sm"
                     onClick={() => setImportType(t)}
                   >
-                    {t === "url" ? "URL" : t === "image" ? "Photo" : t.toUpperCase()}
+                    {t === "url"
+                      ? "URL"
+                      : t === "image"
+                        ? "Photo"
+                        : t.toUpperCase()}
                   </Button>
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {importType === "csv"
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
-                  : importType === "pdf"
-                    ? "Upload a PDF menu — AI will extract items automatically."
-                    : importType === "image"
-                      ? "Upload a photo of your menu board or printed menu — AI will read and extract items."
-                      : "Paste a DoorDash, UberEats, Google, or other public menu URL."}
+                    : importType === "pdf"
+                      ? "Upload a PDF menu — AI will extract items automatically."
+                      : importType === "image"
+                        ? "Upload a photo of your menu board or printed menu — AI will read and extract items."
+                        : "Paste your website, Google, Yelp, Grubhub, UberEats, or another public menu URL."}
               </p>
             </div>
             {importType === "url" ? (
               <>
+                {profileImportUrl && !importUrl.trim() && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm">
+                    <div className="font-medium">Use saved profile link</div>
+                    <div className="mt-1 break-all text-xs text-muted-foreground">
+                      {profileImportUrl}
+                    </div>
+                    <Button
+                      className="mt-2"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setImportUrl(profileImportUrl)}
+                    >
+                      Use this link
+                    </Button>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="import-url">Menu URL</Label>
                   <Input
                     id="import-url"
                     type="url"
-                    placeholder="https://www.doordash.com/store/..."
+                    placeholder="https://your-menu-link.example"
                     value={importUrl}
                     onChange={(e) => setImportUrl(e.target.value)}
                   />
@@ -648,7 +762,6 @@ export default function MenuBuilderPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="auto">Auto detect</SelectItem>
-                      <SelectItem value="doordash">DoorDash</SelectItem>
                       <SelectItem value="ubereats">UberEats</SelectItem>
                       <SelectItem value="google">Google</SelectItem>
                       <SelectItem value="grubhub">Grubhub</SelectItem>
@@ -717,11 +830,36 @@ function MenuEditor({
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [menuSettings, setMenuSettings] = useState({
+    name: menu.name,
+    serviceType: normalizeMenuServiceType(menu.serviceType),
+    availableFrom: menu.availableFrom ?? "",
+    availableTo: menu.availableTo ?? "",
     acceptsCash: menu.acceptsCash,
     hidePlatformFee: menu.hidePlatformFee,
     isActive: menu.isActive,
   });
   const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    setMenuSettings({
+      name: menu.name,
+      serviceType: normalizeMenuServiceType(menu.serviceType),
+      availableFrom: menu.availableFrom ?? "",
+      availableTo: menu.availableTo ?? "",
+      acceptsCash: menu.acceptsCash,
+      hidePlatformFee: menu.hidePlatformFee,
+      isActive: menu.isActive,
+    });
+  }, [
+    menu.id,
+    menu.name,
+    menu.serviceType,
+    menu.availableFrom,
+    menu.availableTo,
+    menu.acceptsCash,
+    menu.hidePlatformFee,
+    menu.isActive,
+  ]);
 
   const saveCategory = async () => {
     try {
@@ -772,10 +910,35 @@ function MenuEditor({
     }
   };
 
+  const createStarterCategory = async () => {
+    try {
+      await apiRequest("POST", "/api/owner/menu-categories", {
+        menuId: menu.id,
+        restaurantId,
+        name: "Menu Items",
+        description: null,
+      });
+      onRefresh();
+      toast({ title: "Starter category added" });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const saveMenuSettings = async () => {
     setSavingSettings(true);
     try {
-      await apiRequest("PATCH", `/api/owner/menus/${menu.id}`, menuSettings);
+      await apiRequest("PATCH", `/api/owner/menus/${menu.id}`, {
+        ...menuSettings,
+        name: menuSettings.name.trim() || "Menu",
+        serviceType: normalizeMenuServiceType(menuSettings.serviceType),
+        availableFrom: menuSettings.availableFrom || null,
+        availableTo: menuSettings.availableTo || null,
+      });
       onRefresh();
       toast({ title: "Settings saved" });
     } catch (err: any) {
@@ -884,9 +1047,20 @@ function MenuEditor({
               </div>
 
               {menu.categories.length === 0 && (
-                <p className="text-center text-sm text-muted-foreground py-8">
-                  No categories yet. Add a category to start adding items.
-                </p>
+                <div className="rounded-lg border border-dashed py-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No categories yet. Add a starter category to begin adding items.
+                  </p>
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="outline"
+                    onClick={createStarterCategory}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Starter Category
+                  </Button>
+                </div>
               )}
 
               <Accordion type="multiple" className="space-y-2">
@@ -996,6 +1170,72 @@ function MenuEditor({
             </TabsContent>
 
             <TabsContent value="settings" className="pt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label htmlFor={`menu-name-${menu.id}`}>Menu Name</Label>
+                  <Input
+                    id={`menu-name-${menu.id}`}
+                    value={menuSettings.name}
+                    onChange={(e) =>
+                      setMenuSettings((s) => ({ ...s, name: e.target.value }))
+                    }
+                    placeholder="e.g. Lunch Menu"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`menu-service-${menu.id}`}>Service Type</Label>
+                  <Select
+                    value={menuSettings.serviceType}
+                    onValueChange={(value) =>
+                      setMenuSettings((s) => ({
+                        ...s,
+                        serviceType: normalizeMenuServiceType(value),
+                      }))
+                    }
+                  >
+                    <SelectTrigger id={`menu-service-${menu.id}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MENU_SERVICE_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor={`menu-from-${menu.id}`}>Starts</Label>
+                    <Input
+                      id={`menu-from-${menu.id}`}
+                      type="time"
+                      value={menuSettings.availableFrom}
+                      onChange={(e) =>
+                        setMenuSettings((s) => ({
+                          ...s,
+                          availableFrom: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor={`menu-to-${menu.id}`}>Ends</Label>
+                    <Input
+                      id={`menu-to-${menu.id}`}
+                      type="time"
+                      value={menuSettings.availableTo}
+                      onChange={(e) =>
+                        setMenuSettings((s) => ({
+                          ...s,
+                          availableTo: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Menu Active</Label>

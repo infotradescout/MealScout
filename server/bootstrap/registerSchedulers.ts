@@ -758,10 +758,13 @@ export async function registerSchedulers(app: Express): Promise<void> {
   cron.schedule("0 9 * * *", async () => {
     try {
       const { securityAuditLog, restaurants, users } = await import("@shared/schema");
-      const { eq, and } = await import("drizzle-orm");
+      const { eq, and, desc, sql } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");
 
-      // Find unverified trucks with a recent VAC evaluation entry.
+      // Find unverified businesses with a recent VAC evaluation entry.
+      // Deleted users are anonymized as deleted+<id>@mealscout.invalid; keep
+      // those out of the operational queue so the digest only shows actionable
+      // manual-review cases.
       const pendingRows = await db
         .select({
           restaurantId: restaurants.id,
@@ -779,16 +782,33 @@ export async function registerSchedulers(app: Express): Promise<void> {
             eq(securityAuditLog.action, "vac:evaluate"),
           ),
         )
-        .where(eq(restaurants.isVerified, false))
-        .orderBy(restaurants.createdAt)
-        .limit(100);
+        .where(
+          and(
+            eq(restaurants.isVerified, false),
+            eq(restaurants.isActive, true),
+            sql`coalesce(${users.isDisabled}, false) = false`,
+            sql`lower(coalesce(${users.email}, '')) not like 'deleted+%@mealscout.invalid'`,
+          ),
+        )
+        .orderBy(desc(securityAuditLog.timestamp))
+        .limit(300);
 
-      const manualReviewRows = pendingRows.filter((row: { vacScore: unknown }) => {
-        const meta = (row.vacScore as any) || {};
-        if (meta.shouldAutoVerify === true) return false;
-        if (typeof meta.outcome === "string") return meta.outcome === "manual_review";
-        return true;
-      });
+      const latestRowsByRestaurant = new Map<string, (typeof pendingRows)[number]>();
+      for (const row of pendingRows) {
+        const key = String(row.restaurantId || "");
+        if (key && !latestRowsByRestaurant.has(key)) {
+          latestRowsByRestaurant.set(key, row);
+        }
+      }
+
+      const manualReviewRows = Array.from(latestRowsByRestaurant.values())
+        .filter((row: { vacScore: unknown }) => {
+          const meta = (row.vacScore as any) || {};
+          if (meta.shouldAutoVerify === true) return false;
+          if (typeof meta.outcome === "string") return meta.outcome === "manual_review";
+          return true;
+        })
+        .slice(0, 100);
 
       if (manualReviewRows.length === 0) {
         console.log("[vac-digest] No pending manual reviews — skipping digest");

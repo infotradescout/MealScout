@@ -3654,6 +3654,14 @@ export class DatabaseStorage implements IStorage {
         restaurants,
         eq(verificationRequests.restaurantId, restaurants.id),
       )
+      .innerJoin(users, eq(restaurants.ownerId, users.id))
+      .where(
+        and(
+          eq(restaurants.isActive, true),
+          sql`coalesce(${users.isDisabled}, false) = false`,
+          sql`lower(coalesce(${users.email}, '')) not like 'deleted+%@mealscout.invalid'`,
+        ),
+      )
       .orderBy(desc(verificationRequests.submittedAt));
   }
 

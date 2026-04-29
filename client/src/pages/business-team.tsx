@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BackHeader } from "@/components/back-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 type PermissionSet = {
   manageDeals: boolean;
@@ -22,6 +23,43 @@ const defaultPermissions: PermissionSet = {
   viewAnalytics: false,
   manageProfile: false,
 };
+
+const permissionPresets: Array<{
+  label: string;
+  description: string;
+  permissions: PermissionSet;
+}> = [
+  {
+    label: "Manager",
+    description: "Deals, parking, analytics, profile, and menus.",
+    permissions: {
+      manageDeals: true,
+      manageParkingPass: true,
+      viewAnalytics: true,
+      manageProfile: true,
+    },
+  },
+  {
+    label: "Shift Lead",
+    description: "Daily deals and parking operations.",
+    permissions: {
+      manageDeals: true,
+      manageParkingPass: true,
+      viewAnalytics: false,
+      manageProfile: false,
+    },
+  },
+  {
+    label: "Marketing",
+    description: "Deals, analytics, profile, and menu updates.",
+    permissions: {
+      manageDeals: true,
+      manageParkingPass: false,
+      viewAnalytics: true,
+      manageProfile: true,
+    },
+  },
+];
 
 export default function BusinessTeamPage() {
   const queryClient = useQueryClient();
@@ -86,6 +124,12 @@ export default function BusinessTeamPage() {
 
   const restaurants = teamData?.restaurants || [];
 
+  useEffect(() => {
+    if (!selectedRestaurantId && restaurants.length > 0) {
+      setSelectedRestaurantId(restaurants[0].id);
+    }
+  }, [restaurants, selectedRestaurantId]);
+
   const grouped = useMemo(() => {
     const members = teamData?.members || [];
     const invites = teamData?.invites || [];
@@ -101,11 +145,12 @@ export default function BusinessTeamPage() {
       if (!selectedRestaurantId) {
         throw new Error("Select a business first.");
       }
-      return await apiRequest("POST", "/api/business/team/invites", {
+      const res = await apiRequest("POST", "/api/business/team/invites", {
         restaurantId: selectedRestaurantId,
         email: inviteEmail.trim() || null,
         permissions,
       });
+      return res.json();
     },
     onSuccess: (data: any) => {
       setLatestInviteLink(String(data?.inviteUrl || ""));
@@ -130,6 +175,31 @@ export default function BusinessTeamPage() {
       await apiRequest("POST", `/api/business/team/invites/${inviteId}/revoke`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/business/team"] });
+    },
+  });
+
+  const refreshInvite = useMutation({
+    mutationFn: async (inviteId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/business/team/invites/${inviteId}/refresh`,
+      );
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setLatestInviteLink(String(data?.inviteUrl || ""));
+      queryClient.invalidateQueries({ queryKey: ["/api/business/team"] });
+      toast({
+        title: "Invite link refreshed",
+        description: "Copy the new link below.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not refresh invite",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -213,6 +283,26 @@ export default function BusinessTeamPage() {
               </select>
             </div>
 
+            {selectedRestaurantId ? (
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/menu-builder/${selectedRestaurantId}`}>
+                  <Button type="button" size="sm" variant="outline">
+                    Menu Builder
+                  </Button>
+                </Link>
+                <Link href={`/edit-restaurant/${selectedRestaurantId}`}>
+                  <Button type="button" size="sm" variant="outline">
+                    Edit Profile
+                  </Button>
+                </Link>
+                <Link href="/restaurant-owner-dashboard">
+                  <Button type="button" size="sm" variant="outline">
+                    Dashboard
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <Label>Employee email (optional)</Label>
               <Input
@@ -223,6 +313,24 @@ export default function BusinessTeamPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>Access preset</Label>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {permissionPresets.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className="rounded-md border border-[color:var(--border-subtle)] p-3 text-left text-sm hover:bg-muted/50"
+                      onClick={() => setPermissions(preset.permissions)}
+                    >
+                      <div className="font-medium">{preset.label}</div>
+                      <div className="mt-1 text-xs text-[color:var(--text-secondary)]">
+                        {preset.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <Label className="flex items-center gap-2 font-normal">
                 <Checkbox
                   checked={permissions.manageDeals}
@@ -260,7 +368,7 @@ export default function BusinessTeamPage() {
                     setPermissions((prev) => ({ ...prev, manageProfile: value === true }))
                   }
                 />
-                Edit business profile
+                Edit profile and menus
               </Label>
             </div>
 
@@ -274,6 +382,7 @@ export default function BusinessTeamPage() {
 
             {latestInviteLink ? (
               <div className="rounded-md border border-[color:var(--border-subtle)] p-3 space-y-2">
+                <p className="text-sm font-medium">New invite link</p>
                 <p className="text-xs text-[color:var(--text-secondary)] break-all">
                   {latestInviteLink}
                 </p>
@@ -319,7 +428,7 @@ export default function BusinessTeamPage() {
                               ["manageDeals", "Manage deals"],
                               ["manageParkingPass", "Manage parking pass"],
                               ["viewAnalytics", "View analytics"],
-                              ["manageProfile", "Edit business profile"],
+                              ["manageProfile", "Edit profile and menus"],
                             ] as Array<[keyof PermissionSet, string]>
                           ).map(([key, label]) => {
                             const current =
@@ -387,12 +496,20 @@ export default function BusinessTeamPage() {
                           className="rounded-md border border-[color:var(--border-subtle)] p-3"
                         >
                           <div className="text-sm">{invite.email || "Invite link only"}</div>
-                          <div className="text-xs text-[color:var(--text-secondary)] mb-2">
-                            Expires{" "}
+                        <div className="text-xs text-[color:var(--text-secondary)] mb-2">
+                          Expires{" "}
                             {invite.expiresAt
                               ? new Date(invite.expiresAt).toLocaleDateString()
                               : "soon"}
                           </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={refreshInvite.isPending}
+                            onClick={() => refreshInvite.mutate(invite.id)}
+                          >
+                            Refresh Link
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"

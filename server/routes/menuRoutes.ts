@@ -1,7 +1,7 @@
 /**
  * menuRoutes.ts
  * Online Menu Management – CRUD for menus, categories, items, variants, modifiers
- * and menu import infrastructure (CSV, PDF, UberEats/DoorDash/POS adapters).
+ * and menu import infrastructure (CSV, PDF, public menu URLs, POS adapters).
  *
  * All write endpoints require: isAuthenticated + business profile access.
  * Public read endpoints are unauthenticated (customer-facing menu view).
@@ -50,7 +50,6 @@ import { distributedRateLimit } from "../middleware/distributedRateLimit";
 
 const EXTERNAL_MENU_SOURCES = [
   "ubereats",
-  "doordash",
   "clover",
   "toast",
   "square",
@@ -221,6 +220,97 @@ async function assertOwnsMenuItem(
   return item;
 }
 
+async function loadFullMenusForRestaurant(
+  restaurantId: string,
+  options: { includeInactive?: boolean; menuId?: string } = {},
+) {
+  const filters = [eq(menus.restaurantId, restaurantId)];
+  if (!options.includeInactive) {
+    filters.push(eq(menus.isActive, true));
+  }
+  if (options.menuId) {
+    filters.push(eq(menus.id, options.menuId));
+  }
+
+  const restaurantMenus: Menu[] = await db
+    .select()
+    .from(menus)
+    .where(and(...filters))
+    .orderBy(asc(menus.serviceType));
+
+  if (restaurantMenus.length === 0) return [];
+
+  const menuIds = restaurantMenus.map((m) => m.id);
+
+  const [categories, items] = await Promise.all([
+    db
+      .select()
+      .from(menuCategories)
+      .where(
+        and(
+          inArray(menuCategories.menuId, menuIds),
+          ...(options.includeInactive
+            ? []
+            : [eq(menuCategories.isActive, true)]),
+        ),
+      )
+      .orderBy(asc(menuCategories.sortOrder)),
+    db
+      .select()
+      .from(menuItems)
+      .where(
+        and(
+          inArray(menuItems.menuId, menuIds),
+          ...(options.includeInactive
+            ? []
+            : [eq(menuItems.isAvailable, true)]),
+        ),
+      )
+      .orderBy(asc(menuItems.sortOrder)),
+  ]);
+
+  const typedCategories = categories as MenuCategory[];
+  const typedItems = items as MenuItem[];
+  const itemIds = typedItems.map((i) => i.id);
+  const [realVariants, realModifiers]: [
+    MenuItemVariant[],
+    MenuItemModifier[],
+  ] = itemIds.length
+    ? await Promise.all([
+        db
+          .select()
+          .from(menuItemVariants)
+          .where(inArray(menuItemVariants.menuItemId, itemIds))
+          .orderBy(asc(menuItemVariants.sortOrder)),
+        db
+          .select()
+          .from(menuItemModifiers)
+          .where(inArray(menuItemModifiers.menuItemId, itemIds))
+          .orderBy(asc(menuItemModifiers.sortOrder)),
+      ])
+    : [[], []];
+
+  return restaurantMenus.map((menu) => {
+    const menuCats = typedCategories.filter((c) => c.menuId === menu.id);
+    const menuItemsList = typedItems.filter((i) => i.menuId === menu.id);
+
+    const enrichedItems = menuItemsList.map((item) => ({
+      ...item,
+      variants: realVariants.filter((v) => v.menuItemId === item.id),
+      modifiers: realModifiers.filter((m) => m.menuItemId === item.id),
+    }));
+
+    return {
+      ...menu,
+      categories: menuCats.map((cat) => ({
+        ...cat,
+        items: enrichedItems.filter((i) => i.categoryId === cat.id),
+      })),
+      uncategorizedItems: enrichedItems.filter((i) => !i.categoryId),
+    };
+  });
+}
+
 // ── Error wrapper ─────────────────────────────────────────────────────────────
 function wrap(handler: (req: any, res: any) => Promise<void>) {
   return async (req: any, res: any) => {
@@ -230,7 +320,7 @@ function wrap(handler: (req: any, res: any) => Promise<void>) {
       const status = err?.statusCode || 500;
       const message = err?.message || "Internal server error";
       if (status === 500) console.error("[menuRoutes]", err);
-      res.status(status).json({ message });
+      res.status(status).json(err?.payload || { message });
     }
   };
 }
@@ -262,6 +352,129 @@ function normalizeMenuServiceType(value: unknown): string {
 
   const mapped = aliases[normalized] ?? normalized;
   return MENU_SERVICE_TYPES.has(mapped) ? mapped : "all";
+}
+
+async function importMenuItemsFromPublicUrl({
+  menu,
+  menuId,
+  userId,
+  url,
+  source,
+}: {
+  menu: Menu;
+  menuId: string;
+  userId: string;
+  url: string;
+  source: ExternalMenuSource;
+}) {
+  const parsed = new URL(url);
+  const urlValidation = await validatePublicImportUrl(parsed);
+  if (!urlValidation.ok) {
+    throw Object.assign(new Error(urlValidation.message), { statusCode: 400 });
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  let rawData: Record<string, any>[] = [];
+  try {
+    const response = await fetchPublicMenuUrl(parsed, controller.signal);
+
+    if (!response.ok) {
+      throw Object.assign(new Error(`Source URL returned ${response.status}`), {
+        statusCode: 422,
+      });
+    }
+
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MENU_URL_IMPORT_MAX_BYTES
+    ) {
+      throw Object.assign(new Error("That menu URL is too large to import."), {
+        statusCode: 413,
+      });
+    }
+
+    const html = await response.text();
+    if (Buffer.byteLength(html, "utf8") > MENU_URL_IMPORT_MAX_BYTES) {
+      throw Object.assign(new Error("That menu URL is too large to import."), {
+        statusCode: 413,
+      });
+    }
+    rawData = extractMenuRowsFromHtml(html);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (rawData.length === 0) {
+    const errors = [{ row: 0, reason: "No menu item data found on URL." }];
+    await db.insert(menuImportLogs).values({
+      restaurantId: menu.restaurantId,
+      importedByUserId: userId,
+      source,
+      fileName: url,
+      itemsImported: 0,
+      itemsSkipped: 0,
+      errors: errors as any,
+      status: "failed",
+    });
+    throw Object.assign(
+      new Error(
+        "We could not extract menu items from that URL. Try CSV/PDF import or upload a platform export.",
+      ),
+      {
+        statusCode: 422,
+        payload: {
+          message:
+            "We could not extract menu items from that URL. Try CSV/PDF import or upload a platform export.",
+          imported: 0,
+          skipped: 0,
+          errors,
+          source,
+        },
+      },
+    );
+  }
+
+  const { imported, skipped, errors } = normalizeExternalMenuData(
+    rawData,
+    source,
+    menuId,
+    menu.restaurantId,
+  );
+
+  if (imported.length > 0) {
+    await db.insert(menuItems).values(imported);
+  }
+
+  await db.insert(menuImportLogs).values({
+    restaurantId: menu.restaurantId,
+    importedByUserId: userId,
+    source,
+    fileName: url,
+    itemsImported: imported.length,
+    itemsSkipped: skipped,
+    errors: errors as any,
+    status: computeImportStatus(imported.length, errors.length),
+  });
+
+  await db
+    .update(menus)
+    .set({
+      importSource: source,
+      importedAt: new Date(),
+      importUrl: url,
+      updatedAt: new Date(),
+    })
+    .where(eq(menus.id, menuId));
+
+  return {
+    imported: imported.length,
+    skipped,
+    errors,
+    source,
+  };
 }
 
 export function registerMenuRoutes(app: Express) {
@@ -297,84 +510,11 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
 
-      const restaurantMenus: Menu[] = await db
-        .select()
-        .from(menus)
-        .where(
-          and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)),
-        )
-        .orderBy(asc(menus.serviceType));
+      const result = await loadFullMenusForRestaurant(restaurantId);
 
-      if (restaurantMenus.length === 0) {
+      if (result.length === 0) {
         return res.json({ menus: [], orderingEnabled: false });
       }
-
-      const menuIds = restaurantMenus.map((m) => m.id);
-
-      const [categories, items] = await Promise.all([
-        db
-          .select()
-          .from(menuCategories)
-          .where(
-            and(
-              inArray(menuCategories.menuId, menuIds),
-              eq(menuCategories.isActive, true),
-            ),
-          )
-          .orderBy(asc(menuCategories.sortOrder)),
-        db
-          .select()
-          .from(menuItems)
-          .where(
-            and(
-              inArray(menuItems.menuId, menuIds),
-              eq(menuItems.isAvailable, true),
-            ),
-          )
-          .orderBy(asc(menuItems.sortOrder)),
-      ]);
-
-      // Re-query variants + modifiers now that we have item IDs
-      const typedCategories = categories as MenuCategory[];
-      const typedItems = items as MenuItem[];
-      const itemIds = typedItems.map((i) => i.id);
-      const [realVariants, realModifiers]: [
-        MenuItemVariant[],
-        MenuItemModifier[],
-      ] = itemIds.length
-        ? await Promise.all([
-            db
-              .select()
-              .from(menuItemVariants)
-              .where(inArray(menuItemVariants.menuItemId, itemIds))
-              .orderBy(asc(menuItemVariants.sortOrder)),
-            db
-              .select()
-              .from(menuItemModifiers)
-              .where(inArray(menuItemModifiers.menuItemId, itemIds))
-              .orderBy(asc(menuItemModifiers.sortOrder)),
-          ])
-        : [[], []];
-
-      const result = restaurantMenus.map((menu) => {
-        const menuCats = typedCategories.filter((c) => c.menuId === menu.id);
-        const menuItemsList = typedItems.filter((i) => i.menuId === menu.id);
-
-        const enrichedItems = menuItemsList.map((item) => ({
-          ...item,
-          variants: realVariants.filter((v) => v.menuItemId === item.id),
-          modifiers: realModifiers.filter((m) => m.menuItemId === item.id),
-        }));
-
-        return {
-          ...menu,
-          categories: menuCats.map((cat) => ({
-            ...cat,
-            items: enrichedItems.filter((i) => i.categoryId === cat.id),
-          })),
-          uncategorizedItems: enrichedItems.filter((i) => !i.categoryId),
-        };
-      });
 
       // Determine if online ordering is enabled for this restaurant.
       // Ordering is part of the $25/month subscription (or lifetime access).
@@ -394,14 +534,13 @@ export function registerMenuRoutes(app: Express) {
         .limit(1);
 
       if (restaurantRow?.ownerId) {
-        const restaurantIds = restaurantMenus.map((m) => m.restaurantId);
         // Check for active subscription (includes lifetime isLifetimeFree=true rows)
         const [activeSub] = await db
           .select({ id: restaurantSubscriptions.id })
           .from(restaurantSubscriptions)
           .where(
             and(
-              inArray(restaurantSubscriptions.restaurantId, restaurantIds),
+              eq(restaurantSubscriptions.restaurantId, restaurantId),
               eq(restaurantSubscriptions.status, "active"),
             ),
           )
@@ -514,6 +653,35 @@ export function registerMenuRoutes(app: Express) {
   );
 
   /**
+   * GET /api/owner/menus/:restaurantId/full
+   * Returns owner-editable menus, including inactive menus/categories/items.
+   */
+  app.get(
+    "/api/owner/menus/:restaurantId/full",
+    isAuthenticated,
+    wrap(async (req, res) => {
+      const { restaurantId } = req.params;
+      await assertOwnsRestaurant(
+        req.user.id,
+        restaurantId,
+        req.user?.userType,
+      );
+
+      const menuId = String(req.query.menuId || "").trim() || undefined;
+      if (menuId) {
+        await assertOwnsMenu(req.user.id, menuId, req.user?.userType);
+      }
+
+      const ownerMenus = await loadFullMenusForRestaurant(restaurantId, {
+        includeInactive: true,
+        menuId,
+      });
+
+      res.json({ menus: ownerMenus });
+    }),
+  );
+
+  /**
    * POST /api/owner/menus
    * Create a new menu for a restaurant.
    */
@@ -533,6 +701,13 @@ export function registerMenuRoutes(app: Express) {
       );
 
       const [menu] = await db.insert(menus).values(normalizedBody).returning();
+
+      await db.insert(menuCategories).values({
+        menuId: menu.id,
+        restaurantId: menu.restaurantId,
+        name: "Menu Items",
+        sortOrder: 0,
+      });
 
       // Emit LISA claim for menu published
       db.insert(lisaClaims).values({
@@ -991,7 +1166,18 @@ export function registerMenuRoutes(app: Express) {
 
       // Insert imported items in a transaction
       if (imported.length > 0) {
-        await db.insert(menuItems).values(imported);
+        const catMap = await resolveCategoryIds(
+          menuId,
+          menu.restaurantId,
+          imported.map((it) => it.categoryName),
+        );
+        const itemsToInsert = imported.map(({ categoryName, ...rest }) => ({
+          ...rest,
+          categoryId: categoryName
+            ? catMap.get(categoryName.trim().toLowerCase()) ?? null
+            : null,
+        }));
+        await db.insert(menuItems).values(itemsToInsert);
       }
 
       // Audit log
@@ -1078,7 +1264,9 @@ export function registerMenuRoutes(app: Express) {
       await db
         .update(menus)
         .set({
-          importSource: "pdf",
+          importSource: req.file.mimetype?.startsWith("image/")
+            ? "image"
+            : "pdf",
           importedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -1090,8 +1278,8 @@ export function registerMenuRoutes(app: Express) {
 
   /**
    * POST /api/owner/menus/:menuId/import/external
-   * Import menu from UberEats / DoorDash / Clover / Toast / Square / GMB.
-   * Body: { source: 'ubereats' | 'doordash' | 'clover' | 'toast' | 'square' | 'gmb' | 'google' | 'grubhub' | 'yelp' | 'website', rawData: object[] }
+   * Import menu from supported public/menu export sources and POS adapters.
+   * Body: { source: 'ubereats' | 'clover' | 'toast' | 'square' | 'gmb' | 'google' | 'grubhub' | 'yelp' | 'website', rawData: object[] }
    *
    * NOTE: Full third-party API integrations are implemented incrementally.
    * This endpoint accepts raw exported JSON/objects and normalizes them.
@@ -1149,7 +1337,7 @@ export function registerMenuRoutes(app: Express) {
 
   /**
    * POST /api/owner/menus/:menuId/import/url
-   * Import menu by crawling a public URL (DoorDash/UberEats/Google/other sites).
+   * Import menu by crawling a public URL.
    * Body: { url: string, source?: string }
    */
   app.post(
@@ -1166,108 +1354,17 @@ export function registerMenuRoutes(app: Express) {
       });
 
       const { url, source } = bodySchema.parse(req.body);
-      const parsed = new URL(url);
-      const urlValidation = await validatePublicImportUrl(parsed);
-      if (!urlValidation.ok) {
-        return res
-          .status(400)
-          .json({ message: urlValidation.message });
-      }
-
       const resolvedSource = normalizeExternalSource(
         source || detectSourceFromUrl(url),
       );
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-
-      let rawData: Record<string, any>[] = [];
-      try {
-        const response = await fetchPublicMenuUrl(parsed, controller.signal);
-
-        if (!response.ok) {
-          throw new Error(`Source URL returned ${response.status}`);
-        }
-
-        const contentLength = Number(response.headers.get("content-length") || 0);
-        if (
-          Number.isFinite(contentLength) &&
-          contentLength > MENU_URL_IMPORT_MAX_BYTES
-        ) {
-          return res.status(413).json({
-            message: "That menu URL is too large to import.",
-          });
-        }
-
-        const html = await response.text();
-        if (Buffer.byteLength(html, "utf8") > MENU_URL_IMPORT_MAX_BYTES) {
-          return res.status(413).json({
-            message: "That menu URL is too large to import.",
-          });
-        }
-        rawData = extractMenuRowsFromHtml(html);
-      } finally {
-        clearTimeout(timer);
-      }
-
-      if (rawData.length === 0) {
-        await db.insert(menuImportLogs).values({
-          restaurantId: menu.restaurantId,
-          importedByUserId: req.user.id,
-          source: resolvedSource,
-          fileName: url,
-          itemsImported: 0,
-          itemsSkipped: 0,
-          errors: [{ row: 0, reason: "No menu item data found on URL." }] as any,
-          status: "failed",
-        });
-        return res.status(422).json({
-          message:
-            "We could not extract menu items from that URL. Try CSV/PDF import or upload a platform export.",
-          imported: 0,
-          skipped: 0,
-          errors: [{ row: 0, reason: "No menu item data found on URL." }],
-        });
-      }
-
-      const { imported, skipped, errors } = normalizeExternalMenuData(
-        rawData,
-        resolvedSource,
+      const result = await importMenuItemsFromPublicUrl({
+        menu,
         menuId,
-        menu.restaurantId,
-      );
-
-      if (imported.length > 0) {
-        await db.insert(menuItems).values(imported);
-      }
-
-      await db.insert(menuImportLogs).values({
-        restaurantId: menu.restaurantId,
-        importedByUserId: req.user.id,
-        source: resolvedSource,
-        fileName: url,
-        itemsImported: imported.length,
-        itemsSkipped: skipped,
-        errors: errors as any,
-        status: computeImportStatus(imported.length, errors.length),
-      });
-
-      await db
-        .update(menus)
-        .set({
-          importSource: resolvedSource,
-          importedAt: new Date(),
-          importUrl: url,
-          updatedAt: new Date(),
-        })
-        .where(eq(menus.id, menuId));
-
-      res.json({
-        imported: imported.length,
-        skipped,
-        errors,
+        userId: req.user.id,
+        url,
         source: resolvedSource,
       });
+      res.json(result);
     }),
   );
 
@@ -1398,7 +1495,6 @@ export function normalizeExternalSource(source?: string): ExternalMenuSource {
 
 export function detectSourceFromUrl(url: string): string {
   const value = String(url || "").toLowerCase();
-  if (value.includes("doordash")) return "doordash";
   if (value.includes("ubereats") || value.includes("uber.com")) return "ubereats";
   if (value.includes("google.") || value.includes("g.page") || value.includes("maps.app.goo.gl")) {
     return "google";
@@ -1560,6 +1656,14 @@ export function extractMenuRowsFromHtml(html: string): Record<string, any>[] {
     if (parsed) collectMenuNodes(parsed, pushRow);
   }
 
+  if (rows.length === 0) {
+    collectScriptEmbeddedMenuRows(html, pushRow);
+  }
+
+  if (rows.length === 0) {
+    collectTextMenuRows(html, pushRow);
+  }
+
   const uniqueMap = new Map<string, Record<string, any>>();
   for (const row of rows) {
     const key = `${String(row.name).toLowerCase()}::${Number(row.price_cents)}`;
@@ -1603,6 +1707,157 @@ function collectMenuNodes(
       collectMenuNodes(child, pushRow);
     }
   }
+}
+
+function collectScriptEmbeddedMenuRows(
+  html: string,
+  pushRow: (name: string, priceRaw: unknown, description?: string) => void,
+) {
+  const scriptPattern = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let scriptMatch: RegExpExecArray | null = null;
+
+  while ((scriptMatch = scriptPattern.exec(html))) {
+    const rawScript = scriptMatch[1].trim();
+    if (!rawScript) continue;
+
+    const parsed = parseJsonSafe(rawScript);
+    if (parsed) {
+      collectMenuNodes(parsed, pushRow);
+      continue;
+    }
+
+    const decodedChunks = decodeNextFlightChunks(rawScript);
+    for (const chunk of decodedChunks) {
+      const parsedChunk = parseJsonSafe(chunk);
+      if (parsedChunk) collectMenuNodes(parsedChunk, pushRow);
+      collectTextMenuRows(chunk, pushRow);
+      collectMenuRowsFromLooseJsonText(chunk, pushRow);
+    }
+  }
+}
+
+function decodeNextFlightChunks(script: string): string[] {
+  const chunks: string[] = [];
+  const pushPattern = /self\.__next_f\.push\(\[(?:\d+),\s*("(?:\\.|[^"\\])*")\]\)/g;
+  let match: RegExpExecArray | null = null;
+
+  while ((match = pushPattern.exec(script))) {
+    try {
+      chunks.push(JSON.parse(match[1]));
+    } catch {
+      // Ignore malformed chunks; other extraction paths still apply.
+    }
+  }
+
+  return chunks;
+}
+
+function collectMenuRowsFromLooseJsonText(
+  text: string,
+  pushRow: (name: string, priceRaw: unknown, description?: string) => void,
+) {
+  const normalized = text
+    .replace(/\\"/g, '"')
+    .replace(/\\u0022/g, '"')
+    .replace(/\\u0026/g, "&");
+
+  const objectishPattern =
+    /"name"\s*:\s*"([^"]{3,90})"[\s\S]{0,900}?"(?:price|price_cents|displayString|unitAmount|basePrice)"\s*:\s*(?:"([^"]{1,24})"|(\d{2,7}))/gi;
+  let match: RegExpExecArray | null = null;
+  while ((match = objectishPattern.exec(normalized))) {
+    const name = cleanJsonText(match[1]);
+    const price = match[2] ?? match[3];
+    if (looksLikeMenuItemName(name)) {
+      pushRow(name, price);
+    }
+  }
+
+  const displayPattern =
+    /"displayString"\s*:\s*"(\$?\d{1,3}(?:\.\d{2})?)"[\s\S]{0,900}?"name"\s*:\s*"([^"]{3,90})"/gi;
+  while ((match = displayPattern.exec(normalized))) {
+    const price = match[1];
+    const name = cleanJsonText(match[2]);
+    if (looksLikeMenuItemName(name)) {
+      pushRow(name, price);
+    }
+  }
+}
+
+function cleanJsonText(value: string): string {
+  return decodeHtmlEntities(value)
+    .replace(/\\n/g, " ")
+    .replace(/\\/g, "")
+    .trim();
+}
+
+function collectTextMenuRows(
+  html: string,
+  pushRow: (name: string, priceRaw: unknown, description?: string) => void,
+) {
+  const text = decodeHtmlEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, "\n")
+      .replace(/<style[\s\S]*?<\/style>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|td|h[1-6])>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\r/g, "\n")
+      .replace(/[ \t]+/g, " "),
+  );
+
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 4 && line.length <= 180);
+
+  const pricePattern = /\$?\b(\d{1,3}(?:\.\d{2})?)\b/g;
+  for (const line of lines) {
+    const matches = Array.from(line.matchAll(pricePattern));
+    if (matches.length === 0) continue;
+
+    const match = matches[matches.length - 1];
+    const priceText = match[0];
+    const price = toPriceCents(priceText);
+    if (price === null || price < 100 || price > 25000) continue;
+
+    const rawName = line.slice(0, match.index).trim();
+    const name = rawName
+      .replace(/[-–—:|]+$/g, "")
+      .replace(/^\W+/, "")
+      .trim();
+
+    if (!looksLikeMenuItemName(name)) continue;
+    pushRow(name, price);
+  }
+}
+
+function looksLikeMenuItemName(value: string): boolean {
+  if (value.length < 3 || value.length > 90) return false;
+  if (!/[a-zA-Z]/.test(value)) return false;
+  const lower = value.toLowerCase();
+  const blocked = [
+    "subtotal",
+    "delivery",
+    "service fee",
+    "sales tax",
+    "gift card",
+    "minimum",
+    "copyright",
+    "privacy",
+    "terms",
+  ];
+  return !blocked.some((word) => lower.includes(word));
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
 }
 
 function toPriceCents(rawPrice: unknown): number | null {

@@ -2,7 +2,7 @@
  * menuAutoRefresh.ts
  *
  * Periodic re-fetch of menus that were originally imported from a public URL
- * (DoorDash / UberEats / Yelp / Grubhub / Google / restaurant website).
+ * (UberEats / Yelp / Grubhub / Google / restaurant website).
  *
  * Strategy
  * - Pick menus with `import_url IS NOT NULL` that haven't been refreshed within
@@ -36,7 +36,6 @@ const PER_HOST_DELAY_MS = Number(
 const JITTER_MS = Number(process.env.MENU_AUTO_REFRESH_JITTER_MS || 1500);
 const REFRESHABLE_SOURCES = new Set([
   "url",
-  "doordash",
   "ubereats",
   "grubhub",
   "yelp",
@@ -99,7 +98,7 @@ export async function runMenuAutoRefreshCron(): Promise<MenuAutoRefreshSummary> 
       continue;
     }
 
-    // Be neighborly: throttle per-host so we don't hammer DoorDash/UberEats.
+    // Be neighborly: throttle per-host so we don't hammer external menu sites.
     let host = "";
     try {
       host = new URL(menu.importUrl).hostname;

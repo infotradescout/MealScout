@@ -852,7 +852,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
               <h2>Hi ${firstName}, ready to add your menu?</h2>
               <p>Welcome to MealScout! The fastest way to start getting discovered is to add your menu \u2014 it takes about 2 minutes.</p>
-              <p>You can paste a link to your existing menu (DoorDash, UberEats, or your own site) and we will import the items automatically.</p>
+              <p>You can paste a link to your existing website menu, Google profile, Yelp page, or another public menu and we will import the items automatically.</p>
               <p style="margin: 16px 0;">
                 <a href="${dashUrl}" style="background:#f97316;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;display:inline-block;">
                   Add Your Menu
@@ -882,12 +882,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
               <h2>Hi ${firstName}, want us to set it up for you?</h2>
               <p>I noticed you signed up for MealScout but haven't added a menu yet. No problem \u2014 we can do it for you.</p>
-              <p>Just reply to this email with a link to your existing menu (your website, DoorDash, UberEats, etc.) and we'll import everything for you within 24 hours.</p>
+              <p>Just reply to this email with a link to your existing website menu, Google profile, Yelp page, or another public menu and we'll import everything for you within 24 hours.</p>
               <p>Or if you'd rather, reply with a phone number and we'll call to walk you through it.</p>
               <p style="color:#6b7280;font-size:12px;">\u2014 The MealScout team</p>
             </div>
           `;
-          const text = `Hi ${firstName}, reply with a link to your menu (website, DoorDash, UberEats, etc.) and we'll import it for you within 24 hours. Or send a phone number and we'll call.`;
+          const text = `Hi ${firstName}, reply with a link to your menu (website, Google, Yelp, or another public menu) and we'll import it for you within 24 hours. Or send a phone number and we'll call.`;
           const ok = await emailService.sendBasicEmail(
             user.email,
             "Want us to set up your menu for you?",

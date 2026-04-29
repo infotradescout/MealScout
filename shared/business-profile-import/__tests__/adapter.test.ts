@@ -56,7 +56,7 @@ function makeProfile(
     },
     priceLevel: 2,
     menuUrl: "https://test.com/menu",
-    orderUrl: "https://doordash.com/test",
+    orderUrl: "https://ordering.example/test",
     reservationUrl: null,
     rating: 4.5,
     reviewCount: 120,
@@ -75,7 +75,7 @@ describe("MealScoutRestaurantAdapter", () => {
     expect(updates.description).toBe("A great place to eat");
     expect(updates.websiteUrl).toBe("https://test.com");
     expect(updates.menuUrl).toBe("https://test.com/menu");
-    expect(updates.orderUrl).toBe("https://doordash.com/test");
+    expect(updates.orderUrl).toBe("https://ordering.example/test");
     // Google rating is stored as string in MealScout schema
     expect(updates.googleRating).toBe("4.5");
     expect(updates.googleReviewCount).toBe(120);

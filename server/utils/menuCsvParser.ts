@@ -14,6 +14,7 @@ import { parseTabularFile } from "./tabularImport";
 type ParsedMenuItem = {
   menuId: string;
   restaurantId: string;
+  categoryName: string | null;
   name: string;
   description: string | null;
   priceCents: number;
@@ -120,6 +121,8 @@ export async function parseMenuCsv(
 
     const description =
       col(row, "description", "desc", "details", "notes") || null;
+    const categoryName =
+      col(row, "category", "category_name", "section", "menu_section") || null;
     const sku = col(row, "sku", "item_sku", "product_code") || null;
     const calories = parseIntOrNull(col(row, "calories", "cals"));
     const proteinG = parseDecimal(col(row, "protein", "protein_g"));
@@ -135,6 +138,7 @@ export async function parseMenuCsv(
     imported.push({
       menuId,
       restaurantId,
+      categoryName,
       name,
       description,
       priceCents,

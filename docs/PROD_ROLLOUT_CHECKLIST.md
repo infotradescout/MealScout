@@ -51,6 +51,9 @@ Use this checklist for each production release.
 3. Ensure bypass flags are disabled in production:
    - `MEALSCOUT_BYPASS_STRIPE=false`
    - `MEALSCOUT_TEST_MODE=false`
+4. If Brevo authorized IP restrictions are enabled, add the current Render outbound IP in Brevo:
+   - https://app.brevo.com/security/authorised_ips
+   - Verify with `POST /api/admin/email/test` after deploy.
 
 ## 3. Run DB migrations in production
 

@@ -21,6 +21,14 @@ import {
   normalizeBusinessPermissions,
 } from "../services/businessTeamAccess";
 
+function buildInviteUrl(token: string) {
+  const baseUrl = (process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(
+    /\/+$/,
+    "",
+  );
+  return `${baseUrl}/business-team/accept?token=${encodeURIComponent(token)}`;
+}
+
 const inviteCreateSchema = z.object({
   restaurantId: z.string().min(1),
   email: z.string().email().optional().nullable(),
@@ -284,11 +292,7 @@ export function registerBusinessTeamRoutes(app: Express) {
         })
         .returning();
 
-      const baseUrl = (process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(
-        /\/+$/,
-        "",
-      );
-      const inviteUrl = `${baseUrl}/business-team/accept?token=${encodeURIComponent(token)}`;
+      const inviteUrl = buildInviteUrl(token);
 
       res.json({ invite, inviteUrl });
     } catch (error: any) {
@@ -503,6 +507,58 @@ export function registerBusinessTeamRoutes(app: Express) {
       } catch (error: any) {
         console.error("Error revoking invite:", error);
         res.status(400).json({ message: error?.message || "Failed to revoke invite" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/business/team/invites/:inviteId/refresh",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { inviteId } = req.params;
+        const [invite] = await db
+          .select()
+          .from(businessStaffInvites)
+          .where(eq(businessStaffInvites.id, inviteId))
+          .limit(1);
+        if (!invite) {
+          return res.status(404).json({ message: "Invite not found" });
+        }
+
+        const owner = await getRestaurantOwnerUser(invite.restaurantId);
+        if (!owner) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+        if (!isElevated(req.user) && owner.ownerId !== req.user.id) {
+          return res.status(403).json({ message: "Only business owners can refresh invites." });
+        }
+        if (!["pending", "expired"].includes(String(invite.status || ""))) {
+          return res.status(400).json({ message: "Only pending or expired invites can be refreshed." });
+        }
+
+        const token = randomBytes(24).toString("hex");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+        const [refreshed] = await db
+          .update(businessStaffInvites)
+          .set({
+            tokenHash,
+            status: "pending",
+            expiresAt,
+            revokedAt: null,
+            acceptedAt: null,
+            acceptedByUserId: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(businessStaffInvites.id, inviteId))
+          .returning();
+
+        res.json({ invite: refreshed, inviteUrl: buildInviteUrl(token) });
+      } catch (error: any) {
+        console.error("Error refreshing invite:", error);
+        res.status(400).json({ message: error?.message || "Failed to refresh invite" });
       }
     },
   );

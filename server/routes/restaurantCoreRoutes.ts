@@ -41,6 +41,7 @@ import {
   moderationCases,
   moderationResolutions,
   restaurants,
+  restaurantSubscriptions,
   menus,
   menuItems,
 } from "@shared/schema";
@@ -808,8 +809,28 @@ export function registerRestaurantCoreRoutes(
         const hasMenu = menuRows.length > 0;
         const hasItems = itemCount > 0;
         const isVerified = ownerRestaurants.some((r: any) => r.isVerified);
-        const hasSubscription = Boolean(user.stripeSubscriptionId);
+        const primaryRestaurant = ownerRestaurants[0] || null;
+        let hasActiveRestaurantSubscription = false;
+        if (restaurantIds.length > 0) {
+          const [activeSub] = await db
+            .select({ id: restaurantSubscriptions.id })
+            .from(restaurantSubscriptions)
+            .where(
+              and(
+                inArray(restaurantSubscriptions.restaurantId, restaurantIds),
+                eq(restaurantSubscriptions.status, "active"),
+              ),
+            )
+            .limit(1);
+          hasActiveRestaurantSubscription = Boolean(activeSub);
+        }
+        const hasSubscription = Boolean(
+          user.stripeSubscriptionId || hasActiveRestaurantSubscription,
+        );
         const emailVerified = Boolean(user.emailVerified);
+        const menuBuilderHref = primaryRestaurant
+          ? `/menu-builder/${primaryRestaurant.id}`
+          : "/menu-builder";
 
         const steps = [
           {
@@ -832,7 +853,7 @@ export function registerRestaurantCoreRoutes(
             id: "add-menu",
             label: "Add your menu",
             done: hasMenu,
-            href: "/menu-builder",
+            href: menuBuilderHref,
             cta: "Add menu",
             why: "Paste a link to your existing menu \u2014 we'll import it.",
           },
@@ -840,7 +861,7 @@ export function registerRestaurantCoreRoutes(
             id: "add-items",
             label: "Add at least one item",
             done: hasItems,
-            href: "/menu-builder",
+            href: menuBuilderHref,
             cta: "Add items",
             why: "Without items, customers see an empty menu.",
           },

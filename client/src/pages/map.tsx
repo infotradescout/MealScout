@@ -306,6 +306,7 @@ interface Restaurant {
 interface LiveTruck {
   id: string;
   name: string;
+  address?: string | null;
   currentLatitude?: string | number | null;
   currentLongitude?: string | number | null;
   distance?: number;

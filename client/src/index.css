@@ -1417,7 +1417,7 @@
     box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.15);
   }
 
-  /* DoorDash-style card hover */
+  /* Marketplace-style card hover */
   .card-hover {
     transition: box-shadow 0.2s ease-in-out;
   }
