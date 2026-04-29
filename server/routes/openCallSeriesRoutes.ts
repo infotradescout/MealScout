@@ -265,7 +265,13 @@ export function registerOpenCallSeriesRoutes(app: Express) {
       }
 
       const seriesList = await storage.getEventSeriesOwnedByUser(userId);
-      res.json(seriesList);
+      // Host Open Calls dashboard should only show event/open_call series.
+      // Parking Pass series are managed in the Parking Pass flow.
+      const openCallSeries = seriesList.filter((series: any) => {
+        const seriesType = String(series?.seriesType || "event").toLowerCase();
+        return seriesType === "event" || seriesType === "open_call";
+      });
+      res.json(openCallSeries);
     } catch (error: any) {
       console.error("Error fetching event series:", error);
       res.status(500).json({ message: "Failed to fetch event series" });

@@ -176,7 +176,13 @@ function HostDashboard() {
         throw new Error("Failed to load event series");
       }
       const data = await res.json();
-      setSeriesList(Array.isArray(data) ? data : []);
+      const series = Array.isArray(data)
+        ? data.filter((row: any) => {
+            const seriesType = String(row?.seriesType || "event").toLowerCase();
+            return seriesType === "event" || seriesType === "open_call";
+          })
+        : [];
+      setSeriesList(series);
     } catch (error: any) {
       setSeriesError(error.message || "Failed to load event series.");
     } finally {
