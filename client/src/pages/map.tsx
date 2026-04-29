@@ -44,6 +44,7 @@ import {
   ChevronUp,
   ChevronDown,
   Info,
+  Share2,
 } from "lucide-react";
 import DealCard from "@/components/deal-card";
 import { SEOHead } from "@/components/seo-head";
@@ -3402,7 +3403,7 @@ export default function MapPage() {
           )}
 
           {/* Map legend (collapsible, top-left) */}
-          <div className="absolute top-3 left-3 z-[1100]">
+          <div className="absolute top-3 left-3 z-[1100] flex items-start gap-2">
             <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 shadow-clean backdrop-blur">
               <button
                 type="button"
@@ -3470,6 +3471,34 @@ export default function MapPage() {
                 </ul>
               )}
             </div>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const url = window.location.href;
+                  if (navigator.share) {
+                    await navigator.share({
+                      title: "MealScout map view",
+                      url,
+                    });
+                  } else {
+                    await navigator.clipboard.writeText(url);
+                    toast({
+                      title: "Link copied",
+                      description: "Share this map view with anyone.",
+                    });
+                  }
+                } catch {
+                  // user cancelled or clipboard unavailable
+                }
+              }}
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-2.5 text-xs font-medium text-[color:var(--text-primary)] shadow-clean backdrop-blur"
+              aria-label="Share this map view"
+              data-testid="button-share-map-view"
+            >
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Share
+            </button>
           </div>
 
           {/* Empty state when nothing visible in current bounds */}
