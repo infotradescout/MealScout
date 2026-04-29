@@ -1160,6 +1160,10 @@ export default function MapPage() {
     x: number;
     y: number;
   } | null>(null);
+  const [mapCalloutAnchorPosition, setMapCalloutAnchorPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [drawingActive, setDrawingActive] = useState(false);
   const [areaFilterBounds, setAreaFilterBounds] = useState<{
     north: number;
@@ -3224,6 +3228,40 @@ export default function MapPage() {
         "Jump into search results across deals, trucks, parking, and events.",
     }));
 
+  const activeMapCalloutAnchor = useMemo<GeoPoint | null>(() => {
+    if (selectedDeal) {
+      const lat = toNumberOrNull(selectedDeal.restaurant?.latitude);
+      const lng = toNumberOrNull(selectedDeal.restaurant?.longitude);
+      if (lat !== null && lng !== null) return { lat, lng };
+    }
+    if (!selectedDeal && selectedSighting) {
+      return {
+        lat: Number(selectedSighting.latitude),
+        lng: Number(selectedSighting.longitude),
+      };
+    }
+    if (!selectedDeal && selectedParkingPreview) {
+      return {
+        lat: selectedParkingPreview.markerLat,
+        lng: selectedParkingPreview.markerLng,
+      };
+    }
+    if (!selectedDeal && !selectedParkingPreview && selectedHostCluster) {
+      return { lat: selectedHostCluster.lat, lng: selectedHostCluster.lng };
+    }
+    return null;
+  }, [selectedDeal, selectedSighting, selectedParkingPreview, selectedHostCluster]);
+
+  const mapCalloutShellClassName = mapCalloutAnchorPosition
+    ? "absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]"
+    : "absolute bottom-4 left-1/2 z-20 -translate-x-1/2";
+  const mapCalloutShellStyle = mapCalloutAnchorPosition
+    ? {
+        left: mapCalloutAnchorPosition.x,
+        top: mapCalloutAnchorPosition.y,
+      }
+    : undefined;
+
   return (
     <div className="max-w-md mx-auto bg-background min-h-screen relative pb-20">
       <SEOHead
@@ -3601,6 +3639,8 @@ export default function MapPage() {
                     y: position.y,
                   });
                 }}
+                popupAnchor={activeMapCalloutAnchor}
+                onPopupAnchorPosition={setMapCalloutAnchorPosition}
                 onFatalError={handleGoogleMapsFatalError}
                 drawingActive={drawingActive}
                 onAreaSelected={(b) => {
@@ -3615,7 +3655,7 @@ export default function MapPage() {
                   data-testid="marker-hover-preview"
                   role="tooltip"
                 >
-                  <div className="max-w-[220px] rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs shadow-clean-lg">
+                  <div className="map-callout-card map-callout-card--hover max-w-[220px] px-3 py-2 text-xs">
                     <div className="truncate font-semibold text-foreground">
                       {hoverPreview.marker.title || hoverPreview.marker.kind}
                     </div>
@@ -3625,6 +3665,7 @@ export default function MapPage() {
                       </div>
                     )}
                   </div>
+                  <div className="map-callout-tail map-callout-tail--hover" />
                 </div>
               )}
             </MapErrorBoundary>
@@ -3663,7 +3704,11 @@ export default function MapPage() {
 
         {/* Selected Deal Info Card */}
         {selectedDeal && (
-          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
+          <div
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            style={mapCalloutShellStyle}
+          >
+          <Card className="map-callout-card w-full">
             <CardContent className="p-4">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex-1">
@@ -3752,10 +3797,16 @@ export default function MapPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="map-callout-tail" />
+          </div>
         )}
 
         {!selectedDeal && selectedSighting && (
-          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
+          <div
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            style={mapCalloutShellStyle}
+          >
+          <Card className="map-callout-card w-full">
             <CardContent className="p-4">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
@@ -3823,10 +3874,16 @@ export default function MapPage() {
               </Button>
             </CardContent>
           </Card>
+          <div className="map-callout-tail" />
+          </div>
         )}
 
         {!selectedDeal && selectedParkingHost && (
-          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(360px,calc(100vw-1.5rem))] max-h-[56vh] -translate-x-1/2 overflow-hidden rounded-2xl shadow-clean-lg">
+          <div
+            className={`${mapCalloutShellClassName} w-[min(360px,calc(100vw-1.5rem))]`}
+            style={mapCalloutShellStyle}
+          >
+          <Card className="map-callout-card w-full max-h-[56vh] overflow-hidden rounded-2xl">
             <CardContent className="flex max-h-[56vh] flex-col p-0">
               <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
               <div className="mb-2 flex items-start gap-2">
@@ -4064,10 +4121,16 @@ export default function MapPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="map-callout-tail" />
+          </div>
         )}
 
         {!selectedDeal && !selectedParkingHost && selectedHostCluster && (
-          <Card className="absolute bottom-4 left-1/2 z-20 w-[min(340px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-xl shadow-clean-lg">
+          <div
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            style={mapCalloutShellStyle}
+          >
+          <Card className="map-callout-card w-full">
             <CardContent className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div>
@@ -4144,6 +4207,8 @@ export default function MapPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="map-callout-tail" />
+          </div>
         )}
       </div>
 
