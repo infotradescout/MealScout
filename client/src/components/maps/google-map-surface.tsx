@@ -310,8 +310,20 @@ export function GoogleMapSurface({
   const popupOverlayRef = useRef<any>(null);
   const projectionOverlayRef = useRef<any>(null);
   const clustererRef = useRef<any>(null);
+  const clusteredInstancesRef = useRef<Map<string, any>>(new Map());
   const drawingManagerRef = useRef<any>(null);
   const drawnRectangleRef = useRef<any>(null);
+
+  // Callback refs — keep latest handlers without re-running the marker effect on
+  // every parent render (parents typically pass inline lambdas).
+  const onMarkerTapRef = useRef(onMarkerTap);
+  const onMarkerHoverRef = useRef(onMarkerHover);
+  useEffect(() => {
+    onMarkerTapRef.current = onMarkerTap;
+  }, [onMarkerTap]);
+  useEffect(() => {
+    onMarkerHoverRef.current = onMarkerHover;
+  }, [onMarkerHover]);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((marker) => [marker.id, marker])),
@@ -571,7 +583,7 @@ export function GoogleMapSurface({
           });
       const handleMarkerTap = () => {
         const tapped = markerIndex.get(marker.id);
-        if (tapped) onMarkerTap(tapped);
+        if (tapped) onMarkerTapRef.current?.(tapped);
       };
       if (typeof instance.addEventListener === "function") {
         instance.addEventListener("gmp-click", handleMarkerTap);
@@ -596,13 +608,14 @@ export function GoogleMapSurface({
         return null;
       };
       const handleMouseOver = () => {
-        if (!onMarkerHover) return;
+        const cb = onMarkerHoverRef.current;
+        if (!cb) return;
         const tapped = markerIndex.get(marker.id);
         if (!tapped) return;
-        onMarkerHover(tapped, projectMarkerToPixel());
+        cb(tapped, projectMarkerToPixel());
       };
       const handleMouseOut = () => {
-        onMarkerHover?.(null, null);
+        onMarkerHoverRef.current?.(null, null);
       };
       if (typeof instance.addListener === "function") {
         instance.addListener("mouseover", handleMouseOver);
@@ -637,7 +650,8 @@ export function GoogleMapSurface({
       markerSignatureRefs.current.delete(id);
     });
 
-    // Sync the marker clusterer with the current set of clusterable markers.
+    // Sync the marker clusterer with the current set of clusterable markers,
+    // diffing in/out to avoid the flicker caused by clearMarkers+addMarkers.
     try {
       if (!clustererRef.current) {
         clustererRef.current = new MarkerClusterer({
@@ -655,21 +669,44 @@ export function GoogleMapSurface({
           },
         });
       }
-      const clusterableInstances: any[] = [];
+      const desiredIds = new Set<string>();
+      const desiredById = new Map<string, any>();
       markers.forEach((marker) => {
         if (!isClusterable(marker)) return;
         const inst = markerRefs.current.get(marker.id);
-        if (inst) clusterableInstances.push(inst);
+        if (!inst) return;
+        desiredIds.add(marker.id);
+        desiredById.set(marker.id, inst);
       });
-      clustererRef.current.clearMarkers();
-      if (clusterableInstances.length > 0) {
-        clustererRef.current.addMarkers(clusterableInstances);
+      const currentMap = clusteredInstancesRef.current;
+      const toAdd: any[] = [];
+      const toRemove: any[] = [];
+      desiredById.forEach((inst, id) => {
+        const prev = currentMap.get(id);
+        if (prev !== inst) {
+          if (prev) toRemove.push(prev);
+          toAdd.push(inst);
+        }
+      });
+      currentMap.forEach((prev, id) => {
+        if (desiredIds.has(id)) return;
+        toRemove.push(prev);
+      });
+      if (toRemove.length > 0) {
+        clustererRef.current.removeMarkers(toRemove, true);
       }
+      if (toAdd.length > 0) {
+        clustererRef.current.addMarkers(toAdd, true);
+      }
+      if (toAdd.length > 0 || toRemove.length > 0) {
+        clustererRef.current.render();
+      }
+      clusteredInstancesRef.current = desiredById;
     } catch (error) {
       // Clustering is best-effort; never break map rendering on clusterer errors.
       console.warn("[GoogleMapSurface] clusterer sync failed", error);
     }
-  }, [markers, markerIndex, onMarkerTap, onMarkerHover, mapReadyVersion, effectiveMapId]);
+  }, [markers, markerIndex, mapReadyVersion, effectiveMapId]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
@@ -796,6 +833,7 @@ export function GoogleMapSurface({
         // ignore teardown errors
       }
       clustererRef.current = null;
+      clusteredInstancesRef.current = new Map();
     };
   }, []);
 
