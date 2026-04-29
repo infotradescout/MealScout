@@ -1154,7 +1154,7 @@ export default function MapPage() {
   const bestLocationAccuracyRef = useRef<number | null>(null);
   const hasCenteredFromLiveLocationRef = useRef(false);
   const enableClientGeocode = false;
-  const [legendOpen, setLegendOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const urlStateHydratedRef = useRef(false);
   const [hoverPreview, setHoverPreview] = useState<{
     marker: MapAdapterMarker;
@@ -3491,49 +3491,61 @@ export default function MapPage() {
               {legendOpen && (
                 <ul
                   id="map-legend-body"
-                  className="border-t border-[color:var(--border-subtle)] px-3 py-2 text-xs text-[color:var(--text-primary)] space-y-1.5"
+                  className="min-w-44 border-t border-[color:var(--border-subtle)] px-3 py-2 text-xs text-[color:var(--text-primary)] space-y-2"
                 >
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-blue-500"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[9px] font-bold text-white"
                       aria-hidden="true"
-                    />
-                    You
+                    >
+                      Y
+                    </span>
+                    <span>You are here</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-orange-500"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 text-[9px] font-bold text-white"
                       aria-hidden="true"
-                    />
-                    Live trucks
+                    >
+                      T
+                    </span>
+                    <span>Food truck</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-fuchsia-500"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-fuchsia-500 text-[9px] font-bold text-white"
                       aria-hidden="true"
-                    />
-                    Events
+                    >
+                      E
+                    </span>
+                    <span>Event</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-green-500"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[9px] font-bold text-white"
                       aria-hidden="true"
-                    />
-                    Deals
+                    >
+                      D
+                    </span>
+                    <span>Deal</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-sky-600"
+                      className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-full bg-black"
                       aria-hidden="true"
-                    />
-                    Host parking
+                    >
+                      <img src={mealScoutIcon} alt="" className="h-3.5 w-3.5" />
+                    </span>
+                    <span>Host parking</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <span
-                      className="inline-block h-3 w-3 rounded-full bg-yellow-400"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-yellow-400 text-[9px] font-bold text-black"
                       aria-hidden="true"
-                    />
-                    Sponsored
+                    >
+                      $
+                    </span>
+                    <span>Sponsored</span>
                   </li>
                 </ul>
               )}

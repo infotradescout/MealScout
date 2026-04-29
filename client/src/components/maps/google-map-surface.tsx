@@ -119,6 +119,41 @@ const markerColor = (marker: MapAdapterMarker) => {
   }
 };
 
+const markerTypeLabel = (kind: MapAdapterMarker["kind"]) => {
+  switch (kind) {
+    case "truck":
+      return "Truck";
+    case "parking":
+      return "Host";
+    case "event":
+      return "Event";
+    case "deal":
+      return "Deal";
+    case "geo_ad":
+      return "Sponsored";
+    case "user":
+      return "You";
+    default:
+      return "Pin";
+  }
+};
+
+const markerIdentifier = (marker: MapAdapterMarker) =>
+  String(marker.title || marker.subtitle || markerTypeLabel(marker.kind)).trim();
+
+const markerGoogleLabel = (marker: MapAdapterMarker, showLabel: boolean) => {
+  if (!showLabel || marker.kind === "user") return null;
+  const text = markerIdentifier(marker);
+  if (!text) return null;
+  return {
+    text: text.length > 22 ? `${text.slice(0, 21)}...` : text,
+    color: "#111827",
+    fontSize: "11px",
+    fontWeight: "700",
+    className: "meal-map-marker-label",
+  };
+};
+
 const trafficCellColor = (source: MapTrafficCell["source"]) =>
   source === "google_places"
     ? "#60A5FA"
@@ -161,7 +196,20 @@ const applyMarkerA11y = (
 const buildAdvancedMarkerContent = (
   googleMaps: any,
   marker: MapAdapterMarker,
+  showLabel: boolean,
 ) => {
+  const labelText =
+    showLabel && marker.kind !== "user" ? markerIdentifier(marker) : "";
+  const wrapper = document.createElement("div");
+  wrapper.className = "meal-map-marker";
+
+  if (labelText) {
+    const label = document.createElement("div");
+    label.className = "meal-map-marker__label";
+    label.textContent = labelText;
+    wrapper.appendChild(label);
+  }
+
   if (marker.kind === "parking") {
     const img = document.createElement("img");
     img.src = mealScoutIcon;
@@ -171,7 +219,8 @@ const buildAdvancedMarkerContent = (
     img.style.width = "34px";
     img.style.height = "34px";
     applyMarkerA11y(img, marker);
-    return img;
+    wrapper.appendChild(img);
+    return wrapper;
   }
 
   const dot = document.createElement("div");
@@ -182,7 +231,8 @@ const buildAdvancedMarkerContent = (
   dot.style.background = markerColor(marker);
   dot.style.border = "1px solid #111827";
   applyMarkerA11y(dot, marker);
-  return dot;
+  wrapper.appendChild(dot);
+  return wrapper;
 };
 
 const removeMarkerFromMap = (instance: any) => {
@@ -551,6 +601,7 @@ export function GoogleMapSurface({
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
     const isClusterable = (marker: MapAdapterMarker) => marker.kind !== "user";
+    const showMarkerLabels = zoom >= 14;
 
     const usedIds = new Set<string>();
     markers.forEach((marker) => {
@@ -563,6 +614,7 @@ export function GoogleMapSurface({
         marker.color || "",
         marker.title || "",
         marker.subtitle || "",
+        showMarkerLabels ? "label" : "nolabel",
       ].join("|");
       const previousSignature = markerSignatureRefs.current.get(marker.id);
       if (existing) {
@@ -576,8 +628,15 @@ export function GoogleMapSurface({
         }
         if (typeof existing.setIcon === "function") {
           existing.setIcon(buildMarkerIcon(googleMaps, marker));
+          if (typeof existing.setLabel === "function") {
+            existing.setLabel(markerGoogleLabel(marker, showMarkerLabels));
+          }
         } else if ("content" in existing) {
-          existing.content = buildAdvancedMarkerContent(googleMaps, marker);
+          existing.content = buildAdvancedMarkerContent(
+            googleMaps,
+            marker,
+            showMarkerLabels,
+          );
         }
         markerSignatureRefs.current.set(marker.id, signature);
         return;
@@ -594,13 +653,18 @@ export function GoogleMapSurface({
             map: directMap || undefined,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
-            content: buildAdvancedMarkerContent(googleMaps, marker),
+            content: buildAdvancedMarkerContent(
+              googleMaps,
+              marker,
+              showMarkerLabels,
+            ),
           })
         : new googleMaps.Marker({
             map: directMap,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildMarkerIcon(googleMaps, marker),
+            label: markerGoogleLabel(marker, showMarkerLabels),
           });
       const handleMarkerTap = () => {
         const tapped = markerIndex.get(marker.id);
@@ -734,7 +798,7 @@ export function GoogleMapSurface({
       // Clustering is best-effort; never break map rendering on clusterer errors.
       console.warn("[GoogleMapSurface] clusterer sync failed", error);
     }
-  }, [markers, markerIndex, mapReadyVersion, effectiveMapId]);
+  }, [markers, markerIndex, mapReadyVersion, effectiveMapId, zoom]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;

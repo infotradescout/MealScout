@@ -1071,6 +1071,41 @@
     transition: none !important;
   }
 
+  .meal-map-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .meal-map-marker__label,
+  .meal-map-marker-label {
+    max-width: 132px;
+    overflow: hidden;
+    border: 1px solid rgba(17, 24, 39, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+    color: #111827 !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    line-height: 1.15;
+    padding: 3px 7px;
+    text-align: center;
+    text-overflow: ellipsis;
+    text-shadow: none !important;
+    white-space: nowrap;
+  }
+
+  .theme-night .meal-map-marker__label,
+  .theme-night .meal-map-marker-label {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(17, 17, 17, 0.9);
+    color: #ffffff !important;
+  }
+
   .theme-day .leaflet-control-zoom a,
   .theme-day .leaflet-bar a {
     background: rgba(255, 255, 255, 0.92);
