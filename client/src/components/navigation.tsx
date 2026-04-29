@@ -168,6 +168,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isRestaurantOwner = user && user.userType === "restaurant_owner";
   const isFoodTruck = user && user.userType === "food_truck";
   const isSupplier = user && user.userType === "supplier";
+  const isHostUser = user && user.userType === "host";
   const isAdmin =
     user && (user.userType === "admin" || user.userType === "super_admin");
   const isStaff = user && user.userType === "staff";
@@ -208,6 +209,16 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   const [isHost, setIsHost] = useState(false);
   const canSeeParkingPassNav = canManageParkingPass || isHost;
+  const currentPath = location.split("?")[0];
+  const currentSearch = location.includes("?")
+    ? location.slice(location.indexOf("?"))
+    : window.location.search;
+  const isHostManagementContext =
+    currentPath === "/host/dashboard" ||
+    (currentPath === "/parking-pass" &&
+      new URLSearchParams(currentSearch).get("adminMode") === "host") ||
+    Boolean(isHostUser && currentPath === "/parking-pass");
+  const shouldUseHostNav = Boolean(isHost || isHostUser || isHostManagementContext);
 
   useEffect(() => {
     if (!user) {
@@ -247,6 +258,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
         { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
         { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+      ];
+    }
+    if (shouldUseHostNav) {
+      return [
+        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+        { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
+        { path: "/parking-pass", icon: ParkingSquare, labelKey: "nav.parkingPass", fallbackLabel: "Parking Pass" },
       ];
     }
     if (isAdmin) {
@@ -302,7 +320,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       return [
         { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
         { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        { path: "/parking-pass", icon: ParkingSquare, labelKey: "nav.parkingPass", fallbackLabel: "Parking Pass" },
       ];
     }
     // Customer
@@ -320,10 +338,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     // ── Discover ──
     items.push(
       { path: "/", icon: UtensilsCrossed, fallbackLabel: "Food", group: "Discover" },
-      { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" },
       { path: "/video", icon: Clapperboard, fallbackLabel: "Video", group: "Discover" },
       { path: "/events", icon: Calendar, fallbackLabel: "Events", group: "Discover" },
     );
+
+    if (!shouldUseHostNav) {
+      items.splice(1, 0, { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" });
+    }
 
     if (!user) {
       items.push(
