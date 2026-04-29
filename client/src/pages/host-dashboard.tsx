@@ -63,6 +63,8 @@ function HostDashboard() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isLoadingPage, setIsLoadingPage] = useState(true);
+  const [authLoadingTimedOut, setAuthLoadingTimedOut] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
   const [hosts, setHosts] = useState<HostProfile[]>([]);
   const [selectedHostId, setSelectedHostId] = useState<string>("");
   const [host, setHost] = useState<HostProfile | null>(null);
@@ -76,6 +78,19 @@ function HostDashboard() {
   const [demandQueue, setDemandQueue] = useState<LocationDemandItem[]>([]);
   const [isLoadingDemand, setIsLoadingDemand] = useState(false);
   const [ownedRestaurants, setOwnedRestaurants] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setAuthLoadingTimedOut(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAuthLoadingTimedOut(true);
+    }, 12000);
+
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
 
   useEffect(() => {
     if (isLoading) {
@@ -93,8 +108,18 @@ function HostDashboard() {
     }
 
     const fetchData = async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 12000);
       try {
-        const hostsRes = await fetch("/api/hosts");
+        setDashboardError("");
+        const hostsRes = await fetch("/api/hosts", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (hostsRes.status === 401 || hostsRes.status === 403) {
+          setLocation("/login?redirect=/host/dashboard");
+          return;
+        }
         if (!hostsRes.ok) {
           throw new Error("Failed to fetch host profiles");
         }
@@ -108,9 +133,15 @@ function HostDashboard() {
         const initialHost = hostList[0];
         setSelectedHostId(initialHost.id);
         setHost(initialHost);
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
+        const message =
+          error?.name === "AbortError"
+            ? "Loading timed out. Please try again."
+            : error?.message || "Unable to load Host Dashboard.";
+        setDashboardError(message);
       } finally {
+        window.clearTimeout(timeoutId);
         setIsLoadingPage(false);
       }
     };
@@ -359,6 +390,24 @@ function HostDashboard() {
   );
 
   if (isLoading || isLoadingPage) {
+    if (authLoadingTimedOut) {
+      return (
+        <div className="max-w-xl mx-auto px-4 py-16">
+          <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 text-center">
+            <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
+              Host Dashboard is taking too long to load
+            </h2>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+              We couldn't finish loading your account session. Try reloading this page.
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <Button onClick={() => window.location.reload()}>Reload</Button>
+              <Button variant="outline" onClick={() => setLocation("/parking-pass")}>Go To Parking Pass</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--bg-layered)]">
         <Loader2 className="h-8 w-8 animate-spin text-[color:var(--accent-text)]" />
@@ -366,7 +415,24 @@ function HostDashboard() {
     );
   }
 
-  if (!host) return null;
+  if (!host) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16">
+        <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 text-center">
+          <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
+            Couldn't load Host Parking Pass dashboard
+          </h2>
+          <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
+            {dashboardError || "We hit a temporary loading issue."}
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <Button onClick={() => window.location.reload()}>Retry</Button>
+            <Button variant="outline" onClick={() => setLocation("/parking-pass")}>Open Parking Pass</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const hostStripePayoutReady = Boolean(
     host.stripeConnectAccountId &&
