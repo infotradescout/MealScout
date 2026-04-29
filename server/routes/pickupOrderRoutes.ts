@@ -944,14 +944,34 @@ export function registerPickupOrderRoutes(app: Express) {
     "/api/my/orders",
     isAuthenticated,
     wrap(async (req, res) => {
-      const orders = await db
+      const orders: PickupOrder[] = await db
         .select()
         .from(pickupOrders)
         .where(eq(pickupOrders.customerId, req.user.id))
         .orderBy(desc(pickupOrders.createdAt))
         .limit(50);
 
-      res.json({ orders });
+      const restaurantIds: string[] = Array.from(
+        new Set(orders.map((order) => order.restaurantId).filter(Boolean)),
+      );
+      const restaurantRows: Array<{ id: string; name: string }> =
+        restaurantIds.length > 0
+          ? await db
+              .select({ id: restaurants.id, name: restaurants.name })
+              .from(restaurants)
+              .where(inArray(restaurants.id, restaurantIds))
+          : [];
+      const restaurantNameById = new Map(
+        restaurantRows.map((restaurant) => [restaurant.id, restaurant.name]),
+      );
+
+      res.json({
+        orders: orders.map((order) => ({
+          ...order,
+          restaurantName:
+            restaurantNameById.get(order.restaurantId) || "Restaurant",
+        })),
+      });
     }),
   );
 }
