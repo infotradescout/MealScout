@@ -134,6 +134,19 @@ const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   };
 };
 
+const applyMarkerA11y = (
+  el: HTMLElement,
+  marker: MapAdapterMarker,
+) => {
+  if (marker.kind === "user") return;
+  el.setAttribute("role", "button");
+  el.setAttribute("tabindex", "0");
+  const label = marker.title || marker.subtitle || `${marker.kind} marker`;
+  el.setAttribute("aria-label", label);
+  el.style.outlineOffset = "2px";
+  el.style.cursor = "pointer";
+};
+
 const buildAdvancedMarkerContent = (
   googleMaps: any,
   marker: MapAdapterMarker,
@@ -146,6 +159,7 @@ const buildAdvancedMarkerContent = (
     img.height = 34;
     img.style.width = "34px";
     img.style.height = "34px";
+    applyMarkerA11y(img, marker);
     return img;
   }
 
@@ -156,6 +170,7 @@ const buildAdvancedMarkerContent = (
   dot.style.borderRadius = "50%";
   dot.style.background = markerColor(marker);
   dot.style.border = "1px solid #111827";
+  applyMarkerA11y(dot, marker);
   return dot;
 };
 
@@ -541,6 +556,18 @@ export function GoogleMapSurface({
       }
       if (typeof instance.addListener === "function") {
         instance.addListener("click", handleMarkerTap);
+      }
+      // Keyboard activation for AdvancedMarker content (Enter/Space).
+      if (useAdvancedMarkers && instance.content instanceof HTMLElement) {
+        instance.content.addEventListener(
+          "keydown",
+          (event: KeyboardEvent) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              handleMarkerTap();
+            }
+          },
+        );
       }
       markerRefs.current.set(marker.id, instance);
       markerSignatureRefs.current.set(marker.id, signature);

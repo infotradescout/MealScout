@@ -1352,6 +1352,14 @@
     }
   }
 
+  /* Visible focus ring for keyboard-activated map markers (AdvancedMarkerElement) */
+  gmp-advanced-marker [role="button"]:focus-visible,
+  gmp-advanced-marker [role="button"]:focus {
+    outline: 2px solid var(--brand-primary, #f97316);
+    outline-offset: 3px;
+    border-radius: 999px;
+  }
+
   .event-form .event-form-field {
     background-color: #ffffff;
     color: #0f172a;

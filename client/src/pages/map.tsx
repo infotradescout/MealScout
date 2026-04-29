@@ -3056,6 +3056,58 @@ export default function MapPage() {
     [selectedParkingRouteSummary],
   );
 
+  const {
+    data: selectedSightingRouteSummary,
+    isLoading: isLoadingSelectedSightingRouteSummary,
+  } = useQuery<MapRouteSummaryResponse>({
+    queryKey: [
+      "/api/map/route-summary",
+      userLocation?.lat,
+      userLocation?.lng,
+      selectedSighting?.latitude,
+      selectedSighting?.longitude,
+      "DRIVE",
+    ],
+    enabled: Boolean(userLocation && selectedSighting),
+    queryFn: async () => {
+      if (!userLocation || !selectedSighting) {
+        throw new Error("Route summary missing origin/destination");
+      }
+      const params = new URLSearchParams({
+        originLat: String(userLocation.lat),
+        originLng: String(userLocation.lng),
+        destLat: String(selectedSighting.latitude),
+        destLng: String(selectedSighting.longitude),
+        travelMode: "DRIVE",
+      });
+      const res = await fetch(
+        apiUrl(`/api/map/route-summary?${params.toString()}`),
+      );
+      if (!res.ok) {
+        throw new Error("Failed to load route summary");
+      }
+      return res.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const selectedSightingEtaLabel = useMemo(
+    () =>
+      selectedSightingRouteSummary
+        ? formatDurationLabel(selectedSightingRouteSummary.durationSeconds)
+        : null,
+    [selectedSightingRouteSummary],
+  );
+
+  const selectedSightingDistanceLabel = useMemo(
+    () =>
+      selectedSightingRouteSummary
+        ? formatRoadDistance(selectedSightingRouteSummary.distanceMeters)
+        : null,
+    [selectedSightingRouteSummary],
+  );
+
   const mapSchemaData = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -3608,6 +3660,21 @@ export default function MapPage() {
                 Reports: {selectedSighting.reportCount} · Expires from map at{" "}
                 {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
               </div>
+              {userLocation && (
+                <div
+                  className="mb-3 text-xs text-muted-foreground"
+                  data-testid="sighting-distance-eta"
+                >
+                  {isLoadingSelectedSightingRouteSummary
+                    ? "Estimating drive time..."
+                    : [
+                        selectedSightingDistanceLabel,
+                        selectedSightingEtaLabel,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "Drive ETA unavailable"}
+                </div>
+              )}
               <Button
                 size="sm"
                 className="w-full"
