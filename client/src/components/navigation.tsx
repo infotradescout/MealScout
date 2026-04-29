@@ -208,7 +208,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     businessAccess?.permissions?.manageProfile === true;
 
   const [isHost, setIsHost] = useState(false);
-  const canSeeParkingPassNav = canManageParkingPass || isHost;
+  const canSeeParkingPassNav = canManageParkingPass;
   const currentPath = location.split("?")[0];
   const currentSearch = location.includes("?")
     ? location.slice(location.indexOf("?"))
@@ -226,7 +226,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       return;
     }
     let cancelled = false;
-    fetch("/api/hosts")
+    fetch("/api/hosts", { credentials: "include" })
       .then(async (res) => {
         if (cancelled) return;
         if (!res.ok) {
@@ -264,7 +264,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       return [
         { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
         { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-        { path: "/parking-pass", icon: ParkingSquare, labelKey: "nav.parkingPass", fallbackLabel: "Parking Pass" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
       ];
     }
     if (isAdmin) {
@@ -320,7 +320,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       return [
         { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
         { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-        { path: "/parking-pass", icon: ParkingSquare, labelKey: "nav.parkingPass", fallbackLabel: "Parking Pass" },
+        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
       ];
     }
     // Customer
@@ -338,13 +338,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     // ── Discover ──
     items.push(
       { path: "/", icon: UtensilsCrossed, fallbackLabel: "Food", group: "Discover" },
+      { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" },
       { path: "/video", icon: Clapperboard, fallbackLabel: "Video", group: "Discover" },
       { path: "/events", icon: Calendar, fallbackLabel: "Events", group: "Discover" },
     );
-
-    if (!shouldUseHostNav) {
-      items.splice(1, 0, { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" });
-    }
 
     if (!user) {
       items.push(
@@ -378,7 +375,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           { path: "/kitchen", icon: ChefHat, fallbackLabel: "Kitchen", group: "Business" },
           { path: "/supply/orders", icon: Package, fallbackLabel: "Supply Orders", group: "Business" },
         );
-        if (canSeeParkingPassNav) {
+        if (canSeeParkingPassNav && !shouldUseHostNav) {
           items.push(
             { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Business" },
           );
@@ -399,7 +396,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         items.push(
           { path: "/host/dashboard", icon: Users, fallbackLabel: "Host Dashboard", group: "Host" },
         );
-        if (canSeeParkingPassNav && !items.some(i => i.path === "/parking-pass")) {
+        if (canSeeParkingPassNav && !shouldUseHostNav && !items.some(i => i.path === "/parking-pass")) {
           items.push(
             { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Host" },
           );
