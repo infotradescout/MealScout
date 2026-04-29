@@ -382,6 +382,7 @@ export function GoogleMapSurface({
           mapRef.current = new MapConstructor(mapContainerRef.current, {
             center,
             zoom,
+            backgroundColor: isNightTheme ? "#111827" : "#F8FAFC",
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
@@ -451,8 +452,12 @@ export function GoogleMapSurface({
           // Ensure marker sync runs after first map instance initialization.
           setMapReadyVersion((prev) => prev + 1);
         } else {
+          mapRef.current.setOptions({
+            backgroundColor: isNightTheme ? "#111827" : "#F8FAFC",
+          });
           if (!effectiveMapId) {
             mapRef.current.setOptions({
+              backgroundColor: isNightTheme ? "#111827" : "#F8FAFC",
               styles: isNightTheme
                 ? [...mapStyleDark, ...mapStyleHideFoodPoiIcons]
                 : mapStyleHideFoodPoiIcons,
@@ -978,7 +983,9 @@ export function GoogleMapSurface({
     <div className="h-full w-full relative">
       <div
         ref={mapContainerRef}
-        className="h-full w-full rounded-lg overflow-hidden"
+        className={`google-map-surface h-full w-full overflow-hidden rounded-lg ${
+          isNightTheme ? "google-map-surface--night" : "google-map-surface--day"
+        }`}
       />
       <div className="absolute top-5 right-5 flex flex-col space-y-2 z-[1000]">
         <Button

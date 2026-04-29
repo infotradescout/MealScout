@@ -1034,6 +1034,26 @@
     filter: contrast(1.12) saturate(1.06);
   }
 
+  .google-map-surface,
+  .google-map-surface .gm-style,
+  .leaflet-container,
+  .leaflet-tile-pane {
+    background: #f8fafc !important;
+  }
+
+  .theme-night .google-map-surface,
+  .theme-night .google-map-surface .gm-style,
+  .theme-night .leaflet-container,
+  .theme-night .leaflet-tile-pane {
+    background: #111827 !important;
+  }
+
+  .theme-night .google-map-surface img,
+  .theme-night .leaflet-tile,
+  .theme-night .leaflet-zoom-animated {
+    transition: none !important;
+  }
+
   .theme-day .leaflet-control-zoom a,
   .theme-day .leaflet-bar a {
     background: rgba(255, 255, 255, 0.92);
