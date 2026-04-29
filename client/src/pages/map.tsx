@@ -40,6 +40,9 @@ import {
   List,
   X,
   ArrowDownToLine,
+  ChevronUp,
+  ChevronDown,
+  Info,
 } from "lucide-react";
 import DealCard from "@/components/deal-card";
 import { SEOHead } from "@/components/seo-head";
@@ -1148,6 +1151,8 @@ export default function MapPage() {
   const bestLocationAccuracyRef = useRef<number | null>(null);
   const hasCenteredFromLiveLocationRef = useRef(false);
   const enableClientGeocode = false;
+  const [legendOpen, setLegendOpen] = useState(false);
+  const urlStateHydratedRef = useRef(false);
 
   const handleTruckSightingPhotoChange = useCallback(
     async (file: File | null) => {
@@ -1388,11 +1393,59 @@ export default function MapPage() {
       // ignore localStorage issues
     }
 
+    // URL state takes precedence over stored device location so deep-links work.
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const latRaw = params.get("lat");
+        const lngRaw = params.get("lng");
+        const zoomRaw = params.get("z") || params.get("zoom");
+        const lat = latRaw ? Number(latRaw) : NaN;
+        const lng = lngRaw ? Number(lngRaw) : NaN;
+        const z = zoomRaw ? Number(zoomRaw) : NaN;
+        if (
+          Number.isFinite(lat) &&
+          Number.isFinite(lng) &&
+          Math.abs(lat) <= 90 &&
+          Math.abs(lng) <= 180
+        ) {
+          setMapCenter({ lat, lng });
+          if (Number.isFinite(z) && z >= 1 && z <= 20) {
+            setZoomLevel(Math.round(z));
+            lastZoomLevelRef.current = Math.round(z);
+          }
+        }
+      }
+    } catch {
+      // ignore URL parse errors
+    } finally {
+      urlStateHydratedRef.current = true;
+    }
+
     requestUserLocation();
     return () => {
       stopLocationWatch();
     };
   }, [requestUserLocation, stopLocationWatch]);
+
+  // Persist current map center + zoom to URL (debounced) so views are shareable.
+  useEffect(() => {
+    if (!urlStateHydratedRef.current) return;
+    if (typeof window === "undefined") return;
+    const timer = window.setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        params.set("lat", mapCenter.lat.toFixed(5));
+        params.set("lng", mapCenter.lng.toFixed(5));
+        params.set("z", String(zoomLevel));
+        const next = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+        window.history.replaceState(null, "", next);
+      } catch {
+        // ignore history API errors
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [mapCenter.lat, mapCenter.lng, zoomLevel]);
 
   // Fetch nearby deals based on user location
   const { data: dealsData = [], isLoading } = useQuery({
@@ -3281,6 +3334,98 @@ export default function MapPage() {
               </Button>
             </div>
           )}
+
+          {/* Map legend (collapsible, top-left) */}
+          <div className="absolute top-3 left-3 z-[1100]">
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 shadow-clean backdrop-blur">
+              <button
+                type="button"
+                onClick={() => setLegendOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-[color:var(--text-primary)]"
+                aria-expanded={legendOpen}
+                aria-controls="map-legend-body"
+                data-testid="button-toggle-map-legend"
+              >
+                <Info className="w-3.5 h-3.5" aria-hidden="true" />
+                Legend
+                {legendOpen ? (
+                  <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                )}
+              </button>
+              {legendOpen && (
+                <ul
+                  id="map-legend-body"
+                  className="border-t border-[color:var(--border-subtle)] px-3 py-2 text-xs text-[color:var(--text-primary)] space-y-1.5"
+                >
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-blue-500"
+                      aria-hidden="true"
+                    />
+                    You
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-orange-500"
+                      aria-hidden="true"
+                    />
+                    Live trucks
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-fuchsia-500"
+                      aria-hidden="true"
+                    />
+                    Events
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-green-500"
+                      aria-hidden="true"
+                    />
+                    Deals
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-sky-600"
+                      aria-hidden="true"
+                    />
+                    Host parking
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-yellow-400"
+                      aria-hidden="true"
+                    />
+                    Sponsored
+                  </li>
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Empty state when nothing visible in current bounds */}
+          {appliedMapBounds &&
+            !hasPendingAreaSearch &&
+            activityPins === 0 &&
+            !isLocating &&
+            !isLoading && (
+              <div
+                className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex -translate-y-1/2 justify-center px-4"
+                data-testid="empty-state-no-pins"
+              >
+                <div className="pointer-events-auto max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-4 py-3 text-center shadow-clean backdrop-blur">
+                  <p className="text-sm font-medium text-foreground mb-1">
+                    No trucks, events, or hosts in this area
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Zoom out or pan the map to explore another area.
+                  </p>
+                </div>
+              </div>
+            )}
           {mapCenter && isUsingGoogleMap ? (
             <GoogleMapSurface
               key={`google-map-${googleMapRetryNonce}`}

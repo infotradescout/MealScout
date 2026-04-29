@@ -1345,6 +1345,13 @@
     }
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .map-user-marker__pulse {
+      animation: none !important;
+      opacity: 0.35;
+    }
+  }
+
   .event-form .event-form-field {
     background-color: #ffffff;
     color: #0f172a;
