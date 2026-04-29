@@ -1160,6 +1160,13 @@ export default function MapPage() {
     x: number;
     y: number;
   } | null>(null);
+  const [drawingActive, setDrawingActive] = useState(false);
+  const [areaFilterBounds, setAreaFilterBounds] = useState<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
 
   const handleTruckSightingPhotoChange = useCallback(
     async (file: File | null) => {
@@ -2794,8 +2801,18 @@ export default function MapPage() {
       seen.add(key);
       out.push(m);
     }
+    if (areaFilterBounds) {
+      const { north, south, east, west } = areaFilterBounds;
+      return out.filter(
+        (m) =>
+          m.lat <= north &&
+          m.lat >= south &&
+          m.lng <= east &&
+          m.lng >= west,
+      );
+    }
     return out;
-  }, [adapterMarkers]);
+  }, [adapterMarkers, areaFilterBounds]);
 
   const selectParkingHost = useCallback(
     (
@@ -3504,6 +3521,37 @@ export default function MapPage() {
               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
               Share
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (areaFilterBounds) {
+                  setAreaFilterBounds(null);
+                  setDrawingActive(false);
+                  return;
+                }
+                setDrawingActive((v) => !v);
+              }}
+              className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium shadow-clean backdrop-blur ${
+                drawingActive || areaFilterBounds
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                  : "border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 text-[color:var(--text-primary)]"
+              }`}
+              aria-pressed={drawingActive || !!areaFilterBounds}
+              aria-label={
+                areaFilterBounds
+                  ? "Clear drawn area"
+                  : drawingActive
+                  ? "Cancel area drawing"
+                  : "Draw an area to filter pins"
+              }
+              data-testid="button-draw-area"
+            >
+              {areaFilterBounds
+                ? "Clear area"
+                : drawingActive
+                ? "Drawing…"
+                : "Draw area"}
+            </button>
           </div>
 
           {/* Empty state when nothing visible in current bounds */}
@@ -3554,6 +3602,11 @@ export default function MapPage() {
                   });
                 }}
                 onFatalError={handleGoogleMapsFatalError}
+                drawingActive={drawingActive}
+                onAreaSelected={(b) => {
+                  setAreaFilterBounds(b);
+                  if (b) setDrawingActive(false);
+                }}
               />
               {hoverPreview && (
                 <div

@@ -35,6 +35,12 @@ type GoogleMapSurfaceProps = {
   onPopupAnchorPosition?: (
     position: { x: number; y: number } | null,
   ) => void;
+  /** Enables rectangle drawing mode for area selection. */
+  drawingActive?: boolean;
+  /** Fires when the user finishes drawing a rectangle (or clears it). */
+  onAreaSelected?: (
+    bounds: { north: number; south: number; east: number; west: number } | null,
+  ) => void;
 };
 
 type GoogleMapsWindow = Window & {
@@ -230,7 +236,7 @@ const loadGoogleMaps = async (apiKey: string) => {
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
       apiKey,
-    )}&v=weekly&loading=async&libraries=marker`;
+    )}&v=weekly&loading=async&libraries=marker,drawing`;
     script.async = true;
     script.defer = true;
     script.dataset.mealscoutGoogleMaps = "1";
@@ -286,6 +292,8 @@ export function GoogleMapSurface({
   onFatalError,
   popupAnchor = null,
   onPopupAnchorPosition,
+  drawingActive = false,
+  onAreaSelected,
 }: GoogleMapSurfaceProps) {
   const effectiveMapId = String(mapId || BUILD_GOOGLE_MAP_ID || "").trim();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -302,6 +310,8 @@ export function GoogleMapSurface({
   const popupOverlayRef = useRef<any>(null);
   const projectionOverlayRef = useRef<any>(null);
   const clustererRef = useRef<any>(null);
+  const drawingManagerRef = useRef<any>(null);
+  const drawnRectangleRef = useRef<any>(null);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((marker) => [marker.id, marker])),
@@ -813,6 +823,91 @@ export function GoogleMapSurface({
       projectionOverlayRef.current = null;
     };
   }, [mapReadyVersion]);
+
+  // Drawing manager — rectangle selection for filtering by area.
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+
+    const clearDrawnRectangle = () => {
+      if (drawnRectangleRef.current) {
+        try {
+          drawnRectangleRef.current.setMap(null);
+        } catch {
+          // ignore
+        }
+        drawnRectangleRef.current = null;
+      }
+    };
+
+    if (!drawingActive) {
+      if (drawingManagerRef.current) {
+        try {
+          drawingManagerRef.current.setMap(null);
+        } catch {
+          // ignore
+        }
+        drawingManagerRef.current = null;
+      }
+      clearDrawnRectangle();
+      onAreaSelected?.(null);
+      return;
+    }
+
+    const drawingLib = googleMaps.drawing;
+    if (!drawingLib?.DrawingManager) return;
+
+    const manager = new drawingLib.DrawingManager({
+      drawingMode: drawingLib.OverlayType.RECTANGLE,
+      drawingControl: false,
+      rectangleOptions: {
+        fillColor: "#22c55e",
+        fillOpacity: 0.12,
+        strokeColor: "#16a34a",
+        strokeWeight: 2,
+        clickable: false,
+        editable: false,
+        zIndex: 1,
+      },
+    });
+    manager.setMap(mapRef.current);
+    drawingManagerRef.current = manager;
+
+    const listener = googleMaps.event.addListener(
+      manager,
+      "rectanglecomplete",
+      (rectangle: any) => {
+        clearDrawnRectangle();
+        drawnRectangleRef.current = rectangle;
+        manager.setDrawingMode(null);
+        const b = rectangle.getBounds();
+        if (!b) return;
+        const ne = b.getNorthEast();
+        const sw = b.getSouthWest();
+        onAreaSelected?.({
+          north: ne.lat(),
+          east: ne.lng(),
+          south: sw.lat(),
+          west: sw.lng(),
+        });
+      },
+    );
+
+    return () => {
+      try {
+        googleMaps.event.removeListener(listener);
+      } catch {
+        // ignore
+      }
+      try {
+        manager.setMap(null);
+      } catch {
+        // ignore
+      }
+      drawingManagerRef.current = null;
+      clearDrawnRectangle();
+    };
+  }, [drawingActive, mapReadyVersion, onAreaSelected]);
 
   const controlClassName = isNightTheme
     ? "w-11 h-11 p-0 rounded-full bg-[var(--bg-card)]/90 border border-white/20 shadow-clean-lg backdrop-blur text-[color:var(--text-primary)]"
