@@ -790,21 +790,29 @@ export function registerRestaurantCoreRoutes(
         let menuRows: Array<{ restaurantId: string; menuId: string }> = [];
         let itemCount = 0;
         if (restaurantIds.length > 0) {
-          menuRows = await db
-            .select({
-              restaurantId: menus.restaurantId,
-              menuId: menus.id,
-            })
-            .from(menus)
-            .where(inArray(menus.restaurantId, restaurantIds));
+          try {
+            menuRows = await db
+              .select({
+                restaurantId: menus.restaurantId,
+                menuId: menus.id,
+              })
+              .from(menus)
+              .where(inArray(menus.restaurantId, restaurantIds));
 
-          if (menuRows.length > 0) {
-            const menuIds = menuRows.map((m) => m.menuId);
-            const [{ count }] = await db
-              .select({ count: sql<number>`COUNT(*)::int` })
-              .from(menuItems)
-              .where(inArray(menuItems.menuId, menuIds));
-            itemCount = Number(count || 0);
+            if (menuRows.length > 0) {
+              const menuIds = menuRows.map((m) => m.menuId);
+              const [{ count }] = await db
+                .select({ count: sql<number>`COUNT(*)::int` })
+                .from(menuItems)
+                .where(inArray(menuItems.menuId, menuIds));
+              itemCount = Number(count || 0);
+            }
+          } catch (error) {
+            // Some environments can lag behind menu migrations.
+            // Keep onboarding usable instead of hard-failing the endpoint.
+            console.warn("[owner/onboarding] menu tables unavailable; using zero counts", error);
+            menuRows = [];
+            itemCount = 0;
           }
         }
 

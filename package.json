@@ -67,6 +67,8 @@
     "stress-test": "tsx scripts/stressTest.ts",
     "test:flows": "tsx scripts/userFlows.ts",
     "test:onboarding-completion": "tsx scripts/testOnboardingCompletionEndpoint.ts",
+    "test:public-profile-visibility": "tsx scripts/testPublicProfileVisibilityRules.ts",
+    "test:owner-discoverability-flow": "tsx scripts/testOwnerDiscoverabilityFlow.ts",
     "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
