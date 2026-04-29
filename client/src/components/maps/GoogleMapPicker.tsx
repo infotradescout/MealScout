@@ -25,6 +25,7 @@ import {
 import L from "leaflet";
 import { useQuery } from "@tanstack/react-query";
 import mealScoutIcon from "@assets/meal-scout-icon.png";
+import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import type { MapTrafficCell } from "./map-adapter.types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -894,9 +895,7 @@ export function GoogleMapPicker({
   });
 
   // Build-time key takes priority; runtime key is a fallback for server-injected keys
-  const buildTimeKey = String(
-    (import.meta as any).env?.VITE_GOOGLE_MAPS_WEB_API_KEY || "",
-  ).trim();
+  const buildTimeKey = GOOGLE_MAPS_WEB_API_KEY;
   const runtimeKey = String(mapRuntime?.googleMapsApiKey || "").trim();
   const apiKey = buildTimeKey || runtimeKey;
 

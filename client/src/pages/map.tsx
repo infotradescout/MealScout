@@ -1781,9 +1781,15 @@ export default function MapPage() {
     useQuery<MapRuntimeResponse>({
       queryKey: ["/api/map/runtime"],
       queryFn: async () => {
-        const res = await fetch(apiUrl("/api/map/runtime"));
-        if (!res.ok) throw new Error("Failed to load map runtime config");
-        return res.json();
+        try {
+          const res = await fetch(apiUrl("/api/map/runtime"));
+          if (!res.ok) {
+            return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+          }
+          return res.json();
+        } catch {
+          return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+        }
       },
       retry: 4,
       retryDelay: 800,
