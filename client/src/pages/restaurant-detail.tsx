@@ -20,7 +20,6 @@ import {
 } from "@/components/moderation/FlagDialogs";
 import {
   ArrowLeft,
-  ExternalLink,
   Flame,
   List,
   MapPin,
@@ -36,7 +35,6 @@ import {
   Share2,
   Star,
   Globe,
-  UtensilsCrossed,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -596,7 +594,7 @@ export default function RestaurantDetailPage() {
   const heroImageUrl = toExternalUrl(
     (restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl,
   );
-  const heroImageSrc = heroImageUrl || "/backgrounds/night-market-plate.webp";
+  const heroImageSrc = heroImageUrl || "";
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
@@ -632,13 +630,12 @@ export default function RestaurantDetailPage() {
   const locationDisplay = [address, city, state].filter(Boolean).join(", ");
   const nextStop = parkingScheduleItems[0];
   const locationTitle = isFoodTruck ? "Today's Location" : "Location";
-  const locationName = nextStop?.title || locationLabel || restaurantName;
-  const locationSubtitle =
-    nextStop?.subtitle || locationDisplay || "Location coming soon";
+  const locationName = nextStop?.title || locationDisplay || locationLabel;
+  const locationSubtitle = nextStop?.subtitle || "";
   const hoursLabel =
     nextStop?.startTime && nextStop?.endTime
       ? `${nextStop.startTime} - ${nextStop.endTime}`
-      : "Open now";
+      : "";
   const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const localBusinessSchema = {
@@ -720,7 +717,7 @@ export default function RestaurantDetailPage() {
         canonicalUrl={canonicalProfileUrl}
         allowCanonicalHostOverride={Boolean(customDomainHost)}
         ogType="restaurant"
-        ogImage={heroImageSrc}
+        ogImage={heroImageSrc || undefined}
         schemaData={[
           localBusinessSchema,
           sourceOfTruthSchema,
@@ -728,12 +725,14 @@ export default function RestaurantDetailPage() {
         ]}
       />
       <section className="relative min-h-[24rem] overflow-hidden bg-black">
-        <img
-          src={heroImageSrc}
-          alt={`${restaurantName} exterior or food photo`}
-          className="absolute inset-0 h-full w-full object-cover"
-          loading="eager"
-        />
+        {heroImageSrc ? (
+          <img
+            src={heroImageSrc}
+            alt={`${restaurantName} exterior or food photo`}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="eager"
+          />
+        ) : null}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.25)_32%,rgba(0,0,0,0.94)_100%)]" />
 
         <div className="relative z-10 flex min-h-[24rem] flex-col justify-between px-5 pb-6 pt-[calc(1rem+env(safe-area-inset-top))]">
@@ -790,11 +789,15 @@ export default function RestaurantDetailPage() {
                   </span>
                 </>
               ) : null}
-              <span>•</span>
-              <span className="inline-flex items-center gap-1 text-[color:var(--status-success)]">
-                <span className="h-2 w-2 rounded-full bg-[color:var(--status-success)]" />
-                Open Now
-              </span>
+              {hoursLabel ? (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 text-[color:var(--status-success)]">
+                    <span className="h-2 w-2 rounded-full bg-[color:var(--status-success)]" />
+                    {hoursLabel}
+                  </span>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -927,99 +930,101 @@ export default function RestaurantDetailPage() {
           </div>
         ) : null}
 
-        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
-          <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
-                <MapPin className="h-5 w-5" />
-                <h2 className="text-lg font-black uppercase tracking-normal">
-                  {locationTitle}
-                </h2>
+        {locationName || locationSubtitle ? (
+          <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+            <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
+                  <MapPin className="h-5 w-5" />
+                  <h2 className="text-lg font-black uppercase tracking-normal">
+                    {locationTitle}
+                  </h2>
+                </div>
+                {locationName ? (
+                  <p className="text-lg font-semibold text-white">
+                    {locationName}
+                  </p>
+                ) : null}
+                {locationSubtitle ? (
+                  <p className="mt-1 text-sm text-white/70">
+                    {locationSubtitle}
+                  </p>
+                ) : null}
+                {hoursLabel ? (
+                  <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[color:var(--status-success)]">
+                    <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />
+                    {hoursLabel}
+                  </p>
+                ) : null}
               </div>
-              <p className="text-lg font-semibold text-white">{locationName}</p>
-              <p className="mt-1 text-sm text-white/70">{locationSubtitle}</p>
-              <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[color:var(--status-success)]">
-                <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />
-                {hoursLabel}
-              </p>
-            </div>
-            <a
-              href={
-                directionsUrl ||
-                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationSubtitle || restaurantName)}`
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="relative min-h-[7.5rem] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(30,41,59,0.95),rgba(2,6,23,0.95))]"
-            >
-              <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.09)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.09)_1px,transparent_1px)] [background-size:22px_22px]" />
-              <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[color:var(--accent-text)] text-black shadow-xl">
-                <MapPin className="h-7 w-7 fill-current" />
-              </div>
-            </a>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
-          <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
-                <Star className="h-5 w-5" />
-                <h2 className="text-lg font-black uppercase tracking-normal">
-                  Tonight's Special
-                </h2>
-              </div>
-              <p className="text-lg font-semibold text-white">
-                {primaryDeal?.title || "Specials coming soon"}
-              </p>
-              <p className="mt-1 text-sm text-white/75">
-                {primaryDeal?.discountValue
-                  ? primaryDeal.dealType === "percentage"
-                    ? `${primaryDeal.discountValue}% off`
-                    : `$${primaryDeal.discountValue} off`
-                  : primaryDeal?.description ||
-                    "Check back for fresh deals and limited-time offers."}
-              </p>
-            </div>
-            <div className="min-h-[6.5rem] overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-              <img
-                src={primaryDeal?.imageUrl || heroImageSrc}
-                alt={primaryDeal?.title || `${restaurantName} special`}
-                className="h-full min-h-[6.5rem] w-full object-cover"
-                loading="lazy"
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
-          <div className="mb-3 flex items-center gap-2 text-[color:var(--accent-text)]">
-            <Flame className="h-5 w-5" />
-            <h2 className="text-lg font-black uppercase tracking-normal">
-              Popular Items
-            </h2>
-          </div>
-          <div className="divide-y divide-white/10">
-            {(popularMenuItems.length > 0
-              ? popularMenuItems
-              : [
-                  { id: "menu", name: "View full menu", description: null },
-                  {
-                    id: "special",
-                    name: "Current specials",
-                    description: null,
-                  },
-                  { id: "visit", name: "Visit or order", description: null },
-                ]
-            ).map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--accent-text)]/15 text-[color:var(--accent-text)]">
-                    <UtensilsCrossed className="h-5 w-5" />
+              {hasCoords ? (
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="relative min-h-[7.5rem] overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(30,41,59,0.95),rgba(2,6,23,0.95))]"
+                >
+                  <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(rgba(255,255,255,.09)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.09)_1px,transparent_1px)] [background-size:22px_22px]" />
+                  <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[color:var(--accent-text)] text-black shadow-xl">
+                    <MapPin className="h-7 w-7 fill-current" />
                   </div>
+                </a>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {primaryDeal ? (
+          <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+            <div className="grid gap-3 sm:grid-cols-[1fr_10rem] sm:items-center">
+              <div>
+                <div className="mb-2 flex items-center gap-2 text-[color:var(--accent-text)]">
+                  <Star className="h-5 w-5" />
+                  <h2 className="text-lg font-black uppercase tracking-normal">
+                    Tonight's Special
+                  </h2>
+                </div>
+                <p className="text-lg font-semibold text-white">
+                  {primaryDeal.title || "Special"}
+                </p>
+                {primaryDeal.discountValue || primaryDeal.description ? (
+                  <p className="mt-1 text-sm text-white/75">
+                    {primaryDeal.discountValue
+                      ? primaryDeal.dealType === "percentage"
+                        ? `${primaryDeal.discountValue}% off`
+                        : `$${primaryDeal.discountValue} off`
+                      : primaryDeal.description}
+                  </p>
+                ) : null}
+              </div>
+              {primaryDeal.imageUrl ? (
+                <div className="min-h-[6.5rem] overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                  <img
+                    src={primaryDeal.imageUrl}
+                    alt={primaryDeal.title || `${restaurantName} special`}
+                    className="h-full min-h-[6.5rem] w-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {popularMenuItems.length > 0 ? (
+          <section className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean">
+            <div className="mb-3 flex items-center gap-2 text-[color:var(--accent-text)]">
+              <Flame className="h-5 w-5" />
+              <h2 className="text-lg font-black uppercase tracking-normal">
+                Popular Items
+              </h2>
+            </div>
+            <div className="divide-y divide-white/10">
+              {popularMenuItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 py-3"
+                >
                   <div>
                     <p className="font-semibold text-white">{item.name}</p>
                     {item.description ? (
@@ -1028,12 +1033,14 @@ export default function RestaurantDetailPage() {
                       </p>
                     ) : null}
                   </div>
+                  <p className="text-sm font-semibold text-white/70">
+                    {formatMoney(item.priceCents)}
+                  </p>
                 </div>
-                <ExternalLink className="h-4 w-4 text-white/35" />
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {isStaffOrAdmin ? (
           <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
