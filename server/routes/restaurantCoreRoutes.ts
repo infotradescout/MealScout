@@ -9,7 +9,10 @@ import { sanitizeUser } from "../utils/sanitize";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
-import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
+import {
+  getPublicBusinessVisibilityChecks,
+  isPublicBusinessVisible,
+} from "../utils/publicBusinessVisibility";
 import { forwardGeocode } from "../utils/geocoding";
 import {
   aggregateImportedReviews,
@@ -831,6 +834,17 @@ export function registerRestaurantCoreRoutes(
         const menuBuilderHref = primaryRestaurant
           ? `/menu-builder/${primaryRestaurant.id}`
           : "/menu-builder";
+        const editProfileHref = primaryRestaurant
+          ? `/edit-restaurant/${primaryRestaurant.id}`
+          : "/restaurant-signup";
+
+        const primaryProfileChecks = primaryRestaurant
+          ? getPublicBusinessVisibilityChecks(primaryRestaurant as any)
+          : { blockers: ["no_business"], warnings: [] as string[] };
+        const hasPublicProfileBasics =
+          hasBusiness &&
+          primaryProfileChecks.blockers.length === 0 &&
+          !primaryProfileChecks.warnings.includes("missing_description_or_photo");
 
         const steps = [
           {
@@ -864,6 +878,14 @@ export function registerRestaurantCoreRoutes(
             href: menuBuilderHref,
             cta: "Add items",
             why: "Without items, customers see an empty menu.",
+          },
+          {
+            id: "complete-public-profile",
+            label: "Complete your public profile",
+            done: hasPublicProfileBasics,
+            href: editProfileHref,
+            cta: "Complete profile",
+            why: "A clear profile helps customers trust you and choose you faster.",
           },
           {
             id: "get-verified",
@@ -913,11 +935,12 @@ export function registerRestaurantCoreRoutes(
         if (!ownerRestaurants.some((r: any) => Boolean(r.isVerified))) {
           visibilityBlockers.push("unverified");
         }
-        if (
-          previewRestaurant &&
-          !isPublicBusinessVisible(previewRestaurant as any)
-        ) {
-          visibilityBlockers.push("flagged_test_data");
+        if (previewRestaurant) {
+          const previewChecks = getPublicBusinessVisibilityChecks(
+            previewRestaurant as any,
+          );
+          visibilityBlockers.push(...previewChecks.blockers);
+          visibilityBlockers.push(...previewChecks.warnings);
         }
 
         res.json({
@@ -934,7 +957,11 @@ export function registerRestaurantCoreRoutes(
           },
           isDiscoverable,
           publicPreviewUrl,
-          visibilityBlockers,
+          visibilityBlockers: Array.from(new Set(visibilityBlockers)),
+          publicProfileChecks: {
+            blockers: primaryProfileChecks.blockers,
+            warnings: primaryProfileChecks.warnings,
+          },
         });
       } catch (error: any) {
         console.error("[owner/onboarding] failed:", error);

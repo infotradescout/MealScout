@@ -35,6 +35,10 @@ interface OnboardingResponse {
   isDiscoverable: boolean;
   publicPreviewUrl: string | null;
   visibilityBlockers: string[];
+  publicProfileChecks?: {
+    blockers: string[];
+    warnings: string[];
+  };
 }
 
 const blockerText: Record<string, string> = {
@@ -44,6 +48,10 @@ const blockerText: Record<string, string> = {
   inactive: "Business is not active",
   unverified: "Business not verified yet",
   flagged_test_data: "Profile looks like test data",
+  missing_name: "Add a clear business name",
+  missing_location: "Add your address or city/state",
+  missing_category: "Choose cuisine or business type",
+  missing_description_or_photo: "Add a short description or profile photo",
 };
 
 const DISMISS_KEY = "ms-onboarding-dismissed-complete";
@@ -114,6 +122,10 @@ export default function OwnerOnboardingChecklist() {
   const blockers = (data.visibilityBlockers || []).map(
     (key) => blockerText[key] || key,
   );
+  const profileHints = [
+    ...((data.publicProfileChecks?.blockers || []).map((key) => blockerText[key] || key)),
+    ...((data.publicProfileChecks?.warnings || []).map((key) => blockerText[key] || key)),
+  ];
   const needsAdminHelp =
     (data.visibilityBlockers || []).includes("inactive") ||
     (data.visibilityBlockers || []).includes("unverified") ||
@@ -205,6 +217,11 @@ export default function OwnerOnboardingChecklist() {
               {!data.isDiscoverable && needsAdminHelp && (
                 <div className="mt-1 text-orange-700">
                   This part needs admin approval. We usually review quickly.
+                </div>
+              )}
+              {!data.isDiscoverable && profileHints.length > 0 && (
+                <div className="mt-1 text-orange-700">
+                  Quick profile fixes: {Array.from(new Set(profileHints)).join(" • ")}.
                 </div>
               )}
             </div>
