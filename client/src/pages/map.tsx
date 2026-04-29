@@ -3705,25 +3705,25 @@ export default function MapPage() {
         {/* Selected Deal Info Card */}
         {selectedDeal && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-2">
+            <CardContent className="p-3">
+              <div className="mb-1.5 flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-foreground text-sm">
+                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
                     {selectedDeal.title}
                   </h3>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <p className="text-xs text-muted-foreground">
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
                       {selectedDeal.restaurant?.name}
                     </p>
                     {businessPopularityByRestaurant[
                       String(selectedDeal.restaurantId || "")
                     ] && (
                       <span
-                        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
                         style={{
                           backgroundColor:
                             businessPopularityByRestaurant[
@@ -3744,7 +3744,7 @@ export default function MapPage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setSelectedDeal(null)}
-                  className="h-10 w-10"
+                  className="h-8 w-8"
                   data-testid="button-close-selected-deal"
                   aria-label="Close selected deal"
                 >
@@ -3752,24 +3752,25 @@ export default function MapPage() {
                 </Button>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-primary font-bold text-sm">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-sm font-bold text-primary">
                     {selectedDeal.discountValue
                       ? selectedDeal.dealType === "fixed"
                         ? `$${selectedDeal.discountValue} OFF`
                         : `${selectedDeal.discountValue}% OFF`
                       : "Limited Time"}
-                  </span>
+                </span>
                   {selectedDeal.discountValue && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                       Min: ${selectedDeal.minOrderAmount}
                     </span>
                   )}
-                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   size="sm"
-                  className="w-full sm:w-auto"
+                  className="h-8"
                   data-testid="button-view-deal"
                   onClick={() => {
                     trackUxEvent("map_deal_view_click", {
@@ -3779,12 +3780,12 @@ export default function MapPage() {
                     window.location.href = `/deal/${selectedDeal.id}`;
                   }}
                 >
-                  View Deal
+                  Open
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full sm:w-auto"
+                  className="h-8"
                   onClick={() =>
                     window.open(
                       `https://maps.google.com/?q=${selectedDeal.restaurant?.latitude},${selectedDeal.restaurant?.longitude}`,
@@ -3792,7 +3793,7 @@ export default function MapPage() {
                     )
                   }
                 >
-                  Directions
+                  Route
                 </Button>
               </div>
             </CardContent>
@@ -3803,17 +3804,17 @@ export default function MapPage() {
 
         {!selectedDeal && selectedSighting && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-start justify-between gap-2">
+            <CardContent className="p-3">
+              <div className="mb-1.5 flex items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">
+                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
                     {selectedSighting.truckName}
                   </h3>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground">
                     Community sighting (temporary map pin)
                   </p>
                 </div>
@@ -3821,7 +3822,7 @@ export default function MapPage() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setSelectedSighting(null)}
-                  className="h-10 w-10"
+                  className="h-8 w-8"
                   data-testid="button-close-selected-sighting"
                   aria-label="Close selected sighting"
                 >
@@ -3837,17 +3838,17 @@ export default function MapPage() {
                 <img
                   src={selectedSighting.photoUrl}
                   alt={`${selectedSighting.truckName} sighting`}
-                  className="mb-2 h-24 w-full rounded-lg border border-border/60 object-cover"
+                  className="mb-2 h-16 w-full rounded-md border border-border/60 object-cover"
                   loading="lazy"
                 />
               )}
-              <div className="mb-3 text-xs text-muted-foreground">
+              <div className="mb-2 text-[11px] text-muted-foreground">
                 Reports: {selectedSighting.reportCount} · Expires from map at{" "}
                 {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
               </div>
               {userLocation && (
                 <div
-                  className="mb-3 text-xs text-muted-foreground"
+                  className="mb-2 text-[11px] text-muted-foreground"
                   data-testid="sighting-distance-eta"
                 >
                   {isLoadingSelectedSightingRouteSummary
@@ -3862,7 +3863,7 @@ export default function MapPage() {
               )}
               <Button
                 size="sm"
-                className="w-full"
+                className="h-8 w-full"
                 onClick={() =>
                   window.open(
                     `https://maps.google.com/?q=${selectedSighting.latitude},${selectedSighting.longitude}`,
@@ -3870,7 +3871,7 @@ export default function MapPage() {
                   )
                 }
               >
-                Directions
+                Route
               </Button>
             </CardContent>
           </Card>
@@ -3880,17 +3881,16 @@ export default function MapPage() {
 
         {!selectedDeal && selectedParkingHost && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(320px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(280px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
-          <Card className="map-callout-card w-full max-h-[44vh] overflow-hidden rounded-2xl">
-            <CardContent className="flex max-h-[44vh] flex-col p-0">
-              <div className="flex-1 overflow-y-auto px-4 pb-3 pt-4">
+          <Card className="map-callout-card w-full overflow-hidden rounded-xl">
+            <CardContent className="p-3">
               <div className="mb-2 flex items-start gap-2">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="mt-0.5 h-8 w-8 shrink-0 rounded-full border border-[color:var(--border-subtle)] bg-background/95 shadow-sm"
+                  className="mt-0.5 h-7 w-7 shrink-0 rounded-full border border-[color:var(--border-subtle)] bg-background/95"
                   onClick={closeParkingPreview}
                   data-testid="button-close-selected-parking-preview"
                   aria-label="Close parking preview"
@@ -3901,39 +3901,21 @@ export default function MapPage() {
                   <h3 className="truncate text-sm font-semibold text-foreground">
                     {selectedParkingHost.host.name}
                   </h3>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-[11px] text-muted-foreground">
                     {selectedParkingHost.host.address}
                   </p>
                 </div>
               </div>
-              <div className="mb-2 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
+              <div className="mb-1.5 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
                 {selectedParkingHost.availabilityLabel}
               </div>
               {selectedParkingHost.distanceLabel && (
-                <p className="mb-2 text-xs text-muted-foreground">
+                <p className="mb-1 text-[11px] text-muted-foreground">
                   {selectedParkingHost.distanceLabel} away
                 </p>
               )}
-              {(() => {
-                const imgUrl = selectedParkingHostImageUrl || (() => {
-                  if (!effectiveGoogleMapsApiKey) return null;
-                  const host = selectedParkingHost.host;
-                  const parts = [host.address, host.city, host.state].filter(Boolean);
-                  if (parts.length === 0) return null;
-                  const encoded = encodeURIComponent(parts.join(", "));
-                  return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encoded}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
-                })();
-                return imgUrl ? (
-                  <img
-                    src={imgUrl}
-                    alt={`${selectedParkingHost.host.name} place image`}
-                    className="mb-3 h-20 w-full rounded-xl border border-border/60 object-cover sm:h-24"
-                    loading="lazy"
-                  />
-                ) : null;
-              })()}
               {userLocation && (
-                <p className="mb-2 text-xs text-muted-foreground">
+                <p className="mb-2 text-[11px] text-muted-foreground">
                   {isLoadingSelectedParkingRouteSummary
                     ? "Estimating drive time..."
                     : [
@@ -3944,162 +3926,16 @@ export default function MapPage() {
                         .join(" • ") || "Drive ETA unavailable"}
                 </p>
               )}
-              {selectedParkingHost.nearbyTruck ? (
-                <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Live truck at this location
-                  </div>
-                  <div className="text-sm font-medium text-foreground">
-                    {selectedParkingHost.nearbyTruck.name}
-                  </div>
+              {selectedParkingHost.nearbyTruck && (
+                <div className="mb-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5 text-[11px] text-muted-foreground">
+                  Live truck: <span className="font-medium text-foreground">{selectedParkingHost.nearbyTruck.name}</span>
                 </div>
-              ) : selectedParkingHasBusinessInfo ? (
-                <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                      About this location
-                    </div>
-                    {selectedParkingHost.host.locationType && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {getLocationTypeLabel(selectedParkingHost.host.locationType)}
-                      </span>
-                    )}
-                  </div>
-                  {selectedParkingHostProfile?.description ||
-                  selectedParkingHost.host.description ? (
-                    <p className="mt-1 text-xs text-foreground leading-relaxed line-clamp-3">
-                      {selectedParkingHostProfile?.description ||
-                        selectedParkingHost.host.description}
-                    </p>
-                  ) : selectedParkingGoogleCategories.length > 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {selectedParkingGoogleCategories
-                        .slice(0, 3)
-                        .map(formatGoogleCategory)
-                        .join(" · ")}
-                    </p>
-                  ) : null}
-                  {(selectedParkingHostProfile?.googlePriceLevel ??
-                    selectedParkingHost.host.googlePriceLevel) != null &&
-                    Number(
-                      selectedParkingHostProfile?.googlePriceLevel ??
-                        selectedParkingHost.host.googlePriceLevel,
-                    ) > 0 && (
-                    <div className="mt-1.5 text-xs text-muted-foreground">
-                      {"$".repeat(
-                        Number(
-                          selectedParkingHostProfile?.googlePriceLevel ??
-                            selectedParkingHost.host.googlePriceLevel,
-                        ),
-                      )}
-                    </div>
-                  )}
-                  {/* Business hours - show if open/closed */}
-                  {(selectedParkingHostProfile?.businessHours ||
-                    selectedParkingHost.host.businessHours) && (() => {
-                    try {
-                      const rawHours =
-                        selectedParkingHostProfile?.businessHours ||
-                        selectedParkingHost.host.businessHours;
-                      const hours = typeof rawHours === 'string'
-                        ? JSON.parse(rawHours)
-                        : rawHours;
-                      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                      const today = dayNames[new Date().getDay()];
-                      const todayKey = today.toLowerCase();
-                      const todayHours = Array.isArray(hours)
-                        ? hours.find((h: any) => h.day === today || h.day?.toLowerCase() === today.toLowerCase())
-                        : hours?.[todayKey] || null;
-                      if (todayHours && todayHours.open && todayHours.close) {
-                        return (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            <span className="font-medium text-green-600">Open today</span> · {todayHours.open} – {todayHours.close}
-                          </div>
-                        );
-                      } else if (todayHours && todayHours.closed) {
-                        return (
-                          <div className="mt-1 text-[11px] text-red-500 font-medium">
-                            Closed today
-                          </div>
-                        );
-                      }
-                      return null;
-                    } catch { return null; }
-                  })()}
-                  {/* Phone number */}
-                  {(selectedParkingHostProfile?.phone ||
-                    selectedParkingHost.host.googleFormattedPhone) && (
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      Phone:{" "}
-                      {selectedParkingHostProfile?.phone ||
-                        selectedParkingHost.host.googleFormattedPhone}
-                    </div>
-                  )}
-                  {/* Website link */}
-                  {(selectedParkingHostProfile?.website ||
-                    selectedParkingHost.host.businessWebsite) && (
-                    <a
-                      href={
-                        selectedParkingHostProfile?.website ||
-                        selectedParkingHost.host.businessWebsite ||
-                        "#"
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 block text-[11px] text-blue-600 hover:underline truncate"
-                    >
-                      {(
-                        selectedParkingHostProfile?.website ||
-                        selectedParkingHost.host.businessWebsite ||
-                        ""
-                      ).replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                    </a>
-                  )}
-                </div>
-              ) : null}
-              {(isLoadingSelectedHostUpcomingBookings ||
-                selectedParkingHasUpcomingBookings) && (
-              <div className="mb-3 rounded-lg border border-[color:var(--border-subtle)] p-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Upcoming bookings
-                </div>
-                {isLoadingSelectedHostUpcomingBookings ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Loading schedule...
-                  </div>
-                ) : selectedParkingHasUpcomingBookings ? (
-                    <div className="mt-1 space-y-1">
-                      {selectedHostUpcomingBookings?.bookings
-                        .slice(0, 3)
-                        .map((booking) => (
-                          <div
-                            key={booking.eventId}
-                            className="rounded border border-[color:var(--border-subtle)] px-2 py-1"
-                          >
-                            <div className="text-xs font-semibold text-foreground">
-                              {formatBookingDate(booking.date)} ·{" "}
-                              {formatBookingTimeRange(
-                                booking.startTime,
-                                booking.endTime,
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {booking.truck?.name || "Food truck"}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                ) : (
-                  null
-                )}
-              </div>
               )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 border-t border-[color:var(--border-subtle)] bg-background/95 px-4 py-3">
+              <div className="grid grid-cols-2 gap-1.5">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-10 rounded-full"
+                  className="h-8 rounded-full"
                   onClick={() =>
                     window.open(
                       `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
@@ -4107,16 +3943,16 @@ export default function MapPage() {
                     )
                   }
                 >
-                  Directions
+                  Route
                 </Button>
                 <Button
                   size="sm"
-                  className="h-10 rounded-full"
+                  className="h-8 rounded-full"
                   onClick={() => {
                     window.location.href = selectedParkingHost.publicProfileHref;
                   }}
                 >
-                  Open details
+                  Details
                 </Button>
               </div>
             </CardContent>
@@ -4127,24 +3963,24 @@ export default function MapPage() {
 
         {!selectedDeal && !selectedParkingHost && selectedHostCluster && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(304px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
-            <CardContent className="p-4">
-              <div className="mb-2 flex items-center justify-between">
+            <CardContent className="p-3">
+              <div className="mb-1.5 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">
                     {selectedHostCluster.count} nearby parking locations
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Pick a location or zoom in for exact pins.
+                  <p className="text-[11px] text-muted-foreground">
+                    Tap a spot or zoom in.
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9"
+                  className="h-8 w-8"
                   onClick={() => setSelectedHostCluster(null)}
                   data-testid="button-close-cluster-preview"
                   aria-label="Close cluster preview"
@@ -4152,26 +3988,27 @@ export default function MapPage() {
                   <X className="w-3 h-3" />
                 </Button>
               </div>
-              <div className="space-y-2">
-                {selectedHostCluster.hosts.slice(0, 4).map((host) => {
+              <div className="space-y-1.5">
+                {selectedHostCluster.hosts.slice(0, 2).map((host) => {
                   const coords = resolveHostCoords(host);
                   if (!coords) return null;
                   return (
                     <div
                       key={`cluster-preview-${host.id}`}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--border-subtle)] p-2"
+                      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--border-subtle)] p-1.5"
                     >
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">
+                        <div className="truncate text-xs font-medium text-foreground">
                           {host.name}
                         </div>
-                        <div className="truncate text-xs text-muted-foreground">
+                        <div className="truncate text-[11px] text-muted-foreground">
                           {host.address}
                         </div>
                       </div>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="h-7 px-2 text-[11px]"
                         onClick={() => {
                           window.open(
                             `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
@@ -4186,14 +4023,14 @@ export default function MapPage() {
                 })}
               </div>
               {selectedHostCluster.count > 4 && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  +{selectedHostCluster.count - 4} more in this area
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  +{selectedHostCluster.count - 2} more in this area
                 </p>
               )}
-              <div className="mt-3">
+              <div className="mt-2">
                 <Button
                   size="sm"
-                  className="w-full"
+                  className="h-8 w-full"
                   onClick={() => {
                     trackUxEvent("map_cluster_zoom_in_clicked", {
                       clusterSize: selectedHostCluster.count,
