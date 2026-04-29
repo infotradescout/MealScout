@@ -213,12 +213,29 @@
   body,
   #root {
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
   }
 
   /* Ensure background overlays stay behind the app content (night mode readability) */
   #root {
     position: relative;
     z-index: 10;
+    max-width: 100vw;
+  }
+
+  .app-content {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  @supports (overflow: clip) {
+    .app-content {
+      overflow-x: clip;
+    }
   }
 
   * {
