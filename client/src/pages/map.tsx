@@ -3252,13 +3252,13 @@ export default function MapPage() {
     return null;
   }, [selectedDeal, selectedSighting, selectedParkingPreview, selectedHostCluster]);
 
-  const mapCalloutShellClassName = mapCalloutAnchorPosition
-    ? "absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]"
-    : "absolute bottom-4 left-1/2 z-20 -translate-x-1/2";
-  const mapCalloutShellStyle = mapCalloutAnchorPosition
+  const hasMapCalloutAnchor = Boolean(mapCalloutAnchorPosition);
+  const mapCalloutShellClassName =
+    "absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]";
+  const mapCalloutShellStyle = hasMapCalloutAnchor
     ? {
-        left: mapCalloutAnchorPosition.x,
-        top: mapCalloutAnchorPosition.y,
+        left: mapCalloutAnchorPosition!.x,
+        top: mapCalloutAnchorPosition!.y,
       }
     : undefined;
 
@@ -3703,9 +3703,9 @@ export default function MapPage() {
         </div>
 
         {/* Selected Deal Info Card */}
-        {selectedDeal && (
+        {selectedDeal && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
@@ -3801,9 +3801,9 @@ export default function MapPage() {
           </div>
         )}
 
-        {!selectedDeal && selectedSighting && (
+        {!selectedDeal && selectedSighting && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
@@ -3878,9 +3878,9 @@ export default function MapPage() {
           </div>
         )}
 
-        {!selectedDeal && selectedParkingHost && (
+        {!selectedDeal && selectedParkingHost && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(360px,calc(100vw-1.5rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(360px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full max-h-[56vh] overflow-hidden rounded-2xl">
@@ -4125,9 +4125,9 @@ export default function MapPage() {
           </div>
         )}
 
-        {!selectedDeal && !selectedParkingHost && selectedHostCluster && (
+        {!selectedDeal && !selectedParkingHost && selectedHostCluster && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(340px,calc(100vw-1.5rem))]`}
+            className={`${mapCalloutShellClassName} w-[min(340px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full">
