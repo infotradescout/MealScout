@@ -4100,62 +4100,173 @@ export default function MapPage() {
           <header className="px-4 sm:px-6 py-6 bg-[var(--bg-card)] border-b border-[color:var(--border-subtle)] sticky top-0">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-foreground">
-                Nearby Deals
+                Nearby on the map
               </h2>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowList(false)}
                 data-testid="button-close-list"
-                aria-label="Close nearby deals list"
+                aria-label="Close nearby list"
               >
                 <X className="w-4 h-4" />
               </Button>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {visibleLiveTrucks.length} live trucks · {visibleHostLocations.length} hosts · {visibleEventLocations.length} events · {deals.length} deals
+            </p>
           </header>
 
-          <div className="px-4 sm:px-6 py-4">
-            {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="bg-[var(--bg-card)] rounded-2xl overflow-hidden animate-pulse shadow-clean"
-                  >
-                    <div className="w-full h-48 bg-muted"></div>
-                    <div className="p-6 space-y-3">
-                      <div className="h-6 bg-muted rounded-lg w-3/4"></div>
-                      <div className="h-4 bg-muted rounded-lg w-1/2"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : deals.length > 0 ? (
-              <div className="space-y-4">
-                {deals.map((deal: Deal) => (
-                  <div key={deal.id} onClick={() => handleDealClick(deal)}>
-                    <DealCard
-                      deal={deal}
-                      popularity={
-                        businessPopularityByRestaurant[
-                          String(deal.restaurantId || "")
-                        ] || null
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  No deals nearby
+          <div className="px-4 sm:px-6 py-4 space-y-6">
+            {visibleLiveTrucks.length > 0 && (
+              <section data-testid="list-section-live-trucks">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Live trucks
                 </h3>
-                <p className="text-muted-foreground">
-                  Try expanding your search area or check back later.
-                </p>
-              </div>
+                <ul className="divide-y divide-[color:var(--border-subtle)] rounded-xl border border-[color:var(--border-subtle)]">
+                  {visibleLiveTrucks.slice(0, 50).map((truck) => (
+                    <li key={truck.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                        onClick={() => {
+                          window.location.href = `/restaurant/${truck.id}`;
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {truck.name}
+                          </div>
+                          {truck.address && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {truck.address}
+                            </div>
+                          )}
+                        </div>
+                        <span className="shrink-0 self-center text-xs text-muted-foreground">
+                          View →
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
+
+            {visibleHostLocations.length > 0 && (
+              <section data-testid="list-section-host-parking">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Host parking
+                </h3>
+                <ul className="divide-y divide-[color:var(--border-subtle)] rounded-xl border border-[color:var(--border-subtle)]">
+                  {visibleHostLocations.slice(0, 50).map((host) => (
+                    <li key={host.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                        onClick={() => {
+                          const coords = resolveHostCoords(host);
+                          if (coords) {
+                            selectParkingHost(host, coords, "pin-tap");
+                          }
+                          setShowList(false);
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {host.name}
+                          </div>
+                          {host.address && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {host.address}
+                            </div>
+                          )}
+                        </div>
+                        <span className="shrink-0 self-center text-xs text-muted-foreground">
+                          Open →
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {visibleEventLocations.length > 0 && (
+              <section data-testid="list-section-events">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Events
+                </h3>
+                <ul className="divide-y divide-[color:var(--border-subtle)] rounded-xl border border-[color:var(--border-subtle)]">
+                  {visibleEventLocations.slice(0, 50).map((event) => (
+                    <li key={event.id}>
+                      <Link
+                        href={`/events/${event.id}`}
+                        className="flex w-full items-start justify-between gap-3 px-3 py-2 hover:bg-muted/40"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {event.name || (event as any).title || "Untitled event"}
+                          </div>
+                          {(event as any).address && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              {(event as any).address}
+                            </div>
+                          )}
+                        </div>
+                        <span className="shrink-0 self-center text-xs text-muted-foreground">
+                          Details →
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <section data-testid="list-section-deals">
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Deals
+              </h3>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-[var(--bg-card)] rounded-2xl overflow-hidden animate-pulse shadow-clean"
+                    >
+                      <div className="w-full h-48 bg-muted"></div>
+                      <div className="p-6 space-y-3">
+                        <div className="h-6 bg-muted rounded-lg w-3/4"></div>
+                        <div className="h-4 bg-muted rounded-lg w-1/2"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : deals.length > 0 ? (
+                <div className="space-y-4">
+                  {deals.map((deal: Deal) => (
+                    <div key={deal.id} onClick={() => handleDealClick(deal)}>
+                      <DealCard
+                        deal={deal}
+                        popularity={
+                          businessPopularityByRestaurant[
+                            String(deal.restaurantId || "")
+                          ] || null
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-[color:var(--border-subtle)] py-8 text-center">
+                  <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    No deals nearby. Try expanding your search area.
+                  </p>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       )}
