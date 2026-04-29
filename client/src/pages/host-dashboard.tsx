@@ -962,7 +962,7 @@ function HostDashboard() {
         )}
       </div>
 
-      <section className="mb-12">
+      {false && <section className="mb-12">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-[color:var(--text-primary)]">
             Event Series (Open Calls)
@@ -1237,7 +1237,7 @@ function HostDashboard() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
       {/* ── Profile Import & Photo Gallery ────────────────────── */}
       {host && (
