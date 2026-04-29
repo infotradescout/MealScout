@@ -53,7 +53,10 @@ import {
   trackGeoAdImpression,
 } from "@/utils/geoAds";
 import { SEOHead } from "@/components/seo-head";
-import { AdminEditableText, AdminEditButton } from "@/components/admin-inline-copy";
+import {
+  AdminEditableText,
+  AdminEditButton,
+} from "@/components/admin-inline-copy";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import {
   FUNNEL_EVENTS,
@@ -195,12 +198,14 @@ function TruckCard({ truck, deals }: { truck: LiveTruck; deals: Deal[] }) {
       <div className="group relative rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden">
         {/* Background accent */}
         <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--accent-text)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        
+
         <div className="relative z-10">
           {/* Live badge */}
           <div className="absolute top-5 right-5 flex items-center gap-1.5 bg-[color:var(--status-success)]/15 px-3 py-1.5 rounded-full">
             <span className="w-2 h-2 rounded-full bg-[color:var(--status-success)] animate-pulse" />
-            <span className="text-xs font-bold text-[color:var(--status-success)]">LIVE</span>
+            <span className="text-xs font-bold text-[color:var(--status-success)]">
+              LIVE
+            </span>
           </div>
 
           {/* Content */}
@@ -227,12 +232,14 @@ function TruckCard({ truck, deals }: { truck: LiveTruck; deals: Deal[] }) {
           {deals.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-[color:var(--accent-text)] uppercase tracking-wide">
-                {deals.length} Active Deal{deals.length !== 1 ? 's' : ''}
+                {deals.length} Active Deal{deals.length !== 1 ? "s" : ""}
               </p>
               {deals.slice(0, 2).map((deal) => (
                 <div key={deal.id} className="flex items-start gap-2">
                   <Zap className="w-3.5 h-3.5 text-[color:var(--accent-text)] flex-shrink-0 mt-0.5" />
-                  <span className="text-xs line-clamp-1 text-foreground">{deal.title}</span>
+                  <span className="text-xs line-clamp-1 text-foreground">
+                    {deal.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -244,11 +251,7 @@ function TruckCard({ truck, deals }: { truck: LiveTruck; deals: Deal[] }) {
 }
 
 // Premium business card component
-function BusinessCard({
-  business,
-}: {
-  business: BusinessDealsSummary;
-}) {
+function BusinessCard({ business }: { business: BusinessDealsSummary }) {
   const businessTypeLabel = formatBusinessTypeLabel(business);
   const distanceLabel =
     typeof business.distance === "number" && Number.isFinite(business.distance)
@@ -260,7 +263,7 @@ function BusinessCard({
       <div className="group relative rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden">
         {/* Background accent */}
         <div className="absolute inset-0 bg-gradient-to-br from-[color:var(--accent-text)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        
+
         <div className="relative z-10">
           {/* Header */}
           <div className="mb-4">
@@ -286,12 +289,15 @@ function BusinessCard({
           {business.deals.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-[color:var(--accent-text)] uppercase tracking-wide">
-                {business.deals.length} Deal{business.deals.length !== 1 ? 's' : ''}
+                {business.deals.length} Deal
+                {business.deals.length !== 1 ? "s" : ""}
               </p>
               {business.deals.slice(0, 2).map((deal) => (
                 <div key={deal.id} className="flex items-start gap-2">
                   <Zap className="w-3.5 h-3.5 text-[color:var(--accent-text)] flex-shrink-0 mt-0.5" />
-                  <span className="text-xs line-clamp-1 text-foreground">{deal.title}</span>
+                  <span className="text-xs line-clamp-1 text-foreground">
+                    {deal.title}
+                  </span>
                 </div>
               ))}
             </div>
@@ -306,7 +312,9 @@ function BusinessCard({
 export default function Home() {
   const { user } = useAuth();
   const isStandalone = useIsStandalone();
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
   const [locationName, setLocationName] = useState("Your Location");
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [manualLocation, setManualLocation] = useState("");
@@ -320,6 +328,16 @@ export default function Home() {
     (user as any)?.firstName?.trim() ||
     (user as any)?.name?.split?.(" ")?.[0] ||
     "";
+
+  const rememberSelectedPurpose = (
+    purpose: "foodie" | "owner" | "host" | "booker",
+  ) => {
+    try {
+      localStorage.setItem("mealscout:selectedPurpose", purpose);
+    } catch {
+      // Continue navigation even if storage is unavailable.
+    }
+  };
 
   useEffect(() => {
     if (navigateTo) {
@@ -349,11 +367,13 @@ export default function Home() {
   const handleLocationDetection = async () => {
     // Don't show loading state for automatic detection
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          timeout: 10000,
-        });
-      });
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 10000,
+          });
+        },
+      );
 
       const newLocation = {
         lat: position.coords.latitude,
@@ -460,10 +480,9 @@ export default function Home() {
   }, [liveTrucksData]);
 
   // Fetch featured businesses
-  const {
-    data: publicProfiles = [],
-    isLoading: profilesLoading,
-  } = useQuery<PublicBusinessProfile[]>({
+  const { data: publicProfiles = [], isLoading: profilesLoading } = useQuery<
+    PublicBusinessProfile[]
+  >({
     queryKey: location
       ? ["/api/restaurants/public", location.lat, location.lng]
       : ["/api/restaurants/public", "no-location"],
@@ -471,7 +490,9 @@ export default function Home() {
     queryFn: async () => {
       if (!location) {
         try {
-          const response = await fetch("/api/restaurants/public", { credentials: "include" });
+          const response = await fetch("/api/restaurants/public", {
+            credentials: "include",
+          });
           if (!response.ok) return [];
           return response.json();
         } catch {
@@ -489,10 +510,7 @@ export default function Home() {
   });
 
   // Fetch deals
-  const {
-    data: deals = [],
-    isLoading: dealsLoading,
-  } = useQuery<Deal[]>({
+  const { data: deals = [], isLoading: dealsLoading } = useQuery<Deal[]>({
     queryKey: location
       ? ["/api/deals/nearby", location.lat, location.lng]
       : ["/api/deals/nearby", "no-location"],
@@ -500,7 +518,9 @@ export default function Home() {
     queryFn: async () => {
       if (!location) {
         try {
-          const response = await fetch("/api/deals/active", { credentials: "include" });
+          const response = await fetch("/api/deals/active", {
+            credentials: "include",
+          });
           if (!response.ok) return [];
           return response.json();
         } catch {
@@ -578,13 +598,21 @@ export default function Home() {
 
   const restaurants = useMemo(() => {
     return featuredBusinesses.filter(
-      (b) => !b.isFoodTruck && !String(b.businessType || "").toLowerCase().includes("bar"),
+      (b) =>
+        !b.isFoodTruck &&
+        !String(b.businessType || "")
+          .toLowerCase()
+          .includes("bar"),
     );
   }, [featuredBusinesses]);
 
   const bars = useMemo(() => {
     return featuredBusinesses.filter(
-      (b) => !b.isFoodTruck && String(b.businessType || "").toLowerCase().includes("bar"),
+      (b) =>
+        !b.isFoodTruck &&
+        String(b.businessType || "")
+          .toLowerCase()
+          .includes("bar"),
     );
   }, [featuredBusinesses]);
 
@@ -593,7 +621,10 @@ export default function Home() {
 
   return (
     <>
-      <SEOHead title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout" description="Discover food trucks, restaurants, and bars near you. Browse menus, find deals, and book parking spots with MealScout." />
+      <SEOHead
+        title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout"
+        description="Discover food trucks, restaurants, and bars near you. Browse menus, find deals, and book parking spots with MealScout."
+      />
       <Navigation />
 
       {/* Hero Section */}
@@ -612,10 +643,15 @@ export default function Home() {
                   {firstName ? (
                     <>
                       Hey {firstName}, what's for{" "}
-                      <span className="text-[color:var(--accent-text)]">{mealPromptWord}</span>?
+                      <span className="text-[color:var(--accent-text)]">
+                        {mealPromptWord}
+                      </span>
+                      ?
                     </>
                   ) : (
-                    <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
+                    <span className="text-[color:var(--accent-text)]">
+                      {mealPrompt}
+                    </span>
                   )}
                 </h1>
               </div>
@@ -670,13 +706,21 @@ export default function Home() {
               {isLoadingLocation ? "Finding..." : "My Location"}
             </Button>
             <Link href="/map">
-              <Button variant="outline" className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm" size="sm">
+              <Button
+                variant="outline"
+                className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm"
+                size="sm"
+              >
                 <MapIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                 Map
               </Button>
             </Link>
             <Link href="/deals/featured">
-              <Button variant="outline" className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm" size="sm">
+              <Button
+                variant="outline"
+                className="h-9 sm:h-10 px-3 sm:px-4 rounded-full font-semibold text-xs sm:text-sm"
+                size="sm"
+              >
                 <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
                 Deals
               </Button>
@@ -693,9 +737,7 @@ export default function Home() {
                   value={manualLocation}
                   onChange={(e) => setManualLocation(e.target.value)}
                   className="h-12 rounded-full px-6"
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handleManualLocation()
-                  }
+                  onKeyDown={(e) => e.key === "Enter" && handleManualLocation()}
                 />
                 <Button
                   onClick={handleManualLocation}
@@ -706,10 +748,81 @@ export default function Home() {
                 </Button>
               </div>
               {locationError && (
-                <p className="text-sm text-[color:var(--status-error)] mt-3">{locationError}</p>
+                <p className="text-sm text-[color:var(--status-error)] mt-3">
+                  {locationError}
+                </p>
               )}
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="py-5 sm:py-8">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-black/65 p-4 shadow-clean-lg backdrop-blur sm:p-6">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[color:var(--accent-text)]">
+                  New here?
+                </p>
+                <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
+                  Choose your MealScout path
+                </h2>
+                <p className="mt-1 text-sm font-medium text-[color:var(--text-secondary)]">
+                  Start with one purpose, then MealScout will guide the next
+                  step.
+                </p>
+              </div>
+              <Link href="/start">
+                <Button className="h-10 rounded-full px-5 font-black">
+                  See all paths
+                </Button>
+              </Link>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  href: "/find-food/location",
+                  purpose: "foodie" as const,
+                  label: "Find food near me",
+                  icon: MapPin,
+                },
+                {
+                  href: "/owner/start",
+                  purpose: "owner" as const,
+                  label: "List my food truck",
+                  icon: Truck,
+                },
+                {
+                  href: "/host/start",
+                  purpose: "host" as const,
+                  label: "Host food trucks",
+                  icon: Store,
+                },
+                {
+                  href: "/book/start",
+                  purpose: "booker" as const,
+                  label: "Book a truck",
+                  icon: CalendarDays,
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.href} href={item.href}>
+                    <div
+                      className="flex h-full items-center gap-3 rounded-2xl border border-white/10 bg-[var(--bg-card)]/90 p-3 text-sm font-black uppercase text-[color:var(--text-primary)] transition hover:border-[color:var(--accent-text)]/70"
+                      onClick={() => rememberSelectedPurpose(item.purpose)}
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--accent-text)]/15 text-[color:var(--accent-text)]">
+                        <Icon className="h-4 w-4" aria-hidden="true" />
+                      </span>
+                      {item.label}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -717,187 +830,220 @@ export default function Home() {
 
       {/* Live Food Trucks */}
       {liveTrucks.length > 0 && (
-      <section className="py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-green-500/15">
-                <Truck className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <div className="inline-flex items-center gap-2">
-                  <h2 className="text-2xl sm:text-3xl font-black">
-                    <AdminEditableText
+        <section className="py-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-green-500/15">
+                  <Truck className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-2">
+                    <h2 className="text-2xl sm:text-3xl font-black">
+                      <AdminEditableText
+                        textKey="home.section.liveTrucks.title"
+                        defaultText="Live Food Trucks"
+                      />
+                    </h2>
+                    <AdminEditButton
                       textKey="home.section.liveTrucks.title"
                       defaultText="Live Food Trucks"
+                      label="Live food trucks section title"
                     />
-                  </h2>
-                  <AdminEditButton
-                    textKey="home.section.liveTrucks.title"
-                    defaultText="Live Food Trucks"
-                    label="Live food trucks section title"
-                  />
+                  </div>
+                  <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                    <AdminEditableText
+                      textKey="home.section.liveTrucks.subtitlePrefix"
+                      defaultText="Broadcasting now in"
+                    />{" "}
+                    {shortLocation}
+                  </p>
                 </div>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">
-                  <AdminEditableText
-                    textKey="home.section.liveTrucks.subtitlePrefix"
-                    defaultText="Broadcasting now in"
-                  /> {shortLocation}
-                </p>
               </div>
+              {liveTrucks.length > 0 && (
+                <Link href="/map">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-sm font-semibold"
+                    size="sm"
+                  >
+                    View All <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              )}
             </div>
-            {liveTrucks.length > 0 && (
-              <Link href="/map">
-                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </Link>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {liveTrucks.slice(0, 6).map((truck) => (
+                <TruckCard
+                  key={truck.id}
+                  truck={truck}
+                  deals={dealsByRestaurant.get(String(truck.id)) || []}
+                />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {liveTrucks.slice(0, 6).map((truck) => (
-              <TruckCard key={truck.id} truck={truck} deals={dealsByRestaurant.get(String(truck.id)) || []} />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Restaurants */}
       {restaurants.length > 0 && (
-      <section className="py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
-                <Utensils className="w-6 h-6 text-[color:var(--accent-text)]" />
-              </div>
-              <div>
-                <div className="inline-flex items-center gap-2">
-                  <h2 className="text-2xl sm:text-3xl font-black">
-                    <AdminEditableText
+        <section className="py-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15">
+                  <Utensils className="w-6 h-6 text-[color:var(--accent-text)]" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-2">
+                    <h2 className="text-2xl sm:text-3xl font-black">
+                      <AdminEditableText
+                        textKey="home.section.restaurants.title"
+                        defaultText="Restaurants"
+                      />
+                    </h2>
+                    <AdminEditButton
                       textKey="home.section.restaurants.title"
                       defaultText="Restaurants"
+                      label="Restaurants section title"
                     />
-                  </h2>
-                  <AdminEditButton
-                    textKey="home.section.restaurants.title"
-                    defaultText="Restaurants"
-                    label="Restaurants section title"
-                  />
+                  </div>
+                  <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                    <AdminEditableText
+                      textKey="home.section.restaurants.subtitle"
+                      defaultText="Local favorites near you"
+                    />
+                  </p>
                 </div>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">
-                  <AdminEditableText
-                    textKey="home.section.restaurants.subtitle"
-                    defaultText="Local favorites near you"
-                  />
-                </p>
               </div>
+              {restaurants.length > 0 && (
+                <Link href="/search?type=restaurant">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-sm font-semibold"
+                    size="sm"
+                  >
+                    View All <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              )}
             </div>
-            {restaurants.length > 0 && (
-              <Link href="/search?type=restaurant">
-                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </Link>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {restaurants.slice(0, 6).map((biz) => (
+                <BusinessCard key={biz.id} business={biz} />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {restaurants.slice(0, 6).map((biz) => (
-              <BusinessCard key={biz.id} business={biz} />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Bars */}
       {bars.length > 0 && (
-      <section className="py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-purple-500/15">
-                <Wine className="w-6 h-6 text-purple-600" />
+        <section className="py-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-purple-500/15">
+                  <Wine className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black">
+                    Bars &amp; Nightlife
+                  </h2>
+                  <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                    Drinks and vibes nearby
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black">Bars &amp; Nightlife</h2>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Drinks and vibes nearby</p>
-              </div>
+              {bars.length > 0 && (
+                <Link href="/search?type=bar">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-sm font-semibold"
+                    size="sm"
+                  >
+                    View All <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              )}
             </div>
-            {bars.length > 0 && (
-              <Link href="/search?type=bar">
-                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </Link>
-            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {bars.slice(0, 6).map((biz) => (
+                <BusinessCard key={biz.id} business={biz} />
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {bars.slice(0, 6).map((biz) => (
-              <BusinessCard key={biz.id} business={biz} />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Hot Deals */}
       {deals.length > 0 && (
-      <section className="py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-amber-500/15">
-                <Zap className="w-6 h-6 text-amber-600" />
-              </div>
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black">Hot Deals</h2>
-                <p className="text-sm font-medium text-[color:var(--text-secondary)]">Save on your next meal</p>
-              </div>
-            </div>
-            {deals.length > 0 && (
-              <Link href="/deals/featured">
-                <Button variant="outline" className="rounded-full text-sm font-semibold" size="sm">
-                  All Deals <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </Link>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {deals.slice(0, 6).map((deal) => (
-              <Link key={deal.id} href={`/restaurant/${deal.restaurantId}`}>
-                <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-amber-500/15 flex-shrink-0">
-                      <Zap className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">{deal.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">{deal.restaurant?.name || "Local Spot"}</p>
-                    </div>
-                  </div>
-                  {deal.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{deal.description}</p>
-                  )}
-                  {deal.discountValue && (
-                    <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
-                      {deal.dealType === "fixed"
-                        ? `$${deal.discountValue} OFF`
-                        : `${deal.discountValue}% OFF`}
-                    </div>
-                  )}
-                  {!deal.discountValue && (
-                    <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
-                      Limited Time
-                    </div>
-                  )}
+        <section className="py-8">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-amber-500/15">
+                  <Zap className="w-6 h-6 text-amber-600" />
                 </div>
-              </Link>
-            ))}
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black">Hot Deals</h2>
+                  <p className="text-sm font-medium text-[color:var(--text-secondary)]">
+                    Save on your next meal
+                  </p>
+                </div>
+              </div>
+              {deals.length > 0 && (
+                <Link href="/deals/featured">
+                  <Button
+                    variant="outline"
+                    className="rounded-full text-sm font-semibold"
+                    size="sm"
+                  >
+                    All Deals <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {deals.slice(0, 6).map((deal) => (
+                <Link key={deal.id} href={`/restaurant/${deal.restaurantId}`}>
+                  <div className="group rounded-2xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[var(--bg-surface)] p-5 hover:border-amber-500/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="p-2 rounded-lg bg-amber-500/15 flex-shrink-0">
+                        <Zap className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-foreground line-clamp-1 group-hover:text-amber-600 transition-colors">
+                          {deal.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {deal.restaurant?.name || "Local Spot"}
+                        </p>
+                      </div>
+                    </div>
+                    {deal.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {deal.description}
+                      </p>
+                    )}
+                    {deal.discountValue && (
+                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                        {deal.dealType === "fixed"
+                          ? `$${deal.discountValue} OFF`
+                          : `${deal.discountValue}% OFF`}
+                      </div>
+                    )}
+                    {!deal.discountValue && (
+                      <div className="mt-3 inline-block px-3 py-1 rounded-full bg-amber-500/15 text-xs font-bold text-amber-700">
+                        Limited Time
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       )}
 
       {/* Explore by Cuisine */}
@@ -930,7 +1076,11 @@ export default function Home() {
               { name: "Burgers", icon: Beef, href: "/category/burgers" },
               { name: "Sushi", icon: Fish, href: "/category/sushi" },
               { name: "Tacos", icon: Sandwich, href: "/category/mexican" },
-              { name: "Breakfast", icon: Croissant, href: "/category/breakfast" },
+              {
+                name: "Breakfast",
+                icon: Croissant,
+                href: "/category/breakfast",
+              },
               { name: "Coffee", icon: Coffee, href: "/category/coffee" },
             ].map((cuisine) => (
               <Link key={cuisine.name} href={cuisine.href}>
@@ -939,7 +1089,9 @@ export default function Home() {
                     <div className="p-2.5 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
                       <cuisine.icon className="w-5 h-5 text-[color:var(--accent-text)]" />
                     </div>
-                    <span className="text-xs font-semibold text-center">{cuisine.name}</span>
+                    <span className="text-xs font-semibold text-center">
+                      {cuisine.name}
+                    </span>
                   </div>
                 </div>
               </Link>
@@ -960,7 +1112,10 @@ export default function Home() {
                     <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
                   </div>
                   <h3 className="text-2xl font-black mb-2">For Businesses</h3>
-                  <p className="text-muted-foreground text-sm">Join today and get 30 days free access to optional Growth Tools.</p>
+                  <p className="text-muted-foreground text-sm">
+                    Join today and get 30 days free access to optional Growth
+                    Tools.
+                  </p>
                 </div>
                 <Link href="/customer-signup?role=business">
                   <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
@@ -976,7 +1131,9 @@ export default function Home() {
                     <Users className="w-6 h-6 text-[color:var(--accent-text)]" />
                   </div>
                   <h3 className="text-2xl font-black mb-2">For Diners</h3>
-                  <p className="text-muted-foreground text-sm">Discover amazing food happening around you</p>
+                  <p className="text-muted-foreground text-sm">
+                    Discover amazing food happening around you
+                  </p>
                 </div>
                 <Link href="/customer-signup?role=diner">
                   <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
@@ -1018,9 +1175,12 @@ export default function Home() {
                         <MapIcon className="h-6 w-6 text-[color:var(--accent-text)]" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="font-black text-[color:var(--text-primary)]">Explore Nearby</h3>
+                        <h3 className="font-black text-[color:var(--text-primary)]">
+                          Explore Nearby
+                        </h3>
                         <p className="text-sm font-medium text-[color:var(--text-secondary)]">
-                          Open the live map for trucks, spots, and deals around {shortLocation}.
+                          Open the live map for trucks, spots, and deals around{" "}
+                          {shortLocation}.
                         </p>
                       </div>
                     </div>
@@ -1033,7 +1193,9 @@ export default function Home() {
                         <Zap className="h-6 w-6 text-amber-600" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="font-black text-[color:var(--text-primary)]">Find Deals</h3>
+                        <h3 className="font-black text-[color:var(--text-primary)]">
+                          Find Deals
+                        </h3>
                         <p className="text-sm font-medium text-[color:var(--text-secondary)]">
                           Browse current specials and limited-time offers.
                         </p>
@@ -1049,7 +1211,9 @@ export default function Home() {
                       <div className="p-3 rounded-xl bg-red-500/15 group-hover:bg-red-500/25 transition-colors">
                         <Heart className="w-6 h-6 text-red-500" />
                       </div>
-                      <span className="text-sm font-semibold text-center">Favorites</span>
+                      <span className="text-sm font-semibold text-center">
+                        Favorites
+                      </span>
                     </div>
                   </div>
                 </Link>
@@ -1059,7 +1223,9 @@ export default function Home() {
                       <div className="p-3 rounded-xl bg-blue-500/15 group-hover:bg-blue-500/25 transition-colors">
                         <Clock className="w-6 h-6 text-blue-500" />
                       </div>
-                      <span className="text-sm font-semibold text-center">Orders</span>
+                      <span className="text-sm font-semibold text-center">
+                        Orders
+                      </span>
                     </div>
                   </div>
                 </Link>
@@ -1069,7 +1235,9 @@ export default function Home() {
                       <div className="p-3 rounded-xl bg-[color:var(--accent-text)]/15 group-hover:bg-[color:var(--accent-text)]/25 transition-colors">
                         <Rocket className="w-6 h-6 text-[color:var(--accent-text)]" />
                       </div>
-                      <span className="text-sm font-semibold text-center">Dashboard</span>
+                      <span className="text-sm font-semibold text-center">
+                        Dashboard
+                      </span>
                     </div>
                   </div>
                 </Link>
@@ -1079,7 +1247,9 @@ export default function Home() {
                       <div className="p-3 rounded-xl bg-purple-500/15 group-hover:bg-purple-500/25 transition-colors">
                         <Bell className="w-6 h-6 text-purple-500" />
                       </div>
-                      <span className="text-sm font-semibold text-center">Events</span>
+                      <span className="text-sm font-semibold text-center">
+                        Events
+                      </span>
                     </div>
                   </div>
                 </Link>

@@ -17,6 +17,7 @@ import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Home from "@/pages/home-v2";
+import PurposeSelector from "@/pages/purpose-selector";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
@@ -160,6 +161,11 @@ const PageLoader = () => (
 const publicRoutePrefixes = [
   "/",
   "/login",
+  "/start",
+  "/owner/start",
+  "/host/start",
+  "/book/start",
+  "/find-food/location",
   "/customer-signup",
   "/verify-email",
   "/restaurant-signup",
@@ -289,6 +295,21 @@ function Router() {
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/" component={Home} />
+            <Route path="/start" component={PurposeSelector} />
+            <Route path="/find-food/location">
+              {() => <Redirect to="/find-food" />}
+            </Route>
+            <Route path="/owner/start">
+              {() => (
+                <Redirect to="/restaurant-signup?businessType=food_truck&claim=1" />
+              )}
+            </Route>
+            <Route path="/host/start">
+              {() => <Redirect to="/host-signup" />}
+            </Route>
+            <Route path="/book/start">
+              {() => <Redirect to="/request-truck" />}
+            </Route>
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/verify-email" component={VerifyEmailPage} />
@@ -417,6 +438,19 @@ function Router() {
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/" component={Home} />
+            <Route path="/start" component={PurposeSelector} />
+            <Route path="/find-food/location">
+              {() => <Redirect to="/find-food" />}
+            </Route>
+            <Route path="/owner/start">
+              {() => <Redirect to="/restaurant-owner-dashboard" />}
+            </Route>
+            <Route path="/host/start">
+              {() => <Redirect to="/host/dashboard" />}
+            </Route>
+            <Route path="/book/start">
+              {() => <Redirect to="/request-truck" />}
+            </Route>
             <Route path="/login">{() => <Redirect to="/dashboard" />}</Route>
             <Route path="/customer-signup">
               {() => <Redirect to="/dashboard" />}
