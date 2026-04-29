@@ -959,11 +959,11 @@ export default function Home() {
                     <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
                   </div>
                   <h3 className="text-2xl font-black mb-2">For Businesses</h3>
-                  <p className="text-muted-foreground text-sm">Get discovered by hungry customers in your area</p>
+                  <p className="text-muted-foreground text-sm">Join today and get 30 days free access to optional Growth Tools.</p>
                 </div>
                 <Link href="/customer-signup?role=business">
                   <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
-                    Start Free Trial
+                    Join
                     <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
                 </Link>

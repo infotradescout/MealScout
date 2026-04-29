@@ -421,10 +421,10 @@ export default function HomeRedesigned() {
                   <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
                 </div>
                 <h3 className="text-3xl font-bold mb-2">For Businesses</h3>
-                <p className="text-muted-foreground">Get discovered by hungry customers</p>
+                <p className="text-muted-foreground">Join today and get 30 days free access to optional Growth Tools.</p>
               </div>
               <Link href="/customer-signup?role=business">
-                <Button className="action-primary w-full">Start Free Trial</Button>
+                <Button className="action-primary w-full">Join</Button>
               </Link>
             </div>
 
