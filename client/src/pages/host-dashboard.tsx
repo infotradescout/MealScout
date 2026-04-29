@@ -480,7 +480,10 @@ function HostDashboard() {
       });
       toast({
         title: "Series created",
-        description: "Draft series created. Publish when ready.",
+        description:
+          String(created?.seriesType || "") === "parking_pass"
+            ? "Recurring schedules are treated as Parking Pass opportunities. Manage them in Parking Pass."
+            : "Draft open-call series created. Publish when ready.",
       });
     } catch (error: any) {
       setSeriesError(error.message || "Failed to create series.");

@@ -8,6 +8,7 @@ import {
   eventSeries,
   insertEventSeriesSchema,
   type InsertEvent,
+  type InsertEventSeries,
 } from "@shared/schema";
 import { isAuthenticated } from "../unifiedAuth";
 import { getHostByUserId, userOwnsSeries } from "../services/hostOwnership";
@@ -103,7 +104,19 @@ export function registerOpenCallSeriesRoutes(app: Express) {
             .json({ message: "End time must be after start time" });
         }
 
-        const series = await storage.createEventSeries(parsed);
+        // Product rule: recurring host opportunities are Parking Pass, not Open Calls.
+        // This prevents hybrid records from bleeding across pages.
+        const hasRecurrence = Boolean(String(parsed.recurrenceRule || "").trim());
+        const normalizedSeriesType = hasRecurrence
+          ? "parking_pass"
+          : "open_call";
+
+        const createInput: InsertEventSeries = {
+          ...parsed,
+          seriesType: normalizedSeriesType,
+        };
+
+        const series = await storage.createEventSeries(createInput);
 
         // Telemetry
         await storage.createTelemetryEvent({
