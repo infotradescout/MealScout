@@ -1155,6 +1155,11 @@ export default function MapPage() {
   const enableClientGeocode = false;
   const [legendOpen, setLegendOpen] = useState(false);
   const urlStateHydratedRef = useRef(false);
+  const [hoverPreview, setHoverPreview] = useState<{
+    marker: MapAdapterMarker;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const handleTruckSightingPhotoChange = useCallback(
     async (file: File | null) => {
@@ -3536,8 +3541,39 @@ export default function MapPage() {
                 onBoundsChanged={setMapBounds}
                 onZoomChanged={setZoomLevel}
                 onMarkerTap={handleAdapterMarkerTap}
+                onMarkerHover={(marker, position) => {
+                  if (!marker || !position) {
+                    setHoverPreview(null);
+                    return;
+                  }
+                  if (marker.kind === "user") return;
+                  setHoverPreview({
+                    marker,
+                    x: position.x,
+                    y: position.y,
+                  });
+                }}
                 onFatalError={handleGoogleMapsFatalError}
               />
+              {hoverPreview && (
+                <div
+                  className="pointer-events-none absolute z-[1300] hidden -translate-x-1/2 -translate-y-[calc(100%+12px)] md:block"
+                  style={{ left: hoverPreview.x, top: hoverPreview.y }}
+                  data-testid="marker-hover-preview"
+                  role="tooltip"
+                >
+                  <div className="max-w-[220px] rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs shadow-clean-lg">
+                    <div className="truncate font-semibold text-foreground">
+                      {hoverPreview.marker.title || hoverPreview.marker.kind}
+                    </div>
+                    {hoverPreview.marker.subtitle && (
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {hoverPreview.marker.subtitle}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </MapErrorBoundary>
           ) : (
             <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-[hsl(var(--background))/0.75] backdrop-blur-sm">

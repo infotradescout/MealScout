@@ -24,6 +24,10 @@ type GoogleMapSurfaceProps = {
   onBoundsChanged: (bounds: MapBoundsLike) => void;
   onZoomChanged: (zoom: number) => void;
   onMarkerTap: (marker: MapAdapterMarker) => void;
+  onMarkerHover?: (
+    marker: MapAdapterMarker | null,
+    position: { x: number; y: number } | null,
+  ) => void;
   onFatalError?: (message: string) => void;
   /** Lat/lng to anchor a floating popup card above the corresponding pin. */
   popupAnchor?: GeoPoint | null;
@@ -278,6 +282,7 @@ export function GoogleMapSurface({
   onBoundsChanged,
   onZoomChanged,
   onMarkerTap,
+  onMarkerHover,
   onFatalError,
   popupAnchor = null,
   onPopupAnchorPosition,
@@ -295,6 +300,7 @@ export function GoogleMapSurface({
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
   const popupOverlayRef = useRef<any>(null);
+  const projectionOverlayRef = useRef<any>(null);
   const clustererRef = useRef<any>(null);
 
   const markerIndex = useMemo(
@@ -563,6 +569,41 @@ export function GoogleMapSurface({
       if (typeof instance.addListener === "function") {
         instance.addListener("click", handleMarkerTap);
       }
+      // Hover preview wiring (desktop only — touch devices fire no hover).
+      const projectMarkerToPixel = () => {
+        try {
+          const overlay =
+            projectionOverlayRef.current || popupOverlayRef.current;
+          const pageProj = overlay?.getProjection?.();
+          if (pageProj?.fromLatLngToContainerPixel) {
+            const latLng = new googleMaps.LatLng(marker.lat, marker.lng);
+            const p = pageProj.fromLatLngToContainerPixel(latLng);
+            if (p) return { x: p.x, y: p.y };
+          }
+        } catch {
+          // ignore projection errors
+        }
+        return null;
+      };
+      const handleMouseOver = () => {
+        if (!onMarkerHover) return;
+        const tapped = markerIndex.get(marker.id);
+        if (!tapped) return;
+        onMarkerHover(tapped, projectMarkerToPixel());
+      };
+      const handleMouseOut = () => {
+        onMarkerHover?.(null, null);
+      };
+      if (typeof instance.addListener === "function") {
+        instance.addListener("mouseover", handleMouseOver);
+        instance.addListener("mouseout", handleMouseOut);
+      }
+      if (useAdvancedMarkers && instance.content instanceof HTMLElement) {
+        instance.content.addEventListener("mouseenter", handleMouseOver);
+        instance.content.addEventListener("mouseleave", handleMouseOut);
+        instance.content.addEventListener("focus", handleMouseOver);
+        instance.content.addEventListener("blur", handleMouseOut);
+      }
       // Keyboard activation for AdvancedMarker content (Enter/Space).
       if (useAdvancedMarkers && instance.content instanceof HTMLElement) {
         instance.content.addEventListener(
@@ -618,7 +659,7 @@ export function GoogleMapSurface({
       // Clustering is best-effort; never break map rendering on clusterer errors.
       console.warn("[GoogleMapSurface] clusterer sync failed", error);
     }
-  }, [markers, markerIndex, onMarkerTap, mapReadyVersion, effectiveMapId]);
+  }, [markers, markerIndex, onMarkerTap, onMarkerHover, mapReadyVersion, effectiveMapId]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
@@ -747,6 +788,31 @@ export function GoogleMapSurface({
       clustererRef.current = null;
     };
   }, []);
+
+  // Persistent OverlayView used for projection lookups (e.g., hover preview).
+  useEffect(() => {
+    const googleMaps = (window as GoogleMapsWindow).google?.maps;
+    if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
+    if (projectionOverlayRef.current) return;
+    const OverlayView = googleMaps.OverlayView as
+      | (new () => any)
+      | undefined;
+    if (!OverlayView) return;
+    const overlay = new OverlayView();
+    overlay.onAdd = function () {};
+    overlay.draw = function () {};
+    overlay.onRemove = function () {};
+    overlay.setMap(mapRef.current);
+    projectionOverlayRef.current = overlay;
+    return () => {
+      try {
+        overlay.setMap(null);
+      } catch {
+        // ignore
+      }
+      projectionOverlayRef.current = null;
+    };
+  }, [mapReadyVersion]);
 
   const controlClassName = isNightTheme
     ? "w-11 h-11 p-0 rounded-full bg-[var(--bg-card)]/90 border border-white/20 shadow-clean-lg backdrop-blur text-[color:var(--text-primary)]"
