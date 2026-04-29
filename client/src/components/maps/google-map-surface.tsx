@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navigation as NavigationIcon } from "lucide-react";
+import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -294,6 +295,7 @@ export function GoogleMapSurface({
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
   const popupOverlayRef = useRef<any>(null);
+  const clustererRef = useRef<any>(null);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((marker) => [marker.id, marker])),
@@ -499,6 +501,8 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
+    const isClusterable = (marker: MapAdapterMarker) => marker.kind !== "user";
+
     const usedIds = new Set<string>();
     markers.forEach((marker) => {
       usedIds.add(marker.id);
@@ -534,15 +538,17 @@ export function GoogleMapSurface({
       const useAdvancedMarkers = Boolean(
         AdvancedMarkerElement && effectiveMapId,
       );
+      // Clusterable markers omit `map` so the MarkerClusterer can manage them.
+      const directMap = isClusterable(marker) ? null : mapRef.current;
       const instance = useAdvancedMarkers
         ? new AdvancedMarkerElement({
-            map: mapRef.current,
+            map: directMap || undefined,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             content: buildAdvancedMarkerContent(googleMaps, marker),
           })
         : new googleMaps.Marker({
-            map: mapRef.current,
+            map: directMap,
             position: { lat: marker.lat, lng: marker.lng },
             title: marker.title || marker.subtitle || marker.kind,
             icon: buildMarkerIcon(googleMaps, marker),
@@ -579,6 +585,39 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
+
+    // Sync the marker clusterer with the current set of clusterable markers.
+    try {
+      if (!clustererRef.current) {
+        clustererRef.current = new MarkerClusterer({
+          map: mapRef.current,
+          markers: [],
+          onClusterClick: (event: any, cluster: any, map: any) => {
+            try {
+              const bounds = cluster.bounds;
+              if (bounds && map) {
+                map.fitBounds(bounds, 64);
+              }
+            } catch {
+              // ignore zoom errors
+            }
+          },
+        });
+      }
+      const clusterableInstances: any[] = [];
+      markers.forEach((marker) => {
+        if (!isClusterable(marker)) return;
+        const inst = markerRefs.current.get(marker.id);
+        if (inst) clusterableInstances.push(inst);
+      });
+      clustererRef.current.clearMarkers();
+      if (clusterableInstances.length > 0) {
+        clustererRef.current.addMarkers(clusterableInstances);
+      }
+    } catch (error) {
+      // Clustering is best-effort; never break map rendering on clusterer errors.
+      console.warn("[GoogleMapSurface] clusterer sync failed", error);
+    }
   }, [markers, markerIndex, onMarkerTap, mapReadyVersion, effectiveMapId]);
 
   useEffect(() => {
@@ -695,6 +734,19 @@ export function GoogleMapSurface({
       popupOverlayRef.current = null;
     };
   }, [popupAnchor?.lat, popupAnchor?.lng, mapReadyVersion, onPopupAnchorPosition]);
+
+  // Tear down the marker clusterer when the surface unmounts.
+  useEffect(() => {
+    return () => {
+      try {
+        clustererRef.current?.clearMarkers();
+        clustererRef.current?.setMap(null);
+      } catch {
+        // ignore teardown errors
+      }
+      clustererRef.current = null;
+    };
+  }, []);
 
   const controlClassName = isNightTheme
     ? "w-11 h-11 p-0 rounded-full bg-[var(--bg-card)]/90 border border-white/20 shadow-clean-lg backdrop-blur text-[color:var(--text-primary)]"
