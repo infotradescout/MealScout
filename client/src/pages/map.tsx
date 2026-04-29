@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import { usePinZoomCardMode } from "@/components/maps/usePinZoomCardMode";
+import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -2775,7 +2776,20 @@ export default function MapPage() {
     setSelectedParkingPreview(null);
   }, [pinZoomCardMode.showCards, selectedParkingPreview]);
 
-  const mapMarkersForRender = adapterMarkers;
+  const mapMarkersForRender = useMemo(() => {
+    // Dedupe markers by (kind, rounded lat, rounded lng) to avoid duplicate
+    // overlapping pins from coexisting data feeds (e.g., live trucks +
+    // community sightings of the same truck at the same address).
+    const seen = new Set<string>();
+    const out: MapAdapterMarker[] = [];
+    for (const m of adapterMarkers) {
+      const key = `${m.kind}|${m.lat.toFixed(5)}|${m.lng.toFixed(5)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(m);
+    }
+    return out;
+  }, [adapterMarkers]);
 
   const selectParkingHost = useCallback(
     (
@@ -3479,21 +3493,23 @@ export default function MapPage() {
               </div>
             )}
           {mapCenter && isUsingGoogleMap ? (
-            <GoogleMapSurface
-              key={`google-map-${googleMapRetryNonce}`}
-              apiKey={effectiveGoogleMapsApiKey}
-              mapId={effectiveGoogleMapsMapId || undefined}
-              center={mapCenter}
-              zoom={zoomLevel}
-              markers={mapMarkersForRender}
-              showRoadTrafficLayer={false}
-              userLocation={userLocation}
-              isNightTheme={isNightTheme}
-              onBoundsChanged={setMapBounds}
-              onZoomChanged={setZoomLevel}
-              onMarkerTap={handleAdapterMarkerTap}
-              onFatalError={handleGoogleMapsFatalError}
-            />
+            <MapErrorBoundary>
+              <GoogleMapSurface
+                key={`google-map-${googleMapRetryNonce}`}
+                apiKey={effectiveGoogleMapsApiKey}
+                mapId={effectiveGoogleMapsMapId || undefined}
+                center={mapCenter}
+                zoom={zoomLevel}
+                markers={mapMarkersForRender}
+                showRoadTrafficLayer={false}
+                userLocation={userLocation}
+                isNightTheme={isNightTheme}
+                onBoundsChanged={setMapBounds}
+                onZoomChanged={setZoomLevel}
+                onMarkerTap={handleAdapterMarkerTap}
+                onFatalError={handleGoogleMapsFatalError}
+              />
+            </MapErrorBoundary>
           ) : (
             <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-[hsl(var(--background))/0.75] backdrop-blur-sm">
               <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[var(--bg-card)] px-4 py-3 text-sm text-[color:var(--text-muted)] shadow-clean max-w-xs text-center">
