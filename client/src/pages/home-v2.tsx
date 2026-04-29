@@ -589,6 +589,7 @@ export default function Home() {
   }, [featuredBusinesses]);
 
   const shortLocation = locationName?.split(",")[0] || "your area";
+  const mealPromptWord = mealPrompt.replace(/\?+$/, "").toLowerCase();
 
   return (
     <>
@@ -610,8 +611,8 @@ export default function Home() {
                 <h1 className="text-3xl sm:text-5xl font-black leading-[0.95] sm:leading-tight tracking-tight text-[color:var(--text-primary)]">
                   {firstName ? (
                     <>
-                      Hey {firstName},{" "}
-                      <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
+                      Hey {firstName}, what's for{" "}
+                      <span className="text-[color:var(--accent-text)]">{mealPromptWord}</span>?
                     </>
                   ) : (
                     <span className="text-[color:var(--accent-text)]">{mealPrompt}</span>
