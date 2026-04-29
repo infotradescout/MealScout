@@ -1,6 +1,13 @@
 import { queryClient } from "@/lib/queryClient";
 import { fetchJsonWithRetry } from "@/lib/resilientFetch";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  type SVGProps,
+} from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import Navigation from "@/components/navigation";
@@ -32,7 +39,6 @@ import {
   Fish,
   Coffee,
   Cake,
-  Beef,
   Flame,
   ArrowDownToLine,
   PlayCircle,
@@ -41,7 +47,6 @@ import {
   ChevronRight,
   Users,
   Wine,
-  CalendarDays,
   Utensils,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
@@ -72,6 +77,29 @@ import {
 const WelcomeLocationModal = lazy(
   () => import("@/components/WelcomeLocationModal"),
 );
+
+function BurgerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4 11a8 8 0 0 1 16 0" />
+      <path d="M3 12h18" />
+      <path d="M5 15h14" />
+      <path d="M5 18h14" />
+      <path d="M7 8h.01" />
+      <path d="M12 6h.01" />
+      <path d="M17 8h.01" />
+    </svg>
+  );
+}
 
 console.log("MealScout Client Loaded - Build: " + new Date().toISOString());
 
@@ -328,16 +356,6 @@ export default function Home() {
     (user as any)?.firstName?.trim() ||
     (user as any)?.name?.split?.(" ")?.[0] ||
     "";
-
-  const rememberSelectedPurpose = (
-    purpose: "foodie" | "owner" | "host" | "booker",
-  ) => {
-    try {
-      localStorage.setItem("mealscout:selectedPurpose", purpose);
-    } catch {
-      // Continue navigation even if storage is unavailable.
-    }
-  };
 
   useEffect(() => {
     if (navigateTo) {
@@ -757,75 +775,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-5 sm:py-8">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-black/65 p-4 shadow-clean-lg backdrop-blur sm:p-6">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[color:var(--accent-text)]">
-                  New here?
-                </p>
-                <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
-                  Choose your MealScout path
-                </h2>
-                <p className="mt-1 text-sm font-medium text-[color:var(--text-secondary)]">
-                  Start with one purpose, then MealScout will guide the next
-                  step.
-                </p>
-              </div>
-              <Link href="/start">
-                <Button className="h-10 rounded-full px-5 font-black">
-                  See all paths
-                </Button>
-              </Link>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                {
-                  href: "/find-food/location",
-                  purpose: "foodie" as const,
-                  label: "Find food near me",
-                  icon: MapPin,
-                },
-                {
-                  href: "/owner/start",
-                  purpose: "owner" as const,
-                  label: "List my food truck",
-                  icon: Truck,
-                },
-                {
-                  href: "/host/start",
-                  purpose: "host" as const,
-                  label: "Host food trucks",
-                  icon: Store,
-                },
-                {
-                  href: "/book/start",
-                  purpose: "booker" as const,
-                  label: "Book a truck",
-                  icon: CalendarDays,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <div
-                      className="flex h-full items-center gap-3 rounded-2xl border border-white/10 bg-[var(--bg-card)]/90 p-3 text-sm font-black uppercase text-[color:var(--text-primary)] transition hover:border-[color:var(--accent-text)]/70"
-                      onClick={() => rememberSelectedPurpose(item.purpose)}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[color:var(--accent-text)]/15 text-[color:var(--accent-text)]">
-                        <Icon className="h-4 w-4" aria-hidden="true" />
-                      </span>
-                      {item.label}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── Food Scene Sections ── */}
 
       {/* Live Food Trucks */}
@@ -1073,7 +1022,7 @@ export default function Home() {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
             {[
               { name: "Pizza", icon: Pizza, href: "/category/pizza" },
-              { name: "Burgers", icon: Beef, href: "/category/burgers" },
+              { name: "Burgers", icon: BurgerIcon, href: "/category/burgers" },
               { name: "Sushi", icon: Fish, href: "/category/sushi" },
               { name: "Tacos", icon: Sandwich, href: "/category/mexican" },
               {
