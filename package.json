@@ -69,6 +69,7 @@
     "test:onboarding-completion": "tsx scripts/testOnboardingCompletionEndpoint.ts",
     "test:public-profile-visibility": "tsx scripts/testPublicProfileVisibilityRules.ts",
     "test:owner-discoverability-flow": "tsx scripts/testOwnerDiscoverabilityFlow.ts",
+    "test:host-parking-pass-boundaries": "tsx scripts/testHostDashboardParkingPassBoundaries.ts",
     "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",

@@ -402,7 +402,7 @@ function HostDashboard() {
             </p>
             <div className="mt-4 flex items-center justify-center gap-2">
               <Button onClick={() => window.location.reload()}>Reload</Button>
-              <Button variant="outline" onClick={() => setLocation("/parking-pass")}>Go To Parking Pass</Button>
+              <Button variant="outline" onClick={() => setLocation("/map")}>Open Map</Button>
             </div>
           </div>
         </div>
@@ -427,7 +427,7 @@ function HostDashboard() {
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <Button onClick={() => window.location.reload()}>Retry</Button>
-            <Button variant="outline" onClick={() => setLocation("/parking-pass")}>Open Parking Pass</Button>
+            <Button variant="outline" onClick={() => setLocation("/map")}>Open Map</Button>
           </div>
         </div>
       </div>
@@ -749,11 +749,9 @@ function HostDashboard() {
                     {thresholdMet ? (
                       <Button
                         size="sm"
-                        onClick={() =>
-                          setLocation("/parking-pass#parking-pass-settings")
-                        }
+                        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                       >
-                        Publish Slots
+                        Review Location
                       </Button>
                     ) : null}
                   </div>
@@ -809,7 +807,7 @@ function HostDashboard() {
 
       <section className="mb-12 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
         <h2 className="text-base font-semibold text-[color:var(--text-primary)]">
-          Events And Open Calls
+          Parking Pass Only
         </h2>
         <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
           Events are managed separately from Parking Pass. This Host Dashboard only manages Parking Pass listings, payouts, and bookings.

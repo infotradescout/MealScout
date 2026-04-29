@@ -3886,6 +3886,14 @@ export default function MapPage() {
             style={mapCalloutShellStyle}
           >
           <Card className="map-callout-card w-full overflow-hidden rounded-xl">
+            {selectedParkingHostImageUrl && (
+              <img
+                src={selectedParkingHostImageUrl}
+                alt={`${selectedParkingHost.host.name} parking location`}
+                className="h-24 w-full border-b border-[color:var(--border-subtle)] object-cover"
+                loading="lazy"
+              />
+            )}
             <CardContent className="p-3">
               <div className="mb-2 flex items-start gap-2">
                 <Button
