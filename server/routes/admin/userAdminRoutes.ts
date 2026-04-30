@@ -240,6 +240,142 @@ export function registerUserAdminRoutes(
     },
   );
 
+  app.patch(
+    "/api/admin/event-intake-requests/:id",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      try {
+        const [existing] = await db
+          .select()
+          .from(claims)
+          .where(eq(claims.id, req.params.id))
+          .limit(1);
+        if (!existing) {
+          return res.status(404).json({ message: "Request not found" });
+        }
+        if (
+          existing.claimType !== CLAIM_TYPES.EVENT &&
+          existing.claimType !== CLAIM_TYPES.FOOD_TRUCK
+        ) {
+          return res.status(400).json({ message: "Unsupported request type" });
+        }
+
+        const currentClaimData =
+          existing.claimData && typeof existing.claimData === "object"
+            ? (existing.claimData as Record<string, any>)
+            : {};
+        const currentMetadata =
+          existing.metadata && typeof existing.metadata === "object"
+            ? (existing.metadata as Record<string, any>)
+            : {};
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const updates: Record<string, any> = {};
+        const setString = (key: string, sourceKey = key) => {
+          if (body[sourceKey] !== undefined) {
+            updates[key] = String(body[sourceKey] ?? "").trim();
+          }
+        };
+
+        setString("eventName");
+        setString("occasion", "eventName");
+        setString("date");
+        setString("startTime");
+        setString("endTime");
+        setString("timeDisplay");
+        setString("requestedVendorType");
+        setString("requestSummary");
+        setString("hostBusinessName");
+        setString("address");
+        setString("city");
+        setString("state");
+        setString("zip");
+        if (body.requestedTruckCount !== undefined) {
+          const requestedTruckCount = Math.max(
+            1,
+            Math.min(50, Number(body.requestedTruckCount) || 1),
+          );
+          updates.requestedTruckCount = requestedTruckCount;
+          updates.maxTrucks = requestedTruckCount;
+        }
+
+        if (body.eventVisibility !== undefined) {
+          const eventVisibility =
+            String(body.eventVisibility).toLowerCase() === "private"
+              ? "private"
+              : "public";
+          updates.eventVisibility = eventVisibility;
+        }
+
+        if (Array.isArray(body.missingFields)) {
+          updates.missingFields = body.missingFields
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean);
+        }
+        if (Array.isArray(body.requestedDetailsFromTruck)) {
+          updates.requestedDetailsFromTruck = body.requestedDetailsFromTruck
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean);
+        }
+        if (body.organizer && typeof body.organizer === "object") {
+          updates.organizer = {
+            ...(currentClaimData.organizer || {}),
+            name: String(body.organizer.name || "").trim() || null,
+            title: String(body.organizer.title || "").trim() || null,
+            phone: String(body.organizer.phone || "").trim() || null,
+            email: String(body.organizer.email || "").trim() || null,
+          };
+        }
+
+        const nextClaimData = {
+          ...currentClaimData,
+          ...updates,
+        };
+        const eventVisibility = String(
+          nextClaimData.eventVisibility || "",
+        ).toLowerCase();
+        const nextMetadata = {
+          ...currentMetadata,
+          discoverableByAllUsers:
+            eventVisibility === "public"
+              ? true
+              : eventVisibility === "private"
+                ? false
+                : currentMetadata.discoverableByAllUsers,
+          updatedBy: req.user?.id || req.user?.claims?.sub || null,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const [updated] = await db
+          .update(claims)
+          .set({ claimData: nextClaimData, metadata: nextMetadata })
+          .where(eq(claims.id, existing.id))
+          .returning();
+
+        await logAudit(
+          String(req.user?.id || req.user?.claims?.sub || ""),
+          "admin_event_intake_updated",
+          "claim",
+          String(existing.id),
+          String(req.ip || ""),
+          String(req.get("User-Agent") || ""),
+          {
+            claimType: existing.claimType,
+            eventVisibility: nextClaimData.eventVisibility || null,
+          },
+        ).catch(() => {});
+
+        res.json({ ok: true, item: updated });
+      } catch (error: any) {
+        console.error("Error updating event intake request:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to update event intake request" });
+      }
+    },
+  );
+
   app.post(
     "/api/admin/users/:id/resend-verification",
     isAuthenticated,

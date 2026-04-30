@@ -47,7 +47,7 @@ const importedEventRequestSchema = z.object({
   timeDisplay: z.string().trim().optional().default(""),
   requestedVendorType: z.string().trim().min(1),
   status: z.string().trim().optional().default("needs_truck_match"),
-  visibility: z.string().trim().optional().default("private_until_confirmed"),
+  visibility: z.string().trim().optional().default("public"),
   requestSummary: z.string().trim().optional().default(""),
   requestedDetailsFromTruck: z.array(z.string().trim()).optional().default([]),
   detailsAvailableBy: z.string().trim().optional().default("Contact event organizer"),
@@ -839,6 +839,12 @@ export function registerAdminLeadImportRoutes(app: Express) {
           await storage.ensureDraftParkingPassForHost(host.id).catch(() => false);
         }
 
+        const eventVisibility =
+          String(parsed.eventRequest.visibility || "public").toLowerCase() ===
+          "private"
+            ? "private"
+            : "public";
+
         const claimData = {
           eventName: parsed.eventRequest.eventName,
           occasion: parsed.eventRequest.eventName,
@@ -851,7 +857,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
           requestedVendorType: parsed.eventRequest.requestedVendorType,
           requestedTruckCount: 1,
           maxTrucks: 1,
-          eventVisibility: "private",
+          eventVisibility,
           status: parsed.eventRequest.status,
           hostId: host.id,
           hostBusinessName: parsed.host.name,
@@ -886,7 +892,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
               source: parsed.source,
               importedBy: actorId || null,
               importedAt: new Date().toISOString(),
-              discoverableByAllUsers: false,
+              discoverableByAllUsers: eventVisibility === "public",
               rawSource: parsed.rawSource || {},
             },
           } as any)

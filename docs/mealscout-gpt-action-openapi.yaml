@@ -112,7 +112,10 @@ components:
           default: needs_truck_match
         visibility:
           type: string
-          default: private_until_confirmed
+          enum:
+            - public
+            - private
+          default: public
         requestSummary:
           type: string
           default: ""

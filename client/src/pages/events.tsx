@@ -42,6 +42,8 @@ type EventIntakeRequest = {
     expectedCrowd: string | null;
     guestCount: string | null;
   };
+  claimData?: Record<string, any>;
+  metadata?: Record<string, any>;
 };
 
 type EventIntakeResponse = {
@@ -75,6 +77,26 @@ export default function EventsPage() {
   const [intakeTypeFilter, setIntakeTypeFilter] = useState<
     "all" | "event" | "food_truck"
   >("all");
+  const [selectedIntakeId, setSelectedIntakeId] = useState<string | null>(null);
+  const [intakeEdit, setIntakeEdit] = useState({
+    eventName: "",
+    date: "",
+    startTime: "",
+    endTime: "",
+    eventVisibility: "public" as "public" | "private",
+    requestedVendorType: "",
+    requestedTruckCount: "1",
+    hostBusinessName: "",
+    address: "",
+    city: "",
+    state: "",
+    zip: "",
+    organizerName: "",
+    organizerEmail: "",
+    organizerPhone: "",
+    requestSummary: "",
+    missingFields: "",
+  });
   const [formData, setFormData] = useState({
     organizationName: "",
     address: "",
@@ -166,6 +188,9 @@ export default function EventsPage() {
       ? "1 upcoming event"
       : `${discoverEvents.length} upcoming events`;
   const intakeItems = Array.isArray(intakeData?.items) ? intakeData.items : [];
+  const selectedIntake = selectedIntakeId
+    ? intakeItems.find((item) => item.id === selectedIntakeId) || null
+    : null;
   const hasOperationsTools = isStaffOrAdmin || isEventCoordinator;
   const isManageView = activeView === "manage";
   const pageTitle = isManageView
@@ -241,6 +266,104 @@ export default function EventsPage() {
       .slice(0, 80);
     return `${id}-${name || "event"}`;
   };
+
+  const openIntakeEditor = (item: EventIntakeRequest) => {
+    const claimData = item.claimData || {};
+    const organizer =
+      claimData.organizer && typeof claimData.organizer === "object"
+        ? claimData.organizer
+        : {};
+    setSelectedIntakeId(item.id);
+    setIntakeEdit({
+      eventName: String(
+        claimData.eventName || claimData.occasion || item.summary.title || "",
+      ),
+      date: String(claimData.date || item.summary.date || ""),
+      startTime: String(claimData.startTime || ""),
+      endTime: String(claimData.endTime || ""),
+      eventVisibility:
+        item.eventVisibility === "private" ? "private" : "public",
+      requestedVendorType: String(claimData.requestedVendorType || ""),
+      requestedTruckCount: String(
+        claimData.requestedTruckCount || claimData.maxTrucks || 1,
+      ),
+      hostBusinessName: String(
+        claimData.hostBusinessName || claimData.businessName || "",
+      ),
+      address: String(claimData.address || ""),
+      city: String(claimData.city || item.summary.city || ""),
+      state: String(claimData.state || ""),
+      zip: String(claimData.zip || ""),
+      organizerName: String(organizer.name || item.requester.name || ""),
+      organizerEmail: String(organizer.email || item.requester.email || ""),
+      organizerPhone: String(organizer.phone || ""),
+      requestSummary: String(claimData.requestSummary || ""),
+      missingFields: Array.isArray(claimData.missingFields)
+        ? claimData.missingFields.join(", ")
+        : "",
+    });
+  };
+
+  const updateIntake = useMutation({
+    mutationFn: async () => {
+      if (!selectedIntakeId) throw new Error("Select a request first");
+      const payload = {
+        eventName: intakeEdit.eventName,
+        date: intakeEdit.date,
+        startTime: intakeEdit.startTime,
+        endTime: intakeEdit.endTime,
+        eventVisibility: intakeEdit.eventVisibility,
+        requestedVendorType: intakeEdit.requestedVendorType,
+        requestedTruckCount: Number(intakeEdit.requestedTruckCount || 1),
+        hostBusinessName: intakeEdit.hostBusinessName,
+        address: intakeEdit.address,
+        city: intakeEdit.city,
+        state: intakeEdit.state,
+        zip: intakeEdit.zip,
+        requestSummary: intakeEdit.requestSummary,
+        missingFields: intakeEdit.missingFields
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        organizer: {
+          name: intakeEdit.organizerName,
+          email: intakeEdit.organizerEmail,
+          phone: intakeEdit.organizerPhone,
+        },
+      };
+      const res = await fetch(`/api/admin/event-intake-requests/${selectedIntakeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to update request");
+      }
+      return await res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: [
+          "/api/admin/event-intake-requests",
+          intakeVisibilityFilter,
+          intakeTypeFilter,
+        ],
+      });
+      toast({
+        title: "Request updated",
+        description: "The admin queue item now has the corrected details.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const createEvent = useMutation({
     mutationFn: async () => {
@@ -604,9 +727,16 @@ export default function EventsPage() {
                 ) : (
                   <div className="space-y-3">
                     {intakeItems.slice(0, 12).map((item) => (
-                      <div
+                      <button
                         key={item.id}
-                        className="flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
+                        type="button"
+                        onClick={() => openIntakeEditor(item)}
+                        className={`flex w-full gap-3 rounded-lg border p-3 text-left transition-colors ${
+                          selectedIntakeId === item.id
+                            ? "border-[color:var(--accent-text)] bg-[color:var(--accent-text)]/10"
+                            : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] hover:border-[color:var(--accent-text)]/60"
+                        }`}
+                        data-testid={`button-edit-intake-${item.id}`}
                       >
                         <span className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
                           {item.claimType === "event" ? (
@@ -658,8 +788,261 @@ export default function EventsPage() {
                           </p>
                         </div>
                         <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-[color:var(--text-muted)]" />
-                      </div>
+                      </button>
                     ))}
+                  </div>
+                )}
+
+                {selectedIntake && (
+                  <div className="mt-4 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                          Edit queue request
+                        </p>
+                        <p className="text-xs text-[color:var(--text-muted)]">
+                          Update visibility and event details before outreach.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedIntakeId(null)}
+                      >
+                        Close
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="intakeEventName">Event name</Label>
+                        <Input
+                          id="intakeEventName"
+                          value={intakeEdit.eventName}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              eventName: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeVisibilityEdit">Visibility</Label>
+                        <select
+                          id="intakeVisibilityEdit"
+                          className="w-full rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm"
+                          value={intakeEdit.eventVisibility}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              eventVisibility: e.target.value as
+                                | "public"
+                                | "private",
+                            }))
+                          }
+                        >
+                          <option value="public">Public</option>
+                          <option value="private">Private</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeTruckCount">Trucks needed</Label>
+                        <Input
+                          id="intakeTruckCount"
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={intakeEdit.requestedTruckCount}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              requestedTruckCount: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeDate">Date</Label>
+                        <Input
+                          id="intakeDate"
+                          type="date"
+                          value={intakeEdit.date}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="intakeStartTime">Start</Label>
+                          <Input
+                            id="intakeStartTime"
+                            type="time"
+                            value={intakeEdit.startTime}
+                            onChange={(e) =>
+                              setIntakeEdit((prev) => ({
+                                ...prev,
+                                startTime: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="intakeEndTime">End</Label>
+                          <Input
+                            id="intakeEndTime"
+                            type="time"
+                            value={intakeEdit.endTime}
+                            onChange={(e) =>
+                              setIntakeEdit((prev) => ({
+                                ...prev,
+                                endTime: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeVendorType">Vendor type</Label>
+                        <Input
+                          id="intakeVendorType"
+                          value={intakeEdit.requestedVendorType}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              requestedVendorType: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeHostName">Host name</Label>
+                        <Input
+                          id="intakeHostName"
+                          value={intakeEdit.hostBusinessName}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              hostBusinessName: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="intakeAddress">Address</Label>
+                        <Input
+                          id="intakeAddress"
+                          value={intakeEdit.address}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              address: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeCity">City</Label>
+                        <Input
+                          id="intakeCity"
+                          value={intakeEdit.city}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              city: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="grid grid-cols-[1fr_1.4fr] gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor="intakeState">State</Label>
+                          <Input
+                            id="intakeState"
+                            value={intakeEdit.state}
+                            onChange={(e) =>
+                              setIntakeEdit((prev) => ({
+                                ...prev,
+                                state: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="intakeZip">ZIP</Label>
+                          <Input
+                            id="intakeZip"
+                            value={intakeEdit.zip}
+                            onChange={(e) =>
+                              setIntakeEdit((prev) => ({
+                                ...prev,
+                                zip: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeOrganizerName">Contact name</Label>
+                        <Input
+                          id="intakeOrganizerName"
+                          value={intakeEdit.organizerName}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              organizerName: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="intakeOrganizerEmail">Contact email</Label>
+                        <Input
+                          id="intakeOrganizerEmail"
+                          type="email"
+                          value={intakeEdit.organizerEmail}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              organizerEmail: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="intakeSummary">Notes</Label>
+                        <Textarea
+                          id="intakeSummary"
+                          value={intakeEdit.requestSummary}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              requestSummary: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setSelectedIntakeId(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => updateIntake.mutate()}
+                        disabled={updateIntake.isPending}
+                      >
+                        {updateIntake.isPending ? "Saving..." : "Save changes"}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
