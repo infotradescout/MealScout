@@ -7,7 +7,9 @@
 
 :root {
   --mobile-nav-offset: 5.75rem;
-  --mobile-nav-height: calc(var(--mobile-nav-offset) + env(safe-area-inset-bottom));
+  --mobile-nav-height: calc(
+    var(--mobile-nav-offset) + env(safe-area-inset-bottom)
+  );
   --font-sans:
     "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     sans-serif;
@@ -1303,6 +1305,42 @@
       0 8px 18px -8px rgba(12, 7, 4, 0.34);
   }
 
+  .map-callout-shell {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 1200;
+  }
+
+  .map-callout-shell .map-callout-card {
+    max-height: min(46vh, 360px);
+    overflow: hidden;
+  }
+
+  .map-callout-shell .map-callout-tail {
+    display: none;
+  }
+
+  @media (min-width: 640px) {
+    .map-callout-shell {
+      left: var(--map-callout-x, 50%);
+      right: auto;
+      bottom: auto;
+      top: var(--map-callout-y, 50%);
+      z-index: 20;
+      transform: translate(-50%, calc(-100% - 18px));
+    }
+
+    .map-callout-shell .map-callout-card {
+      max-height: none;
+    }
+
+    .map-callout-shell .map-callout-tail {
+      display: block;
+    }
+  }
+
   .map-callout-card--hover {
     border-radius: 12px;
     box-shadow:
@@ -1317,8 +1355,10 @@
     width: 16px;
     height: 16px;
     transform: translateX(-50%) rotate(45deg);
-    border-right: 1px solid color-mix(in oklab, var(--border-subtle) 72%, transparent);
-    border-bottom: 1px solid color-mix(in oklab, var(--border-subtle) 72%, transparent);
+    border-right: 1px solid
+      color-mix(in oklab, var(--border-subtle) 72%, transparent);
+    border-bottom: 1px solid
+      color-mix(in oklab, var(--border-subtle) 72%, transparent);
     background: color-mix(in oklab, var(--bg-card) 88%, transparent);
     box-shadow: 8px 8px 14px -12px rgba(12, 7, 4, 0.5);
     backdrop-filter: blur(12px) saturate(110%);

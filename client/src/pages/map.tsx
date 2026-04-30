@@ -1158,7 +1158,7 @@ export default function MapPage() {
   const bestLocationAccuracyRef = useRef<number | null>(null);
   const hasCenteredFromLiveLocationRef = useRef(false);
   const enableClientGeocode = false;
-  const [legendOpen, setLegendOpen] = useState(true);
+  const [legendOpen, setLegendOpen] = useState(false);
   const urlStateHydratedRef = useRef(false);
   const [hoverPreview, setHoverPreview] = useState<{
     marker: MapAdapterMarker;
@@ -1475,16 +1475,15 @@ export default function MapPage() {
     queryKey: userLocation
       ? ["/api/deals/nearby", userLocation.lat, userLocation.lng]
       : ["/api/deals/featured"],
-    queryFn: userLocation
-      ? async () => {
-          const response = await fetch(
-            apiUrl(`/api/deals/nearby/${userLocation.lat}/${userLocation.lng}`),
-          );
-          if (!response.ok) throw new Error("Failed to fetch nearby deals");
-          return response.json();
-        }
-      : undefined,
-    enabled: !!userLocation,
+    queryFn: async () => {
+      const response = await fetch(
+        userLocation
+          ? apiUrl(`/api/deals/nearby/${userLocation.lat}/${userLocation.lng}`)
+          : apiUrl("/api/deals/featured"),
+      );
+      if (!response.ok) throw new Error("Failed to fetch map deals");
+      return response.json();
+    },
   });
 
   const deals: Deal[] = Array.isArray(dealsData) ? (dealsData as Deal[]) : [];
@@ -1493,17 +1492,16 @@ export default function MapPage() {
     queryKey: userLocation
       ? ["/api/trucks/live", userLocation.lat, userLocation.lng]
       : ["live-trucks", "none"],
-    queryFn: userLocation
-      ? async () => {
-          const response = await fetch(
-            apiUrl(
-              `/api/trucks/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=5`,
-            ),
-          );
-          if (!response.ok) throw new Error("Failed to fetch live trucks");
-          return response.json();
-        }
-      : undefined,
+    queryFn: async () => {
+      if (!userLocation) return [];
+      const response = await fetch(
+        apiUrl(
+          `/api/trucks/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=5`,
+        ),
+      );
+      if (!response.ok) throw new Error("Failed to fetch live trucks");
+      return response.json();
+    },
     enabled: !!userLocation,
     staleTime: 5 * 1000,
     refetchInterval: 15 * 1000,
@@ -1523,17 +1521,16 @@ export default function MapPage() {
           userLocation.lng,
         ]
       : ["community-truck-sightings", "none"],
-    queryFn: userLocation
-      ? async () => {
-          const response = await fetch(
-            apiUrl(
-              `/api/trucks/community-sightings/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=6`,
-            ),
-          );
-          if (!response.ok) throw new Error("Failed to fetch truck sightings");
-          return response.json();
-        }
-      : undefined,
+    queryFn: async () => {
+      if (!userLocation) return [];
+      const response = await fetch(
+        apiUrl(
+          `/api/trucks/community-sightings/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=6`,
+        ),
+      );
+      if (!response.ok) throw new Error("Failed to fetch truck sightings");
+      return response.json();
+    },
     enabled: !!userLocation,
     staleTime: 10 * 1000,
     refetchInterval: 30 * 1000,
@@ -1813,7 +1810,7 @@ export default function MapPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setMapProviderGraceExpired(true);
-    }, 8000);
+    }, 2000);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -3267,13 +3264,12 @@ export default function MapPage() {
   ]);
 
   const hasMapCalloutAnchor = Boolean(mapCalloutAnchorPosition);
-  const mapCalloutShellClassName =
-    "absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-[calc(100%+18px)]";
+  const mapCalloutShellClassName = "map-callout-shell";
   const mapCalloutShellStyle = hasMapCalloutAnchor
-    ? {
-        left: mapCalloutAnchorPosition!.x,
-        top: mapCalloutAnchorPosition!.y,
-      }
+    ? ({
+        "--map-callout-x": `${mapCalloutAnchorPosition!.x}px`,
+        "--map-callout-y": `${mapCalloutAnchorPosition!.y}px`,
+      } as React.CSSProperties)
     : undefined;
 
   return (
@@ -3294,30 +3290,31 @@ export default function MapPage() {
             : "bg-[var(--bg-card)] text-[color:var(--text-primary)]"
         }`}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[var(--bg-card)] shadow-clean flex items-center justify-center">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--bg-card)] shadow-clean">
               <img
                 src={mealScoutIcon}
                 alt={mapBranding.appName}
                 className="w-7 h-7"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-foreground">
                 {mapBranding.mapName}
               </h1>
               {showMapDiagnostics ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="line-clamp-2 text-sm text-muted-foreground">
                   {headerSubtitle}
                 </p>
               ) : null}
             </div>
           </div>
-          <div className="flex space-x-2">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
             <Button
               variant="outline"
               size="sm"
+              className="px-3 whitespace-nowrap"
               onClick={() => {
                 setShowReportTruckDialog(true);
                 setSelectedDeal(null);
@@ -3327,7 +3324,7 @@ export default function MapPage() {
               }}
               data-testid="button-report-truck-sighting"
             >
-              Report Truck
+              Report
             </Button>
             {!isStandalone && (
               <Link href="/install">
@@ -3698,41 +3695,43 @@ export default function MapPage() {
               )}
             </MapErrorBoundary>
           ) : (
-            <div className="absolute inset-0 z-[1100] flex items-center justify-center bg-[hsl(var(--background))/0.75] backdrop-blur-sm">
-              <div className="rounded-lg border border-[color:var(--status-warning)]/30 bg-[var(--bg-card)] px-4 py-3 text-sm text-[color:var(--text-muted)] shadow-clean max-w-xs text-center">
-                Google Maps key is not ready yet. Map will appear automatically
-                once available.
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-card)]/80 px-6">
+              <div className="max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3 text-center text-sm text-[color:var(--text-muted)] shadow-clean">
+                Map services are not available in this preview. Live pins will
+                appear once Google Maps is ready.
               </div>
             </div>
           )}
 
           {/* Paid parking state overlay */}
-          {!isBookableHostIdsLoading && totalHostParkingLocations === 0 && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <div className="pointer-events-auto bg-[var(--bg-card)] rounded-xl px-4 py-3 text-center shadow-clean max-w-xs border border-[color:var(--border-subtle)]">
-                <p className="text-sm font-medium text-foreground mb-1">
-                  No host parking locations available yet
-                </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Add a host address to show parking availability on the map.
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    window.location.href = "/parking-pass?tab=host";
-                  }}
-                >
-                  Add host location
-                </Button>
+          {isUsingGoogleMap &&
+            !isBookableHostIdsLoading &&
+            totalHostParkingLocations === 0 && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center">
+                <div className="pointer-events-auto bg-[var(--bg-card)] rounded-xl px-4 py-3 text-center shadow-clean max-w-xs border border-[color:var(--border-subtle)]">
+                  <p className="text-sm font-medium text-foreground mb-1">
+                    No host parking locations available yet
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Add a host address to show parking availability on the map.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      window.location.href = "/parking-pass?tab=host";
+                    }}
+                  >
+                    Add host location
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* Selected Deal Info Card */}
         {selectedDeal && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} sm:w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
             <Card className="map-callout-card w-full">
@@ -3831,7 +3830,7 @@ export default function MapPage() {
 
         {!selectedDeal && selectedSighting && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} sm:w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
             <Card className="map-callout-card w-full">
@@ -3908,7 +3907,7 @@ export default function MapPage() {
 
         {!selectedDeal && selectedParkingHost && hasMapCalloutAnchor && (
           <div
-            className={`${mapCalloutShellClassName} w-[min(280px,calc(100%-1rem))]`}
+            className={`${mapCalloutShellClassName} sm:w-[min(280px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
             <Card className="map-callout-card w-full overflow-hidden rounded-xl">
@@ -4005,7 +4004,7 @@ export default function MapPage() {
           selectedHostCluster &&
           hasMapCalloutAnchor && (
             <div
-              className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
+              className={`${mapCalloutShellClassName} sm:w-[min(272px,calc(100%-1rem))]`}
               style={mapCalloutShellStyle}
             >
               <Card className="map-callout-card w-full">
