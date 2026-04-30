@@ -2281,7 +2281,12 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(restaurants)
-      .where(eq(restaurants.isActive, false))
+      .where(
+        and(
+          eq(restaurants.isActive, false),
+          isNull(restaurants.claimedFromImportId),
+        ),
+      )
       .orderBy(desc(restaurants.createdAt));
   }
 

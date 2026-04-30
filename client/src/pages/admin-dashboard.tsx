@@ -622,8 +622,8 @@ function TruckImportPanel({ enabled }: { enabled: boolean }) {
         </CardTitle>
         <CardDescription>
           Upload CSV/TSV/XLSX to seed food truck profiles for the claim flow
-          (not user accounts). They’ll appear under Restaurants → Pending and in
-          “Claim an Existing Food Truck” search.
+          (not user accounts). They’ll appear in “Claim an Existing Food Truck”
+          search without cluttering restaurant approvals.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
