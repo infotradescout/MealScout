@@ -399,20 +399,48 @@ export default function EventsPage() {
   const publishIntake = useMutation({
     mutationFn: async () => {
       if (!selectedIntakeId) throw new Error("Select a request first");
-      const res = await fetch(
-        `/api/admin/event-intake-requests/${selectedIntakeId}/publish`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify(buildIntakePayload()),
-        },
-      );
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "Failed to publish event");
+      const payload = buildIntakePayload();
+      if (!payload.organizer.phone.trim()) {
+        throw new Error("Add a contact phone before publishing.");
       }
-      return await res.json();
+      const res = await fetch("/api/event-coordinator/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          businessName: payload.hostBusinessName || "Event host",
+          address: payload.address,
+          city: payload.city,
+          state: payload.state,
+          contactPhone: payload.organizer.phone,
+          name: payload.eventName,
+          description:
+            payload.requestSummary ||
+            `Seeking ${payload.requestedVendorType || "food truck"} vendors.`,
+          date: payload.date,
+          startTime: payload.startTime,
+          endTime: payload.endTime,
+          maxTrucks: payload.requestedTruckCount,
+          eventVisibility: "public",
+          hardCapEnabled: false,
+          eventCadence: "one_time",
+          recurringDaysOfWeek: [],
+          amenities: [],
+          requiresPayment: false,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = {};
+        }
+        throw new Error(data.message || data.error || "Failed to publish event");
+      }
+      const text = await res.text().catch(() => "");
+      return text ? JSON.parse(text) : {};
     },
     onSuccess: async () => {
       await Promise.all([
@@ -1090,6 +1118,19 @@ export default function EventsPage() {
                             setIntakeEdit((prev) => ({
                               ...prev,
                               organizerEmail: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="intakeOrganizerPhone">Contact phone</Label>
+                        <Input
+                          id="intakeOrganizerPhone"
+                          value={intakeEdit.organizerPhone}
+                          onChange={(e) =>
+                            setIntakeEdit((prev) => ({
+                              ...prev,
+                              organizerPhone: e.target.value,
                             }))
                           }
                         />
