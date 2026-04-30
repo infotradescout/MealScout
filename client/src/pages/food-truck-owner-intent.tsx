@@ -10,7 +10,6 @@ import {
   Megaphone,
   MessageSquareText,
   MousePointerClick,
-  QrCode,
   Repeat,
   Search,
   Share2,
@@ -116,11 +115,11 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "DoorDash alternative for food trucks",
     seoTitle: "DoorDash Alternative for Food Trucks | Direct Orders with MealScout",
     seoDescription:
-      "A DoorDash alternative for food trucks that helps owners take direct pickup orders, share QR menus, publish locations, and keep customer relationships.",
+      "A DoorDash alternative for food trucks that helps owners take direct pickup orders, publish locations, and keep customer relationships.",
     eyebrow: "DoorDash alternative for food trucks",
     headline: "Do not rent your regulars from DoorDash.",
     subhead:
-      "Use delivery apps for discovery when they earn the fee. Send regulars, QR scans, event guests, and social followers to a MealScout pickup link that keeps the order tied to your menu, schedule, and truck profile.",
+      "Use delivery apps for discovery when they earn the fee. Send regulars, event guests, and social followers to a MealScout pickup link that keeps the order tied to your menu, schedule, and truck profile.",
     primaryCta: { href: signupHref, label: "Build my direct order link" },
     secondaryCta: { href: "/menu-builder", label: "Preview the order page" },
     intentTerms: [
@@ -134,13 +133,13 @@ const pages: OwnerIntentPage[] = [
     proof: [
       {
         title: "Pickup-first ordering",
-        body: "Give regulars and QR scans a checkout path that is built for pickup at the truck.",
+        body: "Give regulars and event guests a checkout path that is built for pickup at the truck.",
         icon: ShoppingBag,
       },
       {
-        title: "QR menu links",
-        body: "Put one direct menu behind window signs, event flyers, receipts, and social posts.",
-        icon: QrCode,
+        title: "Direct order links",
+        body: "Put one direct menu link in social bios, event listings, customer messages, and printed signs.",
+        icon: MousePointerClick,
       },
       {
         title: "Customer ownership",
@@ -150,7 +149,7 @@ const pages: OwnerIntentPage[] = [
     ],
     workflow: [
       "Create your truck profile and menu.",
-      "Put the direct link on your QR code, social bio, event listing, and printed signs.",
+      "Put the direct link in your social bio, event listing, customer updates, and printed signs.",
       "Send regulars to pickup ordering before they open a marketplace app.",
       "Use delivery apps only for orders where the fee still makes sense.",
     ],
@@ -173,7 +172,7 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck online ordering",
     seoTitle: "Food Truck Online Ordering and Pickup Menus | MealScout",
     seoDescription:
-      "Create food truck online ordering with pickup menus, QR links, public profiles, and schedule visibility through MealScout.",
+      "Create food truck online ordering with pickup menus, direct links, public profiles, and schedule visibility through MealScout.",
     eyebrow: "Food truck online ordering",
     headline: "Turn your menu into a direct pickup ordering page.",
     subhead:
@@ -184,14 +183,14 @@ const pages: OwnerIntentPage[] = [
       "food truck online ordering",
       "food truck preorder app",
       "food truck pickup ordering",
-      "QR code menu for food trucks",
+      "direct menu link for food trucks",
     ],
     promise:
       "Give customers a simple way to order ahead while keeping the order connected to where your truck is serving today.",
     proof: [
       {
         title: "Menu builder",
-        body: "Create a public menu that can be used for pickup ordering and QR sharing.",
+        body: "Create a public menu that can be used for pickup ordering and direct sharing.",
         icon: Store,
       },
       {
@@ -207,7 +206,7 @@ const pages: OwnerIntentPage[] = [
     ],
     workflow: [
       "Add menu items and pickup details.",
-      "Publish the menu link on your profile, QR sign, and social channels.",
+      "Publish the menu link on your profile, social channels, and customer updates.",
       "Let customers order before they reach the window.",
       "Use MealScout visibility to bring them back to future stops.",
     ],
@@ -436,7 +435,7 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Claim your truck profile.",
       "Add current and upcoming stops.",
-      "Share your public schedule link from social, QR codes, and event pages.",
+      "Share your public schedule link from social posts, customer updates, and event pages.",
       "Update the schedule as your week changes.",
     ],
     faqs: [
@@ -607,14 +606,14 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Create a public truck profile.",
       "Add schedule, menu, deals, and ordering links customers can revisit.",
-      "Use QR codes and social posts to send customers to that profile.",
+      "Use social posts, customer updates, and direct links to send customers to that profile.",
       "Turn one-time buyers into repeat customers who know where to find you next.",
     ],
     faqs: [
       {
         question: "How can a food truck build a customer list?",
         answer:
-          "A food truck can build a customer list by sending buyers to direct ordering, QR menus, deals, profile follows, schedule updates, and owned communication paths instead of relying only on social feeds.",
+          "A food truck can build a customer list by sending buyers to direct ordering, deals, profile follows, schedule updates, and owned communication paths instead of relying only on social feeds.",
       },
       {
         question: "Why does customer ownership matter for food trucks?",
@@ -721,7 +720,7 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Create one customer-facing profile.",
       "Publish schedule, menu, deals, and pickup options.",
-      "Use QR codes, posts, and updates to send customers back to that profile.",
+      "Use posts, customer updates, and direct links to send customers back to that profile.",
       "Layer rewards and repeat offers on top of an already findable truck presence.",
     ],
     faqs: [
@@ -766,8 +765,8 @@ const pages: OwnerIntentPage[] = [
       },
       {
         title: "Menu and ordering",
-        body: "Turn a static menu into an action path for pickup orders and QR links.",
-        icon: QrCode,
+        body: "Turn a static menu into an action path for pickup orders and direct links.",
+        icon: MousePointerClick,
       },
       {
         title: "Booking requests",
@@ -778,7 +777,7 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Create a MealScout truck profile.",
       "Add menu, schedule, location, photos, and booking details.",
-      "Use the page as the link in bio, QR destination, and event profile.",
+      "Use the page as the link in bio, customer destination, and event profile.",
       "Keep the page current as stops, menus, and offers change.",
     ],
     faqs: [
@@ -800,7 +799,7 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck marketing ideas",
     seoTitle: "Food Truck Marketing Ideas That Lead to Orders and Bookings | MealScout",
     seoDescription:
-      "Food truck marketing ideas for schedules, social posts, direct ordering, deals, QR menus, customer lists, and booking requests with MealScout.",
+      "Food truck marketing ideas for schedules, social posts, direct ordering, deals, customer lists, and booking requests with MealScout.",
     eyebrow: "Food truck marketing ideas",
     headline: "Market the action you want customers or hosts to take next.",
     subhead:
@@ -814,7 +813,7 @@ const pages: OwnerIntentPage[] = [
       "food truck Instagram ideas",
     ],
     promise:
-      "Turn marketing into measurable owner actions by linking posts, QR codes, texts, and local search traffic to a profile that can convert demand.",
+      "Turn marketing into measurable owner actions by linking posts, customer updates, and local search traffic to a profile that can convert demand.",
     proof: [
       {
         title: "Schedule marketing",
@@ -835,14 +834,14 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Choose the action: visit, order, book, follow, or return.",
       "Publish the matching MealScout page or profile section.",
-      "Use that link in posts, QR signs, text updates, and local pages.",
+      "Use that link in posts, text updates, event listings, and local pages.",
       "Repeat around schedules, deals, events, and catering availability.",
     ],
     faqs: [
       {
         question: "What are good food truck marketing ideas?",
         answer:
-          "Good food truck marketing ideas include weekly schedule posts, QR menus, preorder drops, catering request links, customer text updates, limited deals, and local opportunity pages.",
+          "Good food truck marketing ideas include weekly schedule posts, preorder drops, catering request links, customer text updates, limited deals, and local opportunity pages.",
       },
       {
         question: "How does MealScout help food truck marketing?",
@@ -1240,7 +1239,7 @@ function DoorDashHeroPanel({ page }: { page: OwnerIntentPage }) {
                 A direct pickup page instead of another marketplace listing.
               </p>
             </div>
-            <QrCode className="h-7 w-7 flex-none text-[color:var(--accent-text)]" />
+            <MousePointerClick className="h-7 w-7 flex-none text-[color:var(--accent-text)]" />
           </div>
           <div className="mt-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
             <div className="flex items-start justify-between gap-3">
@@ -1256,7 +1255,7 @@ function DoorDashHeroPanel({ page }: { page: OwnerIntentPage }) {
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-black text-[color:var(--text-secondary)]">
               <span className="rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5">
-                QR menu
+                Direct menu
               </span>
               <span className="rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5">
                 Next stop
@@ -1322,12 +1321,12 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
       {
         label: "Customer starts",
         marketplace: "Inside a delivery marketplace",
-        mealscout: "On your truck profile, QR menu, schedule, or direct link",
+        mealscout: "On your truck profile, menu, schedule, or direct link",
       },
       {
         label: "Best fit",
         marketplace: "Delivery app browsing and paid marketplace demand",
-        mealscout: "Pickup, regulars, events, QR signs, social traffic, and local search",
+        mealscout: "Pickup, regulars, events, social traffic, customer updates, and local search",
       },
       {
         label: "Owner control",
@@ -1338,7 +1337,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
     const nextSteps = [
       "Create or claim the truck profile.",
       "Add the menu items customers already ask for at the window.",
-      "Put the direct order link behind QR signs, social posts, and event pages.",
+      "Put the direct order link in social posts, customer updates, and event pages.",
       "Keep DoorDash or Uber Eats only where delivery marketplace demand is worth the fee.",
     ];
 
@@ -1356,7 +1355,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-secondary)]">
                   Delivery apps can be useful for strangers. They get expensive when regulars,
-                  QR scans, and event guests are still paying through the same toll booth.
+                  social followers, and event guests are still paying through the same toll booth.
                 </p>
               </div>
 
@@ -1433,7 +1432,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                     </p>
                     <h3 className="mt-1 text-lg font-black">A direct pickup page</h3>
                   </div>
-                  <QrCode className="h-8 w-8 text-[color:var(--accent-text)]" />
+                  <MousePointerClick className="h-8 w-8 text-[color:var(--accent-text)]" />
                 </div>
                 <div className="mt-4 space-y-3">
                   <div className="rounded-lg bg-[color:var(--accent-text)]/10 p-3">
@@ -1584,7 +1583,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
     page.intentKey === "website_builder"
       ? ["Menu", "Weekly schedule", "Booking request link", "Direct order link", "Photos"]
       : page.intentKey === "customer_list" || page.intentKey === "text_marketing" || page.intentKey === "loyalty_program"
-        ? ["Profile link", "QR code", "Schedule updates", "Deal link", "Repeat order path"]
+        ? ["Profile link", "Direct menu link", "Schedule updates", "Deal link", "Repeat order path"]
         : ["Date/time", "Host type", "Expected guests", "Parking details", "Cuisine fit"];
 
   return (
