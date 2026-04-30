@@ -302,6 +302,12 @@ export default function EventsPage() {
         ? claimData.missingFields.join(", ")
         : "",
     });
+    window.setTimeout(() => {
+      document.getElementById("intake-editor")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
   };
 
   const updateIntake = useMutation({
@@ -360,6 +366,75 @@ export default function EventsPage() {
       toast({
         title: "Update failed",
         description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const buildIntakePayload = () => ({
+    eventName: intakeEdit.eventName,
+    date: intakeEdit.date,
+    startTime: intakeEdit.startTime,
+    endTime: intakeEdit.endTime,
+    eventVisibility: intakeEdit.eventVisibility,
+    requestedVendorType: intakeEdit.requestedVendorType,
+    requestedTruckCount: Number(intakeEdit.requestedTruckCount || 1),
+    hostBusinessName: intakeEdit.hostBusinessName,
+    address: intakeEdit.address,
+    city: intakeEdit.city,
+    state: intakeEdit.state,
+    zip: intakeEdit.zip,
+    requestSummary: intakeEdit.requestSummary,
+    missingFields: intakeEdit.missingFields
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+    organizer: {
+      name: intakeEdit.organizerName,
+      email: intakeEdit.organizerEmail,
+      phone: intakeEdit.organizerPhone,
+    },
+  });
+
+  const publishIntake = useMutation({
+    mutationFn: async () => {
+      if (!selectedIntakeId) throw new Error("Select a request first");
+      const res = await fetch(
+        `/api/admin/event-intake-requests/${selectedIntakeId}/publish`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(buildIntakePayload()),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to publish event");
+      }
+      return await res.json();
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "/api/admin/event-intake-requests",
+            intakeVisibilityFilter,
+            intakeTypeFilter,
+          ],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["/api/events/upcoming"] }),
+      ]);
+      setSelectedIntakeId(null);
+      toast({
+        title: "Event published",
+        description: "Trucks and users can now see this public event.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Publish failed",
+        description: error.message || "Please check the required fields.",
         variant: "destructive",
       });
     },
@@ -787,14 +862,20 @@ export default function EventsPage() {
                               : ""}
                           </p>
                         </div>
-                        <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-[color:var(--text-muted)]" />
+                        <span className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-[color:var(--border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--text-secondary)]">
+                          Edit
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
                       </button>
                     ))}
                   </div>
                 )}
 
                 {selectedIntake && (
-                  <div className="mt-4 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <div
+                    id="intake-editor"
+                    className="mt-4 scroll-mt-24 rounded-lg border border-[color:var(--accent-text)] bg-[var(--bg-surface)] p-4"
+                  >
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-[color:var(--text-primary)]">
@@ -1042,6 +1123,17 @@ export default function EventsPage() {
                       >
                         {updateIntake.isPending ? "Saving..." : "Save changes"}
                       </Button>
+                      {selectedIntake.claimType === "event" && (
+                        <Button
+                          type="button"
+                          onClick={() => publishIntake.mutate()}
+                          disabled={publishIntake.isPending}
+                        >
+                          {publishIntake.isPending
+                            ? "Publishing..."
+                            : "Publish public event"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}

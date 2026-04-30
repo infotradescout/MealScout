@@ -23,12 +23,14 @@ import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {
   CLAIM_TYPES,
+  CLAIM_STATUS,
   claims,
   deals,
   eventBookings,
   eventSeries,
   events,
   hosts,
+  insertEventSchema,
   insertHostSchema,
   insertRestaurantSchema,
   restaurants,
@@ -328,7 +330,7 @@ export function registerUserAdminRoutes(
           };
         }
 
-        const nextClaimData = {
+        const nextClaimData: Record<string, any> = {
           ...currentClaimData,
           ...updates,
         };
@@ -372,6 +374,175 @@ export function registerUserAdminRoutes(
         res
           .status(500)
           .json({ message: "Failed to update event intake request" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/event-intake-requests/:id/publish",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      try {
+        const [existing] = await db
+          .select()
+          .from(claims)
+          .where(eq(claims.id, req.params.id))
+          .limit(1);
+        if (!existing) {
+          return res.status(404).json({ message: "Request not found" });
+        }
+        if (existing.claimType !== CLAIM_TYPES.EVENT) {
+          return res.status(400).json({
+            message: "Only organizer event requests can be published as events.",
+          });
+        }
+
+        const currentClaimData =
+          existing.claimData && typeof existing.claimData === "object"
+            ? (existing.claimData as Record<string, any>)
+            : {};
+        const currentMetadata =
+          existing.metadata && typeof existing.metadata === "object"
+            ? (existing.metadata as Record<string, any>)
+            : {};
+        const body = req.body && typeof req.body === "object" ? req.body : {};
+        const nextClaimData: Record<string, any> = {
+          ...currentClaimData,
+          eventName: String(
+            body.eventName ?? currentClaimData.eventName ?? currentClaimData.occasion ?? "",
+          ).trim(),
+          occasion: String(
+            body.eventName ?? currentClaimData.occasion ?? currentClaimData.eventName ?? "",
+          ).trim(),
+          date: String(body.date ?? currentClaimData.date ?? "").trim(),
+          startTime: String(body.startTime ?? currentClaimData.startTime ?? "").trim(),
+          endTime: String(body.endTime ?? currentClaimData.endTime ?? "").trim(),
+          eventVisibility: "public",
+          requestedVendorType: String(
+            body.requestedVendorType ?? currentClaimData.requestedVendorType ?? "",
+          ).trim(),
+          requestedTruckCount: Math.max(
+            1,
+            Math.min(
+              50,
+              Number(body.requestedTruckCount ?? currentClaimData.requestedTruckCount ?? currentClaimData.maxTrucks ?? 1) || 1,
+            ),
+          ),
+          maxTrucks: Math.max(
+            1,
+            Math.min(
+              50,
+              Number(body.requestedTruckCount ?? currentClaimData.maxTrucks ?? 1) || 1,
+            ),
+          ),
+          requestSummary: String(
+            body.requestSummary ?? currentClaimData.requestSummary ?? "",
+          ).trim(),
+          hostBusinessName: String(
+            body.hostBusinessName ?? currentClaimData.hostBusinessName ?? "Event host",
+          ).trim(),
+          address: String(body.address ?? currentClaimData.address ?? "").trim(),
+          city: String(body.city ?? currentClaimData.city ?? "").trim(),
+          state: String(body.state ?? currentClaimData.state ?? "").trim(),
+          zip: String(body.zip ?? currentClaimData.zip ?? "").trim(),
+        };
+
+        if (
+          !nextClaimData.eventName ||
+          !nextClaimData.date ||
+          !nextClaimData.startTime ||
+          !nextClaimData.endTime ||
+          !nextClaimData.address ||
+          !nextClaimData.city ||
+          !nextClaimData.state
+        ) {
+          return res.status(400).json({
+            message:
+              "Add event name, date, start/end time, address, city, and state before publishing.",
+          });
+        }
+
+        if (nextClaimData.endTime <= nextClaimData.startTime) {
+          return res.status(400).json({
+            message: "End time must be after start time.",
+          });
+        }
+
+        let host = nextClaimData.hostId
+          ? await storage.getHost(String(nextClaimData.hostId)).catch(() => undefined)
+          : undefined;
+        const ownerUserId = String(existing.personId || req.user?.id || req.user?.claims?.sub || "");
+        if (!host && ownerUserId) {
+          host = await storage.getHostByUserId(ownerUserId).catch(() => undefined);
+        }
+        if (!host) {
+          const hostInput = insertHostSchema.parse({
+            userId: ownerUserId || String(req.user?.id || req.user?.claims?.sub || ""),
+            businessName: nextClaimData.hostBusinessName || "Event host",
+            address: nextClaimData.address,
+            city: nextClaimData.city,
+            state: nextClaimData.state,
+            contactPhone: nextClaimData.organizer?.phone || null,
+            locationType: "event_coordinator",
+            spotCount: Number(nextClaimData.maxTrucks || 1),
+          });
+          host = await storage.createHost(hostInput);
+        }
+
+        if (!host) {
+          return res.status(500).json({ message: "Failed to prepare host" });
+        }
+
+        const eventInput = insertEventSchema.parse({
+          hostId: host.id,
+          coordinatorUserId: ownerUserId || null,
+          name: nextClaimData.eventName,
+          description:
+            nextClaimData.requestSummary ||
+            `Seeking ${nextClaimData.requestedVendorType || "food truck"} vendors.`,
+          date: nextClaimData.date,
+          startTime: nextClaimData.startTime,
+          endTime: nextClaimData.endTime,
+          maxTrucks: Number(nextClaimData.maxTrucks || 1),
+          hardCapEnabled: false,
+          eventType: "event",
+          requiresPayment: false,
+        });
+        const event = await storage.createEvent(eventInput);
+
+        const nextMetadata = {
+          ...currentMetadata,
+          discoverableByAllUsers: true,
+          publishedEventId: event.id,
+          publishedBy: req.user?.id || req.user?.claims?.sub || null,
+          publishedAt: new Date().toISOString(),
+        };
+
+        await db
+          .update(claims)
+          .set({
+            status: CLAIM_STATUS.VERIFIED,
+            claimData: { ...nextClaimData, hostId: host.id, publishedEventId: event.id },
+            metadata: nextMetadata,
+          })
+          .where(eq(claims.id, existing.id));
+
+        await logAudit(
+          String(req.user?.id || req.user?.claims?.sub || ""),
+          "admin_event_intake_published",
+          "event",
+          String(event.id),
+          String(req.ip || ""),
+          String(req.get("User-Agent") || ""),
+          { claimId: existing.id, hostId: host.id },
+        ).catch(() => {});
+
+        res.status(201).json({ ok: true, event });
+      } catch (error: any) {
+        console.error("Error publishing event intake request:", error);
+        res.status(500).json({ message: "Failed to publish event" });
       }
     },
   );
