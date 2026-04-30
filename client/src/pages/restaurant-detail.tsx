@@ -65,6 +65,7 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
+import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type PublicRecommendation = {
@@ -114,7 +115,51 @@ const toExternalUrl = (value: string | null | undefined) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
   return `https://${raw}`;
+};
+
+const parseJsonArray = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const buildGooglePlacesPhotoUrl = (photoName: string) => {
+  if (!photoName) return "";
+  if (!GOOGLE_MAPS_WEB_API_KEY) {
+    return `/api/google/photo?name=${encodeURIComponent(photoName)}&maxWidth=960`;
+  }
+  return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=960&key=${encodeURIComponent(GOOGLE_MAPS_WEB_API_KEY)}`;
+};
+
+const getGooglePhotoSrc = (photos: unknown) => {
+  const firstPhoto = parseJsonArray(photos)[0] as any;
+  const directUrl = toExternalUrl(
+    firstPhoto?.url || firstPhoto?.photoUrl || firstPhoto?.src,
+  );
+  if (directUrl) return directUrl;
+
+  const photoName = String(
+    firstPhoto?.name || firstPhoto?.photoName || "",
+  ).trim();
+  return photoName ? buildGooglePlacesPhotoUrl(photoName) : "";
+};
+
+const buildGoogleStreetViewSrc = (locationQuery: string) => {
+  if (!locationQuery || !GOOGLE_MAPS_WEB_API_KEY) return "";
+  return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encodeURIComponent(locationQuery)}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(GOOGLE_MAPS_WEB_API_KEY)}`;
+};
+
+const parseCoordinate = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const toPhoneHref = (value: string | null | undefined) => {
@@ -592,40 +637,11 @@ export default function RestaurantDetailPage() {
   const websitePrimaryUrl = toExternalUrl(
     (restaurant as any)?.websiteUrl || (restaurant as any)?.website,
   );
-  const heroImageUrl = toExternalUrl(
-    (restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl,
-  );
-  const heroImageSrc = heroImageUrl || "";
-  const hasHeroImage = Boolean(heroImageSrc);
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
     !isVerifiedMemberProfile && isGeneratedProfile;
   const phoneHref = toPhoneHref(phoneNumber);
-  const lat = Number(
-    (restaurant as any)?.currentLatitude || (restaurant as any)?.latitude,
-  );
-  const lng = Number(
-    (restaurant as any)?.currentLongitude || (restaurant as any)?.longitude,
-  );
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
-  const mapsDestination = (restaurant as any)?.googlePlaceId
-    ? `place_id:${(restaurant as any).googlePlaceId}`
-    : hasCoords
-      ? `${lat},${lng}`
-      : [restaurantName, address, city, state].filter(Boolean).join(", ");
-  const directionsUrl = mapsDestination
-    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-        mapsDestination,
-      )}${(restaurant as any)?.googlePlaceId ? `&destination_place_id=${encodeURIComponent((restaurant as any).googlePlaceId)}` : ""}`
-    : "";
-  const primaryDeal = restaurantDeals[0] as any | undefined;
-  const popularMenuItems = onsiteMenuCategories
-    .flatMap((category) =>
-      Array.isArray(category.items) ? category.items : [],
-    )
-    .filter((item) => item?.isAvailable !== false)
-    .slice(0, 3);
   const profileTypeLabel = isFoodTruck
     ? "Food Truck"
     : String(cuisineType || "Restaurant");
@@ -643,6 +659,44 @@ export default function RestaurantDetailPage() {
   ]
     .filter(Boolean)
     .join(", ");
+  const lat = parseCoordinate(
+    (restaurant as any)?.currentLatitude ?? (restaurant as any)?.latitude,
+  );
+  const lng = parseCoordinate(
+    (restaurant as any)?.currentLongitude ?? (restaurant as any)?.longitude,
+  );
+  const hasCoords = lat !== null && lng !== null;
+  const googlePhotoSrc = getGooglePhotoSrc((restaurant as any)?.googlePhotos);
+  const locationImageQuery = [restaurantName, locationDisplay || address]
+    .filter(Boolean)
+    .join(", ");
+  const streetViewImageSrc = buildGoogleStreetViewSrc(locationImageQuery);
+  const heroImageSrc =
+    toExternalUrl(
+      (restaurant as any)?.coverImageUrl ||
+        (restaurant as any)?.facebookCoverUrl ||
+        (restaurant as any)?.logoUrl,
+    ) ||
+    googlePhotoSrc ||
+    streetViewImageSrc;
+  const hasHeroImage = Boolean(heroImageSrc);
+  const mapsDestination = (restaurant as any)?.googlePlaceId
+    ? `place_id:${(restaurant as any).googlePlaceId}`
+    : hasCoords
+      ? `${lat},${lng}`
+      : [restaurantName, locationDisplay || address].filter(Boolean).join(", ");
+  const directionsUrl = mapsDestination
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        mapsDestination,
+      )}${(restaurant as any)?.googlePlaceId ? `&destination_place_id=${encodeURIComponent((restaurant as any).googlePlaceId)}` : ""}`
+    : "";
+  const primaryDeal = restaurantDeals[0] as any | undefined;
+  const popularMenuItems = onsiteMenuCategories
+    .flatMap((category) =>
+      Array.isArray(category.items) ? category.items : [],
+    )
+    .filter((item) => item?.isAvailable !== false)
+    .slice(0, 3);
   const nextStop = parkingScheduleItems[0];
   const locationTitle = isFoodTruck ? "Today's Location" : "Location";
   const locationName = nextStop?.title || locationDisplay || locationLabel;

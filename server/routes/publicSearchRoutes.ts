@@ -344,6 +344,27 @@ const scoreSearchFields = (
 };
 
 export function registerPublicSearchRoutes(app: Express) {
+  app.get("/api/google/photo", (req, res) => {
+    const photoName = String(req.query.name || "").trim();
+    const maxWidth = Math.max(
+      120,
+      Math.min(1600, Number(req.query.maxWidth || 960) || 960),
+    );
+
+    if (!photoName || !photoName.startsWith("places/")) {
+      return res
+        .status(400)
+        .json({ message: "Valid Google photo name is required" });
+    }
+
+    const photoUrl = getGooglePhotoUrl(photoName, maxWidth);
+    if (!photoUrl) {
+      return res.status(404).json({ message: "Google photo is not available" });
+    }
+
+    res.redirect(302, photoUrl);
+  });
+
   app.post("/api/search/google-place/:placeId/profile", async (req, res) => {
     try {
       const placeId = String(req.params.placeId || "").trim();
