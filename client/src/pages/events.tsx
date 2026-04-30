@@ -159,23 +159,31 @@ export default function EventsPage() {
   const isManageView = activeView === "manage";
   const pageTitle = isManageView
     ? isStaffOrAdmin
-      ? "Admin Event Ops"
-      : "Organizer Event Ops"
-    : "Find Local Events";
+      ? "Admin Queue"
+      : "Organizer Events"
+    : "Events";
   const pageDeck = isManageView
     ? isStaffOrAdmin
-      ? "You are viewing the staff/admin operations queue, not the public event finder."
-      : "You are viewing organizer tools for posting and managing event opportunities."
-    : "Browse public events and food truck opportunities visible to diners and operators.";
+      ? "Inbound event, catering, and truck opportunity requests."
+      : "Post and manage event opportunities."
+    : "Local events and food truck opportunities.";
   const activeViewBadge = isManageView
     ? isStaffOrAdmin
       ? "Admin view"
       : "Organizer view"
     : "Public view";
-  const discoverTabLabel = isStaffOrAdmin
-    ? "Public finder"
-    : "Find local events";
-  const manageTabLabel = isStaffOrAdmin ? "Admin ops" : "Organizer tools";
+  const discoverTabLabel = isStaffOrAdmin ? "Public" : "Browse";
+  const manageTabLabel = isStaffOrAdmin ? "Admin queue" : "Organizer";
+  const modeTitle = isManageView
+    ? isStaffOrAdmin
+      ? "Viewing admin queue"
+      : "Viewing organizer tools"
+    : "Viewing public events";
+  const modeDescription = isManageView
+    ? isStaffOrAdmin
+      ? `${intakeItems.length} request${intakeItems.length === 1 ? "" : "s"} in this queue`
+      : "Create and update event opportunities"
+    : eventCountLabel;
   const HeaderIcon = isManageView ? ShieldCheck : Calendar;
 
   const toEventSlug = (event: any) => {
@@ -430,8 +438,8 @@ export default function EventsPage() {
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-4xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
-                <HeaderIcon className="w-10 h-10 text-[color:var(--accent-text)]" />
+              <h1 className="flex items-center gap-3 text-3xl font-bold text-[color:var(--text-primary)] sm:text-4xl">
+                <HeaderIcon className="h-8 w-8 text-[color:var(--accent-text)] sm:h-9 sm:w-9" />
                 {pageTitle}
               </h1>
               {hasOperationsTools && (
@@ -464,19 +472,20 @@ export default function EventsPage() {
               </Button>
             </div>
           )}
-          <div className="bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-lg p-4">
-            <p className="text-base text-[color:var(--text-secondary)] mb-2">
-              <strong>
-                {isManageView
-                  ? "What am I reviewing?"
-                  : "What are these events?"}
-              </strong>
-            </p>
-            <p className="text-sm text-[color:var(--text-secondary)] mb-1">
-              {isManageView
-                ? "These are inbound organizer requests, truck/catering leads, and private opportunities that need staff triage."
-                : "These are high-volume events (festivals, markets, corporate gatherings) coordinated by event organizers to help you find food trucks."}
-            </p>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                {modeTitle}
+              </p>
+              <p className="truncate text-xs text-[color:var(--text-muted)]">
+                {modeDescription}
+              </p>
+            </div>
+            {hasOperationsTools ? (
+              <Badge variant={isManageView ? "default" : "secondary"}>
+                {activeViewBadge}
+              </Badge>
+            ) : null}
           </div>
 
           {activeView === "manage" && isStaffOrAdmin && (

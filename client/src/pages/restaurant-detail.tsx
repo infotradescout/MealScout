@@ -140,6 +140,9 @@ export default function RestaurantDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [failedHeroImageSrc, setFailedHeroImageSrc] = useState<string | null>(
+    null,
+  );
   const [bookingForm, setBookingForm] = useState({
     name: "",
     email: user?.email || "",
@@ -614,7 +617,9 @@ export default function RestaurantDetailPage() {
     googlePhotos: (restaurant as any)?.googlePhotos,
     locationQuery: locationImageQuery,
   });
-  const hasHeroImage = Boolean(heroImageSrc);
+  const hasHeroImage = Boolean(
+    heroImageSrc && failedHeroImageSrc !== heroImageSrc,
+  );
   const mapsDestination = (restaurant as any)?.googlePlaceId
     ? `place_id:${(restaurant as any).googlePlaceId}`
     : hasCoords
@@ -757,6 +762,41 @@ export default function RestaurantDetailPage() {
           breadcrumbSchema,
         ]}
       />
+      {isStaffOrAdmin ? (
+        <div className="sticky top-0 z-40 border-b border-amber-400/30 bg-zinc-950/95 px-4 py-2 backdrop-blur">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 text-xs text-white">
+            <div className="flex min-w-0 items-center gap-2">
+              <Shield className="h-4 w-4 shrink-0 text-amber-300" />
+              <span className="shrink-0 font-semibold text-amber-200">
+                Admin preview
+              </span>
+              <span className="truncate text-white/70">
+                Public restaurant profile
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href={editRestaurantPath as any}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-white/15 bg-white/5 px-3 text-xs text-white hover:bg-white/10"
+                >
+                  Edit
+                </Button>
+              </Link>
+              <Link href="/admin/dashboard?tab=restaurants">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-white/15 bg-white/5 px-3 text-xs text-white hover:bg-white/10"
+                >
+                  Admin
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <section
         className={`relative overflow-hidden ${hasHeroImage ? "min-h-[24rem] bg-black" : "bg-transparent"}`}
       >
@@ -766,6 +806,7 @@ export default function RestaurantDetailPage() {
             alt={`${restaurantName} exterior or food photo`}
             className="absolute inset-0 h-full w-full object-cover"
             loading="eager"
+            onError={() => setFailedHeroImageSrc(heroImageSrc || null)}
           />
         ) : null}
         {hasHeroImage ? (
@@ -1143,10 +1184,13 @@ export default function RestaurantDetailPage() {
         ) : null}
 
         {isStaffOrAdmin ? (
-          <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-            <summary className="cursor-pointer list-none text-sm font-semibold text-white/80">
-              Manage this profile
+          <details className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-3">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-amber-100">
+              Admin tools
             </summary>
+            <p className="mt-1 text-xs text-amber-100/70">
+              Public page preview for {restaurantName}.
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={editRestaurantFocusPath("description") as any}>
                 <Button

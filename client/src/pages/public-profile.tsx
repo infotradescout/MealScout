@@ -15,6 +15,7 @@ import {
   Clock3,
   ExternalLink,
   UtensilsCrossed,
+  ShieldCheck,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/hooks/useAuth";
@@ -176,6 +177,9 @@ export default function PublicProfilePage() {
     user?.userType === "staff" ||
     user?.userType === "admin" ||
     user?.userType === "super_admin";
+  const [failedProfileImageSrc, setFailedProfileImageSrc] = useState<
+    string | null
+  >(null);
   const [restaurantTab, setRestaurantTab] = useState<
     "overview" | "specials" | "merch"
   >("overview");
@@ -368,6 +372,10 @@ export default function PublicProfilePage() {
     locationQuery: [data.title, locationLine].filter(Boolean).join(", "),
     apiKey: effectiveGoogleMapsApiKey,
   });
+  const visibleProfileImageUrl =
+    profileImageUrl && failedProfileImageSrc !== profileImageUrl
+      ? profileImageUrl
+      : "";
   const profile = data.profileSettings || {};
   const presetDefaults =
     profile.templatePreset === "story"
@@ -449,7 +457,7 @@ export default function PublicProfilePage() {
     description,
     url: data.canonicalUrl,
     telephone: data.phone || undefined,
-    image: profileImageUrl || undefined,
+    image: visibleProfileImageUrl || undefined,
     address: locationLine
       ? {
           "@type": "PostalAddress",
@@ -680,9 +688,35 @@ export default function PublicProfilePage() {
         description={description}
         canonicalUrl={data.canonicalUrl}
         ogType="profile"
-        ogImage={profileImageUrl || "/og-default.jpg"}
+        ogImage={visibleProfileImageUrl || "/og-default.jpg"}
         schemaData={schemaData}
       />
+
+      {isStaffOrAdmin ? (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <div className="flex min-w-0 items-center gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span className="shrink-0 font-semibold">Admin preview</span>
+            <span className="truncate text-amber-950/70">
+              Public {data.entity} profile
+            </span>
+          </div>
+          {data.entity === "restaurant" ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href={conciergeEditPath as any}>
+                <Button size="sm" variant="outline" className="h-8 px-3 text-xs">
+                  Edit
+                </Button>
+              </Link>
+              <Link href="/admin/dashboard?tab=restaurants">
+                <Button size="sm" variant="outline" className="h-8 px-3 text-xs">
+                  Admin
+                </Button>
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className={`bg-gradient-to-br ${themePalette.bg} p-8 text-white`}>
@@ -854,13 +888,14 @@ export default function PublicProfilePage() {
           </div>
         </div>
 
-        {profileImageUrl ? (
+        {visibleProfileImageUrl ? (
           <div className="border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
             <img
-              src={profileImageUrl}
+              src={visibleProfileImageUrl}
               alt={`${data.title} cover`}
               className="h-44 w-full rounded-lg object-cover"
               loading="lazy"
+              onError={() => setFailedProfileImageSrc(visibleProfileImageUrl)}
             />
           </div>
         ) : null}
@@ -870,9 +905,12 @@ export default function PublicProfilePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {isStaffOrAdmin && data.entity === "restaurant" ? (
-            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Manage This Profile
+            <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
+                Admin Tools
+              </div>
+              <div className="mt-1 text-xs text-amber-900/70">
+                Public profile preview for {data.title}.
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Link href={conciergeEditPath as any}>
