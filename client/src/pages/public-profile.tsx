@@ -676,18 +676,23 @@ export default function PublicProfilePage() {
 
   const restaurantActionCards = [
     orderUrl
-      ? { label: "Order Online", href: orderUrl, icon: UtensilsCrossed }
+      ? { label: "Order", href: orderUrl, icon: UtensilsCrossed }
       : null,
-    menuUrl ? { label: "View Menu", href: menuUrl, icon: Sparkles } : null,
+    menuUrl ? { label: "Menu", href: menuUrl, icon: Sparkles } : null,
+    websiteUrl ? { label: "Website", href: websiteUrl, icon: Globe } : null,
     phoneHref ? { label: "Call", href: phoneHref, icon: Phone } : null,
     directionsUrl
       ? { label: "Directions", href: directionsUrl, icon: Navigation }
       : null,
   ].filter(Boolean) as Array<{ label: string; href: string; icon: any }>;
+  const primaryRestaurantAction = restaurantActionCards[0] || null;
+  const secondaryRestaurantAction = restaurantActionCards[1] || null;
+  const PrimaryRestaurantIcon = primaryRestaurantAction?.icon;
+  const SecondaryRestaurantIcon = secondaryRestaurantAction?.icon;
 
   return (
     <div
-      className={`mx-auto ${isHostProfile ? "max-w-6xl" : "max-w-3xl"} px-4 py-8 ${data.entity === "restaurant" ? "pb-28" : ""} ${fontClass}`}
+      className={`mx-auto ${isHostProfile ? "max-w-6xl" : data.entity === "restaurant" ? "max-w-5xl" : "max-w-3xl"} px-4 py-5 sm:py-8 ${data.entity === "restaurant" ? "pb-28" : ""} ${fontClass}`}
     >
       <SEOHead
         title={title}
@@ -724,7 +729,99 @@ export default function PublicProfilePage() {
         </div>
       ) : null}
 
-      <Card className={`overflow-hidden ${isHostProfile ? "rounded-2xl border-[color:var(--border-subtle)] shadow-clean-lg" : ""}`}>
+      <Card className={`overflow-hidden border-[color:var(--border-subtle)] ${isHostProfile || data.entity === "restaurant" ? "rounded-xl shadow-clean-lg" : ""}`}>
+        {data.entity === "restaurant" ? (
+          <div className={`grid bg-[var(--bg-card)] ${visibleProfileImageUrl ? "md:grid-cols-[1.05fr_0.95fr]" : ""}`}>
+            <div className="flex min-h-[25rem] flex-col justify-between p-6 sm:p-8">
+              <div>
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="gap-1">
+                    <Store className="h-3.5 w-3.5" />
+                    {data.subtitle || "Restaurant"}
+                  </Badge>
+                  {data.isVerified ? (
+                    <Badge className="bg-[color:var(--status-success)] text-white hover:bg-[color:var(--status-success)]">
+                      Verified
+                    </Badge>
+                  ) : null}
+                </div>
+                <h1 className="max-w-xl text-4xl font-black leading-none tracking-normal text-[color:var(--text-primary)] sm:text-6xl">
+                  {heroTitle}
+                </h1>
+                {heroSubtitle ? (
+                  <p className="mt-4 max-w-xl text-base leading-relaxed text-[color:var(--text-secondary)] sm:text-lg">
+                    {heroSubtitle}
+                  </p>
+                ) : null}
+                <div className="mt-5 flex flex-wrap gap-2 text-sm font-semibold text-[color:var(--text-secondary)]">
+                  {locationLine ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5">
+                      <MapPin className="h-4 w-4 text-[color:var(--accent-text)]" />
+                      {[data.city, data.state].filter(Boolean).join(", ") || locationLine}
+                    </span>
+                  ) : null}
+                  {businessHours.length > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5">
+                      <Clock3 className="h-4 w-4 text-[color:var(--accent-text)]" />
+                      Hours posted
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                {primaryRestaurantAction ? (
+                  <a
+                    href={primaryRestaurantAction.href}
+                    target={primaryRestaurantAction.href.startsWith("http") ? "_blank" : undefined}
+                    rel={primaryRestaurantAction.href.startsWith("http") ? "noreferrer noopener" : undefined}
+                  >
+                    <Button className="h-11 gap-2 rounded-full px-5 font-black">
+                      {PrimaryRestaurantIcon ? (
+                        <PrimaryRestaurantIcon className="h-4 w-4" />
+                      ) : null}
+                      {primaryRestaurantAction.label}
+                    </Button>
+                  </a>
+                ) : null}
+                {secondaryRestaurantAction ? (
+                  <a
+                    href={secondaryRestaurantAction.href}
+                    target={secondaryRestaurantAction.href.startsWith("http") ? "_blank" : undefined}
+                    rel={secondaryRestaurantAction.href.startsWith("http") ? "noreferrer noopener" : undefined}
+                  >
+                    <Button variant="outline" className="h-11 gap-2 rounded-full px-5 font-bold">
+                      {SecondaryRestaurantIcon ? (
+                        <SecondaryRestaurantIcon className="h-4 w-4" />
+                      ) : null}
+                      {secondaryRestaurantAction.label}
+                    </Button>
+                  </a>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 gap-2 rounded-full px-5 font-bold"
+                  onClick={handleShareProfile}
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share
+                </Button>
+              </div>
+            </div>
+            {visibleProfileImageUrl ? (
+              <div className="relative min-h-72 bg-[var(--bg-surface)] md:min-h-full">
+                <img
+                  src={visibleProfileImageUrl}
+                  alt={`${data.title} cover`}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  loading="eager"
+                  onError={() => setFailedProfileImageSrc(visibleProfileImageUrl)}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : (
         <div className={`bg-gradient-to-br ${themePalette.bg} ${isHostProfile ? "p-6 sm:p-8" : "p-8"} text-white`}>
           <div
             className={`mb-3 flex items-center gap-2 ${profile.hideProfileBadge ? "hidden" : ""}`}
@@ -772,118 +869,6 @@ export default function PublicProfilePage() {
                 </div>
               ) : null}
 
-              {data.entity === "restaurant" ? (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {orderUrl ? (
-                    <a
-                      href={orderUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                    >
-                      <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                        Order Online
-                      </Button>
-                    </a>
-                  ) : null}
-                  {menuUrl ? (
-                    <a href={menuUrl} target="_blank" rel="noreferrer noopener">
-                      <Button className="h-9 bg-orange-600 text-white hover:bg-orange-700">
-                        View Menu
-                      </Button>
-                    </a>
-                  ) : null}
-                  {phoneHref ? (
-                    <a href={phoneHref}>
-                      <Button
-                        variant="outline"
-                        className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
-                      >
-                        Call
-                      </Button>
-                    </a>
-                  ) : null}
-                  {websiteUrl ? (
-                    <a
-                      href={websiteUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                    >
-                      <Button
-                        variant="outline"
-                        className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
-                      >
-                        Website
-                      </Button>
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {data.entity === "restaurant" ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant={
-                      engagementState?.viewer?.isLiked ? "default" : "outline"
-                    }
-                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      handleAuthRequiredAction(() => likeMutation.mutate())
-                    }
-                  >
-                    {engagementState?.viewer?.isLiked ? "Liked" : "Like"} ·{" "}
-                    {engagementState?.counts?.likes ?? 0}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={
-                      engagementState?.viewer?.isFollowing
-                        ? "default"
-                        : "outline"
-                    }
-                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      handleAuthRequiredAction(() => followMutation.mutate())
-                    }
-                  >
-                    {engagementState?.viewer?.isFollowing
-                      ? "Following"
-                      : "Follow"}{" "}
-                    · {engagementState?.counts?.follows ?? 0}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={
-                      engagementState?.viewer?.isFavorited
-                        ? "default"
-                        : "outline"
-                    }
-                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      handleAuthRequiredAction(() => favoriteMutation.mutate())
-                    }
-                  >
-                    {engagementState?.viewer?.isFavorited
-                      ? "Favorited"
-                      : "Favorite"}{" "}
-                    · {engagementState?.counts?.favorites ?? 0}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-                    onClick={() =>
-                      handleAuthRequiredAction(() => recommendMutation.mutate())
-                    }
-                  >
-                    {engagementState?.viewer?.hasRecommended
-                      ? "Update Recommendation"
-                      : "Recommend"}{" "}
-                    · {engagementState?.counts?.recommendations ?? 0}
-                  </Button>
-                </div>
-              ) : null}
-
               {isRestaurantUnclaimed ? (
                 <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-500/10 p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
@@ -922,8 +907,9 @@ export default function PublicProfilePage() {
             ) : null}
           </div>
         </div>
+        )}
 
-        {visibleProfileImageUrl ? (
+        {visibleProfileImageUrl && data.entity !== "restaurant" ? (
           <div className={`border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] ${isHostProfile ? "p-4" : "p-3"}`}>
             <img
               src={visibleProfileImageUrl}
@@ -935,10 +921,12 @@ export default function PublicProfilePage() {
           </div>
         ) : null}
 
-        <CardHeader>
-          <CardTitle className="text-2xl">{data.title}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        {data.entity !== "restaurant" ? (
+          <CardHeader>
+            <CardTitle className="text-2xl">{data.title}</CardTitle>
+          </CardHeader>
+        ) : null}
+        <CardContent className={data.entity === "restaurant" ? "space-y-5 p-5 sm:p-6" : "space-y-6"}>
           {isHostProfile ? (
             <div className="grid gap-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:grid-cols-3">
               <div>
@@ -991,52 +979,15 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
-          {data.entity === "restaurant" && engagementState ? (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Likes
-                </div>
-                <div className="mt-1 text-xl font-semibold text-foreground">
-                  {engagementState.counts.likes}
-                </div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Follows
-                </div>
-                <div className="mt-1 text-xl font-semibold text-foreground">
-                  {engagementState.counts.follows}
-                </div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Favorites
-                </div>
-                <div className="mt-1 text-xl font-semibold text-foreground">
-                  {engagementState.counts.favorites}
-                </div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Recs
-                </div>
-                <div className="mt-1 text-xl font-semibold text-foreground">
-                  {engagementState.counts.recommendations}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {data.entity === "restaurant" ? (
+          {data.entity === "restaurant" && restaurantActionCards.length > 2 ? (
             <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 shadow-clean">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-xs font-black uppercase tracking-[0.18em] text-[color:var(--accent-text)]">
-                    Guest actions
+                    Quick actions
                   </div>
                   <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                    Order, view the menu, call, or get directions from this profile.
+                    Everything a customer needs without hunting through links.
                   </div>
                 </div>
                 <Button
@@ -1080,7 +1031,7 @@ export default function PublicProfilePage() {
             </div>
           ) : null}
 
-          {data.entity === "restaurant" ? (
+          {data.entity === "restaurant" && (restaurantDeals.length > 0 || merchItems.length > 0) ? (
             <div className="flex flex-wrap gap-2 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2">
               <Button
                 size="sm"
@@ -1089,20 +1040,24 @@ export default function PublicProfilePage() {
               >
                 Overview
               </Button>
-              <Button
-                size="sm"
-                variant={restaurantTab === "specials" ? "default" : "ghost"}
-                onClick={() => setRestaurantTab("specials")}
-              >
-                Specials
-              </Button>
-              <Button
-                size="sm"
-                variant={restaurantTab === "merch" ? "default" : "ghost"}
-                onClick={() => setRestaurantTab("merch")}
-              >
-                Merch
-              </Button>
+              {restaurantDeals.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant={restaurantTab === "specials" ? "default" : "ghost"}
+                  onClick={() => setRestaurantTab("specials")}
+                >
+                  Specials
+                </Button>
+              ) : null}
+              {merchItems.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant={restaurantTab === "merch" ? "default" : "ghost"}
+                  onClick={() => setRestaurantTab("merch")}
+                >
+                  Merch
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
@@ -1357,47 +1312,33 @@ export default function PublicProfilePage() {
             ))
           )}
 
-          <div className="border-t pt-4 text-xs text-muted-foreground">
-            Permanent profile link: {data.canonicalUrl}
-          </div>
+          {isStaffOrAdmin ? (
+            <div className="border-t pt-4 text-xs text-muted-foreground">
+              Permanent profile link: {data.canonicalUrl}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
       {data.entity === "restaurant" ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-[hsl(var(--background))/0.96] p-3 backdrop-blur md:hidden">
-          <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2">
-            <Button
-              size="sm"
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-              disabled={!orderUrl}
-              onClick={() => {
-                if (orderUrl)
-                  window.open(orderUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              Order
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!menuUrl}
-              onClick={() => {
-                if (menuUrl)
-                  window.open(menuUrl, "_blank", "noopener,noreferrer");
-              }}
-            >
-              Menu
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!phoneHref}
-              onClick={() => {
-                if (phoneHref) window.location.href = phoneHref;
-              }}
-            >
-              Call
-            </Button>
+          <div className="mx-auto grid max-w-3xl gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(restaurantActionCards.length || 1, 3)}, minmax(0, 1fr))` }}>
+            {restaurantActionCards.slice(0, 3).map((card, index) => (
+              <Button
+                key={card.label}
+                size="sm"
+                variant={index === 0 ? "default" : "outline"}
+                onClick={() => {
+                  if (card.href.startsWith("http")) {
+                    window.open(card.href, "_blank", "noopener,noreferrer");
+                    return;
+                  }
+                  window.location.href = card.href;
+                }}
+              >
+                {card.label}
+              </Button>
+            ))}
           </div>
         </div>
       ) : null}
