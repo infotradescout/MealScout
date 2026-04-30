@@ -458,13 +458,22 @@ export default function SearchPage() {
   )
     ? (unifiedResults as any).unclaimedListings
     : [];
+  const visibleUnclaimed =
+    mergedRestaurants.length > 0 ? [] : searchedUnclaimed;
   const totalStructuredMatches =
     mergedRestaurants.length +
     searchedParkingPassHosts.length +
     searchedVideos.length +
     searchedEvents.length +
     searchedDeals.length +
-    searchedUnclaimed.length;
+    visibleUnclaimed.length;
+  const hasNonDealSearchMatches =
+    mergedRestaurants.length +
+      searchedParkingPassHosts.length +
+      searchedVideos.length +
+      searchedEvents.length +
+      visibleUnclaimed.length >
+    0;
 
   const dealsForPage = searchQuery ? searchedDeals : allDeals;
   const queryGroups = buildQueryGroups(searchQuery);
@@ -953,8 +962,9 @@ export default function SearchPage() {
               {/* Clear Filters */}
               <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm text-muted-foreground">
-                  {filteredDeals.length} deal
-                  {filteredDeals.length === 1 ? "" : "s"} found
+                  {searchQuery
+                    ? `${totalStructuredMatches} result${totalStructuredMatches === 1 ? "" : "s"} found`
+                    : `${filteredDeals.length} deal${filteredDeals.length === 1 ? "" : "s"} found`}
                 </span>
                 <Button
                   variant="outline"
@@ -999,9 +1009,9 @@ export default function SearchPage() {
               <span className="rounded-full border border-[color:var(--border-subtle)] px-2.5 py-1 text-muted-foreground">
                 Parking: {searchedParkingPassHosts.length}
               </span>
-              {searchedUnclaimed.length > 0 && (
+              {visibleUnclaimed.length > 0 && (
                 <span className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-800">
-                  Unclaimed: {searchedUnclaimed.length}
+                  Unclaimed: {visibleUnclaimed.length}
                 </span>
               )}
             </div>
@@ -1201,25 +1211,25 @@ export default function SearchPage() {
           </div>
         )}
 
-        {searchQuery && searchedUnclaimed.length > 0 && (
+        {searchQuery && visibleUnclaimed.length > 0 && (
           <div className="mb-8">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-foreground">
                 Not on MealScout yet
               </h2>
               <span className="text-sm text-muted-foreground">
-                {searchedUnclaimed.length} unclaimed
+                {visibleUnclaimed.length} unclaimed
               </span>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">
               We found{" "}
-              {searchedUnclaimed.length === 1 ? "this place" : "these places"}{" "}
-              on the web. Help us list{" "}
-              {searchedUnclaimed.length === 1 ? "it" : "them"} by claiming the
+              {visibleUnclaimed.length === 1 ? "this place" : "these places"} on
+              the web. Help us list{" "}
+              {visibleUnclaimed.length === 1 ? "it" : "them"} by claiming the
               profile.
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {searchedUnclaimed.map((listing: any) => {
+              {visibleUnclaimed.map((listing: any) => {
                 const locationLine = [listing.city, listing.state]
                   .filter(Boolean)
                   .join(", ");
@@ -1262,12 +1272,19 @@ export default function SearchPage() {
 
         {/* Deals Section */}
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-semibold text-foreground">
-            {searchQuery ? `Deals matching "${searchQuery}"` : "Popular Deals"}
-          </h2>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              {searchQuery ? "Active Deals" : "Popular Deals"}
+            </h2>
+            {searchQuery && hasNonDealSearchMatches ? (
+              <p className="text-sm text-muted-foreground">
+                Deals are shown separately when this place has a live offer.
+              </p>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
-              {filteredDeals.length} deals found
+              {filteredDeals.length} deal{filteredDeals.length === 1 ? "" : "s"}
             </span>
           </div>
         </div>
@@ -1303,19 +1320,19 @@ export default function SearchPage() {
               />
             ))}
           </div>
-        ) : (
+        ) : searchQuery && hasNonDealSearchMatches ? null : (
           <div className="text-center py-12">
             <div className="w-20 h-20 bg-[var(--bg-surface-muted)] rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
-              {searchQuery && mergedRestaurants && mergedRestaurants.length > 0
-                ? "No deals found yet"
+              {searchQuery && hasNonDealSearchMatches
+                ? "No active deals for this search"
                 : "No matches found"}
             </h3>
             <p className="text-muted-foreground">
-              {searchQuery && mergedRestaurants && mergedRestaurants.length > 0
-                ? "Restaurants and trucks are listed above even without active deals."
+              {searchQuery && hasNonDealSearchMatches
+                ? "Matching restaurants, trucks, parking, videos, or events are listed above."
                 : "Try adjusting your search terms to find restaurants, trucks, or deals."}
             </p>
             {didYouMean && (

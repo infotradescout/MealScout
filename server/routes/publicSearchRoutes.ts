@@ -70,7 +70,6 @@ const parseUSCityStateFromFormatted = (
   return { city: null, state: null };
 };
 
-
 const normalizeSearchTerm = (value: unknown) =>
   String(value || "")
     .toLowerCase()
@@ -116,9 +115,12 @@ const isGoogleLocalityOnly = (candidate: {
 }) => {
   const types = Array.isArray(candidate.types) ? candidate.types : [];
   return types.some((type) =>
-    ["locality", "political", "administrative_area_level_1", "country"].includes(
-      type,
-    ),
+    [
+      "locality",
+      "political",
+      "administrative_area_level_1",
+      "country",
+    ].includes(type),
   );
 };
 
@@ -131,7 +133,9 @@ const candidateLooksLikeRequestedPlace = (
   const haystack = normalizeSearchTerm(
     `${candidate.name || ""} ${candidate.formattedAddress || ""}`,
   );
-  const hits = requestedTokens.filter((token) => haystack.includes(token)).length;
+  const hits = requestedTokens.filter((token) =>
+    haystack.includes(token),
+  ).length;
   return hits >= Math.min(2, requestedTokens.length);
 };
 
@@ -691,9 +695,7 @@ export function registerPublicSearchRoutes(app: Express) {
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
           operatingHours:
-            restaurant.operatingHours ??
-            restaurant.businessHours ??
-            null,
+            restaurant.operatingHours ?? restaurant.businessHours ?? null,
           googleRating: restaurant.googleRating,
           googleReviewCount: restaurant.googleReviewCount,
         }));
@@ -716,18 +718,28 @@ export function registerPublicSearchRoutes(app: Express) {
             ...restaurant,
             rating:
               rating ??
-              (restaurant.googleRating ? Number(restaurant.googleRating) : null),
+              (restaurant.googleRating
+                ? Number(restaurant.googleRating)
+                : null),
           };
         }),
       );
 
-      const dealsOut = (
-        await storage.searchDeals({
-          query,
-          sortBy: "relevance",
-          radius: 9999,
-        })
-      ).slice(0, 12);
+      let dealsOut: any[] = [];
+      try {
+        dealsOut = (
+          await storage.searchDeals({
+            query,
+            sortBy: "relevance",
+            radius: 9999,
+          })
+        ).slice(0, 12);
+      } catch (dealSearchError) {
+        console.warn(
+          "[search] deals lookup failed; returning place results without deals:",
+          dealSearchError,
+        );
+      }
 
       const hostSeriesRows = await db
         .select({
@@ -929,9 +941,9 @@ export function registerPublicSearchRoutes(app: Express) {
       const SEED_MIN_QUERY_LEN = 5;
       const hasPlacesApiKey = Boolean(
         process.env.GOOGLE_MAPS_API_KEY ||
-          process.env.GOOGLE_PLACES_API_KEY ||
-          process.env.GOOGLE_API_KEY ||
-          process.env.VITE_GOOGLE_MAPS_WEB_API_KEY,
+        process.env.GOOGLE_PLACES_API_KEY ||
+        process.env.GOOGLE_API_KEY ||
+        process.env.VITE_GOOGLE_MAPS_WEB_API_KEY,
       );
       const shouldAttemptAutoSeed =
         restaurantsOut.length === 0 &&
