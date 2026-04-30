@@ -188,9 +188,18 @@ function useRestaurantId(restaurants: RestaurantOption[]): string | null {
   if (isAdminMode && typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const override = String(params.get("adminRestaurantId") || "").trim();
-      if (override) return override;
+    if (override) return override;
   }
-  return (user as any)?.restaurantId ?? restaurants[0]?.id ?? null;
+
+  const userRestaurantId = String((user as any)?.restaurantId || "").trim();
+  if (
+    userRestaurantId &&
+    restaurants.some((restaurant) => restaurant.id === userRestaurantId)
+  ) {
+    return userRestaurantId;
+  }
+
+  return restaurants[0]?.id ?? null;
 }
 
 // ──────────────────────────────── main page ───────────────────────────────────
@@ -204,7 +213,8 @@ export default function MenuBuilderPage() {
   const restaurantOptions = restaurantsQuery.data ?? [];
   const restaurantId = useRestaurantId(restaurantOptions);
   const activeRestaurant = useMemo(
-    () => restaurantOptions.find((restaurant) => restaurant.id === restaurantId),
+    () =>
+      restaurantOptions.find((restaurant) => restaurant.id === restaurantId),
     [restaurantOptions, restaurantId],
   );
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
@@ -229,10 +239,16 @@ export default function MenuBuilderPage() {
       activeRestaurant?.websiteUrl,
     ];
     return candidates.find((value) => String(value || "").trim()) || "";
-  }, [activeRestaurant?.menuUrl, activeRestaurant?.orderUrl, activeRestaurant?.websiteUrl]);
+  }, [
+    activeRestaurant?.menuUrl,
+    activeRestaurant?.orderUrl,
+    activeRestaurant?.websiteUrl,
+  ]);
 
   const openImportDialog = (urlOverride?: string | null) => {
-    const nextUrl = String(urlOverride || importUrl || profileImportUrl || "").trim();
+    const nextUrl = String(
+      urlOverride || importUrl || profileImportUrl || "",
+    ).trim();
     if (nextUrl) {
       setImportType("url");
       setImportUrl(nextUrl);
@@ -251,7 +267,7 @@ export default function MenuBuilderPage() {
       );
       if (!res.ok) throw new Error("Failed to load menus");
       const payload = await res.json();
-      return Array.isArray(payload) ? payload : payload?.menus ?? [];
+      return Array.isArray(payload) ? payload : (payload?.menus ?? []);
     },
     enabled: !!restaurantId,
   });
@@ -441,7 +457,8 @@ export default function MenuBuilderPage() {
               Menu Builder
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Create and manage menus for {activeRestaurant?.name || "your business"}.
+              Create and manage menus for{" "}
+              {activeRestaurant?.name || "your business"}.
             </p>
           </div>
           <div className="flex gap-2">
@@ -487,20 +504,25 @@ export default function MenuBuilderPage() {
             <span>
               Last imported{" "}
               <strong>
-                {new Date(selectedMenu.importedAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {new Date(selectedMenu.importedAt).toLocaleDateString(
+                  undefined,
+                  {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  },
+                )}
               </strong>
               {selectedMenu.importSource && (
                 <>
-                  {" "}via <strong>{selectedMenu.importSource}</strong>
+                  {" "}
+                  via <strong>{selectedMenu.importSource}</strong>
                 </>
               )}
               {selectedMenu.importUrl && (
                 <>
-                  {" "}—{" "}
+                  {" "}
+                  —{" "}
                   <a
                     href={selectedMenu.importUrl}
                     target="_blank"
@@ -524,8 +546,11 @@ export default function MenuBuilderPage() {
                   {lastImportResult.imported === 1 ? "" : "s"}
                 </span>
                 <span className="text-muted-foreground">
-                  {" "}• skipped {lastImportResult.skipped}
-                  {lastImportResult.source ? ` • source ${lastImportResult.source}` : ""}
+                  {" "}
+                  • skipped {lastImportResult.skipped}
+                  {lastImportResult.source
+                    ? ` • source ${lastImportResult.source}`
+                    : ""}
                 </span>
               </div>
               <Button
@@ -719,11 +744,11 @@ export default function MenuBuilderPage() {
               <p className="text-xs text-muted-foreground mt-2">
                 {importType === "csv"
                   ? "CSV with columns: Name, Description, Price, Category, Calories, etc."
-                    : importType === "pdf"
-                      ? "Upload a PDF menu — AI will extract items automatically."
-                      : importType === "image"
-                        ? "Upload a photo of your menu board or printed menu — AI will read and extract items."
-                        : "Paste your website, Google, Yelp, Grubhub, UberEats, or another public menu URL."}
+                  : importType === "pdf"
+                    ? "Upload a PDF menu — AI will extract items automatically."
+                    : importType === "image"
+                      ? "Upload a photo of your menu board or printed menu — AI will read and extract items."
+                      : "Paste your website, Google, Yelp, Grubhub, UberEats, or another public menu URL."}
               </p>
             </div>
             {importType === "url" ? (
@@ -777,7 +802,13 @@ export default function MenuBuilderPage() {
                 <Input
                   id="import-file"
                   type="file"
-                  accept={importType === "csv" ? ".csv,.tsv,.xlsx,.xls" : importType === "image" ? "image/*" : ".pdf"}
+                  accept={
+                    importType === "csv"
+                      ? ".csv,.tsv,.xlsx,.xls"
+                      : importType === "image"
+                        ? "image/*"
+                        : ".pdf"
+                  }
                   onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
                 />
               </div>
@@ -794,9 +825,7 @@ export default function MenuBuilderPage() {
               onClick={handleImport}
               disabled={
                 isImporting ||
-                (importType === "url"
-                  ? !importUrl.trim()
-                  : !importFile)
+                (importType === "url" ? !importUrl.trim() : !importFile)
               }
             >
               {isImporting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
@@ -1049,7 +1078,8 @@ function MenuEditor({
               {menu.categories.length === 0 && (
                 <div className="rounded-lg border border-dashed py-8 text-center">
                   <p className="text-sm text-muted-foreground">
-                    No categories yet. Add a starter category to begin adding items.
+                    No categories yet. Add a starter category to begin adding
+                    items.
                   </p>
                   <Button
                     className="mt-3"
@@ -1139,8 +1169,12 @@ function MenuEditor({
                             item={item}
                             canMoveUp={itemIdx > 0}
                             canMoveDown={itemIdx < cat.items.length - 1}
-                            onMoveUp={() => moveItem(cat.id, cat.items, itemIdx, -1)}
-                            onMoveDown={() => moveItem(cat.id, cat.items, itemIdx, 1)}
+                            onMoveUp={() =>
+                              moveItem(cat.id, cat.items, itemIdx, -1)
+                            }
+                            onMoveDown={() =>
+                              moveItem(cat.id, cat.items, itemIdx, 1)
+                            }
                             onEdit={() => {
                               setEditingItem(item);
                               setActiveCategoryId(cat.id);
@@ -1183,7 +1217,9 @@ function MenuEditor({
                   />
                 </div>
                 <div>
-                  <Label htmlFor={`menu-service-${menu.id}`}>Service Type</Label>
+                  <Label htmlFor={`menu-service-${menu.id}`}>
+                    Service Type
+                  </Label>
                   <Select
                     value={menuSettings.serviceType}
                     onValueChange={(value) =>

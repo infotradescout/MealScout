@@ -49,7 +49,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getGroupedLocationTypes, getLocationTypeLabel } from "@shared/constants/locationTypes";
+import {
+  getGroupedLocationTypes,
+  getLocationTypeLabel,
+} from "@shared/constants/locationTypes";
 const groupedLocationTypes = getGroupedLocationTypes();
 
 const FOOD_TYPE_OPTIONS = [
@@ -145,6 +148,19 @@ interface PendingRestaurant {
   cuisineType: string;
   createdAt: string;
   isActive: boolean;
+}
+
+interface AdminRestaurantSearchResult {
+  id: string;
+  name: string;
+  ownerEmail?: string | null;
+  cuisineType?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  isActive?: boolean | null;
+  isVerified?: boolean | null;
+  createdAt?: string | null;
 }
 
 interface MapPinAudit {
@@ -1619,10 +1635,13 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                 Restaurant created: {inviteRestaurantId}
               </p>
               <p className="text-xs text-[color:var(--status-success)]/80">
-                Google auto-populate is running in the background. Photos, hours, and description will be imported automatically.
+                Google auto-populate is running in the background. Photos,
+                hours, and description will be imported automatically.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Link href={`/menu-builder?adminRestaurantId=${encodeURIComponent(inviteRestaurantId)}`}>
+                <Link
+                  href={`/menu-builder?adminRestaurantId=${encodeURIComponent(inviteRestaurantId)}`}
+                >
                   <Button size="sm" variant="outline" className="gap-1">
                     Upload Menu (PDF/Image)
                   </Button>
@@ -2080,13 +2099,17 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                     }
                     className="w-full px-3 py-2 border rounded-md"
                   >
-                    {Object.entries(groupedLocationTypes).map(([group, options]) => (
-                      <optgroup key={group} label={group}>
-                        {options.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {Object.entries(groupedLocationTypes).map(
+                      ([group, options]) => (
+                        <optgroup key={group} label={group}>
+                          {options.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ),
+                    )}
                   </select>
                 </div>
 
@@ -2411,6 +2434,7 @@ export default function AdminDashboard() {
   const [userSearch, setUserSearch] = useState(
     () => readAdminDashboardQueryState().q,
   );
+  const [restaurantSearchTerm, setRestaurantSearchTerm] = useState("");
   const [userTypeFilter, setUserTypeFilter] = useState("all");
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
   const [dealDetailsOpen, setDealDetailsOpen] = useState(false);
@@ -2577,6 +2601,32 @@ export default function AdminDashboard() {
   const { data: pendingRestaurants = [] } = useQuery<PendingRestaurant[]>({
     queryKey: ["/api/admin/restaurants/pending"],
     enabled: !!adminUser && selectedTab === "restaurants",
+  });
+
+  const restaurantSearchQuery = restaurantSearchTerm.trim();
+  const {
+    data: restaurantSearchResults = [],
+    isLoading: searchingRestaurants,
+  } = useQuery<AdminRestaurantSearchResult[]>({
+    queryKey: ["/api/admin/restaurants/search", restaurantSearchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        q: restaurantSearchQuery,
+        limit: "25",
+      });
+      const response = await fetch(`/api/admin/restaurants/search?${params}`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Failed to search restaurants");
+      }
+      return response.json();
+    },
+    enabled:
+      !!adminUser &&
+      selectedTab === "restaurants" &&
+      restaurantSearchQuery.length >= 2,
   });
 
   // Fetch all users
@@ -3488,7 +3538,10 @@ export default function AdminDashboard() {
   });
   const backfillGoogleProfiles = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/backfill/google-profiles");
+      const res = await apiRequest(
+        "POST",
+        "/api/admin/backfill/google-profiles",
+      );
       return await res.json();
     },
     onSuccess: (data: any) => {
@@ -3500,7 +3553,8 @@ export default function AdminDashboard() {
     onError: (error: any) => {
       toast({
         title: "Google backfill failed",
-        description: error?.message || "Unable to start Google profile backfill.",
+        description:
+          error?.message || "Unable to start Google profile backfill.",
         variant: "destructive",
       });
     },
@@ -3978,13 +4032,17 @@ export default function AdminDashboard() {
                       })
                     }
                   >
-                    {Object.entries(groupedLocationTypes).map(([group, options]) => (
-                      <optgroup key={group} label={group}>
-                        {options.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {Object.entries(groupedLocationTypes).map(
+                      ([group, options]) => (
+                        <optgroup key={group} label={group}>
+                          {options.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ),
+                    )}
                   </select>
                   <select
                     className="w-full px-2 py-1 border rounded-md text-sm bg-background"
@@ -4673,13 +4731,17 @@ export default function AdminDashboard() {
                   })
                 }
               >
-                {Object.entries(groupedLocationTypes).map(([group, options]) => (
-                  <optgroup key={group} label={group}>
-                    {options.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
+                {Object.entries(groupedLocationTypes).map(
+                  ([group, options]) => (
+                    <optgroup key={group} label={group}>
+                      {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ),
+                )}
               </select>
               <select
                 className="w-full px-2 py-1 border rounded-md text-sm bg-background"
@@ -5084,6 +5146,9 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/restaurants/pending"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/search"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Restaurant Approved",
@@ -5374,7 +5439,9 @@ export default function AdminDashboard() {
     onSuccess: (payload) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       setSelectedUser((prev: any) =>
-        prev ? { ...prev, profileImageUrl: payload?.url || prev.profileImageUrl } : prev,
+        prev
+          ? { ...prev, profileImageUrl: payload?.url || prev.profileImageUrl }
+          : prev,
       );
       setSelectedUserProfileImageFile(null);
       toast({
@@ -6231,8 +6298,8 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-          <Card className="mb-6">
-            <CardHeader className="pb-3">
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Operations
             </CardTitle>
@@ -6337,7 +6404,7 @@ export default function AdminDashboard() {
                 <p className="font-semibold">
                   {operations?.trucks?.liveTrucks15m ?? 0}
                 </p>
-                 <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {operations?.trucks?.activeSessions ?? 0} active sessions
                 </p>
               </div>
@@ -6349,7 +6416,9 @@ export default function AdminDashboard() {
                 onClick={() => backfillGoogleProfiles.mutate()}
                 disabled={backfillGoogleProfiles.isPending}
               >
-                {backfillGoogleProfiles.isPending ? "Running..." : "Backfill Google Profiles"}
+                {backfillGoogleProfiles.isPending
+                  ? "Running..."
+                  : "Backfill Google Profiles"}
               </Button>
             </div>
           </CardContent>
@@ -8135,6 +8204,121 @@ export default function AdminDashboard() {
 
           {/* Restaurants Tab */}
           <TabsContent value="restaurants" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Search & Activate Restaurants</CardTitle>
+                <CardDescription>
+                  Find an existing restaurant by name, city, cuisine, address,
+                  or owner email, then activate it manually.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <input
+                  type="search"
+                  value={restaurantSearchTerm}
+                  onChange={(event) =>
+                    setRestaurantSearchTerm(event.target.value)
+                  }
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  placeholder="Search restaurants or owner email"
+                  data-testid="input-admin-restaurant-search"
+                />
+                {restaurantSearchQuery.length > 0 &&
+                  restaurantSearchQuery.length < 2 && (
+                    <p className="text-sm text-muted-foreground">
+                      Type at least 2 characters to search.
+                    </p>
+                  )}
+                {searchingRestaurants ? (
+                  <p className="text-sm text-muted-foreground">Searching...</p>
+                ) : restaurantSearchQuery.length >= 2 &&
+                  restaurantSearchResults.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No restaurants matched that search.
+                  </p>
+                ) : restaurantSearchResults.length > 0 ? (
+                  <div className="space-y-3">
+                    {restaurantSearchResults.map((restaurant) => {
+                      const location = [restaurant.city, restaurant.state]
+                        .map((value) => String(value || "").trim())
+                        .filter(Boolean)
+                        .join(", ");
+                      const details = [
+                        restaurant.cuisineType,
+                        location,
+                        restaurant.ownerEmail,
+                      ]
+                        .map((value) => String(value || "").trim())
+                        .filter(Boolean)
+                        .join(" - ");
+
+                      return (
+                        <div
+                          key={restaurant.id}
+                          className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <div className="font-medium">{restaurant.name}</div>
+                            {details && (
+                              <div className="text-sm text-muted-foreground">
+                                {details}
+                              </div>
+                            )}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge
+                                variant={
+                                  restaurant.isActive ? "default" : "secondary"
+                                }
+                              >
+                                {restaurant.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                              <Badge
+                                variant={
+                                  restaurant.isVerified ? "default" : "outline"
+                                }
+                              >
+                                {restaurant.isVerified
+                                  ? "Verified"
+                                  : "Unverified"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Link href={`/restaurant/${restaurant.id}`}>
+                              <Button size="sm" variant="outline">
+                                View
+                              </Button>
+                            </Link>
+                            <Link
+                              href={`/menu-builder?adminRestaurantId=${encodeURIComponent(restaurant.id)}`}
+                            >
+                              <Button size="sm" variant="outline">
+                                Menu
+                              </Button>
+                            </Link>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                approveRestaurant.mutate(restaurant.id)
+                              }
+                              disabled={
+                                restaurant.isActive === true ||
+                                approveRestaurant.isPending
+                              }
+                              data-testid={`button-activate-restaurant-${restaurant.id}`}
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Activate
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Pending Restaurant Approvals</CardTitle>
@@ -9983,8 +10167,7 @@ export default function AdminDashboard() {
                               } catch {
                                 toast({
                                   title: "Invalid JSON",
-                                  description:
-                                    "Amenities must be valid JSON.",
+                                  description: "Amenities must be valid JSON.",
                                   variant: "destructive",
                                 });
                                 return;
@@ -10132,8 +10315,7 @@ export default function AdminDashboard() {
                                     onChange={() => {
                                       const nextTypes = isSelected
                                         ? selectedTypes.filter(
-                                            (item: string) =>
-                                              item !== foodType,
+                                            (item: string) => item !== foodType,
                                           )
                                         : [...selectedTypes, foodType];
                                       setNewRestaurantProfile({
@@ -10159,7 +10341,8 @@ export default function AdminDashboard() {
                           newRestaurantProfile.businessType === "bar";
                         if (
                           !newRestaurantProfile.name.trim() ||
-                          (profileNeedsAddress && !newRestaurantProfile.address.trim()) ||
+                          (profileNeedsAddress &&
+                            !newRestaurantProfile.address.trim()) ||
                           !newRestaurantProfile.city.trim() ||
                           !newRestaurantProfile.state.trim()
                         ) {
@@ -10458,16 +10641,22 @@ export default function AdminDashboard() {
                       type="file"
                       accept="image/*"
                       onChange={(e) =>
-                        setSelectedUserProfileImageFile(e.target.files?.[0] || null)
+                        setSelectedUserProfileImageFile(
+                          e.target.files?.[0] || null,
+                        )
                       }
                       className="text-sm"
                       data-testid="input-admin-user-profile-image"
-                      disabled={!isAdminOrSuper || uploadSelectedUserProfileImage.isPending}
+                      disabled={
+                        !isAdminOrSuper ||
+                        uploadSelectedUserProfileImage.isPending
+                      }
                     />
                     <Button
                       size="sm"
                       onClick={() => {
-                        if (!selectedUser?.id || !selectedUserProfileImageFile) return;
+                        if (!selectedUser?.id || !selectedUserProfileImageFile)
+                          return;
                         uploadSelectedUserProfileImage.mutate({
                           userId: selectedUser.id,
                           file: selectedUserProfileImageFile,

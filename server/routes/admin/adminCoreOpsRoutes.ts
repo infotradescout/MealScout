@@ -398,6 +398,64 @@ export function registerAdminCoreOpsRoutes(app: Express) {
   );
 
   app.get(
+    "/api/admin/restaurants/search",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const query = String(req.query.q || "")
+          .trim()
+          .toLowerCase();
+        const limit = Math.max(
+          1,
+          Math.min(
+            50,
+            Number.parseInt(String(req.query.limit || "25"), 10) || 25,
+          ),
+        );
+
+        if (query.length < 2) {
+          return res.json([]);
+        }
+
+        const pattern = `%${query.replace(/[%_]/g, "\\$&")}%`;
+        const rows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            cuisineType: restaurants.cuisineType,
+            address: restaurants.address,
+            city: restaurants.city,
+            state: restaurants.state,
+            isActive: restaurants.isActive,
+            isVerified: restaurants.isVerified,
+            createdAt: restaurants.createdAt,
+            ownerEmail: users.email,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .where(
+            sql`
+            lower(coalesce(${restaurants.name}, '')) like ${pattern} escape '\\'
+            or lower(coalesce(${restaurants.cuisineType}, '')) like ${pattern} escape '\\'
+            or lower(coalesce(${restaurants.address}, '')) like ${pattern} escape '\\'
+            or lower(coalesce(${restaurants.city}, '')) like ${pattern} escape '\\'
+            or lower(coalesce(${restaurants.state}, '')) like ${pattern} escape '\\'
+            or lower(coalesce(${users.email}, '')) like ${pattern} escape '\\'
+          `,
+          )
+          .orderBy(desc(restaurants.createdAt))
+          .limit(limit);
+
+        res.json(rows);
+      } catch (error) {
+        console.error("Error searching restaurants:", error);
+        res.status(500).json({ message: "Failed to search restaurants" });
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/restaurants/pending",
     isAuthenticated,
     isStaffOrAdmin,
@@ -469,10 +527,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
-        const days = Math.min(
-          90,
-          Math.max(1, Number(req.query?.days) || 7),
-        );
+        const days = Math.min(90, Math.max(1, Number(req.query?.days) || 7));
         const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
         const today = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -672,9 +727,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const summary = {
           windowDays: days,
           totalNewOwners: rows.length,
-          newToday: rows.filter(
-            (r: any) => new Date(r.createdAt) >= today,
-          ).length,
+          newToday: rows.filter((r: any) => new Date(r.createdAt) >= today)
+            .length,
           unverifiedEmails: rows.filter((r: any) => !r.emailVerified).length,
           noBusinessYet: rows.filter((r: any) => !r.checklist.hasBusiness)
             .length,
@@ -757,7 +811,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         );
         res.json({ ok: true, ...result });
       } catch (error: any) {
-        console.error("[admin/launch-week/discoverability-alert] failed:", error);
+        console.error(
+          "[admin/launch-week/discoverability-alert] failed:",
+          error,
+        );
         res.status(500).json({
           message: "Failed to run discoverability alert scan",
           error: String(error?.message || error),
