@@ -1,0 +1,98 @@
+openapi: 3.1.0
+info:
+  title: MealScout Lead Import
+  version: 1.0.0
+servers:
+  - url: https://www.mealscout.us
+components:
+  securitySchemes:
+    leadImportBearer:
+      type: http
+      scheme: bearer
+  schemas:
+    LeadImportPayload:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - account
+            - host_event
+            - restaurant_menu
+            - food_truck
+        source:
+          type: string
+          default: chatgpt_screenshot
+        sendVerificationEmail:
+          type: boolean
+        user:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+            userType:
+              type: string
+        host:
+          type: object
+          additionalProperties: true
+        eventRequest:
+          type: object
+          additionalProperties: true
+        restaurant:
+          type: object
+          additionalProperties: true
+        restaurantId:
+          type: string
+        truck:
+          type: object
+          additionalProperties: true
+        menu:
+          type: object
+          additionalProperties: true
+        rawSource:
+          type: object
+          additionalProperties: true
+paths:
+  /api/admin/lead-import/preview:
+    post:
+      operationId: previewLeadImport
+      summary: Preview MealScout screenshot import
+      description: Validates a proposed import and returns the records that would be created or reused.
+      security:
+        - leadImportBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadImportPayload"
+      responses:
+        "200":
+          description: Preview result
+  /api/admin/lead-import:
+    post:
+      operationId: importLead
+      summary: Import MealScout screenshot payload
+      description: Creates or reuses MealScout records for account, host event, restaurant menu, or food truck intake.
+      x-openai-isConsequential: true
+      security:
+        - leadImportBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadImportPayload"
+      responses:
+        "200":
+          description: Import result
+        "201":
+          description: Created import records

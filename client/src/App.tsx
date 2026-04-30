@@ -69,6 +69,7 @@ const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
 );
 const AdminGeoAds = lazy(() => import("@/pages/admin-geo-ads"));
+const AdminLeadImport = lazy(() => import("@/pages/admin-lead-import"));
 const AdminOwnerSeoPage = lazy(() => import("@/pages/admin-owner-seo"));
 const AdminTruckSightings = lazy(() => import("@/pages/admin-truck-sightings"));
 const AffiliateEarnings = lazy(() => import("@/pages/AffiliateEarnings"));
@@ -496,6 +497,7 @@ function Router() {
             <Route path="/account-setup" component={AccountSetup} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/admin/lead-import" component={AdminLogin} />
             <Route
               path="/admin/sentiment-intelligence"
               component={AdminLogin}
@@ -627,6 +629,7 @@ function Router() {
               component={AdminSentimentIntelligence}
             />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
+            <Route path="/admin/lead-import" component={AdminLeadImport} />
             <Route path="/admin/owner-seo" component={AdminOwnerSeoPage} />
             <Route
               path="/admin/truck-sightings"
