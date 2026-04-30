@@ -65,7 +65,7 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
-import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
+import { resolveBusinessImageUrl } from "@/lib/business-images";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type PublicRecommendation = {
@@ -117,43 +117,6 @@ const toExternalUrl = (value: string | null | undefined) => {
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith("/")) return raw;
   return `https://${raw}`;
-};
-
-const parseJsonArray = (value: unknown): unknown[] => {
-  if (Array.isArray(value)) return value;
-  if (typeof value !== "string") return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const buildGooglePlacesPhotoUrl = (photoName: string) => {
-  if (!photoName) return "";
-  if (!GOOGLE_MAPS_WEB_API_KEY) {
-    return `/api/google/photo?name=${encodeURIComponent(photoName)}&maxWidth=960`;
-  }
-  return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=960&key=${encodeURIComponent(GOOGLE_MAPS_WEB_API_KEY)}`;
-};
-
-const getGooglePhotoSrc = (photos: unknown) => {
-  const firstPhoto = parseJsonArray(photos)[0] as any;
-  const directUrl = toExternalUrl(
-    firstPhoto?.url || firstPhoto?.photoUrl || firstPhoto?.src,
-  );
-  if (directUrl) return directUrl;
-
-  const photoName = String(
-    firstPhoto?.name || firstPhoto?.photoName || "",
-  ).trim();
-  return photoName ? buildGooglePlacesPhotoUrl(photoName) : "";
-};
-
-const buildGoogleStreetViewSrc = (locationQuery: string) => {
-  if (!locationQuery || !GOOGLE_MAPS_WEB_API_KEY) return "";
-  return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encodeURIComponent(locationQuery)}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(GOOGLE_MAPS_WEB_API_KEY)}`;
 };
 
 const parseCoordinate = (value: unknown): number | null => {
@@ -666,19 +629,18 @@ export default function RestaurantDetailPage() {
     (restaurant as any)?.currentLongitude ?? (restaurant as any)?.longitude,
   );
   const hasCoords = lat !== null && lng !== null;
-  const googlePhotoSrc = getGooglePhotoSrc((restaurant as any)?.googlePhotos);
   const locationImageQuery = [restaurantName, locationDisplay || address]
     .filter(Boolean)
     .join(", ");
-  const streetViewImageSrc = buildGoogleStreetViewSrc(locationImageQuery);
-  const heroImageSrc =
-    toExternalUrl(
-      (restaurant as any)?.coverImageUrl ||
-        (restaurant as any)?.facebookCoverUrl ||
-        (restaurant as any)?.logoUrl,
-    ) ||
-    googlePhotoSrc ||
-    streetViewImageSrc;
+  const heroImageSrc = resolveBusinessImageUrl({
+    uploaded: [
+      (restaurant as any)?.coverImageUrl,
+      (restaurant as any)?.facebookCoverUrl,
+      (restaurant as any)?.logoUrl,
+    ],
+    googlePhotos: (restaurant as any)?.googlePhotos,
+    locationQuery: locationImageQuery,
+  });
   const hasHeroImage = Boolean(heroImageSrc);
   const mapsDestination = (restaurant as any)?.googlePlaceId
     ? `place_id:${(restaurant as any).googlePlaceId}`

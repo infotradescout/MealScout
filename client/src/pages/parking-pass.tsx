@@ -64,6 +64,10 @@ import { initFacebookSDK, postToFacebook } from "@/lib/facebook";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import {
+  buildGoogleStaticMapImageUrl,
+  buildGoogleStreetViewImageUrl,
+} from "@/lib/business-images";
+import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
@@ -2819,15 +2823,17 @@ export default function ParkingPassPage() {
   };
 
   const buildGoogleLocationPhotoUrl = (addressQuery: string | null) => {
-    if (!addressQuery || !effectiveGoogleMapsApiKey) return null;
-    const encodedAddress = encodeURIComponent(addressQuery);
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${encodedAddress}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encodedAddress}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+    return (
+      buildGoogleStaticMapImageUrl(addressQuery, effectiveGoogleMapsApiKey) ||
+      null
+    );
   };
 
   const buildGooglePlaceImageUrl = (addressQuery: string | null) => {
-    if (!addressQuery || !effectiveGoogleMapsApiKey) return null;
-    const encodedAddress = encodeURIComponent(addressQuery);
-    return `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encodedAddress}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
+    return (
+      buildGoogleStreetViewImageUrl(addressQuery, effectiveGoogleMapsApiKey) ||
+      null
+    );
   };
 
   const handleSelect = (listing: ParkingPassListing, slotType: string) => {

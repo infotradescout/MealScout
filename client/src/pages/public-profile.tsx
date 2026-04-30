@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "wouter";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 import { SEOHead } from "@/components/seo-head";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { resolveBusinessImageUrl } from "@/lib/business-images";
 
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
@@ -35,6 +36,7 @@ type PublicProfile = {
   menuUrl?: string | null;
   orderUrl?: string | null;
   imageUrl?: string | null;
+  googlePhotos?: unknown;
   businessHours?: Record<string, { open?: string; close?: string }> | null;
   canonicalUrl: string;
   profilePath: string;
@@ -81,6 +83,11 @@ type PublicProfile = {
     facebookPageUrl?: string | null;
     xUrl?: string | null;
   };
+};
+
+type MapRuntimeResponse = {
+  hasGoogleMapsKey: boolean;
+  googleMapsApiKey?: string | null;
 };
 
 type PublicCanonical = {
@@ -212,6 +219,19 @@ export default function PublicProfilePage() {
       }
       return res.json();
     },
+  });
+
+  const { data: mapRuntime } = useQuery<MapRuntimeResponse>({
+    queryKey: ["/api/map/runtime"],
+    queryFn: async () => {
+      const res = await fetch("/api/map/runtime");
+      if (!res.ok) return { hasGoogleMapsKey: false, googleMapsApiKey: null };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: canonical } = useQuery<PublicCanonical>({
@@ -402,6 +422,15 @@ export default function PublicProfilePage() {
   const locationLine = [data.address, data.city, data.state]
     .filter(Boolean)
     .join(", ");
+  const effectiveGoogleMapsApiKey = String(
+    mapRuntime?.googleMapsApiKey || "",
+  ).trim();
+  const profileImageUrl = resolveBusinessImageUrl({
+    uploaded: [data.imageUrl],
+    googlePhotos: data.googlePhotos,
+    locationQuery: [data.title, locationLine].filter(Boolean).join(", "),
+    apiKey: effectiveGoogleMapsApiKey,
+  });
   const profile = data.profileSettings || {};
   const presetDefaults =
     profile.templatePreset === "story"
@@ -483,7 +512,7 @@ export default function PublicProfilePage() {
     description,
     url: data.canonicalUrl,
     telephone: data.phone || undefined,
-    image: data.imageUrl || undefined,
+    image: profileImageUrl || undefined,
     address: locationLine
       ? {
           "@type": "PostalAddress",
@@ -663,8 +692,8 @@ export default function PublicProfilePage() {
       ? profile.sectionOrder
       : defaultOrder;
   const renderedSections = order
-    .map((key) => sections.get(key))
-    .filter(Boolean);
+    .map((key) => ({ key, node: sections.get(key) }))
+    .filter((section) => Boolean(section.node));
 
   const handleAuthRequiredAction = (action: () => void) => {
     if (!user) {
@@ -714,7 +743,7 @@ export default function PublicProfilePage() {
         description={description}
         canonicalUrl={data.canonicalUrl}
         ogType="profile"
-        ogImage={data.imageUrl || "/og-default.jpg"}
+        ogImage={profileImageUrl || "/og-default.jpg"}
         schemaData={schemaData}
       />
 
@@ -887,6 +916,17 @@ export default function PublicProfilePage() {
             ) : null}
           </div>
         </div>
+
+        {profileImageUrl ? (
+          <div className="border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+            <img
+              src={profileImageUrl}
+              alt={`${data.title} cover`}
+              className="h-44 w-full rounded-lg object-cover"
+              loading="lazy"
+            />
+          </div>
+        ) : null}
 
         <CardHeader>
           <CardTitle className="text-2xl">{data.title}</CardTitle>
@@ -1341,7 +1381,9 @@ export default function PublicProfilePage() {
               </div>
             </div>
           ) : (
-            renderedSections
+            renderedSections.map((section) => (
+              <Fragment key={section.key}>{section.node}</Fragment>
+            ))
           )}
 
           <div className="border-t pt-4 text-xs text-muted-foreground">

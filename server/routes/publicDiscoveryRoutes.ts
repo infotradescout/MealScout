@@ -103,21 +103,21 @@ const importedHighlights = (value: unknown) =>
 const hasRichHostProfile = (row: any) =>
   Boolean(
     row?.googlePlaceId &&
-      (row?.description ||
-        row?.businessWebsite ||
-        row?.businessHours ||
-        row?.googleFormattedPhone ||
-        parseArray(row?.googlePhotos).length > 0),
+    (row?.description ||
+      row?.businessWebsite ||
+      row?.businessHours ||
+      row?.googleFormattedPhone ||
+      parseArray(row?.googlePhotos).length > 0),
   );
 
 const hasRichRestaurantProfile = (row: any) =>
   Boolean(
     row?.googlePlaceId &&
-      (row?.description ||
-        row?.websiteUrl ||
-        row?.operatingHours ||
-        row?.googleFormattedPhone ||
-        parseArray(row?.googlePhotos).length > 0),
+    (row?.description ||
+      row?.websiteUrl ||
+      row?.operatingHours ||
+      row?.googleFormattedPhone ||
+      parseArray(row?.googlePhotos).length > 0),
   );
 
 const normalizeLoose = (value: unknown) =>
@@ -157,6 +157,21 @@ const countBy = <T extends string>(values: T[]) =>
   );
 
 export function registerPublicDiscoveryRoutes(app: Express) {
+  const requireStaffOrAdmin = (req: any, res: any): boolean => {
+    if (!req.isAuthenticated?.()) {
+      res.status(401).json({ message: "Authentication required" });
+      return false;
+    }
+
+    const userType = String(req.user?.userType || "");
+    if (!["staff", "admin", "super_admin"].includes(userType)) {
+      res.status(403).json({ message: "Admin access required" });
+      return false;
+    }
+
+    return true;
+  };
+
   const loadRecentPublicSignals = async (since: Date) => {
     try {
       const [recentRequests, recentShares, recentPosts, recentQueries] =
@@ -194,9 +209,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         recentQueries,
       };
     } catch (error) {
-      console.warn("[public-evidence] Telemetry read failed; returning empty evidence", {
-        error,
-      });
+      console.warn(
+        "[public-evidence] Telemetry read failed; returning empty evidence",
+        {
+          error,
+        },
+      );
       return {
         recentRequests: [],
         recentShares: [],
@@ -208,7 +226,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/public/canonical/:entity/:id", async (req, res) => {
     try {
-      const entity = String(req.params.entity || "").toLowerCase().trim();
+      if (!requireStaffOrAdmin(req, res)) {
+        return;
+      }
+
+      const entity = String(req.params.entity || "")
+        .toLowerCase()
+        .trim();
       const id = String(req.params.id || "").trim();
       if (!entity || !id) {
         return res.status(400).json({ message: "Entity and id are required" });
@@ -227,7 +251,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const knowledgeGaps = [
           !row.description ? "missing_description" : null,
           !row.websiteUrl ? "missing_website" : null,
-          !row.address || !row.city || !row.state ? "missing_location_context" : null,
+          !row.address || !row.city || !row.state
+            ? "missing_location_context"
+            : null,
           !row.cuisineType ? "missing_cuisine" : null,
           !row.isVerified ? "unverified_profile" : null,
         ].filter(Boolean) as string[];
@@ -237,7 +263,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           (row.websiteUrl ? 1 : 0) +
           (row.address && row.city && row.state ? 1 : 0) +
           (row.cuisineType ? 1 : 0) +
-          ((row.isVerified || row.mobileOnline || row.isFoodTruck) ? 1 : 0);
+          (row.isVerified || row.mobileOnline || row.isFoodTruck ? 1 : 0);
 
         const canonicalPath = `/restaurant/${row.id}`;
 
@@ -255,10 +281,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           active: Boolean(row.isActive),
           evidenceSummary: {
             activeDealCount: Array.isArray(activeDeals)
-              ? activeDeals.filter((deal: any) => deal?.isActive !== false).length
+              ? activeDeals.filter((deal: any) => deal?.isActive !== false)
+                  .length
               : 0,
             liveLocationActive: Boolean(row.mobileOnline),
-            isFoodTruck: Boolean(row.isFoodTruck || row.businessType === "food_truck"),
+            isFoodTruck: Boolean(
+              row.isFoodTruck || row.businessType === "food_truck",
+            ),
           },
           sourceFields: {
             hasDescription: Boolean(row.description),
@@ -361,7 +390,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           sourceTruthStatements: [
             row.hostName ? `Hosted by ${row.hostName}` : null,
             row.hostAddress || row.hostCity
-              ? [row.hostAddress, row.hostCity, row.hostState].filter(Boolean).join(", ")
+              ? [row.hostAddress, row.hostCity, row.hostState]
+                  .filter(Boolean)
+                  .join(", ")
               : null,
             row.bookedRestaurantId && row.truckName
               ? `Booked truck: ${row.truckName}`
@@ -380,7 +411,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         const freshnessHours = hoursSince(row.updatedAt || row.createdAt);
         const knowledgeGaps = [
           !row.notes ? "missing_description" : null,
-          !row.address || !row.city || !row.state ? "missing_location_context" : null,
+          !row.address || !row.city || !row.state
+            ? "missing_location_context"
+            : null,
           !row.spotCount ? "missing_spot_capacity" : null,
           !row.isVerified ? "unverified_host" : null,
           !row.stripeOnboardingCompleted ? "stripe_not_ready" : null,
@@ -500,7 +533,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             row.restaurantName ? `Offered by ${row.restaurantName}` : null,
             row.dealType ? `Deal type: ${row.dealType}` : null,
             row.discountValue ? `Discount value: ${row.discountValue}` : null,
-            row.isActive ? "Deal currently active on MealScout" : "Deal is not active",
+            row.isActive
+              ? "Deal currently active on MealScout"
+              : "Deal is not active",
           ].filter(Boolean),
         });
       }
@@ -577,7 +612,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           menuUrl: row.menuUrl || null,
           orderUrl: row.orderUrl || null,
           imageUrl:
-            row.coverImageUrl || row.logoUrl || importedGallery[0] || null,
+            row.coverImageUrl ||
+            row.facebookCoverUrl ||
+            row.logoUrl ||
+            importedGallery[0] ||
+            null,
+          googlePhotos: row.googlePhotos || null,
           businessHours: row.operatingHours || null,
           profilePath,
           canonicalUrl: `${baseUrl}${profilePath}`,
@@ -645,6 +685,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             : null,
           websiteUrl: row.businessWebsite || null,
           imageUrl: row.spotImageUrl || importedGallery[0] || null,
+          googlePhotos: row.googlePhotos || null,
           businessHours: row.businessHours || null,
           profilePath,
           canonicalUrl: `${baseUrl}${profilePath}`,
@@ -721,7 +762,13 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
   app.get("/api/public/evidence/:entity/:id", async (req, res) => {
     try {
-      const entity = String(req.params.entity || "").toLowerCase().trim();
+      if (!requireStaffOrAdmin(req, res)) {
+        return;
+      }
+
+      const entity = String(req.params.entity || "")
+        .toLowerCase()
+        .trim();
       const id = String(req.params.id || "").trim();
       const hoursRaw = Number(req.query.hours ?? 24 * 30);
       const hours = Number.isFinite(hoursRaw)
@@ -746,14 +793,12 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           `/bar/${slug}`,
           `/p/restaurant/${row.id}`,
         ];
-        const searchTokens = keywordTokens([row.name, row.cuisineType].join(" "));
+        const searchTokens = keywordTokens(
+          [row.name, row.cuisineType].join(" "),
+        );
 
-        const {
-          recentRequests,
-          recentShares,
-          recentPosts,
-          recentQueries,
-        } = await loadRecentPublicSignals(since);
+        const { recentRequests, recentShares, recentPosts, recentQueries } =
+          await loadRecentPublicSignals(since);
         let stories: any[] = [];
         try {
           stories = await db
@@ -782,7 +827,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return (
             path.includes(row.id) ||
             candidatePaths.some(
-              (candidate) => path === candidate || path.startsWith(`${candidate}?`),
+              (candidate) =>
+                path === candidate || path.startsWith(`${candidate}?`),
             )
           );
         });
@@ -822,7 +868,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             affiliateShares: matchingShares.length,
             outboundSocialPosts: matchingPosts.length,
             successfulSocialPosts: matchingPosts.filter(
-              (post: any) => String(post.status || "").toLowerCase() === "posted",
+              (post: any) =>
+                String(post.status || "").toLowerCase() === "posted",
             ).length,
           },
           demand: {
@@ -830,7 +877,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             topQueries: Object.entries(
               countBy(
                 matchingQueries.map((query: any) =>
-                  String(query.query || "").trim().toLowerCase(),
+                  String(query.query || "")
+                    .trim()
+                    .toLowerCase(),
                 ),
               ),
             )
@@ -910,12 +959,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.name, row.hostName, row.description].filter(Boolean).join(" "),
         );
 
-        const {
-          recentRequests,
-          recentShares,
-          recentPosts,
-          recentQueries,
-        } = await loadRecentPublicSignals(since);
+        const { recentRequests, recentShares, recentPosts, recentQueries } =
+          await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -963,7 +1008,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             affiliateShares: matchingShares.length,
             outboundSocialPosts: matchingPosts.length,
             successfulSocialPosts: matchingPosts.filter(
-              (post: any) => String(post.status || "").toLowerCase() === "posted",
+              (post: any) =>
+                String(post.status || "").toLowerCase() === "posted",
             ).length,
           },
           demand: {
@@ -971,7 +1017,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             topQueries: Object.entries(
               countBy(
                 matchingQueries.map((query: any) =>
-                  String(query.query || "").trim().toLowerCase(),
+                  String(query.query || "")
+                    .trim()
+                    .toLowerCase(),
                 ),
               ),
             )
@@ -1029,12 +1077,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.businessName, row.locationType, row.city, row.state].join(" "),
         );
 
-        const {
-          recentRequests,
-          recentShares,
-          recentPosts,
-          recentQueries,
-        } = await loadRecentPublicSignals(since);
+        const { recentRequests, recentShares, recentPosts, recentQueries } =
+          await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -1078,7 +1122,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             affiliateShares: matchingShares.length,
             outboundSocialPosts: matchingPosts.length,
             successfulSocialPosts: matchingPosts.filter(
-              (post: any) => String(post.status || "").toLowerCase() === "posted",
+              (post: any) =>
+                String(post.status || "").toLowerCase() === "posted",
             ).length,
           },
           demand: {
@@ -1086,7 +1131,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             topQueries: Object.entries(
               countBy(
                 matchingQueries.map((query: any) =>
-                  String(query.query || "").trim().toLowerCase(),
+                  String(query.query || "")
+                    .trim()
+                    .toLowerCase(),
                 ),
               ),
             )
@@ -1126,12 +1173,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           [row.title, row.description, row.restaurantName].join(" "),
         );
 
-        const {
-          recentRequests,
-          recentShares,
-          recentPosts,
-          recentQueries,
-        } = await loadRecentPublicSignals(since);
+        const { recentRequests, recentShares, recentPosts, recentQueries } =
+          await loadRecentPublicSignals(since);
 
         const matchingRequests = recentRequests.filter((request: any) => {
           const path = String(request.path || "");
@@ -1173,7 +1216,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             affiliateShares: matchingShares.length,
             outboundSocialPosts: matchingPosts.length,
             successfulSocialPosts: matchingPosts.filter(
-              (post: any) => String(post.status || "").toLowerCase() === "posted",
+              (post: any) =>
+                String(post.status || "").toLowerCase() === "posted",
             ).length,
           },
           demand: {
@@ -1181,7 +1225,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             topQueries: Object.entries(
               countBy(
                 matchingQueries.map((query: any) =>
-                  String(query.query || "").trim().toLowerCase(),
+                  String(query.query || "")
+                    .trim()
+                    .toLowerCase(),
                 ),
               ),
             )
@@ -1230,7 +1276,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       const cuisineByCity = new Map<string, Map<string, number>>();
       for (const row of restaurantRows as any[]) {
-        const cityName = String(row.city || "").trim().toLowerCase();
+        const cityName = String(row.city || "")
+          .trim()
+          .toLowerCase();
         const cuisine = toSlug(row.cuisineType || "");
         if (!cityName || !cuisine) continue;
         if (!cuisineByCity.has(cityName)) {
@@ -1271,7 +1319,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
   app.get("/api/cities/:slug", async (req, res) => {
     try {
       const { slug } = req.params as { slug: string };
-      const [city] = await db.select().from(cities).where(eq(cities.slug, slug));
+      const [city] = await db
+        .select()
+        .from(cities)
+        .where(eq(cities.slug, slug));
       if (!city) {
         return res.status(404).json({ message: "City not found" });
       }
@@ -1285,14 +1336,21 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         (row: any) => !row.isFoodTruck,
       );
 
-      const hostRows = await db.select().from(hosts).where(eq(hosts.city, city.name));
+      const hostRows = await db
+        .select()
+        .from(hosts)
+        .where(eq(hosts.city, city.name));
       const hostIds = hostRows.map((row: any) => row.id);
       let upcomingEvents: any[] = [];
       if (hostIds.length) {
         const now = new Date();
-        upcomingEvents = await db.select().from(events).where(eq(events.status, "open"));
+        upcomingEvents = await db
+          .select()
+          .from(events)
+          .where(eq(events.status, "open"));
         upcomingEvents = upcomingEvents.filter(
-          (row: any) => new Date(row.date) >= now && hostIds.includes(row.hostId),
+          (row: any) =>
+            new Date(row.date) >= now && hostIds.includes(row.hostId),
         );
       }
 
@@ -1304,7 +1362,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           .from(videoStories)
           .orderBy(desc(videoStories.createdAt));
         stories = stories
-          .filter((row: any) => row.restaurantId && restaurantIds.includes(row.restaurantId))
+          .filter(
+            (row: any) =>
+              row.restaurantId && restaurantIds.includes(row.restaurantId),
+          )
           .slice(0, 8);
       }
 
