@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Navigation as NavigationIcon } from "lucide-react";
-import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
+import {
+  MarkerClusterer,
+  SuperClusterAlgorithm,
+} from "@googlemaps/markerclusterer";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
@@ -23,6 +26,7 @@ type GoogleMapSurfaceProps = {
   isNightTheme: boolean;
   onBoundsChanged: (bounds: MapBoundsLike) => void;
   onZoomChanged: (zoom: number) => void;
+  onCenterChanged?: (center: GeoPoint) => void;
   onMarkerTap: (marker: MapAdapterMarker) => void;
   onMarkerHover?: (
     marker: MapAdapterMarker | null,
@@ -32,9 +36,7 @@ type GoogleMapSurfaceProps = {
   /** Lat/lng to anchor a floating popup card above the corresponding pin. */
   popupAnchor?: GeoPoint | null;
   /** Reports anchor screen pixel position relative to the map container, or null. */
-  onPopupAnchorPosition?: (
-    position: { x: number; y: number } | null,
-  ) => void;
+  onPopupAnchorPosition?: (position: { x: number; y: number } | null) => void;
   /** Enables rectangle drawing mode for area selection. */
   drawingActive?: boolean;
   /** Fires when the user finishes drawing a rectangle (or clears it). */
@@ -139,7 +141,9 @@ const markerTypeLabel = (kind: MapAdapterMarker["kind"]) => {
 };
 
 const markerIdentifier = (marker: MapAdapterMarker) =>
-  String(marker.title || marker.subtitle || markerTypeLabel(marker.kind)).trim();
+  String(
+    marker.title || marker.subtitle || markerTypeLabel(marker.kind),
+  ).trim();
 
 const markerGoogleLabel = (marker: MapAdapterMarker, showLabel: boolean) => {
   if (!showLabel || marker.kind === "user") return null;
@@ -180,10 +184,7 @@ const buildMarkerIcon = (googleMaps: any, marker: MapAdapterMarker) => {
   };
 };
 
-const applyMarkerA11y = (
-  el: HTMLElement,
-  marker: MapAdapterMarker,
-) => {
+const applyMarkerA11y = (el: HTMLElement, marker: MapAdapterMarker) => {
   if (marker.kind === "user") return;
   el.setAttribute("role", "button");
   el.setAttribute("tabindex", "0");
@@ -337,6 +338,7 @@ export function GoogleMapSurface({
   isNightTheme,
   onBoundsChanged,
   onZoomChanged,
+  onCenterChanged,
   onMarkerTap,
   onMarkerHover,
   onFatalError,
@@ -353,6 +355,7 @@ export function GoogleMapSurface({
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const roadTrafficLayerRef = useRef<any>(null);
   const lastBoundsRef = useRef<MapBoundsLike | null>(null);
+  const lastCenterRef = useRef<GeoPoint | null>(null);
   const lastZoomRef = useRef<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
@@ -368,12 +371,16 @@ export function GoogleMapSurface({
   // every parent render (parents typically pass inline lambdas).
   const onMarkerTapRef = useRef(onMarkerTap);
   const onMarkerHoverRef = useRef(onMarkerHover);
+  const onCenterChangedRef = useRef(onCenterChanged);
   useEffect(() => {
     onMarkerTapRef.current = onMarkerTap;
   }, [onMarkerTap]);
   useEffect(() => {
     onMarkerHoverRef.current = onMarkerHover;
   }, [onMarkerHover]);
+  useEffect(() => {
+    onCenterChangedRef.current = onCenterChanged;
+  }, [onCenterChanged]);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((marker) => [marker.id, marker])),
@@ -451,6 +458,7 @@ export function GoogleMapSurface({
 
           mapRef.current.addListener("idle", () => {
             const currentBounds = mapRef.current?.getBounds?.();
+            const currentCenter = mapRef.current?.getCenter?.();
             const currentZoom = Number(mapRef.current?.getZoom?.() || 0);
             if (
               Number.isFinite(currentZoom) &&
@@ -459,6 +467,23 @@ export function GoogleMapSurface({
             ) {
               lastZoomRef.current = currentZoom;
               onZoomChanged(currentZoom);
+            }
+            if (currentCenter) {
+              const nextCenter = {
+                lat: Number(currentCenter.lat()),
+                lng: Number(currentCenter.lng()),
+              };
+              const previousCenter = lastCenterRef.current;
+              const centerChanged =
+                Number.isFinite(nextCenter.lat) &&
+                Number.isFinite(nextCenter.lng) &&
+                (!previousCenter ||
+                  Math.abs(previousCenter.lat - nextCenter.lat) >= 0.00005 ||
+                  Math.abs(previousCenter.lng - nextCenter.lng) >= 0.00005);
+              if (centerChanged) {
+                lastCenterRef.current = nextCenter;
+                onCenterChangedRef.current?.(nextCenter);
+              }
             }
             if (!currentBounds) return;
             const ne = currentBounds.getNorthEast();
@@ -543,7 +568,15 @@ export function GoogleMapSurface({
 
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setCenter(center);
+    const currentCenter = mapRef.current.getCenter?.();
+    const shouldMove =
+      !currentCenter ||
+      Math.abs(Number(currentCenter.lat()) - center.lat) >= 0.00005 ||
+      Math.abs(Number(currentCenter.lng()) - center.lng) >= 0.00005;
+    if (shouldMove) {
+      mapRef.current.setCenter(center);
+      lastCenterRef.current = center;
+    }
   }, [center.lat, center.lng]);
 
   useEffect(() => {
@@ -561,7 +594,6 @@ export function GoogleMapSurface({
     const syncMapSize = () => {
       if (!mapRef.current) return;
       googleMaps.event.trigger(mapRef.current, "resize");
-      mapRef.current.setCenter(center);
     };
 
     const visibilityHandler = () => {
@@ -594,7 +626,7 @@ export function GoogleMapSurface({
       window.removeEventListener("resize", syncMapSize);
       document.removeEventListener("visibilitychange", visibilityHandler);
     };
-  }, [center, mapReadyVersion]);
+  }, [mapReadyVersion]);
 
   useEffect(() => {
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
@@ -714,15 +746,12 @@ export function GoogleMapSurface({
       }
       // Keyboard activation for AdvancedMarker content (Enter/Space).
       if (useAdvancedMarkers && instance.content instanceof HTMLElement) {
-        instance.content.addEventListener(
-          "keydown",
-          (event: KeyboardEvent) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              handleMarkerTap();
-            }
-          },
-        );
+        instance.content.addEventListener("keydown", (event: KeyboardEvent) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleMarkerTap();
+          }
+        });
       }
       markerRefs.current.set(marker.id, instance);
       markerSignatureRefs.current.set(marker.id, signature);
@@ -913,7 +942,12 @@ export function GoogleMapSurface({
       overlay.setMap(null);
       popupOverlayRef.current = null;
     };
-  }, [popupAnchor?.lat, popupAnchor?.lng, mapReadyVersion, onPopupAnchorPosition]);
+  }, [
+    popupAnchor?.lat,
+    popupAnchor?.lng,
+    mapReadyVersion,
+    onPopupAnchorPosition,
+  ]);
 
   // Tear down the marker clusterer when the surface unmounts.
   useEffect(() => {
@@ -934,9 +968,7 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
     if (projectionOverlayRef.current) return;
-    const OverlayView = googleMaps.OverlayView as
-      | (new () => any)
-      | undefined;
+    const OverlayView = googleMaps.OverlayView as (new () => any) | undefined;
     if (!OverlayView) return;
     const overlay = new OverlayView();
     overlay.onAdd = function () {};

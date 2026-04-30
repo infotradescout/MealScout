@@ -29,7 +29,6 @@ import {
   Map as MapIcon,
   LogIn,
   UserPlus,
-  Store,
   Bug,
   Sandwich,
   Soup,
@@ -45,7 +44,6 @@ import {
   TrendingUp,
   Zap,
   ChevronRight,
-  Users,
   Wine,
   Utensils,
 } from "lucide-react";
@@ -1053,44 +1051,22 @@ export default function Home() {
       <section className="pb-[calc(7rem+env(safe-area-inset-bottom))] pt-8 md:pb-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           {!user ? (
-            /* Logged-out: signup CTAs */
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-                <div className="mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
-                    <Store className="w-6 h-6 text-[color:var(--accent-text)]" />
-                  </div>
-                  <h3 className="text-2xl font-black mb-2">For Businesses</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Join today and get 30 days free access to optional Growth
-                    Tools.
-                  </p>
-                </div>
-                <Link href="/customer-signup?role=business">
-                  <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
-                    Join
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              </div>
-
-              <div className="rounded-3xl border border-[color:var(--border-subtle)] bg-gradient-to-br from-[var(--bg-card)] to-[color:var(--accent-text)]/5 p-8 hover:shadow-xl hover:border-[color:var(--accent-text)]/50 transition-all">
-                <div className="mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-[color:var(--accent-text)]/20 flex items-center justify-center mb-4">
-                    <Users className="w-6 h-6 text-[color:var(--accent-text)]" />
-                  </div>
-                  <h3 className="text-2xl font-black mb-2">For Diners</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Discover amazing food happening around you
-                  </p>
-                </div>
-                <Link href="/customer-signup?role=diner">
-                  <Button className="action-primary w-full h-10 rounded-full font-semibold text-sm">
-                    Create Account
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              </div>
+            <div className="mx-auto flex max-w-sm flex-col gap-3 sm:max-w-md sm:flex-row sm:justify-center">
+              <Link href="/customer-signup" className="sm:flex-1">
+                <Button className="action-primary h-11 w-full rounded-full text-sm font-semibold">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Create Account
+                </Button>
+              </Link>
+              <Link href="/login" className="sm:flex-1">
+                <Button
+                  variant="outline"
+                  className="h-11 w-full rounded-full border-[color:var(--border-subtle)] bg-[var(--bg-card)] text-sm font-semibold"
+                >
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Log In
+                </Button>
+              </Link>
             </div>
           ) : (
             /* Logged-in: quick access cards */

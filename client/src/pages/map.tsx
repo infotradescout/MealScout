@@ -2421,6 +2421,18 @@ export default function MapPage() {
     }
   };
 
+  const handleMapCenterChanged = useCallback((center: GeoPoint) => {
+    setMapCenter((previous) => {
+      if (
+        Math.abs(previous.lat - center.lat) < 0.00005 &&
+        Math.abs(previous.lng - center.lng) < 0.00005
+      ) {
+        return previous;
+      }
+      return center;
+    });
+  }, []);
+
   const handleDealClick = (deal: Deal) => {
     trackUxEvent("map_deal_pin_tap", {
       dealId: deal.id,
@@ -3651,6 +3663,7 @@ export default function MapPage() {
                 isNightTheme={isNightTheme}
                 onBoundsChanged={setMapBounds}
                 onZoomChanged={setZoomLevel}
+                onCenterChanged={handleMapCenterChanged}
                 onMarkerTap={handleAdapterMarkerTap}
                 onMarkerHover={(marker, position) => {
                   if (!marker || !position) {
