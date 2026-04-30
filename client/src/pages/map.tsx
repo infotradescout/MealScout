@@ -307,6 +307,8 @@ interface LiveTruck {
   id: string;
   name: string;
   address?: string | null;
+  city?: string | null;
+  state?: string | null;
   currentLatitude?: string | number | null;
   currentLongitude?: string | number | null;
   distance?: number;
@@ -3464,6 +3466,59 @@ export default function MapPage() {
                 )}
             </div>
           </>
+        )}
+        {visibleLiveTrucks.length > 0 && (
+          <section
+            className="mt-4 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 p-3 shadow-clean"
+            data-testid="map-live-trucks-summary"
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Live trucks nearby
+              </h2>
+              <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-500">
+                {visibleLiveTrucks.length} live
+              </span>
+            </div>
+            <div className="space-y-2">
+              {visibleLiveTrucks.slice(0, 3).map((truck) => {
+                const coords = {
+                  lat: toNumberOrNull(truck.currentLatitude),
+                  lng: toNumberOrNull(truck.currentLongitude),
+                };
+                const distanceLabel =
+                  coords.lat !== null && coords.lng !== null
+                    ? formatDistance({ lat: coords.lat, lng: coords.lng })
+                    : null;
+                const locationLabel = [truck.address, truck.city, truck.state]
+                  .filter(Boolean)
+                  .join(", ");
+
+                return (
+                  <Link
+                    key={truck.id}
+                    href={`/restaurant/${truck.id}`}
+                    className="flex items-center justify-between gap-3 rounded-md border border-[color:var(--border-subtle)] bg-black/15 px-3 py-2 text-left hover:bg-muted/40"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <MapPin className="h-4 w-4 shrink-0 text-orange-500" />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">
+                          {truck.name}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {distanceLabel || locationLabel || "Live now"}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                      View
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
         )}
       </header>
 
