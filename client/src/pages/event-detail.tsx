@@ -5,7 +5,6 @@ import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generateEventSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
@@ -94,50 +93,6 @@ export default function EventDetailPage() {
     staleTime: 30_000,
   });
 
-  const { data: canonical } = useQuery({
-    queryKey: ["public-canonical-event", eventId],
-    enabled: Boolean(eventId),
-    queryFn: async () => {
-      const res = await fetch(
-        apiUrl(
-          `/api/public/canonical/event/${encodeURIComponent(String(eventId))}`,
-        ),
-        { credentials: "include" },
-      );
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(
-          payload?.message ||
-            `Failed to load canonical event data (status=${res.status})`,
-        );
-      }
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-
-  const { data: evidence } = useQuery({
-    queryKey: ["public-event-evidence", eventId],
-    enabled: Boolean(eventId),
-    queryFn: async () => {
-      const res = await fetch(
-        apiUrl(
-          `/api/public/evidence/event/${encodeURIComponent(String(eventId))}`,
-        ),
-        { credentials: "include" },
-      );
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        throw new Error(
-          payload?.message ||
-            `Failed to load event evidence (status=${res.status})`,
-        );
-      }
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-
   const dateText = data?.date ? new Date(data.date).toLocaleDateString() : null;
   const timeText =
     data?.startTime && data?.endTime
@@ -185,12 +140,9 @@ export default function EventDetailPage() {
                 {
                   "@context": "https://schema.org",
                   "@type": "WebPage",
-                  name: `${data.title || "Event"} source of truth`,
+                  name: `${data.title || "Event"} details`,
                   url: data.canonicalUrl || undefined,
-                  dateModified:
-                    canonical?.updatedAt ||
-                    data?.lastConfirmedAtUtc ||
-                    undefined,
+                  dateModified: data?.lastConfirmedAtUtc || undefined,
                   about: {
                     "@type": "Event",
                     name: data.title,
@@ -223,168 +175,6 @@ export default function EventDetailPage() {
               <CardTitle>Details</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {canonical ? (
-                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                        Source of Truth
-                      </p>
-                      <h2 className="text-sm font-semibold">
-                        Canonical MealScout event record
-                      </h2>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-end">
-                      <Badge variant="outline">
-                        {canonical.machineReadiness}
-                      </Badge>
-                      <Badge variant="secondary">{canonical.freshness}</Badge>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2 text-xs text-muted-foreground">
-                    <div>
-                      Last updated{" "}
-                      <span className="font-medium text-foreground">
-                        {canonical.updatedAt
-                          ? new Date(canonical.updatedAt).toLocaleString()
-                          : "Unknown"}
-                      </span>
-                    </div>
-                    <div>
-                      Freshness window{" "}
-                      <span className="font-medium text-foreground">
-                        {canonical.freshnessHours != null
-                          ? `${canonical.freshnessHours}h ago`
-                          : "Unknown"}
-                      </span>
-                    </div>
-                    <div>
-                      Host linked{" "}
-                      <span className="font-medium text-foreground">
-                        {canonical.evidenceSummary?.hasHost ? "Yes" : "No"}
-                      </span>
-                    </div>
-                    <div>
-                      Truck booked{" "}
-                      <span className="font-medium text-foreground">
-                        {canonical.evidenceSummary?.hasBookedTruck
-                          ? "Yes"
-                          : "No"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {Array.isArray(canonical.sourceTruthStatements) &&
-                  canonical.sourceTruthStatements.length > 0 ? (
-                    <div className="space-y-1">
-                      {canonical.sourceTruthStatements
-                        .slice(0, 4)
-                        .map((item: string) => (
-                          <p key={item} className="text-sm text-foreground">
-                            {item}
-                          </p>
-                        ))}
-                    </div>
-                  ) : null}
-
-                  {Array.isArray(canonical.knowledgeGaps) &&
-                  canonical.knowledgeGaps.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {canonical.knowledgeGaps
-                        .slice(0, 4)
-                        .map((gap: string) => (
-                          <Badge
-                            key={gap}
-                            variant="outline"
-                            className="text-[11px]"
-                          >
-                            gap: {gap.replace(/_/g, " ")}
-                          </Badge>
-                        ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {evidence ? (
-                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                        External Evidence
-                      </p>
-                      <h2 className="text-sm font-semibold">
-                        Discovery and distribution signals
-                      </h2>
-                    </div>
-                    <Badge variant="outline">
-                      {evidence.windowHours
-                        ? `${Math.round(evidence.windowHours / 24)}d window`
-                        : "window"}
-                    </Badge>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2 text-xs text-muted-foreground">
-                    <div>
-                      Crawler hits{" "}
-                      <span className="font-medium text-foreground">
-                        {evidence.externalPressure?.crawlerHits ?? 0}
-                      </span>
-                    </div>
-                    <div>
-                      Human page hits{" "}
-                      <span className="font-medium text-foreground">
-                        {evidence.externalPressure?.humanPageHits ?? 0}
-                      </span>
-                    </div>
-                    <div>
-                      Search demand{" "}
-                      <span className="font-medium text-foreground">
-                        {evidence.demand?.matchingSearchQueries ?? 0}
-                      </span>
-                    </div>
-                    <div>
-                      Outbound posts{" "}
-                      <span className="font-medium text-foreground">
-                        {evidence.distribution?.outboundSocialPosts ?? 0}
-                      </span>
-                    </div>
-                  </div>
-
-                  {Array.isArray(evidence.externalPressure?.topBots) &&
-                  evidence.externalPressure.topBots.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {evidence.externalPressure.topBots.map((bot: any) => (
-                        <Badge
-                          key={bot.label}
-                          variant="secondary"
-                          className="text-[11px]"
-                        >
-                          {bot.label}: {bot.count}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {Array.isArray(evidence.demand?.topQueries) &&
-                  evidence.demand.topQueries.length > 0 ? (
-                    <div className="space-y-1">
-                      {evidence.demand.topQueries
-                        .slice(0, 3)
-                        .map((query: any) => (
-                          <p
-                            key={query.query}
-                            className="text-sm text-foreground"
-                          >
-                            demand: {query.query} ({query.count})
-                          </p>
-                        ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
               {dateText ? (
                 <div className="text-sm text-muted-foreground">
                   {dateText}

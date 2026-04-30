@@ -2085,7 +2085,9 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "admin", "super_admin"].includes(req.user.userType)
+    !["restaurant_owner", "food_truck", "admin", "super_admin"].includes(
+      req.user.userType,
+    )
   ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }
@@ -2097,6 +2099,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
 type UserRole =
   | "customer"
   | "restaurant_owner"
+  | "food_truck"
   | "supplier"
   | "staff"
   | "admin"
@@ -2150,6 +2153,7 @@ export const isStaffOrAdmin = requireRole(["staff", "admin", "super_admin"]);
 // Convenience middleware for restaurant owner or admin
 export const isRestaurantOwnerOrAdmin = requireRole([
   "restaurant_owner",
+  "food_truck",
   "admin",
   "super_admin",
 ]);

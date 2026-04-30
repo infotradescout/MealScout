@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, MapPin, Users, Clock } from "lucide-react";
+import { Calendar, MapPin, Users, Clock, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -156,6 +156,27 @@ export default function EventsPage() {
       : `${discoverEvents.length} upcoming events`;
   const intakeItems = Array.isArray(intakeData?.items) ? intakeData.items : [];
   const hasOperationsTools = isStaffOrAdmin || isEventCoordinator;
+  const isManageView = activeView === "manage";
+  const pageTitle = isManageView
+    ? isStaffOrAdmin
+      ? "Admin Event Ops"
+      : "Organizer Event Ops"
+    : "Find Local Events";
+  const pageDeck = isManageView
+    ? isStaffOrAdmin
+      ? "You are viewing the staff/admin operations queue, not the public event finder."
+      : "You are viewing organizer tools for posting and managing event opportunities."
+    : "Browse public events and food truck opportunities visible to diners and operators.";
+  const activeViewBadge = isManageView
+    ? isStaffOrAdmin
+      ? "Admin view"
+      : "Organizer view"
+    : "Public view";
+  const discoverTabLabel = isStaffOrAdmin
+    ? "Public finder"
+    : "Find local events";
+  const manageTabLabel = isStaffOrAdmin ? "Admin ops" : "Organizer tools";
+  const HeaderIcon = isManageView ? ShieldCheck : Calendar;
 
   const toEventSlug = (event: any) => {
     const id = String(event?.id || "").trim();
@@ -407,10 +428,22 @@ export default function EventsPage() {
       <div className="max-w-6xl mx-auto p-4 space-y-6">
         {/* Header */}
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
-            <Calendar className="w-10 h-10 text-[color:var(--accent-text)]" />
-            Find Local Events
-          </h1>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-4xl font-bold text-[color:var(--text-primary)] flex items-center gap-3">
+                <HeaderIcon className="w-10 h-10 text-[color:var(--accent-text)]" />
+                {pageTitle}
+              </h1>
+              {hasOperationsTools && (
+                <Badge variant={isManageView ? "default" : "secondary"}>
+                  {activeViewBadge}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-[color:var(--text-secondary)]">
+              {pageDeck}
+            </p>
+          </div>
           {hasOperationsTools && (
             <div className="inline-flex rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
               <Button
@@ -419,7 +452,7 @@ export default function EventsPage() {
                 onClick={() => setActiveView("discover")}
                 data-testid="button-events-discover-view"
               >
-                Find local events
+                {discoverTabLabel}
               </Button>
               <Button
                 variant={activeView === "manage" ? "default" : "ghost"}
@@ -427,18 +460,22 @@ export default function EventsPage() {
                 onClick={() => setActiveView("manage")}
                 data-testid="button-events-manage-view"
               >
-                Organizer & ops
+                {manageTabLabel}
               </Button>
             </div>
           )}
           <div className="bg-[color:var(--accent-text)]/10 border border-[color:var(--border-subtle)] rounded-lg p-4">
             <p className="text-base text-[color:var(--text-secondary)] mb-2">
-              <strong>What are these events?</strong>
+              <strong>
+                {isManageView
+                  ? "What am I reviewing?"
+                  : "What are these events?"}
+              </strong>
             </p>
             <p className="text-sm text-[color:var(--text-secondary)] mb-1">
-              These are high-volume events (festivals, markets, corporate
-              gatherings) coordinated by event organizers to help you find food
-              trucks.
+              {isManageView
+                ? "These are inbound organizer requests, truck/catering leads, and private opportunities that need staff triage."
+                : "These are high-volume events (festivals, markets, corporate gatherings) coordinated by event organizers to help you find food trucks."}
             </p>
           </div>
 

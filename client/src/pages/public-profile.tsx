@@ -90,33 +90,6 @@ type MapRuntimeResponse = {
   googleMapsApiKey?: string | null;
 };
 
-type PublicCanonical = {
-  machineReadiness: string;
-  freshness: string;
-  freshnessHours: number | null;
-  updatedAt?: string | null;
-  verified?: boolean;
-  knowledgeGaps?: string[];
-  sourceTruthStatements?: string[];
-};
-
-type PublicEvidence = {
-  windowHours: number;
-  externalPressure?: {
-    crawlerHits?: number;
-    humanPageHits?: number;
-    topBots?: Array<{ label: string; count: number }>;
-  };
-  demand?: {
-    matchingSearchQueries?: number;
-    topQueries?: Array<{ query: string; count: number }>;
-  };
-  distribution?: {
-    affiliateShares?: number;
-    outboundSocialPosts?: number;
-  };
-};
-
 type RestaurantEngagementState = {
   counts: {
     favorites: number;
@@ -232,42 +205,6 @@ export default function PublicProfilePage() {
     gcTime: 10 * 60 * 1000,
     retry: false,
     refetchOnWindowFocus: false,
-  });
-
-  const { data: canonical } = useQuery<PublicCanonical>({
-    queryKey: ["/api/public/canonical", profileType, profileId],
-    enabled:
-      !!profileType &&
-      !!profileId &&
-      isStaffOrAdmin &&
-      (profileType === "host" || profileType === "restaurant"),
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/canonical/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
-      );
-      if (!res.ok) {
-        throw new Error("Canonical record not found");
-      }
-      return res.json();
-    },
-  });
-
-  const { data: evidence } = useQuery<PublicEvidence>({
-    queryKey: ["/api/public/evidence", profileType, profileId],
-    enabled:
-      !!profileType &&
-      !!profileId &&
-      isStaffOrAdmin &&
-      (profileType === "host" || profileType === "restaurant"),
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/evidence/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
-      );
-      if (!res.ok) {
-        throw new Error("Evidence not found");
-      }
-      return res.json();
-    },
   });
 
   const isRestaurantProfile = data?.entity === "restaurant" && !!profileId;
@@ -935,17 +872,17 @@ export default function PublicProfilePage() {
           {isStaffOrAdmin && data.entity === "restaurant" ? (
             <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Managed Profile Controls
+                Manage This Profile
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Link href={conciergeEditPath as any}>
                   <Button size="sm" variant="outline">
-                    Manage Profile For Owner
+                    Edit profile
                   </Button>
                 </Link>
                 <Link href={conciergeDealPath as any}>
                   <Button size="sm" variant="outline">
-                    Manage Specials
+                    Edit specials
                   </Button>
                 </Link>
               </div>
@@ -1060,78 +997,6 @@ export default function PublicProfilePage() {
               >
                 Merch
               </Button>
-            </div>
-          ) : null}
-
-          {isStaffOrAdmin && canonical ? (
-            <div className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Source of Truth
-                  </div>
-                  <div className="text-sm font-semibold">
-                    Canonical MealScout record
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">{canonical.machineReadiness}</Badge>
-                  <Badge variant="secondary">{canonical.freshness}</Badge>
-                  {canonical.verified ? <Badge>verified</Badge> : null}
-                </div>
-              </div>
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  Updated{" "}
-                  <span className="font-medium text-foreground">
-                    {canonical.updatedAt
-                      ? new Date(canonical.updatedAt).toLocaleString()
-                      : "Unknown"}
-                  </span>
-                </div>
-                <div>
-                  Freshness window{" "}
-                  <span className="font-medium text-foreground">
-                    {canonical.freshnessHours != null
-                      ? `${canonical.freshnessHours}h ago`
-                      : "Unknown"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {isStaffOrAdmin && evidence ? (
-            <div className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    External Evidence
-                  </div>
-                  <div className="text-sm font-semibold">
-                    Discovery and distribution signals
-                  </div>
-                </div>
-                <Badge variant="outline">
-                  {evidence.windowHours
-                    ? `${Math.round(evidence.windowHours / 24)}d window`
-                    : "window"}
-                </Badge>
-              </div>
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  Crawler hits{" "}
-                  <span className="font-medium text-foreground">
-                    {evidence.externalPressure?.crawlerHits ?? 0}
-                  </span>
-                </div>
-                <div>
-                  Search demand{" "}
-                  <span className="font-medium text-foreground">
-                    {evidence.demand?.matchingSearchQueries ?? 0}
-                  </span>
-                </div>
-              </div>
             </div>
           ) : null}
 

@@ -221,32 +221,6 @@ export default function RestaurantDetailPage() {
       },
     });
 
-  const { data: canonical } = useQuery({
-    queryKey: ["/api/public/canonical", "restaurant", restaurantId],
-    enabled: !!restaurantId,
-    retry: false,
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/canonical/restaurant/${restaurantId}`,
-      );
-      if (!res.ok) return null;
-      return res.json();
-    },
-  });
-
-  const { data: evidence } = useQuery({
-    queryKey: ["/api/public/evidence", "restaurant", restaurantId],
-    enabled: !!restaurantId,
-    retry: false,
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/public/evidence/restaurant/${restaurantId}`,
-      );
-      if (!res.ok) return null;
-      return res.json();
-    },
-  });
-
   const claimGeneratedProfileMutation = useMutation({
     mutationFn: async () => {
       if (!restaurantId) throw new Error("Missing restaurant");
@@ -723,13 +697,12 @@ export default function RestaurantDetailPage() {
       : [],
   };
 
-  const sourceOfTruthSchema = {
+  const profileWebPageSchema = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: `${restaurantName} source of truth`,
+    name: `${restaurantName} profile`,
     url: canonicalProfileUrl,
-    dateModified:
-      canonical?.updatedAt || (restaurant as any)?.updatedAt || undefined,
+    dateModified: (restaurant as any)?.updatedAt || undefined,
     about: {
       "@type": isFoodTruck ? "FoodTruck" : "Restaurant",
       name: restaurantName,
@@ -781,7 +754,7 @@ export default function RestaurantDetailPage() {
         ogImage={heroImageSrc || undefined}
         schemaData={[
           localBusinessSchema,
-          sourceOfTruthSchema,
+          profileWebPageSchema,
           breadcrumbSchema,
         ]}
       />
@@ -1173,7 +1146,7 @@ export default function RestaurantDetailPage() {
         {isStaffOrAdmin ? (
           <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
             <summary className="cursor-pointer list-none text-sm font-semibold text-white/80">
-              Admin tools
+              Manage this profile
             </summary>
             <div className="mt-3 flex flex-wrap gap-2">
               <Link href={editRestaurantFocusPath("description") as any}>
@@ -1182,7 +1155,7 @@ export default function RestaurantDetailPage() {
                   size="sm"
                   className="border-white/15 bg-black/35 text-white hover:bg-white/10"
                 >
-                  Manage Profile For Owner
+                    Edit profile
                 </Button>
               </Link>
               {isFoodTruck ? (
@@ -1192,7 +1165,7 @@ export default function RestaurantDetailPage() {
                     size="sm"
                     className="border-white/15 bg-black/35 text-white hover:bg-white/10"
                   >
-                    Manage Parking Schedule
+                    Edit parking schedule
                   </Button>
                 </Link>
               ) : null}
@@ -1202,68 +1175,9 @@ export default function RestaurantDetailPage() {
                   size="sm"
                   className="border-white/15 bg-black/35 text-white hover:bg-white/10"
                 >
-                  Manage Specials
+                  Edit specials
                 </Button>
               </Link>
-            </div>
-          </details>
-        ) : null}
-
-        {isStaffOrAdmin && (canonical || evidence) ? (
-          <details className="rounded-2xl border border-white/10 bg-white/[0.03]">
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-white/80">
-              Admin diagnostics
-            </summary>
-            <div className="space-y-3 px-4 pb-4">
-              {canonical ? (
-                <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                          Source of Truth
-                        </p>
-                        <h2 className="text-sm font-semibold text-foreground">
-                          Canonical MealScout record
-                        </h2>
-                      </div>
-                      <div className="flex flex-wrap gap-2 justify-end">
-                        <Badge variant="outline">
-                          {canonical.machineReadiness}
-                        </Badge>
-                        <Badge variant="secondary">{canonical.freshness}</Badge>
-                        {canonical.verified ? (
-                          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                            verified
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
-
-              {evidence ? (
-                <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)]/80">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                          External Evidence
-                        </p>
-                        <h2 className="text-sm font-semibold text-foreground">
-                          Discovery and distribution signals
-                        </h2>
-                      </div>
-                      <Badge variant="outline">
-                        {evidence.windowHours
-                          ? `${Math.round(evidence.windowHours / 24)}d window`
-                          : "window"}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : null}
             </div>
           </details>
         ) : null}

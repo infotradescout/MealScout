@@ -8,7 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import DealClaimModal from "@/components/deal-claim-modal";
 import DealShareModal from "@/components/deal-share-modal";
 import { BackHeader } from "@/components/back-header";
@@ -109,30 +108,6 @@ export default function DealDetail() {
       return response.json() as Promise<{
         profileAccuracyScore?: number;
       }>;
-    },
-  });
-
-  const { data: canonical } = useQuery({
-    queryKey: ["/api/public/canonical", "deal", dealId],
-    enabled: !!dealId,
-    queryFn: async () => {
-      const res = await fetch(`/api/public/canonical/deal/${dealId}`);
-      if (!res.ok) {
-        throw new Error("Failed to load canonical deal data");
-      }
-      return res.json();
-    },
-  });
-
-  const { data: evidence } = useQuery({
-    queryKey: ["/api/public/evidence", "deal", dealId],
-    enabled: !!dealId,
-    queryFn: async () => {
-      const res = await fetch(`/api/public/evidence/deal/${dealId}`);
-      if (!res.ok) {
-        throw new Error("Failed to load deal evidence");
-      }
-      return res.json();
     },
   });
 
@@ -523,88 +498,6 @@ export default function DealDetail() {
             </div>
           </CardContent>
         </Card>
-
-        {canonical ? (
-          <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                    Source of Truth
-                  </p>
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Canonical MealScout deal record
-                  </h2>
-                </div>
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <Badge variant="outline">{canonical.machineReadiness}</Badge>
-                  <Badge variant="secondary">{canonical.freshness}</Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div>
-                  Freshness{" "}
-                  <span className="text-foreground font-medium">
-                    {canonical.freshnessHours != null
-                      ? `${canonical.freshnessHours}h ago`
-                      : "Unknown"}
-                  </span>
-                </div>
-                <div>
-                  Active{" "}
-                  <span className="text-foreground font-medium">
-                    {canonical.active ? "Yes" : "No"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(canonical.knowledgeGaps || [])
-                  .slice(0, 4)
-                  .map((gap: string) => (
-                    <Badge key={gap} variant="outline" className="text-[11px]">
-                      gap: {gap.replace(/_/g, " ")}
-                    </Badge>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {evidence ? (
-          <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-                    External Evidence
-                  </p>
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Discovery and distribution signals
-                  </h2>
-                </div>
-                <Badge variant="outline">
-                  {evidence.windowHours
-                    ? `${Math.round(evidence.windowHours / 24)}d window`
-                    : "window"}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div>
-                  Crawler hits{" "}
-                  <span className="text-foreground font-medium">
-                    {evidence.externalPressure?.crawlerHits ?? 0}
-                  </span>
-                </div>
-                <div>
-                  Search demand{" "}
-                  <span className="text-foreground font-medium">
-                    {evidence.demand?.matchingSearchQueries ?? 0}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
