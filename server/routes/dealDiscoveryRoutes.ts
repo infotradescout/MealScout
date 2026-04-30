@@ -38,6 +38,16 @@ const resolvePublicBaseUrl = () =>
       "https://www.mealscout.us",
   ).replace(/\/+$/, "");
 
+function isReviewReadSchemaDrift(error: unknown): boolean {
+  const code = String((error as any)?.code || "").toUpperCase();
+  const message = String((error as any)?.message || "").toLowerCase();
+
+  return (
+    (code === "42P01" && message.includes('relation "reviews" does not exist')) ||
+    (code === "42703" && message.includes("reviews.rating_score_100"))
+  );
+}
+
 export function registerDealDiscoveryRoutes(
   app: Express,
   {
@@ -512,6 +522,14 @@ export function registerDealDiscoveryRoutes(
       );
       res.json(reviews);
     } catch (error) {
+      if (isReviewReadSchemaDrift(error)) {
+        console.warn(
+          "Review read schema is unavailable; returning empty public reviews",
+          { restaurantId: req.params.restaurantId },
+        );
+        return res.json([]);
+      }
+
       console.error("Error fetching reviews:", error);
       res.status(500).json({ message: "Failed to fetch reviews" });
     }
@@ -524,6 +542,14 @@ export function registerDealDiscoveryRoutes(
       );
       res.json({ rating });
     } catch (error) {
+      if (isReviewReadSchemaDrift(error)) {
+        console.warn(
+          "Review rating schema is unavailable; returning neutral public rating",
+          { restaurantId: req.params.restaurantId },
+        );
+        return res.json({ rating: 0 });
+      }
+
       console.error("Error fetching rating:", error);
       res.status(500).json({ message: "Failed to fetch rating" });
     }

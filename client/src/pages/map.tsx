@@ -1501,7 +1501,9 @@ export default function MapPage() {
         ),
       );
       if (!response.ok) throw new Error("Failed to fetch live trucks");
-      return response.json();
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+      return Array.isArray(data?.trucks) ? data.trucks : [];
     },
     enabled: !!userLocation,
     staleTime: 5 * 1000,

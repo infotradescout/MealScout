@@ -315,6 +315,8 @@ export function createTruckLiveOpsRepository() {
           ownerId: restaurants.ownerId,
           name: restaurants.name,
           address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
           phone: restaurants.phone,
           businessType: restaurants.businessType,
           cuisineType: restaurants.cuisineType,

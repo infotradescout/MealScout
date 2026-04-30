@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { BetaDisclaimer } from "@/components/beta-disclaimer";
 import AdminQuickHeader from "@/components/admin-quick-header";
 import Navigation from "@/components/navigation";
 import { apiUrl } from "@/lib/api";
@@ -684,7 +683,6 @@ function App() {
         <TimeOfDayBackground />
         <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10 pb-[var(--mobile-nav-height)] lg:pb-0">
           <Toaster />
-          <BetaDisclaimer />
           <AdminInlineCopyProvider>
             <Router />
             <Navigation scope="global" />

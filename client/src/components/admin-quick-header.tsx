@@ -203,18 +203,20 @@ export default function AdminQuickHeader() {
               ))
             : null}
 
-          <Link href={pageControl.href}>
-            <a className="inline-flex items-center gap-1 rounded-md border border-amber-500 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200">
-              <Settings className="h-3.5 w-3.5" />
-              {pageControl.label}
-            </a>
+          <Link
+            href={pageControl.href}
+            className="inline-flex items-center gap-1 rounded-md border border-amber-500 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            {pageControl.label}
           </Link>
 
           {!isAdminSurface && context?.id ? (
-            <Link href={`/admin/dashboard?tab=users&q=${encodeURIComponent(context.id)}`}>
-              <a className="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200">
-                Open Context Record
-              </a>
+            <Link
+              href={`/admin/dashboard?tab=users&q=${encodeURIComponent(context.id)}`}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+            >
+              Open Context Record
             </Link>
           ) : null}
         </div>

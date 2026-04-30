@@ -1155,7 +1155,7 @@ export default function RestaurantDetailPage() {
                   size="sm"
                   className="border-white/15 bg-black/35 text-white hover:bg-white/10"
                 >
-                    Edit profile
+                  Edit profile
                 </Button>
               </Link>
               {isFoodTruck ? (

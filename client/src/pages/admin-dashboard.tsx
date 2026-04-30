@@ -54,6 +54,7 @@ import {
   getLocationTypeLabel,
 } from "@shared/constants/locationTypes";
 const groupedLocationTypes = getGroupedLocationTypes();
+const EMPTY_ARRAY: never[] = [];
 
 const FOOD_TYPE_OPTIONS = [
   "American",
@@ -390,7 +391,7 @@ function TruckImportPanel({ enabled }: { enabled: boolean }) {
   const [detailOffset, setDetailOffset] = useState(0);
   const detailLimit = 50;
 
-  const { data: batches = [] } = useQuery<any[]>({
+  const { data: batches = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: [
       "/api/admin/truck-imports",
       includePurgedBatches ? "includePurged" : "activeOnly",
@@ -2201,11 +2202,11 @@ function StaffManagementTab() {
   const [staffSearch, setStaffSearch] = useState("");
   const [eligibleUserSearch, setEligibleUserSearch] = useState("");
 
-  const { data: staffMembers = [], isLoading: loadingStaff } = useQuery<any[]>({
+  const { data: staffMembers = EMPTY_ARRAY, isLoading: loadingStaff } = useQuery<any[]>({
     queryKey: ["/api/admin/staff"],
   });
 
-  const { data: allUsers = [] } = useQuery<any[]>({
+  const { data: allUsers = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
   });
 
@@ -2598,14 +2599,14 @@ export default function AdminDashboard() {
     });
 
   // Fetch pending restaurants
-  const { data: pendingRestaurants = [] } = useQuery<PendingRestaurant[]>({
+  const { data: pendingRestaurants = EMPTY_ARRAY } = useQuery<PendingRestaurant[]>({
     queryKey: ["/api/admin/restaurants/pending"],
     enabled: !!adminUser && selectedTab === "restaurants",
   });
 
   const restaurantSearchQuery = restaurantSearchTerm.trim();
   const {
-    data: restaurantSearchResults = [],
+    data: restaurantSearchResults = EMPTY_ARRAY,
     isLoading: searchingRestaurants,
   } = useQuery<AdminRestaurantSearchResult[]>({
     queryKey: ["/api/admin/restaurants/search", restaurantSearchQuery],
@@ -2630,7 +2631,7 @@ export default function AdminDashboard() {
   });
 
   // Fetch all users
-  const { data: users = [] } = useQuery<any[]>({
+  const { data: users = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
     enabled: !!adminUser && selectedTab === "users",
   });
@@ -3665,32 +3666,32 @@ export default function AdminDashboard() {
   const userContextEnabled =
     !!adminUser && !!selectedUser?.id && userDetailsOpen;
 
-  const { data: parkingPasses = [] } = useQuery<any[]>({
+  const { data: parkingPasses = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "parking-pass"],
     enabled: userContextEnabled,
   });
 
-  const { data: userHosts = [] } = useQuery<any[]>({
+  const { data: userHosts = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "hosts"],
     enabled: userContextEnabled,
   });
 
-  const { data: userRestaurants = [] } = useQuery<any[]>({
+  const { data: userRestaurants = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "restaurants"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
 
-  const { data: userDeals = [] } = useQuery<any[]>({
+  const { data: userDeals = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "deals"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
 
-  const { data: userEvents = [] } = useQuery<any[]>({
+  const { data: userEvents = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "events"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
 
-  const { data: userEventSeries = [] } = useQuery<any[]>({
+  const { data: userEventSeries = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "event-series"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
@@ -3699,7 +3700,7 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", selectedUser?.id, "parking-pass-bookings"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
-  const { data: userAddresses = [] } = useQuery<any[]>({
+  const { data: userAddresses = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "addresses"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
@@ -5122,13 +5123,13 @@ export default function AdminDashboard() {
   });
 
   // Fetch all deals
-  const { data: deals = [] } = useQuery<any[]>({
+  const { data: deals = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/deals"],
     enabled: !!adminUser && selectedTab === "deals",
   });
 
   // Fetch verification requests
-  const { data: verificationRequests = [], isLoading: loadingVerifications } =
+  const { data: verificationRequests = EMPTY_ARRAY, isLoading: loadingVerifications } =
     useQuery<any[]>({
       queryKey: ["/api/admin/verifications"],
       enabled: !!adminUser && selectedTab === "verifications",

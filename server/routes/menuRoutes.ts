@@ -510,7 +510,26 @@ export function registerMenuRoutes(app: Express) {
     wrap(async (req, res) => {
       const { restaurantId } = req.params;
 
-      const result = await loadFullMenusForRestaurant(restaurantId);
+      let result: Awaited<ReturnType<typeof loadFullMenusForRestaurant>>;
+      try {
+        result = await loadFullMenusForRestaurant(restaurantId);
+      } catch (error) {
+        if (
+          isMissingRelationError(error, "menus") ||
+          isMissingRelationError(error, "menu_categories") ||
+          isMissingRelationError(error, "menu_items") ||
+          isMissingRelationError(error, "menu_item_variants") ||
+          isMissingRelationError(error, "menu_item_modifiers")
+        ) {
+          console.warn(
+            "[menuRoutes] Menu tables are unavailable; returning empty public menu response",
+            { restaurantId },
+          );
+          return res.json({ menus: [], orderingEnabled: false });
+        }
+
+        throw error;
+      }
 
       if (result.length === 0) {
         return res.json({ menus: [], orderingEnabled: false });

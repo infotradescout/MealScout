@@ -10,6 +10,7 @@ import {
   lte,
   ne,
   or,
+  sql,
 } from "drizzle-orm";
 
 import { db } from "../db";
@@ -1450,7 +1451,7 @@ export function registerPublicMapRoutes(app: Express) {
       const activeDealRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(deals.id),
+          count: sql<number>`count(*)`,
         })
         .from(deals)
         .where(
@@ -1466,7 +1467,7 @@ export function registerPublicMapRoutes(app: Express) {
       const claimRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(dealClaims.id),
+          count: sql<number>`count(*)`,
         })
         .from(dealClaims)
         .innerJoin(deals, eq(dealClaims.dealId, deals.id))
@@ -1481,7 +1482,7 @@ export function registerPublicMapRoutes(app: Express) {
       const viewRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(dealViews.id),
+          count: sql<number>`count(*)`,
         })
         .from(dealViews)
         .innerJoin(deals, eq(dealViews.dealId, deals.id))
@@ -1496,7 +1497,7 @@ export function registerPublicMapRoutes(app: Express) {
       const bookingRows = await db
         .select({
           restaurantId: events.bookedRestaurantId,
-          count: db.$count(events.id),
+          count: sql<number>`count(*)`,
         })
         .from(events)
         .where(
