@@ -9,7 +9,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -19,12 +18,18 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Mail,
   Eye,
   EyeOff,
   UserPlus,
   ArrowLeft,
-  Utensils,
   MapPinned,
   CalendarDays,
   Package,
@@ -73,67 +78,75 @@ type AccountType =
   | "supplier";
 type BusinessSubType = "restaurant" | "bar" | "food_truck";
 
-const accountTypeOptions: Array<{
-  value: AccountType;
+type SignupFlowOption = {
+  id: string;
+  accountType: AccountType;
+  businessSubType?: BusinessSubType;
   label: string;
   description: string;
+  href: string;
   icon: typeof UserPlus;
-}> = [
+};
+
+const signupFlowOptions: SignupFlowOption[] = [
   {
-    value: "business",
-    label: "Restaurant / Truck",
-    description: "Deals, menus, and owner tools",
-    icon: Utensils,
-  },
-  {
-    value: "diner",
+    id: "diner",
+    accountType: "diner",
     label: "Diner",
-    description: "Save deals and favorites",
+    description: "Save deals and favorite local spots.",
+    href: "/customer-signup?role=diner",
     icon: UserPlus,
   },
   {
-    value: "host",
-    label: "Host",
-    description: "Offer parking to trucks",
-    icon: MapPinned,
+    id: "food_truck",
+    accountType: "business",
+    businessSubType: "food_truck",
+    label: "Food Truck",
+    description: "Claim your truck and get live on the map.",
+    href: "/customer-signup?role=business&businessType=food_truck",
+    icon: Truck,
   },
   {
-    value: "event_organizer",
-    label: "Event Organizer",
-    description: "Coordinate vendors and events",
-    icon: CalendarDays,
-  },
-  {
-    value: "supplier",
-    label: "Supplier",
-    description: "Sell to food businesses",
-    icon: Package,
-  },
-];
-
-const businessTypeOptions: Array<{
-  value: BusinessSubType;
-  label: string;
-  description: string;
-  icon: typeof UserPlus;
-}> = [
-  {
-    value: "restaurant",
+    id: "restaurant",
+    accountType: "business",
+    businessSubType: "restaurant",
     label: "Restaurant",
-    description: "Dine-in, pickup, or delivery",
+    description: "Create a menu, profile, and specials.",
+    href: "/customer-signup?role=business&businessType=restaurant",
     icon: Building2,
   },
   {
-    value: "bar",
+    id: "bar",
+    accountType: "business",
+    businessSubType: "bar",
     label: "Bar",
-    description: "Food, drinks, and specials",
+    description: "Promote food, drinks, and events.",
+    href: "/customer-signup?role=business&businessType=bar",
     icon: Beer,
   },
   {
-    value: "food_truck",
-    label: "Food Truck",
-    description: "Claim or launch a mobile profile",
-    icon: Truck,
+    id: "host",
+    accountType: "host",
+    label: "Host",
+    description: "Offer parking or event space to trucks.",
+    href: "/customer-signup?role=host",
+    icon: MapPinned,
+  },
+  {
+    id: "event_organizer",
+    accountType: "event_organizer",
+    label: "Event Organizer",
+    description: "Coordinate vendors and event requests.",
+    href: "/customer-signup?role=event_coordinator",
+    icon: CalendarDays,
+  },
+  {
+    id: "supplier",
+    accountType: "supplier",
+    label: "Supplier",
+    description: "Sell products to food businesses.",
+    href: "/customer-signup?role=supplier",
+    icon: Package,
   },
 ];
 
@@ -143,13 +156,18 @@ export default function CustomerSignup() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showAccountTypeChoices, setShowAccountTypeChoices] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const requirePhoneVerification = false;
 
   const searchParams = new URLSearchParams(window.location.search);
   const role = searchParams.get("role");
+  const hasExplicitSignupFlow = Boolean(
+    role || searchParams.get("businessType"),
+  );
+  const [accountChooserOpen, setAccountChooserOpen] = useState(
+    !hasExplicitSignupFlow,
+  );
   const initialAccountType: AccountType =
     role === "business"
       ? "business"
@@ -662,13 +680,25 @@ export default function CustomerSignup() {
             ? "Create supplier profile"
             : "Go to dashboard";
 
-  const selectedAccountTypeOption =
-    accountTypeOptions.find((option) => option.value === accountType) ||
-    accountTypeOptions[0];
-  const selectedBusinessTypeOption =
-    businessTypeOptions.find((option) => option.value === businessSubType) ||
-    businessTypeOptions[0];
-  const SelectedAccountTypeIcon = selectedAccountTypeOption.icon;
+  const selectedSignupFlowOption =
+    signupFlowOptions.find(
+      (option) =>
+        option.accountType === accountType &&
+        (option.accountType !== "business" ||
+          option.businessSubType === businessSubType),
+    ) || signupFlowOptions[0];
+  const SelectedSignupFlowIcon = selectedSignupFlowOption.icon;
+
+  const handleChooseSignupFlow = (option: SignupFlowOption) => {
+    setAccountType(option.accountType);
+    if (option.accountType === "business") {
+      setBusinessSubType(option.businessSubType || "restaurant");
+    } else {
+      setBusinessSubType("restaurant");
+    }
+    setLocation(option.href);
+    setAccountChooserOpen(false);
+  };
 
   if (isLoading) {
     return (
@@ -826,6 +856,53 @@ export default function CustomerSignup() {
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
+      <Dialog open={accountChooserOpen} onOpenChange={setAccountChooserOpen}>
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 sm:max-w-md">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogTitle className="text-xl font-black text-[color:var(--text-primary)]">
+              Choose account type
+            </DialogTitle>
+            <DialogDescription className="text-sm text-[color:var(--text-secondary)]">
+              Pick the path that matches what you want to do first.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {signupFlowOptions.map((option) => {
+              const Icon = option.icon;
+              const selected = selectedSignupFlowOption.id === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleChooseSignupFlow(option)}
+                  className={`min-h-[5.5rem] rounded-2xl border p-3 text-left transition-colors ${
+                    selected
+                      ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
+                      : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:border-[color:var(--action-primary)]/60 hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                  data-testid={`button-signup-flow-${option.id}`}
+                >
+                  <span className="flex items-center gap-2 text-base font-black leading-tight">
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    {option.label}
+                  </span>
+                  <span
+                    className={`mt-1 block text-xs leading-snug ${
+                      selected
+                        ? "text-[color:var(--action-primary-text)]/85"
+                        : "text-[color:var(--text-secondary)]"
+                    }`}
+                  >
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-[calc(var(--mobile-nav-height)+1.5rem)] pt-3">
         {/* Top: hero + form */}
         <div>
@@ -852,108 +929,35 @@ export default function CustomerSignup() {
 
           {/* Signup Form */}
           <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean-lg sm:p-5">
-            {/* Account type selection inside form */}
             <div className="mb-3 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
-                  Account type
+                  Selected path
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowAccountTypeChoices((value) => !value)}
+                  onClick={() => setAccountChooserOpen(true)}
                   className="text-xs font-semibold text-[color:var(--accent-text)]"
                   data-testid="button-change-account-type"
                 >
-                  {showAccountTypeChoices ? "Done" : "Change"}
+                  Change
                 </button>
               </div>
               <div className="rounded-xl border border-[color:var(--action-primary)] bg-[color:var(--action-primary)] px-3 py-2 text-[color:var(--action-primary-text)] shadow-clean">
                 <div className="flex items-center gap-2">
-                  <SelectedAccountTypeIcon
+                  <SelectedSignupFlowIcon
                     className="h-4 w-4 shrink-0"
                     aria-hidden="true"
                   />
                   <span className="text-sm font-semibold leading-tight">
-                    {selectedAccountTypeOption.label}
+                    {selectedSignupFlowOption.label}
                   </span>
                 </div>
                 <div className="mt-0.5 text-xs leading-tight text-[color:var(--action-primary-text)]/85">
-                  {selectedAccountTypeOption.description}
+                  {selectedSignupFlowOption.description}
                 </div>
               </div>
-              {showAccountTypeChoices && (
-                <div className="grid grid-cols-2 gap-2">
-                  {accountTypeOptions.map((option) => {
-                    const Icon = option.icon;
-                    const selected = accountType === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => {
-                          setAccountType(option.value);
-                          setShowAccountTypeChoices(false);
-                        }}
-                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
-                          selected
-                            ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
-                            : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[var(--bg-surface-muted)]"
-                        }`}
-                        data-testid={`button-account-type-${option.value}`}
-                      >
-                        <span className="flex items-center gap-2 text-sm font-semibold leading-tight">
-                          <Icon
-                            className="h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                          />
-                          {option.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
-
-            {accountType === "business" && (
-              <div className="mb-3 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-2.5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
-                  Business Type
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  {businessTypeOptions.map((option) => {
-                    const Icon = option.icon;
-                    const selected = businessSubType === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setBusinessSubType(option.value)}
-                        className={`min-h-12 rounded-xl border px-2 py-1.5 text-left transition-colors ${
-                          selected
-                            ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
-                            : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[var(--bg-surface-muted)]"
-                        }`}
-                        data-testid={`button-business-type-${option.value.replace("_", "-")}`}
-                      >
-                        <span className="flex flex-col gap-1 text-xs font-semibold leading-tight sm:flex-row sm:items-center sm:gap-2">
-                          <Icon
-                            className="h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                          />
-                          {option.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-1.5 text-xs leading-tight text-[color:var(--text-secondary)]">
-                  {businessSubType === "food_truck"
-                    ? "Create your account, then claim your truck from the registry list."
-                    : selectedBusinessTypeOption.description}
-                </div>
-              </div>
-            )}
 
             <div className="mb-3 text-center">
               <h3 className="text-sm font-bold text-[color:var(--text-primary)]">
