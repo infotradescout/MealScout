@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, Flame, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import RestaurantDealsDrawer from "./restaurant-deals-drawer";
 
 interface Deal {
@@ -45,16 +45,16 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
 
   return (
     <div>
-      <Card 
+      <Card
         ref={cardRef}
-        className="card-light rounded-2xl hover:shadow-clean-lg transition-all duration-300 cursor-pointer border border-subtle shadow-clean group overflow-hidden" 
+        className="card-light rounded-2xl hover:shadow-clean-lg transition-all duration-300 cursor-pointer border border-subtle shadow-clean group overflow-hidden"
         onClick={() => setShowDealsDrawer(true)}
       >
         <CardContent className="p-0">
           {/* Optional Hero Image (Once, Not Per Deal) */}
           {business.imageUrl && (
             <div className="deal-card-media relative h-24 overflow-hidden rounded-t-2xl">
-              <img 
+              <img
                 src={business.imageUrl}
                 alt={business.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -86,30 +86,25 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
                   )}
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2 text-xs text-secondary">
-                <div className="flex items-center gap-0.5">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-yellow-500">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                  </svg>
-                  <span className="font-medium">4.5</span>
+
+              {(business.distance !== undefined || business.cuisineType) && (
+                <div className="flex items-center gap-2 text-xs text-secondary">
+                  {business.distance !== undefined && (
+                    <>
+                      <div className="flex items-center gap-0.5">
+                        <MapPin className="w-3 h-3" />
+                        <span>{business.distance.toFixed(1)} mi</span>
+                      </div>
+                    </>
+                  )}
+                  {business.cuisineType && (
+                    <>
+                      {business.distance !== undefined && <span>•</span>}
+                      <span>{business.cuisineType}</span>
+                    </>
+                  )}
                 </div>
-                {business.distance !== undefined && (
-                  <>
-                    <span>•</span>
-                    <div className="flex items-center gap-0.5">
-                      <MapPin className="w-3 h-3" />
-                      <span>{business.distance.toFixed(1)} mi</span>
-                    </div>
-                  </>
-                )}
-                {business.cuisineType && (
-                  <>
-                    <span>•</span>
-                    <span>{business.cuisineType}</span>
-                  </>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Deal Gallery (Compact Rows) */}
@@ -118,31 +113,30 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
                 <div key={deal.id} className="py-1.5">
                   {/* Price Line */}
                   <div className="text-[color:var(--accent-text)] leading-none mb-1">
-                    <span className="font-semibold text-base">{formatDiscount(deal)}</span>
-                    {deal.discountValue && (
-                      <span className="text-sm ml-1.5">${deal.minOrderAmount || '8'}+</span>
-                    )}
+                    <span className="font-semibold text-base">
+                      {formatDiscount(deal)}
+                    </span>
+                    {deal.discountValue &&
+                      (deal.minOrderAmount ? (
+                        <span className="text-sm ml-1.5">
+                          ${deal.minOrderAmount}+
+                        </span>
+                      ) : null)}
                   </div>
-                  
+
                   {/* Description */}
                   <p className="text-primary text-sm font-medium mb-1 line-clamp-1">
                     {deal.description}
                   </p>
-                  
-                  {/* Meta */}
-                  <div className="flex items-center gap-2 text-xs text-muted">
-                    <div className="flex items-center gap-0.5">
-                      <Clock className="w-3 h-3" />
-                      <span>2h15m</span>
+
+                  {typeof deal.currentUses === "number" ? (
+                    <div className="text-xs text-muted">
+                      {deal.currentUses} claimed
                     </div>
-                    <div className="flex items-center gap-0.5">
-                      <Flame className="w-3 h-3 text-warning" />
-                      <span>{deal.currentUses || 188}</span>
-                    </div>
-                  </div>
+                  ) : null}
                 </div>
               ))}
-              
+
               {business.deals.length > 3 && (
                 <p className="text-xs text-muted pt-1">
                   +{business.deals.length - 3} more deals
@@ -151,7 +145,7 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
             </div>
 
             {/* Primary CTA (Business-Level) */}
-            <Button 
+            <Button
               className="w-full action-primary hover:bg-[color:var(--action-hover)] font-medium h-9"
               onClick={(e) => {
                 e.stopPropagation();
@@ -163,7 +157,7 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Restaurant Deals Drawer */}
       <RestaurantDealsDrawer
         isOpen={showDealsDrawer}
@@ -175,4 +169,3 @@ export default function BusinessSnapshot({ business }: BusinessSnapshotProps) {
     </div>
   );
 }
-

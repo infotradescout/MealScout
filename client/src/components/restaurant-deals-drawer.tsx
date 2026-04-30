@@ -1,13 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  X,
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  Phone,
-  Clock,
-} from "lucide-react";
+import { X, ChevronLeft, ChevronRight, MapPin, Phone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import DealClaimModal from "./deal-claim-modal";
@@ -38,56 +31,6 @@ interface RestaurantDealsDrawerProps {
   restaurantName: string;
   initialDealId?: string;
 }
-
-const getDefaultImage = (cuisineType?: string, title?: string) => {
-  const images = {
-    pizza:
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop&auto=format",
-    burger:
-      "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=400&h=300&fit=crop&auto=format",
-    mexican:
-      "https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=400&h=300&fit=crop&auto=format",
-    asian:
-      "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=400&h=300&fit=crop&auto=format",
-    italian:
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop&auto=format",
-    chinese:
-      "https://images.unsplash.com/photo-1526318896980-cf78c088247c?w=400&h=300&fit=crop&auto=format",
-    indian:
-      "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&h=300&fit=crop&auto=format",
-    cafe: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop&auto=format",
-    default:
-      "https://images.unsplash.com/photo-1493770348161-369560ae357d?w=400&h=300&fit=crop&auto=format",
-  };
-
-  const lowerCuisine = cuisineType?.toLowerCase() || "";
-  const lowerTitle = title?.toLowerCase() || "";
-
-  // Title-based matching
-  if (lowerTitle.includes("burger") || lowerTitle.includes("sandwich"))
-    return images.burger;
-  if (lowerTitle.includes("pizza")) return images.pizza;
-  if (lowerTitle.includes("taco") || lowerTitle.includes("burrito"))
-    return images.mexican;
-  if (lowerTitle.includes("curry") || lowerTitle.includes("naan"))
-    return images.indian;
-  if (lowerTitle.includes("pasta") || lowerTitle.includes("garlic bread"))
-    return images.italian;
-  if (lowerTitle.includes("noodle") || lowerTitle.includes("bowl"))
-    return images.asian;
-  if (lowerTitle.includes("coffee") || lowerTitle.includes("pastry"))
-    return images.cafe;
-
-  // Cuisine-based matching
-  if (lowerCuisine.includes("mexican")) return images.mexican;
-  if (lowerCuisine.includes("chinese") || lowerCuisine.includes("asian"))
-    return images.chinese;
-  if (lowerCuisine.includes("italian")) return images.italian;
-  if (lowerCuisine.includes("indian")) return images.indian;
-  if (lowerCuisine.includes("cafe")) return images.cafe;
-
-  return images.default;
-};
 
 export default function RestaurantDealsDrawer({
   isOpen,
@@ -129,7 +72,10 @@ export default function RestaurantDealsDrawer({
     };
   }, [isOpen]);
 
-  const formatDiscount = (dealType?: string | null, discountValue?: string | null) => {
+  const formatDiscount = (
+    dealType?: string | null,
+    discountValue?: string | null,
+  ) => {
     if (!discountValue) {
       return "Limited Time";
     }
@@ -238,26 +184,8 @@ export default function RestaurantDealsDrawer({
               {/* Restaurant Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="flex items-center gap-1">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className="text-yellow-500"
-                    >
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-[color:var(--text-primary)]">
-                      4.5
-                    </span>
-                  </div>
-                  <span className="text-sm text-[color:var(--text-muted)]">•</span>
                   <span className="text-sm text-[color:var(--text-muted)]">
                     {deals[0].restaurant.cuisineType || "Restaurant"}
-                  </span>
-                  <span className="px-2 py-0.5 bg-[color:var(--status-success)]/12 text-[color:var(--status-success)] text-xs font-medium rounded-full">
-                    Open now
                   </span>
                 </div>
 
@@ -276,10 +204,6 @@ export default function RestaurantDealsDrawer({
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    <span>Open until 10:00 PM</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -292,7 +216,9 @@ export default function RestaurantDealsDrawer({
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
-                <p className="text-[color:var(--text-muted)]">Loading specials...</p>
+                <p className="text-[color:var(--text-muted)]">
+                  Loading specials...
+                </p>
               </div>
             </div>
           ) : deals && deals.length > 0 ? (
@@ -336,30 +262,26 @@ export default function RestaurantDealsDrawer({
                 >
                   <CardContent className="p-0">
                     {/* Deal Image */}
-                    <div className="relative h-48 bg-[var(--bg-subtle)] overflow-hidden rounded-t-xl">
-                      <img
-                        src={
-                          deals[currentDealIndex].imageUrl ||
-                          getDefaultImage(
-                            deals[currentDealIndex].restaurant?.cuisineType,
-                            deals[currentDealIndex].title
-                          )
-                        }
-                        alt={deals[currentDealIndex].title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                        referrerPolicy="no-referrer"
-                      />
+                    {deals[currentDealIndex].imageUrl ? (
+                      <div className="relative h-48 bg-[var(--bg-subtle)] overflow-hidden rounded-t-xl">
+                        <img
+                          src={deals[currentDealIndex].imageUrl}
+                          alt={deals[currentDealIndex].title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                        />
 
-                      {/* Deal badge */}
-                      <div className="absolute top-4 right-4 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-2xl text-sm font-bold shadow-clean-lg">
-                        {formatDiscount(
-                          deals[currentDealIndex].dealType,
-                          deals[currentDealIndex].discountValue
-                        )}
+                        {/* Deal badge */}
+                        <div className="absolute top-4 right-4 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-2xl text-sm font-bold shadow-clean-lg">
+                          {formatDiscount(
+                            deals[currentDealIndex].dealType,
+                            deals[currentDealIndex].discountValue,
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
 
                     {/* Deal Content */}
                     <div className="p-6">
@@ -395,15 +317,16 @@ export default function RestaurantDealsDrawer({
                             <span className="text-[color:var(--status-error)] font-bold text-lg">
                               {formatDiscount(
                                 deals[currentDealIndex].dealType,
-                                deals[currentDealIndex].discountValue
+                                deals[currentDealIndex].discountValue,
                               )}
                             </span>
-                            {deals[currentDealIndex].discountValue && (
-                              <p className="text-[color:var(--status-error)] text-sm">
-                                orders $
-                                {deals[currentDealIndex].minOrderAmount || "15"}+
-                              </p>
-                            )}
+                            {deals[currentDealIndex].discountValue &&
+                              (deals[currentDealIndex].minOrderAmount ? (
+                                <p className="text-[color:var(--status-error)] text-sm">
+                                  orders $
+                                  {deals[currentDealIndex].minOrderAmount}+
+                                </p>
+                              ) : null)}
                           </div>
                         </div>
                       </div>
@@ -462,4 +385,3 @@ export default function RestaurantDealsDrawer({
     </div>
   );
 }
-

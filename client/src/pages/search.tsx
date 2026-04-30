@@ -301,20 +301,29 @@ export default function SearchPage() {
     queryKey: userLocation
       ? ["/api/deals/nearby", userLocation.lat, userLocation.lng]
       : ["/api/deals/featured"],
-    queryFn: userLocation
-      ? async () => {
-          const response = await fetch(
-            `/api/deals/nearby/${userLocation.lat}/${userLocation.lng}`,
-          );
-          if (!response.ok) throw new Error("Failed to fetch nearby deals");
-          return response.json();
-        }
-      : undefined,
+    queryFn: async () => {
+      if (userLocation) {
+        const response = await fetch(
+          `/api/deals/nearby/${userLocation.lat}/${userLocation.lng}`,
+        );
+        if (!response.ok) throw new Error("Failed to fetch nearby deals");
+        return response.json();
+      }
+
+      const response = await fetch("/api/deals/featured");
+      if (!response.ok) throw new Error("Failed to fetch featured deals");
+      return response.json();
+    },
     enabled: !searchQuery && (!!userLocation || !isLocating),
   });
 
   const { data: featuredDeals, isLoading: featuredLoading } = useQuery({
     queryKey: ["/api/deals/featured"],
+    queryFn: async () => {
+      const response = await fetch("/api/deals/featured");
+      if (!response.ok) throw new Error("Failed to fetch featured deals");
+      return response.json();
+    },
     enabled: !searchQuery && !userLocation && !isLocating,
   });
 
@@ -657,20 +666,10 @@ export default function SearchPage() {
         "Get quick answers about accounts, deals, and location-based results.",
     },
   ];
-  const fallbackTrending = [
-    "tacos",
-    "bbq",
-    "wings",
-    "seafood",
-    "breakfast",
-    "food trucks",
-    "pizza",
-    "coffee",
-  ];
   const trendingLinks = (
-    Array.isArray(trendingSearches) && trendingSearches.length > 0
+    Array.isArray(trendingSearches)
       ? trendingSearches.map((row) => row?.query).filter(Boolean)
-      : fallbackTrending
+      : []
   )
     .slice(0, 8)
     .map((query) => ({
@@ -728,40 +727,32 @@ export default function SearchPage() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {isLocating && !searchQuery
-                ? (
-                    <AdminEditableText
-                      textKey="search.hero.state.locating"
-                      defaultText="Finding your location..."
-                    />
-                  )
-                : userLocation && !searchQuery
-                  ? (
-                      <AdminEditableText
-                        textKey="search.hero.state.popularNearby"
-                        defaultText="Popular deals near you"
-                      />
-                    )
-                  : searchQuery && totalStructuredMatches > 0
-                    ? (
-                        <AdminEditableText
-                          textKey="search.hero.state.resultsFound"
-                          defaultText="Showing restaurants, trucks, and deals that match your search"
-                        />
-                      )
-                    : searchQuery
-                      ? (
-                          <AdminEditableText
-                            textKey="search.hero.state.noMatches"
-                            defaultText="No matches yet"
-                          />
-                        )
-                      : (
-                          <AdminEditableText
-                            textKey="search.hero.state.default"
-                            defaultText="Use location for nearby results or browse featured deals"
-                          />
-                        )}
+              {isLocating && !searchQuery ? (
+                <AdminEditableText
+                  textKey="search.hero.state.locating"
+                  defaultText="Finding your location..."
+                />
+              ) : userLocation && !searchQuery ? (
+                <AdminEditableText
+                  textKey="search.hero.state.popularNearby"
+                  defaultText="Popular deals near you"
+                />
+              ) : searchQuery && totalStructuredMatches > 0 ? (
+                <AdminEditableText
+                  textKey="search.hero.state.resultsFound"
+                  defaultText="Showing restaurants, trucks, and deals that match your search"
+                />
+              ) : searchQuery ? (
+                <AdminEditableText
+                  textKey="search.hero.state.noMatches"
+                  defaultText="No matches yet"
+                />
+              ) : (
+                <AdminEditableText
+                  textKey="search.hero.state.default"
+                  defaultText="Use location for nearby results or browse featured deals"
+                />
+              )}
             </p>
             <div className="mt-1">
               <AdminEditButton
@@ -1046,9 +1037,16 @@ export default function SearchPage() {
                       name: String(restaurant.name || "Local Spot"),
                       address: String(restaurant.address || ""),
                       cuisineType: String(restaurant.cuisineType || ""),
-                      isActive: true,
+                      isActive:
+                        typeof restaurant.isActive === "boolean"
+                          ? restaurant.isActive
+                          : undefined,
                       isVerified: Boolean(restaurant.isVerified),
-                      isFoodTruck: Boolean(restaurant.isFoodTruck),
+                      isFoodTruck: Boolean(
+                        restaurant.isFoodTruck ||
+                        restaurant.businessType === "food_truck" ||
+                        restaurant.type === "food_truck",
+                      ),
                       rating:
                         typeof restaurant.rating === "number"
                           ? restaurant.rating
@@ -1214,7 +1212,11 @@ export default function SearchPage() {
               </span>
             </div>
             <p className="mb-3 text-sm text-muted-foreground">
-              We found {searchedUnclaimed.length === 1 ? "this place" : "these places"} on the web. Help us list {searchedUnclaimed.length === 1 ? "it" : "them"} by claiming the profile.
+              We found{" "}
+              {searchedUnclaimed.length === 1 ? "this place" : "these places"}{" "}
+              on the web. Help us list{" "}
+              {searchedUnclaimed.length === 1 ? "it" : "them"} by claiming the
+              profile.
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {searchedUnclaimed.map((listing: any) => {
@@ -1267,11 +1269,6 @@ export default function SearchPage() {
             <span className="text-sm text-muted-foreground">
               {filteredDeals.length} deals found
             </span>
-            {filteredDeals.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-[var(--bg-surface-muted)] text-[11px] text-[color:var(--text-secondary)]">
-                Open now
-              </span>
-            )}
           </div>
         </div>
 

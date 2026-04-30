@@ -47,7 +47,7 @@ async function getFollowedRestaurantIds(): Promise<Set<string>> {
         const ids = new Set<string>(
           list
             .map((follow: any) => follow.restaurantId || follow.restaurant?.id)
-            .filter(Boolean)
+            .filter(Boolean),
         );
         followSnapshotCache = ids;
         return ids;
@@ -143,90 +143,6 @@ function formatRelativeTime(value?: string | null): string | null {
   return `Updated ${days}d ago`;
 }
 
-const getDefaultImage = (cuisineType?: string, title?: string) => {
-  const images = {
-    pizza:
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop&auto=format",
-    burger:
-      "https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=400&h=300&fit=crop&auto=format",
-    mexican:
-      "https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=400&h=300&fit=crop&auto=format",
-    asian:
-      "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=400&h=300&fit=crop&auto=format",
-    italian:
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=400&h=300&fit=crop&auto=format",
-    chinese:
-      "https://images.unsplash.com/photo-1526318896980-cf78c088247c?w=400&h=300&fit=crop&auto=format",
-    indian:
-      "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&h=300&fit=crop&auto=format",
-    cafe: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=300&fit=crop&auto=format",
-    creole:
-      "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop&auto=format",
-    seafood:
-      "https://images.unsplash.com/photo-1565299585323-38174c97c24d?w=400&h=300&fit=crop&auto=format",
-    sushi:
-      "https://images.unsplash.com/photo-1563379091339-03246963d51a?w=400&h=300&fit=crop&auto=format",
-    deli: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop&auto=format",
-    healthy:
-      "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop&auto=format",
-    default:
-      "https://images.unsplash.com/photo-1493770348161-369560ae357d?w=400&h=300&fit=crop&auto=format",
-  };
-
-  const lowerCuisine = cuisineType?.toLowerCase() || "";
-  const lowerTitle = title?.toLowerCase() || "";
-
-  // Title-based matching
-  if (lowerTitle.includes("burger") || lowerTitle.includes("sandwich"))
-    return images.burger;
-  if (lowerTitle.includes("pizza")) return images.pizza;
-  if (lowerTitle.includes("taco") || lowerTitle.includes("burrito"))
-    return images.mexican;
-  if (lowerTitle.includes("sushi") || lowerTitle.includes("roll"))
-    return images.sushi;
-  if (
-    lowerTitle.includes("beignet") ||
-    lowerTitle.includes("coffee") ||
-    lowerTitle.includes("pastry")
-  )
-    return images.cafe;
-  if (lowerTitle.includes("curry") || lowerTitle.includes("naan"))
-    return images.indian;
-  if (lowerTitle.includes("pasta") || lowerTitle.includes("garlic bread"))
-    return images.italian;
-  if (lowerTitle.includes("noodle") || lowerTitle.includes("bowl"))
-    return images.asian;
-  if (
-    lowerTitle.includes("jambalaya") ||
-    lowerTitle.includes("brunch") ||
-    lowerTitle.includes("mimosa")
-  )
-    return images.creole;
-  if (
-    lowerTitle.includes("shrimp") ||
-    lowerTitle.includes("fish") ||
-    lowerTitle.includes("catch")
-  )
-    return images.seafood;
-  if (lowerTitle.includes("smoothie") || lowerTitle.includes("salad"))
-    return images.healthy;
-
-  // Cuisine-based matching
-  if (lowerCuisine.includes("mexican")) return images.mexican;
-  if (lowerCuisine.includes("chinese") || lowerCuisine.includes("asian"))
-    return images.chinese;
-  if (lowerCuisine.includes("italian")) return images.italian;
-  if (lowerCuisine.includes("indian")) return images.indian;
-  if (lowerCuisine.includes("cafe")) return images.cafe;
-  if (lowerCuisine.includes("creole")) return images.creole;
-  if (lowerCuisine.includes("seafood")) return images.seafood;
-  if (lowerCuisine.includes("sushi")) return images.sushi;
-  if (lowerCuisine.includes("deli")) return images.deli;
-  if (lowerCuisine.includes("healthy")) return images.healthy;
-
-  return images.default;
-};
-
 export default function DealCard({
   deal,
   popularity = null,
@@ -260,11 +176,10 @@ export default function DealCard({
   const [recommendMood, setRecommendMood] = useState(78);
   const [recommendError, setRecommendError] = useState("");
   const [recommendSubmitting, setRecommendSubmitting] = useState(false);
-  const [journeySnapshot, setJourneySnapshot] = useState<JourneySnapshot | null>(
-    null
-  );
+  const [journeySnapshot, setJourneySnapshot] =
+    useState<JourneySnapshot | null>(null);
   const isGoldenForkUser = Boolean(
-    (user as any)?.influenceScore && (user as any)?.influenceScore > 0
+    (user as any)?.influenceScore && (user as any)?.influenceScore > 0,
   );
   const [, setLocation] = useLocation();
   const lastUpdatedLabel = formatRelativeTime(deal.restaurant?.lastBroadcastAt);
@@ -297,7 +212,7 @@ export default function DealCard({
           }
         });
       },
-      { threshold: 0.5 } // Track when 50% of card is visible
+      { threshold: 0.5 }, // Track when 50% of card is visible
     );
 
     if (cardRef.current instanceof Element) {
@@ -334,23 +249,24 @@ export default function DealCard({
         const list = Array.isArray(favorites) ? favorites : [];
         const isFav = list.some(
           (fav: any) =>
-            (fav.restaurantId || fav.restaurant?.id) === deal.restaurantId
+            (fav.restaurantId || fav.restaurant?.id) === deal.restaurantId,
         );
         const followList = Array.isArray(follows) ? follows : [];
         const isFollowed = followList.some(
           (follow: any) =>
-            (follow.restaurantId || follow.restaurant?.id) === deal.restaurantId
+            (follow.restaurantId || follow.restaurant?.id) ===
+            deal.restaurantId,
         );
         const recommendationList = Array.isArray(recommendations)
           ? recommendations
           : [];
         const isRecommended = recommendationList.some(
           (rec: any) =>
-            (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId
+            (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId,
         );
         const existingRecommendation = recommendationList.find(
           (rec: any) =>
-            (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId
+            (rec.restaurantId || rec.restaurant?.id) === deal.restaurantId,
         );
         const existingMood = Number(existingRecommendation?.sentimentScore100);
         if (Number.isFinite(existingMood)) {
@@ -445,7 +361,7 @@ export default function DealCard({
       } catch (apiError) {
         console.debug(
           "Deal save API not available; kept client bookmark",
-          apiError
+          apiError,
         );
       }
     } catch (error) {
@@ -466,11 +382,11 @@ export default function DealCard({
 
     if (navigator.share) {
       try {
-          await navigator.share({
-            title: "MealScout Special",
-            text: shareText,
-            url: shareUrl,
-          });
+        await navigator.share({
+          title: "MealScout Special",
+          text: shareText,
+          url: shareUrl,
+        });
         return;
       } catch (err) {
         console.debug("Web Share failed, falling back to modal", err);
@@ -509,7 +425,7 @@ export default function DealCard({
   const MAX_FAVORITES = 3;
 
   const toggleRestaurantFavorite = async (
-    nextSelected: boolean
+    nextSelected: boolean,
   ): Promise<boolean> => {
     if (!user) {
       window.location.href = authUrl("/api/auth/facebook");
@@ -538,18 +454,18 @@ export default function DealCard({
         await apiRequest(
           "POST",
           `/api/restaurants/${deal.restaurantId}/favorite`,
-          {}
+          {},
         );
         setIsRestaurantFavorite(true);
         setFavoriteSelection(true);
         setFavoriteCount(
-          (prev) => (prev ?? 0) + (isRestaurantFavorite ? 0 : 1)
+          (prev) => (prev ?? 0) + (isRestaurantFavorite ? 0 : 1),
         );
       } else {
         await apiRequest(
           "DELETE",
           `/api/restaurants/${deal.restaurantId}/favorite`,
-          {}
+          {},
         );
         setIsRestaurantFavorite(false);
         setFavoriteSelection(false);
@@ -568,7 +484,7 @@ export default function DealCard({
   };
 
   const toggleRestaurantFollow = async (
-    nextSelected: boolean
+    nextSelected: boolean,
   ): Promise<boolean> => {
     if (!user) {
       window.location.href = authUrl("/api/auth/facebook");
@@ -585,7 +501,7 @@ export default function DealCard({
         await apiRequest(
           "POST",
           `/api/restaurants/${deal.restaurantId}/follow`,
-          {}
+          {},
         );
         setIsRestaurantFollowed(true);
         setFollowSelection(true);
@@ -596,7 +512,7 @@ export default function DealCard({
         await apiRequest(
           "DELETE",
           `/api/restaurants/${deal.restaurantId}/follow`,
-          {}
+          {},
         );
         setIsRestaurantFollowed(false);
         setFollowSelection(false);
@@ -661,7 +577,7 @@ export default function DealCard({
           {
             sentimentScore100: recommendMood,
             menuItemName: deal.title,
-          }
+          },
         );
         setIsRestaurantRecommended(true);
         setRecommendSelection(true);
@@ -699,7 +615,7 @@ export default function DealCard({
     } catch (error) {
       console.error("Recommendation submit failed:", error);
       setRecommendError(
-        (error as any)?.message || "Could not submit recommendation."
+        (error as any)?.message || "Could not submit recommendation.",
       );
     } finally {
       setRecommendSubmitting(false);
@@ -744,72 +660,74 @@ export default function DealCard({
         data-testid={`card-deal-${deal.id}`}
       >
         <CardContent className="p-0">
-          {/* Image with gradient overlay - framed inside card */}
-          <div className="deal-card-media relative h-24 overflow-hidden rounded-t-2xl">
-            <img
-              src={
-                deal.imageUrl ||
-                getDefaultImage(deal.restaurant?.cuisineType, deal.title)
-              }
-              alt={deal.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              loading="lazy"
-              decoding="async"
-              referrerPolicy="no-referrer"
-            />
-            {/* Deal Badge - top left */}
-            <div className="absolute top-1.5 left-1.5 bg-[#F59E0B] text-[#111111] px-1.5 py-0.5 rounded-lg shadow-clean-lg">
-              <span className="font-bold text-sm leading-none">
-                {formatDiscount()}
-              </span>
-            </div>
-
-            {/* Golden fork (restaurant recommendation) - top right */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowRecommendModal(true);
-                setForkPressed(true);
-              }}
-              onMouseDown={() => setForkPressed(true)}
-              onMouseUp={() => setForkPressed(false)}
-              onMouseLeave={() => setForkPressed(false)}
-              className="absolute top-1.5 right-1.5 w-7 h-7 bg-[var(--bg-surface)]/95 backdrop-blur-sm rounded-full flex items-center justify-center shadow-clean-lg hover:bg-[var(--bg-surface)] transition-all duration-300 hover:scale-110 z-10"
-              title="Recommend this restaurant"
-              aria-label="Recommend this restaurant"
-            >
-              <GoldenForkIcon
-                className={`w-3.5 h-3.5 transition-colors duration-200 ${
-                  forkPressed ? "text-[color:var(--accent-text)]" : "text-muted"
-                }`}
+          {deal.imageUrl ? (
+            <div className="deal-card-media relative h-24 overflow-hidden rounded-t-2xl">
+              <img
+                src={deal.imageUrl}
+                alt={deal.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
               />
-            </button>
+              {/* Deal Badge - top left */}
+              <div className="absolute top-1.5 left-1.5 bg-[#F59E0B] text-[#111111] px-1.5 py-0.5 rounded-lg shadow-clean-lg">
+                <span className="font-bold text-sm leading-none">
+                  {formatDiscount()}
+                </span>
+              </div>
 
-            {/* Restaurant Name Overlay - bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3
-                  className="font-semibold text-white text-xs truncate"
-                  data-testid={`text-restaurant-name-${deal.id}`}
-                >
-                  {deal.restaurant?.name || "Restaurant Name"}
-                </h3>
-                {popularity && (
-                  <span
-                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
-                    style={{ backgroundColor: popularity.color }}
-                  >
-                    {popularity.label}
-                  </span>
+              {/* Golden fork (restaurant recommendation) - top right */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowRecommendModal(true);
+                  setForkPressed(true);
+                }}
+                onMouseDown={() => setForkPressed(true)}
+                onMouseUp={() => setForkPressed(false)}
+                onMouseLeave={() => setForkPressed(false)}
+                className="absolute top-1.5 right-1.5 w-7 h-7 bg-[var(--bg-surface)]/95 backdrop-blur-sm rounded-full flex items-center justify-center shadow-clean-lg hover:bg-[var(--bg-surface)] transition-all duration-300 hover:scale-110 z-10"
+                title="Recommend this restaurant"
+                aria-label="Recommend this restaurant"
+              >
+                <GoldenForkIcon
+                  className={`w-3.5 h-3.5 transition-colors duration-200 ${
+                    forkPressed
+                      ? "text-[color:var(--accent-text)]"
+                      : "text-muted"
+                  }`}
+                />
+              </button>
+
+              {/* Restaurant Name Overlay - bottom */}
+              <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
+                <div className="flex items-center justify-between gap-2">
+                  {deal.restaurant?.name ? (
+                    <h3
+                      className="font-semibold text-white text-xs truncate"
+                      data-testid={`text-restaurant-name-${deal.id}`}
+                    >
+                      {deal.restaurant.name}
+                    </h3>
+                  ) : null}
+                  {popularity && (
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
+                      style={{ backgroundColor: popularity.color }}
+                    >
+                      {popularity.label}
+                    </span>
+                  )}
+                </div>
+                {deal.restaurant?.cuisineType && (
+                  <p className="text-white/80 text-[10px] truncate">
+                    {deal.restaurant.cuisineType}
+                  </p>
                 )}
               </div>
-              {deal.restaurant?.cuisineType && (
-                <p className="text-white/80 text-[10px] truncate">
-                  {deal.restaurant.cuisineType}
-                </p>
-              )}
             </div>
-          </div>
+          ) : null}
 
           {/* Content */}
           <div className="p-2" onClick={handleCardClick}>
@@ -829,27 +747,12 @@ export default function DealCard({
                   Live now
                 </div>
               )}
-              <div className="flex items-center gap-0.5">
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="text-[color:var(--accent-text)]"
-                >
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-                <span className="font-medium">4.5</span>
-              </div>
               {deal.distance !== undefined && (
-                <>
-                  <span>•</span>
-                  <span>{deal.distance.toFixed(1)} mi</span>
-                </>
+                <span>{deal.distance.toFixed(1)} mi</span>
               )}
               {deal.minOrderAmount && (
                 <>
-                  <span>•</span>
+                  {deal.distance !== undefined && <span>•</span>}
                   <span className="text-[color:var(--accent-text)] font-medium">
                     ${deal.minOrderAmount} min
                   </span>
@@ -859,21 +762,19 @@ export default function DealCard({
 
             {/* Meta Line: Time & Popularity */}
             <div className="flex items-center gap-2 text-[11px] text-secondary mb-2">
-              <div className="flex items-center gap-0.5 text-[color:var(--accent-text)]">
-                <Clock className="w-3 h-3" />
-                <span>Available now</span>
-              </div>
               {lastUpdatedLabel && (
                 <div className="rounded-full bg-[var(--bg-surface-muted)] px-2 py-0.5 text-[10px] text-secondary">
                   {lastUpdatedLabel}
                 </div>
               )}
-              <div className="flex items-center gap-0.5">
-                <Flame className="w-3 h-3 text-[color:var(--accent-text)]" />
-                <span className="font-medium text-secondary">
-                  {deal.currentUses || 188} claimed
-                </span>
-              </div>
+              {typeof deal.currentUses === "number" ? (
+                <div className="flex items-center gap-0.5">
+                  <Flame className="w-3 h-3 text-[color:var(--accent-text)]" />
+                  <span className="font-medium text-secondary">
+                    {deal.currentUses} claimed
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {/* Action row: save + share + parking */}
@@ -902,7 +803,11 @@ export default function DealCard({
                 size="sm"
                 className="h-7 text-[11px] px-1 text-primary border-[color:var(--border-strong)] bg-[color:var(--bg-surface-muted)] hover:bg-[color:var(--bg-surface-muted)]"
                 onClick={handleFollowCta}
-                aria-label={isRestaurantFollowed ? "Following restaurant" : "Follow restaurant"}
+                aria-label={
+                  isRestaurantFollowed
+                    ? "Following restaurant"
+                    : "Follow restaurant"
+                }
               >
                 {isRestaurantFollowed ? "Following" : "Follow"}
               </Button>
@@ -923,7 +828,7 @@ export default function DealCard({
               }}
             >
               View Special
-              </Button>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -990,11 +895,13 @@ export default function DealCard({
                       Quest bonus ready: +{questBonusGain} points
                     </div>
                   )}
-                  {typeof journeySnapshot.futureCreditPreview?.estimatedCreditDollars ===
-                    "number" && (
+                  {typeof journeySnapshot.futureCreditPreview
+                    ?.estimatedCreditDollars === "number" && (
                     <div className="mt-1 text-xs text-yellow-800/80">
                       Future MealScout credits preview: $
-                      {journeySnapshot.futureCreditPreview.estimatedCreditDollars.toFixed(2)}
+                      {journeySnapshot.futureCreditPreview.estimatedCreditDollars.toFixed(
+                        2,
+                      )}
                     </div>
                   )}
                 </div>
@@ -1029,7 +936,9 @@ export default function DealCard({
                     onValueChange={(value) => {
                       const next = Number(value?.[0] ?? recommendMood);
                       if (!Number.isFinite(next)) return;
-                      setRecommendMood(Math.max(1, Math.min(100, Math.round(next))));
+                      setRecommendMood(
+                        Math.max(1, Math.min(100, Math.round(next))),
+                      );
                     }}
                     aria-label="Recommendation mood"
                   />
@@ -1139,7 +1048,7 @@ export default function DealCard({
                     !isRestaurantFavorite
                   ) {
                     setFavoriteError(
-                      `You can favorite up to ${MAX_FAVORITES} restaurants.`
+                      `You can favorite up to ${MAX_FAVORITES} restaurants.`,
                     );
                   } else {
                     setFavoriteError("");
@@ -1155,7 +1064,7 @@ export default function DealCard({
                   className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
                     favoriteSelection
                       ? "bg-[var(--bg-surface)] text-yellow-600 border-yellow-300"
-                    : "bg-card text-muted border-subtle"
+                      : "bg-card text-muted border-subtle"
                   }`}
                 >
                   <Star
@@ -1231,4 +1140,3 @@ export default function DealCard({
     </div>
   );
 }
-

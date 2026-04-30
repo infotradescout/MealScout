@@ -418,13 +418,19 @@ const resolveHostImageUrl = (host?: HostLocation | null): string | null => {
   // Fallback: use first Google photo if available
   if (host.googlePhotos) {
     try {
-      const photos = typeof host.googlePhotos === 'string' ? JSON.parse(host.googlePhotos) : host.googlePhotos;
+      const photos =
+        typeof host.googlePhotos === "string"
+          ? JSON.parse(host.googlePhotos)
+          : host.googlePhotos;
       if (Array.isArray(photos) && photos.length > 0) {
         const firstPhoto = photos[0];
-        const photoUrl = firstPhoto?.url || firstPhoto?.photoUrl || firstPhoto?.photoReference;
+        const photoUrl =
+          firstPhoto?.url || firstPhoto?.photoUrl || firstPhoto?.photoReference;
         if (photoUrl) return String(photoUrl);
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
   return null;
 };
@@ -442,9 +448,7 @@ const parseGoogleCategories = (value: any): string[] => {
 };
 
 const formatGoogleCategory = (value: string) =>
-  value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
 type EventLocation = {
   id: string;
@@ -1509,32 +1513,32 @@ export default function MapPage() {
 
   const liveTrucks = Array.isArray(liveTrucksData) ? liveTrucksData : [];
 
-  const { data: communitySightingsData = [] } = useQuery<CommunityTruckSighting[]>(
-    {
-      queryKey: userLocation
-        ? [
-            "/api/trucks/community-sightings/live",
-            userLocation.lat,
-            userLocation.lng,
-          ]
-        : ["community-truck-sightings", "none"],
-      queryFn: userLocation
-        ? async () => {
-            const response = await fetch(
-              apiUrl(
-                `/api/trucks/community-sightings/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=6`,
-              ),
-            );
-            if (!response.ok) throw new Error("Failed to fetch truck sightings");
-            return response.json();
-          }
-        : undefined,
-      enabled: !!userLocation,
-      staleTime: 10 * 1000,
-      refetchInterval: 30 * 1000,
-      refetchOnWindowFocus: true,
-    },
-  );
+  const { data: communitySightingsData = [] } = useQuery<
+    CommunityTruckSighting[]
+  >({
+    queryKey: userLocation
+      ? [
+          "/api/trucks/community-sightings/live",
+          userLocation.lat,
+          userLocation.lng,
+        ]
+      : ["community-truck-sightings", "none"],
+    queryFn: userLocation
+      ? async () => {
+          const response = await fetch(
+            apiUrl(
+              `/api/trucks/community-sightings/live?lat=${userLocation.lat}&lng=${userLocation.lng}&radiusKm=6`,
+            ),
+          );
+          if (!response.ok) throw new Error("Failed to fetch truck sightings");
+          return response.json();
+        }
+      : undefined,
+    enabled: !!userLocation,
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
+  });
 
   const communitySightings = Array.isArray(communitySightingsData)
     ? communitySightingsData
@@ -2157,7 +2161,13 @@ export default function MapPage() {
       }
       return true;
     });
-  }, [activeMapLocations, hostCoords, mapBounds, appliedMapBounds, effectiveBookableHostIds]);
+  }, [
+    activeMapLocations,
+    hostCoords,
+    mapBounds,
+    appliedMapBounds,
+    effectiveBookableHostIds,
+  ]);
 
   const getHostAvailabilityLabel = useCallback(
     (host: HostLocation) => {
@@ -2692,9 +2702,7 @@ export default function MapPage() {
 
   const cardCandidateMarkers = useMemo(() => {
     const candidateBounds = mapBounds ?? appliedMapBounds;
-    const base = adapterMarkers.filter(
-      (marker) => marker.kind === "parking",
-    );
+    const base = adapterMarkers.filter((marker) => marker.kind === "parking");
     if (!candidateBounds) return base;
     const inView = base.filter((marker) =>
       candidateBounds.contains([marker.lat, marker.lng]),
@@ -2816,10 +2824,7 @@ export default function MapPage() {
       const { north, south, east, west } = areaFilterBounds;
       return out.filter(
         (m) =>
-          m.lat <= north &&
-          m.lat >= south &&
-          m.lng <= east &&
-          m.lng >= west,
+          m.lat <= north && m.lat >= south && m.lng <= east && m.lng >= west,
       );
     }
     return out;
@@ -2977,7 +2982,9 @@ export default function MapPage() {
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const res = await fetch(
-        apiUrl(`/api/profiles/host/${encodeURIComponent(selectedParkingHostId)}`),
+        apiUrl(
+          `/api/profiles/host/${encodeURIComponent(selectedParkingHostId)}`,
+        ),
       );
       if (!res.ok) {
         throw new Error("Failed to load host profile");
@@ -2997,16 +3004,16 @@ export default function MapPage() {
 
   const selectedParkingHasBusinessInfo = Boolean(
     selectedParkingHostProfile?.description ||
-      selectedParkingHost?.host.description ||
-      selectedParkingGoogleCategories.length > 0 ||
-      selectedParkingHostProfile?.businessHours ||
-      selectedParkingHost?.host.businessHours ||
-      selectedParkingHostProfile?.phone ||
-      selectedParkingHost?.host.googleFormattedPhone ||
-      selectedParkingHostProfile?.website ||
-      selectedParkingHost?.host.businessWebsite ||
-      (selectedParkingHostProfile?.googlePriceLevel ??
-        selectedParkingHost?.host.googlePriceLevel) != null,
+    selectedParkingHost?.host.description ||
+    selectedParkingGoogleCategories.length > 0 ||
+    selectedParkingHostProfile?.businessHours ||
+    selectedParkingHost?.host.businessHours ||
+    selectedParkingHostProfile?.phone ||
+    selectedParkingHost?.host.googleFormattedPhone ||
+    selectedParkingHostProfile?.website ||
+    selectedParkingHost?.host.businessWebsite ||
+    (selectedParkingHostProfile?.googlePriceLevel ??
+      selectedParkingHost?.host.googlePriceLevel) != null,
   );
 
   const selectedParkingHostImageUrl = useMemo(() => {
@@ -3019,13 +3026,18 @@ export default function MapPage() {
     if (!selectedParkingHost || !effectiveGoogleMapsApiKey) return null;
     const host = selectedParkingHost.host;
     const addressParts = [host.address, host.city, host.state].filter(Boolean);
-    const addressQuery = addressParts.length > 0 ? addressParts.join(", ") : null;
+    const addressQuery =
+      addressParts.length > 0 ? addressParts.join(", ") : null;
     if (!addressQuery) return null;
     const encoded = encodeURIComponent(addressQuery);
     const streetView = `https://maps.googleapis.com/maps/api/streetview?size=960x540&location=${encoded}&fov=90&pitch=5&source=outdoor&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
     const staticMap = `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=16&size=640x360&scale=1&maptype=roadmap&markers=color:0xF97316%7C${encoded}&key=${encodeURIComponent(effectiveGoogleMapsApiKey)}`;
     return streetView || staticMap;
-  }, [selectedParkingHost, selectedParkingHostProfile, effectiveGoogleMapsApiKey]);
+  }, [
+    selectedParkingHost,
+    selectedParkingHostProfile,
+    effectiveGoogleMapsApiKey,
+  ]);
 
   const {
     data: selectedHostUpcomingBookings,
@@ -3049,7 +3061,7 @@ export default function MapPage() {
 
   const selectedParkingHasUpcomingBookings = Boolean(
     Array.isArray(selectedHostUpcomingBookings?.bookings) &&
-      selectedHostUpcomingBookings.bookings.length > 0,
+    selectedHostUpcomingBookings.bookings.length > 0,
   );
 
   const {
@@ -3212,20 +3224,10 @@ export default function MapPage() {
         "Learn how map pins, live trucks, and deal availability work.",
     },
   ];
-  const fallbackTrending = [
-    "food trucks",
-    "tacos",
-    "bbq",
-    "breakfast",
-    "seafood",
-    "wings",
-    "pizza",
-    "coffee",
-  ];
   const trendingLinks = (
-    Array.isArray(trendingSearches) && trendingSearches.length > 0
+    Array.isArray(trendingSearches)
       ? trendingSearches.map((row) => row?.query).filter(Boolean)
-      : fallbackTrending
+      : []
   )
     .slice(0, 8)
     .map((query) => ({
@@ -3257,7 +3259,12 @@ export default function MapPage() {
       return { lat: selectedHostCluster.lat, lng: selectedHostCluster.lng };
     }
     return null;
-  }, [selectedDeal, selectedSighting, selectedParkingPreview, selectedHostCluster]);
+  }, [
+    selectedDeal,
+    selectedSighting,
+    selectedParkingPreview,
+    selectedHostCluster,
+  ]);
 
   const hasMapCalloutAnchor = Boolean(mapCalloutAnchorPosition);
   const mapCalloutShellClassName =
@@ -3301,7 +3308,9 @@ export default function MapPage() {
                 {mapBranding.mapName}
               </h1>
               {showMapDiagnostics ? (
-                <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
+                <p className="text-sm text-muted-foreground">
+                  {headerSubtitle}
+                </p>
               ) : null}
             </div>
           </div>
@@ -3598,16 +3607,16 @@ export default function MapPage() {
                 areaFilterBounds
                   ? "Clear drawn area"
                   : drawingActive
-                  ? "Cancel area drawing"
-                  : "Draw an area to filter pins"
+                    ? "Cancel area drawing"
+                    : "Draw an area to filter pins"
               }
               data-testid="button-draw-area"
             >
               {areaFilterBounds
                 ? "Clear area"
                 : drawingActive
-                ? "Drawing…"
-                : "Draw area"}
+                  ? "Drawing…"
+                  : "Draw area"}
             </button>
           </div>
 
@@ -3718,7 +3727,6 @@ export default function MapPage() {
               </div>
             </div>
           )}
-
         </div>
 
         {/* Selected Deal Info Card */}
@@ -3727,97 +3735,97 @@ export default function MapPage() {
             className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
-          <Card className="map-callout-card w-full">
-            <CardContent className="p-3">
-              <div className="mb-1.5 flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
-                    {selectedDeal.title}
-                  </h3>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                      {selectedDeal.restaurant?.name}
-                    </p>
-                    {businessPopularityByRestaurant[
-                      String(selectedDeal.restaurantId || "")
-                    ] && (
-                      <span
-                        className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
-                        style={{
-                          backgroundColor:
+            <Card className="map-callout-card w-full">
+              <CardContent className="p-3">
+                <div className="mb-1.5 flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
+                      {selectedDeal.title}
+                    </h3>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                        {selectedDeal.restaurant?.name}
+                      </p>
+                      {businessPopularityByRestaurant[
+                        String(selectedDeal.restaurantId || "")
+                      ] && (
+                        <span
+                          className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
+                          style={{
+                            backgroundColor:
+                              businessPopularityByRestaurant[
+                                String(selectedDeal.restaurantId || "")
+                              ].color,
+                          }}
+                        >
+                          {
                             businessPopularityByRestaurant[
                               String(selectedDeal.restaurantId || "")
-                            ].color,
-                        }}
-                      >
-                        {
-                          businessPopularityByRestaurant[
-                            String(selectedDeal.restaurantId || "")
-                          ].label
-                        }
-                      </span>
-                    )}
+                            ].label
+                          }
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedDeal(null)}
+                    className="h-8 w-8"
+                    data-testid="button-close-selected-deal"
+                    aria-label="Close selected deal"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSelectedDeal(null)}
-                  className="h-8 w-8"
-                  data-testid="button-close-selected-deal"
-                  aria-label="Close selected deal"
-                >
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
 
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-sm font-bold text-primary">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-sm font-bold text-primary">
                     {selectedDeal.discountValue
                       ? selectedDeal.dealType === "fixed"
                         ? `$${selectedDeal.discountValue} OFF`
                         : `${selectedDeal.discountValue}% OFF`
                       : "Limited Time"}
-                </span>
+                  </span>
                   {selectedDeal.discountValue && (
                     <span className="text-[11px] text-muted-foreground">
                       Min: ${selectedDeal.minOrderAmount}
                     </span>
                   )}
-              </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
-                <Button
-                  size="sm"
-                  className="h-8"
-                  data-testid="button-view-deal"
-                  onClick={() => {
-                    trackUxEvent("map_deal_view_click", {
-                      dealId: selectedDeal.id,
-                      restaurantId: selectedDeal.restaurantId || null,
-                    });
-                    window.location.href = `/deal/${selectedDeal.id}`;
-                  }}
-                >
-                  Open
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8"
-                  onClick={() =>
-                    window.open(
-                      `https://maps.google.com/?q=${selectedDeal.restaurant?.latitude},${selectedDeal.restaurant?.longitude}`,
-                      "_blank",
-                    )
-                  }
-                >
-                  Route
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="map-callout-tail" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    data-testid="button-view-deal"
+                    onClick={() => {
+                      trackUxEvent("map_deal_view_click", {
+                        dealId: selectedDeal.id,
+                        restaurantId: selectedDeal.restaurantId || null,
+                      });
+                      window.location.href = `/deal/${selectedDeal.id}`;
+                    }}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={() =>
+                      window.open(
+                        `https://maps.google.com/?q=${selectedDeal.restaurant?.latitude},${selectedDeal.restaurant?.longitude}`,
+                        "_blank",
+                      )
+                    }
+                  >
+                    Route
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="map-callout-tail" />
           </div>
         )}
 
@@ -3826,75 +3834,75 @@ export default function MapPage() {
             className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
-          <Card className="map-callout-card w-full">
-            <CardContent className="p-3">
-              <div className="mb-1.5 flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
-                    {selectedSighting.truckName}
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Community sighting (temporary map pin)
+            <Card className="map-callout-card w-full">
+              <CardContent className="p-3">
+                <div className="mb-1.5 flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
+                      {selectedSighting.truckName}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Community sighting (temporary map pin)
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSelectedSighting(null)}
+                    className="h-8 w-8"
+                    data-testid="button-close-selected-sighting"
+                    aria-label="Close selected sighting"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+                {selectedSighting.notes && (
+                  <p className="mb-2 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                    {selectedSighting.notes}
                   </p>
+                )}
+                {selectedSighting.photoUrl && (
+                  <img
+                    src={selectedSighting.photoUrl}
+                    alt={`${selectedSighting.truckName} sighting`}
+                    className="mb-2 h-16 w-full rounded-md border border-border/60 object-cover"
+                    loading="lazy"
+                  />
+                )}
+                <div className="mb-2 text-[11px] text-muted-foreground">
+                  Reports: {selectedSighting.reportCount} · Expires from map at{" "}
+                  {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
                 </div>
+                {userLocation && (
+                  <div
+                    className="mb-2 text-[11px] text-muted-foreground"
+                    data-testid="sighting-distance-eta"
+                  >
+                    {isLoadingSelectedSightingRouteSummary
+                      ? "Estimating drive time..."
+                      : [
+                          selectedSightingDistanceLabel,
+                          selectedSightingEtaLabel,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ") || "Drive ETA unavailable"}
+                  </div>
+                )}
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSelectedSighting(null)}
-                  className="h-8 w-8"
-                  data-testid="button-close-selected-sighting"
-                  aria-label="Close selected sighting"
+                  size="sm"
+                  className="h-8 w-full"
+                  onClick={() =>
+                    window.open(
+                      `https://maps.google.com/?q=${selectedSighting.latitude},${selectedSighting.longitude}`,
+                      "_blank",
+                    )
+                  }
                 >
-                  <X className="w-3 h-3" />
+                  Route
                 </Button>
-              </div>
-              {selectedSighting.notes && (
-                <p className="mb-2 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                  {selectedSighting.notes}
-                </p>
-              )}
-              {selectedSighting.photoUrl && (
-                <img
-                  src={selectedSighting.photoUrl}
-                  alt={`${selectedSighting.truckName} sighting`}
-                  className="mb-2 h-16 w-full rounded-md border border-border/60 object-cover"
-                  loading="lazy"
-                />
-              )}
-              <div className="mb-2 text-[11px] text-muted-foreground">
-                Reports: {selectedSighting.reportCount} · Expires from map at{" "}
-                {new Date(selectedSighting.expiresAt).toLocaleTimeString()}
-              </div>
-              {userLocation && (
-                <div
-                  className="mb-2 text-[11px] text-muted-foreground"
-                  data-testid="sighting-distance-eta"
-                >
-                  {isLoadingSelectedSightingRouteSummary
-                    ? "Estimating drive time..."
-                    : [
-                        selectedSightingDistanceLabel,
-                        selectedSightingEtaLabel,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ") || "Drive ETA unavailable"}
-                </div>
-              )}
-              <Button
-                size="sm"
-                className="h-8 w-full"
-                onClick={() =>
-                  window.open(
-                    `https://maps.google.com/?q=${selectedSighting.latitude},${selectedSighting.longitude}`,
-                    "_blank",
-                  )
-                }
-              >
-                Route
-              </Button>
-            </CardContent>
-          </Card>
-          <div className="map-callout-tail" />
+              </CardContent>
+            </Card>
+            <div className="map-callout-tail" />
           </div>
         )}
 
@@ -3903,177 +3911,184 @@ export default function MapPage() {
             className={`${mapCalloutShellClassName} w-[min(280px,calc(100%-1rem))]`}
             style={mapCalloutShellStyle}
           >
-          <Card className="map-callout-card w-full overflow-hidden rounded-xl">
-            {selectedParkingHostImageUrl && (
-              <img
-                src={selectedParkingHostImageUrl}
-                alt={`${selectedParkingHost.host.name} parking location`}
-                className="h-24 w-full border-b border-[color:var(--border-subtle)] object-cover"
-                loading="lazy"
-              />
-            )}
-            <CardContent className="p-3">
-              <div className="mb-2 flex items-start gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="mt-0.5 h-7 w-7 shrink-0 rounded-full border border-[color:var(--border-subtle)] bg-background/95"
-                  onClick={closeParkingPreview}
-                  data-testid="button-close-selected-parking-preview"
-                  aria-label="Close parking preview"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-                <div className="min-w-0 pt-0.5">
-                  <h3 className="truncate text-sm font-semibold text-foreground">
-                    {selectedParkingHost.host.name}
-                  </h3>
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {selectedParkingHost.host.address}
+            <Card className="map-callout-card w-full overflow-hidden rounded-xl">
+              {selectedParkingHostImageUrl && (
+                <img
+                  src={selectedParkingHostImageUrl}
+                  alt={`${selectedParkingHost.host.name} parking location`}
+                  className="h-24 w-full border-b border-[color:var(--border-subtle)] object-cover"
+                  loading="lazy"
+                />
+              )}
+              <CardContent className="p-3">
+                <div className="mb-2 flex items-start gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mt-0.5 h-7 w-7 shrink-0 rounded-full border border-[color:var(--border-subtle)] bg-background/95"
+                    onClick={closeParkingPreview}
+                    data-testid="button-close-selected-parking-preview"
+                    aria-label="Close parking preview"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-0 pt-0.5">
+                    <h3 className="truncate text-sm font-semibold text-foreground">
+                      {selectedParkingHost.host.name}
+                    </h3>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {selectedParkingHost.host.address}
+                    </p>
+                  </div>
+                </div>
+                <div className="mb-1.5 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
+                  {selectedParkingHost.availabilityLabel}
+                </div>
+                {selectedParkingHost.distanceLabel && (
+                  <p className="mb-1 text-[11px] text-muted-foreground">
+                    {selectedParkingHost.distanceLabel} away
                   </p>
+                )}
+                {userLocation && (
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    {isLoadingSelectedParkingRouteSummary
+                      ? "Estimating drive time..."
+                      : [
+                          selectedParkingRoadDistanceLabel,
+                          selectedParkingEtaLabel,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ") || "Drive ETA unavailable"}
+                  </p>
+                )}
+                {selectedParkingHost.nearbyTruck && (
+                  <div className="mb-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5 text-[11px] text-muted-foreground">
+                    Live truck:{" "}
+                    <span className="font-medium text-foreground">
+                      {selectedParkingHost.nearbyTruck.name}
+                    </span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-full"
+                    onClick={() =>
+                      window.open(
+                        `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
+                        "_blank",
+                      )
+                    }
+                  >
+                    Route
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 rounded-full"
+                    onClick={() => {
+                      window.location.href =
+                        selectedParkingHost.publicProfileHref;
+                    }}
+                  >
+                    Details
+                  </Button>
                 </div>
-              </div>
-              <div className="mb-1.5 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
-                {selectedParkingHost.availabilityLabel}
-              </div>
-              {selectedParkingHost.distanceLabel && (
-                <p className="mb-1 text-[11px] text-muted-foreground">
-                  {selectedParkingHost.distanceLabel} away
-                </p>
-              )}
-              {userLocation && (
-                <p className="mb-2 text-[11px] text-muted-foreground">
-                  {isLoadingSelectedParkingRouteSummary
-                    ? "Estimating drive time..."
-                    : [
-                        selectedParkingRoadDistanceLabel,
-                        selectedParkingEtaLabel,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ") || "Drive ETA unavailable"}
-                </p>
-              )}
-              {selectedParkingHost.nearbyTruck && (
-                <div className="mb-2 rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5 text-[11px] text-muted-foreground">
-                  Live truck: <span className="font-medium text-foreground">{selectedParkingHost.nearbyTruck.name}</span>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-1.5">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 rounded-full"
-                  onClick={() =>
-                    window.open(
-                      `https://maps.google.com/?q=${selectedParkingHost.coords.lat},${selectedParkingHost.coords.lng}`,
-                      "_blank",
-                    )
-                  }
-                >
-                  Route
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-8 rounded-full"
-                  onClick={() => {
-                    window.location.href = selectedParkingHost.publicProfileHref;
-                  }}
-                >
-                  Details
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="map-callout-tail" />
+              </CardContent>
+            </Card>
+            <div className="map-callout-tail" />
           </div>
         )}
 
-        {!selectedDeal && !selectedParkingHost && selectedHostCluster && hasMapCalloutAnchor && (
-          <div
-            className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
-            style={mapCalloutShellStyle}
-          >
-          <Card className="map-callout-card w-full">
-            <CardContent className="p-3">
-              <div className="mb-1.5 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {selectedHostCluster.count} nearby parking locations
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Tap a spot or zoom in.
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSelectedHostCluster(null)}
-                  data-testid="button-close-cluster-preview"
-                  aria-label="Close cluster preview"
-                >
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-              <div className="space-y-1.5">
-                {selectedHostCluster.hosts.slice(0, 2).map((host) => {
-                  const coords = resolveHostCoords(host);
-                  if (!coords) return null;
-                  return (
-                    <div
-                      key={`cluster-preview-${host.id}`}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--border-subtle)] p-1.5"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-xs font-medium text-foreground">
-                          {host.name}
-                        </div>
-                        <div className="truncate text-[11px] text-muted-foreground">
-                          {host.address}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2 text-[11px]"
-                        onClick={() => {
-                          window.open(
-                            `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
-                            "_blank",
-                          );
-                        }}
-                      >
-                        Directions
-                      </Button>
+        {!selectedDeal &&
+          !selectedParkingHost &&
+          selectedHostCluster &&
+          hasMapCalloutAnchor && (
+            <div
+              className={`${mapCalloutShellClassName} w-[min(272px,calc(100%-1rem))]`}
+              style={mapCalloutShellStyle}
+            >
+              <Card className="map-callout-card w-full">
+                <CardContent className="p-3">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {selectedHostCluster.count} nearby parking locations
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Tap a spot or zoom in.
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-              {selectedHostCluster.count > 4 && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  +{selectedHostCluster.count - 2} more in this area
-                </p>
-              )}
-              <div className="mt-2">
-                <Button
-                  size="sm"
-                  className="h-8 w-full"
-                  onClick={() => {
-                    trackUxEvent("map_cluster_zoom_in_clicked", {
-                      clusterSize: selectedHostCluster.count,
-                    });
-                    setZoomLevel((prev) => Math.min(18, prev + 2));
-                  }}
-                  data-testid="button-cluster-zoom-in"
-                >
-                  Zoom in
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-          <div className="map-callout-tail" />
-          </div>
-        )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setSelectedHostCluster(null)}
+                      data-testid="button-close-cluster-preview"
+                      aria-label="Close cluster preview"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedHostCluster.hosts.slice(0, 2).map((host) => {
+                      const coords = resolveHostCoords(host);
+                      if (!coords) return null;
+                      return (
+                        <div
+                          key={`cluster-preview-${host.id}`}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--border-subtle)] p-1.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-foreground">
+                              {host.name}
+                            </div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {host.address}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => {
+                              window.open(
+                                `https://maps.google.com/?q=${coords.lat},${coords.lng}`,
+                                "_blank",
+                              );
+                            }}
+                          >
+                            Directions
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {selectedHostCluster.count > 4 && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      +{selectedHostCluster.count - 2} more in this area
+                    </p>
+                  )}
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      className="h-8 w-full"
+                      onClick={() => {
+                        trackUxEvent("map_cluster_zoom_in_clicked", {
+                          clusterSize: selectedHostCluster.count,
+                        });
+                        setZoomLevel((prev) => Math.min(18, prev + 2));
+                      }}
+                      data-testid="button-cluster-zoom-in"
+                    >
+                      Zoom in
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="map-callout-tail" />
+            </div>
+          )}
       </div>
 
       {/* List View Overlay */}
@@ -4095,7 +4110,9 @@ export default function MapPage() {
               </Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {visibleLiveTrucks.length} live trucks · {visibleHostLocations.length} hosts · {visibleEventLocations.length} events · {deals.length} deals
+              {visibleLiveTrucks.length} live trucks ·{" "}
+              {visibleHostLocations.length} hosts ·{" "}
+              {visibleEventLocations.length} events · {deals.length} deals
             </p>
           </header>
 
@@ -4188,7 +4205,9 @@ export default function MapPage() {
                       >
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium text-foreground">
-                            {event.name || (event as any).title || "Untitled event"}
+                            {event.name ||
+                              (event as any).title ||
+                              "Untitled event"}
                           </div>
                           {(event as any).address && (
                             <div className="truncate text-xs text-muted-foreground">
@@ -4253,12 +4272,16 @@ export default function MapPage() {
         </div>
       )}
 
-      <Dialog open={showReportTruckDialog} onOpenChange={setShowReportTruckDialog}>
+      <Dialog
+        open={showReportTruckDialog}
+        onOpenChange={setShowReportTruckDialog}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Report a food truck sighting</DialogTitle>
             <DialogDescription>
-              This crowd pin stays public for 1 hour, then drops off the map. The report stays saved in admin history for due diligence.
+              This crowd pin stays public for 1 hour, then drops off the map.
+              The report stays saved in admin history for due diligence.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -4336,34 +4359,40 @@ export default function MapPage() {
                   if (!coords) {
                     toast({
                       title: "Location required",
-                      description: "Enable location services to submit a truck sighting.",
+                      description:
+                        "Enable location services to submit a truck sighting.",
                       variant: "destructive",
                     });
                     return;
                   }
 
                   setIsSubmittingTruckSighting(true);
-                  const res = await fetch(apiUrl("/api/public/truck-sightings"), {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
+                  const res = await fetch(
+                    apiUrl("/api/public/truck-sightings"),
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      credentials: "include",
+                      body: JSON.stringify({
+                        truckName: reportTruckName.trim(),
+                        photoUrl: reportTruckPhotoDataUrl,
+                        latitude: coords.lat,
+                        longitude: coords.lng,
+                        notes: reportTruckNotes.trim() || undefined,
+                        locationLabel: reportLocationLabel.trim() || undefined,
+                        source: "map_user_ping",
+                        seenAt: new Date().toISOString(),
+                      }),
                     },
-                    credentials: "include",
-                    body: JSON.stringify({
-                      truckName: reportTruckName.trim(),
-                      photoUrl: reportTruckPhotoDataUrl,
-                      latitude: coords.lat,
-                      longitude: coords.lng,
-                      notes: reportTruckNotes.trim() || undefined,
-                      locationLabel: reportLocationLabel.trim() || undefined,
-                      source: "map_user_ping",
-                      seenAt: new Date().toISOString(),
-                    }),
-                  });
+                  );
 
                   if (!res.ok) {
                     const payload = await res.json().catch(() => ({}));
-                    throw new Error(payload?.message || "Failed to submit truck sighting");
+                    throw new Error(
+                      payload?.message || "Failed to submit truck sighting",
+                    );
                   }
 
                   setShowReportTruckDialog(false);
@@ -4387,7 +4416,8 @@ export default function MapPage() {
                 } catch (error: any) {
                   toast({
                     title: "Unable to submit sighting",
-                    description: error?.message || "Please try again in a moment.",
+                    description:
+                      error?.message || "Please try again in a moment.",
                     variant: "destructive",
                   });
                 } finally {

@@ -1,9 +1,22 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Share2, Copy, Facebook, Twitter, MessageCircle, Mail, Check } from "lucide-react";
+import {
+  Share2,
+  Copy,
+  Facebook,
+  Twitter,
+  MessageCircle,
+  Mail,
+  Check,
+} from "lucide-react";
 import { getAffiliateShareUrl } from "@/lib/share";
 
 interface Deal {
@@ -25,7 +38,11 @@ interface DealShareModalProps {
   deal: Deal;
 }
 
-export default function DealShareModal({ isOpen, onClose, deal }: DealShareModalProps) {
+export default function DealShareModal({
+  isOpen,
+  onClose,
+  deal,
+}: DealShareModalProps) {
   const [copied, setCopied] = useState(false);
   const [shareUrl, setShareUrl] = useState(() => {
     if (typeof window === "undefined") return `/deal/${deal.id}`;
@@ -49,18 +66,19 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
       isActive = false;
     };
   }, [deal.id, isOpen]);
-  
+
   const discountLabel = deal.discountValue
     ? deal.dealType === "fixed"
       ? `$${deal.discountValue} OFF`
       : `${deal.discountValue}% OFF`
     : "Limited Time";
-  const minOrderText = deal.discountValue
-    ? ` (Min order: $${deal.minOrderAmount || "15"})`
-    : "";
+  const minOrderText =
+    deal.discountValue && deal.minOrderAmount
+      ? ` (Min order: $${deal.minOrderAmount})`
+      : "";
 
   // Create share text
-  const shareText = `Amazing special at ${deal.restaurant?.name || 'this restaurant'}!\n\n${deal.title}\n${discountLabel}${minOrderText}\n\nCheck it out on MealScout:`;
+  const shareText = `Amazing special at ${deal.restaurant?.name || "this restaurant"}!\n\n${deal.title}\n${discountLabel}${minOrderText}\n\nCheck it out on MealScout:`;
 
   const handleCopyLink = async () => {
     try {
@@ -82,19 +100,19 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
 
   const handleFacebookShare = () => {
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
-    window.open(facebookUrl, '_blank', 'width=600,height=400');
+    window.open(facebookUrl, "_blank", "width=600,height=400");
   };
 
   const handleTwitterShare = () => {
     const twitterText = `${shareText} ${shareUrl}`;
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(twitterText)}`;
-    window.open(twitterUrl, '_blank', 'width=600,height=400');
+    window.open(twitterUrl, "_blank", "width=600,height=400");
   };
 
   const handleWhatsAppShare = () => {
     const whatsappText = `${shareText} ${shareUrl}`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
-    window.open(whatsappUrl, '_blank');
+    window.open(whatsappUrl, "_blank");
   };
 
   const handleEmailShare = () => {
@@ -108,30 +126,34 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
     {
       name: "Facebook",
       icon: Facebook,
-      color: "bg-[color:var(--accent-text)] hover:bg-[color:var(--accent-text-hover)]",
+      color:
+        "bg-[color:var(--accent-text)] hover:bg-[color:var(--accent-text-hover)]",
       onClick: handleFacebookShare,
-      testId: "button-share-facebook"
+      testId: "button-share-facebook",
     },
     {
       name: "Twitter",
       icon: Twitter,
-      color: "bg-[color:var(--accent-text)] hover:bg-[color:var(--accent-text-hover)]",
+      color:
+        "bg-[color:var(--accent-text)] hover:bg-[color:var(--accent-text-hover)]",
       onClick: handleTwitterShare,
-      testId: "button-share-twitter"
+      testId: "button-share-twitter",
     },
     {
       name: "WhatsApp",
       icon: MessageCircle,
-      color: "bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)]",
+      color:
+        "bg-[color:var(--status-success)] hover:bg-[color:var(--status-success)]",
       onClick: handleWhatsAppShare,
-      testId: "button-share-whatsapp"
+      testId: "button-share-whatsapp",
     },
     {
       name: "Email",
       icon: Mail,
-      color: "bg-[color:var(--text-secondary)] hover:bg-[color:var(--text-primary)]",
+      color:
+        "bg-[color:var(--text-secondary)] hover:bg-[color:var(--text-primary)]",
       onClick: handleEmailShare,
-      testId: "button-share-email"
+      testId: "button-share-email",
     },
   ];
 
@@ -151,16 +173,20 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
             <h3 className="font-semibold text-foreground text-sm mb-1">
               {deal.title}
             </h3>
-            <p className="text-xs text-muted-foreground mb-2">
-              {deal.restaurant?.name || 'Restaurant'} - {deal.restaurant?.cuisineType || 'Food'}
-            </p>
+            {(deal.restaurant?.name || deal.restaurant?.cuisineType) && (
+              <p className="text-xs text-muted-foreground mb-2">
+                {[deal.restaurant?.name, deal.restaurant?.cuisineType]
+                  .filter(Boolean)
+                  .join(" - ")}
+              </p>
+            )}
             <div className="flex items-center space-x-2">
               <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full font-semibold">
                 {discountLabel}
               </span>
-              {deal.discountValue && (
+              {deal.discountValue && deal.minOrderAmount && (
                 <span className="text-xs text-muted-foreground">
-                  Min: ${deal.minOrderAmount || '15'}
+                  Min: ${deal.minOrderAmount}
                 </span>
               )}
             </div>
@@ -226,5 +252,3 @@ export default function DealShareModal({ isOpen, onClose, deal }: DealShareModal
     </Dialog>
   );
 }
-
-
