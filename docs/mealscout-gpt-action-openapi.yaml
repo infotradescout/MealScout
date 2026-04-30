@@ -2,6 +2,9 @@ openapi: 3.1.0
 info:
   title: MealScout Lead Import
   version: 1.0.0
+  license:
+    name: MIT
+    identifier: MIT
 servers:
   - url: https://www.mealscout.us
 components:
@@ -10,6 +13,214 @@ components:
       type: http
       scheme: bearer
   schemas:
+    ImportedUser:
+      type: object
+      required:
+        - firstName
+        - email
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+          default: ""
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          default: ""
+        userType:
+          type: string
+          enum:
+            - customer
+            - restaurant_owner
+            - food_truck
+            - host
+            - event_coordinator
+            - staff
+            - admin
+            - super_admin
+    HostImport:
+      type: object
+      required:
+        - name
+        - address
+        - city
+        - state
+      properties:
+        name:
+          type: string
+          description: Host or venue name. Use this exact key; do not use company.
+        category:
+          type: string
+          default: host_location
+        website:
+          type: string
+          default: ""
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+          default: ""
+        contactName:
+          type: string
+          default: ""
+        contactTitle:
+          type: string
+          default: ""
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+          default: ""
+    HostEventRequest:
+      type: object
+      required:
+        - eventName
+        - eventDate
+        - startTime
+        - endTime
+        - requestedVendorType
+      properties:
+        eventName:
+          type: string
+        eventDate:
+          type: string
+          description: Event date in YYYY-MM-DD format. Use this exact key; do not use date.
+        startTime:
+          type: string
+          pattern: "^\\d{2}:\\d{2}$"
+          description: 24-hour HH:mm start time. If unknown, use 00:00 and list it in missingFields.
+        endTime:
+          type: string
+          pattern: "^\\d{2}:\\d{2}$"
+          description: 24-hour HH:mm end time. If unknown, use 23:59 and list it in missingFields.
+        timeDisplay:
+          type: string
+          default: ""
+        requestedVendorType:
+          type: string
+          description: Desired food/vendor type. Use this exact key; do not use foodType.
+        status:
+          type: string
+          default: needs_truck_match
+        visibility:
+          type: string
+          default: private_until_confirmed
+        requestSummary:
+          type: string
+          default: ""
+        requestedDetailsFromTruck:
+          type: array
+          items:
+            type: string
+          default: []
+        detailsAvailableBy:
+          type: string
+          default: Contact event organizer
+        missingFields:
+          type: array
+          items:
+            type: string
+          default: []
+    BusinessImport:
+      type: object
+      required:
+        - name
+        - address
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+          default: ""
+        state:
+          type: string
+          default: ""
+        phone:
+          type: string
+          default: ""
+        cuisineType:
+          type: string
+          default: Various
+        description:
+          type: string
+          default: ""
+        websiteUrl:
+          type: string
+          default: ""
+        menuUrl:
+          type: string
+          default: ""
+        instagramUrl:
+          type: string
+          default: ""
+        facebookPageUrl:
+          type: string
+          default: ""
+        latitude:
+          oneOf:
+            - type: number
+            - type: string
+        longitude:
+          oneOf:
+            - type: number
+            - type: string
+    MenuItemImport:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          default: ""
+        priceCents:
+          type: integer
+          minimum: 0
+        price:
+          oneOf:
+            - type: number
+            - type: string
+        category:
+          type: string
+          default: Menu
+        dietaryTags:
+          type: array
+          items:
+            type: string
+          default: []
+        allergens:
+          type: array
+          items:
+            type: string
+          default: []
+    MenuImport:
+      type: object
+      properties:
+        name:
+          type: string
+          default: Imported Menu
+        serviceType:
+          type: string
+          default: all
+        importUrl:
+          type: string
+          default: ""
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItemImport"
+          default: []
     LeadImportPayload:
       type: object
       required:
@@ -28,35 +239,19 @@ components:
         sendVerificationEmail:
           type: boolean
         user:
-          type: object
-          properties:
-            firstName:
-              type: string
-            lastName:
-              type: string
-            email:
-              type: string
-            phone:
-              type: string
-            userType:
-              type: string
+          $ref: "#/components/schemas/ImportedUser"
         host:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/HostImport"
         eventRequest:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/HostEventRequest"
         restaurant:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/BusinessImport"
         restaurantId:
           type: string
         truck:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/BusinessImport"
         menu:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/MenuImport"
         rawSource:
           type: object
           additionalProperties: true
@@ -77,6 +272,10 @@ paths:
       responses:
         "200":
           description: Preview result
+        "400":
+          description: Invalid lead import data
+        "401":
+          description: Missing or invalid bearer token
   /api/admin/lead-import:
     post:
       operationId: importLead
@@ -96,3 +295,7 @@ paths:
           description: Import result
         "201":
           description: Created import records
+        "400":
+          description: Invalid lead import data
+        "401":
+          description: Missing or invalid bearer token
