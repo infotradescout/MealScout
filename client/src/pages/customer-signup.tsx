@@ -18,13 +18,23 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Mail, Eye, EyeOff, UserPlus, ArrowLeft } from "lucide-react";
+import {
+  Mail,
+  Eye,
+  EyeOff,
+  UserPlus,
+  ArrowLeft,
+  Utensils,
+  MapPinned,
+  CalendarDays,
+  Package,
+  Building2,
+  Beer,
+  Truck,
+} from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
-import {
-  PASSWORD_REGEX,
-  PASSWORD_REQUIREMENTS,
-} from "@/utils/passwordPolicy";
+import { PASSWORD_REGEX, PASSWORD_REQUIREMENTS } from "@/utils/passwordPolicy";
 import {
   InputOTP,
   InputOTPGroup,
@@ -55,6 +65,77 @@ const signupSchema = z
   });
 
 type SignupFormData = z.infer<typeof signupSchema>;
+type AccountType =
+  | "diner"
+  | "host"
+  | "event_organizer"
+  | "business"
+  | "supplier";
+type BusinessSubType = "restaurant" | "bar" | "food_truck";
+
+const accountTypeOptions: Array<{
+  value: AccountType;
+  label: string;
+  description: string;
+  icon: typeof UserPlus;
+}> = [
+  {
+    value: "business",
+    label: "Restaurant / Truck",
+    description: "Deals, menus, and owner tools",
+    icon: Utensils,
+  },
+  {
+    value: "diner",
+    label: "Diner",
+    description: "Save deals and favorites",
+    icon: UserPlus,
+  },
+  {
+    value: "host",
+    label: "Host",
+    description: "Offer parking to trucks",
+    icon: MapPinned,
+  },
+  {
+    value: "event_organizer",
+    label: "Event Organizer",
+    description: "Coordinate vendors and events",
+    icon: CalendarDays,
+  },
+  {
+    value: "supplier",
+    label: "Supplier",
+    description: "Sell to food businesses",
+    icon: Package,
+  },
+];
+
+const businessTypeOptions: Array<{
+  value: BusinessSubType;
+  label: string;
+  description: string;
+  icon: typeof UserPlus;
+}> = [
+  {
+    value: "restaurant",
+    label: "Restaurant",
+    description: "Dine-in, pickup, or delivery",
+    icon: Building2,
+  },
+  {
+    value: "bar",
+    label: "Bar",
+    description: "Food, drinks, and specials",
+    icon: Beer,
+  },
+  {
+    value: "food_truck",
+    label: "Food Truck",
+    description: "Claim or launch a mobile profile",
+    icon: Truck,
+  },
+];
 
 export default function CustomerSignup() {
   const [, setLocation] = useLocation();
@@ -62,18 +143,14 @@ export default function CustomerSignup() {
   const { isAuthenticated, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAccountTypeChoices, setShowAccountTypeChoices] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const requirePhoneVerification = false;
 
   const searchParams = new URLSearchParams(window.location.search);
   const role = searchParams.get("role");
-  const initialAccountType:
-    | "diner"
-    | "host"
-    | "event_organizer"
-    | "business"
-    | "supplier" =
+  const initialAccountType: AccountType =
     role === "business"
       ? "business"
       : role === "host"
@@ -82,15 +159,11 @@ export default function CustomerSignup() {
           ? "event_organizer"
           : role === "event_coordinator"
             ? "event_organizer"
-        : role === "supplier"
-          ? "supplier"
-          : "diner";
-  const [accountType, setAccountType] = useState<
-    "diner" | "host" | "event_organizer" | "business" | "supplier"
-  >(
-    initialAccountType
-  );
-  type BusinessSubType = "restaurant" | "bar" | "food_truck";
+            : role === "supplier"
+              ? "supplier"
+              : "diner";
+  const [accountType, setAccountType] =
+    useState<AccountType>(initialAccountType);
   const businessTypeParam = searchParams.get("businessType");
   const initialBusinessSubType: BusinessSubType =
     businessTypeParam === "food_truck"
@@ -98,18 +171,22 @@ export default function CustomerSignup() {
       : businessTypeParam === "bar"
         ? "bar"
         : "restaurant";
-  const [businessSubType, setBusinessSubType] = useState<
-    BusinessSubType
-  >(initialAccountType === "business" ? initialBusinessSubType : "restaurant");
+  const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
+    initialAccountType === "business" ? initialBusinessSubType : "restaurant",
+  );
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
 
   useEffect(() => {
-    trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "customer_signup_view", {
-      page: "customer-signup",
-      accountType: initialAccountType,
-      businessSubType: initialBusinessSubType,
-      stage: "signup_view",
-    });
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.signupStarted,
+      "customer_signup_view",
+      {
+        page: "customer-signup",
+        accountType: initialAccountType,
+        businessSubType: initialBusinessSubType,
+        stage: "signup_view",
+      },
+    );
   }, [initialAccountType, initialBusinessSubType]);
 
   const defaultValues = useMemo<SignupFormData>(() => {
@@ -184,7 +261,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/customer/register",
-        signupData
+        signupData,
       );
       return await res.json();
     },
@@ -197,9 +274,9 @@ export default function CustomerSignup() {
           ? "/host-signup"
           : accountType === "event_organizer"
             ? "/events"
-          : accountType === "business"
-            ? "/restaurant-signup"
-            : "/";
+            : accountType === "business"
+              ? "/restaurant-signup"
+              : "/";
       try {
         window.sessionStorage.setItem(
           "mealscout:lastSignupEmail",
@@ -240,14 +317,10 @@ export default function CustomerSignup() {
   const businessSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
-      const res = await apiRequest(
-        "POST",
-        "/api/auth/restaurant/register",
-        {
-          ...signupData,
-          businessType: businessSubType,
-        }
-      );
+      const res = await apiRequest("POST", "/api/auth/restaurant/register", {
+        ...signupData,
+        businessType: businessSubType,
+      });
       return await res.json();
     },
     onSuccess: async (payload: any) => {
@@ -277,7 +350,7 @@ export default function CustomerSignup() {
           ? "/restaurant-signup?businessType=food_truck&claim=1"
           : businessSubType === "bar"
             ? "/restaurant-signup?businessType=bar"
-          : "/restaurant-signup";
+            : "/restaurant-signup";
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_login",
@@ -343,7 +416,8 @@ export default function CustomerSignup() {
     onError: (error) => {
       toast({
         title: "Event organizer signup failed",
-        description: error.message || "Failed to create event organizer account",
+        description:
+          error.message || "Failed to create event organizer account",
         variant: "destructive",
       });
     },
@@ -355,7 +429,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/supplier/register",
-        signupData
+        signupData,
       );
       return await res.json();
     },
@@ -386,11 +460,7 @@ export default function CustomerSignup() {
         redirectPath: "/supplier/dashboard",
         accountType: "supplier",
       });
-      routeToVerifyEmail(
-        "/supplier/dashboard",
-        "customer-signup",
-        "supplier",
-      );
+      routeToVerifyEmail("/supplier/dashboard", "customer-signup", "supplier");
     },
     onError: (error) => {
       toast({
@@ -410,7 +480,8 @@ export default function CustomerSignup() {
         body: JSON.stringify({}),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Failed to activate supplier profile");
+      if (!res.ok)
+        throw new Error(data?.message || "Failed to activate supplier profile");
       return data;
     },
     onSuccess: () => {
@@ -447,7 +518,7 @@ export default function CustomerSignup() {
           ? "/restaurant-signup?businessType=food_truck&claim=1"
           : businessSubType === "bar"
             ? "/restaurant-signup?businessType=bar"
-          : "/restaurant-signup";
+            : "/restaurant-signup";
       setLocation(businessRedirect);
       return;
     }
@@ -581,15 +652,23 @@ export default function CustomerSignup() {
       ? "Create host profile"
       : accountType === "event_organizer"
         ? "Create event organizer profile"
-      : accountType === "business"
-        ? businessSubType === "food_truck"
-          ? "Create food truck profile"
-          : businessSubType === "bar"
-            ? "Create bar profile"
-          : "Create restaurant profile"
-        : accountType === "supplier"
-          ? "Create supplier profile"
-          : "Go to dashboard";
+        : accountType === "business"
+          ? businessSubType === "food_truck"
+            ? "Create food truck profile"
+            : businessSubType === "bar"
+              ? "Create bar profile"
+              : "Create restaurant profile"
+          : accountType === "supplier"
+            ? "Create supplier profile"
+            : "Go to dashboard";
+
+  const selectedAccountTypeOption =
+    accountTypeOptions.find((option) => option.value === accountType) ||
+    accountTypeOptions[0];
+  const selectedBusinessTypeOption =
+    businessTypeOptions.find((option) => option.value === businessSubType) ||
+    businessTypeOptions[0];
+  const SelectedAccountTypeIcon = selectedAccountTypeOption.icon;
 
   if (isLoading) {
     return (
@@ -611,9 +690,12 @@ export default function CustomerSignup() {
         <main className="flex-1 px-4 py-6 max-w-md mx-auto w-full">
           <div className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] rounded-2xl shadow-clean-lg p-4 space-y-4">
             <div className="text-center">
-              <h1 className="text-xl font-bold text-[color:var(--text-primary)]">You are already signed in</h1>
+              <h1 className="text-xl font-bold text-[color:var(--text-primary)]">
+                You are already signed in
+              </h1>
               <p className="text-sm text-[color:var(--text-secondary)] mt-1">
-                Add another profile to this same account instead of creating a new login.
+                Add another profile to this same account instead of creating a
+                new login.
               </p>
             </div>
 
@@ -744,160 +826,139 @@ export default function CustomerSignup() {
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
-      <main className="flex-1 px-4 py-2 max-w-md mx-auto flex flex-col justify-between">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pb-[calc(var(--mobile-nav-height)+1.5rem)] pt-3">
         {/* Top: hero + form */}
         <div>
           {/* Welcome Section (highly compressed) */}
-          <div className="text-center mb-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-500 via-orange-500 to-yellow-500 rounded-2xl mb-1 flex items-center justify-center mx-auto shadow-clean-lg ring-2 ring-white/70">
+          <div className="mb-3 text-center">
+            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 via-orange-500 to-yellow-500 shadow-clean-lg ring-2 ring-white/70">
               <UserPlus className="w-5 h-5 text-white drop-shadow" />
             </div>
-            <h2 className="text-lg font-bold text-[color:var(--text-primary)] mb-1 tracking-tight">
+            <h2 className="mb-1 text-lg font-bold tracking-tight text-[color:var(--text-primary)]">
               Create Your MealScout Account
             </h2>
-            <p className="text-[color:var(--text-secondary)] text-xs leading-snug max-w-sm mx-auto">
+            <p className="mx-auto max-w-xs text-xs leading-snug text-[color:var(--text-secondary)]">
               {accountType === "business"
-                ? "Create your login so we can connect your restaurant or truck, list your deals, and pass savings directly to your regulars."
+                ? "Set up your login, then connect your restaurant or truck."
                 : accountType === "host"
-                ? "Post and manage parking-host locations for trucks and local diners."
-                : accountType === "event_organizer"
-                ? "Publish events, coordinate vendor attendance, and manage event demand."
-                : accountType === "supplier"
-                ? "Set up your supplier profile, publish products, and accept orders from food trucks and restaurants."
-                : "Save favorite deals and never miss new drops from local spots."}
+                  ? "Manage parking-host locations for trucks and diners."
+                  : accountType === "event_organizer"
+                    ? "Publish events and coordinate vendor attendance."
+                    : accountType === "supplier"
+                      ? "Publish products and accept business orders."
+                      : "Save favorite deals and never miss new drops from local spots."}
             </p>
           </div>
 
           {/* Signup Form */}
-          <div className="bg-[var(--bg-card)] border border-[color:var(--border-subtle)] rounded-2xl shadow-clean-lg p-4">
+          <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean-lg sm:p-5">
             {/* Account type selection inside form */}
-            <div className="flex justify-center mb-4">
-              <div className="inline-flex rounded-full bg-[var(--bg-surface)] border border-[color:var(--border-subtle)] shadow-clean text-[11px] font-medium text-[color:var(--text-secondary)] overflow-hidden">
+            <div className="mb-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+                  Account type
+                </div>
                 <button
                   type="button"
-                  onClick={() => setAccountType("business")}
-                  className={`px-3 py-1 transition-colors ${
-                    accountType === "business"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
-                  }`}
+                  onClick={() => setShowAccountTypeChoices((value) => !value)}
+                  className="text-xs font-semibold text-[color:var(--accent-text)]"
+                  data-testid="button-change-account-type"
                 >
-                  Restaurant / Food Truck
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("diner")}
-                  className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                    accountType === "diner"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
-                  }`}
-                >
-                  Diner
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("host")}
-                  className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                    accountType === "host"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
-                  }`}
-                >
-                  Host
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("event_organizer")}
-                  className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                    accountType === "event_organizer"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
-                  }`}
-                >
-                  Event Organizer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("supplier")}
-                  className={`px-3 py-1 border-l border-[color:var(--border-subtle)] transition-colors ${
-                    accountType === "supplier"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent text-[color:var(--text-secondary)] hover:bg-[var(--bg-surface-muted)]"
-                  }`}
-                >
-                  Supplier
+                  {showAccountTypeChoices ? "Done" : "Change"}
                 </button>
               </div>
+              <div className="rounded-xl border border-[color:var(--action-primary)] bg-[color:var(--action-primary)] px-3 py-2 text-[color:var(--action-primary-text)] shadow-clean">
+                <div className="flex items-center gap-2">
+                  <SelectedAccountTypeIcon
+                    className="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span className="text-sm font-semibold leading-tight">
+                    {selectedAccountTypeOption.label}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs leading-tight text-[color:var(--action-primary-text)]/85">
+                  {selectedAccountTypeOption.description}
+                </div>
+              </div>
+              {showAccountTypeChoices && (
+                <div className="grid grid-cols-2 gap-2">
+                  {accountTypeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const selected = accountType === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setAccountType(option.value);
+                          setShowAccountTypeChoices(false);
+                        }}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
+                            : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[var(--bg-surface-muted)]"
+                        }`}
+                        data-testid={`button-account-type-${option.value}`}
+                      >
+                        <span className="flex items-center gap-2 text-sm font-semibold leading-tight">
+                          <Icon
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          {option.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {accountType === "business" && (
-              <div className="mb-4 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+              <div className="mb-3 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-2.5">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
                   Business Type
                 </div>
-                <div className="mt-2 inline-flex w-full overflow-hidden rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-clean">
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSubType("restaurant")}
-                    className={`flex-1 px-3 py-2 transition-colors ${
-                      businessSubType === "restaurant"
-                        ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                        : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
-                    }`}
-                    data-testid="button-business-type-restaurant"
-                  >
-                  Restaurant
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBusinessSubType("bar")}
-                  className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
-                    businessSubType === "bar"
-                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                      : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
-                  }`}
-                  data-testid="button-business-type-bar"
-                >
-                  Bar
-                </button>
-                <button
-                  type="button"
-                    onClick={() => setBusinessSubType("food_truck")}
-                    className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
-                      businessSubType === "food_truck"
-                        ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
-                        : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
-                    }`}
-                    data-testid="button-business-type-food-truck"
-                  >
-                    Food Truck (Claim)
-                  </button>
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  {businessTypeOptions.map((option) => {
+                    const Icon = option.icon;
+                    const selected = businessSubType === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setBusinessSubType(option.value)}
+                        className={`min-h-12 rounded-xl border px-2 py-1.5 text-left transition-colors ${
+                          selected
+                            ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
+                            : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:bg-[var(--bg-surface-muted)]"
+                        }`}
+                        data-testid={`button-business-type-${option.value.replace("_", "-")}`}
+                      >
+                        <span className="flex flex-col gap-1 text-xs font-semibold leading-tight sm:flex-row sm:items-center sm:gap-2">
+                          <Icon
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          {option.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-                {businessSubType === "food_truck" && (
-                  <div className="mt-2 text-xs text-[color:var(--text-secondary)]">
-                    Create your account, then claim your truck from the registry list.
-                    We’ll keep it inactive and unverified until you submit verification.
-                  </div>
-                )}
+                <div className="mt-1.5 text-xs leading-tight text-[color:var(--text-secondary)]">
+                  {businessSubType === "food_truck"
+                    ? "Create your account, then claim your truck from the registry list."
+                    : selectedBusinessTypeOption.description}
+                </div>
               </div>
             )}
 
-            <div className="text-center mb-4">
-              <h3 className="text-lg font-bold text-[color:var(--text-primary)] mb-1">
+            <div className="mb-3 text-center">
+              <h3 className="text-sm font-bold text-[color:var(--text-primary)]">
                 Sign Up with Email
               </h3>
-              <p className="text-[color:var(--text-secondary)] text-xs">
-                {accountType === "business"
-                  ? "This login powers your business dashboard. Pricing stays transparent and your discounts go straight to your guests."
-                  : accountType === "host"
-                  ? "This login lets you manage host locations and parking availability."
-                : accountType === "event_organizer"
-                  ? "This login gives you event organizer tools and vendor scheduling access."
-                  : accountType === "supplier"
-                  ? "This login powers your supplier dashboard, products, and incoming orders."
-                  : "Create your account to get started with local food deals."}
-              </p>
             </div>
 
             <Form {...form}>
@@ -905,7 +966,7 @@ export default function CustomerSignup() {
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-3"
               >
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="firstName"
@@ -1109,7 +1170,8 @@ export default function CustomerSignup() {
                   {isSubmitting ? (
                     <div className="animate-spin w-5 h-5 mr-3 border-2 border-white border-t-transparent rounded-full" />
                   ) : null}
-                  {accountType === "business" && businessSubType === "food_truck"
+                  {accountType === "business" &&
+                  businessSubType === "food_truck"
                     ? "Create Account & Claim Food Truck"
                     : "Create Account"}
                 </Button>
@@ -1217,6 +1279,3 @@ export default function CustomerSignup() {
     </div>
   );
 }
-
-
-
