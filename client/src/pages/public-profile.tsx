@@ -60,7 +60,13 @@ type PublicProfile = {
     }>;
     galleryUrls?: string[];
     sectionOrder?: Array<
-      "about" | "highlights" | "links" | "gallery" | "contact" | "location" | "metrics"
+      | "about"
+      | "highlights"
+      | "links"
+      | "gallery"
+      | "contact"
+      | "location"
+      | "metrics"
     >;
     showAddress?: boolean;
     showContact?: boolean;
@@ -190,7 +196,9 @@ export default function PublicProfilePage() {
     user?.userType === "staff" ||
     user?.userType === "admin" ||
     user?.userType === "super_admin";
-  const [restaurantTab, setRestaurantTab] = useState<"overview" | "specials" | "merch">("overview");
+  const [restaurantTab, setRestaurantTab] = useState<
+    "overview" | "specials" | "merch"
+  >("overview");
 
   const { data, isLoading } = useQuery<PublicProfile>({
     queryKey: ["/api/public/profiles", profileType, profileId],
@@ -368,8 +376,14 @@ export default function PublicProfilePage() {
     setLocation(canonicalPath);
   }, [profileType, profileId, profileSlug, data?.title, setLocation]);
 
+  useEffect(() => {
+    setRestaurantTab("overview");
+  }, [data?.id]);
+
   if (isLoading) {
-    return <div className="mx-auto max-w-3xl px-4 py-10">Loading profile...</div>;
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">Loading profile...</div>
+    );
   }
 
   if (!data) {
@@ -385,7 +399,9 @@ export default function PublicProfilePage() {
     );
   }
 
-  const locationLine = [data.address, data.city, data.state].filter(Boolean).join(", ");
+  const locationLine = [data.address, data.city, data.state]
+    .filter(Boolean)
+    .join(", ");
   const profile = data.profileSettings || {};
   const presetDefaults =
     profile.templatePreset === "story"
@@ -396,30 +412,44 @@ export default function PublicProfilePage() {
           ? { theme: "slate", heroLayout: "left", fontFamily: "system" }
           : { theme: "sunset", heroLayout: "left", fontFamily: "system" };
   const heroTitle = profile.heroTitle || data.title;
-  const heroSubtitle = profile.heroSubtitle || data.subtitle || data.description || "";
+  const heroSubtitle =
+    profile.heroSubtitle || data.subtitle || data.description || "";
   const about = profile.about || data.description || "";
-  const highlights = Array.isArray(profile.highlights) ? profile.highlights : [];
-  const featuredLinks = Array.isArray(profile.featuredLinks) ? profile.featuredLinks : [];
-  const merchItems = Array.isArray(profile.merchItems) ? profile.merchItems : [];
-  const galleryUrls = Array.isArray(profile.galleryUrls) ? profile.galleryUrls : [];
+  const highlights = Array.isArray(profile.highlights)
+    ? profile.highlights
+    : [];
+  const featuredLinks = Array.isArray(profile.featuredLinks)
+    ? profile.featuredLinks
+    : [];
+  const merchItems = Array.isArray(profile.merchItems)
+    ? profile.merchItems
+    : [];
+  const galleryUrls = Array.isArray(profile.galleryUrls)
+    ? profile.galleryUrls
+    : [];
   const businessHours = formatBusinessHours(data.businessHours);
   const ctaLabel = profile.ctaLabel || (data.websiteUrl ? "Visit website" : "");
   const ctaUrl = profile.ctaUrl || data.websiteUrl || "";
   const orderUrl = toExternalUrl((data as any).orderUrl);
   const menuUrl = toExternalUrl((data as any).menuUrl);
   const websiteUrl = toExternalUrl(data.websiteUrl);
-  const phoneHref = data.phone ? `tel:${String(data.phone).replace(/\s+/g, "")}` : "";
+  const phoneHref = data.phone
+    ? `tel:${String(data.phone).replace(/\s+/g, "")}`
+    : "";
   const resolvedRestaurantId = String(data.id || profileId || "").trim();
   const isRestaurantUnclaimed =
     data.entity === "restaurant" && data.isVerified !== true;
   const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(resolvedRestaurantId)}?src=concierge&focus=description`;
   const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(resolvedRestaurantId)}&src=concierge`;
   const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
-    String(data.subtitle || "").toLowerCase().includes("truck")
+    String(data.subtitle || "")
+      .toLowerCase()
+      .includes("truck")
       ? "food_truck"
       : "restaurant",
   )}&claim=1&q=${encodeURIComponent(String(data.title || "").trim())}&redirect=${encodeURIComponent(
-    data.profilePath || `/p/restaurant/${encodeURIComponent(resolvedRestaurantId)}`,
+    data.profilePath ||
+      `/p/restaurant/${encodeURIComponent(resolvedRestaurantId)}`,
   )}`;
   const directionsUrl = locationLine
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLine)}`
@@ -435,10 +465,6 @@ export default function PublicProfilePage() {
         String(deal.restaurantId || "") === data.id && deal.isActive !== false,
     )
     .slice(0, 6);
-
-  useEffect(() => {
-    setRestaurantTab("overview");
-  }, [data?.id]);
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -473,12 +499,28 @@ export default function PublicProfilePage() {
   const resolvedFontFamily = profile.fontFamily || presetDefaults.fontFamily;
   const themePalette =
     resolvedTheme === "forest"
-      ? { bg: "from-emerald-900 to-emerald-700", panel: "bg-emerald-950/70", chip: "bg-emerald-400/20 text-emerald-100" }
+      ? {
+          bg: "from-emerald-900 to-emerald-700",
+          panel: "bg-emerald-950/70",
+          chip: "bg-emerald-400/20 text-emerald-100",
+        }
       : resolvedTheme === "slate"
-        ? { bg: "from-slate-900 to-slate-700", panel: "bg-slate-950/70", chip: "bg-slate-300/20 text-slate-100" }
+        ? {
+            bg: "from-slate-900 to-slate-700",
+            panel: "bg-slate-950/70",
+            chip: "bg-slate-300/20 text-slate-100",
+          }
         : resolvedTheme === "amber"
-          ? { bg: "from-amber-900 to-amber-700", panel: "bg-amber-950/70", chip: "bg-amber-300/20 text-amber-100" }
-          : { bg: "from-rose-900 to-orange-700", panel: "bg-rose-950/70", chip: "bg-rose-300/20 text-rose-100" };
+          ? {
+              bg: "from-amber-900 to-amber-700",
+              panel: "bg-amber-950/70",
+              chip: "bg-amber-300/20 text-amber-100",
+            }
+          : {
+              bg: "from-rose-900 to-orange-700",
+              panel: "bg-rose-950/70",
+              chip: "bg-rose-300/20 text-rose-100",
+            };
   const accentStyle = profile.accentColor
     ? ({ borderColor: profile.accentColor, color: profile.accentColor } as any)
     : undefined;
@@ -498,7 +540,10 @@ export default function PublicProfilePage() {
         : "text-left";
 
   const sections = new Map<string, ReactNode>();
-  sections.set("about", about ? <p className="text-base leading-relaxed">{about}</p> : null);
+  sections.set(
+    "about",
+    about ? <p className="text-base leading-relaxed">{about}</p> : null,
+  );
   sections.set(
     "location",
     locationLine ? (
@@ -533,9 +578,13 @@ export default function PublicProfilePage() {
   );
   sections.set(
     "metrics",
-    data.entity === "supplier" && typeof data.metrics?.activeProductCount === "number" ? (
+    data.entity === "supplier" &&
+      typeof data.metrics?.activeProductCount === "number" ? (
       <div className="text-sm text-muted-foreground">
-        Active products: <span className="font-medium text-foreground">{data.metrics.activeProductCount}</span>
+        Active products:{" "}
+        <span className="font-medium text-foreground">
+          {data.metrics.activeProductCount}
+        </span>
       </div>
     ) : null,
   );
@@ -543,7 +592,9 @@ export default function PublicProfilePage() {
     "highlights",
     highlights.length > 0 ? (
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Highlights</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Highlights
+        </h2>
         <div className="flex flex-wrap gap-2">
           {highlights.map((item, idx) => (
             <Badge key={`${item}-${idx}`} variant="outline" style={accentStyle}>
@@ -558,7 +609,9 @@ export default function PublicProfilePage() {
     "links",
     featuredLinks.length > 0 ? (
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Links</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Links
+        </h2>
         <div className="grid gap-2">
           {featuredLinks.map((link, idx) => (
             <a
@@ -579,7 +632,9 @@ export default function PublicProfilePage() {
     "gallery",
     galleryUrls.length > 0 ? (
       <div>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Gallery</h2>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Gallery
+        </h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {galleryUrls.map((url, idx) => (
             <img
@@ -594,10 +649,19 @@ export default function PublicProfilePage() {
       </div>
     ) : null,
   );
-  const defaultOrder = ["about", "location", "contact", "metrics", "highlights", "links", "gallery"];
-  const order = Array.isArray(profile.sectionOrder) && profile.sectionOrder.length > 0
-    ? profile.sectionOrder
-    : defaultOrder;
+  const defaultOrder = [
+    "about",
+    "location",
+    "contact",
+    "metrics",
+    "highlights",
+    "links",
+    "gallery",
+  ];
+  const order =
+    Array.isArray(profile.sectionOrder) && profile.sectionOrder.length > 0
+      ? profile.sectionOrder
+      : defaultOrder;
   const renderedSections = order
     .map((key) => sections.get(key))
     .filter(Boolean);
@@ -634,9 +698,7 @@ export default function PublicProfilePage() {
     orderUrl
       ? { label: "Order Online", href: orderUrl, icon: UtensilsCrossed }
       : null,
-    menuUrl
-      ? { label: "View Menu", href: menuUrl, icon: Sparkles }
-      : null,
+    menuUrl ? { label: "View Menu", href: menuUrl, icon: Sparkles } : null,
     phoneHref ? { label: "Call", href: phoneHref, icon: Phone } : null,
     directionsUrl
       ? { label: "Directions", href: directionsUrl, icon: Navigation }
@@ -658,21 +720,31 @@ export default function PublicProfilePage() {
 
       <Card className="overflow-hidden">
         <div className={`bg-gradient-to-br ${themePalette.bg} p-8 text-white`}>
-          <div className={`mb-3 flex items-center gap-2 ${profile.hideProfileBadge ? "hidden" : ""}`}>
+          <div
+            className={`mb-3 flex items-center gap-2 ${profile.hideProfileBadge ? "hidden" : ""}`}
+          >
             <Store className="h-5 w-5" />
-            <Badge className={themePalette.chip}>{labelByEntity[data.entity] || "Public Profile"}</Badge>
+            <Badge className={themePalette.chip}>
+              {labelByEntity[data.entity] || "Public Profile"}
+            </Badge>
           </div>
           <div className={heroLayoutClass}>
             <div>
               <h1 className="text-4xl font-bold tracking-tight">{heroTitle}</h1>
               {heroSubtitle ? (
-                <p className="mt-2 max-w-2xl text-sm text-white/85">{heroSubtitle}</p>
+                <p className="mt-2 max-w-2xl text-sm text-white/85">
+                  {heroSubtitle}
+                </p>
               ) : null}
 
               {data.entity === "restaurant" ? (
                 <div className="mt-5 flex flex-wrap gap-2">
                   {orderUrl ? (
-                    <a href={orderUrl} target="_blank" rel="noreferrer noopener">
+                    <a
+                      href={orderUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
                       <Button className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
                         Order Online
                       </Button>
@@ -696,7 +768,11 @@ export default function PublicProfilePage() {
                     </a>
                   ) : null}
                   {websiteUrl ? (
-                    <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                    <a
+                      href={websiteUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
                       <Button
                         variant="outline"
                         className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
@@ -712,31 +788,50 @@ export default function PublicProfilePage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant={engagementState?.viewer?.isLiked ? "default" : "outline"}
+                    variant={
+                      engagementState?.viewer?.isLiked ? "default" : "outline"
+                    }
                     className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-                    onClick={() => handleAuthRequiredAction(() => likeMutation.mutate())}
+                    onClick={() =>
+                      handleAuthRequiredAction(() => likeMutation.mutate())
+                    }
                   >
-                    {engagementState?.viewer?.isLiked ? "Liked" : "Like"} · {engagementState?.counts?.likes ?? 0}
+                    {engagementState?.viewer?.isLiked ? "Liked" : "Like"} ·{" "}
+                    {engagementState?.counts?.likes ?? 0}
                   </Button>
                   <Button
                     size="sm"
-                    variant={engagementState?.viewer?.isFollowing ? "default" : "outline"}
+                    variant={
+                      engagementState?.viewer?.isFollowing
+                        ? "default"
+                        : "outline"
+                    }
                     className="border-white/40 bg-white/10 text-white hover:bg-white/20"
                     onClick={() =>
                       handleAuthRequiredAction(() => followMutation.mutate())
                     }
                   >
-                    {engagementState?.viewer?.isFollowing ? "Following" : "Follow"} · {engagementState?.counts?.follows ?? 0}
+                    {engagementState?.viewer?.isFollowing
+                      ? "Following"
+                      : "Follow"}{" "}
+                    · {engagementState?.counts?.follows ?? 0}
                   </Button>
                   <Button
                     size="sm"
-                    variant={engagementState?.viewer?.isFavorited ? "default" : "outline"}
+                    variant={
+                      engagementState?.viewer?.isFavorited
+                        ? "default"
+                        : "outline"
+                    }
                     className="border-white/40 bg-white/10 text-white hover:bg-white/20"
                     onClick={() =>
                       handleAuthRequiredAction(() => favoriteMutation.mutate())
                     }
                   >
-                    {engagementState?.viewer?.isFavorited ? "Favorited" : "Favorite"} · {engagementState?.counts?.favorites ?? 0}
+                    {engagementState?.viewer?.isFavorited
+                      ? "Favorited"
+                      : "Favorite"}{" "}
+                    · {engagementState?.counts?.favorites ?? 0}
                   </Button>
                   <Button
                     size="sm"
@@ -746,7 +841,10 @@ export default function PublicProfilePage() {
                       handleAuthRequiredAction(() => recommendMutation.mutate())
                     }
                   >
-                    {engagementState?.viewer?.hasRecommended ? "Update Recommendation" : "Recommend"} · {engagementState?.counts?.recommendations ?? 0}
+                    {engagementState?.viewer?.hasRecommended
+                      ? "Update Recommendation"
+                      : "Recommend"}{" "}
+                    · {engagementState?.counts?.recommendations ?? 0}
                   </Button>
                 </div>
               ) : null}
@@ -770,7 +868,13 @@ export default function PublicProfilePage() {
               ) : null}
             </div>
             {ctaLabel && ctaUrl ? (
-              <div className={resolvedHeroLayout === "split" ? "md:justify-self-end" : "mt-5"}>
+              <div
+                className={
+                  resolvedHeroLayout === "split"
+                    ? "md:justify-self-end"
+                    : "mt-5"
+                }
+              >
                 <a
                   href={ctaUrl}
                   target="_blank"
@@ -795,10 +899,14 @@ export default function PublicProfilePage() {
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Link href={conciergeEditPath as any}>
-                  <Button size="sm" variant="outline">Manage Profile For Owner</Button>
+                  <Button size="sm" variant="outline">
+                    Manage Profile For Owner
+                  </Button>
                 </Link>
                 <Link href={conciergeDealPath as any}>
-                  <Button size="sm" variant="outline">Manage Specials</Button>
+                  <Button size="sm" variant="outline">
+                    Manage Specials
+                  </Button>
                 </Link>
               </div>
             </div>
@@ -807,20 +915,36 @@ export default function PublicProfilePage() {
           {data.entity === "restaurant" && engagementState ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Likes</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.likes}</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Likes
+                </div>
+                <div className="mt-1 text-xl font-semibold text-foreground">
+                  {engagementState.counts.likes}
+                </div>
               </div>
               <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Follows</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.follows}</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Follows
+                </div>
+                <div className="mt-1 text-xl font-semibold text-foreground">
+                  {engagementState.counts.follows}
+                </div>
               </div>
               <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Favorites</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.favorites}</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Favorites
+                </div>
+                <div className="mt-1 text-xl font-semibold text-foreground">
+                  {engagementState.counts.favorites}
+                </div>
               </div>
               <div className="rounded-lg border p-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Recs</div>
-                <div className="mt-1 text-xl font-semibold text-foreground">{engagementState.counts.recommendations}</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Recs
+                </div>
+                <div className="mt-1 text-xl font-semibold text-foreground">
+                  {engagementState.counts.recommendations}
+                </div>
               </div>
             </div>
           ) : null}
@@ -836,7 +960,11 @@ export default function PublicProfilePage() {
                     Everything guests need, in one profile
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={handleShareProfile}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleShareProfile}
+                >
                   <Share2 className="mr-1.5 h-3.5 w-3.5" />
                   Share
                 </Button>
@@ -848,8 +976,14 @@ export default function PublicProfilePage() {
                     <a
                       key={card.label}
                       href={card.href}
-                      target={card.href.startsWith("http") ? "_blank" : undefined}
-                      rel={card.href.startsWith("http") ? "noreferrer noopener" : undefined}
+                      target={
+                        card.href.startsWith("http") ? "_blank" : undefined
+                      }
+                      rel={
+                        card.href.startsWith("http")
+                          ? "noreferrer noopener"
+                          : undefined
+                      }
                       className="rounded-lg border bg-[var(--bg-card)] px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
                     >
                       <div className="flex items-center gap-2">
@@ -896,7 +1030,9 @@ export default function PublicProfilePage() {
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     Source of Truth
                   </div>
-                  <div className="text-sm font-semibold">Canonical MealScout record</div>
+                  <div className="text-sm font-semibold">
+                    Canonical MealScout record
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{canonical.machineReadiness}</Badge>
@@ -937,7 +1073,9 @@ export default function PublicProfilePage() {
                   </div>
                 </div>
                 <Badge variant="outline">
-                  {evidence.windowHours ? `${Math.round(evidence.windowHours / 24)}d window` : "window"}
+                  {evidence.windowHours
+                    ? `${Math.round(evidence.windowHours / 24)}d window`
+                    : "window"}
                 </Badge>
               </div>
               <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
@@ -965,7 +1103,9 @@ export default function PublicProfilePage() {
                     <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
                       About
                     </div>
-                    <p className="text-sm leading-relaxed text-foreground">{about}</p>
+                    <p className="text-sm leading-relaxed text-foreground">
+                      {about}
+                    </p>
                   </div>
                 ) : null}
 
@@ -991,7 +1131,7 @@ export default function PublicProfilePage() {
                                 </p>
                               ) : null}
                             </div>
-                            {(deal.discountValue || deal.dealType) ? (
+                            {deal.discountValue || deal.dealType ? (
                               <Badge variant="secondary" className="shrink-0">
                                 {deal.discountValue
                                   ? `${deal.discountValue}${deal.dealType === "percentage" ? "%" : ""}`
@@ -1016,7 +1156,10 @@ export default function PublicProfilePage() {
                     {merchItems.length > 0 ? (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {merchItems.map((item, idx) => (
-                          <div key={`${item.name}-${idx}`} className="rounded-lg border p-3">
+                          <div
+                            key={`${item.name}-${idx}`}
+                            className="rounded-lg border p-3"
+                          >
                             {item.imageUrl ? (
                               <img
                                 src={item.imageUrl}
@@ -1053,7 +1196,8 @@ export default function PublicProfilePage() {
                       </div>
                     ) : (
                       <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                        No merch listed yet. Restaurant owners can add merch items in Profile Settings.
+                        No merch listed yet. Restaurant owners can add merch
+                        items in Profile Settings.
                       </div>
                     )}
                   </div>
@@ -1066,7 +1210,11 @@ export default function PublicProfilePage() {
                     </h2>
                     <div className="flex flex-wrap gap-2">
                       {highlights.map((item, idx) => (
-                        <Badge key={`${item}-${idx}`} variant="outline" style={accentStyle}>
+                        <Badge
+                          key={`${item}-${idx}`}
+                          variant="outline"
+                          style={accentStyle}
+                        >
                           {item}
                         </Badge>
                       ))}
@@ -1117,7 +1265,7 @@ export default function PublicProfilePage() {
               </div>
 
               <div className="space-y-4">
-                {(locationLine || data.phone || businessHours.length > 0) ? (
+                {locationLine || data.phone || businessHours.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Contact & Visit
@@ -1210,7 +1358,8 @@ export default function PublicProfilePage() {
               className="bg-emerald-600 text-white hover:bg-emerald-700"
               disabled={!orderUrl}
               onClick={() => {
-                if (orderUrl) window.open(orderUrl, "_blank", "noopener,noreferrer");
+                if (orderUrl)
+                  window.open(orderUrl, "_blank", "noopener,noreferrer");
               }}
             >
               Order
@@ -1220,7 +1369,8 @@ export default function PublicProfilePage() {
               variant="outline"
               disabled={!menuUrl}
               onClick={() => {
-                if (menuUrl) window.open(menuUrl, "_blank", "noopener,noreferrer");
+                if (menuUrl)
+                  window.open(menuUrl, "_blank", "noopener,noreferrer");
               }}
             >
               Menu
