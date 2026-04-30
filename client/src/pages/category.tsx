@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import Navigation from "@/components/navigation";
 import DealCard from "@/components/deal-card";
+import RestaurantCard from "@/components/restaurant-card";
 import { Button } from "@/components/ui/button";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -23,72 +24,84 @@ import {
 const categoryConfig = {
   pizza: {
     title: "Pizza & Italian",
+    searchTerms: ["pizza", "italian", "pasta"],
     icon: Pizza,
     gradient: "from-orange-500 to-red-500",
     description: "Delicious pizza and authentic Italian cuisine",
   },
   burgers: {
     title: "Burgers & American",
+    searchTerms: ["burger", "burgers", "american", "sandwich"],
     icon: Sandwich,
     gradient: "from-red-500 to-yellow-500",
     description: "Juicy burgers and classic American dishes",
   },
   sushi: {
     title: "Sushi & Japanese",
+    searchTerms: ["sushi", "japanese", "sashimi"],
     icon: Fish,
     gradient: "from-red-500 to-pink-500",
     description: "Fresh sushi and authentic Japanese cuisine",
   },
   chinese: {
     title: "Chinese Food",
+    searchTerms: ["chinese", "noodle", "fried rice"],
     icon: Soup,
     gradient: "from-red-600 to-yellow-500",
     description: "Authentic Chinese dishes and flavors",
   },
   mexican: {
     title: "Mexican Food",
+    searchTerms: ["mexican", "taco", "burrito"],
     icon: UtensilsCrossed,
     gradient: "from-green-500 to-red-500",
     description: "Tacos, burritos, and Mexican specialties",
   },
   breakfast: {
     title: "Breakfast & Brunch",
+    searchTerms: ["breakfast", "brunch", "pancake"],
     icon: Croissant,
     gradient: "from-yellow-400 to-orange-500",
-    description: "Start your day with great breakfast deals",
+    description: "Start your day with great breakfast and brunch spots",
   },
   seafood: {
     title: "Seafood",
+    searchTerms: ["seafood", "fish", "shrimp"],
     icon: Fish,
     gradient: "from-blue-500 to-teal-500",
     description: "Fresh catch and seafood specialties",
   },
   bbq: {
     title: "BBQ & Grilled",
+    searchTerms: ["bbq", "barbecue", "brisket", "ribs"],
     icon: Flame,
     gradient: "from-orange-600 to-red-600",
     description: "Smoky BBQ and grilled meats",
   },
   dessert: {
     title: "Desserts & Sweets",
+    searchTerms: ["dessert", "sweets", "ice cream", "cake"],
     icon: Cake,
     gradient: "from-pink-400 to-purple-500",
     description: "Sweet treats and decadent desserts",
   },
   coffee: {
     title: "Coffee & Cafes",
+    searchTerms: ["coffee", "cafe", "latte"],
     icon: Coffee,
     gradient: "from-amber-600 to-orange-600",
     description: "Great coffee and cozy cafe atmosphere",
   },
   healthy: {
     title: "Healthy Options",
+    searchTerms: ["healthy", "salad", "smoothie", "bowl"],
     icon: Salad,
     gradient: "from-green-400 to-green-600",
     description: "Fresh, nutritious, and delicious healthy meals",
   },
   asian: {
     title: "Asian Cuisine",
+    searchTerms: ["asian", "thai", "vietnamese", "pho"],
     icon: Soup,
     gradient: "from-red-600 to-orange-500",
     description: "Authentic Asian flavors and fresh ingredients",
@@ -97,16 +110,118 @@ const categoryConfig = {
 
 const lower = (value?: string) => String(value || "").toLowerCase();
 
+const categorySearchTerms = (
+  config: (typeof categoryConfig)[keyof typeof categoryConfig],
+) =>
+  "searchTerms" in config && Array.isArray(config.searchTerms)
+    ? config.searchTerms
+    : [config.title];
+
+const normalizeRestaurantForCard = (restaurant: any) => {
+  const id = String(restaurant.id || "").trim();
+  const name = String(restaurant.name || "").trim();
+
+  if (!id || !name) return null;
+
+  return {
+    id,
+    name,
+    address: String(restaurant.address || ""),
+    cuisineType: String(restaurant.cuisineType || ""),
+    isActive:
+      typeof restaurant.isActive === "boolean"
+        ? restaurant.isActive
+        : undefined,
+    isVerified: Boolean(restaurant.isVerified),
+    isFoodTruck: Boolean(
+      restaurant.isFoodTruck ||
+      restaurant.businessType === "food_truck" ||
+      restaurant.type === "food_truck",
+    ),
+    rating: typeof restaurant.rating === "number" ? restaurant.rating : null,
+    operatingHours:
+      restaurant.operatingHours ?? restaurant.businessHours ?? null,
+    mobileOnline: Boolean(restaurant.mobileOnline),
+    currentLatitude:
+      typeof restaurant.currentLatitude === "number"
+        ? restaurant.currentLatitude
+        : undefined,
+    currentLongitude:
+      typeof restaurant.currentLongitude === "number"
+        ? restaurant.currentLongitude
+        : undefined,
+    lastBroadcastAt:
+      typeof restaurant.lastBroadcastAt === "string"
+        ? restaurant.lastBroadcastAt
+        : undefined,
+    distance:
+      typeof restaurant.distance === "number" ? restaurant.distance : undefined,
+  };
+};
+
 export default function CategoryPage() {
   const params = useParams() as Record<string, string | undefined>;
   const category = params.category || params.type || "";
   const categoryKey = category as keyof typeof categoryConfig;
   const config = category ? categoryConfig[categoryKey] : null;
 
-  const { data: featuredDeals, isLoading } = useQuery({
+  const searchTerms = config ? categorySearchTerms(config) : [];
+
+  const { data: featuredDeals, isLoading: dealsLoading } = useQuery({
     queryKey: ["/api/deals/featured"],
+    queryFn: async () => {
+      const response = await fetch("/api/deals/featured");
+      if (!response.ok) throw new Error("Failed to fetch featured deals");
+      return response.json();
+    },
     enabled: true,
+    retry: false,
   });
+
+  const { data: categorySearchResults, isLoading: restaurantsLoading } =
+    useQuery({
+      queryKey: ["/api/search", searchTerms, "category", categoryKey],
+      queryFn: async () => {
+        const responses = await Promise.allSettled(
+          searchTerms.map(async (term) => {
+            const params = new URLSearchParams({ q: term });
+            const response = await fetch(`/api/search?${params}`);
+            if (!response.ok) throw new Error("Failed to search category");
+            return response.json();
+          }),
+        );
+
+        return responses.reduce(
+          (merged, result) => {
+            if (result.status !== "fulfilled") return merged;
+            const restaurants = Array.isArray(result.value?.restaurants)
+              ? result.value.restaurants
+              : [];
+            const deals = Array.isArray(result.value?.deals)
+              ? result.value.deals
+              : [];
+
+            restaurants.forEach((restaurant: any) => {
+              const id = String(restaurant?.id || "").trim();
+              if (id) merged.restaurantMap.set(id, restaurant);
+            });
+            deals.forEach((deal: any) => {
+              const id = String(deal?.id || "").trim();
+              if (id) merged.dealMap.set(id, deal);
+            });
+
+            return merged;
+          },
+          {
+            restaurantMap: new Map<string, any>(),
+            dealMap: new Map<string, any>(),
+          },
+        );
+      },
+      enabled: Boolean(config && searchTerms.length > 0),
+      retry: false,
+      staleTime: 30_000,
+    });
 
   if (!config) {
     return (
@@ -123,6 +238,12 @@ export default function CategoryPage() {
   }
 
   const allDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
+  const searchedRestaurants = categorySearchResults?.restaurantMap
+    ? Array.from(categorySearchResults.restaurantMap.values())
+    : [];
+  const searchedDeals = categorySearchResults?.dealMap
+    ? Array.from(categorySearchResults.dealMap.values())
+    : [];
   const categoryDeals = allDeals.filter((deal: any) => {
     const cuisineType = lower(deal.restaurant?.cuisineType);
     const title = lower(deal.title);
@@ -220,30 +341,54 @@ export default function CategoryPage() {
         return false;
     }
   });
+  const mergedDealMap = new Map<string, any>();
+  [...searchedDeals, ...categoryDeals].forEach((deal: any) => {
+    const id = String(deal?.id || "").trim();
+    if (id) mergedDealMap.set(id, deal);
+  });
+  const displayDeals = Array.from(mergedDealMap.values());
+  const displayRestaurants = searchedRestaurants
+    .map(normalizeRestaurantForCard)
+    .filter(Boolean)
+    .slice(0, 24);
+  const totalResults = displayRestaurants.length + displayDeals.length;
+  const isLoading =
+    restaurantsLoading || (dealsLoading && !categorySearchResults);
 
   const canonicalUrl = `https://www.mealscout.us/category/${encodeURIComponent(category || "")}`;
-  const seoTitle = `${config.title} Deals Near You | MealScout`;
-  const seoDescription = `Browse ${config.title.toLowerCase()} deals from local restaurants and food trucks on MealScout. Find fresh offers near you today.`;
+  const seoTitle = `${config.title} Restaurants, Food Trucks & Deals Near You | MealScout`;
+  const seoDescription = `Browse ${config.title.toLowerCase()} restaurants, food trucks, and deals on MealScout. Find real matching places and active offers near you.`;
   const schemaData = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "CollectionPage",
-        name: `${config.title} Deals`,
+        name: `${config.title} Restaurants, Food Trucks & Deals`,
         description: seoDescription,
         url: canonicalUrl,
       },
       {
         "@type": "ItemList",
-        name: `${config.title} deal list`,
-        numberOfItems: categoryDeals.slice(0, 12).length,
-        itemListElement: categoryDeals
-          .slice(0, 12)
-          .map((deal: any, index: number) => ({
-            "@type": "ListItem",
-            position: index + 1,
+        name: `${config.title} result list`,
+        numberOfItems: totalResults,
+        itemListElement: [
+          ...displayRestaurants.map((restaurant: any) => ({
+            id: restaurant.id,
+            name: restaurant.name,
+            url: `https://www.mealscout.us/restaurant/${restaurant.id}`,
+          })),
+          ...displayDeals.map((deal: any) => ({
+            id: deal.id,
             name: deal.title,
             url: `https://www.mealscout.us/deal/${deal.id}`,
+          })),
+        ]
+          .slice(0, 12)
+          .map((item: any, index: number) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: item.name,
+            url: item.url,
           })),
       },
     ],
@@ -291,8 +436,7 @@ export default function CategoryPage() {
 
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            {categoryDeals.length} deal{categoryDeals.length !== 1 ? "s" : ""}{" "}
-            found
+            {totalResults} result{totalResults !== 1 ? "s" : ""} found
           </div>
           <div className="flex space-x-2">
             <Button variant="outline" size="sm" data-testid="button-sort">
@@ -323,11 +467,46 @@ export default function CategoryPage() {
               </div>
             ))}
           </div>
-        ) : categoryDeals.length > 0 ? (
-          <div className="space-y-4">
-            {categoryDeals.map((deal: any) => (
-              <DealCard key={deal.id} deal={deal} />
-            ))}
+        ) : totalResults > 0 ? (
+          <div className="space-y-8">
+            {displayRestaurants.length > 0 ? (
+              <section>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    Restaurants & Food Trucks
+                  </h2>
+                  <span className="text-sm text-muted-foreground">
+                    {displayRestaurants.length} found
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  {displayRestaurants.map((restaurant: any) => (
+                    <RestaurantCard
+                      key={restaurant.id}
+                      restaurant={restaurant}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {displayDeals.length > 0 ? (
+              <section>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-foreground">
+                    Active Deals
+                  </h2>
+                  <span className="text-sm text-muted-foreground">
+                    {displayDeals.length} found
+                  </span>
+                </div>
+                <div className="space-y-4">
+                  {displayDeals.map((deal: any) => (
+                    <DealCard key={deal.id} deal={deal} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         ) : (
           <div className="text-center py-12">
@@ -339,13 +518,13 @@ export default function CategoryPage() {
             <h3
               className={`font-bold text-lg bg-gradient-to-r ${config.gradient} text-transparent bg-clip-text mb-2`}
             >
-              No {config.title} deals yet
+              No {config.title} results yet
             </h3>
             <p className="text-muted-foreground mb-6">
-              Check back soon for amazing {config.title.toLowerCase()} deals!
+              No matching restaurants, trucks, or active deals are listed yet.
             </p>
             <Link href="/search">
-              <Button data-testid="button-browse-all">Browse All Deals</Button>
+              <Button data-testid="button-browse-all">Search all food</Button>
             </Link>
           </div>
         )}
@@ -357,12 +536,12 @@ export default function CategoryPage() {
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/search">
               <Button variant="outline" size="sm">
-                Search all deals
+                Search all food
               </Button>
             </Link>
             <Link href="/deals/featured">
               <Button variant="outline" size="sm">
-                Featured deals
+                Featured food
               </Button>
             </Link>
             <Link href="/map">
