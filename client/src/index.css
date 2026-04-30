@@ -1307,10 +1307,13 @@
 
   .map-callout-shell {
     position: absolute;
-    left: 0.75rem;
-    right: 0.75rem;
-    bottom: 0.75rem;
+    left: clamp(0.5rem, var(--map-callout-x, 50%), calc(100% - 0.5rem));
+    right: auto;
+    bottom: auto;
+    top: var(--map-callout-y, 50%);
+    width: min(280px, calc(100% - 1rem));
     z-index: 1200;
+    transform: translate(-50%, calc(-100% - 18px));
   }
 
   .map-callout-shell .map-callout-card {
@@ -1319,17 +1322,14 @@
   }
 
   .map-callout-shell .map-callout-tail {
-    display: none;
+    display: block;
   }
 
   @media (min-width: 640px) {
     .map-callout-shell {
-      left: var(--map-callout-x, 50%);
-      right: auto;
-      bottom: auto;
+      left: clamp(0.5rem, var(--map-callout-x, 50%), calc(100% - 0.5rem));
       top: var(--map-callout-y, 50%);
-      z-index: 20;
-      transform: translate(-50%, calc(-100% - 18px));
+      z-index: 1300;
     }
 
     .map-callout-shell .map-callout-card {

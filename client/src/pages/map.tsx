@@ -1169,6 +1169,7 @@ export default function MapPage() {
     x: number;
     y: number;
   } | null>(null);
+  const mapViewportRef = useRef<HTMLDivElement | null>(null);
   const [drawingActive, setDrawingActive] = useState(false);
   const [areaFilterBounds, setAreaFilterBounds] = useState<{
     north: number;
@@ -3279,8 +3280,8 @@ export default function MapPage() {
   const mapCalloutShellClassName = "map-callout-shell";
   const mapCalloutShellStyle = hasMapCalloutAnchor
     ? ({
-        "--map-callout-x": `${mapCalloutAnchorPosition!.x}px`,
-        "--map-callout-y": `${mapCalloutAnchorPosition!.y}px`,
+        "--map-callout-x": `${mapCalloutAnchorPosition!.x + (mapViewportRef.current?.offsetLeft || 0)}px`,
+        "--map-callout-y": `${mapCalloutAnchorPosition!.y + (mapViewportRef.current?.offsetTop || 0)}px`,
       } as React.CSSProperties)
     : undefined;
 
@@ -3466,7 +3467,7 @@ export default function MapPage() {
 
       {/* Map Container */}
       <div className="relative flex-1">
-        <div className="relative h-[60vh] min-h-[320px]">
+        <div ref={mapViewportRef} className="relative h-[60vh] min-h-[320px]">
           {shouldHoldMapProviderSelection && (
             <div className="absolute inset-0 z-[1200] flex items-center justify-center bg-[hsl(var(--background))/0.7] backdrop-blur-sm">
               <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-4 py-2 text-sm text-muted-foreground shadow-clean">
