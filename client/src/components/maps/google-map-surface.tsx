@@ -53,6 +53,8 @@ type GoogleMapsWindow = Window & {
 const BUILD_GOOGLE_MAP_ID = String(
   (import.meta as any).env?.VITE_GOOGLE_MAPS_MAP_ID || "",
 ).trim();
+const PIN_IDENTIFIER_MIN_ZOOM = 12;
+const PIN_CLUSTER_MAX_ZOOM = PIN_IDENTIFIER_MIN_ZOOM - 1;
 
 const createBoundsLike = (
   north: number,
@@ -633,7 +635,7 @@ export function GoogleMapSurface({
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
     const isClusterable = (marker: MapAdapterMarker) => marker.kind !== "user";
-    const showMarkerLabels = zoom >= 14;
+    const showMarkerLabels = zoom >= PIN_IDENTIFIER_MIN_ZOOM;
 
     const usedIds = new Set<string>();
     markers.forEach((marker) => {
@@ -774,7 +776,7 @@ export function GoogleMapSurface({
           // Only cluster at lower zoom levels so individual pins do not
           // appear/disappear when the user zooms in/out within detail zoom.
           algorithm: new SuperClusterAlgorithm({
-            maxZoom: 13,
+            maxZoom: PIN_CLUSTER_MAX_ZOOM,
             radius: 80,
             minPoints: 3,
           }),
