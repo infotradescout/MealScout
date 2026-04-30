@@ -35,6 +35,7 @@ import {
   Share2,
   Star,
   Globe,
+  ExternalLink,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -638,6 +639,36 @@ export default function RestaurantDetailPage() {
       : "";
   const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
+  const getPopularItemAction = (itemName: string) => {
+    const normalizedName = itemName.toLowerCase().trim();
+    if (normalizedName.includes("full menu")) {
+      if (menuPrimaryUrl) {
+        return {
+          type: menuPrimaryIsInternal ? "internal" : "external",
+          href: menuPrimaryUrl,
+        };
+      }
+      return { type: "scroll", targetId: "restaurant-specials" };
+    }
+    if (normalizedName.includes("special")) {
+      return { type: "scroll", targetId: "restaurant-specials-list" };
+    }
+    if (normalizedName.includes("visit") || normalizedName.includes("order")) {
+      if (orderPrimaryUrl) return { type: "external", href: orderPrimaryUrl };
+      if (onsiteOrderingEnabled && onsiteMenuUrl) {
+        return { type: "internal", href: onsiteMenuUrl };
+      }
+      if (websitePrimaryUrl)
+        return { type: "external", href: websitePrimaryUrl };
+      if (directionsUrl) return { type: "external", href: directionsUrl };
+      if (phoneHref) return { type: "external", href: phoneHref };
+    }
+    return null;
+  };
+
+  const popularItemRowClass =
+    "flex w-full items-center justify-between gap-3 py-3 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-text)]";
+
   const localBusinessSchema = {
     "@context": "https://schema.org",
     "@type": "Restaurant",
@@ -709,7 +740,7 @@ export default function RestaurantDetailPage() {
   };
 
   return (
-    <div className="max-w-md lg:max-w-3xl mx-auto bg-[#0b0b0c] min-h-screen relative pb-24 text-white">
+    <div className="max-w-md lg:max-w-3xl mx-auto min-h-screen relative pb-24 text-white">
       <SEOHead
         title={`${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} | Menu, Deals & Hours`}
         description={description}
@@ -1020,24 +1051,85 @@ export default function RestaurantDetailPage() {
               </h2>
             </div>
             <div className="divide-y divide-white/10">
-              {popularMenuItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between gap-3 py-3"
-                >
-                  <div>
-                    <p className="font-semibold text-white">{item.name}</p>
-                    {item.description ? (
-                      <p className="text-xs text-white/55">
-                        {item.description}
+              {popularMenuItems.map((item) => {
+                const itemAction = getPopularItemAction(item.name);
+                const rowContent = (
+                  <>
+                    <div>
+                      <p className="font-semibold text-white">{item.name}</p>
+                      {item.description ? (
+                        <p className="text-xs text-white/55">
+                          {item.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    {itemAction ? (
+                      <ExternalLink className="h-4 w-4 shrink-0 text-white/55" />
+                    ) : (
+                      <p className="text-sm font-semibold text-white/70">
+                        {formatMoney(item.priceCents)}
                       </p>
-                    ) : null}
+                    )}
+                  </>
+                );
+
+                if (itemAction?.type === "internal" && itemAction.href) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={itemAction.href as any}
+                      className={popularItemRowClass}
+                    >
+                      {rowContent}
+                    </Link>
+                  );
+                }
+
+                if (itemAction?.type === "external" && itemAction.href) {
+                  return (
+                    <a
+                      key={item.id}
+                      href={itemAction.href}
+                      target={
+                        itemAction.href.startsWith("http")
+                          ? "_blank"
+                          : undefined
+                      }
+                      rel={
+                        itemAction.href.startsWith("http")
+                          ? "noreferrer noopener"
+                          : undefined
+                      }
+                      className={popularItemRowClass}
+                    >
+                      {rowContent}
+                    </a>
+                  );
+                }
+
+                if (itemAction?.type === "scroll") {
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={popularItemRowClass}
+                      onClick={() =>
+                        document
+                          .getElementById(itemAction.targetId || "")
+                          ?.scrollIntoView({ behavior: "smooth" })
+                      }
+                    >
+                      {rowContent}
+                    </button>
+                  );
+                }
+
+                return (
+                  <div key={item.id} className={popularItemRowClass}>
+                    {rowContent}
                   </div>
-                  <p className="text-sm font-semibold text-white/70">
-                    {formatMoney(item.priceCents)}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ) : null}
