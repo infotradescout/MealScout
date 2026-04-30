@@ -118,11 +118,11 @@ const pages: OwnerIntentPage[] = [
     seoDescription:
       "A DoorDash alternative for food trucks that helps owners take direct pickup orders, share QR menus, publish locations, and keep customer relationships.",
     eyebrow: "DoorDash alternative for food trucks",
-    headline: "Take direct pickup orders without making delivery apps your whole business.",
+    headline: "Keep DoorDash as a channel, not the place your food truck lives.",
     subhead:
-      "MealScout gives food trucks a direct ordering path for pickup, QR menus, customer-facing schedules, and repeat buyer visibility so every sale is not trapped inside a third-party marketplace.",
-    primaryCta: { href: "/menu-builder", label: "Build direct menu" },
-    secondaryCta: { href: signupHref, label: "Create truck profile" },
+      "MealScout gives food trucks a direct pickup ordering path, QR menu, public schedule, and customer-facing profile so regulars can buy from the truck without starting inside a third-party marketplace every time.",
+    primaryCta: { href: signupHref, label: "Start direct ordering" },
+    secondaryCta: { href: "/menu-builder", label: "Preview menu builder" },
     intentTerms: [
       "DoorDash alternative for food trucks",
       "Uber Eats alternative for food trucks",
@@ -130,7 +130,7 @@ const pages: OwnerIntentPage[] = [
       "avoid delivery app fees",
     ],
     promise:
-      "Give customers a direct way to order from your truck while still keeping the profile, schedule, and local discovery tools that help them find you again.",
+      "Give customers a direct way to order from your truck while keeping the menu, schedule, QR code, local profile, and repeat-customer path tied to your own MealScout presence.",
     proof: [
       {
         title: "Pickup-first ordering",
@@ -1198,6 +1198,12 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
     () => Math.round(orders * ticket * (commission / 100)),
     [orders, ticket, commission],
   );
+  const grossSales = useMemo(() => Math.round(orders * ticket), [orders, ticket]);
+  const directShiftOrders = useMemo(() => Math.round(orders * 0.35), [orders]);
+  const directShiftFees = useMemo(
+    () => Math.round(directShiftOrders * ticket * (commission / 100)),
+    [commission, directShiftOrders, ticket],
+  );
   const useTool = () => {
     if (toolUsed) return;
     setToolUsed(true);
@@ -1214,7 +1220,226 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
     `Booking ${truckName} for an office, apartment, brewery, or event? Send the request through our MealScout profile.`,
   ];
 
-  if (page.intentKey === "doordash_alternative" || page.intentKey === "online_ordering") {
+  const formatMoney = (value: number) => `$${Math.max(0, value).toLocaleString()}`;
+
+  if (page.intentKey === "doordash_alternative") {
+    const comparisonRows = [
+      {
+        label: "Customer starts",
+        marketplace: "Inside a delivery marketplace",
+        mealscout: "On your truck profile, QR menu, schedule, or direct link",
+      },
+      {
+        label: "Best fit",
+        marketplace: "Delivery app browsing and paid marketplace demand",
+        mealscout: "Pickup, regulars, events, QR signs, social traffic, and local search",
+      },
+      {
+        label: "Owner control",
+        marketplace: "Limited customer relationship and marketplace rules",
+        mealscout: "Profile, menu, schedule, deals, booking path, and repeat buyer loop",
+      },
+    ];
+    const nextSteps = [
+      "Create or claim the truck profile.",
+      "Add the menu items customers already ask for at the window.",
+      "Put the direct order link behind QR signs, social posts, and event pages.",
+      "Keep DoorDash or Uber Eats only where delivery marketplace demand is worth the fee.",
+    ];
+
+    return (
+      <div className="space-y-5">
+        <Card className="overflow-hidden border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+          <CardContent className="grid gap-6 p-5 lg:grid-cols-[0.9fr_1.1fr] lg:p-6">
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                  Direct order fee calculator
+                </p>
+                <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                  See what marketplace fees can cost before you send regulars there.
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-secondary)]">
+                  This is not a promise that every order moves direct. It shows the fee pressure
+                  so a truck owner can decide which customers should get a direct MealScout link.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                  Monthly app orders
+                  <input
+                    className="mt-1 w-full rounded-md border border-[color:var(--border-subtle)] bg-background px-3 py-2 text-sm font-semibold text-[color:var(--text-primary)]"
+                    min="0"
+                    type="number"
+                    value={orders}
+                    onChange={(event) => {
+                      setOrders(Number(event.target.value) || 0);
+                      useTool();
+                    }}
+                  />
+                </label>
+                <label className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                  Average ticket
+                  <input
+                    className="mt-1 w-full rounded-md border border-[color:var(--border-subtle)] bg-background px-3 py-2 text-sm font-semibold text-[color:var(--text-primary)]"
+                    min="0"
+                    type="number"
+                    value={ticket}
+                    onChange={(event) => {
+                      setTicket(Number(event.target.value) || 0);
+                      useTool();
+                    }}
+                  />
+                </label>
+                <label className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                  Marketplace fee %
+                  <input
+                    className="mt-1 w-full rounded-md border border-[color:var(--border-subtle)] bg-background px-3 py-2 text-sm font-semibold text-[color:var(--text-primary)]"
+                    min="0"
+                    type="number"
+                    value={commission}
+                    onChange={(event) => {
+                      setCommission(Number(event.target.value) || 0);
+                      useTool();
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                    App order volume
+                  </div>
+                  <div className="mt-1 text-2xl font-black">{formatMoney(grossSales)}</div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                    Estimated app fees
+                  </div>
+                  <div className="mt-1 text-2xl font-black">{formatMoney(savings)}</div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--accent-text)]/35 bg-[color:var(--accent-text)]/8 p-4">
+                  <div className="text-xs font-semibold text-[color:var(--accent-text)]">
+                    If 35% order direct
+                  </div>
+                  <div className="mt-1 text-2xl font-black">{formatMoney(directShiftFees)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                      MealScout direct page
+                    </p>
+                    <h3 className="mt-1 text-lg font-black">Your truck link</h3>
+                  </div>
+                  <QrCode className="h-8 w-8 text-[color:var(--accent-text)]" />
+                </div>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-lg bg-[color:var(--accent-text)]/10 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-black">Smash burger combo</span>
+                      <span className="font-black">$14</span>
+                    </div>
+                    <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
+                      Pickup at today&apos;s serving window
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border border-[color:var(--border-subtle)] p-3 text-sm">
+                      <ShoppingBag className="mb-2 h-4 w-4 text-[color:var(--accent-text)]" />
+                      Direct pickup order
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--border-subtle)] p-3 text-sm">
+                      <CalendarDays className="mb-2 h-4 w-4 text-[color:var(--accent-text)]" />
+                      Schedule and next stop
+                    </div>
+                  </div>
+                  <Button asChild className="w-full gap-2">
+                    <Link
+                      href={withIntentParams(signupHref, page)}
+                      onClick={() =>
+                        trackFunnelEvent(FUNNEL_EVENTS.ownerIntentCtaClick, {
+                          page: "food-truck-owner-intent",
+                          intent: page.intentKey,
+                          cta: "tool-direct-order-preview",
+                          href: signupHref,
+                        })
+                      }
+                    >
+                      Create this order path
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+            <CardContent className="p-5">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                Marketplace vs direct
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Use the right channel for the right order.</h2>
+              <div className="mt-4 overflow-hidden rounded-lg border border-[color:var(--border-subtle)]">
+                <div className="hidden bg-[var(--bg-surface)] text-xs font-black uppercase tracking-[0.12em] text-[color:var(--text-secondary)] sm:grid sm:grid-cols-[0.75fr_1fr_1fr]">
+                  <div className="p-3">Decision</div>
+                  <div className="border-l border-[color:var(--border-subtle)] p-3">DoorDash / Uber Eats</div>
+                  <div className="border-l border-[color:var(--border-subtle)] p-3">MealScout direct</div>
+                </div>
+                {comparisonRows.map((row) => (
+                  <div key={row.label} className="grid gap-2 border-t border-[color:var(--border-subtle)] p-3 text-sm sm:grid-cols-[0.75fr_1fr_1fr] sm:gap-0 sm:p-0">
+                    <div className="font-black sm:p-3">{row.label}</div>
+                    <div className="rounded-md bg-[var(--bg-surface)] p-3 text-[color:var(--text-secondary)] sm:rounded-none sm:border-l sm:border-[color:var(--border-subtle)] sm:bg-transparent">
+                      <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.12em] text-[color:var(--text-muted)] sm:hidden">
+                        DoorDash / Uber Eats
+                      </span>
+                      {row.marketplace}
+                    </div>
+                    <div className="rounded-md bg-[color:var(--accent-text)]/8 p-3 text-[color:var(--text-secondary)] sm:rounded-none sm:border-l sm:border-[color:var(--border-subtle)] sm:bg-transparent">
+                      <span className="mb-1 block text-[11px] font-black uppercase tracking-[0.12em] text-[color:var(--accent-text)] sm:hidden">
+                        MealScout direct
+                      </span>
+                      {row.mealscout}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+            <CardContent className="p-5">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                What to do next
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Build the direct path first.</h2>
+              <div className="mt-4 space-y-3">
+                {nextSteps.map((step, index) => (
+                  <div key={step} className="flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">
+                    <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[color:var(--accent-text)]/10 text-xs font-black text-[color:var(--accent-text)]">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (page.intentKey === "online_ordering") {
     return (
       <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
         <CardContent className="grid gap-4 p-5 md:grid-cols-[0.8fr_1.2fr] md:items-center">
