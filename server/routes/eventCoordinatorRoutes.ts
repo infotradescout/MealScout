@@ -543,6 +543,9 @@ export function registerEventCoordinatorRoutes(
               : null;
 
         const eventDate = new Date(parsed.date);
+        if (Number.isNaN(eventDate.getTime())) {
+          return res.status(400).json({ message: "Event date must be valid" });
+        }
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         if (eventDate < today) {
@@ -575,7 +578,7 @@ export function registerEventCoordinatorRoutes(
             coordinatorUserId: req.user.id,
             name: parsed.name,
             description: parsed.description || null,
-            date: parsed.date,
+            date: eventDate,
             startTime: parsed.startTime,
             endTime: parsed.endTime,
             maxTrucks: parsed.maxTrucks,
@@ -814,7 +817,10 @@ export function registerEventCoordinatorRoutes(
         if (error instanceof z.ZodError) {
           return res
             .status(400)
-            .json({ message: "Invalid event data", errors: error.errors });
+            .json({
+              message: error.errors[0]?.message || "Invalid event data",
+              errors: error.errors,
+            });
         }
         res.status(400).json({
           message: error.message || "Failed to create event",

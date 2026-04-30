@@ -470,6 +470,13 @@ export function registerUserAdminRoutes(
           });
         }
 
+        const eventDate = new Date(nextClaimData.date);
+        if (Number.isNaN(eventDate.getTime())) {
+          return res.status(400).json({
+            message: "Add a valid event date before publishing.",
+          });
+        }
+
         let host = nextClaimData.hostId
           ? await storage.getHost(String(nextClaimData.hostId)).catch(() => undefined)
           : undefined;
@@ -502,7 +509,7 @@ export function registerUserAdminRoutes(
           description:
             nextClaimData.requestSummary ||
             `Seeking ${nextClaimData.requestedVendorType || "food truck"} vendors.`,
-          date: nextClaimData.date,
+          date: eventDate,
           startTime: nextClaimData.startTime,
           endTime: nextClaimData.endTime,
           maxTrucks: Number(nextClaimData.maxTrucks || 1),
