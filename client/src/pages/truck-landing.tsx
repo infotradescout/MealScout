@@ -88,6 +88,14 @@ export default function TruckLanding() {
               <Link href="/food-truck-opportunities/pensacola" className="text-primary underline-offset-4 hover:underline">
                 Pensacola opportunities
               </Link>
+              <span className="text-muted-foreground">/</span>
+              <Link href="/food-truck-customer-list" className="text-primary underline-offset-4 hover:underline">
+                Customer list
+              </Link>
+              <span className="text-muted-foreground">/</span>
+              <Link href="/food-truck-website-builder" className="text-primary underline-offset-4 hover:underline">
+                Truck website
+              </Link>
             </div>
           </div>
         </div>

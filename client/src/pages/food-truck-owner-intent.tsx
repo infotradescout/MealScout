@@ -3,13 +3,18 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardList,
+  Globe2,
+  HeartHandshake,
+  Mail,
   Megaphone,
   MessageSquareText,
   MousePointerClick,
   QrCode,
+  Repeat,
   Search,
   Share2,
   ShoppingBag,
+  Smartphone,
   Store,
   Truck,
   Users,
@@ -486,6 +491,342 @@ const pages: OwnerIntentPage[] = [
         question: "Is Pensacola a MealScout launch market?",
         answer:
           "Yes. Pensacola is MealScout's first focused food truck market before broader expansion.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-vendor-opportunities",
+    sitemapTitle: "Food truck vendor opportunities",
+    seoTitle: "Food Truck Vendor Opportunities and Open Spots | MealScout",
+    seoDescription:
+      "Find food truck vendor opportunities, open host spots, parking passes, market requests, and event leads through MealScout owner tools.",
+    eyebrow: "Food truck vendor opportunities",
+    headline: "Find the kinds of food truck opportunities owners are already searching for.",
+    subhead:
+      "MealScout turns host demand, parking passes, public events, and booking requests into a clearer opportunity path for food truck operators.",
+    primaryCta: { href: "/pensacola/spots", label: "View open spots" },
+    secondaryCta: { href: signupHref, label: "Create truck profile" },
+    intentTerms: [
+      "food truck vendor opportunities",
+      "food truck events accepting vendors",
+      "food truck spots near me",
+      "food truck open calls",
+    ],
+    promise:
+      "Give owners a search-friendly place to find host-posted demand instead of relying on cold links, old social posts, or scattered vendor forms.",
+    proof: [
+      {
+        title: "Open spots",
+        body: "Show available host and parking pass opportunities when they are ready for trucks.",
+        icon: Truck,
+      },
+      {
+        title: "Event requests",
+        body: "Connect owner profiles to events, catering requests, and public open calls.",
+        icon: ClipboardList,
+      },
+      {
+        title: "Local launch focus",
+        body: "Start with Pensacola opportunity pages, then expand by market as demand grows.",
+        icon: Search,
+      },
+    ],
+    workflow: [
+      "Search or browse available opportunity pages.",
+      "Review location, timing, host type, and booking details.",
+      "Claim or create a profile so the truck can request matching opportunities.",
+      "Use the profile for future host demand, ordering, and schedule visibility.",
+    ],
+    faqs: [
+      {
+        question: "Where can food trucks find vendor opportunities?",
+        answer:
+          "Food trucks can look for open events, host-posted spots, parking pass locations, markets accepting vendors, and booking request platforms like MealScout.",
+      },
+      {
+        question: "How does MealScout help with food truck opportunities?",
+        answer:
+          "MealScout connects owner profiles with host demand, open spots, parking pass workflows, and market-specific opportunity pages.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-customer-list",
+    sitemapTitle: "Food truck customer list",
+    seoTitle: "Food Truck Customer List and Repeat Buyer Tools | MealScout",
+    seoDescription:
+      "Build a food truck customer list with direct profile links, ordering, schedules, deals, and repeat buyer paths through MealScout.",
+    eyebrow: "Food truck customer list",
+    headline: "Stop renting every customer relationship from social feeds and delivery apps.",
+    subhead:
+      "MealScout helps food trucks point customers toward a profile, schedule, ordering path, deals, and updates that belong to the business instead of disappearing inside another platform.",
+    primaryCta: { href: signupHref, label: "Start customer list" },
+    secondaryCta: { href: "/doordash-alternative-for-food-trucks", label: "Reduce app dependency" },
+    intentTerms: [
+      "food truck customer list",
+      "food truck repeat customers",
+      "food truck customer database",
+      "own your food truck customers",
+    ],
+    promise:
+      "Make every order, profile visit, deal, and schedule link part of a repeat-customer loop instead of a one-time interaction.",
+    proof: [
+      {
+        title: "Direct profile",
+        body: "Give regulars one place to find your menu, schedule, deals, and booking options.",
+        icon: Users,
+      },
+      {
+        title: "Repeat paths",
+        body: "Use ordering and deals to bring customers back to the truck's own presence.",
+        icon: Repeat,
+      },
+      {
+        title: "Less dependency",
+        body: "Keep customer attention connected to your truck instead of only to third-party apps.",
+        icon: HeartHandshake,
+      },
+    ],
+    workflow: [
+      "Create a public truck profile.",
+      "Add schedule, menu, deals, and ordering links customers can revisit.",
+      "Use QR codes and social posts to send customers to that profile.",
+      "Turn one-time buyers into repeat customers who know where to find you next.",
+    ],
+    faqs: [
+      {
+        question: "How can a food truck build a customer list?",
+        answer:
+          "A food truck can build a customer list by sending buyers to direct ordering, QR menus, deals, profile follows, schedule updates, and owned communication paths instead of relying only on social feeds.",
+      },
+      {
+        question: "Why does customer ownership matter for food trucks?",
+        answer:
+          "Food trucks move often, so repeat customers need a reliable way to find the next stop, order again, and remember the truck outside of third-party platforms.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-text-marketing",
+    sitemapTitle: "Food truck text marketing",
+    seoTitle: "Food Truck Text Marketing, Updates, and Repeat Demand | MealScout",
+    seoDescription:
+      "Food truck text marketing starts with a clear customer destination: schedule links, direct ordering, deals, and profile updates through MealScout.",
+    eyebrow: "Food truck text marketing",
+    headline: "Make every text update point to a working food truck action.",
+    subhead:
+      "Whether a truck texts location changes, specials, or preorder windows, MealScout gives those messages a destination: schedule, menu, deal, order, or booking profile.",
+    primaryCta: { href: signupHref, label: "Create update-ready profile" },
+    secondaryCta: { href: "/food-truck-schedule-app", label: "Publish schedule" },
+    intentTerms: [
+      "food truck text marketing",
+      "food truck SMS marketing",
+      "food truck customer updates",
+      "text customers food truck location",
+    ],
+    promise:
+      "Pair outbound customer updates with profile pages that customers can actually use when they tap the link.",
+    proof: [
+      {
+        title: "Location updates",
+        body: "Point customers to the current or upcoming stop instead of a vague message.",
+        icon: Smartphone,
+      },
+      {
+        title: "Deal links",
+        body: "Send specials and limited drops to a page with a real next action.",
+        icon: Megaphone,
+      },
+      {
+        title: "Order context",
+        body: "Connect texts to menu and pickup ordering pages when a truck is ready to sell.",
+        icon: ShoppingBag,
+      },
+    ],
+    workflow: [
+      "Publish a truck profile with schedule and menu details.",
+      "Use direct links in text updates for locations, deals, and pickup windows.",
+      "Send customers to the correct MealScout action instead of only a static homepage.",
+      "Measure repeat demand by watching orders, profile visits, and booking interest.",
+    ],
+    faqs: [
+      {
+        question: "What should food truck text marketing link to?",
+        answer:
+          "Food truck texts should link to the current schedule, live location, menu, preorder page, deal, or booking profile so customers can act immediately.",
+      },
+      {
+        question: "Does MealScout send SMS campaigns?",
+        answer:
+          "MealScout provides the owner profile, ordering, deal, and schedule destinations that make text campaigns useful. SMS automation can connect to those customer actions as the truck grows.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-loyalty-program",
+    sitemapTitle: "Food truck loyalty program",
+    seoTitle: "Food Truck Loyalty Program and Repeat Customer Tools | MealScout",
+    seoDescription:
+      "Build food truck loyalty through repeat visits, direct ordering, deals, customer profiles, and schedule visibility with MealScout.",
+    eyebrow: "Food truck loyalty program",
+    headline: "Build loyalty around the next visit, not just the last purchase.",
+    subhead:
+      "For trucks, loyalty starts when customers can find the next stop, see the menu, claim a deal, and order again without hunting across social posts.",
+    primaryCta: { href: signupHref, label: "Create loyalty-ready profile" },
+    secondaryCta: { href: "/food-truck-customer-list", label: "Build customer list" },
+    intentTerms: [
+      "food truck loyalty program",
+      "food truck rewards app",
+      "food truck repeat buyers",
+      "food truck customer retention",
+    ],
+    promise:
+      "Turn discovery, deals, direct ordering, and schedule visibility into repeat buyer behavior before adding complicated rewards mechanics.",
+    proof: [
+      {
+        title: "Deals",
+        body: "Give customers a reason to come back on a specific day or stop.",
+        icon: Megaphone,
+      },
+      {
+        title: "Direct orders",
+        body: "Make repeat purchases easier when customers already know what they want.",
+        icon: ShoppingBag,
+      },
+      {
+        title: "Findability",
+        body: "Keep loyal customers from losing track of where the truck will be next.",
+        icon: CalendarDays,
+      },
+    ],
+    workflow: [
+      "Create one customer-facing profile.",
+      "Publish schedule, menu, deals, and pickup options.",
+      "Use QR codes, posts, and updates to send customers back to that profile.",
+      "Layer rewards and repeat offers on top of an already findable truck presence.",
+    ],
+    faqs: [
+      {
+        question: "What is the simplest loyalty program for a food truck?",
+        answer:
+          "The simplest loyalty system is a reliable profile where customers can find the next stop, see current deals, order again, and follow future updates.",
+      },
+      {
+        question: "How does MealScout support food truck loyalty?",
+        answer:
+          "MealScout connects profiles, schedules, deals, ordering, and customer actions so food trucks can create repeat demand from one public presence.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-website-builder",
+    sitemapTitle: "Food truck website builder",
+    seoTitle: "Food Truck Website Builder Alternative for Menus and Bookings | MealScout",
+    seoDescription:
+      "A food truck website builder alternative with profile pages, menus, schedules, direct ordering, deals, and booking requests through MealScout.",
+    eyebrow: "Food truck website builder",
+    headline: "A food truck profile that works harder than a static website.",
+    subhead:
+      "MealScout gives owners a public page for the things customers and hosts actually need: where you are, what you serve, how to order, and how to request the truck.",
+    primaryCta: { href: signupHref, label: "Create food truck page" },
+    secondaryCta: { href: "/food-truck-online-ordering", label: "Add ordering" },
+    intentTerms: [
+      "food truck website builder",
+      "food truck website alternative",
+      "food truck online menu website",
+      "food truck booking website",
+    ],
+    promise:
+      "Replace a stale brochure page with a living truck profile tied to menus, schedules, orders, deals, and booking requests.",
+    proof: [
+      {
+        title: "Public profile",
+        body: "Use one page for the core information customers and hosts need.",
+        icon: Globe2,
+      },
+      {
+        title: "Menu and ordering",
+        body: "Turn a static menu into an action path for pickup orders and QR links.",
+        icon: QrCode,
+      },
+      {
+        title: "Booking requests",
+        body: "Help event buyers request the truck without searching for old contact details.",
+        icon: ClipboardList,
+      },
+    ],
+    workflow: [
+      "Create a MealScout truck profile.",
+      "Add menu, schedule, location, photos, and booking details.",
+      "Use the page as the link in bio, QR destination, and event profile.",
+      "Keep the page current as stops, menus, and offers change.",
+    ],
+    faqs: [
+      {
+        question: "Do food trucks need a website?",
+        answer:
+          "Food trucks need a reliable public page for menus, schedules, ordering, and booking requests. That can be a traditional website or an active MealScout profile.",
+      },
+      {
+        question: "Can MealScout replace a basic food truck website?",
+        answer:
+          "For many early-stage trucks, a MealScout profile can cover the practical jobs of a basic website: menu, schedule, discovery, direct links, and booking context.",
+      },
+    ],
+  },
+  {
+    path: "/food-truck-marketing-ideas",
+    sitemapTitle: "Food truck marketing ideas",
+    seoTitle: "Food Truck Marketing Ideas That Lead to Orders and Bookings | MealScout",
+    seoDescription:
+      "Food truck marketing ideas for schedules, social posts, direct ordering, deals, QR menus, customer lists, and booking requests with MealScout.",
+    eyebrow: "Food truck marketing ideas",
+    headline: "Market the action you want customers or hosts to take next.",
+    subhead:
+      "The best food truck marketing is not just posting more. It is sending people to the right next action: find the truck, order pickup, claim a deal, request catering, or follow the next stop.",
+    primaryCta: { href: signupHref, label: "Create marketing-ready profile" },
+    secondaryCta: { href: "/food-truck-social-media-management", label: "Plan social updates" },
+    intentTerms: [
+      "food truck marketing ideas",
+      "how to promote my food truck",
+      "food truck advertising ideas",
+      "food truck Instagram ideas",
+    ],
+    promise:
+      "Turn marketing into measurable owner actions by linking posts, QR codes, texts, and local search traffic to a profile that can convert demand.",
+    proof: [
+      {
+        title: "Schedule marketing",
+        body: "Make every weekly stop easier for customers to find and share.",
+        icon: CalendarDays,
+      },
+      {
+        title: "Deal marketing",
+        body: "Promote a specific offer instead of a vague reminder that the truck exists.",
+        icon: Megaphone,
+      },
+      {
+        title: "Booking marketing",
+        body: "Give hosts a direct path to request the truck for catering and events.",
+        icon: Mail,
+      },
+    ],
+    workflow: [
+      "Choose the action: visit, order, book, follow, or return.",
+      "Publish the matching MealScout page or profile section.",
+      "Use that link in posts, QR signs, text updates, and local pages.",
+      "Repeat around schedules, deals, events, and catering availability.",
+    ],
+    faqs: [
+      {
+        question: "What are good food truck marketing ideas?",
+        answer:
+          "Good food truck marketing ideas include weekly schedule posts, QR menus, preorder drops, catering request links, customer text updates, limited deals, and local opportunity pages.",
+      },
+      {
+        question: "How does MealScout help food truck marketing?",
+        answer:
+          "MealScout gives food truck marketing a destination: public profile, schedule, menu, ordering, deals, and booking request links.",
       },
     ],
   },

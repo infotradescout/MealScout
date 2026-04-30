@@ -196,6 +196,12 @@ const publicRoutePrefixes = [
   "/food-truck-booking-software",
   "/food-truck-catering-leads",
   "/food-truck-schedule-app",
+  "/food-truck-vendor-opportunities",
+  "/food-truck-customer-list",
+  "/food-truck-text-marketing",
+  "/food-truck-loyalty-program",
+  "/food-truck-website-builder",
+  "/food-truck-marketing-ideas",
   "/food-truck-opportunities/",
   "/faq",
   "/how-it-works",
@@ -396,6 +402,30 @@ function Router() {
             />
             <Route
               path="/food-truck-schedule-app"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-vendor-opportunities"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-customer-list"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-text-marketing"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-loyalty-program"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-website-builder"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-marketing-ideas"
               component={FoodTruckOwnerIntentPage}
             />
             <Route
@@ -660,6 +690,30 @@ function Router() {
             />
             <Route
               path="/food-truck-schedule-app"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-vendor-opportunities"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-customer-list"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-text-marketing"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-loyalty-program"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-website-builder"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-marketing-ideas"
               component={FoodTruckOwnerIntentPage}
             />
             <Route

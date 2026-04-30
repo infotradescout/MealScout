@@ -232,6 +232,12 @@ export function registerSeoRoutes(app: Express) {
         "/food-truck-booking-software",
         "/food-truck-catering-leads",
         "/food-truck-schedule-app",
+        "/food-truck-vendor-opportunities",
+        "/food-truck-customer-list",
+        "/food-truck-text-marketing",
+        "/food-truck-loyalty-program",
+        "/food-truck-website-builder",
+        "/food-truck-marketing-ideas",
         "/food-truck-opportunities/pensacola",
       ].forEach((path) => mergeUrl(`${baseUrl}${path}`));
 
