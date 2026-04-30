@@ -1029,14 +1029,14 @@ export default function PublicProfilePage() {
           ) : null}
 
           {data.entity === "restaurant" ? (
-            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4">
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 shadow-clean">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Website Actions
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-[color:var(--accent-text)]">
+                    Guest actions
                   </div>
-                  <div className="text-sm font-semibold text-foreground">
-                    Everything guests need, in one profile
+                  <div className="text-sm font-semibold text-[color:var(--text-primary)]">
+                    Order, view the menu, call, or get directions from this profile.
                   </div>
                 </div>
                 <Button
@@ -1048,26 +1048,30 @@ export default function PublicProfilePage() {
                   Share
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {restaurantActionCards.map((card) => {
                   const Icon = card.icon;
+                  const isExternal = card.href.startsWith("http");
                   return (
                     <a
                       key={card.label}
                       href={card.href}
                       target={
-                        card.href.startsWith("http") ? "_blank" : undefined
+                        isExternal ? "_blank" : undefined
                       }
                       rel={
-                        card.href.startsWith("http")
-                          ? "noreferrer noopener"
-                          : undefined
+                        isExternal ? "noreferrer noopener" : undefined
                       }
-                      className="rounded-lg border bg-[var(--bg-card)] px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                      className="group rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-3 text-sm font-bold text-[color:var(--text-primary)] transition hover:border-[color:var(--accent-text)] hover:shadow-clean"
                     >
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-muted-foreground" />
-                        <span>{card.label}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Icon className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
+                          <span className="truncate">{card.label}</span>
+                        </span>
+                        {isExternal ? (
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[color:var(--text-muted)]" />
+                        ) : null}
                       </div>
                     </a>
                   );

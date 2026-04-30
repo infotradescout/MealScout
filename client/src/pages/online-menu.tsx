@@ -36,6 +36,8 @@ import {
   Loader2,
   AlertCircle,
   Clock,
+  Store,
+  CheckCircle2,
   Leaf,
   Wheat,
   ChevronRight,
@@ -174,6 +176,19 @@ export default function MenuPage() {
   }, [activeMenus.length, selectedMenuId]);
 
   const selectedMenu = activeMenus.find((m) => m.id === selectedMenuId) ?? null;
+  const visibleCategories = selectedMenu?.categories
+    .map((category) => ({
+      ...category,
+      items: category.items.filter((item) => item.isAvailable),
+    }))
+    .filter((category) => category.items.length > 0) ?? [];
+  const visibleItemCount = visibleCategories.reduce(
+    (sum, category) => sum + category.items.length,
+    0,
+  );
+  const paymentNote = selectedMenu?.acceptsCash
+    ? "Card or cash at pickup"
+    : "Card payment at checkout";
 
   const cartItemCount = cart
     .filter((i) => i.restaurantId === restaurantId)
@@ -244,7 +259,7 @@ export default function MenuPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-[var(--bg-layered)] pb-28">
       <SEOHead
         title={seoTitle}
         description={seoDescription}
@@ -252,15 +267,76 @@ export default function MenuPage() {
       />
       <Navigation />
 
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:py-8">
+        <section className="mb-5 overflow-hidden rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+          <div className="grid gap-4 p-5 sm:p-6 md:grid-cols-[1.1fr_0.9fr] md:items-end">
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="gap-1">
+                  <Store className="h-3.5 w-3.5" />
+                  {entityType}
+                </Badge>
+                {orderingEnabled ? (
+                  <Badge className="gap-1 bg-[color:var(--status-success)] text-white hover:bg-[color:var(--status-success)]">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Online ordering
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">Menu browsing</Badge>
+                )}
+              </div>
+              <h1 className="text-3xl font-black leading-tight text-[color:var(--text-primary)] sm:text-4xl">
+                {restaurantName || selectedMenu?.name || "Online menu"}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--text-secondary)]">
+                {orderingEnabled
+                  ? `Browse the menu, add pickup items, and check out when you are ready.`
+                  : `Browse the menu before you arrive. Online ordering is not active for this ${entityType} yet.`}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold text-[color:var(--text-secondary)]">
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xl font-black text-[color:var(--text-primary)]">
+                  {visibleCategories.length}
+                </div>
+                sections
+              </div>
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xl font-black text-[color:var(--text-primary)]">
+                  {visibleItemCount}
+                </div>
+                items
+              </div>
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xl font-black text-[color:var(--text-primary)]">
+                  {cartItemCount}
+                </div>
+                in cart
+              </div>
+            </div>
+          </div>
+          {selectedMenu ? (
+            <div className="flex flex-wrap items-center gap-3 border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] px-5 py-3 text-xs font-medium text-[color:var(--text-secondary)] sm:px-6">
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                {orderingEnabled ? "Pickup ordering" : "Browse only"}
+              </span>
+              <span>{paymentNote}</span>
+              {!selectedMenu.hidePlatformFee && orderingEnabled ? (
+                <span>$1.00 MealScout service fee at checkout</span>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
         {/* Menu selector tabs if multiple menus */}
         {activeMenus.length > 1 && (
-          <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+          <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
             {activeMenus.map((menu) => (
               <button
                 key={menu.id}
                 onClick={() => setSelectedMenuId(menu.id)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap border transition-colors ${
+                className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
                   selectedMenuId === menu.id
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card hover:bg-muted border-border"
@@ -275,7 +351,7 @@ export default function MenuPage() {
         {selectedMenu && (
           <>
             {!orderingEnabled && (
-              <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>
                   Menu browsing is always free. Online ordering is not yet
@@ -284,36 +360,28 @@ export default function MenuPage() {
                 </span>
               </div>
             )}
-            {!selectedMenu.hidePlatformFee && orderingEnabled && (
-              <p className="text-xs text-muted-foreground mb-4 text-center">
-                A $1.00 MealScout service fee is added at checkout.
-                {selectedMenu.acceptsCash && " Cash payments accepted."}
-              </p>
-            )}
-            {selectedMenu.hidePlatformFee &&
-              orderingEnabled &&
-              selectedMenu.acceptsCash && (
-                <p className="text-xs text-muted-foreground mb-4 text-center">
-                  Cash payments accepted.
-                </p>
-              )}
 
             {/* Category + items */}
-            {selectedMenu.categories.map((cat) => {
-              const visibleItems = cat.items.filter((i) => i.isAvailable);
-              if (visibleItems.length === 0) return null;
+            {visibleCategories.map((cat) => {
               return (
-                <div key={cat.id} className="mb-8">
-                  <h2 className="text-lg font-semibold border-b pb-2 mb-3">
-                    {cat.name}
-                  </h2>
+                <section key={cat.id} className="mb-5 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean sm:p-5">
+                  <div className="mb-3 flex items-start justify-between gap-3 border-b border-[color:var(--border-subtle)] pb-3">
+                    <div>
+                      <h2 className="text-xl font-black text-[color:var(--text-primary)]">
+                        {cat.name}
+                      </h2>
+                      <p className="mt-1 text-xs font-semibold text-[color:var(--text-muted)]">
+                        {cat.items.length} available item{cat.items.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
                   {cat.description && (
                     <p className="text-sm text-muted-foreground mb-3">
                       {cat.description}
                     </p>
                   )}
-                  <div className="divide-y">
-                    {visibleItems.map((item) => (
+                  <div className="grid gap-3">
+                    {cat.items.map((item) => (
                       <MenuItemCard
                         key={item.id}
                         item={item}
@@ -324,7 +392,7 @@ export default function MenuPage() {
                       />
                     ))}
                   </div>
-                </div>
+                </section>
               );
             })}
           </>
@@ -335,11 +403,11 @@ export default function MenuPage() {
       {cartItemCount > 0 && orderingEnabled && (
         <div className="fixed bottom-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-50">
           <Button
-            className="w-full h-12 text-base shadow-lg"
+            className="h-14 w-full rounded-full text-base font-black shadow-lg"
             onClick={() => setCartOpen(true)}
           >
             <ShoppingCart className="w-5 h-5 mr-2" />
-            View Cart ({cartItemCount})
+            View cart ({cartItemCount})
             <span className="ml-auto">{formatMoney(cartTotal)}</span>
           </Button>
         </div>
@@ -377,7 +445,7 @@ export default function MenuPage() {
               return (
                 <div
                   key={idx}
-                  className="flex gap-3 p-3 bg-muted/50 rounded-lg"
+                  className="flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
                 >
                   <div className="flex-1">
                     <div className="font-medium">{item.itemName}</div>
@@ -435,7 +503,7 @@ export default function MenuPage() {
                 selectedMenu &&
                 !selectedMenu.hidePlatformFee && (
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>MealScout fee</span>
+                    <span>MealScout service fee</span>
                     <span>$1.00</span>
                   </div>
                 )}
@@ -448,7 +516,7 @@ export default function MenuPage() {
                 }}
                 disabled={restaurantCart.length === 0}
               >
-                Proceed to Checkout
+                Continue to checkout
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
@@ -471,24 +539,35 @@ function MenuItemCard({
 }) {
   return (
     <div
-      className={`flex gap-3 py-3 px-1 rounded transition-colors ${
+      className={`group flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition ${
         orderingEnabled
-          ? "cursor-pointer hover:bg-muted/30"
+          ? "cursor-pointer hover:border-[color:var(--accent-text)] hover:shadow-clean"
           : "cursor-default opacity-80"
       }`}
       onClick={orderingEnabled ? onAdd : undefined}
     >
-      <div className="flex-1">
-        <div className="font-medium">{item.name}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-black text-[color:var(--text-primary)]">
+              {item.name}
+            </div>
+            <div className="mt-1 text-sm font-bold text-[color:var(--accent-text)]">
+              {formatMoney(item.priceCents)}
+            </div>
+          </div>
+          {orderingEnabled ? (
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[color:var(--accent-text)] text-black transition group-hover:scale-105">
+              <Plus className="h-4 w-4" />
+            </span>
+          ) : null}
+        </div>
         {item.description && (
           <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
             {item.description}
           </p>
         )}
-        <div className="flex gap-2 flex-wrap mt-1">
-          <span className="text-sm font-semibold">
-            {formatMoney(item.priceCents)}
-          </span>
+        <div className="mt-2 flex flex-wrap gap-2">
           {item.calories && (
             <span className="text-xs text-muted-foreground">
               {item.calories} cal
@@ -509,7 +588,7 @@ function MenuItemCard({
         <img
           src={item.imageUrl}
           alt={item.name}
-          className="w-20 h-20 object-cover rounded-lg shrink-0"
+          className="h-24 w-24 shrink-0 rounded-lg object-cover sm:h-28 sm:w-28"
         />
       )}
     </div>

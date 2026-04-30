@@ -25,6 +25,9 @@ import {
   CreditCard,
   Banknote,
   ExternalLink,
+  ReceiptText,
+  User,
+  CheckCircle2,
 } from "lucide-react";
 import type { CartItem } from "./online-menu";
 import {
@@ -247,10 +250,33 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[var(--bg-layered)] pb-24">
       <Navigation />
-      <div className="max-w-lg mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:py-8">
+        <section className="mb-5 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <Badge variant="secondary" className="mb-3 gap-1">
+                <ShoppingCart className="h-3.5 w-3.5" />
+                {entityType} checkout
+              </Badge>
+              <h1 className="text-3xl font-black leading-tight text-[color:var(--text-primary)] sm:text-4xl">
+                Review and place order
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm text-[color:var(--text-secondary)]">
+                Confirm the cart, add contact details, then choose how this order gets paid.
+              </p>
+            </div>
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 text-right">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-muted)]">
+                Total
+              </p>
+              <p className="mt-1 text-3xl font-black text-[color:var(--text-primary)]">
+                {formatMoney(total)}
+              </p>
+            </div>
+          </div>
+        </section>
 
         {inAppBrowser && paymentMethod === "card" && (
           <div className="flex flex-col gap-3 text-amber-900 text-sm bg-amber-50 px-4 py-3 rounded-lg mb-4 border border-amber-200">
@@ -279,51 +305,17 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Order summary */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {cart.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-sm">
-                <span>
-                  {item.quantity}× {item.itemName}
-                  {item.variantLabel && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {item.variantLabel}
-                    </span>
-                  )}
-                </span>
-                <span>{formatMoney(item.lineTotalCents)}</span>
-              </div>
-            ))}
-            <div className="border-t pt-2 mt-2 space-y-1">
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Subtotal</span>
-                <span>{formatMoney(subtotal)}</span>
-              </div>
-              {platformFee > 0 && (
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>MealScout fee</span>
-                  <span>{formatMoney(platformFee)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-semibold text-base pt-1">
-                <span>Total</span>
-                <span>{formatMoney(total)}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contact info */}
-        <Card className="mb-4">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Your Info</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div className="grid gap-5 lg:grid-cols-[1fr_0.85fr] lg:items-start">
+          <div className="space-y-4">
+            {/* Contact info */}
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <User className="h-4 w-4 text-[color:var(--accent-text)]" />
+                  Customer details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
             <div>
               <Label>Name *</Label>
               <Input
@@ -366,21 +358,24 @@ export default function CheckoutPage() {
                 placeholder="(555) 000-0000"
               />
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Order type */}
-        <Card className="mb-4">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Order Type</CardTitle>
-          </CardHeader>
-          <CardContent>
+            {/* Order type */}
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CheckCircle2 className="h-4 w-4 text-[color:var(--accent-text)]" />
+                  Fulfillment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
             <RadioGroup
               value={orderType}
               onValueChange={(v) => setOrderType(v as "pickup" | "dine_in")}
-              className="flex gap-4"
+              className="grid gap-3 sm:grid-cols-2"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
                 <RadioGroupItem value="pickup" id="ot-pickup" />
                 <Label
                   htmlFor="ot-pickup"
@@ -390,7 +385,7 @@ export default function CheckoutPage() {
                 </Label>
               </div>
               {!isFoodTruck && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
                   <RadioGroupItem value="dine_in" id="ot-dinein" />
                   <Label
                     htmlFor="ot-dinein"
@@ -401,21 +396,24 @@ export default function CheckoutPage() {
                 </div>
               )}
             </RadioGroup>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Payment method */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Payment Method</CardTitle>
-          </CardHeader>
-          <CardContent>
+            {/* Payment method */}
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CreditCard className="h-4 w-4 text-[color:var(--accent-text)]" />
+                  Payment method
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
             <RadioGroup
               value={paymentMethod}
               onValueChange={(v) => setPaymentMethod(v as "card" | "cash")}
-              className="flex gap-4"
+              className="grid gap-3 sm:grid-cols-2"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
                 <RadioGroupItem value="card" id="pm-card" />
                 <Label
                   htmlFor="pm-card"
@@ -425,7 +423,7 @@ export default function CheckoutPage() {
                 </Label>
               </div>
               {menuInfo?.acceptsCash && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
                   <RadioGroupItem value="cash" id="pm-cash" />
                   <Label
                     htmlFor="pm-cash"
@@ -437,31 +435,76 @@ export default function CheckoutPage() {
                 </div>
               )}
             </RadioGroup>
-          </CardContent>
-        </Card>
-
-        {orderError && (
-          <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 px-4 py-3 rounded-lg mb-4">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {orderError}
+              </CardContent>
+            </Card>
           </div>
-        )}
 
-        <Button
-          className="w-full h-12 text-base"
-          onClick={createOrder}
-          disabled={
-            isCreating ||
-            !contact.name.trim() ||
-            !orderingEnabled ||
-            (inAppBrowser && paymentMethod === "card")
-          }
-        >
-          {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-          {paymentMethod === "cash"
-            ? "Place Order (Cash)"
-            : `Pay ${formatMoney(total)}`}
-        </Button>
+          {/* Order summary */}
+          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean lg:sticky lg:top-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ReceiptText className="h-4 w-4 text-[color:var(--accent-text)]" />
+                Order summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {cart.map((item, idx) => (
+                <div key={idx} className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="font-semibold text-[color:var(--text-primary)]">
+                      {item.quantity}x {item.itemName}
+                    </span>
+                    <span className="font-bold">{formatMoney(item.lineTotalCents)}</span>
+                  </div>
+                  {item.variantLabel && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.variantLabel}
+                    </p>
+                  )}
+                </div>
+              ))}
+              <div className="border-t pt-3 mt-2 space-y-1">
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatMoney(subtotal)}</span>
+                </div>
+                {platformFee > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>MealScout service fee</span>
+                    <span>{formatMoney(platformFee)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 text-lg font-black">
+                  <span>Total</span>
+                  <span>{formatMoney(total)}</span>
+                </div>
+              </div>
+
+              {orderError && (
+                <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  {orderError}
+                </div>
+              )}
+
+              <Button
+                className="h-12 w-full rounded-full text-base font-black"
+                onClick={createOrder}
+                disabled={
+                  isCreating ||
+                  !contact.name.trim() ||
+                  !orderingEnabled ||
+                  (inAppBrowser && paymentMethod === "card")
+                }
+              >
+                {isCreating && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                {paymentMethod === "cash"
+                  ? "Place order - cash"
+                  : `Pay ${formatMoney(total)}`}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
