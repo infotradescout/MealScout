@@ -641,11 +641,33 @@ export default function SearchPage() {
     }),
     [searchQuery, searchCanonicalUrl, searchDescription, filteredDeals],
   );
-  type TrendingSearchRow = { query: string; count: number };
+  type TrendingSearchRow = {
+    query: string;
+    count: number;
+    context?: string | null;
+  };
   const { data: trendingSearches = [] } = useQuery<TrendingSearchRow[]>({
-    queryKey: ["/api/search/trending", "search-discovery"],
+    queryKey: [
+      "/api/search/trending",
+      "search-discovery",
+      userLocation?.lat ?? null,
+      userLocation?.lng ?? null,
+      selectedCategory,
+    ],
     queryFn: async () => {
-      const res = await fetch("/api/search/trending?limit=8");
+      const params = new URLSearchParams({
+        limit: "8",
+        windowDays: "7",
+      });
+      if (userLocation) {
+        params.set("lat", String(userLocation.lat));
+        params.set("lng", String(userLocation.lng));
+        params.set("radiusKm", "25");
+      }
+      if (selectedCategory && selectedCategory !== "all") {
+        params.set("interest", selectedCategory);
+      }
+      const res = await fetch(`/api/search/trending?${params}`);
       if (!res.ok) throw new Error("Failed to fetch trending searches");
       return res.json();
     },
@@ -677,21 +699,26 @@ export default function SearchPage() {
   ];
   const trendingLinks = (
     Array.isArray(trendingSearches)
-      ? trendingSearches.map((row) => row?.query).filter(Boolean)
+      ? trendingSearches
+          .map((row) => ({
+            query: row?.query,
+            context: row?.context || null,
+          }))
+          .filter((row) => Boolean(row.query))
       : []
   )
     .slice(0, 8)
-    .map((query) => ({
-      href: `/search?q=${encodeURIComponent(query)}`,
-      title: query,
-      description:
-        "See matching restaurants, trucks, deals, parking, and events.",
+    .map((row) => ({
+      href: `/search?q=${encodeURIComponent(String(row.query))}`,
+      title: String(row.query),
+      context: row.context,
     }));
 
   const searchPlaceholder = getText(
     "search.input.placeholder",
     "Search restaurants, cuisines, deals...",
   );
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   async function trackSearch(query: string, source: string) {
     try {
@@ -1274,9 +1301,9 @@ export default function SearchPage() {
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              {searchQuery ? "Active Deals" : "Popular Deals"}
+              {hasActiveSearch ? "Active Deals" : "Popular Deals"}
             </h2>
-            {searchQuery && hasNonDealSearchMatches ? (
+            {hasActiveSearch && hasNonDealSearchMatches ? (
               <p className="text-sm text-muted-foreground">
                 Deals are shown separately when this place has a live offer.
               </p>
@@ -1313,27 +1340,31 @@ export default function SearchPage() {
                 onOpen={(dealId) => {
                   trackUxEvent("search_deal_card_opened", {
                     dealId,
-                    searchQuery: searchQuery || null,
-                    surface: searchQuery ? "search_results" : "search_popular",
+                    searchQuery: hasActiveSearch ? searchQuery : null,
+                    surface: hasActiveSearch ? "search_results" : "search_popular",
                   });
                 }}
               />
             ))}
           </div>
-        ) : searchQuery && hasNonDealSearchMatches ? null : (
+        ) : hasActiveSearch && hasNonDealSearchMatches ? null : (
           <div className="text-center py-12">
             <div className="w-20 h-20 bg-[var(--bg-surface-muted)] rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="font-bold text-lg text-foreground mb-2">
-              {searchQuery && hasNonDealSearchMatches
+              {hasActiveSearch && hasNonDealSearchMatches
                 ? "No active deals for this search"
-                : "No matches found"}
+                : hasActiveSearch
+                  ? "No matches found"
+                  : "No popular deals nearby"}
             </h3>
             <p className="text-muted-foreground">
-              {searchQuery && hasNonDealSearchMatches
+              {hasActiveSearch && hasNonDealSearchMatches
                 ? "Matching restaurants, trucks, parking, videos, or events are listed above."
-                : "Try adjusting your search terms to find restaurants, trucks, or deals."}
+                : hasActiveSearch
+                  ? "Try adjusting your search terms to find restaurants, trucks, or deals."
+                  : "Open the map or search for a business, cuisine, or truck."}
             </p>
             {didYouMean && (
               <div className="mt-3">
@@ -1354,16 +1385,18 @@ export default function SearchPage() {
                 </Button>
               </div>
             )}
-            <Button
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedCategory("all");
-              }}
-              className="mt-4"
-              data-testid="button-clear-search"
-            >
-              Clear Search
-            </Button>
+            {hasActiveSearch && (
+              <Button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedCategory("all");
+                }}
+                className="mt-4"
+                data-testid="button-clear-search"
+              >
+                Clear Search
+              </Button>
+            )}
             {!userLocation && !isLocating && (
               <Button
                 variant="outline"
@@ -1439,19 +1472,21 @@ export default function SearchPage() {
               <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Trending Searches
               </h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 space-y-2">
                 {trendingLinks.map((link) => (
-                  <Link key={link.href} href={link.href}>
-                    <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean transition-shadow hover:shadow-clean-lg">
-                      <CardContent className="p-4">
-                        <div className="font-medium text-foreground">
-                          {link.title}
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {link.description}
-                        </p>
-                      </CardContent>
-                    </Card>
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm hover:bg-muted/40"
+                  >
+                    <span className="min-w-0 truncate font-medium text-foreground">
+                      {link.title}
+                    </span>
+                    {link.context ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {link.context}
+                      </span>
+                    ) : null}
                   </Link>
                 ))}
               </div>

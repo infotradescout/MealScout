@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import crypto from "crypto";
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
@@ -9,7 +8,6 @@ import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   ensureGoogleRestaurantProfile,
   getGooglePhotoUrl,
-  type GooglePlaceTextResult,
   searchPlacesFreeText,
 } from "../services/googleProfileService";
 import {
@@ -19,7 +17,6 @@ import {
   hosts,
   restaurants,
   truckImportListings,
-  users,
   videoStories,
 } from "@shared/schema";
 
@@ -58,17 +55,6 @@ const FOOD_PLACE_TYPE_ALLOWLIST = new Set([
   "wine_bar",
   "pub",
 ]);
-
-const parseUSCityStateFromFormatted = (
-  formatted: string,
-): { city: string | null; state: string | null } => {
-  if (!formatted) return { city: null, state: null };
-  const m = formatted.match(
-    /,\s*([^,]+),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*,?\s*(?:USA|United States)?\s*$/,
-  );
-  if (m) return { city: m[1].trim(), state: m[2].trim() };
-  return { city: null, state: null };
-};
 
 const normalizeSearchTerm = (value: unknown) =>
   String(value || "")
@@ -138,177 +124,6 @@ const candidateLooksLikeRequestedPlace = (
   ).length;
   return hits >= Math.min(2, requestedTokens.length);
 };
-
-const buildQuerySeedListing = (query: string) => {
-  const parts = String(query || "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const fallbackName = parts[0] || String(query || "").trim();
-  const fallbackAddress =
-    parts.length >= 2 ? parts.slice(1).join(", ") : fallbackName;
-
-  let city: string | null = null;
-  let state: string | null = null;
-
-  const parsed = parseUSCityStateFromFormatted(parts.join(", "));
-  city = parsed.city;
-  state = parsed.state;
-
-  if (!city && parts.length >= 2) {
-    city = parts[parts.length - 2] || null;
-  }
-  if (!state) {
-    const maybeState = String(parts[parts.length - 1] || "").match(
-      /\b([A-Z]{2})\b/,
-    );
-    state = maybeState?.[1] || null;
-  }
-
-  return {
-    name: fallbackName || "Unclaimed listing",
-    address: fallbackAddress || fallbackName || "Address unavailable",
-    city,
-    state,
-  };
-};
-
-let importSystemUserIdPromise: Promise<string> | null = null;
-
-async function getOrCreateImportSystemUserId(): Promise<string> {
-  if (!importSystemUserIdPromise) {
-    importSystemUserIdPromise = (async () => {
-      const email =
-        process.env.IMPORT_SYSTEM_EMAIL || "system-import@mealscout.us";
-      const [existing] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      if (existing?.id) return existing.id;
-
-      await db
-        .insert(users)
-        .values({
-          email,
-          firstName: "System",
-          lastName: "Import",
-          userType: "admin",
-          emailVerified: true,
-        } as any)
-        .onConflictDoNothing({ target: users.email });
-
-      const [created] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      return created.id;
-    })();
-  }
-
-  return importSystemUserIdPromise;
-}
-
-async function ensureSearchQueryRestaurantProfile(
-  query: string,
-  candidate?: GooglePlaceTextResult | null,
-) {
-  const seeded = buildQuerySeedListing(query);
-  const ownerId = await getOrCreateImportSystemUserId();
-  const firstPhotoName = String(candidate?.photos?.[0]?.name || "").trim();
-  const candidateCoverImageUrl = firstPhotoName
-    ? getGooglePhotoUrl(firstPhotoName)
-    : null;
-
-  const [existing] = await db
-    .select()
-    .from(restaurants)
-    .where(
-      and(
-        eq(restaurants.ownerId, ownerId),
-        sql`lower(${restaurants.name}) = lower(${seeded.name})`,
-        sql`lower(${restaurants.address}) = lower(${seeded.address})`,
-        eq(restaurants.profileSource, "search_query_seed" as any),
-      ),
-    )
-    .limit(1);
-
-  if (existing) {
-    const updates: any = {};
-    if (!existing.googlePlaceId && candidate?.placeId) {
-      updates.googlePlaceId = candidate.placeId;
-    }
-    if (!existing.coverImageUrl && candidateCoverImageUrl) {
-      updates.coverImageUrl = candidateCoverImageUrl;
-    }
-    if (
-      (!existing.googlePhotos ||
-        !Array.isArray(existing.googlePhotos) ||
-        existing.googlePhotos.length === 0) &&
-      candidate?.photos?.length
-    ) {
-      updates.googlePhotos = candidate.photos;
-    }
-    if (
-      (existing.googleRating == null || Number(existing.googleRating) <= 0) &&
-      typeof candidate?.rating === "number"
-    ) {
-      updates.googleRating = candidate.rating;
-    }
-    if (
-      (existing.googleReviewCount == null ||
-        Number(existing.googleReviewCount) <= 0) &&
-      typeof candidate?.userRatingCount === "number"
-    ) {
-      updates.googleReviewCount = candidate.userRatingCount;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      const [updated] = await db
-        .update(restaurants)
-        .set(updates)
-        .where(eq(restaurants.id, existing.id))
-        .returning();
-      if (updated) {
-        return { restaurant: updated, created: false };
-      }
-    }
-
-    return { restaurant: existing, created: false };
-  }
-
-  const [created] = await db
-    .insert(restaurants)
-    .values({
-      ownerId,
-      name: seeded.name,
-      address: seeded.address,
-      city: seeded.city,
-      state: seeded.state,
-      businessType: "restaurant",
-      cuisineType: "Restaurant",
-      isFoodTruck: false,
-      isActive: true,
-      isVerified: false,
-      description:
-        "Auto-generated MealScout listing. Claim this profile to take ownership and complete your business details.",
-      profileSource: "search_query_seed",
-      profileLastSynced: new Date(),
-      googlePlaceId: candidate?.placeId || null,
-      coverImageUrl: candidateCoverImageUrl,
-      googlePhotos: candidate?.photos?.length ? candidate.photos : null,
-      googleRating:
-        typeof candidate?.rating === "number" ? candidate.rating : null,
-      googleReviewCount:
-        typeof candidate?.userRatingCount === "number"
-          ? candidate.userRatingCount
-          : null,
-    } as any)
-    .returning();
-
-  return { restaurant: created, created: true };
-}
 
 const scoreSearchFields = (
   fields: unknown[],
@@ -416,6 +231,7 @@ export function registerPublicSearchRoutes(app: Express) {
           cuisineType: restaurants.cuisineType,
           address: restaurants.address,
           isVerified: restaurants.isVerified,
+          profileSource: restaurants.profileSource,
         })
         .from(restaurants)
         .where(
@@ -436,6 +252,7 @@ export function registerPublicSearchRoutes(app: Express) {
             name: row.name,
             address: row.address,
             cuisineType: row.cuisineType,
+            profileSource: row.profileSource,
           }),
         )
         .sort(
@@ -685,6 +502,7 @@ export function registerPublicSearchRoutes(app: Express) {
           operatingHours: restaurants.operatingHours,
           googleRating: restaurants.googleRating,
           googleReviewCount: restaurants.googleReviewCount,
+          profileSource: restaurants.profileSource,
         })
         .from(restaurants);
       const restaurantsBase = restaurantMatches
@@ -910,7 +728,7 @@ export function registerPublicSearchRoutes(app: Express) {
         .orderBy(asc(events.date))
         .limit(12);
 
-      // ----- Unclaimed listings (existing + auto-seed via Google Places) -----
+      // ----- Unclaimed listings (existing imports only; search stays read-only) -----
       const unclaimedSearchValue = `%${searchTerm}%`;
       const existingUnclaimed = await db
         .select({
@@ -956,93 +774,37 @@ export function registerPublicSearchRoutes(app: Express) {
         autoSeeded: false,
       }));
 
-      // If nothing matched in restaurants OR existing unclaimed listings, and
-      // the query is substantial enough, ask Google Places and seed an unclaimed
-      // profile so the user sees the place they were looking for and can claim it.
-      const SEED_MIN_QUERY_LEN = 5;
+      // If nothing matched locally, Google Places can help locate an already
+      // imported claimable business, but GET /api/search must not create new
+      // restaurants or import listings from arbitrary user text.
+      const LOOKUP_MIN_QUERY_LEN = 5;
       const hasPlacesApiKey = Boolean(
         process.env.GOOGLE_MAPS_API_KEY ||
         process.env.GOOGLE_PLACES_API_KEY ||
         process.env.GOOGLE_API_KEY ||
         process.env.VITE_GOOGLE_MAPS_WEB_API_KEY,
       );
-      const shouldAttemptAutoSeed =
+      const shouldAttemptExternalLookup =
         restaurantsOut.length === 0 &&
         unclaimedOut.length === 0 &&
-        query.length >= SEED_MIN_QUERY_LEN;
+        query.length >= LOOKUP_MIN_QUERY_LEN;
 
-      if (shouldAttemptAutoSeed) {
-        let querySeedCandidate: GooglePlaceTextResult | null = null;
+      if (shouldAttemptExternalLookup) {
         try {
           if (hasPlacesApiKey) {
             const candidates = await searchPlacesFreeText(query, 5, {
               latitude: biasLat,
               longitude: biasLng,
             });
-            querySeedCandidate =
-              candidates.find((c) => !isGoogleLocalityOnly(c)) ||
-              candidates[0] ||
-              null;
-            const foodCandidate =
-              candidates.find((c) =>
-                c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)),
-              ) ||
-              candidates.find(
-                (c) =>
-                  !isGoogleLocalityOnly(c) &&
-                  candidateLooksLikeRequestedPlace(c, primaryTerm),
-              ) ||
-              candidates.find((c) => !isGoogleLocalityOnly(c));
+            const foodCandidate = candidates.find(
+              (c) =>
+                !isGoogleLocalityOnly(c) &&
+                Array.isArray(c.types) &&
+                c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)) &&
+                candidateLooksLikeRequestedPlace(c, primaryTerm),
+            );
 
             if (foodCandidate) {
-              try {
-                const generated = await ensureGoogleRestaurantProfile(
-                  foodCandidate.placeId,
-                );
-                const restaurant = generated.restaurant as any;
-                restaurantsOut = [
-                  {
-                    id: restaurant.id,
-                    name: restaurant.name,
-                    cuisineType: restaurant.cuisineType,
-                    address: restaurant.address,
-                    isFoodTruck: Boolean(restaurant.isFoodTruck),
-                    isVerified: Boolean(restaurant.isVerified),
-                    operatingHours:
-                      restaurant.operatingHours ??
-                      restaurant.businessHours ??
-                      null,
-                    rating: restaurant.googleRating
-                      ? Number(restaurant.googleRating)
-                      : null,
-                    googleRating: restaurant.googleRating,
-                    googleReviewCount: restaurant.googleReviewCount,
-                  },
-                ];
-                unclaimedOut = [];
-              } catch (profileErr) {
-                console.warn(
-                  "[search] Google-backed restaurant profile generation failed; falling back to unclaimed listing:",
-                  profileErr,
-                );
-              }
-
-              if (restaurantsOut.length > 0) {
-                res.setHeader("X-MealScout-Auto-Profile", "google");
-              }
-
-              if (restaurantsOut.length > 0) {
-                return res.json({
-                  query,
-                  restaurants: restaurantsOut,
-                  deals: dealsOut,
-                  parkingPassHosts: parkingPassHostsOut,
-                  videos: videoRows,
-                  events: eventsRows,
-                  unclaimedListings: unclaimedOut,
-                });
-              }
-
               const externalId = `google:${foodCandidate.placeId}`;
               const [existing] = await db
                 .select({
@@ -1071,105 +833,11 @@ export function registerPublicSearchRoutes(app: Express) {
                     autoSeeded: false,
                   },
                 ];
-              } else {
-                const { city, state } = parseUSCityStateFromFormatted(
-                  foodCandidate.formattedAddress,
-                );
-                const insertValues: any = {
-                  source: "google_places",
-                  externalId,
-                  name: foodCandidate.name,
-                  address: foodCandidate.formattedAddress || foodCandidate.name,
-                  city,
-                  state,
-                  confidenceScore: Math.min(
-                    100,
-                    Math.round(
-                      50 +
-                        Math.min(
-                          20,
-                          (foodCandidate.userRatingCount || 0) / 50,
-                        ) +
-                        (foodCandidate.rating || 0) * 5,
-                    ),
-                  ),
-                  status: "unclaimed",
-                  rawData: {
-                    placeId: foodCandidate.placeId,
-                    types: foodCandidate.types,
-                    rating: foodCandidate.rating,
-                    userRatingCount: foodCandidate.userRatingCount,
-                    seededFromQuery: query,
-                  },
-                };
-                if (
-                  Number.isFinite(foodCandidate.latitude) &&
-                  Number.isFinite(foodCandidate.longitude)
-                ) {
-                  insertValues.latitude = String(foodCandidate.latitude);
-                  insertValues.longitude = String(foodCandidate.longitude);
-                }
-
-                const [inserted] = await db
-                  .insert(truckImportListings)
-                  .values(insertValues)
-                  .returning({
-                    id: truckImportListings.id,
-                    name: truckImportListings.name,
-                    address: truckImportListings.address,
-                    city: truckImportListings.city,
-                    state: truckImportListings.state,
-                    source: truckImportListings.source,
-                    status: truckImportListings.status,
-                  });
-
-                if (inserted) {
-                  unclaimedOut = [
-                    {
-                      id: inserted.id,
-                      name: inserted.name,
-                      address: inserted.address,
-                      city: inserted.city,
-                      state: inserted.state,
-                      source: inserted.source || "google_places",
-                      status: inserted.status || "unclaimed",
-                      autoSeeded: true,
-                    },
-                  ];
-                }
               }
             }
           }
-        } catch (seedErr) {
-          console.warn("[search] auto-seed unclaimed listing failed:", seedErr);
-        }
-
-        // Guaranteed fallback: even if Google APIs are unavailable or return
-        // no suitable places, create a lightweight generated restaurant
-        // profile so search behaves like the successful Steak House flow.
-        if (restaurantsOut.length === 0 && unclaimedOut.length === 0) {
-          const generated = await ensureSearchQueryRestaurantProfile(
-            query,
-            querySeedCandidate,
-          );
-          const restaurant = generated.restaurant as any;
-          restaurantsOut = [
-            {
-              id: restaurant.id,
-              name: restaurant.name,
-              cuisineType: restaurant.cuisineType,
-              address: restaurant.address,
-              isFoodTruck: Boolean(restaurant.isFoodTruck),
-              isVerified: Boolean(restaurant.isVerified),
-              operatingHours:
-                restaurant.operatingHours ?? restaurant.businessHours ?? null,
-              rating: null,
-              googleRating: restaurant.googleRating,
-              googleReviewCount: restaurant.googleReviewCount,
-            },
-          ];
-          unclaimedOut = [];
-          res.setHeader("X-MealScout-Auto-Profile", "query-seed");
+        } catch (lookupErr) {
+          console.warn("[search] external claimable lookup failed:", lookupErr);
         }
       }
 

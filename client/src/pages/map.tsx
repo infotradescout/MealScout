@@ -3209,11 +3209,29 @@ export default function MapPage() {
     }),
     [visibleDeals, mapBranding],
   );
-  type TrendingSearchRow = { query: string; count: number };
+  type TrendingSearchRow = {
+    query: string;
+    count: number;
+    context?: string | null;
+  };
   const { data: trendingSearches = [] } = useQuery<TrendingSearchRow[]>({
-    queryKey: ["/api/search/trending", "map-discovery"],
+    queryKey: [
+      "/api/search/trending",
+      "map-discovery",
+      adLocation?.lat ?? null,
+      adLocation?.lng ?? null,
+    ],
     queryFn: async () => {
-      const res = await fetch(apiUrl("/api/search/trending?limit=8"));
+      const params = new URLSearchParams({
+        limit: "8",
+        windowDays: "7",
+        radiusKm: "25",
+      });
+      if (adLocation) {
+        params.set("lat", String(adLocation.lat));
+        params.set("lng", String(adLocation.lng));
+      }
+      const res = await fetch(apiUrl(`/api/search/trending?${params}`));
       if (!res.ok) throw new Error("Failed to fetch trending searches");
       return res.json();
     },
@@ -3240,15 +3258,19 @@ export default function MapPage() {
   ];
   const trendingLinks = (
     Array.isArray(trendingSearches)
-      ? trendingSearches.map((row) => row?.query).filter(Boolean)
+      ? trendingSearches
+          .map((row) => ({
+            query: row?.query,
+            context: row?.context || null,
+          }))
+          .filter((row) => Boolean(row.query))
       : []
   )
     .slice(0, 8)
-    .map((query) => ({
-      href: `/search?q=${encodeURIComponent(query)}`,
-      title: query,
-      description:
-        "Jump into search results across deals, trucks, parking, and events.",
+    .map((row) => ({
+      href: `/search?q=${encodeURIComponent(String(row.query))}`,
+      title: String(row.query),
+      context: row.context,
     }));
 
   const activeMapCalloutAnchor = useMemo<GeoPoint | null>(() => {
@@ -4530,19 +4552,21 @@ export default function MapPage() {
               <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Trending Searches
               </h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="mt-3 space-y-2">
                 {trendingLinks.map((link) => (
-                  <Link key={link.href} href={link.href}>
-                    <Card className="h-full border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean transition-shadow hover:shadow-clean-lg">
-                      <CardContent className="p-4">
-                        <div className="font-medium text-foreground">
-                          {link.title}
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {link.description}
-                        </p>
-                      </CardContent>
-                    </Card>
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-sm hover:bg-muted/40"
+                  >
+                    <span className="min-w-0 truncate font-medium text-foreground">
+                      {link.title}
+                    </span>
+                    {link.context ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {link.context}
+                      </span>
+                    ) : null}
                   </Link>
                 ))}
               </div>

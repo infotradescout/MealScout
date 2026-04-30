@@ -9,6 +9,7 @@ type BusinessListingLike = {
   coverImageUrl?: string | null;
   city?: string | null;
   state?: string | null;
+  profileSource?: string | null;
 };
 
 const HARD_TEST_TOKEN_PATTERN =
@@ -55,11 +56,15 @@ export function getPublicBusinessVisibilityChecks(listing: BusinessListingLike):
 
   const name = normalize(listing.name);
   const likelyTestData = isLikelyTestBusiness(listing);
+  const profileSource = normalize(listing.profileSource).toLowerCase();
 
   if (!name || name.length < 2) blockers.push("missing_name");
   if (!hasLocationContext(listing)) blockers.push("missing_location");
   if (!hasCategoryContext(listing)) blockers.push("missing_category");
   if (likelyTestData) blockers.push("flagged_test_data");
+  if (profileSource === "search_query_seed") {
+    blockers.push("query_seed_profile");
+  }
 
   if (!hasDescriptionOrPhoto(listing)) {
     warnings.push("missing_description_or_photo");

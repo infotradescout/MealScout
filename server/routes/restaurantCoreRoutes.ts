@@ -84,6 +84,14 @@ const buildRestaurantSearchTerms = (query: string) => {
     "south",
     "east",
     "west",
+    "food",
+    "foods",
+    "restaurant",
+    "restaurants",
+    "truck",
+    "trucks",
+    "near",
+    "nearby",
   ]);
 
   const normalized = normalizeRestaurantSearchTerm(query);
@@ -714,8 +722,6 @@ export function registerRestaurantCoreRoutes(
           String(restaurant.ownerId || "") === String(importSystemUser.id);
         const isGeneratedProfile =
           String((restaurant as any).profileSource || "") === "google" ||
-          String((restaurant as any).profileSource || "") ===
-            "search_query_seed" ||
           Boolean((restaurant as any).googlePlaceId);
 
         if (!isSystemOwned || !isGeneratedProfile) {
@@ -1485,9 +1491,12 @@ export function registerRestaurantCoreRoutes(
       }
 
       const profileSource = String((restaurant as any).profileSource || "");
+      if (profileSource === "search_query_seed") {
+        return res.status(404).json({ message: "Restaurant not found" });
+      }
+
       const isGeneratedProfile =
         profileSource === "google" ||
-        profileSource === "search_query_seed" ||
         Boolean((restaurant as any).googlePlaceId);
 
       // Opportunistically enrich generated profiles so detail pages get a real banner photo.

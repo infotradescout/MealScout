@@ -510,7 +510,6 @@ export default function RestaurantDetailPage() {
     Boolean((restaurant as any)?.isActive);
   const isGeneratedProfile =
     String((restaurant as any)?.profileSource || "") === "google" ||
-    String((restaurant as any)?.profileSource || "") === "search_query_seed" ||
     Boolean((restaurant as any)?.googlePlaceId);
 
   const cvsScore = Math.max(
