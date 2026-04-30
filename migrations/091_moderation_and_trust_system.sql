@@ -3,10 +3,27 @@
 -- Tracks reporter reputation and moderation outcomes
 
 -- Add reputation fields to users table
-ALTER TABLE "users" ADD COLUMN "reporter_reputation_score" integer NOT NULL DEFAULT 100;
-ALTER TABLE "users" ADD COLUMN "flagged_count" integer NOT NULL DEFAULT 0;
-ALTER TABLE "users" ADD COLUMN "upheld_against_count" integer NOT NULL DEFAULT 0;
-ALTER TABLE "users" ADD COLUMN "false_flag_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reporter_reputation_score" integer NOT NULL DEFAULT 100;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "flagged_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "upheld_against_count" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "false_flag_count" integer NOT NULL DEFAULT 0;
+
+-- Unified moderation case tracking
+CREATE TABLE IF NOT EXISTS "moderation_cases" (
+  "id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  "case_type" varchar NOT NULL, -- 'recommendation_flag' or 'profile_content_flag'
+  "flag_id" varchar NOT NULL, -- References either recommendation_flags or profile_content_flags
+  "status" varchar NOT NULL DEFAULT 'pending', -- 'pending', 'under_review', 'resolved', 'appealed'
+  "restaurant_id" varchar REFERENCES "restaurants"("id") ON DELETE CASCADE,
+  "recommendation_id" varchar,
+  "reporter_id" varchar NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "assigned_moderator_id" varchar REFERENCES "users"("id") ON DELETE SET NULL,
+  "priority" varchar DEFAULT 'normal', -- 'urgent', 'normal', 'low'
+  "assigned_at" timestamp,
+  "resolved_at" timestamp,
+  "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Content flags: User reports inappropriate/spam/misleading recommendation
 CREATE TABLE IF NOT EXISTS "recommendation_flags" (
@@ -33,23 +50,6 @@ CREATE TABLE IF NOT EXISTS "profile_content_flags" (
   "case_id" varchar REFERENCES "moderation_cases"("id") ON DELETE SET NULL,
   "flagged_at" timestamp DEFAULT CURRENT_TIMESTAMP,
   "created_at" timestamp DEFAULT CURRENT_TIMESTAMP
-);
-
--- Unified moderation case tracking
-CREATE TABLE IF NOT EXISTS "moderation_cases" (
-  "id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
-  "case_type" varchar NOT NULL, -- 'recommendation_flag' or 'profile_content_flag'
-  "flag_id" varchar NOT NULL, -- References either recommendation_flags or profile_content_flags
-  "status" varchar NOT NULL DEFAULT 'pending', -- 'pending', 'under_review', 'resolved', 'appealed'
-  "restaurant_id" varchar REFERENCES "restaurants"("id") ON DELETE CASCADE,
-  "recommendation_id" varchar,
-  "reporter_id" varchar NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-  "assigned_moderator_id" varchar REFERENCES "users"("id") ON DELETE SET NULL,
-  "priority" varchar DEFAULT 'normal', -- 'urgent', 'normal', 'low'
-  "assigned_at" timestamp,
-  "resolved_at" timestamp,
-  "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" timestamp DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Moderation decisions and outcomes
