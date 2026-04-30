@@ -19,6 +19,7 @@ import { registerEventRoutes } from "./routes/eventRoutes";
 import { registerDiscoveryRoutes } from "./routes/discoveryRoutes";
 import { registerEventCoordinatorRoutes } from "./routes/eventCoordinatorRoutes";
 import { registerAdminManagementRoutes } from "./routes/adminManagementRoutes";
+import { registerAdminLeadImportRoutes } from "./routes/adminLeadImportRoutes";
 import { registerGeoAdRoutes } from "./routes/geoAdRoutes";
 import { registerBookingRoutes } from "./routes/bookingRoutes";
 import { registerSupplierMarketplaceRoutes } from "./routes/supplierMarketplaceRoutes";
@@ -192,6 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin API endpoints
   registerAdminManagementRoutes(app);
+  registerAdminLeadImportRoutes(app);
   registerGeoAdRoutes(app);
   registerHostPayoutAdminRoutes(app);
   registerMarketExpansionRoutes(app);
