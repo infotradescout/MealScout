@@ -1891,27 +1891,33 @@ export default function RestaurantDetailPage() {
       </div>
 
       {/* FAQ Section - SEO optimized, minimal UI */}
-      <div className="mt-12 pt-8 border-t border-[color:var(--border-subtle)]">
+      <div className="mt-10">
         <MinimalFAQ
           items={[
             {
-              question: `How do I order from ${restaurantName}?`,
-              answer: `Check ${restaurantName}'s menu and current MealScout profile details, or contact them directly at ${(restaurant as any)?.phone || "their phone number"} for pickup and ordering options.`,
+              question: "How do I order?",
+              answer: phoneNumber
+                ? `Use the menu and business links on this profile, or call ${phoneNumber} for pickup and ordering options.`
+                : "Use the menu, directions, and business links on this profile to plan pickup or ordering.",
             },
             {
-              question: `What are the current specials at ${restaurantName}?`,
-              answer: `${restaurantName} has ${restaurantDeals.length} active specials available on MealScout. View all current specials and claim offers directly from this page.`,
+              question: "Are there current specials?",
+              answer:
+                restaurantDeals.length > 0
+                  ? `${restaurantDeals.length} active special${restaurantDeals.length === 1 ? " is" : "s are"} listed right now. View and claim offers from this page.`
+                  : "No active specials are listed right now. Check back for new offers from this spot.",
             },
             {
-              question: `What type of cuisine does ${restaurantName} serve?`,
-              answer: `${restaurantName} specializes in ${cuisineType} cuisine. Check the menu and community recommendations above for favorite picks and highlights.`,
+              question: "What type of food is this?",
+              answer: `${cuisineType} is the current category for this profile. Menus and community recommendations will add more detail as the listing fills out.`,
             },
             {
-              question: `How do I get directions to ${restaurantName}?`,
-              answer: `${restaurantName} is located at ${address}. Click the Directions button above to open navigation in your maps app.`,
+              question: "How do I get there?",
+              answer: address
+                ? `The listed location is ${locationDisplay || address}. Use Directions to open navigation in your maps app.`
+                : "Use Directions to open the best available map location for this profile.",
             },
           ]}
-          className="mt-6"
         />
       </div>
       <Navigation />
