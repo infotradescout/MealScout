@@ -12,10 +12,39 @@ import {
 import { db } from "../db";
 import { eq, and, or, isNull, asc, desc, sql } from "drizzle-orm";
 
+const coerceEventDate = (value: unknown) => {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value.trim()) {
+    const date = new Date(`${value.trim()}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return value;
+};
+
+const normalizeEventCreatePayload = (event: InsertEvent): InsertEvent => {
+  const payload: any = {
+    ...(event as any),
+    date: coerceEventDate((event as any).date),
+  };
+
+  const eventType = String(payload.eventType || "").toLowerCase();
+  const currentStatus = String(payload.status || "").trim();
+  if (!currentStatus) {
+    if (eventType === "private_event") {
+      payload.status = "open";
+    } else if (eventType === "event") {
+      payload.status = "published";
+    }
+  }
+
+  return payload as InsertEvent;
+};
+
 export function createHostsEventsRepository() {
   return {
     async createEvent(event: InsertEvent): Promise<Event> {
-      const [newEvent] = await db.insert(events).values(event).returning();
+      const payload = normalizeEventCreatePayload(event);
+      const [newEvent] = await db.insert(events).values(payload).returning();
       return newEvent;
     },
 
