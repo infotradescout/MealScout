@@ -71,6 +71,7 @@ const SEARCH_FIELD_MASK = [
   "places.types",
   "places.rating",
   "places.userRatingCount",
+  "places.businessStatus",
   "places.photos",
 ].join(",");
 
@@ -1049,6 +1050,7 @@ export type GooglePlaceTextResult = {
   types: string[];
   rating: number | null;
   userRatingCount: number | null;
+  businessStatus: string | null;
   photos: Array<{ name: string; widthPx?: number | null; heightPx?: number | null }>;
 };
 
@@ -1115,6 +1117,9 @@ export async function searchPlacesFreeText(
           typeof place?.userRatingCount === "number"
             ? place.userRatingCount
             : null,
+        businessStatus: place?.businessStatus
+          ? String(place.businessStatus)
+          : null,
         photos: Array.isArray(place?.photos)
           ? place.photos
               .map((p: any) => ({

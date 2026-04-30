@@ -125,6 +125,50 @@ const candidateLooksLikeRequestedPlace = (
   return hits >= Math.min(2, requestedTokens.length);
 };
 
+const hasAllowedFoodPlaceType = (candidate: { types?: string[] }) => {
+  const types = Array.isArray(candidate.types) ? candidate.types : [];
+  return types.some((type) => FOOD_PLACE_TYPE_ALLOWLIST.has(type));
+};
+
+const shouldAutoPopulateGoogleProfile = (
+  candidate: {
+    placeId?: string | null;
+    name?: string | null;
+    formattedAddress?: string | null;
+    types?: string[];
+    businessStatus?: string | null;
+  },
+  query: string,
+  primaryTerm: string,
+) => {
+  const placeId = String(candidate.placeId || "").trim();
+  const name = String(candidate.name || "").trim();
+  const address = String(candidate.formattedAddress || "").trim();
+  if (!placeId || !name || !address) return false;
+  if (isGoogleLocalityOnly(candidate)) return false;
+  if (!hasAllowedFoodPlaceType(candidate)) return false;
+
+  const status = String(candidate.businessStatus || "").toUpperCase();
+  if (status === "CLOSED_PERMANENTLY") return false;
+
+  if (candidateLooksLikeRequestedPlace(candidate, primaryTerm)) return true;
+
+  const normalizedQuery = normalizeSearchTerm(query);
+  const normalizedName = normalizeSearchTerm(name);
+  const normalizedPrimary = normalizeSearchTerm(primaryTerm);
+  if (normalizedName.length >= 4 && normalizedQuery.includes(normalizedName)) {
+    return true;
+  }
+  if (
+    normalizedPrimary.length >= 4 &&
+    normalizedName.includes(normalizedPrimary)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 const scoreSearchFields = (
   fields: unknown[],
   terms: string[],
@@ -229,7 +273,13 @@ export function registerPublicSearchRoutes(app: Express) {
           id: restaurants.id,
           name: restaurants.name,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
           address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
           isVerified: restaurants.isVerified,
           profileSource: restaurants.profileSource,
         })
@@ -241,6 +291,8 @@ export function registerPublicSearchRoutes(app: Express) {
               sql`lower(${restaurants.name}) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.cuisineType}, '')) like ${searchValue}`,
               sql`lower(coalesce(${restaurants.address}, '')) like ${searchValue}`,
+              sql`lower(coalesce(${restaurants.city}, '')) like ${searchValue}`,
+              sql`lower(coalesce(${restaurants.state}, '')) like ${searchValue}`,
             ),
           ),
         )
@@ -251,7 +303,13 @@ export function registerPublicSearchRoutes(app: Express) {
           isPublicBusinessVisible({
             name: row.name,
             address: row.address,
+            city: row.city,
+            state: row.state,
             cuisineType: row.cuisineType,
+            businessType: row.businessType,
+            description: row.description,
+            logoUrl: row.logoUrl,
+            coverImageUrl: row.coverImageUrl,
             profileSource: row.profileSource,
           }),
         )
@@ -268,7 +326,10 @@ export function registerPublicSearchRoutes(app: Express) {
           text: row.name,
           type: "restaurant",
           subtitle:
-            `${row.cuisineType || "Restaurant"} - ${row.address || ""}`.trim(),
+            `${row.cuisineType || row.businessType || "Restaurant"} - ${
+              row.address ||
+              [row.city, row.state].filter(Boolean).join(", ")
+            }`.trim(),
         });
 
         const cuisine = String(row.cuisineType || "").trim();
@@ -499,6 +560,14 @@ export function registerPublicSearchRoutes(app: Express) {
           isActive: restaurants.isActive,
           isFoodTruck: restaurants.isFoodTruck,
           isVerified: restaurants.isVerified,
+          city: restaurants.city,
+          state: restaurants.state,
+          latitude: restaurants.latitude,
+          longitude: restaurants.longitude,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
           operatingHours: restaurants.operatingHours,
           googleRating: restaurants.googleRating,
           googleReviewCount: restaurants.googleReviewCount,
@@ -513,7 +582,14 @@ export function registerPublicSearchRoutes(app: Express) {
           const cuisine = String(restaurant.cuisineType || "").toLowerCase();
           const address = String(restaurant.address || "").toLowerCase();
           const score = scoreSearchFields(
-            [name, cuisine, address],
+            [
+              name,
+              cuisine,
+              address,
+              restaurant.city,
+              restaurant.state,
+              restaurant.businessType,
+            ],
             searchTerms,
             primaryTerm,
           );
@@ -531,6 +607,10 @@ export function registerPublicSearchRoutes(app: Express) {
           name: restaurant.name,
           cuisineType: restaurant.cuisineType,
           address: restaurant.address,
+          city: restaurant.city,
+          state: restaurant.state,
+          latitude: restaurant.latitude,
+          longitude: restaurant.longitude,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
           operatingHours:
@@ -774,9 +854,9 @@ export function registerPublicSearchRoutes(app: Express) {
         autoSeeded: false,
       }));
 
-      // If nothing matched locally, Google Places can help locate an already
-      // imported claimable business, but GET /api/search must not create new
-      // restaurants or import listings from arbitrary user text.
+      // If nothing matched locally, Google Places can create a generated
+      // restaurant profile only after it gives us a concrete food-business
+      // Place ID. Plain search text must never become a restaurant row.
       const LOOKUP_MIN_QUERY_LEN = 5;
       const hasPlacesApiKey = Boolean(
         process.env.GOOGLE_MAPS_API_KEY ||
@@ -796,43 +876,96 @@ export function registerPublicSearchRoutes(app: Express) {
               latitude: biasLat,
               longitude: biasLng,
             });
-            const foodCandidate = candidates.find(
-              (c) =>
-                !isGoogleLocalityOnly(c) &&
-                Array.isArray(c.types) &&
-                c.types.some((t) => FOOD_PLACE_TYPE_ALLOWLIST.has(t)) &&
-                candidateLooksLikeRequestedPlace(c, primaryTerm),
+            const foodCandidate = candidates.find((candidate) =>
+              shouldAutoPopulateGoogleProfile(candidate, query, primaryTerm),
             );
 
             if (foodCandidate) {
-              const externalId = `google:${foodCandidate.placeId}`;
-              const [existing] = await db
-                .select({
-                  id: truckImportListings.id,
-                  name: truckImportListings.name,
-                  address: truckImportListings.address,
-                  city: truckImportListings.city,
-                  state: truckImportListings.state,
-                  source: truckImportListings.source,
-                  status: truckImportListings.status,
-                })
-                .from(truckImportListings)
-                .where(eq(truckImportListings.externalId, externalId))
-                .limit(1);
+              try {
+                const result = await ensureGoogleRestaurantProfile(
+                  foodCandidate.placeId,
+                );
+                const restaurant = result.restaurant as any;
+                if (
+                  restaurant?.isActive !== false &&
+                  isPublicBusinessVisible(restaurant)
+                ) {
+                  let rating: number | null = null;
+                  try {
+                    const avg = await storage.getRestaurantAverageRating(
+                      String(restaurant.id),
+                    );
+                    if (Number.isFinite(avg) && avg > 0) rating = Number(avg);
+                  } catch {
+                    rating = null;
+                  }
 
-              if (existing) {
-                unclaimedOut = [
-                  {
-                    id: existing.id,
-                    name: existing.name,
-                    address: existing.address,
-                    city: existing.city,
-                    state: existing.state,
-                    source: existing.source || "google_places",
-                    status: existing.status || "unclaimed",
-                    autoSeeded: false,
-                  },
-                ];
+                  restaurantsOut = [
+                    {
+                      id: restaurant.id,
+                      name: restaurant.name,
+                      cuisineType: restaurant.cuisineType,
+                      address: restaurant.address,
+                      city: restaurant.city,
+                      state: restaurant.state,
+                      latitude: restaurant.latitude,
+                      longitude: restaurant.longitude,
+                      isFoodTruck: Boolean(restaurant.isFoodTruck),
+                      isVerified: Boolean(restaurant.isVerified),
+                      operatingHours:
+                        restaurant.operatingHours ??
+                        restaurant.businessHours ??
+                        null,
+                      googleRating: restaurant.googleRating,
+                      googleReviewCount: restaurant.googleReviewCount,
+                      rating:
+                        rating ??
+                        (restaurant.googleRating
+                          ? Number(restaurant.googleRating)
+                          : null),
+                      autoPopulated: true,
+                      created: result.created,
+                    },
+                  ];
+                  res.setHeader("X-MealScout-Auto-Profile", "google");
+                }
+              } catch (profileErr) {
+                console.warn(
+                  "[search] Google profile creation failed:",
+                  profileErr,
+                );
+              }
+
+              if (restaurantsOut.length === 0) {
+                const externalId = `google:${foodCandidate.placeId}`;
+                const [existing] = await db
+                  .select({
+                    id: truckImportListings.id,
+                    name: truckImportListings.name,
+                    address: truckImportListings.address,
+                    city: truckImportListings.city,
+                    state: truckImportListings.state,
+                    source: truckImportListings.source,
+                    status: truckImportListings.status,
+                  })
+                  .from(truckImportListings)
+                  .where(eq(truckImportListings.externalId, externalId))
+                  .limit(1);
+
+                if (existing) {
+                  unclaimedOut = [
+                    {
+                      id: existing.id,
+                      name: existing.name,
+                      address: existing.address,
+                      city: existing.city,
+                      state: existing.state,
+                      source: existing.source || "google_places",
+                      status: existing.status || "unclaimed",
+                      autoSeeded: false,
+                    },
+                  ];
+                }
               }
             }
           }
