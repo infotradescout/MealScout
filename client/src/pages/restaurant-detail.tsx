@@ -596,6 +596,7 @@ export default function RestaurantDetailPage() {
     (restaurant as any)?.coverImageUrl || (restaurant as any)?.logoUrl,
   );
   const heroImageSrc = heroImageUrl || "";
+  const hasHeroImage = Boolean(heroImageSrc);
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
@@ -628,7 +629,20 @@ export default function RestaurantDetailPage() {
   const profileTypeLabel = isFoodTruck
     ? "Food Truck"
     : String(cuisineType || "Restaurant");
-  const locationDisplay = [address, city, state].filter(Boolean).join(", ");
+  const normalizedAddress = String(address || "").toLowerCase();
+  const addressAlreadyIncludesCity = city
+    ? normalizedAddress.includes(city.toLowerCase())
+    : false;
+  const addressAlreadyIncludesState = state
+    ? normalizedAddress.includes(state.toLowerCase())
+    : false;
+  const locationDisplay = [
+    address,
+    addressAlreadyIncludesCity ? "" : city,
+    addressAlreadyIncludesState ? "" : state,
+  ]
+    .filter(Boolean)
+    .join(", ");
   const nextStop = parkingScheduleItems[0];
   const locationTitle = isFoodTruck ? "Today's Location" : "Location";
   const locationName = nextStop?.title || locationDisplay || locationLabel;
@@ -755,8 +769,10 @@ export default function RestaurantDetailPage() {
           breadcrumbSchema,
         ]}
       />
-      <section className="relative min-h-[24rem] overflow-hidden bg-black">
-        {heroImageSrc ? (
+      <section
+        className={`relative overflow-hidden ${hasHeroImage ? "min-h-[24rem] bg-black" : "bg-transparent"}`}
+      >
+        {hasHeroImage ? (
           <img
             src={heroImageSrc}
             alt={`${restaurantName} exterior or food photo`}
@@ -764,9 +780,13 @@ export default function RestaurantDetailPage() {
             loading="eager"
           />
         ) : null}
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.25)_32%,rgba(0,0,0,0.94)_100%)]" />
+        {hasHeroImage ? (
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.72)_0%,rgba(0,0,0,0.25)_32%,rgba(0,0,0,0.94)_100%)]" />
+        ) : null}
 
-        <div className="relative z-10 flex min-h-[24rem] flex-col justify-between px-5 pb-6 pt-[calc(1rem+env(safe-area-inset-top))]">
+        <div
+          className={`relative z-10 flex flex-col px-5 pb-5 pt-[calc(1rem+env(safe-area-inset-top))] ${hasHeroImage ? "min-h-[24rem] justify-between" : "gap-6"}`}
+        >
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -781,10 +801,6 @@ export default function RestaurantDetailPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm font-black uppercase tracking-tight text-white backdrop-blur">
-              <MapPin className="h-5 w-5 text-[color:var(--accent-text)]" />
-              Meal<span className="text-[color:var(--accent-text)]">Scout</span>
-            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -797,20 +813,24 @@ export default function RestaurantDetailPage() {
           </div>
 
           <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[color:var(--accent-text)]/45 bg-black/45 px-3 py-2 text-xs font-bold text-[color:var(--accent-text)] backdrop-blur">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[color:var(--accent-text)]/45 bg-black/35 px-3 py-2 text-xs font-bold text-[color:var(--accent-text)] backdrop-blur">
               <Star className="h-4 w-4" />
               {isVerifiedMemberProfile ? "Crowd Favorite" : "Local listing"}
             </div>
             <h1
-              className="max-w-[22rem] text-4xl font-black uppercase leading-[0.92] tracking-normal sm:text-5xl"
+              className="max-w-[22rem] text-3xl font-black uppercase leading-[0.95] tracking-normal sm:text-5xl"
               data-testid="text-restaurant-name"
             >
               {restaurantName}
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-semibold text-white/85">
               <span>{profileTypeLabel}</span>
-              {cuisineType ? <span>•</span> : null}
-              {cuisineType ? <span>{cuisineType}</span> : null}
+              {cuisineType && cuisineType !== profileTypeLabel ? (
+                <>
+                  <span>•</span>
+                  <span>{cuisineType}</span>
+                </>
+              ) : null}
               {hasCoords ? (
                 <>
                   <span>•</span>
