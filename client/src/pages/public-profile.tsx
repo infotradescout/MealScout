@@ -377,8 +377,11 @@ export default function PublicProfilePage() {
       ? profileImageUrl
       : "";
   const profile = data.profileSettings || {};
+  const isHostProfile = data.entity === "host";
   const presetDefaults =
-    profile.templatePreset === "story"
+    isHostProfile
+      ? { theme: "slate", heroLayout: "left", fontFamily: "system" }
+      : profile.templatePreset === "story"
       ? { theme: "forest", heroLayout: "split", fontFamily: "serif" }
       : profile.templatePreset === "bold"
         ? { theme: "amber", heroLayout: "center", fontFamily: "display" }
@@ -387,7 +390,10 @@ export default function PublicProfilePage() {
           : { theme: "sunset", heroLayout: "left", fontFamily: "system" };
   const heroTitle = profile.heroTitle || data.title;
   const heroSubtitle =
-    profile.heroSubtitle || data.subtitle || data.description || "";
+    profile.heroSubtitle ||
+    (isHostProfile
+      ? data.description || data.subtitle || "Truck-friendly host location"
+      : data.subtitle || data.description || "");
   const about = profile.about || data.description || "";
   const highlights = Array.isArray(profile.highlights)
     ? profile.highlights
@@ -681,7 +687,7 @@ export default function PublicProfilePage() {
 
   return (
     <div
-      className={`mx-auto max-w-3xl px-4 py-8 ${data.entity === "restaurant" ? "pb-28" : ""} ${fontClass}`}
+      className={`mx-auto ${isHostProfile ? "max-w-6xl" : "max-w-3xl"} px-4 py-8 ${data.entity === "restaurant" ? "pb-28" : ""} ${fontClass}`}
     >
       <SEOHead
         title={title}
@@ -718,23 +724,52 @@ export default function PublicProfilePage() {
         </div>
       ) : null}
 
-      <Card className="overflow-hidden">
-        <div className={`bg-gradient-to-br ${themePalette.bg} p-8 text-white`}>
+      <Card className={`overflow-hidden ${isHostProfile ? "rounded-2xl border-[color:var(--border-subtle)] shadow-clean-lg" : ""}`}>
+        <div className={`bg-gradient-to-br ${themePalette.bg} ${isHostProfile ? "p-6 sm:p-8" : "p-8"} text-white`}>
           <div
             className={`mb-3 flex items-center gap-2 ${profile.hideProfileBadge ? "hidden" : ""}`}
           >
             <Store className="h-5 w-5" />
             <Badge className={themePalette.chip}>
-              {labelByEntity[data.entity] || "Public Profile"}
+              {isHostProfile
+                ? "Truck-friendly host location"
+                : labelByEntity[data.entity] || "Public Profile"}
             </Badge>
           </div>
           <div className={heroLayoutClass}>
             <div>
-              <h1 className="text-4xl font-bold tracking-tight">{heroTitle}</h1>
+              <h1 className={`${isHostProfile ? "text-3xl sm:text-5xl" : "text-4xl"} font-bold tracking-tight`}>{heroTitle}</h1>
               {heroSubtitle ? (
-                <p className="mt-2 max-w-2xl text-sm text-white/85">
+                <p className={`${isHostProfile ? "mt-3 text-base" : "mt-2 text-sm"} max-w-2xl text-white/85`}>
                   {heroSubtitle}
                 </p>
+              ) : null}
+
+              {isHostProfile ? (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {directionsUrl ? (
+                    <a href={directionsUrl} target="_blank" rel="noreferrer noopener">
+                      <Button className="h-9 bg-white text-slate-950 hover:bg-white/90">
+                        Directions
+                      </Button>
+                    </a>
+                  ) : null}
+                  {websiteUrl ? (
+                    <a href={websiteUrl} target="_blank" rel="noreferrer noopener">
+                      <Button variant="outline" className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20">
+                        Website
+                      </Button>
+                    </a>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 border-white/40 bg-white/10 text-white hover:bg-white/20"
+                    onClick={handleShareProfile}
+                  >
+                    Share
+                  </Button>
+                </div>
               ) : null}
 
               {data.entity === "restaurant" ? (
@@ -889,11 +924,11 @@ export default function PublicProfilePage() {
         </div>
 
         {visibleProfileImageUrl ? (
-          <div className="border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3">
+          <div className={`border-t border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] ${isHostProfile ? "p-4" : "p-3"}`}>
             <img
               src={visibleProfileImageUrl}
               alt={`${data.title} cover`}
-              className="h-44 w-full rounded-lg object-cover"
+              className={`${isHostProfile ? "h-56 sm:h-72 rounded-xl" : "h-44 rounded-lg"} w-full object-cover`}
               loading="lazy"
               onError={() => setFailedProfileImageSrc(visibleProfileImageUrl)}
             />
@@ -904,6 +939,35 @@ export default function PublicProfilePage() {
           <CardTitle className="text-2xl">{data.title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {isHostProfile ? (
+            <div className="grid gap-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">
+                  Host type
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+                  {data.subtitle || "Host location"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">
+                  Location
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+                  {[data.city, data.state].filter(Boolean).join(", ") || "Location available on profile"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">
+                  Truck access
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[color:var(--text-primary)]">
+                  Parking and host details managed in MealScout
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           {isStaffOrAdmin && data.entity === "restaurant" ? (
             <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">

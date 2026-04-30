@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -24,9 +25,15 @@ import { Link } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 
 type OwnerIntentPage = {
   path: string;
+  intentKey: string;
   sitemapTitle: string;
   seoTitle: string;
   seoDescription: string;
@@ -48,6 +55,7 @@ const signupHref =
 const pages: OwnerIntentPage[] = [
   {
     path: "/food-truck-business-tools",
+    intentKey: "business_tools",
     sitemapTitle: "Food truck business tools",
     seoTitle: "Food Truck Business Tools for Orders, Bookings, and Social | MealScout",
     seoDescription:
@@ -104,6 +112,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/doordash-alternative-for-food-trucks",
+    intentKey: "doordash_alternative",
     sitemapTitle: "DoorDash alternative for food trucks",
     seoTitle: "DoorDash Alternative for Food Trucks | Direct Orders with MealScout",
     seoDescription:
@@ -160,6 +169,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-online-ordering",
+    intentKey: "online_ordering",
     sitemapTitle: "Food truck online ordering",
     seoTitle: "Food Truck Online Ordering and Pickup Menus | MealScout",
     seoDescription:
@@ -216,6 +226,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-social-media-management",
+    intentKey: "social_media",
     sitemapTitle: "Food truck social media management",
     seoTitle: "Food Truck Social Media Management and Schedule Posts | MealScout",
     seoDescription:
@@ -272,6 +283,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-booking-software",
+    intentKey: "booking_software",
     sitemapTitle: "Food truck booking software",
     seoTitle: "Food Truck Booking Software for Host Requests | MealScout",
     seoDescription:
@@ -328,6 +340,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-catering-leads",
+    intentKey: "catering_leads",
     sitemapTitle: "Food truck catering leads",
     seoTitle: "Food Truck Catering Leads and Event Requests | MealScout",
     seoDescription:
@@ -384,6 +397,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-schedule-app",
+    intentKey: "schedule_app",
     sitemapTitle: "Food truck schedule app",
     seoTitle: "Food Truck Schedule App for Locations, Menus, and Updates | MealScout",
     seoDescription:
@@ -440,6 +454,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-opportunities/pensacola",
+    intentKey: "pensacola_opportunities",
     sitemapTitle: "Pensacola food truck opportunities",
     seoTitle: "Food Truck Opportunities in Pensacola | MealScout",
     seoDescription:
@@ -496,6 +511,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-vendor-opportunities",
+    intentKey: "vendor_opportunities",
     sitemapTitle: "Food truck vendor opportunities",
     seoTitle: "Food Truck Vendor Opportunities and Open Spots | MealScout",
     seoDescription:
@@ -552,6 +568,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-customer-list",
+    intentKey: "customer_list",
     sitemapTitle: "Food truck customer list",
     seoTitle: "Food Truck Customer List and Repeat Buyer Tools | MealScout",
     seoDescription:
@@ -608,6 +625,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-text-marketing",
+    intentKey: "text_marketing",
     sitemapTitle: "Food truck text marketing",
     seoTitle: "Food Truck Text Marketing, Updates, and Repeat Demand | MealScout",
     seoDescription:
@@ -664,6 +682,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-loyalty-program",
+    intentKey: "loyalty_program",
     sitemapTitle: "Food truck loyalty program",
     seoTitle: "Food Truck Loyalty Program and Repeat Customer Tools | MealScout",
     seoDescription:
@@ -720,6 +739,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-website-builder",
+    intentKey: "website_builder",
     sitemapTitle: "Food truck website builder",
     seoTitle: "Food Truck Website Builder Alternative for Menus and Bookings | MealScout",
     seoDescription:
@@ -776,6 +796,7 @@ const pages: OwnerIntentPage[] = [
   },
   {
     path: "/food-truck-marketing-ideas",
+    intentKey: "marketing_ideas",
     sitemapTitle: "Food truck marketing ideas",
     seoTitle: "Food Truck Marketing Ideas That Lead to Orders and Bookings | MealScout",
     seoDescription:
@@ -833,6 +854,11 @@ const pages: OwnerIntentPage[] = [
 ];
 
 const pageByPath = new Map(pages.map((page) => [page.path, page]));
+const localIntentPrefixes = new Map([
+  ["/food-truck-vendor-opportunities/", "/food-truck-vendor-opportunities"],
+  ["/food-truck-catering-leads/", "/food-truck-catering-leads"],
+  ["/food-truck-booking-software/", "/food-truck-booking-software"],
+]);
 
 export const ownerIntentSitemapPages = pages.map((page) => ({
   href: page.path,
@@ -847,7 +873,37 @@ const defaultPage = pages[0];
 function getCurrentPage() {
   if (typeof window === "undefined") return defaultPage;
   const pathname = window.location.pathname.replace(/\/$/, "") || "/";
+  for (const [prefix, basePath] of localIntentPrefixes.entries()) {
+    if (pathname.startsWith(prefix)) return pageByPath.get(basePath) || defaultPage;
+  }
   return pageByPath.get(pathname) || defaultPage;
+}
+
+const titleCaseSlug = (value: string) =>
+  value
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+function getLocalCityLabel() {
+  if (typeof window === "undefined") return "";
+  const pathname = window.location.pathname.replace(/\/$/, "") || "/";
+  for (const prefix of localIntentPrefixes.keys()) {
+    if (!pathname.startsWith(prefix)) continue;
+    return titleCaseSlug(pathname.slice(prefix.length));
+  }
+  return pathname === "/food-truck-opportunities/pensacola" ? "Pensacola" : "";
+}
+
+function withIntentParams(href: string, page: OwnerIntentPage) {
+  if (!href.startsWith("/")) return href;
+  const [path, search = ""] = href.split("?");
+  const params = new URLSearchParams(search);
+  params.set("intent", page.intentKey);
+  params.set("src", "owner-intent-seo");
+  params.set("sourcePath", page.path);
+  return `${path}?${params.toString()}`;
 }
 
 function buildSchema(page: OwnerIntentPage) {
@@ -897,14 +953,38 @@ function buildSchema(page: OwnerIntentPage) {
 
 export default function FoodTruckOwnerIntentPage() {
   const page = getCurrentPage();
+  const localCityLabel = getLocalCityLabel();
+  const canonicalPath =
+    typeof window !== "undefined"
+      ? window.location.pathname.replace(/\/$/, "") || page.path
+      : page.path;
   const schemaData = buildSchema(page);
+
+  useEffect(() => {
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.ownerIntentView,
+      page.intentKey,
+      {
+        page: "food-truck-owner-intent",
+        intent: page.intentKey,
+        path: canonicalPath,
+        city: localCityLabel || null,
+      },
+    );
+  }, [canonicalPath, localCityLabel, page.intentKey]);
+
+  const primaryHref = withIntentParams(page.primaryCta.href, page);
+  const secondaryHref = withIntentParams(page.secondaryCta.href, page);
+  const headline = localCityLabel
+    ? page.headline.replace("Pensacola", localCityLabel)
+    : page.headline;
 
   return (
     <main className="min-h-screen bg-[var(--bg-layered)] text-[color:var(--text-primary)]">
       <SEOHead
         title={page.seoTitle}
         description={page.seoDescription}
-        canonicalUrl={`https://www.mealscout.us${page.path}`}
+        canonicalUrl={`https://www.mealscout.us${canonicalPath}`}
         schemaData={schemaData}
       />
 
@@ -920,7 +1000,7 @@ export default function FoodTruckOwnerIntentPage() {
             </Link>
             <div className="space-y-3">
               <h1 className="max-w-4xl text-3xl font-black leading-tight sm:text-5xl">
-                {page.headline}
+                {headline}
               </h1>
               <p className="max-w-3xl text-base font-medium leading-relaxed text-[color:var(--text-secondary)] sm:text-lg">
                 {page.subhead}
@@ -928,13 +1008,35 @@ export default function FoodTruckOwnerIntentPage() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="gap-2">
-                <Link href={page.primaryCta.href}>
+                <Link
+                  href={primaryHref}
+                  onClick={() =>
+                    trackFunnelEvent(FUNNEL_EVENTS.ownerIntentCtaClick, {
+                      page: "food-truck-owner-intent",
+                      intent: page.intentKey,
+                      cta: "primary",
+                      href: page.primaryCta.href,
+                    })
+                  }
+                >
                   {page.primaryCta.label}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href={page.secondaryCta.href}>{page.secondaryCta.label}</Link>
+                <Link
+                  href={secondaryHref}
+                  onClick={() =>
+                    trackFunnelEvent(FUNNEL_EVENTS.ownerIntentCtaClick, {
+                      page: "food-truck-owner-intent",
+                      intent: page.intentKey,
+                      cta: "secondary",
+                      href: page.secondaryCta.href,
+                    })
+                  }
+                >
+                  {page.secondaryCta.label}
+                </Link>
               </Button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -979,6 +1081,10 @@ export default function FoodTruckOwnerIntentPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <OwnerIntentTool page={page} city={localCityLabel} />
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
         <div className="grid gap-3 md:grid-cols-3">
           {page.proof.map((item) => {
             const Icon = item.icon;
@@ -1076,5 +1182,108 @@ export default function FoodTruckOwnerIntentPage() {
         </Card>
       </section>
     </main>
+  );
+}
+
+function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }) {
+  const [orders, setOrders] = useState(80);
+  const [ticket, setTicket] = useState(14);
+  const [commission, setCommission] = useState(25);
+  const [truckName, setTruckName] = useState("your truck");
+  const [location, setLocation] = useState(city || "Pensacola");
+  const [special, setSpecial] = useState("lunch special");
+  const [toolUsed, setToolUsed] = useState(false);
+
+  const savings = useMemo(
+    () => Math.round(orders * ticket * (commission / 100)),
+    [orders, ticket, commission],
+  );
+  const useTool = () => {
+    if (toolUsed) return;
+    setToolUsed(true);
+    trackFunnelEvent(FUNNEL_EVENTS.ownerIntentToolUsed, {
+      page: "food-truck-owner-intent",
+      intent: page.intentKey,
+      tool: page.intentKey,
+    });
+  };
+
+  const generatedPosts = [
+    `${truckName} is serving in ${location} this week. Check the schedule before you head out.`,
+    `Today only: ${special}. Order ahead or find our next stop on MealScout.`,
+    `Booking ${truckName} for an office, apartment, brewery, or event? Send the request through our MealScout profile.`,
+  ];
+
+  if (page.intentKey === "doordash_alternative" || page.intentKey === "online_ordering") {
+    return (
+      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-[0.8fr_1.2fr] md:items-center">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">Free calculator</p>
+            <h2 className="mt-2 text-2xl font-black">Estimate third-party order fees.</h2>
+            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Use this as the reason to test direct pickup ordering.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <label className="text-xs font-semibold">Orders<input className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" type="number" value={orders} onChange={(event) => { setOrders(Number(event.target.value) || 0); useTool(); }} /></label>
+            <label className="text-xs font-semibold">Avg ticket<input className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" type="number" value={ticket} onChange={(event) => { setTicket(Number(event.target.value) || 0); useTool(); }} /></label>
+            <label className="text-xs font-semibold">Fee %<input className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" type="number" value={commission} onChange={(event) => { setCommission(Number(event.target.value) || 0); useTool(); }} /></label>
+            <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+              <div className="text-xs text-[color:var(--text-secondary)]">Estimated fees</div>
+              <div className="mt-1 text-2xl font-black">${savings}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (page.intentKey === "social_media" || page.intentKey === "marketing_ideas") {
+    return (
+      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-[0.8fr_1.2fr]">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">Free post generator</p>
+            <h2 className="mt-2 text-2xl font-black">Create three usable food truck posts.</h2>
+            <div className="mt-3 grid gap-2">
+              <input className="rounded-md border bg-background px-3 py-2 text-sm" value={truckName} onChange={(event) => { setTruckName(event.target.value); useTool(); }} />
+              <input className="rounded-md border bg-background px-3 py-2 text-sm" value={location} onChange={(event) => { setLocation(event.target.value); useTool(); }} />
+              <input className="rounded-md border bg-background px-3 py-2 text-sm" value={special} onChange={(event) => { setSpecial(event.target.value); useTool(); }} />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            {generatedPosts.map((post) => (
+              <div key={post} className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">{post}</div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const checklist =
+    page.intentKey === "website_builder"
+      ? ["Menu", "Weekly schedule", "Booking request link", "Direct order link", "Photos"]
+      : page.intentKey === "customer_list" || page.intentKey === "text_marketing" || page.intentKey === "loyalty_program"
+        ? ["Profile link", "QR code", "Schedule updates", "Deal link", "Repeat order path"]
+        : ["Date/time", "Host type", "Expected guests", "Parking details", "Cuisine fit"];
+
+  return (
+    <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+      <CardContent className="grid gap-4 p-5 md:grid-cols-[0.8fr_1.2fr] md:items-center">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">Free checklist</p>
+          <h2 className="mt-2 text-2xl font-black">Make this search actionable.</h2>
+          <p className="mt-2 text-sm text-[color:var(--text-secondary)]">These are the details an owner should have ready before the next click.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {checklist.map((item) => (
+            <button key={item} type="button" onClick={useTool} className="flex items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-left text-sm font-medium">
+              <CheckCircle2 className="h-4 w-4 text-[color:var(--status-success)]" />
+              {item}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

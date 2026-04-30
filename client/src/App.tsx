@@ -69,6 +69,7 @@ const AdminAffiliateManagement = lazy(
   () => import("@/pages/AdminAffiliateManagement"),
 );
 const AdminGeoAds = lazy(() => import("@/pages/admin-geo-ads"));
+const AdminOwnerSeoPage = lazy(() => import("@/pages/admin-owner-seo"));
 const AdminTruckSightings = lazy(() => import("@/pages/admin-truck-sightings"));
 const AffiliateEarnings = lazy(() => import("@/pages/AffiliateEarnings"));
 const EmptyCountyExperience = lazy(
@@ -409,6 +410,10 @@ function Router() {
               component={FoodTruckOwnerIntentPage}
             />
             <Route
+              path="/food-truck-vendor-opportunities/:citySlug"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
               path="/food-truck-customer-list"
               component={FoodTruckOwnerIntentPage}
             />
@@ -495,6 +500,7 @@ function Router() {
               path="/admin/sentiment-intelligence"
               component={AdminLogin}
             />
+            <Route path="/admin/owner-seo" component={AdminLogin} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
             <Route
               path="/checkout/:restaurantId"
@@ -621,6 +627,7 @@ function Router() {
               component={AdminSentimentIntelligence}
             />
             <Route path="/admin/geo-ads" component={AdminGeoAds} />
+            <Route path="/admin/owner-seo" component={AdminOwnerSeoPage} />
             <Route
               path="/admin/truck-sightings"
               component={AdminTruckSightings}
@@ -685,7 +692,15 @@ function Router() {
               component={FoodTruckOwnerIntentPage}
             />
             <Route
+              path="/food-truck-booking-software/:citySlug"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
               path="/food-truck-catering-leads"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-catering-leads/:citySlug"
               component={FoodTruckOwnerIntentPage}
             />
             <Route
@@ -694,6 +709,10 @@ function Router() {
             />
             <Route
               path="/food-truck-vendor-opportunities"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-vendor-opportunities/:citySlug"
               component={FoodTruckOwnerIntentPage}
             />
             <Route
@@ -730,10 +749,18 @@ function Router() {
             <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
+            <Route
+              path="/food-truck-booking-software/:citySlug"
+              component={FoodTruckOwnerIntentPage}
+            />
             <Route path="/admin/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsRouter} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/pensacola/spots" component={PensacolaSpots} />
+            <Route
+              path="/food-truck-catering-leads/:citySlug"
+              component={FoodTruckOwnerIntentPage}
+            />
             <Route path="/pensacola/report" component={PensacolaReport} />
             <Route path="/food-trucks/:citySlug" component={CityLanding} />
             <Route

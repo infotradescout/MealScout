@@ -3,6 +3,9 @@ import { trackUxEvent } from "@/utils/uxTelemetry";
 export const FUNNEL_EVENTS = {
   landingView: "funnel_landing_view",
   primaryCtaClick: "funnel_primary_cta_click",
+  ownerIntentView: "funnel_owner_intent_view",
+  ownerIntentToolUsed: "funnel_owner_intent_tool_used",
+  ownerIntentCtaClick: "funnel_owner_intent_cta_click",
   signupStarted: "funnel_signup_started",
   signupSubmitted: "funnel_signup_submitted",
   signupCompleted: "funnel_signup_completed",

@@ -239,6 +239,9 @@ export function registerSeoRoutes(app: Express) {
         "/food-truck-website-builder",
         "/food-truck-marketing-ideas",
         "/food-truck-opportunities/pensacola",
+        "/food-truck-vendor-opportunities/pensacola",
+        "/food-truck-catering-leads/pensacola",
+        "/food-truck-booking-software/pensacola",
       ].forEach((path) => mergeUrl(`${baseUrl}${path}`));
 
       const latestCityBySlug = new Map<string, any>();

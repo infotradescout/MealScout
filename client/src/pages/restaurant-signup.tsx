@@ -27,7 +27,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Mail, Eye, EyeOff, Store } from "lucide-react";
+import { Mail, Eye, EyeOff, Store, ArrowRight } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
 import {
@@ -126,6 +126,59 @@ type SignupFormData = z.infer<typeof signupSchema>;
 type LoginFormData = z.infer<typeof loginSchema>;
 type RestaurantSubmissionData = Omit<RestaurantFormData, "acceptTerms">;
 
+const OWNER_INTENT_COPY: Record<
+  string,
+  {
+    title: string;
+    body: string;
+    nextLabel: string;
+    nextTarget: "menu" | "dashboard" | "schedule" | "booking";
+  }
+> = {
+  doordash_alternative: {
+    title: "Set up direct ordering first",
+    body: "You came in looking for a delivery-app alternative, so after the profile is created MealScout points you toward menu and pickup setup.",
+    nextLabel: "Next: create direct menu",
+    nextTarget: "menu",
+  },
+  online_ordering: {
+    title: "Create the ordering path first",
+    body: "This signup is tuned for food truck online ordering: profile, menu, then pickup checkout readiness.",
+    nextLabel: "Next: build menu",
+    nextTarget: "menu",
+  },
+  schedule_app: {
+    title: "Publish your schedule first",
+    body: "You came in for schedule visibility, so MealScout takes you toward go-live and schedule prompts after setup.",
+    nextLabel: "Next: add schedule",
+    nextTarget: "schedule",
+  },
+  booking_software: {
+    title: "Create a booking-ready profile",
+    body: "This flow is focused on host requests, catering leads, and event details instead of generic restaurant setup.",
+    nextLabel: "Next: booking tools",
+    nextTarget: "booking",
+  },
+  catering_leads: {
+    title: "Create a catering-ready profile",
+    body: "Add the basics buyers need before requesting your truck: menu style, service area, and contact details.",
+    nextLabel: "Next: booking tools",
+    nextTarget: "booking",
+  },
+  social_media: {
+    title: "Make your profile social-ready",
+    body: "Your profile becomes the working link behind weekly posts, specials, location updates, and booking calls.",
+    nextLabel: "Next: owner dashboard",
+    nextTarget: "dashboard",
+  },
+  customer_list: {
+    title: "Build around repeat customers",
+    body: "Set up one reliable link customers can revisit for schedule, menu, deals, and ordering.",
+    nextLabel: "Next: customer-ready profile",
+    nextTarget: "dashboard",
+  },
+};
+
 export default function RestaurantSignup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -163,6 +216,7 @@ export default function RestaurantSignup() {
   };
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+  const [ownerIntent, setOwnerIntent] = useState("");
 
   const RESTAURANT_DRAFT_KEY = "mealscout:restaurant-signup-draft";
 
@@ -234,6 +288,22 @@ export default function RestaurantSignup() {
     try {
       const params = new URLSearchParams(window.location.search);
       const businessType = params.get("businessType");
+      const intent = String(params.get("intent") || "").trim();
+      const sourcePath = String(params.get("sourcePath") || "").trim();
+      if (intent) {
+        setOwnerIntent(intent);
+        window.sessionStorage.setItem("mealscout:owner-intent", intent);
+        if (sourcePath) {
+          window.sessionStorage.setItem(
+            "mealscout:owner-intent-source",
+            sourcePath,
+          );
+        }
+      } else {
+        setOwnerIntent(
+          window.sessionStorage.getItem("mealscout:owner-intent") || "",
+        );
+      }
       if (
         businessType === "food_truck" ||
         businessType === "restaurant" ||
@@ -269,9 +339,22 @@ export default function RestaurantSignup() {
         stage: "business_onboarding_view",
         businessType: selectedBusinessType,
         authMode,
+        ownerIntent: ownerIntent || null,
       },
     );
-  }, [selectedBusinessType, authMode]);
+  }, [selectedBusinessType, authMode, ownerIntent]);
+
+  const ownerIntentCopy = ownerIntent ? OWNER_INTENT_COPY[ownerIntent] : null;
+
+  const buildFoodTruckNextUrl = (restaurantId: string) => {
+    const dashboardNext = `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(restaurantId)}&src=truck-owner-flow&intent=${encodeURIComponent(ownerIntent || "general")}&goLive=1`;
+    if (ownerIntentCopy?.nextTarget === "menu") {
+      return `/menu-builder/${encodeURIComponent(restaurantId)}?src=truck-owner-flow&intent=${encodeURIComponent(ownerIntent || "online_ordering")}&next=${encodeURIComponent(dashboardNext)}`;
+    }
+    if (ownerIntentCopy?.nextTarget === "booking") return `${dashboardNext}&focus=bookings`;
+    if (ownerIntentCopy?.nextTarget === "schedule") return `${dashboardNext}&focus=schedule`;
+    return dashboardNext;
+  };
 
   useEffect(() => {
     if (selectedBusinessType !== "food_truck" && claimSelection) {
@@ -495,6 +578,7 @@ export default function RestaurantSignup() {
         page: "restaurant-signup",
         stage: "restaurant_profile_created",
         businessType: selectedBusinessType,
+        ownerIntent: ownerIntent || null,
       });
 
       toast({
@@ -503,10 +587,7 @@ export default function RestaurantSignup() {
       });
       const restaurantId = String(restaurant?.id || "").trim();
       if (selectedBusinessType === "food_truck" && restaurantId) {
-        const next = `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(restaurantId)}&src=truck-owner-flow&goLive=1`;
-        window.location.assign(
-          `/menu-builder/${encodeURIComponent(restaurantId)}?src=truck-owner-flow&next=${encodeURIComponent(next)}`,
-        );
+        window.location.assign(buildFoodTruckNextUrl(restaurantId));
         return;
       }
       window.location.assign(
@@ -680,6 +761,27 @@ export default function RestaurantSignup() {
         />
 
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+          {ownerIntentCopy ? (
+            <Card className="mb-4 border-[color:var(--accent-text)]/30 bg-[color:var(--accent-text)]/8 shadow-clean">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                    Food truck owner path
+                  </p>
+                  <h2 className="mt-1 text-lg font-black text-[color:var(--text-primary)]">
+                    {ownerIntentCopy.title}
+                  </h2>
+                  <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                    {ownerIntentCopy.body}
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs font-semibold text-[color:var(--text-secondary)]">
+                  {ownerIntentCopy.nextLabel}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
           <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
             <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
               <CardContent className="p-6 sm:p-8">
@@ -1108,6 +1210,16 @@ export default function RestaurantSignup() {
             <p className="mt-2 text-sm text-[color:var(--text-secondary)] sm:text-base">
               {mainHero.subtitle}
             </p>
+            {ownerIntentCopy ? (
+              <div className="mt-4 rounded-xl border border-[color:var(--accent-text)]/30 bg-[color:var(--accent-text)]/8 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                  {ownerIntentCopy.nextLabel}
+                </p>
+                <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                  {ownerIntentCopy.body}
+                </p>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
