@@ -4,6 +4,7 @@ import { MapPin, Calendar, ShoppingCart, TrendingUp, Users, Share2, Star, BarCha
 import { useAuth } from "@/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
+import { SEOHead } from "@/components/seo-head";
 
 export default function TruckLanding() {
   const { isAuthenticated } = useAuth();
@@ -11,6 +12,12 @@ export default function TruckLanding() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title="Food Truck Owner Tools for Spots, Orders, Schedules, and Social | MealScout"
+        description="MealScout helps food truck owners find spots, publish schedules, take pickup orders, manage booking requests, and promote updates from one profile."
+        canonicalUrl="https://www.mealscout.us/truck-landing"
+      />
+
       {/* Navigation */}
       <nav className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
@@ -68,6 +75,19 @@ export default function TruckLanding() {
                   </Button>
                 </a>
               )}
+            </div>
+            <div className="flex flex-wrap justify-center gap-2 pt-2 text-sm">
+              <Link href="/doordash-alternative-for-food-trucks" className="text-primary underline-offset-4 hover:underline">
+                DoorDash alternative
+              </Link>
+              <span className="text-muted-foreground">/</span>
+              <Link href="/food-truck-social-media-management" className="text-primary underline-offset-4 hover:underline">
+                Social tools
+              </Link>
+              <span className="text-muted-foreground">/</span>
+              <Link href="/food-truck-opportunities/pensacola" className="text-primary underline-offset-4 hover:underline">
+                Pensacola opportunities
+              </Link>
             </div>
           </div>
         </div>

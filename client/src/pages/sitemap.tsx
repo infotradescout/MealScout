@@ -3,7 +3,8 @@ import { SEOHead } from "@/components/seo-head";
 import { BackHeader } from "@/components/back-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
-import { Globe, Home, User, Building, Search, MapPin, Shield, ExternalLink } from "lucide-react";
+import { Globe, Home, User, Building, Search, MapPin, Shield, ExternalLink, Truck } from "lucide-react";
+import { ownerIntentSitemapPages } from "@/pages/food-truck-owner-intent";
 
 type SitemapCity = {
   id: string;
@@ -70,6 +71,16 @@ export default function Sitemap() {
         { title: "Online Ordering Platforms", href: "/online-ordering-platforms", description: "Local-first online ordering and discovery" },
         { title: "Comparison Hub", href: "/compare", description: "Head-to-head platform comparisons" },
       ],
+    },
+    {
+      category: "Food Truck Owner SEO Pages",
+      icon: Truck,
+      color: "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]",
+      pages: ownerIntentSitemapPages.map((page) => ({
+        title: page.title,
+        href: page.href,
+        description: page.description,
+      })),
     },
     {
       category: "Business & Event Pages",

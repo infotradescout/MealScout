@@ -99,6 +99,9 @@ const ComparePage = lazy(() => import("@/pages/compare"));
 const OnlineOrderingPlatformsPage = lazy(
   () => import("@/pages/online-ordering-platforms"),
 );
+const FoodTruckOwnerIntentPage = lazy(
+  () => import("@/pages/food-truck-owner-intent"),
+);
 const FAQ = lazy(() => import("@/pages/faq"));
 const HowItWorks = lazy(() => import("@/pages/how-it-works"));
 const Contact = lazy(() => import("@/pages/contact"));
@@ -186,6 +189,14 @@ const publicRoutePrefixes = [
   "/about",
   "/compare",
   "/online-ordering-platforms",
+  "/food-truck-business-tools",
+  "/doordash-alternative-for-food-trucks",
+  "/food-truck-online-ordering",
+  "/food-truck-social-media-management",
+  "/food-truck-booking-software",
+  "/food-truck-catering-leads",
+  "/food-truck-schedule-app",
+  "/food-truck-opportunities/",
   "/faq",
   "/how-it-works",
   "/contact",
@@ -358,6 +369,38 @@ function Router() {
             <Route
               path="/online-ordering-platforms"
               component={OnlineOrderingPlatformsPage}
+            />
+            <Route
+              path="/food-truck-business-tools"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/doordash-alternative-for-food-trucks"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-online-ordering"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-social-media-management"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-booking-software"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-catering-leads"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-schedule-app"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-opportunities/pensacola"
+              component={FoodTruckOwnerIntentPage}
             />
             <Route path="/faq" component={FAQ} />
             <Route path="/how-it-works" component={HowItWorks} />
@@ -590,6 +633,38 @@ function Router() {
             <Route
               path="/online-ordering-platforms"
               component={OnlineOrderingPlatformsPage}
+            />
+            <Route
+              path="/food-truck-business-tools"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/doordash-alternative-for-food-trucks"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-online-ordering"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-social-media-management"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-booking-software"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-catering-leads"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-schedule-app"
+              component={FoodTruckOwnerIntentPage}
+            />
+            <Route
+              path="/food-truck-opportunities/pensacola"
+              component={FoodTruckOwnerIntentPage}
             />
             <Route path="/faq" component={FAQ} />
             <Route path="/how-it-works" component={HowItWorks} />

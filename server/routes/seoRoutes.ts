@@ -224,6 +224,16 @@ export function registerSeoRoutes(app: Express) {
         "/sitemap",
         "/status",
       ].forEach((path) => mergeUrl(`${baseUrl}${path}`));
+      [
+        "/food-truck-business-tools",
+        "/doordash-alternative-for-food-trucks",
+        "/food-truck-online-ordering",
+        "/food-truck-social-media-management",
+        "/food-truck-booking-software",
+        "/food-truck-catering-leads",
+        "/food-truck-schedule-app",
+        "/food-truck-opportunities/pensacola",
+      ].forEach((path) => mergeUrl(`${baseUrl}${path}`));
 
       const latestCityBySlug = new Map<string, any>();
       for (const city of cityRows as any[]) {

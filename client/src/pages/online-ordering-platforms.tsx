@@ -90,6 +90,12 @@ export default function OnlineOrderingPlatformsPage() {
             ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/doordash-alternative-for-food-trucks">
+              <Button size="sm" variant="outline">DoorDash alternative for trucks</Button>
+            </Link>
+            <Link href="/food-truck-online-ordering">
+              <Button size="sm" variant="outline">Food truck ordering</Button>
+            </Link>
             <Link href="/compare">
               <Button size="sm">Compare platforms</Button>
             </Link>
