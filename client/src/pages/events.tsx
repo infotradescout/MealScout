@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, MapPin, Users, Clock, ShieldCheck } from "lucide-react";
+import {
+  Calendar,
+  MapPin,
+  Users,
+  Clock,
+  ShieldCheck,
+  Truck,
+  ChevronRight,
+  ClipboardList,
+  Send,
+} from "lucide-react";
 import { useLocation } from "wouter";
 import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -92,7 +102,8 @@ export default function EventsPage() {
     monthlyPriceDollars: "",
   });
   const isPrivateEvent = formData.eventVisibility === "private";
-  const isRecurringEvent = !isPrivateEvent && formData.eventCadence === "recurring";
+  const isRecurringEvent =
+    !isPrivateEvent && formData.eventCadence === "recurring";
   const showPricingFields = !isPrivateEvent && formData.requiresPayment;
 
   const parseDollarsToCents = (value: string) => {
@@ -161,12 +172,12 @@ export default function EventsPage() {
     ? isStaffOrAdmin
       ? "Admin Queue"
       : "Organizer Events"
-    : "Events";
+    : "Book Trucks";
   const pageDeck = isManageView
     ? isStaffOrAdmin
       ? "Inbound event, catering, and truck opportunity requests."
       : "Post and manage event opportunities."
-    : "Local events and food truck opportunities.";
+    : "Choose the fastest path for a private booking, open call, or truck profile.";
   const activeViewBadge = isManageView
     ? isStaffOrAdmin
       ? "Admin view"
@@ -184,7 +195,42 @@ export default function EventsPage() {
       ? `${intakeItems.length} request${intakeItems.length === 1 ? "" : "s"} in this queue`
       : "Create and update event opportunities"
     : eventCountLabel;
-  const HeaderIcon = isManageView ? ShieldCheck : Calendar;
+  const HeaderIcon = isManageView ? ShieldCheck : Truck;
+  const scrollToTruckDirectory = () => {
+    document.getElementById("food-truck-directory")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+  const bookingActions = [
+    {
+      title: "Book one specific truck",
+      description:
+        "Send a direct request for parties, offices, job sites, and neighborhoods.",
+      badge: "Private request",
+      icon: Truck,
+      onSelect: () => setLocation("/request-truck"),
+    },
+    {
+      title: "Find trucks for an event",
+      description:
+        "Post the event details or review open calls looking for vendors.",
+      badge: hasOperationsTools ? "Organizer tools" : "Open calls",
+      icon: Send,
+      onSelect: () =>
+        hasOperationsTools
+          ? setActiveView("manage")
+          : setLocation("/truck-discovery"),
+    },
+    {
+      title: "Browse truck profiles",
+      description:
+        "Compare local trucks, cuisine, and profile details before sending a request.",
+      badge: "Directory",
+      icon: Users,
+      onSelect: scrollToTruckDirectory,
+    },
+  ];
 
   const toEventSlug = (event: any) => {
     const id = String(event?.id || "").trim();
@@ -490,15 +536,24 @@ export default function EventsPage() {
 
           {activeView === "manage" && isStaffOrAdmin && (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Incoming Opportunity Requests
-                </CardTitle>
-                <p className="text-sm text-[color:var(--text-secondary)]">
-                  Review and triage organizer requests, truck leads, and private
-                  opportunities. Use filters to route requests by visibility and
-                  type.
-                </p>
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                      <ClipboardList className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <CardTitle className="text-lg">
+                        Pending requests
+                      </CardTitle>
+                      <p className="text-sm text-[color:var(--text-secondary)]">
+                        {intakeItems.length} request
+                        {intakeItems.length === 1 ? "" : "s"} need review.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary">Admin queue</Badge>
+                </div>
                 <div className="grid sm:grid-cols-2 gap-3 pt-2">
                   <div>
                     <Label htmlFor="intakeVisibility">Visibility</Label>
@@ -551,48 +606,58 @@ export default function EventsPage() {
                     {intakeItems.slice(0, 12).map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
+                        className="flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
                       >
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <Badge variant="outline">
-                            {item.claimType === "event"
-                              ? "Organizer intake"
-                              : "Truck/catering intake"}
-                          </Badge>
-                          <Badge
-                            variant={
-                              item.eventVisibility === "public"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {item.eventVisibility === "public"
-                              ? "Public"
-                              : item.eventVisibility === "private"
-                                ? "Private"
-                                : "Unknown"}
-                          </Badge>
-                          {item.requestedTruckCount ? (
+                        <span className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                          {item.claimType === "event" ? (
+                            <Calendar className="h-4 w-4" />
+                          ) : (
+                            <Truck className="h-4 w-4" />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
                             <Badge variant="outline">
-                              {item.requestedTruckCount} truck
-                              {item.requestedTruckCount === 1 ? "" : "s"}
+                              {item.claimType === "event"
+                                ? "Organizer"
+                                : "Truck/catering"}
                             </Badge>
-                          ) : null}
+                            <Badge
+                              variant={
+                                item.eventVisibility === "public"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {item.eventVisibility === "public"
+                                ? "Public"
+                                : item.eventVisibility === "private"
+                                  ? "Private"
+                                  : "Unknown"}
+                            </Badge>
+                            {item.requestedTruckCount ? (
+                              <Badge variant="outline">
+                                {item.requestedTruckCount} truck
+                                {item.requestedTruckCount === 1 ? "" : "s"}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 text-sm font-semibold text-[color:var(--text-primary)] line-clamp-1">
+                            {item.summary.title}
+                          </p>
+                          <p className="text-xs text-[color:var(--text-muted)] mt-1">
+                            {[item.summary.city, item.summary.date]
+                              .filter(Boolean)
+                              .join(" • ") || "No location/date provided"}
+                          </p>
+                          <p className="text-xs text-[color:var(--text-muted)] mt-1 line-clamp-1">
+                            {item.requester.name || "Unknown requester"}
+                            {item.requester.email
+                              ? ` · ${item.requester.email}`
+                              : ""}
+                          </p>
                         </div>
-                        <p className="mt-2 text-sm font-semibold text-[color:var(--text-primary)]">
-                          {item.summary.title}
-                        </p>
-                        <p className="text-xs text-[color:var(--text-muted)] mt-1">
-                          {[item.summary.city, item.summary.date]
-                            .filter(Boolean)
-                            .join(" • ") || "No location/date provided"}
-                        </p>
-                        <p className="text-xs text-[color:var(--text-muted)] mt-1">
-                          Requester: {item.requester.name || "Unknown"}
-                          {item.requester.email
-                            ? ` (${item.requester.email})`
-                            : ""}
-                        </p>
+                        <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-[color:var(--text-muted)]" />
                       </div>
                     ))}
                   </div>
@@ -1030,161 +1095,239 @@ export default function EventsPage() {
           )}
         </div>
 
+        {activeView === "discover" && (
+          <section className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-[color:var(--text-primary)]">
+                  Choose a booking path
+                </h2>
+                <p className="text-sm text-[color:var(--text-secondary)]">
+                  Start with the action that matches the job.
+                </p>
+              </div>
+              <Badge variant="secondary">Booking</Badge>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {bookingActions.map((action) => {
+                const ActionIcon = action.icon;
+                return (
+                  <button
+                    key={action.title}
+                    type="button"
+                    onClick={action.onSelect}
+                    className="group flex min-h-32 items-center gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4 text-left transition hover:border-[color:var(--accent-text)] hover:shadow-clean"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                      <ActionIcon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="mb-2 inline-flex rounded-full bg-[color:var(--accent-text)]/10 px-2 py-1 text-xs font-semibold text-[color:var(--accent-text)]">
+                        {action.badge}
+                      </span>
+                      <span className="block text-base font-semibold text-[color:var(--text-primary)]">
+                        {action.title}
+                      </span>
+                      <span className="mt-1 block text-sm text-[color:var(--text-secondary)]">
+                        {action.description}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-[color:var(--text-muted)] transition group-hover:translate-x-0.5 group-hover:text-[color:var(--accent-text)]" />
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Events Grid */}
         {activeView === "discover" && discoverEvents.length === 0 ? (
-          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-            <CardContent className="p-12 text-center">
-              <Calendar className="w-16 h-16 text-[color:var(--text-muted)] mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-[color:var(--text-secondary)] mb-2">
-                No Upcoming Events
-              </h3>
-              <p className="text-[color:var(--text-muted)] mb-3">
-                No high-volume events are currently listed.
-              </p>
-            </CardContent>
-          </Card>
+          <section className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                  <Calendar className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-[color:var(--text-primary)]">
+                    No public events yet
+                  </h3>
+                  <p className="text-sm text-[color:var(--text-muted)]">
+                    Send a private request, review open calls, or browse truck profiles.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLocation("/truck-discovery")}
+              >
+                Review open calls
+              </Button>
+            </div>
+          </section>
         ) : activeView === "discover" ? (
           <>
-            <p className="text-sm text-[color:var(--text-muted)]">{eventCountLabel}</p>
+            <p className="text-sm text-[color:var(--text-muted)]">
+              {eventCountLabel}
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {discoverEvents.map((event: any) => (
-              <Card
-                key={event.id}
-                className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer"
-                role="button"
-                tabIndex={0}
-                onClick={() => setLocation(`/event/${toEventSlug(event)}`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setLocation(`/event/${toEventSlug(event)}`);
-                  }
-                }}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-lg line-clamp-2">
-                      {event.name || "Food Truck Event"}
-                    </CardTitle>
-                    <Badge variant="default">Open</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Date & Time */}
-                  {event.date && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <Clock className="w-4 h-4" />
-                      <span>
-                        {new Date(event.date).toLocaleDateString("en-US", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
+              {discoverEvents.map((event: any) => (
+                <Card
+                  key={event.id}
+                  className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setLocation(`/event/${toEventSlug(event)}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setLocation(`/event/${toEventSlug(event)}`);
+                    }
+                  }}
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg line-clamp-2">
+                        {event.name || "Food Truck Event"}
+                      </CardTitle>
+                      <Badge variant="default">Open</Badge>
                     </div>
-                  )}
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Date & Time */}
+                    {event.date && (
+                      <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
+                        <Clock className="w-4 h-4" />
+                        <span>
+                          {new Date(event.date).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    )}
 
-                  {/* Location */}
-                  {event.host?.businessName && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <MapPin className="w-4 h-4" />
-                      <span className="line-clamp-1">
-                        {event.host.businessName}
-                      </span>
+                    {/* Location */}
+                    {event.host?.businessName && (
+                      <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
+                        <MapPin className="w-4 h-4" />
+                        <span className="line-clamp-1">
+                          {event.host.businessName}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Capacity */}
+                    {event.maxTrucks && (
+                      <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
+                        <Users className="w-4 h-4" />
+                        <span>Up to {event.maxTrucks} trucks</span>
+                      </div>
+                    )}
+
+                    {event.requiresPayment && event.hostPriceCents ? (
+                      <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[color:var(--accent-text)]/10 text-[10px] font-bold text-[color:var(--accent-text)]">
+                          $
+                        </span>
+                        <span>
+                          ${(Number(event.hostPriceCents) / 100).toFixed(2)}{" "}
+                          host fee + $10 platform fee
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {/* Description */}
+                    {event.description && (
+                      <p className="text-sm text-[color:var(--text-muted)] line-clamp-3">
+                        {event.description}
+                      </p>
+                    )}
+
+                    {/* Series Info */}
+                    {event.series && (
+                      <Badge variant="secondary" className="text-xs">
+                        {event.series.name}
+                      </Badge>
+                    )}
+
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocation(`/event/${toEventSlug(event)}`);
+                        }}
+                      >
+                        View details
+                      </Button>
                     </div>
-                  )}
-
-                  {/* Capacity */}
-                  {event.maxTrucks && (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <Users className="w-4 h-4" />
-                      <span>Up to {event.maxTrucks} trucks</span>
-                    </div>
-                  )}
-
-                  {event.requiresPayment && event.hostPriceCents ? (
-                    <div className="flex items-center gap-2 text-sm text-[color:var(--text-secondary)]">
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[color:var(--accent-text)]/10 text-[10px] font-bold text-[color:var(--accent-text)]">
-                        $
-                      </span>
-                      <span>
-                        ${(Number(event.hostPriceCents) / 100).toFixed(2)} host
-                        fee + $10 platform fee
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {/* Description */}
-                  {event.description && (
-                    <p className="text-sm text-[color:var(--text-muted)] line-clamp-3">
-                      {event.description}
-                    </p>
-                  )}
-
-                  {/* Series Info */}
-                  {event.series && (
-                    <Badge variant="secondary" className="text-xs">
-                      {event.series.name}
-                    </Badge>
-                  )}
-
-                  <div className="pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/event/${toEventSlug(event)}`);
-                      }}
-                    >
-                      View details
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </>
         ) : null}
 
         {activeView === "discover" ? (
-          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
-          <CardHeader>
-            <CardTitle className="text-lg">Food Truck Directory</CardTitle>
-            <p className="text-sm text-[color:var(--text-secondary)]">
-              Reach out directly to trucks for private parties, birthdays, and
-              neighborhood events.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {truckDirectory.length === 0 ? (
-              <p className="text-sm text-[color:var(--text-muted)]">
-                No truck profiles available yet.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {truckDirectory.slice(0, 18).map((truck) => (
-                  <a
-                    key={truck.id}
-                    href={`/restaurant/${truck.id}`}
-                    className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 hover:shadow-clean transition-shadow"
-                  >
-                    <p className="font-semibold text-[color:var(--text-primary)] line-clamp-1">
-                      {truck.name}
+          <Card id="food-truck-directory" className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean scroll-mt-6">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                    <Truck className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <CardTitle className="text-lg">Food trucks</CardTitle>
+                    <p className="text-sm text-[color:var(--text-secondary)]">
+                      Browse bookable truck profiles.
                     </p>
-                    <p className="text-xs text-[color:var(--text-secondary)] mt-1 line-clamp-1">
-                      {truck.cuisineType || "Food Truck"}
-                    </p>
-                    <p className="text-xs text-[color:var(--text-muted)] mt-1 line-clamp-1">
-                      {[truck.city, truck.state].filter(Boolean).join(", ") ||
-                        "Location on profile"}
-                    </p>
-                  </a>
-                ))}
+                  </div>
+                </div>
+                <Badge variant="secondary">{truckDirectory.length}</Badge>
               </div>
-            )}
-          </CardContent>
+            </CardHeader>
+            <CardContent>
+              {truckDirectory.length === 0 ? (
+                <p className="text-sm text-[color:var(--text-muted)]">
+                  No truck profiles available yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {truckDirectory.slice(0, 18).map((truck) => (
+                    <a
+                      key={truck.id}
+                      href={`/restaurant/${truck.id}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition hover:border-[color:var(--accent-text)] hover:shadow-clean"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/10 text-[color:var(--accent-text)]">
+                          <Truck className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-[color:var(--text-primary)] line-clamp-1">
+                            {truck.name}
+                          </p>
+                          <p className="text-xs text-[color:var(--text-secondary)] mt-1 line-clamp-1">
+                            {truck.cuisineType || "Food Truck"}
+                          </p>
+                          <p className="text-xs text-[color:var(--text-muted)] mt-1 line-clamp-1">
+                            {[truck.city, truck.state]
+                              .filter(Boolean)
+                              .join(", ") || "Location on profile"}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--text-muted)]" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
           </Card>
         ) : null}
       </div>
