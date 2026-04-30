@@ -118,11 +118,11 @@ const pages: OwnerIntentPage[] = [
     seoDescription:
       "A DoorDash alternative for food trucks that helps owners take direct pickup orders, share QR menus, publish locations, and keep customer relationships.",
     eyebrow: "DoorDash alternative for food trucks",
-    headline: "Keep DoorDash as a channel, not the place your food truck lives.",
+    headline: "Do not rent your regulars from DoorDash.",
     subhead:
-      "MealScout gives food trucks a direct pickup ordering path, QR menu, public schedule, and customer-facing profile so regulars can buy from the truck without starting inside a third-party marketplace every time.",
-    primaryCta: { href: signupHref, label: "Start direct ordering" },
-    secondaryCta: { href: "/menu-builder", label: "Preview menu builder" },
+      "Use delivery apps for discovery when they earn the fee. Send regulars, QR scans, event guests, and social followers to a MealScout pickup link that keeps the order tied to your menu, schedule, and truck profile.",
+    primaryCta: { href: signupHref, label: "Build my direct order link" },
+    secondaryCta: { href: "/menu-builder", label: "Preview the order page" },
     intentTerms: [
       "DoorDash alternative for food trucks",
       "Uber Eats alternative for food trucks",
@@ -130,29 +130,29 @@ const pages: OwnerIntentPage[] = [
       "avoid delivery app fees",
     ],
     promise:
-      "Give customers a direct way to order from your truck while keeping the menu, schedule, QR code, local profile, and repeat-customer path tied to your own MealScout presence.",
+      "Move the customers you already earned out of the marketplace toll booth and into a direct pickup flow built around your own truck profile.",
     proof: [
       {
         title: "Pickup-first ordering",
-        body: "Use direct pickup checkout for customers who already know they want your food.",
+        body: "Give regulars and QR scans a checkout path that is built for pickup at the truck.",
         icon: ShoppingBag,
       },
       {
         title: "QR menu links",
-        body: "Point signs, posts, and event flyers to a menu that belongs to your truck profile.",
+        body: "Put one direct menu behind window signs, event flyers, receipts, and social posts.",
         icon: QrCode,
       },
       {
         title: "Customer ownership",
-        body: "Keep buyers connected to your schedule, profile, deals, and future stops.",
+        body: "Keep buyers connected to your schedule, deals, profile, and future stops after checkout.",
         icon: Users,
       },
     ],
     workflow: [
       "Create your truck profile and menu.",
-      "Share your direct ordering link from posts, QR codes, and event pages.",
-      "Use pickup windows instead of relying only on delivery marketplaces.",
-      "Bring customers back to your schedule, deals, and booking profile.",
+      "Put the direct link on your QR code, social bio, event listing, and printed signs.",
+      "Send regulars to pickup ordering before they open a marketplace app.",
+      "Use delivery apps only for orders where the fee still makes sense.",
     ],
     faqs: [
       {
@@ -978,6 +978,7 @@ export default function FoodTruckOwnerIntentPage() {
   const headline = localCityLabel
     ? page.headline.replace("Pensacola", localCityLabel)
     : page.headline;
+  const isDoorDashAlternative = page.intentKey === "doordash_alternative";
 
   return (
     <main className="min-h-screen bg-[var(--bg-layered)] text-[color:var(--text-primary)]">
@@ -989,8 +990,8 @@ export default function FoodTruckOwnerIntentPage() {
       />
 
       <section className="border-b border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-14">
-          <div className="space-y-5">
+        <div className={`mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 ${isDoorDashAlternative ? "py-6 pb-20 md:grid-cols-[1.05fr_0.95fr] md:items-start md:gap-6 md:pb-10 lg:py-12" : "py-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-14"}`}>
+          <div className={isDoorDashAlternative ? "space-y-4" : "space-y-5"}>
             <Link
               href="/truck-landing"
               className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]"
@@ -999,14 +1000,14 @@ export default function FoodTruckOwnerIntentPage() {
               {page.eyebrow}
             </Link>
             <div className="space-y-3">
-              <h1 className="max-w-4xl text-3xl font-black leading-tight sm:text-5xl">
+              <h1 className={`max-w-4xl font-black leading-tight normal-case ${isDoorDashAlternative ? "text-3xl min-[520px]:text-4xl lg:text-6xl" : "text-3xl sm:text-5xl"}`}>
                 {headline}
               </h1>
-              <p className="max-w-3xl text-base font-medium leading-relaxed text-[color:var(--text-secondary)] sm:text-lg">
+              <p className="max-w-3xl text-base font-semibold leading-relaxed text-[color:var(--text-secondary)] sm:text-lg">
                 {page.subhead}
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className={`flex flex-col gap-3 ${isDoorDashAlternative ? "min-[520px]:flex-row" : "sm:flex-row"}`}>
               <Button asChild size="lg" className="gap-2">
                 <Link
                   href={primaryHref}
@@ -1039,48 +1040,54 @@ export default function FoodTruckOwnerIntentPage() {
                 </Link>
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {page.intentTerms.map((term) => (
-                <span
-                  key={term}
-                  className="rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1 text-xs font-semibold text-[color:var(--text-secondary)]"
-                >
-                  {term}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean-lg">
-            <CardContent className="space-y-4 p-5 sm:p-6">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
-                  <Search className="h-5 w-5" />
-                </span>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
-                    Owner search intent
-                  </p>
-                  <h2 className="mt-1 text-xl font-black">Be found when owners are already looking.</h2>
-                </div>
-              </div>
-              <p className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
-                {page.promise}
-              </p>
-              <div className="grid gap-2">
-                {page.workflow.slice(0, 3).map((step) => (
-                  <div key={step} className="flex gap-2 text-sm">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-[color:var(--status-success)]" />
-                    <span>{step}</span>
-                  </div>
+            {!isDoorDashAlternative ? (
+              <div className="flex flex-wrap gap-2">
+                {page.intentTerms.map((term) => (
+                  <span
+                    key={term}
+                    className="rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1 text-xs font-semibold text-[color:var(--text-secondary)]"
+                  >
+                    {term}
+                  </span>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            ) : null}
+          </div>
+
+          {isDoorDashAlternative ? (
+            <DoorDashHeroPanel page={page} />
+          ) : (
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean-lg">
+              <CardContent className="space-y-4 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+                    <Search className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                      Owner search intent
+                    </p>
+                    <h2 className="mt-1 text-xl font-black">Be found when owners are already looking.</h2>
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed text-[color:var(--text-secondary)]">
+                  {page.promise}
+                </p>
+                <div className="grid gap-2">
+                  {page.workflow.slice(0, 3).map((step) => (
+                    <div key={step} className="flex gap-2 text-sm">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-[color:var(--status-success)]" />
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <section id="fee-calculator" className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <OwnerIntentTool page={page} city={localCityLabel} />
       </section>
 
@@ -1185,6 +1192,94 @@ export default function FoodTruckOwnerIntentPage() {
   );
 }
 
+function DoorDashHeroPanel({ page }: { page: OwnerIntentPage }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[color:var(--accent-text)]/35 bg-[var(--bg-surface)] shadow-clean-lg md:sticky md:top-4">
+      <div className="border-b border-[color:var(--border-subtle)] bg-[color:var(--accent-text)]/10 p-3.5 sm:p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              Money leak snapshot
+            </p>
+            <h2 className="mt-2 text-3xl font-black leading-tight normal-case sm:text-4xl">
+              $280/mo
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-secondary)]">
+              Lost to fees on 80 monthly orders at $14 and 25%.
+            </p>
+          </div>
+          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-[var(--bg-card)] text-[color:var(--accent-text)]">
+            <ShoppingBag className="h-5 w-5" />
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-3.5 sm:p-4">
+        <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-black uppercase tracking-[0.1em] text-[color:var(--text-secondary)]">
+          <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2.5">
+            <div className="text-lg text-[color:var(--text-primary)]">80</div>
+            orders
+          </div>
+          <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2.5">
+            <div className="text-lg text-[color:var(--text-primary)]">$14</div>
+            ticket
+          </div>
+          <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-2.5">
+            <div className="text-lg text-[color:var(--text-primary)]">25%</div>
+            fee
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                What the customer sees
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[color:var(--text-secondary)]">
+                A direct pickup page instead of another marketplace listing.
+              </p>
+            </div>
+            <QrCode className="h-7 w-7 flex-none text-[color:var(--accent-text)]" />
+          </div>
+          <div className="mt-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-black normal-case">Smash burger combo</p>
+                <p className="mt-1 text-xs font-semibold text-[color:var(--text-secondary)]">
+                  Pickup today, 11:30 AM to 1:30 PM
+                </p>
+              </div>
+              <span className="rounded-full bg-[color:var(--accent-text)]/12 px-2.5 py-1 text-sm font-black text-[color:var(--accent-text)]">
+                $14
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-black text-[color:var(--text-secondary)]">
+              <span className="rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5">
+                QR menu
+              </span>
+              <span className="rounded-md border border-[color:var(--border-subtle)] px-2 py-1.5">
+                Next stop
+              </span>
+            </div>
+          </div>
+          <div className="mt-3 hidden gap-2 sm:grid">
+            {[
+              "Pickup order happens outside the delivery app",
+              "Buyer returns to your schedule and profile",
+            ].map((item) => (
+              <div key={item} className="flex gap-2 text-sm font-medium">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-[color:var(--status-success)]" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }) {
   const [orders, setOrders] = useState(80);
   const [ticket, setTicket] = useState(14);
@@ -1257,11 +1352,11 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                   Direct order fee calculator
                 </p>
                 <h2 className="mt-2 text-2xl font-black sm:text-3xl">
-                  See what marketplace fees can cost before you send regulars there.
+                  Put numbers on the app-fee leak.
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-[color:var(--text-secondary)]">
-                  This is not a promise that every order moves direct. It shows the fee pressure
-                  so a truck owner can decide which customers should get a direct MealScout link.
+                  Delivery apps can be useful for strangers. They get expensive when regulars,
+                  QR scans, and event guests are still paying through the same toll booth.
                 </p>
               </div>
 
@@ -1310,19 +1405,19 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                   <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
-                    App order volume
+                    Marketplace volume
                   </div>
                   <div className="mt-1 text-2xl font-black">{formatMoney(grossSales)}</div>
                 </div>
                 <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                   <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
-                    Estimated app fees
+                    Fee drag
                   </div>
                   <div className="mt-1 text-2xl font-black">{formatMoney(savings)}</div>
                 </div>
                 <div className="rounded-lg border border-[color:var(--accent-text)]/35 bg-[color:var(--accent-text)]/8 p-4">
                   <div className="text-xs font-semibold text-[color:var(--accent-text)]">
-                    If 35% order direct
+                    Attack first
                   </div>
                   <div className="mt-1 text-2xl font-black">{formatMoney(directShiftFees)}</div>
                 </div>
@@ -1334,9 +1429,9 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
-                      MealScout direct page
+                      Customer sees this instead
                     </p>
-                    <h3 className="mt-1 text-lg font-black">Your truck link</h3>
+                    <h3 className="mt-1 text-lg font-black">A direct pickup page</h3>
                   </div>
                   <QrCode className="h-8 w-8 text-[color:var(--accent-text)]" />
                 </div>
@@ -1347,7 +1442,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                       <span className="font-black">$14</span>
                     </div>
                     <p className="mt-1 text-xs text-[color:var(--text-secondary)]">
-                      Pickup at today&apos;s serving window
+                      Pickup from today&apos;s stop, tied to your truck profile
                     </p>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -1372,7 +1467,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
                         })
                       }
                     >
-                      Create this order path
+                      Build the direct path
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -1388,7 +1483,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
                 Marketplace vs direct
               </p>
-              <h2 className="mt-2 text-2xl font-black">Use the right channel for the right order.</h2>
+              <h2 className="mt-2 text-2xl font-black">Stop treating every customer like marketplace traffic.</h2>
               <div className="mt-4 overflow-hidden rounded-lg border border-[color:var(--border-subtle)]">
                 <div className="hidden bg-[var(--bg-surface)] text-xs font-black uppercase tracking-[0.12em] text-[color:var(--text-secondary)] sm:grid sm:grid-cols-[0.75fr_1fr_1fr]">
                   <div className="p-3">Decision</div>
@@ -1421,7 +1516,7 @@ function OwnerIntentTool({ page, city }: { page: OwnerIntentPage; city: string }
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
                 What to do next
               </p>
-              <h2 className="mt-2 text-2xl font-black">Build the direct path first.</h2>
+              <h2 className="mt-2 text-2xl font-black">Move the easiest orders first.</h2>
               <div className="mt-4 space-y-3">
                 {nextSteps.map((step, index) => (
                   <div key={step} className="flex gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm">
