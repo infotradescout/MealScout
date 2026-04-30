@@ -35,7 +35,10 @@ function isLikely3DEatsPartner(
   if (firstName !== "sean") return false;
 
   const hasExact3dEatsRestaurant = ownedRestaurants.some(
-    (row) => String(row?.name || "").trim().toLowerCase() === "3d eats",
+    (row) =>
+      String(row?.name || "")
+        .trim()
+        .toLowerCase() === "3d eats",
   );
   if (hasExact3dEatsRestaurant) return true;
 
@@ -53,7 +56,9 @@ function isLikely3DEatsPartner(
 
 async function ensureFirstPartnerLifetimeAccess(user: any) {
   if (!user?.id) return user;
-  if (!["restaurant_owner", "food_truck"].includes(String(user.userType || ""))) {
+  if (
+    !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
+  ) {
     return user;
   }
 
@@ -154,7 +159,8 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
     ...existingPartnerProgram,
     partnerKey: "3d-eats",
     lifetimeFreeAccess: true,
-    lifetimeGrantedAt: existingPartnerProgram.lifetimeGrantedAt || now.toISOString(),
+    lifetimeGrantedAt:
+      existingPartnerProgram.lifetimeGrantedAt || now.toISOString(),
     loginAnnouncement: shouldQueueAnnouncement
       ? {
           message: FIRST_PARTNER_MESSAGE,
@@ -278,7 +284,9 @@ const accountSettingsSchema = z.object({
     .optional(),
   privacy: z
     .object({
-      profileVisibility: z.enum(["public", "private", "connections"]).optional(),
+      profileVisibility: z
+        .enum(["public", "private", "connections"])
+        .optional(),
       showEmail: z.boolean().optional(),
       showPhone: z.boolean().optional(),
     })
@@ -286,7 +294,9 @@ const accountSettingsSchema = z.object({
   customDomain: z
     .object({
       hostname: z.string().max(255).optional(),
-      status: z.enum(["unverified", "verified", "mismatch", "error"]).optional(),
+      status: z
+        .enum(["unverified", "verified", "mismatch", "error"])
+        .optional(),
       lastCheckedAt: z.string().optional(),
       expectedTarget: z.string().optional(),
       diagnostics: z.string().optional(),
@@ -312,6 +322,18 @@ export function registerAuthAccountRoutes(app: Express) {
       }
 
       let user = req.user;
+
+      if (
+        user?.email &&
+        !user.emailVerified &&
+        !["admin", "super_admin"].includes(String(user.userType || ""))
+      ) {
+        return res.status(403).json({
+          error: "Please verify your email before continuing.",
+          code: "email_not_verified",
+          email: user.email,
+        });
+      }
 
       if (String(user?.userType || "") === "customer") {
         const ownedRestaurants = await storage.getRestaurantsByOwner(user.id);
@@ -644,7 +666,10 @@ export function registerAuthAccountRoutes(app: Express) {
           });
         }
 
-        const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+        const isValid = await bcrypt.compare(
+          currentPassword,
+          user.passwordHash,
+        );
         if (!isValid) {
           return res.status(400).json({
             success: false,

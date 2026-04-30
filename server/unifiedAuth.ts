@@ -26,7 +26,10 @@ import {
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { ensureAffiliateTag, resolveAffiliateUserId } from "./affiliateTagService";
+import {
+  ensureAffiliateTag,
+  resolveAffiliateUserId,
+} from "./affiliateTagService";
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -106,6 +109,22 @@ function establishAuthenticatedSession(req: any, user: User) {
       finalizeLogin();
     });
   });
+}
+
+function requiresEmailVerification(user: User | undefined | null) {
+  if (!user?.email) return false;
+  if (user.emailVerified) return false;
+  return !["admin", "super_admin"].includes(String(user.userType || ""));
+}
+
+function isEmailVerificationBypassPath(path: string) {
+  return (
+    path === "/api/auth/user" ||
+    path === "/api/auth/logout" ||
+    path === "/api/auth/resend-verification" ||
+    path === "/api/auth/verify-email" ||
+    path.startsWith("/api/auth/verify-email/")
+  );
 }
 
 export async function setupUnifiedAuth(app: Express) {
@@ -239,10 +258,7 @@ export async function setupUnifiedAuth(app: Express) {
           );
       }
     } catch (error) {
-      console.error(
-        `Failed to prepare ${welcomeLabel} welcome email:`,
-        error,
-      );
+      console.error(`Failed to prepare ${welcomeLabel} welcome email:`, error);
     }
   };
 
@@ -266,8 +282,7 @@ export async function setupUnifiedAuth(app: Express) {
   };
 
   // Ensure configured super admin email is upgraded
-  const superAdminEmail =
-    process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
+  const superAdminEmail = process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
   if (superAdminEmail) {
     try {
       const existing = await storage.getUserByEmail(superAdminEmail);
@@ -275,10 +290,7 @@ export async function setupUnifiedAuth(app: Express) {
         await storage.updateUserType(existing.id, "super_admin");
       }
     } catch (err) {
-      console.warn(
-        "⚠️  Failed startup super admin auto-upgrade:",
-        err,
-      );
+      console.warn("⚠️  Failed startup super admin auto-upgrade:", err);
     }
   }
 
@@ -321,10 +333,7 @@ export async function setupUnifiedAuth(app: Express) {
         try {
           user = await storage.updateUser(user.id, { emailVerified: true });
         } catch (err) {
-          console.warn(
-            "⚠️  Failed to auto-verify admin account email:",
-            err,
-          );
+          console.warn("⚠️  Failed to auto-verify admin account email:", err);
         }
       }
 
@@ -333,6 +342,21 @@ export async function setupUnifiedAuth(app: Express) {
       // For user not found or other errors, return false to clear the session
       done(null, false);
     }
+  });
+
+  app.use((req: any, res, next) => {
+    if (!req.isAuthenticated?.() || !requiresEmailVerification(req.user)) {
+      return next();
+    }
+
+    if (isEmailVerificationBypassPath(req.path)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      error: "Please verify your email before continuing.",
+      code: "email_not_verified",
+    });
   });
 
   // Google Strategy and routes for all users (only enabled if credentials are configured)
@@ -641,7 +665,9 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google restaurant OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`);
+          res.redirect(
+            `${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`,
+          );
         });
       },
     );
@@ -1211,9 +1237,11 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
       };
 
-      const normalizedBusinessType = ["restaurant", "bar", "food_truck"].includes(
-        String(businessType || ""),
-      )
+      const normalizedBusinessType = [
+        "restaurant",
+        "bar",
+        "food_truck",
+      ].includes(String(businessType || ""))
         ? String(businessType)
         : "restaurant";
       const businessUserType =
@@ -1316,7 +1344,11 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
       };
 
-      const user = await storage.upsertUserByAuth("email", userData, "supplier");
+      const user = await storage.upsertUserByAuth(
+        "email",
+        userData,
+        "supplier",
+      );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
@@ -1333,7 +1365,8 @@ export async function setupUnifiedAuth(app: Express) {
 
       // Require email verification before first login/session.
       res.status(201).json({
-        message: "Supplier account created. Please verify your email before logging in.",
+        message:
+          "Supplier account created. Please verify your email before logging in.",
         requiresEmailVerification: true,
       });
     } catch (error) {
@@ -1356,7 +1389,9 @@ export async function setupUnifiedAuth(app: Express) {
       const user = await storage.getUserByEmail(email);
       if (
         !user ||
-        !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
+        !["restaurant_owner", "food_truck"].includes(
+          String(user.userType || ""),
+        )
       ) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
@@ -1676,7 +1711,10 @@ export async function setupUnifiedAuth(app: Express) {
       const resetToken = `${tokenId}.${verifier}`;
 
       // Store only a hash of the verifier for lookup (not the full token).
-      const tokenHash = crypto.createHash("sha256").update(verifier).digest("hex");
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(verifier)
+        .digest("hex");
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
       // Clean up existing tokens for this user
@@ -1992,9 +2030,10 @@ export async function setupUnifiedAuth(app: Express) {
 
 async function applyAffiliateReferral(req: any, user: User) {
   try {
-    const ref = typeof req.cookies?.referralId === "string"
-      ? req.cookies.referralId.trim()
-      : "";
+    const ref =
+      typeof req.cookies?.referralId === "string"
+        ? req.cookies.referralId.trim()
+        : "";
     if (!ref) return;
     if (user.affiliateCloserUserId) return;
     const affiliateUserId = await resolveAffiliateUserId(ref);
@@ -2005,7 +2044,10 @@ async function applyAffiliateReferral(req: any, user: User) {
       .from(users)
       .where(eq(users.id, affiliateUserId))
       .limit(1);
-    const percentSnapshot = Math.max(Number(affiliate?.affiliatePercent ?? 5), 0);
+    const percentSnapshot = Math.max(
+      Number(affiliate?.affiliatePercent ?? 5),
+      0,
+    );
 
     await db
       .update(users)
@@ -2112,7 +2154,11 @@ export const isRestaurantOwnerOrAdmin = requireRole([
   "super_admin",
 ]);
 
-export const isSupplierOrAdmin = requireRole(["supplier", "admin", "super_admin"]);
+export const isSupplierOrAdmin = requireRole([
+  "supplier",
+  "admin",
+  "super_admin",
+]);
 
 // API Key authentication middleware
 export const apiKeyAuth = async (req: any, res: any, next: any) => {
