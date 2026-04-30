@@ -9,10 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authUrl } from "@/lib/api";
 import { SEOHead } from "@/components/seo-head";
-import {
-  FUNNEL_EVENTS,
-  trackFunnelEvent,
-} from "@/utils/funnelTelemetry";
+import { FUNNEL_EVENTS, trackFunnelEvent } from "@/utils/funnelTelemetry";
 import { trackUxEvent } from "@/utils/uxTelemetry";
 
 const getSafeRedirectPath = (): string | null => {
@@ -43,21 +40,41 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const redirectPath = getSafeRedirectPath();
 
+  const getPostLoginRedirect = (user: any) => {
+    if (redirectPath) return redirectPath;
+    const userType = String(user?.userType || "");
+    if (["admin", "super_admin", "staff"].includes(userType)) {
+      return "/admin/dashboard";
+    }
+    if (["restaurant_owner", "food_truck"].includes(userType)) {
+      return "/restaurant-owner-dashboard";
+    }
+    if (userType === "host") return "/host-dashboard";
+    if (userType === "event_coordinator") return "/event-coordinator/dashboard";
+    if (userType === "supplier") return "/supplier/dashboard";
+    return "/";
+  };
+
   const attemptLoginWithRetry = async () =>
-    fetchJsonWithRetry<Record<string, any>>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-    }, {
-      attempts: 2,
-      retryStatuses: [503],
-      baseDelayMs: 800,
-      timeoutMs: 10000,
-      fallbackValue: {},
-    });
+    fetchJsonWithRetry<Record<string, any>>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      },
+      {
+        attempts: 2,
+        retryStatuses: [503],
+        baseDelayMs: 800,
+        timeoutMs: 10000,
+        fallbackValue: {},
+      },
+    );
 
   useEffect(() => {
     trackUxEvent("auth_login_view", {
@@ -96,6 +113,7 @@ export default function Login() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError("");
     trackUxEvent("auth_login_submitted", {
       page: "login",
       stage: "email_login_submit",
@@ -123,7 +141,8 @@ export default function Login() {
               "This email is linked to Google. Redirecting now...",
           });
           const nextAuthPath =
-            typeof payload?.authUrl === "string" && payload.authUrl.startsWith("/")
+            typeof payload?.authUrl === "string" &&
+            payload.authUrl.startsWith("/")
               ? payload.authUrl
               : "/api/auth/google/customer";
           window.location.href = authUrl(nextAuthPath);
@@ -137,7 +156,17 @@ export default function Login() {
             "MealScout is temporarily unavailable. Please retry in a few seconds.",
           );
         }
-        throw new Error(payload?.error || "Login failed");
+        const responseMessage =
+          payload?.error ||
+          payload?.message ||
+          (response.status === 401
+            ? "That email and password did not match. Check the password or reset it."
+            : "We could not sign you in. Please try again.");
+        throw new Error(
+          responseMessage.toLowerCase() === "invalid email or password"
+            ? "That email and password did not match. Check the password or reset it."
+            : responseMessage,
+        );
       }
       // Refresh auth state before redirect to prevent showing guest view
       try {
@@ -150,13 +179,16 @@ export default function Login() {
       trackUxEvent("auth_login_success", {
         page: "login",
         stage: "login_success",
-        redirectPath: redirectPath || "/",
+        redirectPath: getPostLoginRedirect(payload?.user),
       });
-      window.location.href = redirectPath || "/";
+      window.location.href = getPostLoginRedirect(payload?.user);
     } catch (error: any) {
+      const message =
+        error.message || "That email and password did not match. Try again.";
+      setLoginError(message);
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid email or password.",
+        title: "Could not sign in",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -168,7 +200,8 @@ export default function Login() {
     if (!email) {
       toast({
         title: "Email Required",
-        description: "Enter your email first so we know where to send the link.",
+        description:
+          "Enter your email first so we know where to send the link.",
         variant: "destructive",
       });
       return;
@@ -186,7 +219,8 @@ export default function Login() {
       toast({
         title: "Unable to Send Link",
         description:
-          error.message || "We couldn't resend the verification email right now.",
+          error.message ||
+          "We couldn't resend the verification email right now.",
         variant: "destructive",
       });
     } finally {
@@ -349,7 +383,10 @@ export default function Login() {
                   type="email"
                   placeholder="Email address"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (loginError) setLoginError("");
+                  }}
                   className="w-full px-4 py-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] focus:outline-none focus:ring-2 focus:ring-[color:var(--action-primary)] text-lg"
                   data-testid="input-email"
                   required
@@ -361,7 +398,10 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   placeholder="Password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (loginError) setLoginError("");
+                  }}
                   className="w-full px-4 py-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] focus:outline-none focus:ring-2 focus:ring-[color:var(--action-primary)] text-lg pr-12"
                   data-testid="input-password"
                   required
@@ -375,6 +415,27 @@ export default function Login() {
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
+
+              {loginError ? (
+                <div
+                  className="rounded-xl border border-[color:var(--status-error)]/35 bg-[color:var(--status-error)]/10 p-4 text-sm"
+                  role="alert"
+                  data-testid="login-error-message"
+                >
+                  <p className="font-semibold text-[color:var(--text-primary)]">
+                    We could not sign you in
+                  </p>
+                  <p className="mt-1 text-[color:var(--text-secondary)]">
+                    {loginError}
+                  </p>
+                  <Link
+                    href="/forgot-password"
+                    className="mt-3 inline-flex text-[color:var(--accent-text)] underline underline-offset-4 hover:text-[color:var(--accent-text-hover)]"
+                  >
+                    Reset password
+                  </Link>
+                </div>
+              ) : null}
 
               <button
                 type="submit"
@@ -394,7 +455,8 @@ export default function Login() {
                     Verify your email to finish signing in.
                   </p>
                   <p className="mt-1 text-[color:var(--text-secondary)]">
-                    Your account exists, but email verification is still pending.
+                    Your account exists, but email verification is still
+                    pending.
                   </p>
                   <button
                     type="button"
