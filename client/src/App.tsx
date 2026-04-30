@@ -18,6 +18,7 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Home from "@/pages/home-v2";
 import PurposeSelector from "@/pages/purpose-selector";
+import OwnerStartPage from "@/pages/owner-start";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
@@ -300,11 +301,7 @@ function Router() {
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
             </Route>
-            <Route path="/owner/start">
-              {() => (
-                <Redirect to="/restaurant-signup?businessType=food_truck&claim=1" />
-              )}
-            </Route>
+            <Route path="/owner/start">{() => <OwnerStartPage />}</Route>
             <Route path="/host/start">
               {() => <Redirect to="/host-signup" />}
             </Route>
@@ -444,9 +441,7 @@ function Router() {
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
             </Route>
-            <Route path="/owner/start">
-              {() => <Redirect to="/restaurant-owner-dashboard" />}
-            </Route>
+            <Route path="/owner/start">{() => <OwnerStartPage />}</Route>
             <Route path="/host/start">
               {() => <Redirect to="/host/dashboard" />}
             </Route>

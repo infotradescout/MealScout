@@ -206,12 +206,27 @@ function useRestaurantId(restaurants: RestaurantOption[]): string | null {
 export default function MenuBuilderPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const flowParams = useMemo(() => {
+    if (typeof window === "undefined") return { source: "", next: "" };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      source: String(params.get("src") || ""),
+      next: String(params.get("next") || ""),
+    };
+  }, []);
   const restaurantsQuery = useQuery<RestaurantOption[]>({
     queryKey: ["/api/restaurants/my-restaurants"],
     enabled: !!user,
   });
   const restaurantOptions = restaurantsQuery.data ?? [];
   const restaurantId = useRestaurantId(restaurantOptions);
+  const truckOwnerNextPath =
+    flowParams.source === "truck-owner-flow"
+      ? flowParams.next ||
+        (restaurantId
+          ? `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(restaurantId)}&src=truck-owner-flow&goLive=1`
+          : "/restaurant-owner-dashboard?src=truck-owner-flow&goLive=1")
+      : "";
   const activeRestaurant = useMemo(
     () =>
       restaurantOptions.find((restaurant) => restaurant.id === restaurantId),
@@ -497,6 +512,27 @@ export default function MenuBuilderPage() {
             </Button>
           </div>
         </div>
+
+        {truckOwnerNextPath && (
+          <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Add a quick menu, then go live.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  A short menu is enough for diners to decide. You can keep
+                  improving it later.
+                </p>
+              </div>
+              <Link href={truckOwnerNextPath}>
+                <Button className="w-full sm:w-auto">
+                  Continue to Go Live
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {selectedMenu?.importedAt && (
           <div className="mb-4 px-3 py-2 rounded-md bg-muted/50 border text-xs text-muted-foreground flex items-center gap-2">
