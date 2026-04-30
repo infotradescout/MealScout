@@ -959,6 +959,17 @@ export default function CustomerSignup() {
               </div>
             </div>
 
+            <Link href="/login">
+              <Button
+                type="button"
+                variant="outline"
+                className="mb-4 h-11 w-full rounded-2xl border-[color:var(--action-primary)] bg-[var(--bg-surface)] text-sm font-black text-[color:var(--accent-text)] shadow-clean hover:bg-[color:var(--action-primary)] hover:text-[color:var(--action-primary-text)]"
+                data-testid="button-login-existing-account"
+              >
+                Already have an account? Log in
+              </Button>
+            </Link>
+
             <div className="mb-3 text-center">
               <h3 className="text-sm font-bold text-[color:var(--text-primary)]">
                 Sign Up with Email
@@ -1181,20 +1192,6 @@ export default function CustomerSignup() {
                 </Button>
               </form>
             </Form>
-
-            {/* Divider + Login Link (compressed) */}
-            <div className="mt-3 flex items-center justify-between text-xs text-[color:var(--text-secondary)]">
-              <span>Already have an account?</span>
-              <Link href="/login">
-                <button
-                  type="button"
-                  className="text-[color:var(--accent-text)] underline hover:text-[color:var(--accent-text)]"
-                  data-testid="button-sign-in"
-                >
-                  Sign in
-                </button>
-              </Link>
-            </div>
 
             {/* Trust indicators (compressed) */}
             <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2 flex items-center justify-center gap-4 text-[11px] leading-tight text-[color:var(--text-muted)]">
