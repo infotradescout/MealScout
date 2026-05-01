@@ -12,7 +12,7 @@ cloudinary.config({
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
 
-const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const imageFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   // Accept only images
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
@@ -21,11 +21,33 @@ const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilt
   }
 };
 
+const supportedVideoMimeTypes = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+]);
+
+const videoFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  if (supportedVideoMimeTypes.has(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only MP4, MOV, or WebM video files are allowed!'));
+  }
+};
+
 export const upload = multer({
   storage: storage,
-  fileFilter: fileFilter,
+  fileFilter: imageFileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB max file size
+  },
+});
+
+export const uploadVideo = multer({
+  storage: storage,
+  fileFilter: videoFileFilter,
+  limits: {
+    fileSize: Number(process.env.VIDEO_UPLOAD_MAX_BYTES || 100 * 1024 * 1024), // 100MB default
   },
 });
 
@@ -82,9 +104,81 @@ export async function uploadToCloudinary(
   });
 }
 
-// Delete image from Cloudinary
-export async function deleteFromCloudinary(publicId: string): Promise<void> {
-  await cloudinary.uploader.destroy(publicId);
+// Upload video to Cloudinary
+export async function uploadVideoToCloudinary(
+  fileBuffer: Buffer,
+  folder: string,
+  publicId?: string
+): Promise<{
+  publicId: string;
+  url: string;
+  secureUrl: string;
+  width?: number;
+  height?: number;
+  format: string;
+  bytes: number;
+  durationSeconds?: number;
+  thumbnailUrl: string;
+}> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'video',
+        folder: `mealscout/${folder}`,
+        public_id: publicId,
+        eager: [
+          {
+            width: 640,
+            height: 360,
+            crop: 'fill',
+            gravity: 'auto',
+            format: 'jpg',
+          },
+        ],
+        eager_async: false,
+      },
+      (error, result: any) => {
+        if (error) {
+          reject(error);
+        } else if (result) {
+          resolve({
+            publicId: result.public_id,
+            url: result.url,
+            secureUrl: result.secure_url,
+            width: result.width,
+            height: result.height,
+            format: result.format,
+            bytes: result.bytes,
+            durationSeconds:
+              typeof result.duration === 'number'
+                ? Math.round(result.duration)
+                : undefined,
+            thumbnailUrl:
+              result.eager?.[0]?.secure_url ||
+              cloudinary.url(result.public_id, {
+                resource_type: 'video',
+                format: 'jpg',
+                transformation: [
+                  { width: 640, height: 360, crop: 'fill', gravity: 'auto' },
+                ],
+              }),
+          });
+        } else {
+          reject(new Error('Video upload failed'));
+        }
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+}
+
+// Delete media from Cloudinary
+export async function deleteFromCloudinary(
+  publicId: string,
+  resourceType: 'image' | 'video' = 'image',
+): Promise<void> {
+  await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
 }
 
 // Check if Cloudinary is configured
