@@ -141,7 +141,7 @@ export default function ClaimTruckPage() {
 
   const goToClaimFlow = (row: ClaimRow) => {
     const q = String(row.externalId || row.name || "").trim();
-    const next = `/restaurant-signup?businessType=food_truck&claim=1${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+    const next = `/truck-onboarding?claim=1${q ? `&q=${encodeURIComponent(q)}` : ""}`;
     setLocation(next);
   };
 

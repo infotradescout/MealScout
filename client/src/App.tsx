@@ -17,11 +17,11 @@ import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Home from "@/pages/home-v2";
 import PurposeSelector from "@/pages/purpose-selector";
-import OwnerStartPage from "@/pages/owner-start";
 
 // Lazy load all other pages - they only download when the user navigates to them
 const CustomerSignup = lazy(() => import("@/pages/customer-signup"));
 const RestaurantSignup = lazy(() => import("@/pages/restaurant-signup"));
+const TruckOnboarding = lazy(() => import("@/pages/truck-onboarding"));
 const VerifyEmailPage = lazy(() => import("@/pages/verify-email"));
 const CityLanding = lazy(() => import("@/pages/city-landing"));
 const CityDiscoveryPage = lazy(() => import("@/pages/city-discovery"));
@@ -136,7 +136,6 @@ const VideoPage = lazy(() => import("@/pages/video"));
 const VideoDetailPage = lazy(() => import("@/pages/video-detail"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
 const TruckLanding = lazy(() => import("@/pages/truck-landing"));
-const ClaimTruckPage = lazy(() => import("@/pages/claim-truck"));
 const SuppliersPage = lazy(() => import("@/pages/suppliers"));
 const SupplierDetailPage = lazy(() => import("@/pages/supplier-detail"));
 const SupplierDashboardPage = lazy(() => import("@/pages/supplier-dashboard"));
@@ -174,6 +173,7 @@ const publicRoutePrefixes = [
   "/customer-signup",
   "/verify-email",
   "/restaurant-signup",
+  "/truck-onboarding",
   "/claim-truck",
   "/deal-creation",
   "/deal/",
@@ -250,6 +250,54 @@ function DashboardSwitcherPage() {
   return <DashboardSwitcher defaultView={view || "admin"} />;
 }
 
+const getTruckOnboardingRedirectPath = () => {
+  if (typeof window === "undefined") return "/truck-onboarding";
+  const params = new URLSearchParams(window.location.search);
+  return `/truck-onboarding${params.toString() ? `?${params.toString()}` : ""}`;
+};
+
+function TruckOnboardingRedirect() {
+  return <Redirect to={getTruckOnboardingRedirectPath()} />;
+}
+
+function GuestCustomerSignupRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (
+    params.get("role") === "business" &&
+    params.get("businessType") === "food_truck"
+  ) {
+    return <TruckOnboardingRedirect />;
+  }
+  return <CustomerSignup />;
+}
+
+function AuthenticatedCustomerSignupRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (
+    params.get("role") === "business" &&
+    params.get("businessType") === "food_truck"
+  ) {
+    return <TruckOnboardingRedirect />;
+  }
+  return <Redirect to="/dashboard" />;
+}
+
+function GuestRestaurantSignupRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("businessType") === "food_truck") {
+    return <TruckOnboardingRedirect />;
+  }
+  return <RestaurantSignup />;
+}
+
+function AuthenticatedRestaurantSignupRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("businessType") === "food_truck") {
+    return <TruckOnboardingRedirect />;
+  }
+  return <Redirect to="/dashboard" />;
+}
+
 function Router() {
   const { authState, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
@@ -319,7 +367,7 @@ function Router() {
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
             </Route>
-            <Route path="/owner/start">{() => <OwnerStartPage />}</Route>
+            <Route path="/owner/start" component={TruckOnboardingRedirect} />
             <Route path="/host/start">
               {() => <Redirect to="/host-signup" />}
             </Route>
@@ -327,10 +375,14 @@ function Router() {
               {() => <Redirect to="/request-truck" />}
             </Route>
             <Route path="/login" component={Login} />
-            <Route path="/customer-signup" component={CustomerSignup} />
+            <Route path="/customer-signup" component={GuestCustomerSignupRoute} />
             <Route path="/verify-email" component={VerifyEmailPage} />
-            <Route path="/restaurant-signup" component={RestaurantSignup} />
-            <Route path="/claim-truck" component={ClaimTruckPage} />
+            <Route
+              path="/restaurant-signup"
+              component={GuestRestaurantSignupRoute}
+            />
+            <Route path="/truck-onboarding" component={TruckOnboarding} />
+            <Route path="/claim-truck" component={TruckOnboardingRedirect} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal/:id" component={DealDetail} />
             <Route path="/search" component={Search} />
@@ -521,7 +573,7 @@ function Router() {
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
             </Route>
-            <Route path="/owner/start">{() => <OwnerStartPage />}</Route>
+            <Route path="/owner/start" component={TruckOnboardingRedirect} />
             <Route path="/host/start">
               {() => <Redirect to="/host/dashboard" />}
             </Route>
@@ -529,16 +581,19 @@ function Router() {
               {() => <Redirect to="/request-truck" />}
             </Route>
             <Route path="/login">{() => <Redirect to="/dashboard" />}</Route>
-            <Route path="/customer-signup">
-              {() => <Redirect to="/dashboard" />}
-            </Route>
+            <Route
+              path="/customer-signup"
+              component={AuthenticatedCustomerSignupRoute}
+            />
             <Route path="/verify-email">
               {() => <Redirect to="/dashboard" />}
             </Route>
-            <Route path="/restaurant-signup">
-              {() => <Redirect to="/dashboard" />}
-            </Route>
-            <Route path="/claim-truck" component={ClaimTruckPage} />
+            <Route
+              path="/restaurant-signup"
+              component={AuthenticatedRestaurantSignupRoute}
+            />
+            <Route path="/truck-onboarding" component={TruckOnboarding} />
+            <Route path="/claim-truck" component={TruckOnboardingRedirect} />
             <Route path="/deal-creation" component={DealCreation} />
             <Route path="/deal-edit/:dealId" component={DealEdit} />
             <Route path="/deal/:id" component={DealDetail} />

@@ -586,7 +586,7 @@ function TruckDiscovery() {
           description: "Complete your truck profile to express interest.",
           variant: "destructive",
         });
-        setLocation("/restaurant-signup?businessType=food_truck&claim=1");
+        setLocation("/truck-onboarding?claim=1");
         return;
       }
       setSubmittingId(eventId);
@@ -622,7 +622,7 @@ function TruckDiscovery() {
   );
 
   const handleJoin = useCallback(
-    () => setLocation("/restaurant-signup?businessType=food_truck&claim=1"),
+    () => setLocation("/truck-onboarding?claim=1"),
     [setLocation],
   );
   const applyMarketFilter = useCallback((value: string) => {
@@ -760,7 +760,7 @@ function TruckDiscovery() {
           variant="outline"
           onClick={() =>
             setLocation(
-              "/restaurant-signup?businessType=food_truck&claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL",
+              "/truck-onboarding?claim=1&redirect=%2Ftruck-discovery%3Fcity%3DPensacola%252C%2520FL",
             )
           }
         >

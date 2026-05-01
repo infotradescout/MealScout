@@ -103,7 +103,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "food_truck",
     label: "Food Truck",
     description: "Claim your truck and get live on the map.",
-    href: "/customer-signup?role=business&businessType=food_truck",
+    href: "/truck-onboarding",
     icon: Truck,
   },
   {
@@ -365,7 +365,7 @@ export default function CustomerSignup() {
       });
       const businessRedirect =
         businessSubType === "food_truck"
-          ? "/restaurant-signup?businessType=food_truck&claim=1"
+          ? "/truck-onboarding"
           : businessSubType === "bar"
             ? "/restaurant-signup?businessType=bar"
             : "/restaurant-signup";
@@ -533,7 +533,7 @@ export default function CustomerSignup() {
     if (accountType === "business") {
       const businessRedirect =
         businessSubType === "food_truck"
-          ? "/restaurant-signup?businessType=food_truck&claim=1"
+          ? "/truck-onboarding"
           : businessSubType === "bar"
             ? "/restaurant-signup?businessType=bar"
             : "/restaurant-signup";
@@ -813,7 +813,7 @@ export default function CustomerSignup() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setBusinessSubType("food_truck")}
+                  onClick={() => setLocation("/truck-onboarding")}
                   className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
                     businessSubType === "food_truck"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"

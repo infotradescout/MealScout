@@ -31,7 +31,7 @@ const USER_ITEMS: ShareHubItem[] = [
     key: "claim-business",
     title: "Claim Business",
     description: "Help an owner find and activate an existing listing.",
-    href: "/restaurant-signup?businessType=food_truck&claim=1",
+    href: "/truck-onboarding?claim=1",
     audience: "Business Owners",
     priority: 2,
     outreachText:

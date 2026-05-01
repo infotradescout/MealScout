@@ -3609,6 +3609,7 @@ export class DatabaseStorage implements IStorage {
         restaurantId: verificationRequests.restaurantId,
         status: verificationRequests.status,
         documents: verificationRequests.documents,
+        licenseNumber: verificationRequests.licenseNumber,
         submittedAt: verificationRequests.submittedAt,
         reviewedAt: verificationRequests.reviewedAt,
         reviewerId: verificationRequests.reviewerId,
@@ -3632,6 +3633,11 @@ export class DatabaseStorage implements IStorage {
         name: string;
         address: string;
         ownerId: string;
+        city: string | null;
+        state: string | null;
+        isActive: boolean | null;
+        isVerified: boolean | null;
+        claimedFromImportId: string | null;
       };
     })[]
   > {
@@ -3641,6 +3647,7 @@ export class DatabaseStorage implements IStorage {
         restaurantId: verificationRequests.restaurantId,
         status: verificationRequests.status,
         documents: verificationRequests.documents,
+        licenseNumber: verificationRequests.licenseNumber,
         submittedAt: verificationRequests.submittedAt,
         reviewedAt: verificationRequests.reviewedAt,
         reviewerId: verificationRequests.reviewerId,
@@ -3652,6 +3659,11 @@ export class DatabaseStorage implements IStorage {
           name: restaurants.name,
           address: restaurants.address,
           ownerId: restaurants.ownerId,
+          city: restaurants.city,
+          state: restaurants.state,
+          isActive: restaurants.isActive,
+          isVerified: restaurants.isVerified,
+          claimedFromImportId: restaurants.claimedFromImportId,
         },
       })
       .from(verificationRequests)
@@ -3662,7 +3674,6 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(users, eq(restaurants.ownerId, users.id))
       .where(
         and(
-          eq(restaurants.isActive, true),
           sql`coalesce(${users.isDisabled}, false) = false`,
           sql`lower(coalesce(${users.email}, '')) not like 'deleted+%@mealscout.invalid'`,
         ),

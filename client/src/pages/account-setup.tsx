@@ -130,7 +130,7 @@ export default function AccountSetup() {
       });
       // Redirect to login after 2 seconds
       setTimeout(() => {
-        setLocation("/login");
+        setLocation("/login?redirect=/truck-onboarding");
       }, 2000);
     },
     onError: (error: any) => {

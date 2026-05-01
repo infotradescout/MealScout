@@ -1263,7 +1263,7 @@ export default function SearchPage() {
                 return (
                   <Link
                     key={listing.id}
-                    href={`/claim-truck?q=${encodeURIComponent(listing.name || "")}&listingId=${encodeURIComponent(listing.id)}`}
+                    href={`/truck-onboarding?claim=1&q=${encodeURIComponent(listing.name || "")}&listingId=${encodeURIComponent(listing.id)}`}
                     data-testid={`card-unclaimed-${listing.id}`}
                   >
                     <Card className="border-amber-200 bg-amber-50/40 shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">

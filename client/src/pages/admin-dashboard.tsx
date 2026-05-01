@@ -8870,8 +8870,27 @@ export default function AdminDashboard() {
                               {request.restaurant?.name}
                             </h3>
                             <p className="text-sm text-muted-foreground">
-                              {request.restaurant?.address}
+                              {[
+                                request.restaurant?.address,
+                                request.restaurant?.city,
+                                request.restaurant?.state,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
                             </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {request.restaurant?.claimedFromImportId ? (
+                                <Badge variant="outline">Imported claim</Badge>
+                              ) : null}
+                              {request.restaurant?.isActive === false ? (
+                                <Badge variant="secondary">Not live yet</Badge>
+                              ) : null}
+                              {request.licenseNumber ? (
+                                <Badge variant="outline">
+                                  License {request.licenseNumber}
+                                </Badge>
+                              ) : null}
+                            </div>
                           </div>
                           <Badge
                             variant={

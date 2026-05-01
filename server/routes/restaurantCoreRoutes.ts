@@ -827,6 +827,13 @@ export function registerRestaurantCoreRoutes(
         const hasItems = itemCount > 0;
         const isVerified = ownerRestaurants.some((r: any) => r.isVerified);
         const primaryRestaurant = ownerRestaurants[0] || null;
+        const isFoodTruckOwner =
+          String(user.userType || "") === "food_truck" ||
+          ownerRestaurants.some(
+            (r: any) =>
+              Boolean(r.isFoodTruck) ||
+              String(r.businessType || "").toLowerCase() === "food_truck",
+          );
         let hasActiveRestaurantSubscription = false;
         if (restaurantIds.length > 0) {
           const [activeSub] = await db
@@ -848,9 +855,15 @@ export function registerRestaurantCoreRoutes(
         const menuBuilderHref = primaryRestaurant
           ? `/menu-builder/${primaryRestaurant.id}`
           : "/menu-builder";
+        const businessSetupHref = isFoodTruckOwner
+          ? "/truck-onboarding"
+          : "/restaurant-signup";
         const editProfileHref = primaryRestaurant
           ? `/edit-restaurant/${primaryRestaurant.id}`
-          : "/restaurant-signup";
+          : businessSetupHref;
+        const goLiveHref = primaryRestaurant
+          ? `/restaurant-owner-dashboard?restaurantId=${primaryRestaurant.id}&src=onboarding&goLive=1`
+          : "/truck-onboarding";
 
         const primaryProfileChecks = primaryRestaurant
           ? getPublicBusinessVisibilityChecks(primaryRestaurant as any)
@@ -860,80 +873,113 @@ export function registerRestaurantCoreRoutes(
           primaryProfileChecks.blockers.length === 0 &&
           !primaryProfileChecks.warnings.includes("missing_description_or_photo");
 
-        const steps = [
-          {
-            id: "verify-email",
-            label: "Verify your email",
-            done: emailVerified,
-            href: "/restaurant/dashboard",
-            cta: "Resend verification",
-            why: "Lets us send you booking and review notifications.",
-          },
-          {
-            id: "add-business",
-            label: "Add your business",
-            done: hasBusiness,
-            href: "/restaurant-signup",
-            cta: "Add business",
-            why: "Name, type, and location so customers can find you.",
-          },
-          {
-            id: "add-menu",
-            label: "Add your menu",
-            done: hasMenu,
-            href: menuBuilderHref,
-            cta: "Add menu",
-            why: "Paste a link to your existing menu \u2014 we'll import it.",
-          },
-          {
-            id: "add-items",
-            label: "Add at least one item",
-            done: hasItems,
-            href: menuBuilderHref,
-            cta: "Add items",
-            why: "Without items, customers see an empty menu.",
-          },
-          {
-            id: "complete-public-profile",
-            label: "Complete your public profile",
-            done: hasPublicProfileBasics,
-            href: editProfileHref,
-            cta: "Complete profile",
-            why: "A clear profile helps customers trust you and choose you faster.",
-          },
-          {
-            id: "get-verified",
-            label: "Get verified",
-            done: isVerified,
-            href: "/restaurant/dashboard",
-            cta: "Request verification",
-            why: "Verified businesses appear in search and on the map.",
-          },
-          {
-            id: "subscribe",
-            label: "Activate subscription",
-            done: hasSubscription,
-            href: "/subscribe",
-            cta: "Choose plan",
-            why: "Unlocks deals, analytics, and customer messaging.",
-          },
-        ];
+        // "Discoverable" = customers can actually find this business now.
+        // We require: at least one verified+active restaurant with a menu
+        // and at least one item. Stripe subscription is NOT required for
+        // discoverability; only for paid tools.
+        const firstDiscoverable = ownerRestaurants.find(
+          (r: any) => r.isVerified && r.isActive,
+        );
+        const isDiscoverable = Boolean(
+          firstDiscoverable &&
+            hasMenu &&
+            hasItems &&
+            (!isFoodTruckOwner || hasPublicProfileBasics),
+        );
+
+        const steps = isFoodTruckOwner
+          ? [
+              {
+                id: "create-truck-profile",
+                label: "Create truck profile",
+                done: hasBusiness,
+                href: businessSetupHref,
+                cta: "Create profile",
+                why: "Name, city, state, and phone so people know this is your truck.",
+              },
+              {
+                id: "add-menu",
+                label: "Add menu",
+                done: hasMenu && hasItems,
+                href: menuBuilderHref,
+                cta: hasMenu ? "Add item" : "Add menu",
+                why: hasMenu
+                  ? "Add at least one item so customers do not see an empty menu."
+                  : "Give customers something useful to order or preview.",
+              },
+              {
+                id: "go-live",
+                label: "Go live / get verified",
+                done: isDiscoverable,
+                href: goLiveHref,
+                cta: isVerified ? "Go live" : "Request verification",
+                why: "Verified, active trucks with a menu can show up for customers.",
+              },
+            ]
+          : [
+              {
+                id: "verify-email",
+                label: "Verify your email",
+                done: emailVerified,
+                href: "/restaurant/dashboard",
+                cta: "Resend verification",
+                why: "Lets us send you booking and review notifications.",
+              },
+              {
+                id: "add-business",
+                label: "Add your business",
+                done: hasBusiness,
+                href: "/restaurant-signup",
+                cta: "Add business",
+                why: "Name, type, and location so customers can find you.",
+              },
+              {
+                id: "add-menu",
+                label: "Add your menu",
+                done: hasMenu,
+                href: menuBuilderHref,
+                cta: "Add menu",
+                why: "Paste a link to your existing menu -- we'll import it.",
+              },
+              {
+                id: "add-items",
+                label: "Add at least one item",
+                done: hasItems,
+                href: menuBuilderHref,
+                cta: "Add items",
+                why: "Without items, customers see an empty menu.",
+              },
+              {
+                id: "complete-public-profile",
+                label: "Complete your public profile",
+                done: hasPublicProfileBasics,
+                href: editProfileHref,
+                cta: "Complete profile",
+                why: "A clear profile helps customers trust you and choose you faster.",
+              },
+              {
+                id: "get-verified",
+                label: "Get verified",
+                done: isVerified,
+                href: "/restaurant/dashboard",
+                cta: "Request verification",
+                why: "Verified businesses appear in search and on the map.",
+              },
+              {
+                id: "subscribe",
+                label: "Activate subscription",
+                done: hasSubscription,
+                href: "/subscribe",
+                cta: "Choose plan",
+                why: "Unlocks deals, analytics, and customer messaging.",
+              },
+            ];
 
         const completed = steps.filter((s) => s.done).length;
         const total = steps.length;
         const nextStep = steps.find((s) => !s.done) || null;
         const allDone = completed === total;
 
-        // "Discoverable" = customers can actually find this business now.
-        // We require: at least one verified+active restaurant with a menu
-        // and at least one item. Stripe subscription is NOT required for
-        // discoverability — only for selling deals.
-        const firstDiscoverable = ownerRestaurants.find(
-          (r: any) => r.isVerified && r.isActive,
-        );
-        const isDiscoverable = Boolean(
-          firstDiscoverable && hasMenu && hasItems,
-        );
         const previewRestaurant = firstDiscoverable || ownerRestaurants[0] || null;
         const publicPreviewUrl = previewRestaurant
           ? `/restaurant/${previewRestaurant.id}`
@@ -2820,12 +2866,7 @@ export function registerRestaurantCoreRoutes(
           const expected = String(listing?.externalId || "").trim();
           if (expected) {
             const provided = String(req.body?.licenseNumber || "").trim();
-            if (!provided) {
-              return res.status(400).json({
-                message: "License number is required for imported food trucks.",
-              });
-            }
-            if (provided.toLowerCase() !== expected.toLowerCase()) {
+            if (provided && provided.toLowerCase() !== expected.toLowerCase()) {
               return res.status(400).json({
                 message:
                   "License number does not match the registry record for this truck.",

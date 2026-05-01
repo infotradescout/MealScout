@@ -49,7 +49,7 @@ type OwnerIntentPage = {
 };
 
 const signupHref =
-  "/restaurant-signup?businessType=food_truck&claim=1&flow=truck-owner";
+  "/truck-onboarding?claim=1&flow=truck-owner";
 
 const pages: OwnerIntentPage[] = [
   {

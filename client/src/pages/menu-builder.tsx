@@ -66,6 +66,409 @@ import { Link, useParams } from "wouter";
 const formatMoney = (cents: number) =>
   `$${(Number(cents || 0) / 100).toFixed(2)}`;
 
+type MenuItemSuggestion = {
+  campaign: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  name: string;
+  description: string;
+  price: string;
+  dietaryTags: string;
+  namePlaceholder: string;
+  descriptionPlaceholder: string;
+  pricePlaceholder: string;
+};
+
+const DEFAULT_MENU_ITEM_SUGGESTION: MenuItemSuggestion = {
+  campaign: "default",
+  eyebrow: "Seasonal menu idea",
+  title: "Start with a signature item",
+  body: "When a timely holiday or food occasion is active, this card rotates to a seasonal special. Otherwise, start with a clear best-seller.",
+  name: "Signature Plate",
+  description:
+    "Your best-selling entree with a short, appetizing description customers can understand quickly.",
+  price: "12.00",
+  dietaryTags: "",
+  namePlaceholder: "e.g. Classic Burger",
+  descriptionPlaceholder: "Brief appetizing description",
+  pricePlaceholder: "0.00",
+};
+
+type SeasonalSuggestionWindow = {
+  getWindow: (year: number) => { start: Date; end: Date };
+  suggestion: MenuItemSuggestion;
+};
+
+const dateAtNoon = (year: number, monthIndex: number, day: number) =>
+  new Date(year, monthIndex, day, 12, 0, 0, 0);
+
+const addDays = (date: Date, days: number) =>
+  new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + days,
+    12,
+    0,
+    0,
+    0,
+  );
+
+const nthWeekdayOfMonth = (
+  year: number,
+  monthIndex: number,
+  weekday: number,
+  occurrence: number,
+) => {
+  const first = dateAtNoon(year, monthIndex, 1);
+  const offset = (weekday - first.getDay() + 7) % 7;
+  return dateAtNoon(year, monthIndex, 1 + offset + (occurrence - 1) * 7);
+};
+
+const lastWeekdayOfMonth = (
+  year: number,
+  monthIndex: number,
+  weekday: number,
+) => {
+  const last = dateAtNoon(year, monthIndex + 1, 0);
+  const offset = (last.getDay() - weekday + 7) % 7;
+  return addDays(last, -offset);
+};
+
+const easterSunday = (year: number) => {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return dateAtNoon(year, month, day);
+};
+
+const fixedDateWindow = (
+  monthIndex: number,
+  day: number,
+  daysBefore: number,
+  daysAfter = 0,
+) => ({
+  getWindow: (year: number) => {
+    const date = dateAtNoon(year, monthIndex, day);
+    return { start: addDays(date, -daysBefore), end: addDays(date, daysAfter) };
+  },
+});
+
+const aroundDateWindow = (
+  getDate: (year: number) => Date,
+  daysBefore: number,
+  daysAfter = 0,
+) => ({
+  getWindow: (year: number) => {
+    const date = getDate(year);
+    return { start: addDays(date, -daysBefore), end: addDays(date, daysAfter) };
+  },
+});
+
+const seasonalSuggestionWindows: SeasonalSuggestionWindow[] = [
+  {
+    ...fixedDateWindow(11, 31, 5, 1),
+    suggestion: {
+      campaign: "new_years",
+      eyebrow: "New Year idea",
+      title: "Post a New Year special",
+      body: "Year-end crowds respond well to one easy celebratory plate or late-night snack.",
+      name: "New Year Loaded Street Fries",
+      description:
+        "Crispy loaded fries built for New Year celebrations. Available for a limited holiday run while supplies last.",
+      price: "10.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. New Year Loaded Street Fries",
+      descriptionPlaceholder:
+        "Mention the New Year occasion, what comes with it, and that it is limited-time.",
+      pricePlaceholder: "10.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => nthWeekdayOfMonth(year, 1, 0, 2), 5),
+    suggestion: {
+      campaign: "big_game",
+      eyebrow: "Game day idea",
+      title: "Post a Big Game special",
+      body: "Shareable, salty, easy-to-carry items are perfect for watch parties and tailgate-style service.",
+      name: "Big Game Loaded Nachos",
+      description:
+        "Loaded nachos with melty cheese, salsa, crema, and your choice of protein. Built for game-day sharing.",
+      price: "13.00",
+      dietaryTags: "shareable, limited-time",
+      namePlaceholder: "e.g. Big Game Loaded Nachos",
+      descriptionPlaceholder:
+        "Mention the game-day angle, what comes with it, and why it is good for sharing.",
+      pricePlaceholder: "13.00",
+    },
+  },
+  {
+    ...fixedDateWindow(1, 14, 7),
+    suggestion: {
+      campaign: "valentines_day",
+      eyebrow: "Valentine's idea",
+      title: "Post a shareable Valentine's special",
+      body: "A two-person plate gives couples and friend groups an easy reason to order.",
+      name: "Sweetheart Share Plate",
+      description:
+        "A shareable two-person plate with a savory main, crispy side, and a sweet finish for Valentine's week.",
+      price: "22.00",
+      dietaryTags: "shareable, limited-time",
+      namePlaceholder: "e.g. Sweetheart Share Plate",
+      descriptionPlaceholder:
+        "Mention the shareable Valentine's hook and what is included.",
+      pricePlaceholder: "22.00",
+    },
+  },
+  {
+    ...fixedDateWindow(2, 17, 7),
+    suggestion: {
+      campaign: "st_patricks_day",
+      eyebrow: "St. Patrick's idea",
+      title: "Post a St. Patrick's week special",
+      body: "A green chile, herb, or comfort-food angle makes this feel timely without changing the whole menu.",
+      name: "Lucky Green Chile Fries",
+      description:
+        "Crispy fries topped with green chile, cheese, crema, and fresh herbs for a St. Patrick's week special.",
+      price: "10.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Lucky Green Chile Fries",
+      descriptionPlaceholder:
+        "Mention the St. Patrick's week hook and the flavor twist.",
+      pricePlaceholder: "10.00",
+    },
+  },
+  {
+    ...aroundDateWindow(easterSunday, 7),
+    suggestion: {
+      campaign: "spring_brunch",
+      eyebrow: "Spring brunch idea",
+      title: "Post a spring brunch special",
+      body: "Brunch-friendly items work well around Easter weekend and early spring service.",
+      name: "Spring Brunch Taco Plate",
+      description:
+        "A bright brunch plate with eggs, crispy potatoes, fresh salsa, and warm tortillas for spring weekend service.",
+      price: "12.00",
+      dietaryTags: "brunch, limited-time",
+      namePlaceholder: "e.g. Spring Brunch Taco Plate",
+      descriptionPlaceholder:
+        "Mention the spring brunch hook and what comes on the plate.",
+      pricePlaceholder: "12.00",
+    },
+  },
+  {
+    ...fixedDateWindow(4, 5, 4),
+    suggestion: {
+      campaign: "cinco_de_mayo",
+      eyebrow: "Cinco de Mayo idea",
+      title: "Post a Cinco de Mayo special",
+      body: "This hook is active through May 5, then rotates to the next timely idea automatically.",
+      name: "Cinco de Mayo Street Taco Trio",
+      description:
+        "Three street tacos with bright salsa, fresh lime, and chips. Available for Cinco de Mayo while supplies last.",
+      price: "12.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Cinco de Mayo Street Taco Trio",
+      descriptionPlaceholder:
+        "Mention the Cinco de Mayo special, what comes with it, and that it is limited-time.",
+      pricePlaceholder: "12.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => nthWeekdayOfMonth(year, 4, 0, 2), 7),
+    suggestion: {
+      campaign: "mothers_day",
+      eyebrow: "Mother's Day idea",
+      title: "Post a Mother's Day weekend special",
+      body: "A family-friendly plate or brunch item gives groups a simple way to celebrate.",
+      name: "Mother's Day Brunch Box",
+      description:
+        "A brunch-style box with a savory main, crispy side, and small sweet bite for Mother's Day weekend.",
+      price: "14.00",
+      dietaryTags: "brunch, limited-time",
+      namePlaceholder: "e.g. Mother's Day Brunch Box",
+      descriptionPlaceholder:
+        "Mention the Mother's Day weekend hook and what is included.",
+      pricePlaceholder: "14.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => lastWeekdayOfMonth(year, 4, 1), 7),
+    suggestion: {
+      campaign: "memorial_day",
+      eyebrow: "Memorial Day idea",
+      title: "Post a long-weekend special",
+      body: "Cookout-style plates and family packs fit the way people eat over Memorial Day weekend.",
+      name: "Long Weekend BBQ Plate",
+      description:
+        "A cookout-inspired plate with smoky protein, slaw, chips, and sauce for Memorial Day weekend service.",
+      price: "14.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Long Weekend BBQ Plate",
+      descriptionPlaceholder:
+        "Mention the long-weekend hook and what comes on the plate.",
+      pricePlaceholder: "14.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => nthWeekdayOfMonth(year, 5, 0, 3), 7),
+    suggestion: {
+      campaign: "fathers_day",
+      eyebrow: "Father's Day idea",
+      title: "Post a Father's Day special",
+      body: "A hearty plate or burger-style item is a simple, familiar hook for Father's Day weekend.",
+      name: "Father's Day Double Stack",
+      description:
+        "A hearty double-stack sandwich with crispy side and house sauce for Father's Day weekend.",
+      price: "15.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Father's Day Double Stack",
+      descriptionPlaceholder:
+        "Mention the Father's Day weekend hook and why the item feels hearty.",
+      pricePlaceholder: "15.00",
+    },
+  },
+  {
+    ...fixedDateWindow(6, 4, 7),
+    suggestion: {
+      campaign: "fourth_of_july",
+      eyebrow: "Fourth of July idea",
+      title: "Post a Fourth of July special",
+      body: "Portable cookout plates are easy to promote around fireworks, parks, and weekend crowds.",
+      name: "Firecracker BBQ Plate",
+      description:
+        "A Fourth of July plate with smoky protein, crisp side, pickles, and a bold house sauce.",
+      price: "14.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Firecracker BBQ Plate",
+      descriptionPlaceholder:
+        "Mention the Fourth of July hook and what comes with the plate.",
+      pricePlaceholder: "14.00",
+    },
+  },
+  {
+    ...fixedDateWindow(7, 10, 9, 5),
+    suggestion: {
+      campaign: "back_to_school",
+      eyebrow: "Back-to-school idea",
+      title: "Post a back-to-school family special",
+      body: "Family packs and simple combos give busy parents a reason to order during the school-year reset.",
+      name: "Back-to-School Family Taco Pack",
+      description:
+        "A family-friendly pack with tacos, chips, salsa, and easy sides for the back-to-school rush.",
+      price: "28.00",
+      dietaryTags: "family-pack, limited-time",
+      namePlaceholder: "e.g. Back-to-School Family Taco Pack",
+      descriptionPlaceholder:
+        "Mention the back-to-school hook and how many people it can feed.",
+      pricePlaceholder: "28.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => nthWeekdayOfMonth(year, 8, 1, 1), 7),
+    suggestion: {
+      campaign: "labor_day",
+      eyebrow: "Labor Day idea",
+      title: "Post a Labor Day weekend special",
+      body: "A long-weekend combo helps turn holiday traffic into a simple order decision.",
+      name: "Labor Day Street Plate",
+      description:
+        "A long-weekend street plate with a grilled main, chips, salsa, and cold drink pairing suggestion.",
+      price: "13.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Labor Day Street Plate",
+      descriptionPlaceholder:
+        "Mention the Labor Day weekend hook and what comes with the combo.",
+      pricePlaceholder: "13.00",
+    },
+  },
+  {
+    ...fixedDateWindow(9, 31, 7),
+    suggestion: {
+      campaign: "halloween",
+      eyebrow: "Halloween idea",
+      title: "Post a Halloween week special",
+      body: "Playful names and bold colors make Halloween items easier to share and remember.",
+      name: "Spooky Loaded Fries",
+      description:
+        "Loaded fries with bold sauce, melty cheese, and crispy toppings for Halloween week.",
+      price: "10.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Spooky Loaded Fries",
+      descriptionPlaceholder:
+        "Mention the Halloween hook and what makes the item fun.",
+      pricePlaceholder: "10.00",
+    },
+  },
+  {
+    ...aroundDateWindow((year) => nthWeekdayOfMonth(year, 10, 4, 4), 7),
+    suggestion: {
+      campaign: "thanksgiving",
+      eyebrow: "Thanksgiving week idea",
+      title: "Post a comfort-food special",
+      body: "Warm, cozy plates fit the week when people are already thinking about comfort food.",
+      name: "Harvest Comfort Bowl",
+      description:
+        "A cozy bowl with savory protein, roasted vegetables, crispy topping, and house sauce for Thanksgiving week.",
+      price: "13.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Harvest Comfort Bowl",
+      descriptionPlaceholder:
+        "Mention the Thanksgiving week comfort-food hook and what comes in the bowl.",
+      pricePlaceholder: "13.00",
+    },
+  },
+  {
+    ...fixedDateWindow(11, 18, 17, 6),
+    suggestion: {
+      campaign: "winter_holidays",
+      eyebrow: "Holiday market idea",
+      title: "Post a winter holiday special",
+      body: "A warm, easy-to-carry special fits holiday markets, shopping nights, and December events.",
+      name: "Holiday Market Hand Pie",
+      description:
+        "A warm hand pie with a savory filling and festive side sauce for winter holiday service.",
+      price: "9.00",
+      dietaryTags: "limited-time",
+      namePlaceholder: "e.g. Holiday Market Hand Pie",
+      descriptionPlaceholder:
+        "Mention the winter holiday hook and why it is easy to carry.",
+      pricePlaceholder: "9.00",
+    },
+  },
+];
+
+function getMenuItemSuggestion(now = new Date()): MenuItemSuggestion {
+  const today = dateAtNoon(now.getFullYear(), now.getMonth(), now.getDate());
+  const yearsToCheck = [
+    now.getFullYear() - 1,
+    now.getFullYear(),
+    now.getFullYear() + 1,
+  ];
+
+  for (const year of yearsToCheck) {
+    for (const window of seasonalSuggestionWindows) {
+      const { start, end } = window.getWindow(year);
+      if (today >= start && today <= end) {
+        return window.suggestion;
+      }
+    }
+  }
+
+  return DEFAULT_MENU_ITEM_SUGGESTION;
+}
+
 // ─────────────────────────────────── types ────────────────────────────────────
 interface Menu {
   id: string;
@@ -220,12 +623,19 @@ export default function MenuBuilderPage() {
   });
   const restaurantOptions = restaurantsQuery.data ?? [];
   const restaurantId = useRestaurantId(restaurantOptions);
+  const isTruckOnboardingFlow =
+    flowParams.source === "truck-owner-flow" ||
+    flowParams.source === "truck-onboarding";
+  const truckOnboardingSource =
+    flowParams.source === "truck-onboarding"
+      ? "truck-onboarding"
+      : "truck-owner-flow";
   const truckOwnerNextPath =
-    flowParams.source === "truck-owner-flow"
+    isTruckOnboardingFlow
       ? flowParams.next ||
         (restaurantId
-          ? `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(restaurantId)}&src=truck-owner-flow&goLive=1`
-          : "/restaurant-owner-dashboard?src=truck-owner-flow&goLive=1")
+          ? `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(restaurantId)}&src=${truckOnboardingSource}&goLive=1`
+          : `/restaurant-owner-dashboard?src=${truckOnboardingSource}&goLive=1`)
       : "";
   const activeRestaurant = useMemo(
     () =>
@@ -459,6 +869,13 @@ export default function MenuBuilderPage() {
 
   const menus = menusQuery.data ?? [];
   const selectedMenu = fullMenuQuery.data ?? null;
+  const selectedMenuItemCount =
+    selectedMenu?.categories.reduce(
+      (total, category) => total + category.items.length,
+      0,
+    ) ?? 0;
+  const canContinueTruckOnboarding =
+    !fullMenuQuery.isLoading && selectedMenuItemCount > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -518,18 +935,25 @@ export default function MenuBuilderPage() {
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground">
-                  Add a quick menu, then go live.
+                  Add one menu item, then continue.
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  A short menu is enough for diners to decide. You can keep
-                  improving it later.
+                  {canContinueTruckOnboarding
+                    ? `${selectedMenuItemCount} item${selectedMenuItemCount === 1 ? "" : "s"} ready. The next step checks go-live and verification status.`
+                    : "The truck onboarding checklist stays open until at least one item exists."}
                 </p>
               </div>
-              <Link href={truckOwnerNextPath}>
-                <Button className="w-full sm:w-auto">
-                  Continue to Go Live
+              {canContinueTruckOnboarding ? (
+                <Link href={truckOwnerNextPath}>
+                  <Button className="w-full sm:w-auto">
+                    Continue to Go Live
+                  </Button>
+                </Link>
+              ) : (
+                <Button className="w-full sm:w-auto" disabled>
+                  Add one item first
                 </Button>
-              </Link>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1567,6 +1991,7 @@ function MenuItemDialog({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
+  const menuItemSuggestion = useMemo(() => getMenuItemSuggestion(), []);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1586,6 +2011,22 @@ function MenuItemDialog({
     imageUrl: item?.imageUrl ?? "",
     sku: (item as any)?.sku ?? "",
   });
+
+  const applyMenuItemSuggestion = () => {
+    setForm((current) => ({
+      ...current,
+      name: current.name.trim() ? current.name : menuItemSuggestion.name,
+      description: current.description.trim()
+        ? current.description
+        : menuItemSuggestion.description,
+      priceCents: current.priceCents.trim()
+        ? current.priceCents
+        : menuItemSuggestion.price,
+      dietaryTags: current.dietaryTags.trim()
+        ? current.dietaryTags
+        : menuItemSuggestion.dietaryTags,
+    }));
+  };
 
   const save = async () => {
     if (!form.name.trim() || !form.priceCents) return;
@@ -1649,6 +2090,32 @@ function MenuItemDialog({
           <DialogTitle>{item ? "Edit Item" : "Add Menu Item"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {!item && (
+            <div className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                    {menuItemSuggestion.eyebrow}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold">
+                    {menuItemSuggestion.title}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {menuItemSuggestion.body}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applyMenuItemSuggestion}
+                  className="shrink-0"
+                >
+                  Use suggestion
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <Label>Item Name *</Label>
@@ -1657,7 +2124,7 @@ function MenuItemDialog({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, name: e.target.value }))
                 }
-                placeholder="e.g. Classic Burger"
+                placeholder={menuItemSuggestion.namePlaceholder}
               />
             </div>
             <div>
@@ -1670,10 +2137,10 @@ function MenuItemDialog({
                   onChange={(e) =>
                     setForm((f) => ({ ...f, priceCents: e.target.value }))
                   }
-                  placeholder="0.00"
                   type="number"
                   min="0"
                   step="0.01"
+                  placeholder={menuItemSuggestion.pricePlaceholder}
                 />
               </div>
             </div>
@@ -1735,7 +2202,7 @@ function MenuItemDialog({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
-                placeholder="Brief appetizing description"
+                placeholder={menuItemSuggestion.descriptionPlaceholder}
                 rows={2}
               />
             </div>

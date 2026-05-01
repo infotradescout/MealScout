@@ -346,7 +346,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     if (!user) {
       items.push(
         { path: "/customer-signup", icon: UserPlus, fallbackLabel: "Create Account", group: "Get Started" },
-        { path: "/restaurant-signup?businessType=food_truck&claim=1", icon: Truck, fallbackLabel: "Claim Business", group: "Get Started" },
+        { path: "/truck-onboarding?claim=1", icon: Truck, fallbackLabel: "Claim Business", group: "Get Started" },
       );
     }
 

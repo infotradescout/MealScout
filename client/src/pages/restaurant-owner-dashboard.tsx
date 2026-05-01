@@ -65,6 +65,7 @@ import {
   Satellite,
   Save,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
@@ -164,6 +165,12 @@ interface OwnerMenuSummary {
 }
 
 const DEAL_IMAGE_FALLBACK = "/og-default.jpg";
+const VERIFICATION_SKIP_PREFIX = "ms-verification-skip";
+
+const verificationSkipKey = (restaurantId: string) =>
+  `${VERIFICATION_SKIP_PREFIX}:${restaurantId}`;
+
+const localDayKey = () => format(new Date(), "yyyy-MM-dd");
 
 const normalizeDealImageUrl = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -215,6 +222,9 @@ export default function RestaurantOwnerDashboard() {
   >("month");
   const [onboardingDocuments, setOnboardingDocuments] = useState<string[]>([]);
   const [onboardingLicenseNumber, setOnboardingLicenseNumber] = useState("");
+  const [verificationUploadOpen, setVerificationUploadOpen] = useState(false);
+  const [verificationSkippedToday, setVerificationSkippedToday] =
+    useState(false);
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -641,6 +651,9 @@ export default function RestaurantOwnerDashboard() {
     (onboardingCompletion.overallPct < 100 ||
       onboardingCompletion.verification.status !== "verified"),
   );
+  const verificationStatus = onboardingCompletion?.verification.status || null;
+  const needsVerificationSubmission = verificationStatus === "not_submitted";
+  const isClaimedImport = Boolean((currentRestaurant as any)?.claimedFromImportId);
   const visibleTruckBookings = truckBookings.filter(
     (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
   );
@@ -664,6 +677,34 @@ export default function RestaurantOwnerDashboard() {
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
   const liveShareDescription = "Find us live right now on the MealScout map.";
+
+  useEffect(() => {
+    if (!selectedRestaurant || !needsVerificationSubmission) {
+      setVerificationSkippedToday(false);
+      setVerificationUploadOpen(false);
+      return;
+    }
+
+    let skipped = false;
+    try {
+      skipped =
+        window.localStorage.getItem(verificationSkipKey(selectedRestaurant)) ===
+        localDayKey();
+    } catch {
+      skipped = false;
+    }
+
+    setVerificationSkippedToday(skipped);
+    if (skipped) {
+      setVerificationUploadOpen(false);
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("goLive") === "1") {
+      setVerificationUploadOpen(true);
+    }
+  }, [needsVerificationSubmission, selectedRestaurant]);
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
@@ -1353,33 +1394,29 @@ export default function RestaurantOwnerDashboard() {
       if (onboardingDocuments.length === 0) {
         throw new Error("Upload at least one verification document");
       }
-      if (
-        Boolean((currentRestaurant as any)?.claimedFromImportId) &&
-        !onboardingLicenseNumber.trim()
-      ) {
-        throw new Error(
-          "License number is required for imported food truck verification",
-        );
-      }
       return await apiRequest(
         "POST",
         `/api/restaurants/${selectedRestaurant}/verification/request`,
         {
           documents: onboardingDocuments,
-          licenseNumber: (currentRestaurant as any)?.claimedFromImportId
-            ? onboardingLicenseNumber.trim()
-            : undefined,
+          licenseNumber: onboardingLicenseNumber.trim() || undefined,
         },
       );
     },
     onSuccess: async () => {
       setOnboardingDocuments([]);
       setOnboardingLicenseNumber("");
+      setVerificationUploadOpen(false);
+      setVerificationSkippedToday(false);
+      try {
+        window.localStorage.removeItem(verificationSkipKey(selectedRestaurant));
+      } catch {}
       await queryClient.invalidateQueries({
         queryKey: [
           `/api/restaurants/${selectedRestaurant}/onboarding/completion`,
         ],
       });
+      await queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
       toast({
         title: "Verification submitted",
         description:
@@ -1477,6 +1514,31 @@ export default function RestaurantOwnerDashboard() {
     setLocation(
       `/edit-restaurant/${selectedRestaurant}?src=onboarding&focus=${focus}`,
     );
+  };
+
+  const openVerificationUpload = () => {
+    if (!selectedRestaurant) return;
+    try {
+      window.localStorage.removeItem(verificationSkipKey(selectedRestaurant));
+    } catch {}
+    setVerificationSkippedToday(false);
+    setVerificationUploadOpen(true);
+  };
+
+  const skipVerificationToday = () => {
+    if (!selectedRestaurant) return;
+    try {
+      window.localStorage.setItem(
+        verificationSkipKey(selectedRestaurant),
+        localDayKey(),
+      );
+    } catch {}
+    setVerificationUploadOpen(false);
+    setVerificationSkippedToday(true);
+    toast({
+      title: "Verification skipped for today",
+      description: "We will remind you again tomorrow if it is still missing.",
+    });
   };
 
   if (loadingRestaurants) {
@@ -1816,45 +1878,116 @@ export default function RestaurantOwnerDashboard() {
 
                   {onboardingCompletion.verification.status ===
                     "not_submitted" && (
-                    <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] p-4">
-                      <p className="text-sm font-medium">
-                        Submit verification documents
-                      </p>
-                      {Boolean(
-                        (currentRestaurant as any)?.claimedFromImportId,
-                      ) && (
-                        <Input
-                          value={onboardingLicenseNumber}
-                          onChange={(e) =>
-                            setOnboardingLicenseNumber(e.target.value)
-                          }
-                          placeholder="License number"
-                          data-testid="input-dashboard-license-number"
-                        />
-                      )}
-                      <DocumentUpload
-                        onDocumentsChange={setOnboardingDocuments}
-                        maxFiles={5}
-                        maxFileSize={10 * 1024 * 1024}
-                        acceptedTypes={[
-                          "image/jpeg",
-                          "image/jpg",
-                          "image/png",
-                          "application/pdf",
-                        ]}
-                      />
-                      <Button
-                        onClick={() => submitVerificationMutation.mutate()}
-                        disabled={
-                          submitVerificationMutation.isPending ||
-                          onboardingDocuments.length === 0
-                        }
-                        data-testid="button-submit-dashboard-verification"
-                      >
-                        {submitVerificationMutation.isPending
-                          ? "Submitting..."
-                          : "Submit Verification"}
-                      </Button>
+                    <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+                            <ShieldCheck className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold">
+                              Verify when you have a document nearby
+                            </p>
+                            <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                              You can keep setting up today. Verification stays
+                              on the checklist and we will remind you once per
+                              day until you submit.
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">
+                          Daily reminder
+                        </Badge>
+                      </div>
+
+                      {verificationSkippedToday && !verificationUploadOpen ? (
+                        <div className="flex flex-col gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm text-[color:var(--text-secondary)]">
+                            Snoozed for today. It will come back tomorrow if no
+                            request is submitted.
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={openVerificationUpload}
+                          >
+                            Submit now
+                          </Button>
+                        </div>
+                      ) : null}
+
+                      {!verificationSkippedToday || verificationUploadOpen ? (
+                        verificationUploadOpen ? (
+                          <div className="space-y-3">
+                            {isClaimedImport ? (
+                              <Input
+                                value={onboardingLicenseNumber}
+                                onChange={(e) =>
+                                  setOnboardingLicenseNumber(e.target.value)
+                                }
+                                placeholder="Permit or registry number (optional)"
+                                data-testid="input-dashboard-license-number"
+                              />
+                            ) : null}
+                            <DocumentUpload
+                              onDocumentsChange={setOnboardingDocuments}
+                              maxFiles={3}
+                              maxFileSize={10 * 1024 * 1024}
+                              acceptedTypes={[
+                                "image/jpeg",
+                                "image/jpg",
+                                "image/png",
+                                "application/pdf",
+                              ]}
+                            />
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                              <Button
+                                onClick={() =>
+                                  submitVerificationMutation.mutate()
+                                }
+                                disabled={
+                                  submitVerificationMutation.isPending ||
+                                  onboardingDocuments.length === 0
+                                }
+                                data-testid="button-submit-dashboard-verification"
+                              >
+                                {submitVerificationMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Submitting...
+                                  </>
+                                ) : (
+                                  "Submit verification"
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={skipVerificationToday}
+                              >
+                                Skip for today
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                              type="button"
+                              onClick={openVerificationUpload}
+                            >
+                              Upload document
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={skipVerificationToday}
+                            >
+                              Skip for today
+                            </Button>
+                          </div>
+                        )
+                      ) : null}
                     </div>
                   )}
 

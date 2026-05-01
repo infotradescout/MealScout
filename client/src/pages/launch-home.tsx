@@ -18,7 +18,7 @@ const launchPaths = [
     title: "I own a food truck",
     description:
       "Find places to park, claim your truck, and turn open host locations into paid booking opportunities.",
-    href: "/owner/start",
+    href: "/truck-onboarding",
     cta: "Start as a truck owner",
     icon: Truck,
   },
@@ -79,7 +79,7 @@ export default function LaunchHome() {
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link href="/owner/start">
+                <Link href="/truck-onboarding">
                   <Button className="h-12 w-full sm:w-auto rounded-full px-6 text-base font-bold shadow-clean-lg">
                     I own a food truck
                     <ArrowRight className="ml-2 h-5 w-5" />
@@ -171,7 +171,7 @@ export default function LaunchHome() {
                   Pick the role that matches what you control today. Trucks bring demand. Hosts bring space. Customers bring discovery once activity is real.
                 </p>
                 <div className="mt-6 space-y-3">
-                  <Link href="/claim-truck">
+                  <Link href="/truck-onboarding?claim=1">
                     <Button variant="outline" className="w-full justify-between rounded-full font-bold">
                       Claim a truck
                       <Truck className="h-4 w-4" />

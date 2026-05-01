@@ -2,7 +2,7 @@
  * OwnerOnboardingChecklist
  *
  * Owner-facing setup progress widget. Hits GET /api/owner/onboarding and
- * shows the 6-step checklist with a progress bar and a clear next-step CTA.
+ * shows the setup checklist with a progress bar and a clear next-step CTA.
  *
  * Auto-hides once everything is done, so it's not noise for established owners.
  */

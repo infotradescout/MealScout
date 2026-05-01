@@ -51,13 +51,13 @@ export default function OwnerStartPage() {
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/restaurant-signup?businessType=food_truck&claim=1&flow=truck-owner">
+              <Link href="/truck-onboarding?claim=1&flow=truck-owner">
                 <Button size="lg" className="w-full gap-2 sm:w-auto">
                   Claim & go live
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/claim-truck">
+              <Link href="/truck-onboarding?claim=1">
                 <Button
                   size="lg"
                   variant="outline"

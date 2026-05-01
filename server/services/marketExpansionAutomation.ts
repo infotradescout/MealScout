@@ -1526,7 +1526,7 @@ export async function createInitialOnboardingBatch(
   const baseUrl = String(process.env.PUBLIC_BASE_URL || "https://www.mealscout.us").replace(/\/+$/, "");
   const batch = rows.map((row) => {
     const query = String(row.externalId || row.name || "").trim();
-    const claimUrl = `${baseUrl}/restaurant-signup?businessType=food_truck&claim=1${
+    const claimUrl = `${baseUrl}/truck-onboarding?claim=1${
       query ? `&q=${encodeURIComponent(query)}` : ""
     }`;
     return {

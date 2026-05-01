@@ -7,7 +7,7 @@ type MealScoutPurpose = "foodie" | "owner" | "host" | "booker";
 
 const purposeRoutes: Record<MealScoutPurpose, string> = {
   foodie: "/find-food/location",
-  owner: "/owner/start",
+  owner: "/truck-onboarding",
   host: "/host/start",
   booker: "/book/start",
 };

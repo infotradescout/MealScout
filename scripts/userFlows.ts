@@ -727,38 +727,43 @@ class UserFlowTester {
     let hostId: string | undefined;
     {
       const start = Date.now();
-      const response = await this.makeRequest({ method: 'GET', path: '/api/hosts/me' }, session);
-      if (response.status === 200 && response.body?.id) {
-        hostId = response.body.id;
-        steps.push(this.makeStep('2. Load host profile', true, Date.now() - start, response.status));
-      } else if (response.status === 404) {
-        const hostPayload = {
-          businessName: `Test Host ${Date.now()}`,
-          address: '100 Test Way',
-          city: 'Austin',
-          state: 'TX',
-          locationType: 'office',
-          contactPhone: '555-000-0000',
-          latitude: '30.2672',
-          longitude: '-97.7431',
-          spotCount: 2,
-        };
-        const createStart = Date.now();
-        const created = await this.makeRequest(
-          { method: 'POST', path: '/api/hosts', body: hostPayload },
-          session,
+      const response = await this.makeRequest({ method: 'GET', path: '/api/hosts' }, session);
+      if (response.status === 200 && Array.isArray(response.body)) {
+        const parkingPassHost = response.body.find(
+          (host: any) => host?.id && host?.locationType !== 'event_coordinator',
         );
-        const ok = created.status === 201 && created.body?.id;
-        hostId = created.body?.id;
-        steps.push(
-          this.makeStep(
-            '2. Create host profile',
-            ok,
-            Date.now() - createStart,
-            created.status,
-            ok ? undefined : `Expected 201, got ${created.status}`,
-          ),
-        );
+        if (parkingPassHost) {
+          hostId = parkingPassHost.id;
+          steps.push(this.makeStep('2. Load host profile', true, Date.now() - start, response.status));
+        } else {
+          const hostPayload = {
+            businessName: `Test Host ${Date.now()}`,
+            address: '100 Congress Ave',
+            city: 'Austin',
+            state: 'TX',
+            locationType: 'office',
+            contactPhone: '555-000-0000',
+            latitude: '30.2672',
+            longitude: '-97.7431',
+            spotCount: 2,
+          };
+          const createStart = Date.now();
+          const created = await this.makeRequest(
+            { method: 'POST', path: '/api/hosts', body: hostPayload },
+            session,
+          );
+          const ok = created.status === 201 && created.body?.id;
+          hostId = created.body?.id;
+          steps.push(
+            this.makeStep(
+              '2. Create host profile',
+              ok,
+              Date.now() - createStart,
+              created.status,
+              ok ? undefined : `Expected 201, got ${created.status}`,
+            ),
+          );
+        }
       } else {
         steps.push(
           this.makeStep(
@@ -766,7 +771,7 @@ class UserFlowTester {
             false,
             Date.now() - start,
             response.status,
-            `Expected 200 or 404, got ${response.status}`,
+            `Expected 200 with host list, got ${response.status}`,
           ),
         );
       }

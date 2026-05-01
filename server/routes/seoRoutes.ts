@@ -925,7 +925,7 @@ export function registerSeoRoutes(app: Express) {
         `${baseUrl}/for-events`,
         `${baseUrl}/find-food`,
         `${baseUrl}/restaurant-signup`,
-        `${baseUrl}/claim-truck`,
+        `${baseUrl}/truck-onboarding`,
         `${baseUrl}/truck-landing`,
         `${baseUrl}/for-hosts`,
         `${baseUrl}/host-location-partner`,

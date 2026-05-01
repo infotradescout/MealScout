@@ -27,6 +27,7 @@ import {
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { runMenuAutoRefreshCron } from "../services/menuAutoRefresh";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
+import { runVerificationReminderCron } from "../services/verificationReminderService";
 import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { sendAdminDailyDigest } from "../services/adminDailyDigest";
@@ -259,6 +260,19 @@ export async function registerSchedulers(app: Express): Promise<void> {
       }
     } catch (error) {
       console.error("❌ Restaurant Activation Nudge Failed:", error);
+    }
+  });
+
+  // Verification reminder - daily 3:45 AM. Owners can defer document upload,
+  // but get a once-daily email until a verification request is submitted.
+  cron.schedule("45 3 * * *", async () => {
+    try {
+      const stats = await runVerificationReminderCron();
+      if (stats.sent > 0) {
+        console.log("[verification-reminders] sent:", stats);
+      }
+    } catch (error) {
+      console.error("❌ Verification Reminder Failed:", error);
     }
   });
 

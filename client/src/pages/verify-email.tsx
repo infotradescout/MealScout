@@ -26,7 +26,7 @@ const getSafePath = (candidate: string, fallback: string) => {
 const getSignupPath = (accountType: AccountType, businessType: string) => {
   if (accountType === "business") {
     if (businessType === "food_truck") {
-      return "/customer-signup?role=business&businessType=food_truck";
+      return "/truck-onboarding";
     }
     if (businessType === "bar") {
       return "/customer-signup?role=business&businessType=bar";

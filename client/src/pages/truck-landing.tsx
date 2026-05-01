@@ -8,7 +8,7 @@ import { SEOHead } from "@/components/seo-head";
 
 export default function TruckLanding() {
   const { isAuthenticated } = useAuth();
-  const signupHref = "/customer-signup?role=business&businessType=food_truck";
+  const signupHref = "/truck-onboarding";
 
   return (
     <div className="min-h-screen bg-background">
