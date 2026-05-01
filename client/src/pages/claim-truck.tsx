@@ -12,6 +12,7 @@ import { Store } from "lucide-react";
 
 type ClaimRow = {
   id: string;
+  status?: string | null;
   name?: string | null;
   address?: string | null;
   city?: string | null;

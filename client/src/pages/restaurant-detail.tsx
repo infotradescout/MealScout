@@ -135,7 +135,7 @@ const formatMoney = (cents: number) =>
 
 export default function RestaurantDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const restaurantId = params.id || extractUuidFromSlug(params.slug);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -155,6 +155,7 @@ export default function RestaurantDetailPage() {
     notes: "",
   });
   const [claimDocuments, setClaimDocuments] = useState<string[]>([]);
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
 
   const { data: restaurant, isLoading: restaurantLoading } = useQuery({
     queryKey: ["/api/restaurants", restaurantId],
@@ -230,7 +231,7 @@ export default function RestaurantDetailPage() {
       const response = await apiRequest(
         "POST",
         `/api/restaurants/${encodeURIComponent(String(restaurantId))}/claim-generated`,
-        { documents: claimDocuments },
+        { documents: claimDocuments, source: "restaurant-detail" },
       );
       return response.json();
     },
@@ -249,7 +250,7 @@ export default function RestaurantDetailPage() {
       });
       setClaimDocuments([]);
       window.location.assign(
-        "/restaurant-owner-dashboard?src=claim&showOnboardingPrompt=1",
+        `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(String(restaurantId || ""))}&src=claim&showOnboardingPrompt=1&goLive=1`,
       );
     },
     onError: (error: any) => {
@@ -288,7 +289,7 @@ export default function RestaurantDetailPage() {
       currentPath === legacyPath ||
       currentPath.startsWith(`${legacyPath}/`)
     ) {
-      setLocation(canonicalPath);
+      setLocation(`${canonicalPath}${window.location.search || ""}`);
     }
   }, [restaurantId, restaurant, expectedRestaurantSlug, setLocation]);
 
@@ -580,6 +581,18 @@ export default function RestaurantDetailPage() {
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const canClaimGeneratedProfile =
     !isVerifiedMemberProfile && isGeneratedProfile;
+
+  useEffect(() => {
+    if (!user || !canClaimGeneratedProfile) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("claim") === "1") {
+        setClaimDialogOpen(true);
+      }
+    } catch {
+      // ignore malformed query strings
+    }
+  }, [canClaimGeneratedProfile, location, user]);
   const phoneHref = toPhoneHref(phoneNumber);
   const profileTypeLabel = isFoodTruck
     ? "Food Truck"
@@ -957,7 +970,10 @@ export default function RestaurantDetailPage() {
             </p>
             <div className="mt-3">
               {user && canClaimGeneratedProfile ? (
-                <Dialog>
+                <Dialog
+                  open={claimDialogOpen}
+                  onOpenChange={setClaimDialogOpen}
+                >
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
@@ -978,7 +994,7 @@ export default function RestaurantDetailPage() {
                     <DocumentUpload
                       onDocumentsChange={setClaimDocuments}
                       maxFiles={5}
-                      maxFileSize={10}
+                      maxFileSize={10 * 1024 * 1024}
                     />
                     <DialogFooter>
                       <Button
@@ -997,7 +1013,19 @@ export default function RestaurantDetailPage() {
                   </DialogContent>
                 </Dialog>
               ) : (
-                <Link href={claimBusinessPath as any}>
+                <Link
+                  href={claimBusinessPath as any}
+                  onClick={() => {
+                    try {
+                      window.sessionStorage.setItem(
+                        "mealscout:pending-claim-path",
+                        `${profilePath}?claim=1`,
+                      );
+                    } catch {
+                      // ignore storage errors
+                    }
+                  }}
+                >
                   <Button
                     size="sm"
                     className="bg-amber-500 font-semibold text-black hover:bg-amber-600"

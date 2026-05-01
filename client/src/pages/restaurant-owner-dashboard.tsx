@@ -155,6 +155,9 @@ interface OnboardingCompletion {
     status: "verified" | "pending" | "not_submitted";
     isVerified: boolean;
     needsSubmission: boolean;
+    snoozed?: boolean;
+    snoozedAt?: string | null;
+    snoozedUntil?: string | null;
   };
 }
 
@@ -165,12 +168,6 @@ interface OwnerMenuSummary {
 }
 
 const DEAL_IMAGE_FALLBACK = "/og-default.jpg";
-const VERIFICATION_SKIP_PREFIX = "ms-verification-skip";
-
-const verificationSkipKey = (restaurantId: string) =>
-  `${VERIFICATION_SKIP_PREFIX}:${restaurantId}`;
-
-const localDayKey = () => format(new Date(), "yyyy-MM-dd");
 
 const normalizeDealImageUrl = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -653,6 +650,7 @@ export default function RestaurantOwnerDashboard() {
   );
   const verificationStatus = onboardingCompletion?.verification.status || null;
   const needsVerificationSubmission = verificationStatus === "not_submitted";
+  const verificationSnoozed = Boolean(onboardingCompletion?.verification.snoozed);
   const isClaimedImport = Boolean((currentRestaurant as any)?.claimedFromImportId);
   const visibleTruckBookings = truckBookings.filter(
     (booking) => !selectedRestaurant || booking.truckId === selectedRestaurant,
@@ -685,17 +683,8 @@ export default function RestaurantOwnerDashboard() {
       return;
     }
 
-    let skipped = false;
-    try {
-      skipped =
-        window.localStorage.getItem(verificationSkipKey(selectedRestaurant)) ===
-        localDayKey();
-    } catch {
-      skipped = false;
-    }
-
-    setVerificationSkippedToday(skipped);
-    if (skipped) {
+    setVerificationSkippedToday(verificationSnoozed);
+    if (verificationSnoozed) {
       setVerificationUploadOpen(false);
       return;
     }
@@ -704,7 +693,7 @@ export default function RestaurantOwnerDashboard() {
     if (params.get("goLive") === "1") {
       setVerificationUploadOpen(true);
     }
-  }, [needsVerificationSubmission, selectedRestaurant]);
+  }, [needsVerificationSubmission, selectedRestaurant, verificationSnoozed]);
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
@@ -1408,9 +1397,6 @@ export default function RestaurantOwnerDashboard() {
       setOnboardingLicenseNumber("");
       setVerificationUploadOpen(false);
       setVerificationSkippedToday(false);
-      try {
-        window.localStorage.removeItem(verificationSkipKey(selectedRestaurant));
-      } catch {}
       await queryClient.invalidateQueries({
         queryKey: [
           `/api/restaurants/${selectedRestaurant}/onboarding/completion`,
@@ -1427,6 +1413,41 @@ export default function RestaurantOwnerDashboard() {
       toast({
         title: "Verification failed",
         description: error?.message || "Unable to submit verification request",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const snoozeVerificationMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedRestaurant) {
+        throw new Error("Select a restaurant first");
+      }
+      const response = await apiRequest(
+        "POST",
+        `/api/restaurants/${selectedRestaurant}/verification/snooze`,
+        { source: "dashboard" },
+      );
+      return response.json().catch(() => ({}));
+    },
+    onSuccess: async () => {
+      setVerificationUploadOpen(false);
+      setVerificationSkippedToday(true);
+      await queryClient.invalidateQueries({
+        queryKey: [
+          `/api/restaurants/${selectedRestaurant}/onboarding/completion`,
+        ],
+      });
+      await queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
+      toast({
+        title: "Verification skipped for today",
+        description: "We will remind you again tomorrow if it is still missing.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not skip verification",
+        description: error?.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -1518,27 +1539,13 @@ export default function RestaurantOwnerDashboard() {
 
   const openVerificationUpload = () => {
     if (!selectedRestaurant) return;
-    try {
-      window.localStorage.removeItem(verificationSkipKey(selectedRestaurant));
-    } catch {}
     setVerificationSkippedToday(false);
     setVerificationUploadOpen(true);
   };
 
   const skipVerificationToday = () => {
     if (!selectedRestaurant) return;
-    try {
-      window.localStorage.setItem(
-        verificationSkipKey(selectedRestaurant),
-        localDayKey(),
-      );
-    } catch {}
-    setVerificationUploadOpen(false);
-    setVerificationSkippedToday(true);
-    toast({
-      title: "Verification skipped for today",
-      description: "We will remind you again tomorrow if it is still missing.",
-    });
+    snoozeVerificationMutation.mutate();
   };
 
   if (loadingRestaurants) {
@@ -1965,8 +1972,16 @@ export default function RestaurantOwnerDashboard() {
                                 type="button"
                                 variant="ghost"
                                 onClick={skipVerificationToday}
+                                disabled={snoozeVerificationMutation.isPending}
                               >
-                                Skip for today
+                                {snoozeVerificationMutation.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Skipping...
+                                  </>
+                                ) : (
+                                  "Skip for today"
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -1982,8 +1997,11 @@ export default function RestaurantOwnerDashboard() {
                               type="button"
                               variant="outline"
                               onClick={skipVerificationToday}
+                              disabled={snoozeVerificationMutation.isPending}
                             >
-                              Skip for today
+                              {snoozeVerificationMutation.isPending
+                                ? "Skipping..."
+                                : "Skip for today"}
                             </Button>
                           </div>
                         )

@@ -10,6 +10,10 @@ import { validateDocuments, checkRateLimit } from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import {
+  createVerificationSnooze,
+  getVerificationSnooze,
+} from "../services/verificationSnooze";
+import {
   getPublicBusinessVisibilityChecks,
   isPublicBusinessVisible,
 } from "../utils/publicBusinessVisibility";
@@ -684,6 +688,7 @@ export function registerRestaurantCoreRoutes(
         const parsed = z
           .object({
             documents: z.array(z.string()).min(1).max(5),
+            source: z.string().optional(),
           })
           .parse(req.body || {});
         const documentValidation = validateDocuments(parsed.documents);
@@ -700,12 +705,32 @@ export function registerRestaurantCoreRoutes(
         }
 
         if (String(restaurant.ownerId || "") === userId) {
+          const hasPending = await storage.hasPendingVerificationRequest(
+            restaurantId,
+          );
+          let verificationRequestId: string | null = null;
+          if (!restaurant.isVerified && !hasPending) {
+            const request = await storage.createVerificationRequest({
+              restaurantId,
+              documents: parsed.documents,
+            });
+            verificationRequestId = request.id;
+            await db.insert(telemetryEvents).values({
+              eventName: "verification_request_submitted",
+              userId,
+              properties: {
+                restaurantId,
+                source: parsed.source || "generated-profile-claim",
+                documentCount: parsed.documents.length,
+                claimGeneratedProfile: true,
+              },
+            });
+          }
           return res.json({
             restaurant,
             alreadyOwner: true,
-            verificationPending: await storage.hasPendingVerificationRequest(
-              restaurantId,
-            ),
+            verificationPending: hasPending || Boolean(verificationRequestId),
+            verificationRequestId,
           });
         }
 
@@ -762,6 +787,16 @@ export function registerRestaurantCoreRoutes(
             documents: parsed.documents,
           });
           verificationRequestId = request.id;
+          await db.insert(telemetryEvents).values({
+            eventName: "verification_request_submitted",
+            userId,
+            properties: {
+              restaurantId,
+              source: parsed.source || "generated-profile-claim",
+              documentCount: parsed.documents.length,
+              claimGeneratedProfile: true,
+            },
+          });
         }
 
         res.json({
@@ -791,7 +826,35 @@ export function registerRestaurantCoreRoutes(
         const userId = user.id;
 
         const ownerRestaurants = await storage.getRestaurantsByOwner(userId);
-        const restaurantIds = ownerRestaurants.map((r: any) => r.id);
+        const isFoodTruckOwner =
+          String(user.userType || "") === "food_truck" ||
+          ownerRestaurants.some(
+            (r: any) =>
+              Boolean(r.isFoodTruck) ||
+              String(r.businessType || "").toLowerCase() === "food_truck",
+          );
+        const requestedRestaurantId = String(
+          req.query?.restaurantId || "",
+        ).trim();
+        const requestedRestaurant = requestedRestaurantId
+          ? ownerRestaurants.find(
+              (restaurant: any) =>
+                String(restaurant.id) === requestedRestaurantId,
+            )
+          : null;
+        const primaryRestaurant =
+          requestedRestaurant ||
+          (isFoodTruckOwner
+            ? ownerRestaurants.find(
+                (restaurant: any) =>
+                  Boolean(restaurant.isFoodTruck) ||
+                  String(restaurant.businessType || "").toLowerCase() ===
+                    "food_truck",
+              )
+            : ownerRestaurants[0]) ||
+          null;
+        const checklistRestaurants = primaryRestaurant ? [primaryRestaurant] : [];
+        const restaurantIds = checklistRestaurants.map((r: any) => r.id);
 
         let menuRows: Array<{ restaurantId: string; menuId: string }> = [];
         let itemCount = 0;
@@ -822,18 +885,22 @@ export function registerRestaurantCoreRoutes(
           }
         }
 
-        const hasBusiness = ownerRestaurants.length > 0;
+        const hasBusiness = Boolean(primaryRestaurant);
         const hasMenu = menuRows.length > 0;
         const hasItems = itemCount > 0;
-        const isVerified = ownerRestaurants.some((r: any) => r.isVerified);
-        const primaryRestaurant = ownerRestaurants[0] || null;
-        const isFoodTruckOwner =
-          String(user.userType || "") === "food_truck" ||
-          ownerRestaurants.some(
-            (r: any) =>
-              Boolean(r.isFoodTruck) ||
-              String(r.businessType || "").toLowerCase() === "food_truck",
-          );
+        const isVerified = Boolean((primaryRestaurant as any)?.isVerified);
+        const hasPendingVerification = primaryRestaurant
+          ? await storage.hasPendingVerificationRequest(primaryRestaurant.id)
+          : false;
+        const verificationStatus = isVerified
+          ? "verified"
+          : hasPendingVerification
+            ? "pending"
+            : "not_submitted";
+        const verificationSnooze =
+          verificationStatus === "not_submitted" && primaryRestaurant
+            ? await getVerificationSnooze(primaryRestaurant.id)
+            : { snoozed: false, snoozedAt: null, snoozedUntil: null };
         let hasActiveRestaurantSubscription = false;
         if (restaurantIds.length > 0) {
           const [activeSub] = await db
@@ -877,9 +944,10 @@ export function registerRestaurantCoreRoutes(
         // We require: at least one verified+active restaurant with a menu
         // and at least one item. Stripe subscription is NOT required for
         // discoverability; only for paid tools.
-        const firstDiscoverable = ownerRestaurants.find(
-          (r: any) => r.isVerified && r.isActive,
-        );
+        const firstDiscoverable =
+          primaryRestaurant?.isVerified && primaryRestaurant?.isActive
+            ? primaryRestaurant
+            : null;
         const isDiscoverable = Boolean(
           firstDiscoverable &&
             hasMenu &&
@@ -912,8 +980,16 @@ export function registerRestaurantCoreRoutes(
                 label: "Go live / get verified",
                 done: isDiscoverable,
                 href: goLiveHref,
-                cta: isVerified ? "Go live" : "Request verification",
-                why: "Verified, active trucks with a menu can show up for customers.",
+                cta: isVerified
+                  ? "Go live"
+                  : hasPendingVerification
+                    ? "Check review"
+                    : verificationSnooze.snoozed
+                      ? "Submit anytime"
+                      : "Submit verification",
+                why: hasPendingVerification
+                  ? "Verification is pending. You can keep working while review finishes."
+                  : "Verification can be skipped briefly, but verified trucks are easier to trust and approve.",
               },
             ]
           : [
@@ -989,10 +1065,10 @@ export function registerRestaurantCoreRoutes(
         if (!hasBusiness) visibilityBlockers.push("no_business");
         if (!hasMenu) visibilityBlockers.push("no_menu");
         if (!hasItems) visibilityBlockers.push("no_items");
-        if (!ownerRestaurants.some((r: any) => Boolean(r.isActive))) {
+        if (!primaryRestaurant?.isActive) {
           visibilityBlockers.push("inactive");
         }
-        if (!ownerRestaurants.some((r: any) => Boolean(r.isVerified))) {
+        if (!primaryRestaurant?.isVerified) {
           visibilityBlockers.push("unverified");
         }
         if (previewRestaurant) {
@@ -1018,6 +1094,14 @@ export function registerRestaurantCoreRoutes(
           isDiscoverable,
           publicPreviewUrl,
           visibilityBlockers: Array.from(new Set(visibilityBlockers)),
+          verification: {
+            status: verificationStatus,
+            isVerified,
+            needsSubmission: verificationStatus === "not_submitted",
+            snoozed: verificationSnooze.snoozed,
+            snoozedAt: verificationSnooze.snoozedAt,
+            snoozedUntil: verificationSnooze.snoozedUntil,
+          },
           publicProfileChecks: {
             blockers: primaryProfileChecks.blockers,
             warnings: primaryProfileChecks.warnings,
@@ -2910,11 +2994,68 @@ export function registerRestaurantCoreRoutes(
 
         const verificationRequest =
           await storage.createVerificationRequest(verificationData);
+        await db.insert(telemetryEvents).values({
+          eventName: "verification_request_submitted",
+          userId,
+          properties: {
+            restaurantId,
+            source: String(req.body?.source || "owner"),
+            documentCount: verificationData.documents.length,
+          },
+        });
         res.json(verificationRequest);
       } catch (error: any) {
         console.error("Error creating verification request:", error);
         res.status(400).json({
           message: error.message || "Failed to create verification request",
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/restaurants/:id/verification/snooze",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const restaurantId = String(req.params.id || "").trim();
+        const userId = req.user.id;
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant || String(restaurant.ownerId) !== String(userId)) {
+          return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        if (restaurant.isVerified) {
+          return res.json({
+            snoozed: false,
+            snoozedAt: null,
+            snoozedUntil: null,
+            status: "verified",
+          });
+        }
+
+        const hasPendingRequest =
+          await storage.hasPendingVerificationRequest(restaurantId);
+        if (hasPendingRequest) {
+          return res.json({
+            snoozed: false,
+            snoozedAt: null,
+            snoozedUntil: null,
+            status: "pending",
+          });
+        }
+
+        const snooze = await createVerificationSnooze({
+          restaurantId,
+          userId,
+          source: String(req.body?.source || "owner"),
+        });
+
+        res.json({ ...snooze, status: "not_submitted" });
+      } catch (error: any) {
+        console.error("Error snoozing verification:", error);
+        res.status(400).json({
+          message: error?.message || "Failed to snooze verification",
         });
       }
     },

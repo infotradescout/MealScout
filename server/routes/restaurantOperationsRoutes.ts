@@ -7,6 +7,7 @@ import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { checkRateLimit } from "../documentValidation";
 import { isAuthenticated } from "../unifiedAuth";
+import { getVerificationSnooze } from "../services/verificationSnooze";
 import { reverseGeocode } from "../utils/geocoding";
 import { broadcastLocationUpdate, broadcastStatusUpdate } from "../websocket";
 import {
@@ -316,6 +317,10 @@ export function registerRestaurantOperationsRoutes(
             await storage.hasPendingVerificationRequest(restaurantId);
           verificationStatus = pending ? "pending" : "not_submitted";
         }
+        const verificationSnooze =
+          verificationStatus === "not_submitted"
+            ? await getVerificationSnooze(restaurantId)
+            : { snoozed: false, snoozedAt: null, snoozedUntil: null };
 
         res.json({
           restaurantId,
@@ -334,6 +339,9 @@ export function registerRestaurantOperationsRoutes(
             status: verificationStatus,
             isVerified: Boolean((restaurant as any).isVerified),
             needsSubmission: verificationStatus === "not_submitted",
+            snoozed: verificationSnooze.snoozed,
+            snoozedAt: verificationSnooze.snoozedAt,
+            snoozedUntil: verificationSnooze.snoozedUntil,
           },
         });
       } catch (error) {

@@ -23,6 +23,7 @@ const decorateTruckClaimRows = (
   const COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
   return rows.map((row) => {
+    const status = String(row.status || "unclaimed");
     const hasEmail = Boolean(String(row.email || "").trim());
     const hasInviteUser = Boolean(row.invitedUserId);
     const isInviteOwner =
@@ -37,12 +38,21 @@ const decorateTruckClaimRows = (
       ? Math.max(0, lastInviteSentAtMs + COOLDOWN_MS - now)
       : 0;
 
-    const canClaim = hasInviteUser ? Boolean(isInviteOwner) : true;
+    const canClaim =
+      status === "unclaimed"
+        ? hasInviteUser
+          ? Boolean(isInviteOwner)
+          : true
+        : status === "claim_requested"
+          ? Boolean(isInviteOwner)
+          : false;
     const hasPriorInvite = Boolean(lastInviteSentAtMs);
-    const canRequest = hasEmail && !isInviteOwner && !hasPriorInvite;
+    const canRequest =
+      status === "unclaimed" && hasEmail && !isInviteOwner && !hasPriorInvite;
 
     return {
       id: row.id,
+      status,
       name: row.name,
       address: row.address,
       city: row.city,
@@ -79,6 +89,7 @@ export function registerTruckClaimRoutes(app: Express) {
           state: truckImportListings.state,
           phone: truckImportListings.phone,
           externalId: truckImportListings.externalId,
+          status: truckImportListings.status,
           confidenceScore: truckImportListings.confidenceScore,
           email: truckImportListings.email,
           invitedUserId: truckImportListings.invitedUserId,
@@ -87,7 +98,10 @@ export function registerTruckClaimRoutes(app: Express) {
         .from(truckImportListings)
         .where(
           and(
-            eq(truckImportListings.externalId, query),
+            or(
+              eq(truckImportListings.externalId, query),
+              eq(truckImportListings.id, query),
+            ),
             inArray(truckImportListings.status, [
               "unclaimed",
               "claim_requested",
@@ -114,6 +128,7 @@ export function registerTruckClaimRoutes(app: Express) {
           state: truckImportListings.state,
           phone: truckImportListings.phone,
           externalId: truckImportListings.externalId,
+          status: truckImportListings.status,
           confidenceScore: truckImportListings.confidenceScore,
           email: truckImportListings.email,
           invitedUserId: truckImportListings.invitedUserId,
@@ -127,6 +142,7 @@ export function registerTruckClaimRoutes(app: Express) {
               "claim_requested",
             ] as any),
             or(
+              eq(truckImportListings.id, query),
               sql`lower(${truckImportListings.name}) like ${searchValue}`,
               sql`lower(coalesce(${truckImportListings.address}, '')) like ${searchValue}`,
               sql`lower(coalesce(${truckImportListings.city}, '')) like ${searchValue}`,
@@ -163,6 +179,7 @@ export function registerTruckClaimRoutes(app: Express) {
           state: truckImportListings.state,
           phone: truckImportListings.phone,
           externalId: truckImportListings.externalId,
+          status: truckImportListings.status,
           confidenceScore: truckImportListings.confidenceScore,
           lastInviteSentAt: truckImportListings.lastInviteSentAt,
           invitedUserId: truckImportListings.invitedUserId,
@@ -176,6 +193,7 @@ export function registerTruckClaimRoutes(app: Express) {
               "claim_requested",
             ] as any),
             or(
+              eq(truckImportListings.id, query),
               sql`lower(${truckImportListings.name}) like ${searchValue}`,
               sql`lower(coalesce(${truckImportListings.address}, '')) like ${searchValue}`,
               sql`lower(coalesce(${truckImportListings.city}, '')) like ${searchValue}`,
@@ -314,7 +332,15 @@ export function registerTruckClaimRoutes(app: Express) {
         .where(eq(truckImportListings.id, listingId))
         .limit(1);
 
-      if (!listing || listing.status !== "unclaimed") {
+      const listingStatus = String(listing?.status || "");
+      const isInviteOwner =
+        listing?.invitedUserId &&
+        String(listing.invitedUserId) === String(req.user.id);
+      const canClaimListing =
+        listingStatus === "unclaimed" ||
+        (listingStatus === "claim_requested" && Boolean(isInviteOwner));
+
+      if (!listing || !canClaimListing) {
         return res
           .status(404)
           .json({ message: "Truck listing is not available to claim" });

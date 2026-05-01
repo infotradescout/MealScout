@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { BackHeader } from "@/components/back-header";
+import DocumentUpload from "@/components/document-upload";
 import { SEOHead } from "@/components/seo-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ type TruckMode = "claim" | "create";
 
 type ClaimRow = {
   id: string;
+  status?: string | null;
   name?: string | null;
   address?: string | null;
   city?: string | null;
@@ -95,6 +97,14 @@ type OwnerOnboardingStatus = {
   isDiscoverable: boolean;
   publicPreviewUrl: string | null;
   visibilityBlockers: string[];
+  verification?: {
+    status: "verified" | "pending" | "not_submitted";
+    isVerified: boolean;
+    needsSubmission: boolean;
+    snoozed: boolean;
+    snoozedAt: string | null;
+    snoozedUntil: string | null;
+  };
 };
 
 type SignupFields = {
@@ -240,6 +250,10 @@ export default function TruckOnboardingPage() {
   const [createdRestaurant, setCreatedRestaurant] =
     useState<OwnedRestaurant | null>(null);
   const [addingAnother, setAddingAnother] = useState(false);
+  const [verificationDocuments, setVerificationDocuments] = useState<string[]>([]);
+  const [verificationUploadOpen, setVerificationUploadOpen] = useState(false);
+  const [submittingVerification, setSubmittingVerification] = useState(false);
+  const [snoozingVerification, setSnoozingVerification] = useState(false);
   const autoSearchRan = useRef(false);
 
   const { data: restaurants = [], isLoading: loadingRestaurants } = useQuery<
@@ -249,11 +263,17 @@ export default function TruckOnboardingPage() {
     enabled: isAuthenticated,
     retry: false,
   });
+  const onboardingRestaurantId = String(
+    (createdRestaurant || restaurants.find(isTruckRestaurant))?.id || "",
+  );
   const { data: onboardingStatus, isLoading: loadingOnboardingStatus } =
     useQuery<OwnerOnboardingStatus>({
-      queryKey: ["owner-onboarding"],
+      queryKey: ["owner-onboarding", onboardingRestaurantId],
       queryFn: async () => {
-        const res = await apiRequest("GET", "/api/owner/onboarding");
+        const suffix = onboardingRestaurantId
+          ? `?restaurantId=${encodeURIComponent(onboardingRestaurantId)}`
+          : "";
+        const res = await apiRequest("GET", `/api/owner/onboarding${suffix}`);
         return res.json();
       },
       enabled: isAuthenticated && stage === "finish",
@@ -325,6 +345,82 @@ export default function TruckOnboardingPage() {
   const previewHref = activeRestaurantId
     ? `/restaurant/${encodeURIComponent(activeRestaurantId)}`
     : "/restaurant-owner-dashboard";
+
+  const refreshOnboardingStatus = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
+  };
+
+  const submitVerification = async () => {
+    if (!activeRestaurantId) {
+      toast({
+        title: "Truck profile missing",
+        description: "Finish the truck profile before submitting verification.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (verificationDocuments.length === 0) {
+      toast({
+        title: "Upload a document",
+        description: "Add a permit, license, or official business document first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmittingVerification(true);
+    try {
+      await apiRequest(
+        "POST",
+        `/api/restaurants/${activeRestaurantId}/verification/request`,
+        {
+          documents: verificationDocuments,
+          source: "truck-onboarding",
+        },
+      );
+      setVerificationDocuments([]);
+      setVerificationUploadOpen(false);
+      await refreshOnboardingStatus();
+      toast({
+        title: "Verification submitted",
+        description: "Your documents are in review. You can continue setup now.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Verification failed",
+        description: error?.message || "Try uploading the document again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingVerification(false);
+    }
+  };
+
+  const snoozeVerification = async () => {
+    if (!activeRestaurantId) return;
+    setSnoozingVerification(true);
+    try {
+      await apiRequest(
+        "POST",
+        `/api/restaurants/${activeRestaurantId}/verification/snooze`,
+        { source: "truck-onboarding" },
+      );
+      setVerificationUploadOpen(false);
+      await refreshOnboardingStatus();
+      toast({
+        title: "Verification skipped for today",
+        description: "We will remind you again tomorrow if it is still missing.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Could not skip verification",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSnoozingVerification(false);
+    }
+  };
 
   const updateSignup = (key: keyof SignupFields, value: string) => {
     setSignup((prev) => ({ ...prev, [key]: value }));
@@ -1173,6 +1269,8 @@ export default function TruckOnboardingPage() {
     const nextStep = onboardingStatus?.nextStep;
     const setupComplete = Boolean(onboardingStatus?.allDone);
     const previewUrl = onboardingStatus?.publicPreviewUrl || previewHref;
+    const verification = onboardingStatus?.verification;
+    const needsVerification = verification?.status === "not_submitted";
 
     return (
       <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
@@ -1273,6 +1371,105 @@ export default function TruckOnboardingPage() {
         </Card>
 
         <div className="grid gap-3">
+          {needsVerification ? (
+            <Card className="border-[color:var(--accent-text)]/35 bg-[var(--bg-card)] shadow-clean">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex gap-3">
+                    <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+                      <ShieldCheck className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <div className="font-black">Verify when ready</div>
+                      <p className="text-sm text-[color:var(--text-secondary)]">
+                        {verification?.snoozed
+                          ? "Skipped for today. You can still submit now if the document is nearby."
+                          : "Upload one permit, license, or official business document. If it is not nearby, skip once and we will bring this back tomorrow."}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0">
+                    Daily reminder
+                  </Badge>
+                </div>
+
+                {verification?.snoozed && !verificationUploadOpen ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setVerificationUploadOpen(true)}
+                    className="w-full sm:w-auto"
+                  >
+                    Submit now
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <DocumentUpload
+                      onDocumentsChange={setVerificationDocuments}
+                      maxFiles={3}
+                      maxFileSize={10 * 1024 * 1024}
+                      acceptedTypes={[
+                        "image/jpeg",
+                        "image/jpg",
+                        "image/png",
+                        "application/pdf",
+                      ]}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        onClick={() => void submitVerification()}
+                        disabled={
+                          submittingVerification ||
+                          verificationDocuments.length === 0
+                        }
+                      >
+                        {submittingVerification ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          "Submit verification"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => void snoozeVerification()}
+                        disabled={snoozingVerification || submittingVerification}
+                      >
+                        {snoozingVerification ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Skipping...
+                          </>
+                        ) : (
+                          "Skip for today"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : verification?.status === "pending" ? (
+            <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
+              <CardContent className="flex items-center gap-3 p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--status-warning)]/12 text-[color:var(--status-warning)]">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <div className="font-black">Verification is in review</div>
+                  <p className="text-sm text-[color:var(--text-secondary)]">
+                    No action needed right now. We will update the checklist
+                    when review is complete.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {nextStep ? (
             <Link href={nextStep.href}>
               <Card className="border-[color:var(--accent-text)]/40 bg-[var(--bg-card)] shadow-clean transition-colors hover:bg-[var(--bg-surface-muted)]">

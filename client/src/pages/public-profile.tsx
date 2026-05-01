@@ -421,16 +421,17 @@ export default function PublicProfilePage() {
     data.entity === "restaurant" && data.isVerified !== true;
   const conciergeEditPath = `/edit-restaurant/${encodeURIComponent(resolvedRestaurantId)}?src=concierge&focus=description`;
   const conciergeDealPath = `/deal-creation?restaurantId=${encodeURIComponent(resolvedRestaurantId)}&src=concierge`;
-  const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
-    String(data.subtitle || "")
-      .toLowerCase()
-      .includes("truck")
-      ? "food_truck"
-      : "restaurant",
-  )}&claim=1&q=${encodeURIComponent(String(data.title || "").trim())}&redirect=${encodeURIComponent(
-    data.profilePath ||
-      `/p/restaurant/${encodeURIComponent(resolvedRestaurantId)}`,
-  )}`;
+  const isTruckProfile = String(data.subtitle || "")
+    .toLowerCase()
+    .includes("truck");
+  const claimReturnPath =
+    data.profilePath || `/p/restaurant/${encodeURIComponent(resolvedRestaurantId)}`;
+  const generatedRestaurantClaimPath = `/restaurant/${encodeURIComponent(
+    resolvedRestaurantId,
+  )}?claim=1`;
+  const claimBusinessPath = isTruckProfile
+    ? `/truck-onboarding?claim=1&q=${encodeURIComponent(String(data.title || "").trim())}&redirect=${encodeURIComponent(claimReturnPath)}`
+    : `/restaurant-signup?businessType=restaurant&claim=1&claimRestaurantId=${encodeURIComponent(resolvedRestaurantId)}&q=${encodeURIComponent(String(data.title || "").trim())}&redirect=${encodeURIComponent(generatedRestaurantClaimPath)}`;
   const directionsUrl = locationLine
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationLine)}`
     : "";
@@ -878,7 +879,20 @@ export default function PublicProfilePage() {
                     This profile is not yet a verified MealScout member page.
                   </p>
                   <div className="mt-2">
-                    <Link href={claimBusinessPath as any}>
+                    <Link
+                      href={claimBusinessPath as any}
+                      onClick={() => {
+                        if (isTruckProfile) return;
+                        try {
+                          window.sessionStorage.setItem(
+                            "mealscout:pending-claim-path",
+                            generatedRestaurantClaimPath,
+                          );
+                        } catch {
+                          // ignore storage errors
+                        }
+                      }}
+                    >
                       <Button className="h-9 bg-amber-500 text-black hover:bg-amber-600 font-semibold">
                         Claim Business & Verify
                       </Button>

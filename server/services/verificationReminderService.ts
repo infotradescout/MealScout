@@ -10,6 +10,7 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { emailService } from "../emailService";
 import { restaurants, telemetryEvents, users, verificationRequests } from "@shared/schema";
+import { getVerificationSnooze } from "./verificationSnooze";
 
 type ReminderCandidate = {
   restaurantId: string;
@@ -160,6 +161,11 @@ export async function runVerificationReminderCron(): Promise<{
       continue;
     }
     if (await reminderAlreadySent(candidate.restaurantId, key)) {
+      skipped += 1;
+      continue;
+    }
+    const snooze = await getVerificationSnooze(candidate.restaurantId);
+    if (snooze.snoozed) {
       skipped += 1;
       continue;
     }

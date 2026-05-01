@@ -121,6 +121,26 @@ const loginSchema = z.object({
   password: z.string().min(1, COPY.validation.login.passwordRequired),
 });
 
+const PENDING_CLAIM_PATH_KEY = "mealscout:pending-claim-path";
+
+const safeRelativePath = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "";
+  return raw;
+};
+
+const addClaimParam = (path: string) => {
+  const safePath = safeRelativePath(path);
+  if (!safePath) return "";
+  try {
+    const url = new URL(safePath, window.location.origin);
+    url.searchParams.set("claim", "1");
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return `${safePath}${safePath.includes("?") ? "&" : "?"}claim=1`;
+  }
+};
+
 type RestaurantFormData = z.infer<typeof restaurantSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -205,6 +225,30 @@ export default function RestaurantSignup() {
   const [claimRequestingId, setClaimRequestingId] = useState<string | null>(
     null,
   );
+  const generatedClaimPath = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const claimRestaurantId = String(
+        params.get("claimRestaurantId") || "",
+      ).trim();
+      if (params.get("claim") === "1" && claimRestaurantId) {
+        const redirect = addClaimParam(String(params.get("redirect") || ""));
+        return (
+          redirect ||
+          `/restaurant/${encodeURIComponent(claimRestaurantId)}?claim=1`
+        );
+      }
+      if (params.get("auth") === "success") {
+        return safeRelativePath(
+          window.sessionStorage.getItem(PENDING_CLAIM_PATH_KEY) || "",
+        );
+      }
+    } catch {
+      return "";
+    }
+    return "";
+  }, []);
 
   const routeToVerifyEmail = (redirectAfterLogin: string) => {
     const params = new URLSearchParams();
@@ -213,6 +257,15 @@ export default function RestaurantSignup() {
     params.set("accountType", "business");
     params.set("businessType", selectedBusinessType);
     window.location.href = `/verify-email?${params.toString()}`;
+  };
+
+  const rememberGeneratedClaimPath = () => {
+    if (!generatedClaimPath) return;
+    try {
+      window.sessionStorage.setItem(PENDING_CLAIM_PATH_KEY, generatedClaimPath);
+    } catch {
+      // ignore storage errors
+    }
   };
   const [claimAutoSearch, setClaimAutoSearch] = useState(false);
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
@@ -227,7 +280,7 @@ export default function RestaurantSignup() {
       city: "",
       state: "",
       phone: "",
-      businessType: "food_truck",
+      businessType: "restaurant",
       cuisineType: "",
       description: "",
       websiteUrl: "",
@@ -290,6 +343,12 @@ export default function RestaurantSignup() {
       const businessType = params.get("businessType");
       const intent = String(params.get("intent") || "").trim();
       const sourcePath = String(params.get("sourcePath") || "").trim();
+      if (generatedClaimPath) {
+        window.sessionStorage.setItem(
+          PENDING_CLAIM_PATH_KEY,
+          generatedClaimPath,
+        );
+      }
       if (intent) {
         setOwnerIntent(intent);
         window.sessionStorage.setItem("mealscout:owner-intent", intent);
@@ -328,7 +387,18 @@ export default function RestaurantSignup() {
     } catch {
       // ignore
     }
-  }, [form]);
+  }, [form, generatedClaimPath]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user || !generatedClaimPath) return;
+    if (user.userType === "admin" || user.userType === "staff") return;
+    try {
+      window.sessionStorage.removeItem(PENDING_CLAIM_PATH_KEY);
+    } catch {
+      // ignore storage errors
+    }
+    setLocation(generatedClaimPath);
+  }, [generatedClaimPath, isAuthenticated, setLocation, user]);
 
   useEffect(() => {
     trackFunnelEventOncePerSession(
@@ -411,7 +481,8 @@ export default function RestaurantSignup() {
           signupForm.getValues("email") || "",
         );
       } catch {}
-      routeToVerifyEmail("/restaurant-signup");
+      rememberGeneratedClaimPath();
+      routeToVerifyEmail(generatedClaimPath || "/restaurant-signup");
     },
     onError: (error) => {
       toast({
@@ -433,6 +504,15 @@ export default function RestaurantSignup() {
         title: COPY.notifications.login.successTitle,
         description: COPY.notifications.login.successDescription,
       });
+      if (generatedClaimPath) {
+        try {
+          window.sessionStorage.removeItem(PENDING_CLAIM_PATH_KEY);
+        } catch {
+          // ignore storage errors
+        }
+        window.location.assign(generatedClaimPath);
+        return;
+      }
       // Reload to update auth state
       window.location.reload();
     },
@@ -560,7 +640,8 @@ export default function RestaurantSignup() {
             signupForm.getValues("email") || "",
           );
         } catch {}
-        routeToVerifyEmail("/restaurant-signup");
+        rememberGeneratedClaimPath();
+        routeToVerifyEmail(generatedClaimPath || "/restaurant-signup");
         return;
       }
 
@@ -761,7 +842,25 @@ export default function RestaurantSignup() {
         />
 
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-          {ownerIntentCopy ? (
+          {generatedClaimPath ? (
+            <Card className="mb-4 border-[color:var(--accent-text)]/30 bg-[color:var(--accent-text)]/8 shadow-clean">
+              <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+                    Claim existing listing
+                  </p>
+                  <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                    Sign in or create an owner account, then upload proof for
+                    the business profile you selected.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-xs font-semibold text-[color:var(--text-secondary)]">
+                  Next: verify claim
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </div>
+              </CardContent>
+            </Card>
+          ) : ownerIntentCopy ? (
             <Card className="mb-4 border-[color:var(--accent-text)]/30 bg-[color:var(--accent-text)]/8 shadow-clean">
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -838,11 +937,12 @@ export default function RestaurantSignup() {
                   type="button"
                   data-testid="button-google-signin"
                   variant="outline"
-                  onClick={() =>
-                    (window.location.href = authUrl(
+                  onClick={() => {
+                    rememberGeneratedClaimPath();
+                    window.location.href = authUrl(
                       "/api/auth/google/restaurant",
-                    ))
-                  }
+                    );
+                  }}
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
