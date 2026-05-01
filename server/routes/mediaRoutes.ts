@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
