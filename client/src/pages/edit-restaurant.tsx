@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Save, Store, UtensilsCrossed } from "lucide-react";
 import BusinessProfileImport from "@/components/BusinessProfileImport";
 import BusinessPhotoGallery from "@/components/BusinessPhotoGallery";
+import MediaVideoManager from "@/components/MediaVideoManager";
 
 import { BackHeader } from "@/components/back-header";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,8 @@ export default function EditRestaurantPage() {
     user?.userType === "staff" ||
     user?.userType === "admin" ||
     user?.userType === "super_admin";
+  const canAdminManageMedia =
+    user?.userType === "admin" || user?.userType === "super_admin";
 
   const adminRestaurantQuery = useQuery<RestaurantProfile | null>({
     queryKey: ["/api/restaurants", restaurantId, "admin-edit-fallback"],
@@ -469,6 +472,14 @@ export default function EditRestaurantPage() {
           entityId={restaurant.id}
           maxPhotos={50}
           canEdit={true}
+        />
+
+        <MediaVideoManager
+          ownerType={restaurant.businessType === "food_truck" ? "food_truck" : "restaurant"}
+          ownerId={restaurant.id}
+          title="Business videos"
+          description="Upload featured profile videos for this business. Public pages only show active, public videos after review."
+          adminMode={canAdminManageMedia}
         />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
