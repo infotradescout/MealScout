@@ -182,7 +182,24 @@ async function postJson(path: string, payload: unknown) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(body?.message || body?.error || "Request failed");
+    const missingFields = Array.isArray(body?.missingFields)
+      ? body.missingFields.filter(Boolean)
+      : [];
+    const validationDetails =
+      missingFields.length > 0
+        ? ` Missing fields: ${missingFields.join(", ")}.`
+        : Array.isArray(body?.errors) && body.errors.length > 0
+          ? ` ${body.errors
+              .map((issue: any) => {
+                const path = Array.isArray(issue?.path)
+                  ? issue.path.filter(Boolean).join(".")
+                  : "";
+                return path ? `${path}: ${issue?.message}` : issue?.message;
+              })
+              .filter(Boolean)
+              .join("; ")}`
+          : "";
+    throw new Error(`${body?.message || body?.error || "Request failed"}${validationDetails}`);
   }
   return body;
 }
