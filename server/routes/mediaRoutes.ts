@@ -56,6 +56,54 @@ const toOptionalDate = (value: Date | string | null | undefined) => {
   return Number.isFinite(date.getTime()) ? date : null;
 };
 
+export type PublicMediaAssetVideoRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  fileUrl: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  mediaType: string | null;
+  status: string | null;
+  visibility: string | null;
+  isFeatured: boolean | null;
+  createdAt: Date | string | null;
+};
+
+export const isPublicMediaAssetVideoRenderable = (
+  row: PublicMediaAssetVideoRow,
+) => {
+  if (!row.fileUrl) return false;
+  if (row.mediaType !== "video") return false;
+  if (row.status !== "active") return false;
+  if (row.visibility !== "public") return false;
+
+  return true;
+};
+
+const dateSortValue = (value: Date | string | null | undefined) =>
+  toOptionalDate(value)?.getTime() ?? 0;
+
+export const comparePublicMediaAssetVideos = (
+  left: PublicMediaAssetVideoRow,
+  right: PublicMediaAssetVideoRow,
+) => {
+  const featuredDelta = Number(Boolean(right.isFeatured)) - Number(Boolean(left.isFeatured));
+  if (featuredDelta !== 0) return featuredDelta;
+
+  return dateSortValue(right.createdAt) - dateSortValue(left.createdAt);
+};
+
+export const toPublicMediaAssetVideo = (row: PublicMediaAssetVideoRow) => ({
+  id: row.id,
+  title: String(row.title || "").trim() || "Profile video",
+  description: row.description || null,
+  fileUrl: row.fileUrl || "",
+  thumbnailUrl: row.thumbnailUrl || null,
+  durationSeconds: Number(row.durationSeconds || 0) || null,
+  isFeatured: Boolean(row.isFeatured),
+});
+
 export const isPublicUserVideoRecommendationRenderable = (
   row: PublicUserVideoRecommendationRow,
   now = new Date(),
@@ -439,7 +487,7 @@ export function registerMediaRoutes(app: Express) {
         return res.status(400).json({ message: "Valid owner type and owner ID required" });
       }
 
-      const videos = await db
+      const videoRows = (await db
         .select()
         .from(mediaAssets)
         .where(
@@ -451,7 +499,12 @@ export function registerMediaRoutes(app: Express) {
             eq(mediaAssets.visibility, "public"),
           ),
         )
-        .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt));
+        .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt))) as PublicMediaAssetVideoRow[];
+
+      const videos = videoRows
+        .filter((row) => isPublicMediaAssetVideoRenderable(row))
+        .sort(comparePublicMediaAssetVideos)
+        .map((row) => toPublicMediaAssetVideo(row));
 
       let recommendationVideos: ReturnType<typeof toPublicUserVideoRecommendation>[] = [];
 

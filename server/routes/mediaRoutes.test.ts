@@ -1,5 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { PublicUserVideoRecommendationRow } from "./mediaRoutes";
+import type {
+  PublicMediaAssetVideoRow,
+  PublicUserVideoRecommendationRow,
+} from "./mediaRoutes";
 
 let helpers: typeof import("./mediaRoutes");
 
@@ -33,7 +36,88 @@ const baseRecommendationRow = (
   ...overrides,
 });
 
+const baseMediaAssetVideoRow = (
+  overrides: Partial<PublicMediaAssetVideoRow> = {},
+): PublicMediaAssetVideoRow => ({
+  id: "asset-1",
+  title: "Owner reel",
+  description: "Approved profile media.",
+  fileUrl: "https://res.cloudinary.com/demo/video/upload/owner.mp4",
+  thumbnailUrl: "https://res.cloudinary.com/demo/image/upload/owner.jpg",
+  durationSeconds: 22,
+  mediaType: "video",
+  status: "active",
+  visibility: "public",
+  isFeatured: false,
+  createdAt: new Date("2026-05-02T12:00:00Z"),
+  ...overrides,
+});
+
 describe("public media video helpers", () => {
+  it("allows only active public owner videos into public galleries", () => {
+    expect(
+      helpers.isPublicMediaAssetVideoRenderable(baseMediaAssetVideoRow()),
+    ).toBe(true);
+    expect(
+      helpers.isPublicMediaAssetVideoRenderable(
+        baseMediaAssetVideoRow({ status: "processing" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicMediaAssetVideoRenderable(
+        baseMediaAssetVideoRow({ visibility: "private" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicMediaAssetVideoRenderable(
+        baseMediaAssetVideoRow({ fileUrl: "" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("sorts featured owner videos first and newer videos next", () => {
+    const olderFeatured = baseMediaAssetVideoRow({
+      id: "featured",
+      isFeatured: true,
+      createdAt: new Date("2026-05-01T12:00:00Z"),
+    });
+    const newerRegular = baseMediaAssetVideoRow({
+      id: "newer",
+      isFeatured: false,
+      createdAt: new Date("2026-05-03T12:00:00Z"),
+    });
+    const olderRegular = baseMediaAssetVideoRow({
+      id: "older",
+      isFeatured: false,
+      createdAt: new Date("2026-05-02T12:00:00Z"),
+    });
+
+    expect(
+      [olderRegular, newerRegular, olderFeatured]
+        .sort(helpers.comparePublicMediaAssetVideos)
+        .map((row) => row.id),
+    ).toEqual(["featured", "newer", "older"]);
+  });
+
+  it("maps owner videos without exposing admin-only metadata", () => {
+    const mapped = helpers.toPublicMediaAssetVideo(
+      baseMediaAssetVideoRow({ title: "" }),
+    );
+
+    expect(mapped).toEqual({
+      id: "asset-1",
+      title: "Profile video",
+      description: "Approved profile media.",
+      fileUrl: "https://res.cloudinary.com/demo/video/upload/owner.mp4",
+      thumbnailUrl: "https://res.cloudinary.com/demo/image/upload/owner.jpg",
+      durationSeconds: 22,
+      isFeatured: false,
+    });
+    expect("uploadedByUserId" in mapped).toBe(false);
+    expect("cloudinaryPublicId" in mapped).toBe(false);
+    expect("status" in mapped).toBe(false);
+  });
+
   it("allows ready, approved, unexpired user video recommendations", () => {
     expect(
       helpers.isPublicUserVideoRecommendationRenderable(
