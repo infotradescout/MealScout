@@ -2,7 +2,31 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
+import "./facebook-browser.css";
 import { LocaleProvider } from "@/lib/i18n";
+import { getInAppBrowserInfo } from "@/lib/inAppBrowser";
+
+function installBrowserModeClasses() {
+  if (typeof document === "undefined" || typeof navigator === "undefined") {
+    return;
+  }
+  const info = getInAppBrowserInfo(navigator.userAgent || "");
+  if (!info.isInAppBrowser) return;
+
+  document.documentElement.classList.add("in-app-browser");
+  if (info.isMetaBrowser) {
+    document.documentElement.classList.add("meta-in-app-browser");
+  }
+  if (info.isFacebookBrowser) {
+    document.documentElement.classList.add("facebook-browser");
+  }
+  if (info.isMessengerBrowser) {
+    document.documentElement.classList.add("messenger-browser");
+  }
+  if (info.isInstagramBrowser) {
+    document.documentElement.classList.add("instagram-browser");
+  }
+}
 
 function installPerformanceCompatShim() {
   if (typeof window === "undefined") return;
@@ -37,6 +61,7 @@ function installPerformanceCompatShim() {
   }
 }
 
+installBrowserModeClasses();
 installPerformanceCompatShim();
 
 function shouldEnablePwaRuntime() {
@@ -50,7 +75,9 @@ function shouldEnablePwaRuntime() {
 
 function ensureManifestLink() {
   if (typeof document === "undefined") return;
-  const existing = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  const existing = document.querySelector<HTMLLinkElement>(
+    'link[rel="manifest"]',
+  );
   if (existing) return;
   const link = document.createElement("link");
   link.rel = "manifest";
@@ -112,10 +139,10 @@ if (import.meta.env.PROD) {
   const isChunkError = (message?: string) =>
     Boolean(
       message &&
-        (message.includes("Failed to fetch dynamically imported module") ||
-          message.includes("Loading chunk") ||
-          message.includes("module script") ||
-          message.includes("MIME type")),
+      (message.includes("Failed to fetch dynamically imported module") ||
+        message.includes("Loading chunk") ||
+        message.includes("module script") ||
+        message.includes("MIME type")),
     );
 
   window.addEventListener("vite:preloadError", reloadWithBust);
@@ -126,8 +153,7 @@ if (import.meta.env.PROD) {
   });
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason as Error | string | undefined;
-    const message =
-      typeof reason === "string" ? reason : reason?.message || "";
+    const message = typeof reason === "string" ? reason : reason?.message || "";
     if (isChunkError(message)) {
       reloadWithBust();
     }
@@ -196,4 +222,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </LocaleProvider>,
 );
-

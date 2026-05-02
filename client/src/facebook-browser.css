@@ -1,113 +1,120 @@
-/* Facebook Browser Optimizations */
+/* Meta in-app browser optimizations */
 
-/* Prevent bounce scrolling and improve touch handling */
+.in-app-browser,
+.meta-in-app-browser,
 .facebook-browser {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+.in-app-browser body,
+.meta-in-app-browser body,
 .facebook-browser body {
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
   touch-action: pan-x pan-y;
-  -webkit-transform: translate3d(0, 0, 0); /* Hardware acceleration */
+  transition: none !important;
+  text-rendering: optimizeSpeed;
 }
 
-/* Fix viewport issues in Facebook browser */
+.meta-in-app-browser body::before,
+.facebook-browser body::before {
+  display: none !important;
+}
+
+.meta-in-app-browser .min-h-screen,
 .facebook-browser .min-h-screen {
   min-height: 100vh;
   min-height: -webkit-fill-available;
 }
 
-/* Improve touch targets for Facebook browser */
+.meta-in-app-browser button,
 .facebook-browser button {
   touch-action: manipulation;
-  -webkit-user-select: none;
-  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Optimize scrolling containers for Facebook browser */
+.meta-in-app-browser .overflow-x-auto,
 .facebook-browser .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
+.meta-in-app-browser .overflow-x-auto::-webkit-scrollbar,
 .facebook-browser .overflow-x-auto::-webkit-scrollbar {
   display: none;
 }
 
-/* Fix modal positioning in Facebook browser */
-.facebook-browser .fixed {
-  position: -webkit-sticky;
-  position: sticky;
+.meta-in-app-browser .shadow-clean,
+.meta-in-app-browser .shadow-clean-lg,
+.facebook-browser .shadow-clean,
+.facebook-browser .shadow-clean-lg {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24) !important;
 }
 
-/* Improve performance for Facebook browser */
-.facebook-browser .transform {
-  -webkit-transform: translate3d(0, 0, 0);
-  transform: translate3d(0, 0, 0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
+.meta-in-app-browser .backdrop-blur,
+.meta-in-app-browser .backdrop-blur-sm,
+.meta-in-app-browser .backdrop-blur-md,
+.meta-in-app-browser .backdrop-blur-lg,
+.meta-in-app-browser .backdrop-blur-xl,
+.facebook-browser .backdrop-blur,
+.facebook-browser .backdrop-blur-sm,
+.facebook-browser .backdrop-blur-md,
+.facebook-browser .backdrop-blur-lg,
+.facebook-browser .backdrop-blur-xl {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
-/* Fix input focus issues in Facebook browser */
-.facebook-browser input {
-  -webkit-appearance: none;
-  appearance: none;
-  border-radius: 0;
+.meta-in-app-browser .blur-2xl,
+.meta-in-app-browser .blur-3xl,
+.facebook-browser .blur-2xl,
+.facebook-browser .blur-3xl {
+  display: none !important;
 }
 
-.facebook-browser input:focus {
-  outline: none;
-  -webkit-tap-highlight-color: transparent;
+.meta-in-app-browser .transition,
+.meta-in-app-browser .transition-all,
+.meta-in-app-browser .transition-colors,
+.meta-in-app-browser .transition-opacity,
+.meta-in-app-browser .transition-shadow,
+.meta-in-app-browser .transition-transform,
+.facebook-browser .transition,
+.facebook-browser .transition-all,
+.facebook-browser .transition-colors,
+.facebook-browser .transition-opacity,
+.facebook-browser .transition-shadow,
+.facebook-browser .transition-transform {
+  transition-duration: 0.01ms !important;
 }
 
-/* Optimize gradients for Facebook browser performance */
+.meta-in-app-browser .animate-pulse,
+.facebook-browser .animate-pulse {
+  animation: none !important;
+}
+
+.meta-in-app-browser .bg-gradient-to-r,
+.meta-in-app-browser .bg-gradient-to-br,
+.meta-in-app-browser .bg-gradient-to-b,
 .facebook-browser .bg-gradient-to-r,
 .facebook-browser .bg-gradient-to-br,
 .facebook-browser .bg-gradient-to-b {
-  -webkit-background-clip: padding-box;
-  background-clip: padding-box;
+  background-attachment: scroll !important;
 }
 
-/* Fix sticky header behavior */
-.facebook-browser .sticky {
-  position: -webkit-sticky;
-  position: sticky;
-  -webkit-transform: translate3d(0, 0, 0);
-  transform: translate3d(0, 0, 0);
+.meta-in-app-browser input,
+.meta-in-app-browser textarea,
+.meta-in-app-browser select,
+.facebook-browser input,
+.facebook-browser textarea,
+.facebook-browser select {
+  font-size: 16px;
 }
 
-/* Fix safe area handling for Facebook browser */
-.facebook-browser {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+.meta-in-app-browser .nav-bar-mobile,
+.facebook-browser .nav-bar-mobile {
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.28) !important;
 }
-
-/* Optimize animations for Facebook browser */
-.facebook-browser .transition-all {
-  -webkit-transition: all 0.2s ease;
-  transition: all 0.2s ease;
-}
-
-.facebook-browser .duration-200 {
-  transition-duration: 0.15s; /* Slightly faster for Facebook browser */
-}
-
-/* Fix z-index stacking issues */
-.facebook-browser .z-50 {
-  z-index: 9999; /* Higher z-index for Facebook browser compatibility */
-}
-
-.facebook-browser .z-20 {
-  z-index: 999;
-}
-
-/* Build trigger: harmless touch-friendly CSS note */
-/* Build trigger: tiny noop comment */
-/* Build trigger 2: keep Vercel in sync */
-/* Build trigger 3: force webhook */
-/* Build trigger 4: correct author email */
-
