@@ -17,7 +17,6 @@ import {
   Search,
   ShieldCheck,
   Truck,
-  UserCheck,
 } from "lucide-react";
 
 import { BackHeader } from "@/components/back-header";
@@ -761,37 +760,7 @@ export default function TruckOnboardingPage() {
   };
 
   const renderAccountStage = () => (
-    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
-        <CardContent className="p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
-              <UserCheck className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="text-lg font-black">Start with the owner account</h2>
-              <p className="text-sm text-[color:var(--text-secondary)]">
-                Sign in or create the account that will own this truck.
-              </p>
-            </div>
-          </div>
-          <div className="space-y-3 text-sm text-[color:var(--text-secondary)]">
-            <div className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--status-success)]" />
-              <span>One account owns claim, menu, schedule, and live map tools.</span>
-            </div>
-            <div className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--status-success)]" />
-              <span>Email verification keeps ownership transfers safer.</span>
-            </div>
-            <div className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--status-success)]" />
-              <span>After login, setup continues on this same page.</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
+    <div className="mx-auto max-w-xl">
       <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
         <CardContent className="p-5">
           <div className="mb-4 grid grid-cols-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
@@ -1587,20 +1556,12 @@ export default function TruckOnboardingPage() {
       />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
-        <div className="mb-5 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+        <div className="mb-4 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="mb-1 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
-                <Truck className="h-3.5 w-3.5" />
-                A-Z truck setup
-              </div>
               <h1 className="text-2xl font-black leading-tight sm:text-3xl">
-                List your food truck in one flow.
+                List your food truck
               </h1>
-              <p className="mt-1 max-w-2xl text-sm text-[color:var(--text-secondary)]">
-                Create the owner account, claim or create the truck, add the basics,
-                then continue to menu and live map setup.
-              </p>
             </div>
             <div className="min-w-[220px]">
               <Progress value={progress} className="h-2" />
