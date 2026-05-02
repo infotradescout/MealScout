@@ -8,6 +8,7 @@ import { UserCheck, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authUrl } from "@/lib/api";
+import { isMetaInAppBrowser } from "@/lib/inAppBrowser";
 import { SEOHead } from "@/components/seo-head";
 import { FUNNEL_EVENTS, trackFunnelEvent } from "@/utils/funnelTelemetry";
 import { trackUxEvent } from "@/utils/uxTelemetry";
@@ -35,7 +36,9 @@ export default function Login() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
-  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [showEmailLogin, setShowEmailLogin] = useState(() =>
+    typeof window === "undefined" ? false : isMetaInAppBrowser(),
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

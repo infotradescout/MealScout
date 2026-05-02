@@ -4,7 +4,48 @@ export function getUserAgent(): string {
 }
 
 export function isInAppBrowser(ua = getUserAgent()): boolean {
-  return /FBAN|FBAV|FB_IAB|Instagram|Messenger/i.test(ua);
+  return getInAppBrowserInfo(ua).isInAppBrowser;
+}
+
+export type InAppBrowserInfo = {
+  isInAppBrowser: boolean;
+  isMetaBrowser: boolean;
+  isFacebookBrowser: boolean;
+  isMessengerBrowser: boolean;
+  isInstagramBrowser: boolean;
+  appName: "Facebook" | "Messenger" | "Instagram" | "in-app browser" | null;
+};
+
+export function getInAppBrowserInfo(ua = getUserAgent()): InAppBrowserInfo {
+  const isFacebookBrowser =
+    /FBAN|FBAV|FBIOS|FB4A|FB_IAB|FBSS|FBCR|FBDV|FBMD/i.test(ua);
+  const isMessengerBrowser = /Messenger|FBMSGR|FB_IAB\/Messenger/i.test(ua);
+  const isInstagramBrowser = /Instagram/i.test(ua);
+  const isMetaBrowser =
+    isFacebookBrowser || isMessengerBrowser || isInstagramBrowser;
+  const isInAppBrowser =
+    isMetaBrowser || /Line\/|Twitter|TikTok|Snapchat|Pinterest/i.test(ua);
+
+  return {
+    isInAppBrowser,
+    isMetaBrowser,
+    isFacebookBrowser,
+    isMessengerBrowser,
+    isInstagramBrowser,
+    appName: isMessengerBrowser
+      ? "Messenger"
+      : isFacebookBrowser
+        ? "Facebook"
+        : isInstagramBrowser
+          ? "Instagram"
+          : isInAppBrowser
+            ? "in-app browser"
+            : null,
+  };
+}
+
+export function isMetaInAppBrowser(ua = getUserAgent()): boolean {
+  return getInAppBrowserInfo(ua).isMetaBrowser;
 }
 
 export function isIOSDevice(ua = getUserAgent()): boolean {

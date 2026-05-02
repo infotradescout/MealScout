@@ -11,6 +11,7 @@ import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
 import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
+import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 
 // Eager load only critical pages (home, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -376,7 +377,10 @@ function Router() {
               {() => <Redirect to="/request-truck" />}
             </Route>
             <Route path="/login" component={Login} />
-            <Route path="/customer-signup" component={GuestCustomerSignupRoute} />
+            <Route
+              path="/customer-signup"
+              component={GuestCustomerSignupRoute}
+            />
             <Route path="/verify-email" component={VerifyEmailPage} />
             <Route
               path="/restaurant-signup"
@@ -900,6 +904,7 @@ function App() {
         <TimeOfDayBackground />
         <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10 pb-[var(--mobile-nav-height)] lg:pb-0">
           <Toaster />
+          <InAppBrowserNotice />
           <AdminInlineCopyProvider>
             <Router />
             <Navigation scope="global" />
