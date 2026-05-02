@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { MailCheck, RefreshCcw, PencilLine, ArrowRight } from "lucide-react";
+import { MailCheck, RefreshCcw, PencilLine, LockKeyhole } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { BackHeader } from "@/components/back-header";
 import { useToast } from "@/hooks/use-toast";
@@ -59,11 +59,12 @@ export default function VerifyEmailPage() {
     "unknown") as AccountType;
   const businessType = String(params.get("businessType") || "").trim();
   const signupPath = getSignupPath(accountType, businessType);
-  const loginPath = `/login?redirect=${encodeURIComponent(nextPath)}&signup=1`;
 
   useEffect(() => {
     try {
-      const savedEmail = window.sessionStorage.getItem("mealscout:lastSignupEmail");
+      const savedEmail = window.sessionStorage.getItem(
+        "mealscout:lastSignupEmail",
+      );
       if (savedEmail) {
         setEmail(savedEmail);
       }
@@ -118,7 +119,11 @@ export default function VerifyEmailPage() {
         canonicalUrl="https://www.mealscout.us/verify-email"
         noIndex={true}
       />
-      <BackHeader title="Verify Email" fallbackHref={signupPath} icon={MailCheck} />
+      <BackHeader
+        title="Verify Email"
+        fallbackHref={signupPath}
+        icon={MailCheck}
+      />
 
       <main className="max-w-xl mx-auto px-4 sm:px-6 py-8">
         <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg p-6 sm:p-8">
@@ -149,18 +154,18 @@ export default function VerifyEmailPage() {
               data-testid="button-verify-email-resend"
             >
               <RefreshCcw className="w-4 h-4" />
-              {sending ? "Sending verification link..." : "Resend verification email"}
+              {sending
+                ? "Sending verification link..."
+                : "Resend verification email"}
             </button>
 
-            <Link href={loginPath}>
-              <a
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 font-medium border border-[color:var(--border-subtle)] text-[color:var(--text-primary)] hover:bg-[var(--bg-surface-muted)]"
-                data-testid="link-verify-email-login"
-              >
-                I already verified, continue to login
-                <ArrowRight className="w-4 h-4" />
-              </a>
-            </Link>
+            <div
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 text-center text-sm font-medium text-[color:var(--text-secondary)]"
+              data-testid="message-verify-email-required"
+            >
+              <LockKeyhole className="h-4 w-4 shrink-0" />
+              Open the email verification link to unlock login.
+            </div>
 
             <Link href={signupPath}>
               <a
