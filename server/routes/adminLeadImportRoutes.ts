@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import type { Express } from "express";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService, isEmailConfigured } from "../emailService";
@@ -9,13 +9,42 @@ import { db } from "../db";
 import {
   CLAIM_TYPES,
   claims,
+  hosts,
   menuCategories,
   menuImportLogs,
   menuItems,
   menus,
   restaurants,
+  users,
 } from "@shared/schema";
 import { logAudit } from "../auditLogger";
+
+class LeadImportError extends Error {
+  status: number;
+  code: string;
+  details?: unknown;
+
+  constructor(status: number, message: string, code = "lead_import_error", details?: unknown) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+const importableLeadUserTypes = [
+  "customer",
+  "restaurant_owner",
+  "food_truck",
+  "host",
+  "event_coordinator",
+] as const;
+
+const privilegedUserTypes = new Set(["staff", "admin", "super_admin"]);
+
+export function isPrivilegedLeadImportUserType(userType: string | null | undefined) {
+  return privilegedUserTypes.has(String(userType || ""));
+}
 
 const importedUserSchema = z.object({
   firstName: z.string().trim().min(1),
@@ -69,18 +98,7 @@ const importedAccountSchema = z.object({
   source: z.string().trim().optional().default("admin_lead_import"),
   sendVerificationEmail: z.boolean().optional().default(true),
   user: importedUserSchema.extend({
-    userType: z
-      .enum([
-        "customer",
-        "restaurant_owner",
-        "food_truck",
-        "host",
-        "event_coordinator",
-        "staff",
-        "admin",
-        "super_admin",
-      ])
-      .default("customer"),
+    userType: z.enum(importableLeadUserTypes).default("customer"),
   }),
   rawSource: z.record(z.any()).optional().default({}),
 });
@@ -155,10 +173,10 @@ const leadImportEnvelopeSchema = z.discriminatedUnion("type", [
   importedFoodTruckSchema.extend({ type: z.literal("food_truck") }),
 ]);
 
-const normalizeLocationValue = (value?: string | null) =>
-  String(value || "").trim().toLowerCase();
+export const normalizeLocationValue = (value?: string | null) =>
+  String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
-const buildLocationKey = (
+export const buildLocationKey = (
   address?: string | null,
   city?: string | null,
   state?: string | null,
@@ -196,6 +214,43 @@ function safeTokenEquals(actual: string, expected: string) {
   );
 }
 
+function zodPathToField(path: Array<string | number>) {
+  return path.map((part) => String(part)).join(".");
+}
+
+function zodErrorPayload(message: string, error: z.ZodError) {
+  const missingFields = error.errors
+    .filter((issue) => issue.code === "invalid_type" && (issue as any).received === "undefined")
+    .map((issue) => zodPathToField(issue.path))
+    .filter(Boolean);
+
+  return {
+    message,
+    errors: error.errors,
+    missingFields,
+  };
+}
+
+function sendLeadImportError(res: any, error: any, fallbackMessage: string) {
+  if (error instanceof z.ZodError) {
+    return res.status(400).json(zodErrorPayload(fallbackMessage, error));
+  }
+  if (error instanceof LeadImportError) {
+    return res.status(error.status).json({
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    });
+  }
+  if (error?.code === "23505") {
+    return res.status(409).json({
+      message: "An account, profile, event, or menu record with matching unique data already exists.",
+      code: "duplicate_record",
+    });
+  }
+  return res.status(500).json({ message: error?.message || fallbackMessage });
+}
+
 function isLeadImportAuthorized(req: any, res: any, next: any) {
   const configuredToken = String(process.env.ADMIN_LEAD_IMPORT_API_KEY || "");
   const authHeader = String(req.get("Authorization") || "");
@@ -220,18 +275,57 @@ function toNullableString(value: unknown) {
   return text || null;
 }
 
-function parsePriceCents(item: z.infer<typeof importedMenuItemSchema>) {
+export function parsePriceCents(item: z.infer<typeof importedMenuItemSchema>) {
   if (typeof item.priceCents === "number") return item.priceCents;
   if (item.price === undefined || item.price === null || item.price === "") return 0;
   const numeric = Number.parseFloat(String(item.price).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(numeric) ? Math.round(numeric * 100) : 0;
 }
 
+async function findAnyUserByEmail(email: string) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) return undefined;
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+    .limit(1);
+  return user;
+}
+
 async function ensureImportedUser(
   userInput: z.infer<typeof importedAccountSchema>["user"],
 ) {
-  let user = await storage.getUserByEmail(userInput.email);
+  const requestedUserType = String(userInput.userType || "");
+  if (isPrivilegedLeadImportUserType(requestedUserType)) {
+    throw new LeadImportError(
+      400,
+      "Lead import cannot create staff, admin, or super admin accounts.",
+      "privileged_user_type_not_allowed",
+      { requestedUserType },
+    );
+  }
+
+  let user = await findAnyUserByEmail(userInput.email);
   let userCreated = false;
+  if (user?.isDisabled) {
+    throw new LeadImportError(
+      409,
+      `A disabled account already uses ${userInput.email}. Resolve that account before importing this lead.`,
+      "duplicate_disabled_email",
+      { email: userInput.email, existingUserId: user.id },
+    );
+  }
+
+  if (user && isPrivilegedLeadImportUserType(user.userType)) {
+    throw new LeadImportError(
+      409,
+      `The email ${userInput.email} belongs to a privileged account and cannot be reused by lead import.`,
+      "duplicate_privileged_email",
+      { email: userInput.email, existingUserId: user.id, existingUserType: user.userType },
+    );
+  }
+
   if (!user) {
     user = await storage.createUserInvite({
       email: userInput.email,
@@ -257,6 +351,27 @@ async function ensureImportedUser(
     }
   }
   return { user, userCreated };
+}
+
+async function findMatchingHostByLocation(hostInput: z.infer<typeof importedHostSchema>) {
+  const incomingAddress = normalizeLocationValue(hostInput.address);
+  const incomingCity = normalizeLocationValue(hostInput.city);
+  const incomingState = normalizeLocationValue(hostInput.state);
+  if (!incomingAddress || !incomingCity || !incomingState) return undefined;
+
+  const rows = await db
+    .select()
+    .from(hosts)
+    .where(
+      and(
+        sql`regexp_replace(lower(trim(${hosts.address})), '[[:space:]]+', ' ', 'g') = ${incomingAddress}`,
+        sql`regexp_replace(lower(trim(coalesce(${hosts.city}, ''))), '[[:space:]]+', ' ', 'g') = ${incomingCity}`,
+        sql`regexp_replace(lower(trim(coalesce(${hosts.state}, ''))), '[[:space:]]+', ' ', 'g') = ${incomingState}`,
+      ),
+    )
+    .limit(1);
+
+  return rows[0];
 }
 
 async function findMatchingRestaurant(ownerId: string, business: z.infer<typeof importedBusinessSchema>) {
@@ -333,29 +448,85 @@ async function importMenuForRestaurant({
   source: string;
   menu: z.infer<typeof importedRestaurantMenuSchema>["menu"];
 }) {
-  const [createdMenu] = await db
-    .insert(menus)
-    .values({
-      restaurantId,
-      name: menu.name || "Imported Menu",
-      serviceType: menu.serviceType || "all",
-      importSource: source,
-      importUrl: toNullableString(menu.importUrl),
-      importedAt: new Date(),
-      isActive: true,
-    } as any)
-    .returning();
+  const menuName = menu.name || "Imported Menu";
+  const serviceType = menu.serviceType || "all";
+  const importedAt = new Date();
+  const existingMenus = await db
+    .select()
+    .from(menus)
+    .where(eq(menus.restaurantId, restaurantId));
 
-  const categoryByName = new Map<string, any>();
-  const createdItems = [];
+  let activeMenu = existingMenus.find(
+    (row: any) =>
+      normalizeLocationValue(row.name) === normalizeLocationValue(menuName) &&
+      normalizeLocationValue(row.serviceType) === normalizeLocationValue(serviceType),
+  );
+  let menuCreated = false;
+
+  if (!activeMenu) {
+    const [createdMenu] = await db
+      .insert(menus)
+      .values({
+        restaurantId,
+        name: menuName,
+        serviceType,
+        importSource: source,
+        importUrl: toNullableString(menu.importUrl),
+        importedAt,
+        isActive: true,
+      } as any)
+      .returning();
+    activeMenu = createdMenu;
+    menuCreated = true;
+  } else {
+    const [updatedMenu] = await db
+      .update(menus)
+      .set({
+        importSource: source,
+        importUrl: toNullableString(menu.importUrl),
+        importedAt,
+        isActive: true,
+        updatedAt: importedAt,
+      } as any)
+      .where(eq(menus.id, activeMenu.id))
+      .returning();
+    activeMenu = updatedMenu || activeMenu;
+  }
+
+  const existingCategories = await db
+    .select()
+    .from(menuCategories)
+    .where(eq(menuCategories.menuId, activeMenu.id));
+  const categoryByName = new Map<string, any>(
+    existingCategories.map((category: any) => [
+      normalizeLocationValue(category.name),
+      category,
+    ]),
+  );
+  const existingItems = await db
+    .select()
+    .from(menuItems)
+    .where(eq(menuItems.menuId, activeMenu.id));
+  const itemByCategoryAndName = new Map<string, any>();
+  for (const item of existingItems as any[]) {
+    itemByCategoryAndName.set(
+      `${item.categoryId || ""}|${normalizeLocationValue(item.name)}`,
+      item,
+    );
+  }
+
+  let categoriesCreated = 0;
+  let itemsCreated = 0;
+  let itemsReused = 0;
+  let itemsUpdated = 0;
   for (const [index, item] of menu.items.entries()) {
     const categoryName = item.category || "Menu";
-    let category = categoryByName.get(categoryName.toLowerCase());
+    let category = categoryByName.get(normalizeLocationValue(categoryName));
     if (!category) {
       const [createdCategory] = await db
         .insert(menuCategories)
         .values({
-          menuId: createdMenu.id,
+          menuId: activeMenu.id,
           restaurantId,
           name: categoryName,
           sortOrder: categoryByName.size,
@@ -363,41 +534,64 @@ async function importMenuForRestaurant({
         } as any)
         .returning();
       category = createdCategory;
-      categoryByName.set(categoryName.toLowerCase(), category);
+      categoryByName.set(normalizeLocationValue(categoryName), category);
+      categoriesCreated += 1;
+    }
+
+    const itemKey = `${category.id}|${normalizeLocationValue(item.name)}`;
+    const existingItem = itemByCategoryAndName.get(itemKey);
+    const itemValues = {
+      description: toNullableString(item.description),
+      priceCents: parsePriceCents(item),
+      dietaryTags: item.dietaryTags || [],
+      allergens: item.allergens || [],
+      sortOrder: index,
+      isAvailable: true,
+      updatedAt: new Date(),
+    } as any;
+
+    if (existingItem) {
+      await db
+        .update(menuItems)
+        .set(itemValues)
+        .where(eq(menuItems.id, existingItem.id));
+      itemsReused += 1;
+      itemsUpdated += 1;
+      continue;
     }
 
     const [createdItem] = await db
       .insert(menuItems)
       .values({
-        menuId: createdMenu.id,
+        menuId: activeMenu.id,
         restaurantId,
         categoryId: category.id,
         name: item.name,
-        description: toNullableString(item.description),
-        priceCents: parsePriceCents(item),
-        dietaryTags: item.dietaryTags || [],
-        allergens: item.allergens || [],
-        sortOrder: index,
-        isAvailable: true,
+        ...itemValues,
       } as any)
       .returning();
-    createdItems.push(createdItem);
+    itemByCategoryAndName.set(itemKey, createdItem);
+    itemsCreated += 1;
   }
 
   await db.insert(menuImportLogs).values({
     restaurantId,
     importedByUserId: actorId,
     source,
-    itemsImported: createdItems.length,
+    itemsImported: itemsCreated + itemsUpdated,
     itemsSkipped: 0,
     errors: [],
     status: "complete",
   } as any);
 
   return {
-    menu: createdMenu,
-    categoriesCreated: categoryByName.size,
-    itemsCreated: createdItems.length,
+    menu: activeMenu,
+    menuCreated,
+    categoriesCreated,
+    categoriesReused: categoryByName.size - categoriesCreated,
+    itemsCreated,
+    itemsReused,
+    itemsUpdated,
   };
 }
 
@@ -407,16 +601,30 @@ async function previewImport(payload: z.infer<typeof leadImportEnvelopeSchema>) 
   const missingFields: string[] = [];
 
   if (payload.type === "account") {
-    const existingUser = await storage.getUserByEmail(payload.user.email);
+    const existingUser = await findAnyUserByEmail(payload.user.email);
     actions.push(existingUser ? `reuse user ${payload.user.email}` : `create ${payload.user.userType} user ${payload.user.email}`);
+    if (existingUser?.isDisabled) {
+      warnings.push(`Email ${payload.user.email} belongs to a disabled account and import will be blocked.`);
+    } else if (existingUser && isPrivilegedLeadImportUserType(existingUser.userType)) {
+      warnings.push(`Email ${payload.user.email} belongs to a privileged account and import will be blocked.`);
+    }
     return { ok: true, type: payload.type, actions, warnings, missingFields };
   }
 
   if (payload.type === "host_event") {
-    const existingUser = await storage.getUserByEmail(payload.user.email);
+    const existingUser = await findAnyUserByEmail(payload.user.email);
+    const existingHost = await findMatchingHostByLocation(payload.host);
     actions.push(existingUser ? `reuse host user ${payload.user.email}` : `create host user ${payload.user.email}`);
-    actions.push(`create/reuse host profile ${payload.host.name}`);
+    actions.push(existingHost ? `reuse host profile at ${payload.host.address}` : `create host profile ${payload.host.name}`);
     actions.push(`create provisional event intake claim ${payload.eventRequest.eventName}`);
+    if (existingUser?.isDisabled) {
+      warnings.push(`Email ${payload.user.email} belongs to a disabled account and import will be blocked.`);
+    } else if (existingUser && isPrivilegedLeadImportUserType(existingUser.userType)) {
+      warnings.push(`Email ${payload.user.email} belongs to a privileged account and import will be blocked.`);
+    }
+    if (existingHost && String(existingHost.userId || "") !== String(existingUser?.id || "")) {
+      warnings.push(`Host address already exists under another owner; import will reuse host ${existingHost.id} instead of creating a duplicate.`);
+    }
     if (payload.eventRequest.missingFields?.length) missingFields.push(...payload.eventRequest.missingFields);
     return { ok: true, type: payload.type, actions, warnings, missingFields };
   }
@@ -425,14 +633,37 @@ async function previewImport(payload: z.infer<typeof leadImportEnvelopeSchema>) 
     if (!payload.user && !payload.restaurantId) {
       warnings.push("restaurant_menu imports need either user or restaurantId");
     }
+    const menuName = payload.menu.name || "Imported Menu";
+    if (payload.restaurantId) {
+      const existingMenus = await db
+        .select()
+        .from(menus)
+        .where(eq(menus.restaurantId, payload.restaurantId));
+      const matchingMenu = existingMenus.find(
+        (row: any) =>
+          normalizeLocationValue(row.name) === normalizeLocationValue(menuName) &&
+          normalizeLocationValue(row.serviceType) === normalizeLocationValue(payload.menu.serviceType || "all"),
+      );
+      if (matchingMenu) {
+        warnings.push(`Menu ${menuName} already exists; import will reuse it and update matching items.`);
+      }
+    }
     actions.push(payload.restaurantId ? `attach menu to restaurant ${payload.restaurantId}` : `create/reuse restaurant owner and restaurant ${payload.restaurant.name}`);
-    actions.push(`create menu ${payload.menu.name || "Imported Menu"} with ${payload.menu.items.length} items`);
+    actions.push(`upsert menu ${menuName} with ${payload.menu.items.length} items`);
     return { ok: true, type: payload.type, actions, warnings, missingFields };
   }
 
+  const existingTruckUser = payload.user
+    ? await findAnyUserByEmail(payload.user.email)
+    : null;
   actions.push(payload.user ? `create/reuse food truck owner ${payload.user.email}` : "create food truck under import system owner");
   actions.push(`create/reuse food truck ${payload.truck.name}`);
-  if (payload.menu?.items?.length) actions.push(`create truck menu with ${payload.menu.items.length} items`);
+  if (existingTruckUser?.isDisabled) {
+    warnings.push(`Email ${payload.user?.email} belongs to a disabled account and import will be blocked.`);
+  } else if (existingTruckUser && isPrivilegedLeadImportUserType(existingTruckUser.userType)) {
+    warnings.push(`Email ${payload.user?.email} belongs to a privileged account and import will be blocked.`);
+  }
+  if (payload.menu?.items?.length) actions.push(`upsert truck menu with ${payload.menu.items.length} items`);
   return { ok: true, type: payload.type, actions, warnings, missingFields };
 }
 
@@ -471,13 +702,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         const parsed = leadImportEnvelopeSchema.parse(req.body || {});
         res.json(await previewImport(parsed));
       } catch (error: any) {
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid lead import data",
-            errors: error.errors,
-          });
-        }
-        res.status(500).json({ message: error.message || "Failed to preview import" });
+        return sendLeadImportError(res, error, "Invalid lead import data");
       }
     },
   );
@@ -525,13 +750,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error importing account lead:", error);
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid account import data",
-            errors: error.errors,
-          });
-        }
-        res.status(500).json({ message: error.message || "Failed to import account" });
+        return sendLeadImportError(res, error, "Failed to import account");
       }
     },
   );
@@ -624,15 +843,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error importing restaurant menu lead:", error);
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid restaurant menu import data",
-            errors: error.errors,
-          });
-        }
-        res.status(500).json({
-          message: error.message || "Failed to import restaurant menu",
-        });
+        return sendLeadImportError(res, error, "Failed to import restaurant menu");
       }
     },
   );
@@ -718,13 +929,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error importing food truck lead:", error);
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid food truck import data",
-            errors: error.errors,
-          });
-        }
-        res.status(500).json({ message: error.message || "Failed to import food truck" });
+        return sendLeadImportError(res, error, "Failed to import food truck");
       }
     },
   );
@@ -744,13 +949,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         req.url = pathByType[parsed.type] || req.url;
         app._router.handle(req, res);
       } catch (error: any) {
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid lead import data",
-            errors: error.errors,
-          });
-        }
-        res.status(500).json({ message: error.message || "Failed to route import" });
+        return sendLeadImportError(res, error, "Invalid lead import data");
       }
     },
   );
@@ -761,44 +960,8 @@ export function registerAdminLeadImportRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const parsed = hostEventLeadImportSchema.parse(req.body || {});
-        const actorId = String(req.user?.id || req.user?.claims?.sub || "");
-
-        let user = await storage.getUserByEmail(parsed.user.email);
-        let userCreated = false;
-        if (!user) {
-          user = await storage.createUserInvite({
-            email: parsed.user.email,
-            firstName: parsed.user.firstName,
-            lastName: parsed.user.lastName || null,
-            phone: parsed.user.phone || null,
-            userType: "host",
-          });
-          userCreated = true;
-        } else {
-          const nonOverridableTypes = new Set([
-            "admin",
-            "super_admin",
-            "staff",
-          ]);
-          if (!nonOverridableTypes.has(String(user.userType || ""))) {
-            if (String(user.userType || "") !== "host") {
-              user = await storage.updateUserType(user.id, "host");
-            }
-          }
-          const updatePayload: any = {};
-          if (parsed.user.firstName && !user.firstName) {
-            updatePayload.firstName = parsed.user.firstName;
-          }
-          if (parsed.user.lastName && !user.lastName) {
-            updatePayload.lastName = parsed.user.lastName;
-          }
-          if (parsed.user.phone && !user.phone) {
-            updatePayload.phone = parsed.user.phone;
-          }
-          if (Object.keys(updatePayload).length > 0) {
-            user = await storage.updateUser(user.id, updatePayload);
-          }
-        }
+        const actorId = actorIdFromRequest(req);
+        const { user, userCreated } = await ensureImportedUser(parsed.user);
 
         const userHosts = await storage.getHostsByUserId(user.id);
         const incomingHostKey = buildLocationKey(
@@ -811,6 +974,9 @@ export function registerAdminLeadImportRoutes(app: Express) {
             buildLocationKey(item.address, item.city, item.state) ===
             incomingHostKey,
         );
+        if (!host) {
+          host = await findMatchingHostByLocation(parsed.host);
+        }
         let hostCreated = false;
         if (!host) {
           host = await storage.createHost({
@@ -952,20 +1118,7 @@ export function registerAdminLeadImportRoutes(app: Express) {
         });
       } catch (error: any) {
         console.error("Error importing host event lead:", error);
-        if (error instanceof z.ZodError) {
-          return res.status(400).json({
-            message: "Invalid host event lead import data",
-            errors: error.errors,
-          });
-        }
-        if (error?.code === "23505") {
-          return res.status(409).json({
-            message: "A user, host, or claim with matching unique data already exists",
-          });
-        }
-        res.status(500).json({
-          message: error.message || "Failed to import host event lead",
-        });
+        return sendLeadImportError(res, error, "Failed to import host event lead");
       }
     },
   );
