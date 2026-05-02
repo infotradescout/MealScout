@@ -1,18 +1,14 @@
 import type { Express } from "express";
 import { z } from "zod";
-import {
-  and,
-  desc,
-  eq,
-  gte,
-  isNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { isAdmin } from "../unifiedAuth";
-import { geoAds, geoAdEvents, geoLocationPings, telemetryEvents } from "@shared/schema";
+import {
+  geoAds,
+  geoAdEvents,
+  geoLocationPings,
+  telemetryEvents,
+} from "@shared/schema";
 
 const placementSchema = z.enum(["map", "home", "deals"]);
 const statusSchema = z.enum(["draft", "active", "paused", "archived"]);
@@ -77,7 +73,12 @@ const telemetrySchema = z.object({
 const toDecimalString = (value: number, scale = 8) =>
   Number.isFinite(value) ? value.toFixed(scale) : null;
 
-const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+const haversineKm = (
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+) => {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const earthRadiusKm = 6371;
   const dLat = toRad(bLat - aLat);
@@ -86,9 +87,7 @@ const haversineKm = (aLat: number, aLng: number, bLat: number, bLng: number) => 
   const lat2 = toRad(bLat);
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
-  const h =
-    sinLat * sinLat +
-    Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
   return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
 };
 
@@ -108,8 +107,7 @@ const getFootTrafficCount = async (params: {
   const { lat, lng, radiusM, hours } = params;
   const radiusKm = radiusM / 1000;
   const latDelta = radiusKm / 111;
-  const lngDelta =
-    radiusKm / (111 * Math.cos((lat * Math.PI) / 180) || 1);
+  const lngDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180) || 1);
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
   const minLat = toDecimalString(lat - latDelta);
@@ -137,8 +135,8 @@ const getFootTrafficCount = async (params: {
           gte(geoLocationPings.lat, minLat ?? "0"),
           lte(geoLocationPings.lat, maxLat ?? "0"),
           gte(geoLocationPings.lng, minLng ?? "0"),
-          lte(geoLocationPings.lng, maxLng ?? "0")
-        )
+          lte(geoLocationPings.lng, maxLng ?? "0"),
+        ),
       );
   } catch (error) {
     if (isMissingRelationError(error, "geo_location_pings")) {
@@ -158,7 +156,9 @@ const getFootTrafficCount = async (params: {
     const distanceKm = haversineKm(lat, lng, rowLat, rowLng);
     if (distanceKm * 1000 > radiusM) continue;
     const key =
-      row.userId || row.visitorId || `${rowLat.toFixed(3)}:${rowLng.toFixed(3)}`;
+      row.userId ||
+      row.visitorId ||
+      `${rowLat.toFixed(3)}:${rowLng.toFixed(3)}`;
     unique.add(key);
   }
   return unique.size;
@@ -193,8 +193,8 @@ export function registerGeoAdRoutes(app: Express) {
         and(
           eq(geoAds.status, "active"),
           or(isNull(geoAds.startAt), lte(geoAds.startAt, nowSql)),
-          or(isNull(geoAds.endAt), gte(geoAds.endAt, nowSql))
-        )
+          or(isNull(geoAds.endAt), gte(geoAds.endAt, nowSql)),
+        ),
       )
       .orderBy(desc(geoAds.priority), desc(geoAds.createdAt));
 
@@ -298,24 +298,23 @@ export function registerGeoAdRoutes(app: Express) {
     const userId = req.user?.id || null;
     const userType = req.user?.userType || "guest";
 
-    try {
-      await db.insert(geoLocationPings).values({
+    void db
+      .insert(geoLocationPings)
+      .values({
         userId,
         visitorId,
         userType,
         lat: toDecimalString(roundedLat, 3) || "0",
         lng: toDecimalString(roundedLng, 3) || "0",
         source: parsed.data.source || null,
+      })
+      .catch((error: any) => {
+        if (isMissingRelationError(error, "geo_location_pings")) {
+          console.warn("geo_location_pings missing; skipping geo ping insert.");
+          return;
+        }
+        console.warn("[geo] Failed to record location ping:", error);
       });
-    } catch (error) {
-      if (isMissingRelationError(error, "geo_location_pings")) {
-        console.warn(
-          "geo_location_pings missing; skipping geo ping insert.",
-        );
-        return res.json({ ok: true, skipped: true });
-      }
-      throw error;
-    }
 
     res.json({ ok: true });
   });
@@ -338,10 +337,14 @@ export function registerGeoAdRoutes(app: Express) {
       session[throttleKey] = now;
     }
 
-    const incomingProperties = (parsed.data.properties || {}) as Record<string, unknown>;
+    const incomingProperties = (parsed.data.properties || {}) as Record<
+      string,
+      unknown
+    >;
     const hasUser = Boolean(req.user?.id);
     const inferredClientPath =
-      typeof incomingProperties.path === "string" && incomingProperties.path.trim().length > 0
+      typeof incomingProperties.path === "string" &&
+      incomingProperties.path.trim().length > 0
         ? incomingProperties.path.trim()
         : (() => {
             try {
@@ -439,10 +442,10 @@ export function registerGeoAdRoutes(app: Express) {
 
     if (payload.name !== undefined) updates.name = payload.name.trim();
     if (payload.status !== undefined) updates.status = payload.status;
-    if (payload.placements !== undefined) updates.placements = payload.placements;
+    if (payload.placements !== undefined)
+      updates.placements = payload.placements;
     if (payload.title !== undefined) updates.title = payload.title.trim();
-    if (payload.body !== undefined)
-      updates.body = payload.body?.trim() || null;
+    if (payload.body !== undefined) updates.body = payload.body?.trim() || null;
     if (payload.mediaUrl !== undefined) updates.mediaUrl = payload.mediaUrl;
     if (payload.targetUrl !== undefined) updates.targetUrl = payload.targetUrl;
     if (payload.ctaText !== undefined) updates.ctaText = payload.ctaText;
@@ -465,7 +468,8 @@ export function registerGeoAdRoutes(app: Express) {
     if (payload.priority !== undefined) updates.priority = payload.priority;
     if (payload.startAt !== undefined) {
       const startAt = payload.startAt ? new Date(payload.startAt) : null;
-      updates.startAt = startAt && !Number.isNaN(startAt.valueOf()) ? startAt : null;
+      updates.startAt =
+        startAt && !Number.isNaN(startAt.valueOf()) ? startAt : null;
     }
     if (payload.endAt !== undefined) {
       const endAt = payload.endAt ? new Date(payload.endAt) : null;
@@ -509,8 +513,8 @@ export function registerGeoAdRoutes(app: Express) {
         and(
           eq(geoAdEvents.adId, ad.id),
           eq(geoAdEvents.eventType, "impression"),
-          gte(geoAdEvents.createdAt, since)
-        )
+          gte(geoAdEvents.createdAt, since),
+        ),
       );
 
     const [clicks] = await db
@@ -520,8 +524,8 @@ export function registerGeoAdRoutes(app: Express) {
         and(
           eq(geoAdEvents.adId, ad.id),
           eq(geoAdEvents.eventType, "click"),
-          gte(geoAdEvents.createdAt, since)
-        )
+          gte(geoAdEvents.createdAt, since),
+        ),
       );
 
     const impressionsCount = Number(impressions?.count || 0);
