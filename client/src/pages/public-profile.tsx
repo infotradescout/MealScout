@@ -18,6 +18,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
+import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
@@ -446,6 +447,14 @@ export default function PublicProfilePage() {
         String(deal.restaurantId || "") === data.id && deal.isActive !== false,
     )
     .slice(0, 6);
+  const publicVideoOwnerType =
+    data.entity === "restaurant"
+      ? isTruckProfile
+        ? "food_truck"
+        : "restaurant"
+      : data.entity === "host"
+        ? "host"
+        : null;
 
   const title = `${data.title} | ${labelByEntity[data.entity] || "Public Profile"} | MealScout`;
   const description =
@@ -1221,6 +1230,15 @@ export default function PublicProfilePage() {
                   </div>
                 ) : null}
 
+                {restaurantTab === "overview" && publicVideoOwnerType ? (
+                  <PublicVideoGallery
+                    ownerType={publicVideoOwnerType}
+                    ownerId={String(data.id)}
+                    title={isTruckProfile ? "Truck Videos" : "Restaurant Videos"}
+                    description={`Watch featured videos from ${data.title}.`}
+                  />
+                ) : null}
+
                 {restaurantTab === "overview" && featuredLinks.length > 0 ? (
                   <div className="rounded-xl border p-4">
                     <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -1321,9 +1339,19 @@ export default function PublicProfilePage() {
               </div>
             </div>
           ) : (
-            renderedSections.map((section) => (
-              <Fragment key={section.key}>{section.node}</Fragment>
-            ))
+            <>
+              {renderedSections.map((section) => (
+                <Fragment key={section.key}>{section.node}</Fragment>
+              ))}
+              {publicVideoOwnerType ? (
+                <PublicVideoGallery
+                  ownerType={publicVideoOwnerType}
+                  ownerId={String(data.id)}
+                  title="Host Videos"
+                  description={`Watch featured videos from ${data.title}.`}
+                />
+              ) : null}
+            </>
           )}
 
           {isStaffOrAdmin ? (

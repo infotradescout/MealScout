@@ -64,6 +64,7 @@ import {
   ParkingScheduleCalendar,
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
+import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1664,6 +1665,17 @@ export default function RestaurantDetailPage() {
           )}
         </div>
       )}
+
+      {restaurantId ? (
+        <div className="mb-8">
+          <PublicVideoGallery
+            ownerType={isFoodTruck ? "food_truck" : "restaurant"}
+            ownerId={String(restaurantId)}
+            title={isFoodTruck ? "Truck Videos" : "Restaurant Videos"}
+            description={`Watch featured videos from ${restaurantName}.`}
+          />
+        </div>
+      ) : null}
 
       {/* Current Specials */}
       <div
