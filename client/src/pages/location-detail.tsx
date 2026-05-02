@@ -5,6 +5,7 @@ import { apiUrl } from "@/lib/api";
 import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generatePlaceSchema } from "@/lib/schema-helpers";
 
@@ -175,6 +176,17 @@ export default function LocationDetailPage() {
             ) : null}
           </div>
         </div>
+
+        {hostId ? (
+          <div className="mt-8">
+            <PublicVideoGallery
+              ownerType="host"
+              ownerId={String(hostId)}
+              title="Host Videos"
+              description={`Watch featured videos from ${profile?.title || "this location"}.`}
+            />
+          </div>
+        ) : null}
 
         <div className="mt-8">
           <Card>

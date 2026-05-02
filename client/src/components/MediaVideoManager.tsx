@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { PlayCircle, Star, Trash2, Upload, Video } from "lucide-react";
+import { PlayCircle, RefreshCw, Star, Trash2, Upload, Video } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,24 @@ async function uploadVideo(formData: FormData) {
   return response.json();
 }
 
+async function replaceVideo(videoId: string, file: File) {
+  const payload = new FormData();
+  payload.append("video", file);
+
+  const response = await fetch(apiUrl(`/api/media/${videoId}/replace`), {
+    method: "POST",
+    body: payload,
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.message || "Video replacement failed");
+  }
+
+  return response.json();
+}
+
 export default function MediaVideoManager({
   ownerType,
   ownerId,
@@ -97,6 +115,9 @@ export default function MediaVideoManager({
 }: Props) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [replacementFiles, setReplacementFiles] = useState<
+    Record<string, File | null>
+  >({});
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -188,6 +209,39 @@ export default function MediaVideoManager({
     onError: (error: Error) => {
       toast({
         title: "Could not remove video",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const replaceMutation = useMutation({
+    mutationFn: async ({
+      videoId,
+      file,
+    }: {
+      videoId: string;
+      file?: File | null;
+    }) => {
+      if (!file) throw new Error("Choose a replacement video first");
+      return replaceVideo(videoId, file);
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey });
+      setReplacementFiles((current) => ({
+        ...current,
+        [variables.videoId]: null,
+      }));
+      toast({
+        title: "Video replaced",
+        description: adminMode
+          ? "The replacement video is attached to this record."
+          : "The replacement was uploaded and is waiting for review.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Video replacement failed",
         description: error.message,
         variant: "destructive",
       });
@@ -447,6 +501,36 @@ export default function MediaVideoManager({
                     disabled={deleteMutation.isPending}
                   >
                     <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Input
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm"
+                    aria-label={`Replacement video for ${video.title || "attached video"}`}
+                    onChange={(event) =>
+                      setReplacementFiles((current) => ({
+                        ...current,
+                        [video.id]: event.target.files?.[0] || null,
+                      }))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      replaceMutation.mutate({
+                        videoId: video.id,
+                        file: replacementFiles[video.id],
+                      })
+                    }
+                    disabled={
+                      replaceMutation.isPending || !replacementFiles[video.id]
+                    }
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" /> Replace
                   </Button>
                 </div>
               </div>

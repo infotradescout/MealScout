@@ -5,6 +5,7 @@ import { SEOHead } from "@/components/seo-head";
 import { apiUrl } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generateEventSchema } from "@/lib/schema-helpers";
 import { useAuth } from "@/hooks/useAuth";
@@ -278,6 +279,17 @@ export default function EventDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {data?.id ? (
+          <div className="mt-6">
+            <PublicVideoGallery
+              ownerType="event"
+              ownerId={data.id}
+              title="Event Videos"
+              description={`Watch featured videos from ${data.title}.`}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
