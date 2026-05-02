@@ -7,7 +7,8 @@ import { apiUrl } from '@/lib/api';
 /**
  * Video Feed v1 - COPY + TYPE LOCK
  * - User videos are recommendations, never ads
- * - Restaurant videos are ads, never recommendations
+ * - Restaurant ad videos are ads, never recommendations
+ * - Profile media videos are reusable profile/event media, never recommendations
  * - Do not merge UI, copy, or limits
  * - Do not add boosts or payments to user videos
  */
@@ -63,10 +64,15 @@ interface ApiStory {
   expiresAt?: string;
   userLiked?: boolean;
   isRecommendation?: boolean;
-  __type?: 'ad';
+  __type?: 'ad' | 'profile_media';
+  mediaAssetId?: string;
+  ownerType?: 'restaurant' | 'food_truck' | 'host' | 'event';
+  ownerId?: string;
   mediaUrl?: string;
   targetUrl?: string;
   ctaText?: string;
+  durationSeconds?: number | null;
+  isFeatured?: boolean;
   isHouseAd?: boolean;
   isAffiliate?: boolean;
   affiliateName?: string | null;
@@ -113,7 +119,22 @@ type RestaurantAdVideo = {
   affiliateName?: string | null;
 };
 
-type FeedVideoItem = UserRecommendationVideo | RestaurantAdVideo;
+type ProfileMediaVideo = {
+  kind: 'profile_media';
+  videoId: string;
+  mediaAssetId: string;
+  ownerType: 'restaurant' | 'food_truck' | 'host' | 'event';
+  ownerId: string;
+  title: string;
+  description?: string | null;
+  mediaUrl: string;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  targetUrl: string;
+  isFeatured?: boolean;
+};
+
+type FeedVideoItem = UserRecommendationVideo | RestaurantAdVideo | ProfileMediaVideo;
 
 interface UserVideoCardProps {
   video: UserRecommendationVideo;
@@ -395,6 +416,60 @@ function RestaurantAdCard({ video }: RestaurantAdCardProps) {
   );
 }
 
+interface ProfileMediaVideoCardProps {
+  video: ProfileMediaVideo;
+}
+
+const getProfileVideoCta = (ownerType: ProfileMediaVideo['ownerType']) => {
+  if (ownerType === 'event') return COPY.profileVideo.eventCta;
+  if (ownerType === 'host') return COPY.profileVideo.hostCta;
+  return COPY.profileVideo.ctaDefault;
+};
+
+function ProfileMediaVideoCard({ video }: ProfileMediaVideoCardProps) {
+  return (
+    <div className="bg-[var(--bg-card)] text-[color:var(--text-primary)] rounded-lg overflow-hidden mb-4 border border-[var(--border-subtle)]">
+      <div className="relative bg-[var(--bg-app)] aspect-[9/16] flex items-center justify-center">
+        <video
+          src={video.mediaUrl}
+          poster={video.thumbnailUrl || undefined}
+          className="w-full h-full object-cover"
+          playsInline
+          controls
+        />
+        <div className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-[var(--bg-surface)]/80 text-xs uppercase tracking-wide text-[color:var(--text-secondary)] border border-[var(--border-strong)]">
+          {COPY.profileVideo.badge}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-2">
+        <h3 className="font-semibold text-base">{video.title}</h3>
+        {video.description && (
+          <p className="text-[color:var(--text-muted)] text-sm line-clamp-2">
+            {video.description}
+          </p>
+        )}
+        <div className="pt-2">
+          <a
+            href={video.targetUrl}
+            className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-[var(--bg-subtle)] text-[color:var(--text-primary)] text-sm font-semibold hover:bg-[var(--bg-surface)] transition"
+          >
+            {getProfileVideoCta(video.ownerType)}
+          </a>
+        </div>
+        <ShareButton
+          url={video.targetUrl}
+          title={video.title || COPY.profileVideo.badge}
+          description={video.description || COPY.profileVideo.shareDescription}
+          size="sm"
+          variant="outline"
+          className="w-full justify-center"
+        />
+      </div>
+    </div>
+  );
+}
+
 interface VideoFeedProps {
   onUploadClick?: () => void;
   onReplyToStory?: (story: { id: string; title: string }) => void;
@@ -523,6 +598,32 @@ export function VideoFeed({ onUploadClick, onReplyToStory }: VideoFeedProps) {
       return acc;
     }
 
+    if (
+      item.__type === 'profile_media' &&
+      item.mediaUrl &&
+      item.targetUrl &&
+      item.mediaAssetId &&
+      item.ownerType &&
+      item.ownerId
+    ) {
+      const profileVideo: ProfileMediaVideo = {
+        kind: 'profile_media',
+        videoId: item.id,
+        mediaAssetId: item.mediaAssetId,
+        ownerType: item.ownerType,
+        ownerId: item.ownerId,
+        title: item.title,
+        description: item.description,
+        mediaUrl: item.mediaUrl,
+        thumbnailUrl: item.thumbnailUrl,
+        durationSeconds: item.durationSeconds,
+        targetUrl: item.targetUrl,
+        isFeatured: item.isFeatured,
+      };
+      acc.push(profileVideo);
+      return acc;
+    }
+
     if (item.videoUrl) {
       const userVideo: UserRecommendationVideo = {
         kind: 'user',
@@ -588,6 +689,8 @@ export function VideoFeed({ onUploadClick, onReplyToStory }: VideoFeedProps) {
             isVisible={true}
             onReplyToStory={onReplyToStory}
           />
+        ) : item.kind === 'profile_media' ? (
+          <ProfileMediaVideoCard key={item.videoId} video={item} />
         ) : (
           <RestaurantAdCard key={item.videoId} video={item} />
         )

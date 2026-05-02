@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { PublicFeedStoryRow } from "./storiesRoutes";
+import type { PublicFeedMediaAssetRow, PublicFeedStoryRow } from "./storiesRoutes";
 
 let helpers: typeof import("./storiesRoutes");
 
@@ -86,5 +86,79 @@ describe("public video feed safety", () => {
     expect(
       helpers.isPublicFeedStoryRenderable(baseFeedStory({ videoUrl: "" }), now),
     ).toBe(false);
+  });
+
+  const baseFeedMediaAsset = (
+    overrides: Partial<PublicFeedMediaAssetRow> = {},
+  ): PublicFeedMediaAssetRow => ({
+    id: "media-1",
+    ownerType: "restaurant",
+    ownerId: "restaurant-1",
+    mediaType: "video",
+    title: "Owner intro",
+    description: "A reusable profile video.",
+    fileUrl: "https://res.cloudinary.com/demo/video/upload/profile.mp4",
+    thumbnailUrl: "https://res.cloudinary.com/demo/image/upload/profile.jpg",
+    durationSeconds: 28,
+    status: "active",
+    visibility: "public",
+    isFeatured: true,
+    deletedAt: null,
+    createdAt: new Date("2026-05-02T12:00:00Z"),
+    ...overrides,
+  });
+
+  it("allows only active public reusable profile media in the main feed", () => {
+    expect(helpers.isPublicFeedMediaAssetRenderable(baseFeedMediaAsset())).toBe(true);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ status: "processing" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ visibility: "private" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ mediaType: "image" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ deletedAt: new Date("2026-05-02T10:00:00Z") }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ ownerType: "user" }),
+      ),
+    ).toBe(false);
+    expect(
+      helpers.isPublicFeedMediaAssetRenderable(
+        baseFeedMediaAsset({ fileUrl: "" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("maps reusable profile media to a distinct feed item type", () => {
+    const mediaVideo = helpers.toPublicFeedMediaAssetVideo(
+      baseFeedMediaAsset({
+        ownerType: "event",
+        ownerId: "event-1",
+        id: "media-event-1",
+      }),
+    );
+
+    expect(mediaVideo).toMatchObject({
+      __type: "profile_media",
+      id: "media:media-event-1",
+      mediaAssetId: "media-event-1",
+      ownerType: "event",
+      ownerId: "event-1",
+      targetUrl: "/event/event-1",
+      isFeatured: true,
+    });
   });
 });
