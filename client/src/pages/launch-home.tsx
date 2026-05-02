@@ -121,6 +121,25 @@ export default function LaunchHome() {
                   </Button>
                 </Link>
               </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Link href="/truck-onboarding">
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-full border-white/25 bg-black/35 px-4 text-sm font-black text-white hover:bg-black/55 hover:text-white"
+                  >
+                    <Truck className="mr-2 h-4 w-4" />I own a truck
+                  </Button>
+                </Link>
+                <Link href="/host-signup">
+                  <Button
+                    variant="outline"
+                    className="h-11 w-full rounded-full border-white/25 bg-black/35 px-4 text-sm font-black text-white hover:bg-black/55 hover:text-white"
+                  >
+                    <Store className="mr-2 h-4 w-4" />I have a location
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
