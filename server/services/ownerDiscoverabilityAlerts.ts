@@ -1,10 +1,18 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "../db";
-import { users, restaurants, menus, menuItems, telemetryEvents } from "@shared/schema";
+import {
+  users,
+  restaurants,
+  menus,
+  menuItems,
+  telemetryEvents,
+} from "@shared/schema";
 import { emailService, isEmailConfigured } from "../emailService";
 
 const ADMIN_EMAIL =
-  process.env.ADMIN_EMAIL || process.env.EMAIL_FROM || "info.mealscout@gmail.com";
+  process.env.ADMIN_EMAIL ||
+  process.env.EMAIL_FROM ||
+  "info.mealscout@gmail.com";
 
 type CandidateOwner = {
   id: string;
@@ -25,13 +33,19 @@ type OwnerAlertRow = {
 };
 
 function ownerName(owner: CandidateOwner): string {
-  const full = [owner.firstName, owner.lastName].filter(Boolean).join(" ").trim();
+  const full = [owner.firstName, owner.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   return full || owner.email || "(unknown owner)";
 }
 
 function ageHours(createdAt: Date | null): number {
   if (!createdAt) return 0;
-  return Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / (60 * 60 * 1000)));
+  return Math.max(
+    0,
+    Math.floor((Date.now() - createdAt.getTime()) / (60 * 60 * 1000)),
+  );
 }
 
 async function alreadyAlerted(userId: string): Promise<boolean> {
@@ -69,8 +83,12 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
   );
 
   const now = new Date();
-  const thresholdCutoff = new Date(now.getTime() - thresholdHours * 60 * 60 * 1000);
-  const lookbackCutoff = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+  const thresholdCutoff = new Date(
+    now.getTime() - thresholdHours * 60 * 60 * 1000,
+  );
+  const lookbackCutoff = new Date(
+    now.getTime() - lookbackDays * 24 * 60 * 60 * 1000,
+  );
 
   const candidateOwners = await db
     .select({
@@ -103,7 +121,10 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
     .from(restaurants)
     .where(inArray(restaurants.ownerId, ownerIds));
 
-  const restByOwner = new Map<string, Array<{ id: string; isActive: boolean | null; isVerified: boolean | null }>>();
+  const restByOwner = new Map<
+    string,
+    Array<{ id: string; isActive: boolean | null; isVerified: boolean | null }>
+  >();
   for (const r of ownedRestaurants) {
     const k = String(r.ownerId || "");
     const arr = restByOwner.get(k) || [];
@@ -119,12 +140,37 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
       isVerified: boolean | null;
     }) => r.id,
   );
-  const menuRows = allRestaurantIds.length
-    ? await db
+  let menuRows: Array<{ id: string; restaurantId: string | null }> = [];
+  let itemRows: Array<{ menuId: string | null; count: number }> = [];
+  if (allRestaurantIds.length > 0) {
+    try {
+      menuRows = await db
         .select({ id: menus.id, restaurantId: menus.restaurantId })
         .from(menus)
-        .where(inArray(menus.restaurantId, allRestaurantIds))
-    : [];
+        .where(inArray(menus.restaurantId, allRestaurantIds));
+
+      const allMenuIds = menuRows.map(
+        (m: { id: string; restaurantId: string | null }) => m.id,
+      );
+      itemRows = allMenuIds.length
+        ? await db
+            .select({
+              menuId: menuItems.menuId,
+              count: sql<number>`COUNT(*)::int`,
+            })
+            .from(menuItems)
+            .where(inArray(menuItems.menuId, allMenuIds))
+            .groupBy(menuItems.menuId)
+        : [];
+    } catch (error) {
+      console.warn(
+        "[owner-discoverability-alerts] menu tables unavailable; using zero counts",
+        error,
+      );
+      menuRows = [];
+      itemRows = [];
+    }
+  }
 
   const menusByRestaurant = new Map<string, string[]>();
   for (const m of menuRows) {
@@ -133,17 +179,6 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
     arr.push(m.id);
     menusByRestaurant.set(k, arr);
   }
-
-  const allMenuIds = menuRows.map(
-    (m: { id: string; restaurantId: string | null }) => m.id,
-  );
-  const itemRows = allMenuIds.length
-    ? await db
-        .select({ menuId: menuItems.menuId, count: sql<number>`COUNT(*)::int` })
-        .from(menuItems)
-        .where(inArray(menuItems.menuId, allMenuIds))
-        .groupBy(menuItems.menuId)
-    : [];
 
   const itemsByMenu = new Map<string, number>();
   for (const it of itemRows) {
@@ -154,7 +189,9 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
   for (const owner of candidateOwners) {
     const rests = restByOwner.get(owner.id) || [];
     const restaurantCount = rests.length;
-    const activeVerifiedRestaurants = rests.filter((r) => Boolean(r.isActive) && Boolean(r.isVerified));
+    const activeVerifiedRestaurants = rests.filter(
+      (r) => Boolean(r.isActive) && Boolean(r.isVerified),
+    );
 
     let menuCount = 0;
     let itemCount = 0;
@@ -191,7 +228,9 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
 function renderHtml(rows: OwnerAlertRow[], baseUrl: string): string {
   const list = rows
     .map((r) => {
-      const created = r.owner.createdAt ? new Date(r.owner.createdAt).toLocaleString() : "unknown";
+      const created = r.owner.createdAt
+        ? new Date(r.owner.createdAt).toLocaleString()
+        : "unknown";
       return `<li style="margin-bottom:10px;">
         <strong>${ownerName(r.owner)}</strong> (${String(r.owner.userType || "owner")})<br/>
         <span style="color:#6b7280;">${r.owner.email || "no email"} • signed up ${created} (${ageHours(r.owner.createdAt)}h ago)</span><br/>
@@ -232,11 +271,20 @@ export async function sendOwnerDiscoverabilityAlerts(): Promise<{
   considered: number;
   alerted: number;
 }> {
-  if (String(process.env.OWNER_DISCOVERABILITY_ALERTS_ENABLED || "true").toLowerCase() === "false") {
+  if (
+    String(
+      process.env.OWNER_DISCOVERABILITY_ALERTS_ENABLED || "true",
+    ).toLowerCase() === "false"
+  ) {
     return { sent: false, reason: "disabled", considered: 0, alerted: 0 };
   }
   if (!isEmailConfigured()) {
-    return { sent: false, reason: "email_not_configured", considered: 0, alerted: 0 };
+    return {
+      sent: false,
+      reason: "email_not_configured",
+      considered: 0,
+      alerted: 0,
+    };
   }
 
   const rows = await gatherCandidates();
@@ -251,10 +299,17 @@ export async function sendOwnerDiscoverabilityAlerts(): Promise<{
   }
 
   if (alertRows.length === 0) {
-    return { sent: false, reason: "already_alerted", considered: rows.length, alerted: 0 };
+    return {
+      sent: false,
+      reason: "already_alerted",
+      considered: rows.length,
+      alerted: 0,
+    };
   }
 
-  const baseUrl = (process.env.PUBLIC_BASE_URL || "https://mealscout.us").replace(/\/+$/, "");
+  const baseUrl = (
+    process.env.PUBLIC_BASE_URL || "https://mealscout.us"
+  ).replace(/\/+$/, "");
   const subject = `MealScout launch alert: ${alertRows.length} owner${alertRows.length === 1 ? "" : "s"} stuck >6h`;
   const ok = await emailService.sendBasicEmail(
     ADMIN_EMAIL,
@@ -265,7 +320,12 @@ export async function sendOwnerDiscoverabilityAlerts(): Promise<{
   );
 
   if (!ok) {
-    return { sent: false, reason: "send_failed", considered: rows.length, alerted: 0 };
+    return {
+      sent: false,
+      reason: "send_failed",
+      considered: rows.length,
+      alerted: 0,
+    };
   }
 
   for (const row of alertRows) {

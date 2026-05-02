@@ -65,29 +65,43 @@ export async function buildAdminDigestSnapshot(
     .from(restaurants)
     .where(gte(restaurants.createdAt, cutoff));
 
-  // New menus
-  const [{ count: newMenuCount }] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(menus)
-    .where(gte(menus.createdAt, cutoff));
+  let newMenuCount = 0;
+  let newItemCount = 0;
+  let importsAttempted = 0;
+  let importsFailed = 0;
+  try {
+    // New menus
+    const [menuMetric] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(menus)
+      .where(gte(menus.createdAt, cutoff));
+    newMenuCount = Number(menuMetric?.count || 0);
 
-  // New items
-  const [{ count: newItemCount }] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
-    .from(menuItems)
-    .where(gte(menuItems.createdAt, cutoff));
+    // New items
+    const [itemMetric] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(menuItems)
+      .where(gte(menuItems.createdAt, cutoff));
+    newItemCount = Number(itemMetric?.count || 0);
 
-  // Imports attempted / failed (failed = itemsImported = 0)
-  const importRows = await db
-    .select({
-      itemsImported: menuImportLogs.itemsImported,
-    })
-    .from(menuImportLogs)
-    .where(gte(menuImportLogs.createdAt, cutoff));
-  const importsAttempted = importRows.length;
-  const importsFailed = importRows.filter(
-    (r: { itemsImported: number | null }) => Number(r.itemsImported || 0) === 0,
-  ).length;
+    // Imports attempted / failed (failed = itemsImported = 0)
+    const importRows = await db
+      .select({
+        itemsImported: menuImportLogs.itemsImported,
+      })
+      .from(menuImportLogs)
+      .where(gte(menuImportLogs.createdAt, cutoff));
+    importsAttempted = importRows.length;
+    importsFailed = importRows.filter(
+      (r: { itemsImported: number | null }) =>
+        Number(r.itemsImported || 0) === 0,
+    ).length;
+  } catch (error) {
+    console.warn(
+      "[admin-daily-digest] menu tables unavailable; using zero menu/import counts",
+      error,
+    );
+  }
 
   // Stuck owners (signed up >6h ago, no verified active restaurant — we
   // approximate by: business-type users who have no restaurant at all yet).
@@ -116,8 +130,8 @@ export async function buildAdminDigestSnapshot(
     generatedAt: now.toISOString(),
     newOwners,
     newRestaurants: Number(newRestaurantCount || 0),
-    newMenus: Number(newMenuCount || 0),
-    newItems: Number(newItemCount || 0),
+    newMenus: newMenuCount,
+    newItems: newItemCount,
     importsAttempted,
     importsFailed,
     totalStuck,
