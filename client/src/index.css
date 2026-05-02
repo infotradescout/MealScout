@@ -560,13 +560,10 @@
     color: var(--text-placeholder);
   }
 
-  h1,
-  h2,
-  h3,
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   :focus-visible {
