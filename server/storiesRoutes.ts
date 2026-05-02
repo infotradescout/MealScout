@@ -51,6 +51,36 @@ export const videoStoryUploadBodySchema = insertVideoStorySchema.omit({
   thumbnailUrl: true,
 });
 
+export type PublicFeedStoryRow = {
+  id: string;
+  videoUrl?: string | null;
+  status?: string | null;
+  isApproved?: boolean | null;
+  deletedAt?: Date | string | null;
+  expiresAt?: Date | string | null;
+};
+
+const toOptionalDate = (value: Date | string | null | undefined) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+export const isPublicFeedStoryRenderable = (
+  story: PublicFeedStoryRow,
+  now = new Date(),
+) => {
+  if (!story.videoUrl) return false;
+  if (story.status !== 'ready') return false;
+  if (story.isApproved !== true) return false;
+  if (story.deletedAt) return false;
+
+  const expiresAt = toOptionalDate(story.expiresAt);
+  if (expiresAt && expiresAt.getTime() < now.getTime()) return false;
+
+  return true;
+};
+
 export default function setupStoriesRoutes(app: Express) {
   void (async () => {
     try {
@@ -469,18 +499,22 @@ export default function setupStoriesRoutes(app: Express) {
       const offset = page * limit;
 
       // Get featured videos (sponsored content)
-      const featuredStories = await db
+      const featuredStories = ((await db
         .select()
         .from(videoStories)
         .where(
           and(
             eq(videoStories.isFeatured, true),
             eq(videoStories.status, 'ready'),
+            eq(videoStories.isApproved, true),
+            isNull(videoStories.deletedAt),
             gte(videoStories.expiresAt, sql`NOW()`)
           )
         )
         .orderBy(desc(videoStories.featuredStartedAt))
-        .limit(2); // Show 2 featured videos per page
+        .limit(2)) as VideoStory[]).filter((story) =>
+          isPublicFeedStoryRenderable(story),
+        ); // Show 2 featured videos per page
 
       // Get active ads (house + affiliate)
       const nowSql = sql`NOW()`;
@@ -503,19 +537,23 @@ export default function setupStoriesRoutes(app: Express) {
         .limit(5); // fetch a handful of ads to rotate
 
       // Get community stories (recent uploads)
-      const communityStories = await db
+      const communityStories = ((await db
         .select()
         .from(videoStories)
         .where(
           and(
             eq(videoStories.status, 'ready'),
+            eq(videoStories.isApproved, true),
+            isNull(videoStories.deletedAt),
             lte(videoStories.createdAt, sql`NOW()`),
             gte(videoStories.expiresAt, sql`NOW()`)
           )
         )
         .orderBy(desc(videoStories.createdAt))
         .limit(limit - featuredStories.length)
-        .offset(offset);
+        .offset(offset)) as VideoStory[]).filter((story) =>
+          isPublicFeedStoryRenderable(story),
+        );
 
       // Combine featured + community
       let allStories: any[] = [...featuredStories, ...communityStories];
