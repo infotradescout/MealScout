@@ -505,7 +505,7 @@ if (process.env.NODE_ENV === "production") {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https:"],
           scriptSrc: ["'self'"],
           imgSrc: ["'self'", "data:", "https:"],
           connectSrc: ["'self'", "https:", "ws:", "wss:"],
