@@ -8,6 +8,7 @@ interface VideoUploadModalProps {
   restaurantId?: string;
   replyToStoryId?: string;
   replyToStoryTitle?: string;
+  onUploadSuccess?: () => void | Promise<void>;
 }
 
 export function VideoUploadModal({
@@ -16,6 +17,7 @@ export function VideoUploadModal({
   restaurantId,
   replyToStoryId,
   replyToStoryTitle,
+  onUploadSuccess,
 }: VideoUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -28,8 +30,6 @@ export function VideoUploadModal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [alreadyRecommended, setAlreadyRecommended] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
-
-  if (!isOpen) return null;
 
   useEffect(() => {
     if (!isOpen || !restaurantId) {
@@ -69,6 +69,8 @@ export function VideoUploadModal({
       cancelled = true;
     };
   }, [isOpen, restaurantId]);
+
+  if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -150,6 +152,15 @@ export function VideoUploadModal({
 
       // Invalidate feed queries to refresh
       queryClient.invalidateQueries({ queryKey: ['stories-feed'] });
+      if (restaurantId) {
+        queryClient.invalidateQueries({
+          queryKey: ['/api/media', 'restaurant', restaurantId, 'videos'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/media', 'food_truck', restaurantId, 'videos'],
+        });
+      }
+      await onUploadSuccess?.();
 
       setFile(null);
       setTitle('');

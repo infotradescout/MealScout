@@ -1735,7 +1735,7 @@ export const videoStories = pgTable(
     title: varchar("title").notNull(),
     description: text("description"),
     // Video metadata
-    duration: integer("duration").notNull(), // seconds (10-15)
+    duration: integer("duration").notNull(), // seconds (10-30)
     videoUrl: text("video_url").notNull(), // Cloudinary URL
     thumbnailUrl: text("thumbnail_url"),
     // Status tracking
@@ -2782,7 +2782,7 @@ export const insertVideoStorySchema = createInsertSchema(videoStories)
       .number()
       .int()
       .min(10, "Duration must be at least 10 seconds")
-      .max(15, "Duration must not exceed 15 seconds"),
+      .max(30, "Duration must not exceed 30 seconds"),
     videoUrl: z.string().url("Video URL must be a valid URL"),
     thumbnailUrl: z
       .string()

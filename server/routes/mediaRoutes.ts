@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -18,6 +18,8 @@ import {
   mediaOwnerTypes,
   mediaStatuses,
   mediaVisibilities,
+  users,
+  videoStories,
   type MediaOwnerType,
   type MediaStatus,
   type MediaVisibility,
@@ -26,6 +28,68 @@ import {
 const mediaOwnerTypeSet = new Set<string>(mediaOwnerTypes);
 const mediaStatusSet = new Set<string>(mediaStatuses);
 const mediaVisibilitySet = new Set<string>(mediaVisibilities);
+const PUBLIC_USER_RECOMMENDATION_VIDEO_LIMIT = 8;
+
+export type PublicUserVideoRecommendationRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  fileUrl: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  status: string | null;
+  isApproved: boolean | null;
+  deletedAt: Date | string | null;
+  expiresAt: Date | string | null;
+  createdAt: Date | string | null;
+  userId: string | null;
+  authorName: string | null;
+  likeCount: number | null;
+  commentCount: number | null;
+  shareCount: number | null;
+  viewCount: number | null;
+};
+
+const toOptionalDate = (value: Date | string | null | undefined) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+export const isPublicUserVideoRecommendationRenderable = (
+  row: PublicUserVideoRecommendationRow,
+  now = new Date(),
+) => {
+  if (!row.fileUrl) return false;
+  if (row.status !== "ready") return false;
+  if (row.isApproved === false) return false;
+  if (row.deletedAt) return false;
+
+  const expiresAt = toOptionalDate(row.expiresAt);
+  if (expiresAt && expiresAt.getTime() < now.getTime()) return false;
+
+  return true;
+};
+
+export const toPublicUserVideoRecommendation = (
+  row: PublicUserVideoRecommendationRow,
+) => ({
+  id: row.id,
+  title: row.title || "Food recommendation",
+  description: row.description || null,
+  fileUrl: row.fileUrl || "",
+  thumbnailUrl: row.thumbnailUrl || null,
+  durationSeconds: Number(row.durationSeconds || 0) || null,
+  createdAt: row.createdAt || null,
+  userId: row.userId || null,
+  authorName: String(row.authorName || "").trim() || "MealScout diner",
+  likeCount: Number(row.likeCount || 0),
+  commentCount: Number(row.commentCount || 0),
+  shareCount: Number(row.shareCount || 0),
+  viewCount: Number(row.viewCount || 0),
+  storyUrl: `/video/${row.id}`,
+  source: "user_recommendation" as const,
+});
 
 export function registerMediaRoutes(app: Express) {
   const isAdminUser = (user: any) =>
@@ -389,7 +453,49 @@ export function registerMediaRoutes(app: Express) {
         )
         .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt));
 
-      res.json({ videos });
+      let recommendationVideos: ReturnType<typeof toPublicUserVideoRecommendation>[] = [];
+
+      if (ownerType === "restaurant" || ownerType === "food_truck") {
+        const recommendationRows = (await db
+          .select({
+            id: videoStories.id,
+            title: videoStories.title,
+            description: videoStories.description,
+            fileUrl: videoStories.videoUrl,
+            thumbnailUrl: videoStories.thumbnailUrl,
+            durationSeconds: videoStories.duration,
+            status: videoStories.status,
+            isApproved: videoStories.isApproved,
+            deletedAt: videoStories.deletedAt,
+            expiresAt: videoStories.expiresAt,
+            createdAt: videoStories.createdAt,
+            userId: videoStories.userId,
+            authorName: sql<string>`trim(concat_ws(' ', ${users.firstName}, ${users.lastName}))`,
+            likeCount: videoStories.likeCount,
+            commentCount: videoStories.commentCount,
+            shareCount: videoStories.shareCount,
+            viewCount: videoStories.viewCount,
+          })
+          .from(videoStories)
+          .leftJoin(users, eq(videoStories.userId, users.id))
+          .where(
+            and(
+              eq(videoStories.restaurantId, ownerId),
+              eq(videoStories.status, "ready"),
+              eq(videoStories.isApproved, true),
+              isNull(videoStories.deletedAt),
+              gte(videoStories.expiresAt, sql`NOW()`),
+            ),
+          )
+          .orderBy(desc(videoStories.isFeatured), desc(videoStories.createdAt))
+          .limit(PUBLIC_USER_RECOMMENDATION_VIDEO_LIMIT)) as PublicUserVideoRecommendationRow[];
+
+        recommendationVideos = recommendationRows
+          .filter((row) => isPublicUserVideoRecommendationRenderable(row))
+          .map((row) => toPublicUserVideoRecommendation(row));
+      }
+
+      res.json({ videos, recommendationVideos });
     } catch (error) {
       console.error("Error loading public videos:", error);
       res.status(500).json({ message: "Failed to load videos" });

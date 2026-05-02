@@ -36,6 +36,7 @@ import {
   Star,
   Globe,
   ExternalLink,
+  Video,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -65,6 +66,7 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import PublicVideoGallery from "@/components/PublicVideoGallery";
+import { VideoUploadModal } from "@/components/video-upload-modal";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -157,6 +159,8 @@ export default function RestaurantDetailPage() {
   });
   const [claimDocuments, setClaimDocuments] = useState<string[]>([]);
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [isVideoRecommendationOpen, setIsVideoRecommendationOpen] =
+    useState(false);
 
   const { data: restaurant, isLoading: restaurantLoading } = useQuery({
     queryKey: ["/api/restaurants", restaurantId],
@@ -548,6 +552,13 @@ export default function RestaurantDetailPage() {
   const editRestaurantPath = `/edit-restaurant/${restaurantId}`;
   const editRestaurantFocusPath = (focus: string) =>
     `${editRestaurantPath}?src=concierge&focus=${encodeURIComponent(focus)}`;
+  const handleVideoRecommendationClick = () => {
+    if (!user) {
+      window.location.href = `/login?redirect=${encodeURIComponent(profilePath)}`;
+      return;
+    }
+    setIsVideoRecommendationOpen(true);
+  };
   const dealCreationPath = `/deal-creation?restaurantId=${encodeURIComponent(String(restaurantId || ""))}&src=concierge`;
   const cuisineType = (restaurant as any)?.cuisineType || "food";
   const address = (restaurant as any)?.address || "";
@@ -1749,6 +1760,15 @@ export default function RestaurantDetailPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleVideoRecommendationClick}
+            >
+              <Video className="w-3.5 h-3.5 mr-1" />
+              Recommend with video
+            </Button>
             <Badge variant="outline">{recommendationCount} total</Badge>
             {restaurantId && (
               <FlagProfileContentDialog restaurantId={restaurantId} />
@@ -1879,6 +1899,16 @@ export default function RestaurantDetailPage() {
           ]}
         />
       </div>
+      {user && restaurantId ? (
+        <VideoUploadModal
+          isOpen={isVideoRecommendationOpen}
+          onClose={() => setIsVideoRecommendationOpen(false)}
+          restaurantId={String(restaurantId)}
+          onUploadSuccess={async () => {
+            await refetchRecommendations();
+          }}
+        />
+      ) : null}
       <Navigation />
     </div>
   );
