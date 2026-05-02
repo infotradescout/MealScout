@@ -324,6 +324,16 @@ const parseAutocompleteCoordinate = (
   return parsed;
 };
 
+const optionalNonNegativeNumberEnv = (name: string): number | null => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, parsed);
+};
+
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/runtime", async (_req, res) => {
     try {
@@ -473,8 +483,8 @@ export function registerPublicMapRoutes(app: Express) {
       const launchDegradedMode = isLaunchDegradedMode();
       const MAX_GEOCODE_PER_REQUEST = launchDegradedMode
         ? 0
-        : Math.max(0, Number(process.env.MAP_LOCATIONS_MAX_GEOCODE || 0) || 0) ||
-          (process.env.NODE_ENV === "production" ? 1 : 25);
+        : (optionalNonNegativeNumberEnv("MAP_LOCATIONS_MAX_GEOCODE") ??
+          (process.env.NODE_ENV === "production" ? 0 : 25));
       const GEOCODE_BUDGET_MS =
         Math.max(
           0,
@@ -487,16 +497,13 @@ export function registerPublicMapRoutes(app: Express) {
         ) || (process.env.NODE_ENV === "production" ? 350 : 2000);
       const MAX_REVERSE_GEOCODE_PER_REQUEST = launchDegradedMode
         ? 0
-        : Math.max(
-            0,
-            Number(process.env.MAP_LOCATIONS_MAX_REVERSE_GEOCODE || 0) || 0,
-          ) || (process.env.NODE_ENV === "production" ? 1 : 10);
+        : (optionalNonNegativeNumberEnv("MAP_LOCATIONS_MAX_REVERSE_GEOCODE") ??
+          (process.env.NODE_ENV === "production" ? 0 : 10));
       const MAX_COORD_CALIBRATIONS_PER_REQUEST = launchDegradedMode
         ? 0
-        : Math.max(
-            0,
-            Number(process.env.MAP_LOCATIONS_MAX_COORD_CALIBRATIONS || 0) || 0,
-          ) || (process.env.NODE_ENV === "production" ? 3 : 30);
+        : (optionalNonNegativeNumberEnv(
+            "MAP_LOCATIONS_MAX_COORD_CALIBRATIONS",
+          ) ?? (process.env.NODE_ENV === "production" ? 0 : 30));
       const COORD_CALIBRATION_THRESHOLD_METERS =
         Math.max(
           0,
@@ -2034,16 +2041,20 @@ export function registerPublicMapRoutes(app: Express) {
               },
             },
           };
-          const response = await fetchWithTimeout(nearbyUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": googleApiKey,
-              // Request only the fields we need to minimise billing SKU
-              "X-Goog-FieldMask": "places.location,places.userRatingCount",
+          const response = await fetchWithTimeout(
+            nearbyUrl,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": googleApiKey,
+                // Request only the fields we need to minimise billing SKU
+                "X-Goog-FieldMask": "places.location,places.userRatingCount",
+              },
+              body: JSON.stringify(nearbyBody),
             },
-            body: JSON.stringify(nearbyBody),
-          }, MAP_PROVIDER_TIMEOUT_MS);
+            MAP_PROVIDER_TIMEOUT_MS,
+          );
           const payload = (await response.json().catch(() => null)) as {
             error?: { message?: string; status?: string };
             places?: Array<{

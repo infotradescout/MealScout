@@ -1005,10 +1005,19 @@ export function registerEventRoutes(
       };
     }
   >();
+  const parkingPassHostStatusRefreshByDate = new Map<string, Promise<any>>();
 
   const normalizeDateKey = (value: unknown) =>
     dateKeyFromUnknown(value, "America/Chicago") ||
     dateKeyInZone(new Date(), "America/Chicago");
+  const configuredParkingPassHostStatusCacheTtlMs = Number(
+    process.env.PARKING_PASS_HOST_STATUS_CACHE_TTL_MS || 0,
+  );
+  const parkingPassHostStatusCacheTtlMs =
+    Number.isFinite(configuredParkingPassHostStatusCacheTtlMs) &&
+    configuredParkingPassHostStatusCacheTtlMs > 0
+      ? Math.max(30_000, configuredParkingPassHostStatusCacheTtlMs)
+      : 120_000;
 
   const buildParkingPassHostStatusPayload = async (dateKey: string) => {
     const eventDateKey = (event: any) => {
@@ -1141,11 +1150,36 @@ export function registerEventRoutes(
         if (cached && cached.expiresAt > Date.now()) {
           return res.json(cached.payload);
         }
+        if (cached?.payload) {
+          res.setHeader("X-MealScout-Stale", "1");
+          if (!parkingPassHostStatusRefreshByDate.has(dateKey)) {
+            const refresh = buildParkingPassHostStatusPayload(dateKey)
+              .then((payload) => {
+                parkingPassHostStatusCacheByDate.set(dateKey, {
+                  payload,
+                  expiresAt: Date.now() + parkingPassHostStatusCacheTtlMs,
+                });
+                return payload;
+              })
+              .catch((error) => {
+                console.warn(
+                  "[parking-pass] Failed to refresh host status cache:",
+                  error,
+                );
+                return cached.payload;
+              })
+              .finally(() => {
+                parkingPassHostStatusRefreshByDate.delete(dateKey);
+              });
+            parkingPassHostStatusRefreshByDate.set(dateKey, refresh);
+          }
+          return res.json(cached.payload);
+        }
 
         const payload = await buildParkingPassHostStatusPayload(dateKey);
         parkingPassHostStatusCacheByDate.set(dateKey, {
           payload,
-          expiresAt: Date.now() + 60_000,
+          expiresAt: Date.now() + parkingPassHostStatusCacheTtlMs,
         });
         res.json(payload);
       } catch (error: any) {
