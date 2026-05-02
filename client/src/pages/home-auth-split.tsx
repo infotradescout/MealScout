@@ -1,8 +1,8 @@
 import { lazy, Suspense } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import LaunchHome from "@/pages/launch-home";
 
-const LoggedInHome = lazy(() => import("@/pages/home-v2"));
+const LoggedInHome = lazy(() => import("@/pages/home"));
+const LoggedOutSignup = lazy(() => import("@/pages/customer-signup"));
 
 const PageLoader = () => (
   <div className="flex min-h-screen items-center justify-center bg-[var(--bg-surface)]">
@@ -25,5 +25,9 @@ export default function HomeAuthSplit() {
     );
   }
 
-  return <LaunchHome />;
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <LoggedOutSignup homePage />
+    </Suspense>
+  );
 }
