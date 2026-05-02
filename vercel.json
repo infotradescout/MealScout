@@ -12,12 +12,36 @@
   ],
   "routes": [
     {
-      "src": "/sitemap.xml",
-      "dest": "https://mealscout.onrender.com/sitemap.xml"
+      "src": "/sitemap(.*)\\.xml",
+      "dest": "https://mealscout.onrender.com/sitemap$1.xml"
     },
     {
       "src": "/robots.txt",
       "dest": "https://mealscout.onrender.com/robots.txt"
+    },
+    {
+      "src": "/llms\\.txt",
+      "dest": "https://mealscout.onrender.com/llms.txt"
+    },
+    {
+      "src": "/ai\\.txt",
+      "dest": "https://mealscout.onrender.com/ai.txt"
+    },
+    {
+      "src": "/opensearch\\.xml",
+      "dest": "https://mealscout.onrender.com/opensearch.xml"
+    },
+    {
+      "src": "/\\.well-known/llms\\.txt",
+      "dest": "https://mealscout.onrender.com/.well-known/llms.txt"
+    },
+    {
+      "src": "/\\.well-known/ai\\.txt",
+      "dest": "https://mealscout.onrender.com/.well-known/ai.txt"
+    },
+    {
+      "src": "/\\.well-known/opensearch\\.xml",
+      "dest": "https://mealscout.onrender.com/.well-known/opensearch.xml"
     },
     {
       "src": "/api/(.*)",
