@@ -73,6 +73,7 @@
     "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
+    "smoke:seo": "node scripts/seoCrawlerSmoke.mjs",
     "smoke:launch-spike": "node scripts/launchSpikeSmoke.mjs",
     "check:launch-week": "node scripts/launchWeekReadiness.mjs",
     "smoke:launch-week": "tsx scripts/launchWeekReadinessSmoke.ts",

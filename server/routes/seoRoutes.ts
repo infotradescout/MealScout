@@ -70,6 +70,20 @@ const toIsoDateOrNull = (value: unknown): string | null => {
   return dt.toISOString();
 };
 
+const sitemapRoutePaths = [
+  "/sitemap.xml",
+  "/sitemap-trucks.xml",
+  "/sitemap-bars.xml",
+  "/sitemap-locations.xml",
+  "/sitemap-cities.xml",
+  "/sitemap-cuisines.xml",
+  "/sitemap-events.xml",
+  "/sitemap-deals.xml",
+  "/sitemap-suppliers.xml",
+  "/sitemap-videos.xml",
+  "/sitemap-time-pages.xml",
+];
+
 const sendUrlsetXml = (
   res: any,
   params: { entries: Array<{ loc: string; lastmod?: unknown }> },
@@ -140,6 +154,37 @@ export function registerSeoRoutes(app: Express) {
       res.send(indexNowConfig.key);
     });
   }
+
+  app.get("/sitemap-index.xml", async (_req, res) => {
+    const baseUrl = resolveSitemapSiteUrl();
+    const generatedAt = new Date().toISOString();
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapRoutePaths
+      .map(
+        (path) =>
+          `  <sitemap><loc>${baseUrl}${path}</loc><lastmod>${generatedAt}</lastmod></sitemap>`,
+      )
+      .join("\n")}\n</sitemapindex>`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=1800, stale-while-revalidate=86400",
+    );
+    res.send(xml);
+  });
+
+  app.get(
+    ["/opensearch.xml", "/.well-known/opensearch.xml"],
+    async (_req, res) => {
+      const baseUrl = resolveSitemapSiteUrl();
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">\n  <ShortName>MealScout</ShortName>\n  <Description>Search food trucks, restaurants, host locations, deals, and events on MealScout.</Description>\n  <InputEncoding>UTF-8</InputEncoding>\n  <Image height="16" width="16" type="image/x-icon">${baseUrl}/favicon.ico</Image>\n  <Url type="text/html" template="${baseUrl}/search?q={searchTerms}"/>\n  <Url type="application/rss+xml" rel="results" template="${baseUrl}/sitemap.xml?q={searchTerms}"/>\n</OpenSearchDescription>`;
+      res.setHeader(
+        "Content-Type",
+        "application/opensearchdescription+xml; charset=utf-8",
+      );
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+      res.send(xml);
+    },
+  );
 
   app.get("/sitemap.xml", async (_req, res) => {
     try {
@@ -967,13 +1012,14 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
+  app.get("/.well-known/llms.txt", async (_req, res) => {
+    res.redirect(301, "/llms.txt");
+  });
+
   app.get("/ai.txt", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
-      const lines = [
-        "MealScout",
-        `${baseUrl}/llms.txt`,
-      ].join("\n");
+      const lines = ["MealScout", `${baseUrl}/llms.txt`].join("\n");
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
       res.send(lines);
@@ -983,6 +1029,10 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
+  app.get("/.well-known/ai.txt", async (_req, res) => {
+    res.redirect(301, "/ai.txt");
+  });
+
   app.get("/robots.txt", async (_req, res) => {
     try {
       const baseUrl = resolveSitemapSiteUrl();
@@ -990,8 +1040,12 @@ export function registerSeoRoutes(app: Express) {
         "User-agent: *",
         "Allow: /robots.txt",
         "Allow: /llms.txt",
+        "Allow: /.well-known/llms.txt",
         "Allow: /ai.txt",
+        "Allow: /.well-known/ai.txt",
+        "Allow: /opensearch.xml",
         "Allow: /sitemap.xml",
+        "Allow: /sitemap-index.xml",
         "Allow: /sitemap-*.xml",
         "Allow: /truck/",
         "Allow: /location/",
@@ -1011,19 +1065,17 @@ export function registerSeoRoutes(app: Express) {
         "Disallow: /vendor-dashboard",
         "Disallow: /supplier-portal",
         "",
+        `Host: www.mealscout.us`,
+        "Clean-param: ref&utm_source&utm_medium&utm_campaign&utm_term&utm_content&utm_id&gclid&fbclid&msclkid&twclid&dclid&yclid&mc_cid&mc_eid /",
+        "",
+        `Sitemap: ${baseUrl}/sitemap-index.xml`,
         `Sitemap: ${baseUrl}/sitemap.xml`,
-        `Sitemap: ${baseUrl}/sitemap-trucks.xml`,
-        `Sitemap: ${baseUrl}/sitemap-bars.xml`,
-        `Sitemap: ${baseUrl}/sitemap-locations.xml`,
-        `Sitemap: ${baseUrl}/sitemap-cities.xml`,
-        `Sitemap: ${baseUrl}/sitemap-cuisines.xml`,
-        `Sitemap: ${baseUrl}/sitemap-events.xml`,
-        `Sitemap: ${baseUrl}/sitemap-deals.xml`,
-        `Sitemap: ${baseUrl}/sitemap-suppliers.xml`,
-        `Sitemap: ${baseUrl}/sitemap-videos.xml`,
-        `Sitemap: ${baseUrl}/sitemap-time-pages.xml`,
+        ...sitemapRoutePaths
+          .filter((path) => path !== "/sitemap.xml")
+          .map((path) => `Sitemap: ${baseUrl}${path}`),
         "",
         `AI: ${baseUrl}/llms.txt`,
+        `OpenSearch: ${baseUrl}/opensearch.xml`,
         ...(indexNowConfig.enabled &&
         indexNowConfig.key &&
         indexNowConfig.keyLocation

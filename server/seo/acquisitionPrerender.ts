@@ -1,4 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import { shouldServePrerender } from "./botDetection";
 
 type AcquisitionPageConfig = {
   path: string;
@@ -10,16 +11,6 @@ type AcquisitionPageConfig = {
   schemaType: "ProfessionalService" | "LocalBusiness";
 };
 
-const BOT_UA_PATTERN =
-  /(bot|crawler|spider|slurp|googlebot|bingbot|duckduckbot|applebot|gptbot|oai-searchbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
-
-const shouldServePrerender = (req: Request) => {
-  const force = String(req.query?.prerender || "").toLowerCase();
-  if (force === "1" || force === "true") return true;
-  const ua = String(req.get("user-agent") || "");
-  return BOT_UA_PATTERN.test(ua);
-};
-
 const escapeHtml = (value: string) =>
   String(value || "")
     .replace(/&/g, "&amp;")
@@ -28,7 +19,10 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const buildPageHtml = (canonicalBaseUrl: string, page: AcquisitionPageConfig) => {
+const buildPageHtml = (
+  canonicalBaseUrl: string,
+  page: AcquisitionPageConfig,
+) => {
   const canonical = `${canonicalBaseUrl}${page.path}`;
   const schema = {
     "@context": "https://schema.org",
@@ -162,4 +156,3 @@ export function registerAcquisitionPrerenderRoutes(
     });
   }
 }
-
