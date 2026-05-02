@@ -3,7 +3,7 @@ import { BackHeader } from "@/components/back-header";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function ShareHubPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const userType = String(user?.userType || "");
 
   const mode =
@@ -15,14 +15,19 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "Pick the kind of MealScout link you want to send. Each card has a ready-to-copy link and a plain-language message."
-      : "Share directory for growth ops, outreach, referrals, and internal tools.";
+      ? "Copy a link, send a text, or share MealScout in one tap."
+      : "Fast links and messages for outreach, referrals, and launch ops.";
 
   return (
     <div className="min-h-screen pb-28">
-      <BackHeader title="Share Directory" fallbackHref="/" />
+      <BackHeader title="Share" fallbackHref="/" />
       <main className="mx-auto w-full max-w-5xl px-4 py-5">
-        <ShareHub mode={mode} title="Share Directory" description={description} />
+        <ShareHub
+          mode={mode}
+          title="Share MealScout"
+          description={description}
+          enableAffiliateLookup={isAuthenticated}
+        />
       </main>
     </div>
   );

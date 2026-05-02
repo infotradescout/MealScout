@@ -177,6 +177,7 @@ const publicRoutePrefixes = [
   "/restaurant-signup",
   "/truck-onboarding",
   "/claim-truck",
+  "/share-hub",
   "/deal-creation",
   "/deal/",
   "/search",
