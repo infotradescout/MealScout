@@ -45,6 +45,12 @@ const videoUpload = multer({
   },
 });
 
+export const videoStoryUploadBodySchema = insertVideoStorySchema.omit({
+  userId: true,
+  videoUrl: true,
+  thumbnailUrl: true,
+});
+
 export default function setupStoriesRoutes(app: Express) {
   void (async () => {
     try {
@@ -256,7 +262,7 @@ export default function setupStoriesRoutes(app: Express) {
         }
       }
 
-      const validationResult = insertVideoStorySchema.safeParse(bodyData);
+      const validationResult = videoStoryUploadBodySchema.safeParse(bodyData);
       if (!validationResult.success) {
         return res.status(400).json({
           message: 'Invalid input',
