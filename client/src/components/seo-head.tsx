@@ -53,7 +53,7 @@ export function SEOHead({
   ogImage = "/og-default.jpg",
   ogType = "website",
   schemaData,
-  noIndex = false
+  noIndex = false,
 }: SEOHeadProps) {
   useEffect(() => {
     // Set page title
@@ -131,7 +131,9 @@ export function SEOHead({
         ? new URLSearchParams(window.location.search)
         : new URLSearchParams();
     const autoNoIndex =
-      PRIVATE_NOINDEX_PREFIXES.some((prefix) => currentPath.startsWith(prefix)) ||
+      PRIVATE_NOINDEX_PREFIXES.some((prefix) =>
+        currentPath.startsWith(prefix),
+      ) ||
       Array.from(currentSearchParams.keys()).some((key) =>
         TRACKING_QUERY_KEYS.has(String(key).toLowerCase()),
       );
@@ -141,7 +143,10 @@ export function SEOHead({
       if (!imageUrl) return "";
       if (imageUrl.startsWith("http")) return imageUrl;
       if (typeof window === "undefined") return imageUrl;
-      return `${window.location.origin}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+      const base = allowCanonicalHostOverride
+        ? window.location.origin
+        : "https://www.mealscout.us";
+      return `${base}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
     };
 
     const resolvedOgImage = ogImage ? resolveOgImage(ogImage) : "";
@@ -151,22 +156,20 @@ export function SEOHead({
     // The legacy keywords tag is ignored by modern search engines and can
     // produce misleading SEO audit warnings, so we explicitly remove it.
     removeMetaTag("keywords");
-    
+
     // Robots meta
-    if (effectiveNoIndex) {
-      setMetaTag("robots", "noindex, nofollow");
-    } else {
-      setMetaTag(
-        "robots",
-        "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
-      );
-    }
+    const robotsContent = effectiveNoIndex
+      ? "noindex, nofollow"
+      : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
+    setMetaTag("robots", robotsContent);
+    setMetaTag("googlebot", robotsContent);
 
     // Open Graph tags
     setMetaTag("og:title", title, true);
     setMetaTag("og:description", description, true);
     setMetaTag("og:type", ogType, true);
     setMetaTag("og:site_name", "MealScout", true);
+    setMetaTag("og:locale", "en_US", true);
     if (resolvedOgImage) {
       setMetaTag("og:image", resolvedOgImage, true);
     }
@@ -188,11 +191,13 @@ export function SEOHead({
     let pageSchema: HTMLScriptElement | null = null;
     if (schemaData) {
       // Remove any existing page-specific schema
-      const existingPageSchema = document.querySelector('script[type="application/ld+json"][data-page-schema="true"]');
+      const existingPageSchema = document.querySelector(
+        'script[type="application/ld+json"][data-page-schema="true"]',
+      );
       if (existingPageSchema) {
         existingPageSchema.remove();
       }
-      
+
       // Create new page-specific schema
       pageSchema = document.createElement("script");
       pageSchema.setAttribute("type", "application/ld+json");
@@ -206,8 +211,17 @@ export function SEOHead({
       // Optional: Clean up when component unmounts
       // Usually not needed for SPAs, but good practice
     };
-  }, [title, description, keywords, canonicalUrl, allowCanonicalHostOverride, ogImage, ogType, schemaData, noIndex]);
+  }, [
+    title,
+    description,
+    keywords,
+    canonicalUrl,
+    allowCanonicalHostOverride,
+    ogImage,
+    ogType,
+    schemaData,
+    noIndex,
+  ]);
 
   return null; // This component doesn't render anything
 }
-
