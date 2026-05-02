@@ -150,7 +150,13 @@ const signupFlowOptions: SignupFlowOption[] = [
   },
 ];
 
-export default function CustomerSignup() {
+type CustomerSignupProps = {
+  homePage?: boolean;
+};
+
+export default function CustomerSignup({
+  homePage = false,
+}: CustomerSignupProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
@@ -842,11 +848,19 @@ export default function CustomerSignup() {
   return (
     <div className="min-h-screen bg-[var(--bg-layered)] flex flex-col">
       <SEOHead
-        title="Sign Up - MealScout | Create Free Account"
-        description="Join MealScout for free and start discovering exclusive food deals from local restaurants. Save your favorites, track deals, and never miss amazing dining discounts."
+        title={
+          homePage
+            ? "MealScout | Create Account"
+            : "Sign Up - MealScout | Create Free Account"
+        }
+        description="Join MealScout for free to discover local food, claim a food truck, list a host location, coordinate events, or manage a food business profile."
         keywords="sign up, create account, register, join mealscout, free account, food deals signup"
-        canonicalUrl="https://www.mealscout.us/customer-signup"
-        noIndex={true}
+        canonicalUrl={
+          homePage
+            ? "https://www.mealscout.us/"
+            : "https://www.mealscout.us/customer-signup"
+        }
+        noIndex={!homePage}
       />
       <h1 className="sr-only">Create a MealScout account</h1>
       <BackHeader

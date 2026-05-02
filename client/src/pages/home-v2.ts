@@ -1,8 +1,8 @@
 import { createElement, lazy, Suspense } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import LaunchHome from "@/pages/launch-home";
 
 const LoggedInHome = lazy(() => import("@/pages/home"));
+const LoggedOutSignup = lazy(() => import("@/pages/customer-signup"));
 
 const PageLoader = () =>
   createElement(
@@ -32,5 +32,9 @@ export default function HomeV2AuthSplit() {
     );
   }
 
-  return createElement(LaunchHome);
+  return createElement(
+    Suspense,
+    { fallback: createElement(PageLoader) },
+    createElement(LoggedOutSignup, { homePage: true }),
+  );
 }
