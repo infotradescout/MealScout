@@ -210,6 +210,28 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [isHost, setIsHost] = useState(false);
   const canSeeParkingPassNav = canManageParkingPass;
   const currentPath = location.split("?")[0];
+  const hiddenGuestMobileNavRoutes = [
+    "/login",
+    "/customer-signup",
+    "/verify-email",
+    "/restaurant-signup",
+    "/truck-onboarding",
+    "/claim-truck",
+    "/host-signup",
+    "/event-signup",
+    "/forgot-password",
+    "/reset-password",
+    "/change-password",
+    "/account-setup",
+    "/admin/login",
+  ];
+  const shouldHideGuestMobileNav =
+    !user &&
+    (currentPath === "/" ||
+      hiddenGuestMobileNavRoutes.some(
+        (route) => currentPath === route || currentPath.startsWith(`${route}/`),
+      ));
+  const shouldShowMobileNav = !shouldHideGuestMobileNav;
   const currentSearch = location.includes("?")
     ? location.slice(location.indexOf("?"))
     : window.location.search;
@@ -218,7 +240,15 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     (currentPath === "/parking-pass" &&
       new URLSearchParams(currentSearch).get("adminMode") === "host") ||
     Boolean(isHostUser && currentPath === "/parking-pass");
-  const shouldUseHostNav = Boolean(isHost || isHostUser || isHostManagementContext);
+  const shouldUseHostNav = Boolean(
+    isHost || isHostUser || isHostManagementContext,
+  );
+
+  useEffect(() => {
+    if (!shouldShowMobileNav) {
+      setMoreOpen(false);
+    }
+  }, [shouldShowMobileNav]);
 
   useEffect(() => {
     if (!user) {
@@ -255,79 +285,239 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const getTopItems = (): NavItem[] => {
     if (!user) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
-        { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
+        {
+          path: "/video",
+          icon: Clapperboard,
+          labelKey: "nav.video",
+          fallbackLabel: "Video",
+        },
       ];
     }
     if (shouldUseHostNav) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/host/dashboard",
+          icon: Users,
+          labelKey: "nav.host",
+          fallbackLabel: "Host",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isAdmin) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/admin/dashboard", icon: Shield, labelKey: "nav.admin", fallbackLabel: "Admin" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/admin/dashboard",
+          icon: Shield,
+          labelKey: "nav.admin",
+          fallbackLabel: "Admin",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isStaff) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/staff", icon: Users, labelKey: "nav.staff", fallbackLabel: "Staff" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/staff",
+          icon: Users,
+          labelKey: "nav.staff",
+          fallbackLabel: "Staff",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isEventCoordinator) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/events", icon: Calendar, labelKey: "nav.events", fallbackLabel: "Events" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/events",
+          icon: Calendar,
+          labelKey: "nav.events",
+          fallbackLabel: "Events",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isSupplier) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/supplier/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/supplier/dashboard",
+          icon: LayoutDashboard,
+          labelKey: "nav.dashboard",
+          fallbackLabel: "Dashboard",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isFoodTruck) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/dashboard",
+          icon: LayoutDashboard,
+          labelKey: "nav.dashboard",
+          fallbackLabel: "Dashboard",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isRestaurantOwner) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/dashboard",
+          icon: LayoutDashboard,
+          labelKey: "nav.dashboard",
+          fallbackLabel: "Dashboard",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (hasBusinessTeamAccess) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/restaurant-owner-dashboard", icon: LayoutDashboard, labelKey: "nav.dashboard", fallbackLabel: "Dashboard" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/restaurant-owner-dashboard",
+          icon: LayoutDashboard,
+          labelKey: "nav.dashboard",
+          fallbackLabel: "Dashboard",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     if (isHost) {
       return [
-        { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
-        { path: "/host/dashboard", icon: Users, labelKey: "nav.host", fallbackLabel: "Host" },
-        { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
+        {
+          path: "/",
+          icon: UtensilsCrossed,
+          labelKey: "nav.food",
+          fallbackLabel: "Food",
+        },
+        {
+          path: "/host/dashboard",
+          icon: Users,
+          labelKey: "nav.host",
+          fallbackLabel: "Host",
+        },
+        {
+          path: "/map",
+          icon: MapPin,
+          labelKey: "nav.map",
+          fallbackLabel: "Map",
+        },
       ];
     }
     // Customer
     return [
-      { path: "/", icon: UtensilsCrossed, labelKey: "nav.food", fallbackLabel: "Food" },
+      {
+        path: "/",
+        icon: UtensilsCrossed,
+        labelKey: "nav.food",
+        fallbackLabel: "Food",
+      },
       { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
-      { path: "/video", icon: Clapperboard, labelKey: "nav.video", fallbackLabel: "Video" },
+      {
+        path: "/video",
+        icon: Clapperboard,
+        labelKey: "nav.video",
+        fallbackLabel: "Video",
+      },
     ];
   };
 
@@ -337,114 +527,281 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
     // ── Discover ──
     items.push(
-      { path: "/", icon: UtensilsCrossed, fallbackLabel: "Food", group: "Discover" },
+      {
+        path: "/",
+        icon: UtensilsCrossed,
+        fallbackLabel: "Food",
+        group: "Discover",
+      },
       { path: "/map", icon: MapPin, fallbackLabel: "Map", group: "Discover" },
-      { path: "/video", icon: Clapperboard, fallbackLabel: "Video", group: "Discover" },
-      { path: "/events", icon: Calendar, fallbackLabel: "Events", group: "Discover" },
+      {
+        path: "/video",
+        icon: Clapperboard,
+        fallbackLabel: "Video",
+        group: "Discover",
+      },
+      {
+        path: "/events",
+        icon: Calendar,
+        fallbackLabel: "Events",
+        group: "Discover",
+      },
     );
 
     if (!user) {
       items.push(
-        { path: "/customer-signup", icon: UserPlus, fallbackLabel: "Create Account", group: "Get Started" },
-        { path: "/truck-onboarding?claim=1", icon: Truck, fallbackLabel: "Claim Business", group: "Get Started" },
+        {
+          path: "/customer-signup",
+          icon: UserPlus,
+          fallbackLabel: "Create Account",
+          group: "Get Started",
+        },
+        {
+          path: "/truck-onboarding?claim=1",
+          icon: Truck,
+          fallbackLabel: "Claim Business",
+          group: "Get Started",
+        },
       );
     }
 
     if (user) {
       // ── My Stuff ──
       items.push(
-        { path: "/dashboard", icon: LayoutDashboard, fallbackLabel: "Dashboard", group: "My Stuff" },
-        { path: "/favorites", icon: Heart, fallbackLabel: "Favorites", group: "My Stuff" },
-        { path: "/orders", icon: Receipt, fallbackLabel: "Orders", group: "My Stuff" },
+        {
+          path: "/dashboard",
+          icon: LayoutDashboard,
+          fallbackLabel: "Dashboard",
+          group: "My Stuff",
+        },
+        {
+          path: "/favorites",
+          icon: Heart,
+          fallbackLabel: "Favorites",
+          group: "My Stuff",
+        },
+        {
+          path: "/orders",
+          icon: Receipt,
+          fallbackLabel: "Orders",
+          group: "My Stuff",
+        },
       );
 
       // ── Business ──
-      if (isAdmin || isStaff || isRestaurantOwner || isFoodTruck || hasBusinessTeamAccess) {
+      if (
+        isAdmin ||
+        isStaff ||
+        isRestaurantOwner ||
+        isFoodTruck ||
+        hasBusinessTeamAccess
+      ) {
         if (isRestaurantOwner || isFoodTruck || hasBusinessTeamAccess) {
-          items.push(
-            { path: "/restaurant-owner-dashboard", icon: Store, fallbackLabel: "Business Dashboard", group: "Business" },
-          );
+          items.push({
+            path: "/restaurant-owner-dashboard",
+            icon: Store,
+            fallbackLabel: "Business Dashboard",
+            group: "Business",
+          });
         }
         if (canManageDeals) {
-          items.push(
-            { path: "/deal-creation", icon: Plus, fallbackLabel: "Create Special", group: "Business" },
-          );
+          items.push({
+            path: "/deal-creation",
+            icon: Plus,
+            fallbackLabel: "Create Special",
+            group: "Business",
+          });
         }
         items.push(
-          { path: "/menu-builder", icon: Store, fallbackLabel: "Menu Builder", group: "Business" },
-          { path: "/kitchen", icon: ChefHat, fallbackLabel: "Kitchen", group: "Business" },
-          { path: "/supply/orders", icon: Package, fallbackLabel: "Supply Orders", group: "Business" },
+          {
+            path: "/menu-builder",
+            icon: Store,
+            fallbackLabel: "Menu Builder",
+            group: "Business",
+          },
+          {
+            path: "/kitchen",
+            icon: ChefHat,
+            fallbackLabel: "Kitchen",
+            group: "Business",
+          },
+          {
+            path: "/supply/orders",
+            icon: Package,
+            fallbackLabel: "Supply Orders",
+            group: "Business",
+          },
         );
         if (canSeeParkingPassNav && !shouldUseHostNav) {
-          items.push(
-            { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Business" },
-          );
+          items.push({
+            path: "/parking-pass",
+            icon: ParkingSquare,
+            fallbackLabel: "Parking Pass",
+            group: "Business",
+          });
         }
         if (hasBusinessTeamAccess || canManageBusinessProfile) {
-          items.push(
-            { path: "/business-team", icon: Users, fallbackLabel: "Team", group: "Business" },
-          );
+          items.push({
+            path: "/business-team",
+            icon: Users,
+            fallbackLabel: "Team",
+            group: "Business",
+          });
         }
         items.push(
-          { path: "/subscription", icon: BarChart3, fallbackLabel: "Subscription", group: "Business" },
-          { path: "/suppliers", icon: Store, fallbackLabel: "Supplies", group: "Business" },
+          {
+            path: "/subscription",
+            icon: BarChart3,
+            fallbackLabel: "Subscription",
+            group: "Business",
+          },
+          {
+            path: "/suppliers",
+            icon: Store,
+            fallbackLabel: "Supplies",
+            group: "Business",
+          },
         );
       }
 
       // ── Host ──
       if (isHost || isAdmin || isStaff) {
-        items.push(
-          { path: "/host/dashboard", icon: Users, fallbackLabel: "Host Dashboard", group: "Host" },
-        );
-        if (canSeeParkingPassNav && !shouldUseHostNav && !items.some(i => i.path === "/parking-pass")) {
-          items.push(
-            { path: "/parking-pass", icon: ParkingSquare, fallbackLabel: "Parking Pass", group: "Host" },
-          );
+        items.push({
+          path: "/host/dashboard",
+          icon: Users,
+          fallbackLabel: "Host Dashboard",
+          group: "Host",
+        });
+        if (
+          canSeeParkingPassNav &&
+          !shouldUseHostNav &&
+          !items.some((i) => i.path === "/parking-pass")
+        ) {
+          items.push({
+            path: "/parking-pass",
+            icon: ParkingSquare,
+            fallbackLabel: "Parking Pass",
+            group: "Host",
+          });
         }
       }
 
       // ── Supplier ──
       if (isSupplier) {
-        items.push(
-          { path: "/supplier/dashboard", icon: LayoutDashboard, fallbackLabel: "Supplier Dashboard", group: "Supplier" },
-        );
+        items.push({
+          path: "/supplier/dashboard",
+          icon: LayoutDashboard,
+          fallbackLabel: "Supplier Dashboard",
+          group: "Supplier",
+        });
       }
 
       // ── Staff ──
       if (isStaff) {
-        items.push(
-          { path: "/staff", icon: Users, fallbackLabel: "Staff Hub", group: "Staff" },
-        );
+        items.push({
+          path: "/staff",
+          icon: Users,
+          fallbackLabel: "Staff Hub",
+          group: "Staff",
+        });
       }
 
       // ── Admin ──
       if (isAdmin) {
         items.push(
-          { path: "/admin/dashboard", icon: Shield, fallbackLabel: "Admin", group: "Admin" },
-          { path: "/admin/control-center", icon: LayoutDashboard, fallbackLabel: "Control Center", group: "Admin" },
-          { path: "/admin/sentiment-intelligence", icon: TrendingUp, fallbackLabel: "Sentiment Intel", group: "Admin" },
-          { path: "/admin/affiliates", icon: Users, fallbackLabel: "Affiliates", group: "Admin" },
-          { path: "/admin/vac-logs", icon: Shield, fallbackLabel: "VAC Logs", group: "Admin" },
-          { path: "/deals/featured", icon: Receipt, fallbackLabel: "Featured Specials", group: "Admin" },
-          { path: "/truck-discovery", icon: Truck, fallbackLabel: "Open Calls", group: "Admin" },
+          {
+            path: "/admin/dashboard",
+            icon: Shield,
+            fallbackLabel: "Admin",
+            group: "Admin",
+          },
+          {
+            path: "/admin/control-center",
+            icon: LayoutDashboard,
+            fallbackLabel: "Control Center",
+            group: "Admin",
+          },
+          {
+            path: "/admin/sentiment-intelligence",
+            icon: TrendingUp,
+            fallbackLabel: "Sentiment Intel",
+            group: "Admin",
+          },
+          {
+            path: "/admin/affiliates",
+            icon: Users,
+            fallbackLabel: "Affiliates",
+            group: "Admin",
+          },
+          {
+            path: "/admin/vac-logs",
+            icon: Shield,
+            fallbackLabel: "VAC Logs",
+            group: "Admin",
+          },
+          {
+            path: "/deals/featured",
+            icon: Receipt,
+            fallbackLabel: "Featured Specials",
+            group: "Admin",
+          },
+          {
+            path: "/truck-discovery",
+            icon: Truck,
+            fallbackLabel: "Open Calls",
+            group: "Admin",
+          },
         );
       }
 
       // ── Account ──
       items.push(
-        { path: "/profile", icon: User, fallbackLabel: "Profile", group: "Account" },
-        { path: "/profile/settings", icon: Settings, fallbackLabel: "Settings", group: "Account" },
-        { path: "/profile/notifications", icon: Bell, fallbackLabel: "Notifications", group: "Account" },
-        { path: "/profile/payment", icon: CreditCard, fallbackLabel: "Payment Methods", group: "Account" },
-        { path: "/profile/addresses", icon: MapPinned, fallbackLabel: "Addresses", group: "Account" },
-        { path: "/profile/help", icon: HelpCircle, fallbackLabel: "Help & Support", group: "Account" },
+        {
+          path: "/profile",
+          icon: User,
+          fallbackLabel: "Profile",
+          group: "Account",
+        },
+        {
+          path: "/profile/settings",
+          icon: Settings,
+          fallbackLabel: "Settings",
+          group: "Account",
+        },
+        {
+          path: "/profile/notifications",
+          icon: Bell,
+          fallbackLabel: "Notifications",
+          group: "Account",
+        },
+        {
+          path: "/profile/payment",
+          icon: CreditCard,
+          fallbackLabel: "Payment Methods",
+          group: "Account",
+        },
+        {
+          path: "/profile/addresses",
+          icon: MapPinned,
+          fallbackLabel: "Addresses",
+          group: "Account",
+        },
+        {
+          path: "/profile/help",
+          icon: HelpCircle,
+          fallbackLabel: "Help & Support",
+          group: "Account",
+        },
       );
 
       // ── Share & Report ──
       if (!isAdmin && !isStaff) {
-        items.push(
-          { path: "/share-hub", icon: Share2, fallbackLabel: "Share Hub", group: "More" },
-        );
+        items.push({
+          path: "/share-hub",
+          icon: Share2,
+          fallbackLabel: "Share Hub",
+          group: "More",
+        });
       }
     }
 
@@ -459,7 +816,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     // Deduplicate by path
     const seen = new Set<string>();
     return items.filter((item) => {
-      const key = item.path ? `path:${item.path}` : `label:${item.fallbackLabel}`;
+      const key = item.path
+        ? `path:${item.path}`
+        : `label:${item.fallbackLabel}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -487,7 +846,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   // ─── RENDER HELPERS ─────────────────────────────────────────────
 
   const renderNavLink = (item: NavItem, size: "sm" | "md" = "sm") => {
-    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const label = item.labelKey
+      ? t(item.labelKey, item.fallbackLabel)
+      : item.fallbackLabel;
     const isActive = item.path ? location === item.path : false;
     const iconSize = size === "sm" ? "w-5 h-5" : "w-5 h-5";
     const textSize = size === "sm" ? "text-[11px]" : "text-sm";
@@ -506,7 +867,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           onClick={() => setMoreOpen(false)}
         >
           <item.icon className={iconSize} />
-          <span className={`${textSize} leading-tight font-semibold tracking-normal`}>{label}</span>
+          <span
+            className={`${textSize} leading-tight font-semibold tracking-normal`}
+          >
+            {label}
+          </span>
         </Link>
       );
     }
@@ -530,13 +895,19 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         ) : (
           <item.icon className={iconSize} />
         )}
-        <span className={`${textSize} leading-tight font-semibold tracking-normal`}>{label}</span>
+        <span
+          className={`${textSize} leading-tight font-semibold tracking-normal`}
+        >
+          {label}
+        </span>
       </button>
     );
   };
 
   const renderDrawerItem = (item: NavItem) => {
-    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const label = item.labelKey
+      ? t(item.labelKey, item.fallbackLabel)
+      : item.fallbackLabel;
     const isActive = item.path ? location === item.path : false;
 
     if (item.path) {
@@ -582,7 +953,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   const renderSidebarLink = (item: NavItem) => {
-    const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+    const label = item.labelKey
+      ? t(item.labelKey, item.fallbackLabel)
+      : item.fallbackLabel;
     const isActive = item.path ? location === item.path : false;
 
     if (item.path) {
@@ -635,7 +1008,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           className="fixed top-4 left-4 z-50 h-10 w-10 flex items-center justify-center rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-clean transition-colors hover:bg-[var(--bg-card-hover)]"
           aria-label="Toggle navigation"
         >
-          {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {sidebarOpen ? (
+            <X className="w-5 h-5" />
+          ) : (
+            <Menu className="w-5 h-5" />
+          )}
         </button>
 
         {/* Sidebar panel */}
@@ -650,9 +1027,15 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             <aside className="fixed top-0 left-0 bottom-0 w-72 z-50 bg-[var(--bg-surface)] border-r border-[var(--border-subtle)] shadow-clean-lg overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between px-5 pt-5 pb-4">
-                <Link href="/" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
+                <Link
+                  href="/"
+                  className="flex items-center gap-2"
+                  onClick={() => setSidebarOpen(false)}
+                >
                   <UtensilsCrossed className="w-6 h-6 text-orange-500" />
-                  <span className="text-lg font-bold font-display tracking-tight">MealScout</span>
+                  <span className="text-lg font-bold font-display tracking-tight">
+                    MealScout
+                  </span>
                 </Link>
                 <button
                   onClick={() => setSidebarOpen(false)}
@@ -674,8 +1057,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                       <User className="w-5 h-5 text-orange-500" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{user.firstName || user.email}</p>
-                      <p className="text-xs text-[var(--text-muted)] truncate">{user.email}</p>
+                      <p className="text-sm font-semibold truncate">
+                        {user.firstName || user.email}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)] truncate">
+                        {user.email}
+                      </p>
                     </div>
                   </Link>
                 </div>
@@ -700,7 +1087,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     <button
                       onClick={async () => {
                         try {
-                          await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+                          await fetch("/api/auth/logout", {
+                            method: "POST",
+                            credentials: "include",
+                          });
                           window.location.href = "/";
                         } catch {
                           window.location.href = "/";
@@ -732,11 +1122,17 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                         ? "bg-[color:var(--accent-text)] text-white"
                         : "bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)]"
                     }`}
-                    aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                    aria-label={
+                      item.labelKey
+                        ? t(item.labelKey, item.fallbackLabel)
+                        : item.fallbackLabel
+                    }
                   >
                     <item.icon className="h-4 w-4" />
                     <span className="hidden lg:inline">
-                      {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
+                      {item.labelKey
+                        ? t(item.labelKey, item.fallbackLabel)
+                        : item.fallbackLabel}
                     </span>
                   </Link>
                 ) : null,
@@ -763,83 +1159,94 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       {/* ═══════════════════════════════════════════════════════════════
           MOBILE: Bottom nav bar with top 3 + share + more
           ═══════════════════════════════════════════════════════════════ */}
-      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 h-[var(--mobile-nav-height)] w-full border-t px-2 pt-2 pb-[env(safe-area-inset-bottom)] z-[1100] lg:hidden">
-        <div className="flex items-stretch justify-around w-full max-w-md mx-auto">
-          {/* Top 3 role-specific items */}
-          {topItems.map((item) => renderNavLink(item))}
+      {shouldShowMobileNav && (
+        <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 h-[var(--mobile-nav-height)] w-full border-t px-2 pt-2 pb-[env(safe-area-inset-bottom)] z-[1100] lg:hidden">
+          <div className="flex items-stretch justify-around w-full max-w-md mx-auto">
+            {/* Top 3 role-specific items */}
+            {topItems.map((item) => renderNavLink(item))}
 
-          {/* Share button */}
-          <button
-            onClick={handleShare}
-            className="flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 nav-link--inactive"
-            aria-label="Share"
-          >
-            <Share2 className="w-5 h-5" />
-            <span className="text-[11px] leading-tight font-semibold tracking-normal">Share</span>
-          </button>
+            {/* Share button */}
+            <button
+              onClick={handleShare}
+              className="flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 nav-link--inactive"
+              aria-label="Share"
+            >
+              <Share2 className="w-5 h-5" />
+              <span className="text-[11px] leading-tight font-semibold tracking-normal">
+                Share
+              </span>
+            </button>
 
-          {/* More button */}
-          <button
-            onClick={() => setMoreOpen(true)}
-            className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
-              moreOpen ? "nav-link--active" : "nav-link--inactive"
-            }`}
-            aria-label="More"
-          >
-            <MoreHorizontal className="w-5 h-5" />
-            <span className="text-[11px] leading-tight font-semibold tracking-normal">More</span>
-          </button>
-        </div>
-      </nav>
+            {/* More button */}
+            <button
+              onClick={() => setMoreOpen(true)}
+              className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
+                moreOpen ? "nav-link--active" : "nav-link--inactive"
+              }`}
+              aria-label="More"
+            >
+              <MoreHorizontal className="w-5 h-5" />
+              <span className="text-[11px] leading-tight font-semibold tracking-normal">
+                More
+              </span>
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════
           MOBILE: "More" drawer
           ═══════════════════════════════════════════════════════════════ */}
-      <Drawer open={moreOpen} onOpenChange={setMoreOpen}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="flex items-center justify-between pb-2">
-            <DrawerTitle className="text-lg font-display">Menu</DrawerTitle>
-            <DrawerClose asChild>
-              <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </DrawerClose>
-          </DrawerHeader>
-
-          <div className="overflow-y-auto px-4 pb-8 space-y-5">
-            {Object.entries(groupedOverflow).map(([group, items]) => (
-              <div key={group}>
-                <p className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  {group}
-                </p>
-                <div className="space-y-0.5">
-                  {items.map(renderDrawerItem)}
-                </div>
-              </div>
-            ))}
-
-            {/* Logout in drawer */}
-            {user && (
-              <div className="pt-2 border-t border-[var(--border-subtle)]">
-                <button
-                  onClick={async () => {
-                    try {
-                      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-                      window.location.href = "/";
-                    } catch {
-                      window.location.href = "/";
-                    }
-                  }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full text-left text-red-500 hover:bg-red-500/10"
-                >
-                  <LogOut className="w-5 h-5 flex-shrink-0" />
-                  <span className="text-sm font-medium">Log Out</span>
+      {shouldShowMobileNav && (
+        <Drawer open={moreOpen} onOpenChange={setMoreOpen}>
+          <DrawerContent className="max-h-[85vh]">
+            <DrawerHeader className="flex items-center justify-between pb-2">
+              <DrawerTitle className="text-lg font-display">Menu</DrawerTitle>
+              <DrawerClose asChild>
+                <button className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-[var(--bg-card-hover)] transition-colors">
+                  <X className="w-4 h-4" />
                 </button>
-              </div>
-            )}
-          </div>
-        </DrawerContent>
-      </Drawer>
+              </DrawerClose>
+            </DrawerHeader>
+
+            <div className="overflow-y-auto px-4 pb-8 space-y-5">
+              {Object.entries(groupedOverflow).map(([group, items]) => (
+                <div key={group}>
+                  <p className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    {group}
+                  </p>
+                  <div className="space-y-0.5">
+                    {items.map(renderDrawerItem)}
+                  </div>
+                </div>
+              ))}
+
+              {/* Logout in drawer */}
+              {user && (
+                <div className="pt-2 border-t border-[var(--border-subtle)]">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch("/api/auth/logout", {
+                          method: "POST",
+                          credentials: "include",
+                        });
+                        window.location.href = "/";
+                      } catch {
+                        window.location.href = "/";
+                      }
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors w-full text-left text-red-500 hover:bg-red-500/10"
+                  >
+                    <LogOut className="w-5 h-5 flex-shrink-0" />
+                    <span className="text-sm font-medium">Log Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </DrawerContent>
+        </Drawer>
+      )}
     </>
   );
 }
