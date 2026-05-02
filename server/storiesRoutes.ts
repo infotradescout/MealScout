@@ -16,6 +16,7 @@ import {
   insertStoryAwardSchema,
   restaurantSubscriptions,
   feedAds,
+  mediaAssets,
   type VideoStory,
   type User,
   restaurants,
@@ -79,6 +80,85 @@ export const isPublicFeedStoryRenderable = (
   if (expiresAt && expiresAt.getTime() < now.getTime()) return false;
 
   return true;
+};
+
+const PUBLIC_FEED_MEDIA_OWNER_TYPES = [
+  "restaurant",
+  "food_truck",
+  "host",
+  "event",
+] as const;
+
+type PublicFeedMediaOwnerType = (typeof PUBLIC_FEED_MEDIA_OWNER_TYPES)[number];
+
+const publicFeedMediaOwnerTypeSet = new Set<string>(
+  PUBLIC_FEED_MEDIA_OWNER_TYPES,
+);
+
+export type PublicFeedMediaAssetRow = {
+  id: string;
+  ownerType?: string | null;
+  ownerId?: string | null;
+  mediaType?: string | null;
+  title?: string | null;
+  description?: string | null;
+  fileUrl?: string | null;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  status?: string | null;
+  visibility?: string | null;
+  isFeatured?: boolean | null;
+  createdAt?: Date | string | null;
+  deletedAt?: Date | string | null;
+};
+
+export const isPublicFeedMediaAssetRenderable = (
+  asset: PublicFeedMediaAssetRow,
+) => {
+  if (!asset.fileUrl) return false;
+  if (asset.mediaType !== "video") return false;
+  if (asset.status !== "active") return false;
+  if (asset.visibility !== "public") return false;
+  if (asset.deletedAt) return false;
+  if (!asset.ownerId) return false;
+  if (!publicFeedMediaOwnerTypeSet.has(String(asset.ownerType || ""))) {
+    return false;
+  }
+
+  return true;
+};
+
+const getPublicFeedMediaTargetUrl = (
+  ownerType: PublicFeedMediaOwnerType,
+  ownerId: string,
+) => {
+  if (ownerType === "food_truck") return `/truck/${ownerId}`;
+  if (ownerType === "host") return `/location/${ownerId}`;
+  if (ownerType === "event") return `/event/${ownerId}`;
+  return `/restaurant/${ownerId}`;
+};
+
+export const toPublicFeedMediaAssetVideo = (
+  asset: PublicFeedMediaAssetRow,
+) => {
+  const ownerType = String(asset.ownerType || "") as PublicFeedMediaOwnerType;
+  const ownerId = String(asset.ownerId || "");
+
+  return {
+    __type: "profile_media" as const,
+    id: `media:${asset.id}`,
+    mediaAssetId: asset.id,
+    ownerType,
+    ownerId,
+    title: asset.title || "Profile video",
+    description: asset.description || null,
+    mediaUrl: asset.fileUrl || "",
+    thumbnailUrl: asset.thumbnailUrl || null,
+    durationSeconds: Number(asset.durationSeconds || 0) || null,
+    targetUrl: getPublicFeedMediaTargetUrl(ownerType, ownerId),
+    isFeatured: asset.isFeatured === true,
+    createdAt: asset.createdAt || null,
+  };
 };
 
 export default function setupStoriesRoutes(app: Express) {
@@ -496,7 +576,10 @@ export default function setupStoriesRoutes(app: Express) {
       const userId = (req as any).user?.id;
       const page = parseInt(req.query.page as string) || 0;
       const limit = 10;
-      const offset = page * limit;
+      const communityStoryLimit = 6;
+      const communityStoryOffset = page * communityStoryLimit;
+      const profileMediaLimit = 2;
+      const profileMediaOffset = page * profileMediaLimit;
 
       // Get featured videos (sponsored content)
       const featuredStories = ((await db
@@ -536,6 +619,24 @@ export default function setupStoriesRoutes(app: Express) {
         )
         .limit(5); // fetch a handful of ads to rotate
 
+      const profileMediaVideos = ((await db
+        .select()
+        .from(mediaAssets)
+        .where(
+          and(
+            inArray(mediaAssets.ownerType, [...PUBLIC_FEED_MEDIA_OWNER_TYPES]),
+            eq(mediaAssets.mediaType, "video"),
+            eq(mediaAssets.status, "active"),
+            eq(mediaAssets.visibility, "public"),
+            isNull(mediaAssets.deletedAt),
+          ),
+        )
+        .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt))
+        .limit(profileMediaLimit)
+        .offset(profileMediaOffset)) as PublicFeedMediaAssetRow[])
+        .filter((asset) => isPublicFeedMediaAssetRenderable(asset))
+        .map((asset) => toPublicFeedMediaAssetVideo(asset));
+
       // Get community stories (recent uploads)
       const communityStories = ((await db
         .select()
@@ -550,13 +651,17 @@ export default function setupStoriesRoutes(app: Express) {
           )
         )
         .orderBy(desc(videoStories.createdAt))
-        .limit(limit - featuredStories.length)
-        .offset(offset)) as VideoStory[]).filter((story) =>
+        .limit(communityStoryLimit)
+        .offset(communityStoryOffset)) as VideoStory[]).filter((story) =>
           isPublicFeedStoryRenderable(story),
         );
 
       // Combine featured + community
-      let allStories: any[] = [...featuredStories, ...communityStories];
+      let allStories: any[] = [
+        ...featuredStories,
+        ...profileMediaVideos,
+        ...communityStories,
+      ].slice(0, limit);
 
       // Insert ads every N items based on ad.insertionFrequency (default 5)
       if (ads.length > 0) {
@@ -590,7 +695,7 @@ export default function setupStoriesRoutes(app: Express) {
       // Track impressions for all shown stories (skip ads)
       await Promise.all(
         allStories
-          .filter((story: any) => story && story.__type !== 'ad')
+          .filter((story: any) => story && !story.__type)
           .map((story: VideoStory) =>
             db
               .update(videoStories)
@@ -604,7 +709,7 @@ export default function setupStoriesRoutes(app: Express) {
       // Enrich stories with engagement data (skip ads)
       const enrichedStories = await Promise.all(
         allStories.map(async (story: any) => {
-          if (story.__type === 'ad') {
+          if (story.__type === 'ad' || story.__type === 'profile_media') {
             return story;
           }
 
@@ -638,7 +743,9 @@ export default function setupStoriesRoutes(app: Express) {
 
       res.json({
         stories: enrichedStories,
-        hasMore: communityStories.length === limit - featuredStories.length,
+        hasMore:
+          communityStories.length === communityStoryLimit ||
+          profileMediaVideos.length === profileMediaLimit,
         page,
       });
     } catch (error) {

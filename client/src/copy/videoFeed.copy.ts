@@ -40,6 +40,14 @@ export const VIDEO_FEED_COPY = {
     learnMore: "Learn more",
     ctaDefault: "View offer",
   },
+
+  profileVideo: {
+    badge: "Profile video",
+    ctaDefault: "View profile",
+    eventCta: "View event",
+    hostCta: "View location",
+    shareDescription: "Watch this profile video on MealScout.",
+  },
 } as const;
 
 export type VideoFeedCopy = typeof VIDEO_FEED_COPY;
