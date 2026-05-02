@@ -70,12 +70,14 @@ export default function LaunchHome() {
                 Local food truck booking starts here
               </div>
 
-              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[0.95] tracking-tight text-[var(--text-primary)]">
+              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black leading-tight tracking-normal text-[var(--text-primary)]">
                 Book food truck parking. Host food trucks. Find food nearby.
               </h1>
 
               <p className="mt-6 max-w-2xl text-base sm:text-xl font-medium leading-relaxed text-[var(--text-secondary)]">
-                MealScout connects food trucks with host locations that have usable space, then turns real activity into public food discovery for the community.
+                MealScout connects food trucks with host locations that have
+                usable space, then turns real activity into public food
+                discovery for the community.
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -124,7 +126,10 @@ export default function LaunchHome() {
                     {path.description}
                   </p>
                   <Link href={path.href}>
-                    <Button className="mt-5 w-full rounded-full font-bold" variant="outline">
+                    <Button
+                      className="mt-5 w-full rounded-full font-bold"
+                      variant="outline"
+                    >
                       {path.cta}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
@@ -143,11 +148,14 @@ export default function LaunchHome() {
                   <ShieldCheck className="h-5 w-5" />
                   Launch focus
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-                  The first job is not more features. The first job is reliable bookings.
+                <h2 className="text-2xl sm:text-3xl font-black tracking-normal">
+                  The first job is not more features. The first job is reliable
+                  bookings.
                 </h2>
                 <p className="mt-4 text-base leading-relaxed text-[var(--text-secondary)]">
-                  MealScout is built around a simple local transaction: a truck needs a place to park, a host has usable space, and both sides need a clean path to confirm the opportunity.
+                  MealScout is built around a simple local transaction: a truck
+                  needs a place to park, a host has usable space, and both sides
+                  need a clean path to confirm the opportunity.
                 </p>
                 <div className="mt-6 grid gap-3">
                   {trustPoints.map((point) => (
@@ -164,27 +172,38 @@ export default function LaunchHome() {
 
             <Card className="border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
               <CardContent className="p-6 sm:p-8">
-                <h2 className="text-2xl font-black tracking-tight">
+                <h2 className="text-2xl font-black tracking-normal">
                   Not sure where to start?
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-[var(--text-secondary)]">
-                  Pick the role that matches what you control today. Trucks bring demand. Hosts bring space. Customers bring discovery once activity is real.
+                  Pick the role that matches what you control today. Trucks
+                  bring demand. Hosts bring space. Customers bring discovery
+                  once activity is real.
                 </p>
                 <div className="mt-6 space-y-3">
                   <Link href="/truck-onboarding?claim=1">
-                    <Button variant="outline" className="w-full justify-between rounded-full font-bold">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between rounded-full font-bold"
+                    >
                       Claim a truck
                       <Truck className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Link href="/for-hosts">
-                    <Button variant="outline" className="w-full justify-between rounded-full font-bold">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between rounded-full font-bold"
+                    >
                       Learn about hosting
                       <Store className="h-4 w-4" />
                     </Button>
                   </Link>
                   <Link href="/map">
-                    <Button variant="outline" className="w-full justify-between rounded-full font-bold">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between rounded-full font-bold"
+                    >
                       Open the map
                       <MapPin className="h-4 w-4" />
                     </Button>
