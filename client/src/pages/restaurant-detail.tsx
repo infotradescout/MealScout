@@ -277,6 +277,14 @@ export default function RestaurantDetailPage() {
   const isFoodTruck =
     (restaurant as any)?.isFoodTruck ||
     (restaurant as any)?.businessType === "food_truck";
+  const isVerifiedMemberProfile =
+    Boolean((restaurant as any)?.isVerified) &&
+    Boolean((restaurant as any)?.isActive);
+  const isGeneratedProfile =
+    String((restaurant as any)?.profileSource || "") === "google" ||
+    Boolean((restaurant as any)?.googlePlaceId);
+  const canClaimGeneratedProfile =
+    !isVerifiedMemberProfile && isGeneratedProfile;
 
   const restaurantNameForSlug = String((restaurant as any)?.name || "").trim();
   const expectedRestaurantSlug = toSlug(restaurantNameForSlug);
@@ -297,6 +305,18 @@ export default function RestaurantDetailPage() {
       setLocation(`${canonicalPath}${window.location.search || ""}`);
     }
   }, [restaurantId, restaurant, expectedRestaurantSlug, setLocation]);
+
+  useEffect(() => {
+    if (!user || !canClaimGeneratedProfile) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("claim") === "1") {
+        setClaimDialogOpen(true);
+      }
+    } catch {
+      // ignore malformed query strings
+    }
+  }, [canClaimGeneratedProfile, location, user]);
 
   const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
     queryKey: ["/api/bookings/truck", restaurantId, "schedule"],
@@ -514,12 +534,6 @@ export default function RestaurantDetailPage() {
   const onsiteOrderingEnabled = Boolean(
     publicMenusData?.orderingEnabled && hasOnsiteMenu,
   );
-  const isVerifiedMemberProfile =
-    Boolean((restaurant as any)?.isVerified) &&
-    Boolean((restaurant as any)?.isActive);
-  const isGeneratedProfile =
-    String((restaurant as any)?.profileSource || "") === "google" ||
-    Boolean((restaurant as any)?.googlePlaceId);
 
   const cvsScore = Math.max(
     0,
@@ -591,20 +605,6 @@ export default function RestaurantDetailPage() {
   );
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
-  const canClaimGeneratedProfile =
-    !isVerifiedMemberProfile && isGeneratedProfile;
-
-  useEffect(() => {
-    if (!user || !canClaimGeneratedProfile) return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("claim") === "1") {
-        setClaimDialogOpen(true);
-      }
-    } catch {
-      // ignore malformed query strings
-    }
-  }, [canClaimGeneratedProfile, location, user]);
   const phoneHref = toPhoneHref(phoneNumber);
   const profileTypeLabel = isFoodTruck
     ? "Food Truck"
