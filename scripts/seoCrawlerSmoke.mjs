@@ -20,6 +20,11 @@ const checks = [
     includes: ["<sitemapindex", "/sitemap.xml", "/sitemap-videos.xml"],
   },
   {
+    path: "/sitemap-videos.xml",
+    type: "application/xml",
+    includes: ["<urlset"],
+  },
+  {
     path: "/llms.txt",
     type: "text/plain",
     includes: ["# MealScout", "Priority Pages", "Business Profile Pages"],
