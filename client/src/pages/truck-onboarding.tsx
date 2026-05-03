@@ -31,11 +31,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { authUrl } from "@/lib/api";
+import { trackMetaEvent } from "@/lib/meta-pixel";
 import { apiRequest, ApiError } from "@/lib/queryClient";
 import {
   PASSWORD_REGEX,
   PASSWORD_REQUIREMENTS,
 } from "@/utils/passwordPolicy";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
 
 type Stage = "account" | "truck" | "basics" | "finish";
 type AuthMode = "signup" | "login";
@@ -176,7 +182,7 @@ const cuisineOptions = [
 ];
 
 const stageOrder: Array<{ id: Stage; label: string }> = [
-  { id: "account", label: "Account" },
+  { id: "account", label: "Owner" },
   { id: "truck", label: "Truck" },
   { id: "basics", label: "Basics" },
   { id: "finish", label: "Done" },
@@ -225,6 +231,10 @@ export default function TruckOnboardingPage() {
     [initialParams],
   );
   const incomingIntent = String(initialParams.get("intent") || "general").trim();
+  const incomingSource = String(
+    initialParams.get("source") || initialParams.get("src") || "direct",
+  ).trim();
+  const incomingFlow = String(initialParams.get("flow") || "truck-owner").trim();
   const hasClaimIntent =
     incomingClaimQuery.length > 0 || initialParams.get("claim") === "1";
 
@@ -254,6 +264,24 @@ export default function TruckOnboardingPage() {
   const [submittingVerification, setSubmittingVerification] = useState(false);
   const [snoozingVerification, setSnoozingVerification] = useState(false);
   const autoSearchRan = useRef(false);
+  const funnelContext = useMemo(
+    () => ({
+      page: "truck-onboarding",
+      audience: "food_truck_owner",
+      source: incomingSource || "direct",
+      flow: incomingFlow || "truck-owner",
+      intent: incomingIntent || "general",
+      hasClaimIntent,
+      claimQueryProvided: incomingClaimQuery.length > 0,
+    }),
+    [
+      hasClaimIntent,
+      incomingClaimQuery.length,
+      incomingFlow,
+      incomingIntent,
+      incomingSource,
+    ],
+  );
 
   const { data: restaurants = [], isLoading: loadingRestaurants } = useQuery<
     OwnedRestaurant[]
@@ -284,6 +312,26 @@ export default function TruckOnboardingPage() {
     () => restaurants.find(isTruckRestaurant) || null,
     [restaurants],
   );
+  const hasExistingTruck = Boolean(existingTruck);
+
+  useEffect(() => {
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.truckOnboardingView,
+      `${funnelContext.source}:${funnelContext.flow}:${funnelContext.intent}`,
+      funnelContext,
+    );
+  }, [funnelContext]);
+
+  useEffect(() => {
+    trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingStageView, {
+      ...funnelContext,
+      stage,
+      authMode,
+      truckMode,
+      isAuthenticated,
+      hasExistingTruck,
+    });
+  }, [authMode, funnelContext, hasExistingTruck, isAuthenticated, stage, truckMode]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -458,6 +506,10 @@ export default function TruckOnboardingPage() {
     event.preventDefault();
     const error = validateSignup();
     if (error) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingSignupBlocked, {
+        ...funnelContext,
+        reason: error,
+      });
       toast({
         title: "Check your account details",
         description: error,
@@ -468,6 +520,16 @@ export default function TruckOnboardingPage() {
 
     setSubmittingAuth(true);
     try {
+      trackFunnelEvent(FUNNEL_EVENTS.signupSubmitted, {
+        ...funnelContext,
+        stage: "owner_account_submit",
+        accountType: "business",
+        businessSubType: "food_truck",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingSignupSubmitted, {
+        ...funnelContext,
+        authMode: "signup",
+      });
       await apiRequest("POST", "/api/auth/restaurant/register", {
         firstName: signup.firstName.trim(),
         lastName: signup.lastName.trim(),
@@ -482,12 +544,39 @@ export default function TruckOnboardingPage() {
           signup.email.trim(),
         );
       } catch {}
+      const verifyUrl = makeVerifyEmailUrl();
+      trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+        ...funnelContext,
+        stage: "owner_account_created",
+        accountType: "business",
+        businessSubType: "food_truck",
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingSignupCompleted, {
+        ...funnelContext,
+        redirectPath: verifyUrl,
+      });
+      trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
+        ...funnelContext,
+        stage: "redirect_to_verify_email",
+        redirectPath: verifyUrl,
+        accountType: "business",
+        businessSubType: "food_truck",
+      });
+      trackMetaEvent("Lead", {
+        content_name: "food_truck_owner_signup",
+        content_category: "truck_onboarding",
+      });
       toast({
         title: "Verify your email",
         description: "We sent a verification link. Use it, then continue here.",
       });
-      window.location.href = makeVerifyEmailUrl();
+      window.location.href = verifyUrl;
     } catch (signupError: any) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingSignupBlocked, {
+        ...funnelContext,
+        reason: "api_error",
+        message: signupError?.message || null,
+      });
       toast({
         title: "Account not created",
         description: signupError?.message || "Try again in a moment.",
@@ -501,6 +590,11 @@ export default function TruckOnboardingPage() {
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!login.email.trim() || !login.password) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingLoginSubmitted, {
+        ...funnelContext,
+        blocked: true,
+        reason: "missing_credentials",
+      });
       toast({
         title: "Missing sign in details",
         description: "Enter your email and password.",
@@ -511,6 +605,10 @@ export default function TruckOnboardingPage() {
 
     setSubmittingAuth(true);
     try {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingLoginSubmitted, {
+        ...funnelContext,
+        blocked: false,
+      });
       await apiRequest("POST", "/api/auth/restaurant/login", {
         email: login.email.trim(),
         password: login.password,
@@ -518,6 +616,10 @@ export default function TruckOnboardingPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       await refetch();
       setStage("truck");
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingLoginCompleted, {
+        ...funnelContext,
+        nextStage: "truck",
+      });
       toast({
         title: "Signed in",
         description: "Now finish your truck setup.",
@@ -557,6 +659,11 @@ export default function TruckOnboardingPage() {
     }
     setClaimLoading(true);
     setClaimError("");
+    trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingClaimSearch, {
+      ...funnelContext,
+      queryLength: q.length,
+      stage,
+    });
     try {
       const res = await apiRequest(
         "GET",
@@ -565,10 +672,24 @@ export default function TruckOnboardingPage() {
       const data = await res.json().catch(() => []);
       const rows = Array.isArray(data) ? data : [];
       setClaimResults(rows);
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingClaimSearch, {
+        ...funnelContext,
+        queryLength: q.length,
+        resultCount: rows.length,
+        stage,
+        completed: true,
+      });
       if (rows.length === 0) {
         setClaimError("No matching trucks found. You can create a new profile.");
       }
     } catch (error: any) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingClaimSearch, {
+        ...funnelContext,
+        queryLength: q.length,
+        stage,
+        completed: false,
+        error: error?.message || "search_failed",
+      });
       setClaimError(error?.message || "Search failed. Try a shorter name.");
     } finally {
       setClaimLoading(false);
@@ -676,6 +797,13 @@ export default function TruckOnboardingPage() {
     event.preventDefault();
     const error = validateProfile();
     if (error) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingProfileSubmitted, {
+        ...funnelContext,
+        blocked: true,
+        reason: error,
+        truckMode,
+        hasClaimSelection: Boolean(claimSelection),
+      });
       toast({
         title: "Check truck basics",
         description: error,
@@ -686,6 +814,18 @@ export default function TruckOnboardingPage() {
 
     setSubmittingProfile(true);
     try {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingProfileSubmitted, {
+        ...funnelContext,
+        blocked: false,
+        truckMode,
+        hasClaimSelection: Boolean(claimSelection),
+        hasOptionalDetails:
+          Boolean(profile.cuisineType.trim()) ||
+          Boolean(profile.description.trim()) ||
+          Boolean(profile.websiteUrl.trim()) ||
+          Boolean(profile.instagramUrl.trim()) ||
+          Boolean(profile.facebookPageUrl.trim()),
+      });
       const restaurantData = buildRestaurantPayload();
       const response = claimSelection
         ? await apiRequest("POST", "/api/truck-claims", {
@@ -720,11 +860,25 @@ export default function TruckOnboardingPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       await queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
       setStage("finish");
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingProfileCompleted, {
+        ...funnelContext,
+        truckMode,
+        hasClaimSelection: Boolean(claimSelection),
+        restaurantId: restaurant?.id || null,
+      });
       toast({
         title: "Truck profile created",
         description: "Your profile is ready for menu and live-location setup.",
       });
     } catch (error: any) {
+      trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingProfileSubmitted, {
+        ...funnelContext,
+        blocked: true,
+        reason: "api_error",
+        message: error?.message || null,
+        truckMode,
+        hasClaimSelection: Boolean(claimSelection),
+      });
       toast({
         title: "Truck setup failed",
         description: error?.message || "Try again in a moment.",
@@ -760,9 +914,59 @@ export default function TruckOnboardingPage() {
   };
 
   const renderAccountStage = () => (
-    <div className="mx-auto max-w-xl">
+    <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
+      <section className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+            <Truck className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              Food truck owner setup
+            </p>
+            <h2 className="mt-1 text-xl font-black">
+              Create the owner account first.
+            </h2>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+          This path is for owners claiming or creating a food truck profile.
+          After access is confirmed, you can add the truck, menu, schedule,
+          booking, and live-location tools.
+        </p>
+
+        <div className="mt-5 grid gap-3">
+          {[
+            ["No customer account detour", "The next step is truck setup."],
+            ["No credit card to start", "Create the profile before any paid tools."],
+            ["Built for owner trust", "Phone and email protect the truck claim."],
+          ].map(([title, body]) => (
+            <div
+              key={title}
+              className="flex gap-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--status-success)]" />
+              <div>
+                <div className="text-sm font-black">{title}</div>
+                <div className="text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                  {body}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
         <CardContent className="p-5">
+          <div className="mb-4">
+            <h2 className="text-xl font-black">Owner access</h2>
+            <p className="mt-1 text-sm font-semibold text-[color:var(--text-secondary)]">
+              Sign in or create the owner account attached to the truck.
+            </p>
+          </div>
+
           <div className="mb-4 grid grid-cols-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
             <Button
               type="button"

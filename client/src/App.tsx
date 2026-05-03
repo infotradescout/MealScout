@@ -905,12 +905,30 @@ function Router() {
   );
 }
 
+const ownerSetupFullBleedRoutes = [
+  "/truck-landing",
+  "/truck-onboarding",
+  "/claim-truck",
+];
+
 function App() {
+  const [location] = useLocation();
+  const currentPath = location.split("?")[0];
+  const hideMobileNavPadding = ownerSetupFullBleedRoutes.some(
+    (route) => currentPath === route || currentPath.startsWith(`${route}/`),
+  );
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <TimeOfDayBackground />
-        <div className="desktop-full-width app-background app-content min-h-screen md:pt-16 relative z-10 pb-[var(--mobile-nav-height)] lg:pb-0">
+        <div
+          className={`desktop-full-width app-background app-content min-h-screen relative z-10 ${
+            hideMobileNavPadding
+              ? "pb-0 md:pt-0"
+              : "pb-[var(--mobile-nav-height)] md:pt-16 lg:pb-0"
+          }`}
+        >
           <Toaster />
           <InAppBrowserNotice />
           <AdminInlineCopyProvider>

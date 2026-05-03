@@ -1,322 +1,631 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapPin, Calendar, ShoppingCart, TrendingUp, Users, Share2, Star, BarChart3, Sparkles, Truck, Lock } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { useEffect, useMemo } from "react";
 import { Link } from "wouter";
+import {
+  ArrowRight,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  MapPin,
+  MenuSquare,
+  Radio,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+  Users,
+} from "lucide-react";
+
 import { SEOHead } from "@/components/seo-head";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { getLoginUrl } from "@/const";
+import { useAuth } from "@/hooks/useAuth";
+import { trackMetaEvent } from "@/lib/meta-pixel";
+import {
+  FUNNEL_EVENTS,
+  trackFunnelEvent,
+  trackFunnelEventOncePerSession,
+} from "@/utils/funnelTelemetry";
+
+const rawSignupHref = "/truck-onboarding?claim=1&flow=truck-owner";
+
+const ownerOutcomes = [
+  {
+    title: "Booking requests",
+    body: "Hosts can ask for date, time, location, headcount, and notes from your profile.",
+    icon: ClipboardList,
+    image: "/backgrounds/food-truck-day.jpg",
+  },
+  {
+    title: "Menu and pickup orders",
+    body: "Keep the current menu online and point regulars to direct pickup ordering when you are ready.",
+    icon: MenuSquare,
+    image: "/backgrounds/night-market-plate.webp",
+  },
+  {
+    title: "Schedule and live status",
+    body: "Publish weekly stops, service windows, and live location while your window is open.",
+    icon: ShoppingBag,
+    image: "/backgrounds/food-truck-night.jpg",
+  },
+  {
+    title: "Service area profile",
+    body: "Show city, cuisine, contact, parking needs, and the details hosts need before booking.",
+    icon: CalendarDays,
+    image: "/backgrounds/food-truck-day.jpg",
+  },
+  {
+    title: "Promotion link",
+    body: "Use one link in Facebook, Instagram, QR codes, flyers, and event pitches.",
+    icon: Radio,
+    image: "/backgrounds/food-truck-night.jpg",
+  },
+  {
+    title: "Setup checklist",
+    body: "See what is missing before sending hosts or customers to your truck profile.",
+    icon: BarChart3,
+    image: "/backgrounds/night-market-plate.webp",
+  },
+];
+
+const ownerUseCases = [
+  {
+    title: "Turn DMs into booking requests",
+    body: "Give offices, lots, breweries, schools, and event organizers one clean request path.",
+    label: "Events",
+    icon: Users,
+    image: "/backgrounds/food-truck-night.jpg",
+  },
+  {
+    title: "Keep menu and stops current",
+    body: "Update your profile once, then use the same link everywhere you promote the truck.",
+    label: "Menu",
+    icon: MenuSquare,
+    image: "/backgrounds/night-market-plate.webp",
+  },
+  {
+    title: "Start with a real owner claim",
+    body: "Create or claim the truck before adding ordering, schedules, and paid tools.",
+    label: "Claim",
+    icon: Truck,
+    image: "/backgrounds/food-truck-day.jpg",
+  },
+];
+
+const setupSteps = [
+  {
+    title: "Claim or create your truck",
+    body: "Attach the profile to the owner account that will manage menu, schedule, and requests.",
+    image: "/backgrounds/food-truck-day.jpg",
+  },
+  {
+    title: "Add the details hosts check",
+    body: "Cuisine, city, service area, phone, menu, photos, booking notes, and service windows.",
+    image: "/backgrounds/night-market-plate.webp",
+  },
+  {
+    title: "Publish the link",
+    body: "Use the profile in social bios, ads, event pitches, QR codes, and customer messages.",
+    image: "/backgrounds/food-truck-night.jpg",
+  },
+];
+
+const faqItems = [
+  {
+    question: "Can I start without paying?",
+    answer:
+      "Yes. Start by creating or claiming the truck profile. Paid tools can come after the profile is useful.",
+  },
+  {
+    question: "Do I need online ordering ready first?",
+    answer:
+      "No. You can launch with profile details, menu, schedule, and booking requests before turning on pickup ordering.",
+  },
+  {
+    question: "Does this replace my social pages?",
+    answer:
+      "No. MealScout gives those pages a stable link for menu, stops, bookings, and ordering.",
+  },
+];
+
+const schemaData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "MealScout Food Truck Owner Tools",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description:
+        "Food truck owner tools for profile claims, menus, schedules, host requests, live location, and direct pickup ordering.",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        description: "Free food truck profile creation with optional paid owner tools.",
+      },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer,
+        },
+      })),
+    },
+  ],
+};
+
+const appendCurrentAttribution = (
+  href: string,
+  extraParams: Record<string, string>,
+) => {
+  if (typeof window === "undefined") return href;
+
+  const url = new URL(href, window.location.origin);
+  const currentParams = new URLSearchParams(window.location.search);
+
+  currentParams.forEach((value, key) => {
+    if (!url.searchParams.has(key)) {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  Object.entries(extraParams).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+
+  return `${url.pathname}${url.search}`;
+};
 
 export default function TruckLanding() {
   const { isAuthenticated } = useAuth();
-  const signupHref = "/truck-onboarding";
+  const signupHref = useMemo(
+    () =>
+      appendCurrentAttribution(rawSignupHref, {
+        source: "truck-landing",
+        audience: "food-truck-owner",
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    trackFunnelEventOncePerSession(
+      FUNNEL_EVENTS.landingView,
+      "truck_landing",
+      {
+        page: "truck-landing",
+        audience: "food_truck_owner",
+      },
+    );
+  }, []);
+
+  const trackCta = (cta: string, href: string) => {
+    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+      page: "truck-landing",
+      audience: "food_truck_owner",
+      cta,
+      href,
+    });
+
+    if (cta.includes("profile")) {
+      trackMetaEvent("Lead", {
+        content_name: "truck_landing_profile_cta",
+        content_category: "food_truck_owner",
+      });
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <main className="min-h-screen bg-[var(--bg-surface)] text-[color:var(--text-primary)]">
       <SEOHead
-        title="Food Truck Owner Tools for Spots, Orders, Schedules, and Social | MealScout"
-        description="MealScout helps food truck owners find spots, publish schedules, take pickup orders, manage booking requests, and promote updates from one profile."
+        title="Food Truck Booking, Menu, Schedule, and Pickup Ordering Tools | MealScout"
+        description="Create or claim your food truck profile, publish your menu and schedule, receive host booking requests, show live location, and turn on direct pickup ordering."
         canonicalUrl="https://www.mealscout.us/truck-landing"
+        ogImage="/backgrounds/food-truck-day.jpg"
+        schemaData={schemaData}
       />
 
-      {/* Navigation */}
-      <nav className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/">
-            <a className="flex items-center space-x-2">
-              <Truck className="h-6 w-6 text-primary" />
-              <span className="text-lg font-bold">MealScout</span>
-            </a>
-          </Link>
-          <div className="flex items-center gap-4">
-            <a href="/map" className="text-sm font-medium hover:text-primary transition-colors">Find Spots</a>
-            <a href="/search" className="text-sm font-medium hover:text-primary transition-colors">Search</a>
-            <a href="/deals" className="text-sm font-medium hover:text-primary transition-colors">Deals</a>
-            {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button variant="default">Dashboard</Button>
-              </Link>
-            ) : (
-              <a href={getLoginUrl()}>
-                <Button variant="default">Sign In</Button>
+      <section className="relative min-h-[88svh] overflow-hidden bg-neutral-950 text-white">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/backgrounds/food-truck-day.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-black/42" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.9) 34%, rgba(0,0,0,0.62) 70%, rgba(0,0,0,0.38) 100%)",
+          }}
+        />
+
+        <header className="absolute inset-x-0 top-0 z-20 border-b border-white/10 bg-black/38 backdrop-blur">
+          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+            <Link href="/" className="flex items-center gap-2 font-black">
+              <Truck className="h-6 w-6 text-amber-300" />
+              <span>MealScout</span>
+            </Link>
+            <nav className="hidden items-center gap-5 text-sm font-bold text-white/82 md:flex">
+              <a href="#owner-tools" className="hover:text-white">
+                Owner Tools
               </a>
+              <a href="#setup" className="hover:text-white">
+                Setup
+              </a>
+              <a href="#faq" className="hover:text-white">
+                FAQ
+              </a>
+            </nav>
+            {isAuthenticated ? (
+              <Button asChild size="sm">
+                <Link href="/restaurant-owner-dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <Button asChild size="sm" variant="secondary">
+                <a href={getLoginUrl()}>Sign in</a>
+              </Button>
             )}
           </div>
-        </div>
-      </nav>
+        </header>
 
-      {/* Hero Section */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-primary/5 to-background">
-        <div className="container">
-          <div className="max-w-3xl mx-auto text-center space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Now with Local Intelligence</span>
+        <div className="relative z-10 mx-auto flex min-h-[88svh] max-w-6xl flex-col justify-center px-4 pb-10 pt-24 sm:px-6 lg:pt-28">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-md border border-amber-300/35 bg-black/45 px-3 py-2 text-sm font-black text-amber-200 backdrop-blur">
+              <ShieldCheck className="h-4 w-4" />
+              For food truck owners
             </div>
-            
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-              Never Stop <span className="text-primary">Moving</span>
+
+            <h1 className="mt-5 max-w-[13ch] text-4xl font-black leading-[1.02] tracking-normal sm:text-6xl lg:text-7xl">
+              Fill your calendar without chasing every DM.
             </h1>
-            
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Find profitable parking spots, fill your schedule year-round, publish your menu, and accept pickup pre-orders from one place.
+
+            <p className="mt-5 max-w-2xl text-lg font-semibold leading-relaxed text-white/88 sm:text-xl">
+              Claim or create your truck profile, publish the menu and schedule,
+              collect host requests, show live status, and add pickup ordering
+              from one owner link.
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <a href="/map">
-                <Button size="lg" className="text-lg px-8">
-                  <MapPin className="mr-2 h-5 w-5" />
-                  Find Parking Spots
-                </Button>
-              </a>
-              {!isAuthenticated && (
-                <a href={signupHref}>
-                  <Button size="lg" variant="outline" className="text-lg px-8">
-                    List My Truck
-                  </Button>
+
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="h-14 gap-2 px-7 text-base font-black">
+                <Link
+                  href={signupHref}
+                  onClick={() => trackCta("create_profile_hero", signupHref)}
+                >
+                  Claim or create your truck
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="secondary"
+                className="h-14 bg-white/95 px-7 text-base font-black text-black hover:bg-white"
+              >
+                <a
+                  href="#owner-tools"
+                  onClick={() => trackCta("view_owner_tools", "#owner-tools")}
+                >
+                  See what you get
                 </a>
-              )}
+              </Button>
             </div>
-            <div className="flex flex-wrap justify-center gap-2 pt-2 text-sm">
-              <Link href="/doordash-alternative-for-food-trucks" className="text-primary underline-offset-4 hover:underline">
-                DoorDash alternative
-              </Link>
-              <span className="text-muted-foreground">/</span>
-              <Link href="/food-truck-social-media-management" className="text-primary underline-offset-4 hover:underline">
-                Social tools
-              </Link>
-              <span className="text-muted-foreground">/</span>
-              <Link href="/food-truck-opportunities/pensacola" className="text-primary underline-offset-4 hover:underline">
-                Pensacola opportunities
-              </Link>
-              <span className="text-muted-foreground">/</span>
-              <Link href="/food-truck-customer-list" className="text-primary underline-offset-4 hover:underline">
-                Customer list
-              </Link>
-              <span className="text-muted-foreground">/</span>
-              <Link href="/food-truck-website-builder" className="text-primary underline-offset-4 hover:underline">
-                Truck website
-              </Link>
+
+            <div className="mt-6 grid gap-2 text-sm font-bold text-white/86 sm:grid-cols-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                Free profile setup
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                Booking request link
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                Menu and stops together
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-16">
-        <div className="container">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3">For Food Truck Owners</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to find spots, manage your schedule, and grow pickup revenue
+      <section className="border-b border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+        <div className="mx-auto grid max-w-6xl gap-3 px-4 py-5 sm:grid-cols-3 sm:px-6">
+          {[
+            {
+              title: "Claim",
+              body: "Tie the profile to the owner who runs the truck.",
+              image: "/backgrounds/food-truck-day.jpg",
+            },
+            {
+              title: "Publish",
+              body: "Put menu, schedule, service area, and live status in one place.",
+              image: "/backgrounds/night-market-plate.webp",
+            },
+            {
+              title: "Book",
+              body: "Give hosts and customers a destination that can capture demand.",
+              image: "/backgrounds/food-truck-night.jpg",
+            },
+          ].map((card) => (
+            <div
+              key={card.title}
+              className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+            >
+              <img
+                src={card.image}
+                alt=""
+                className="h-24 w-full object-cover"
+                loading="lazy"
+              />
+              <div className="p-4">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <h2 className="mt-3 text-base font-black">{card.title}</h2>
+                <p className="mt-1 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                  {card.body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[0.85fr_1.15fr]">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+            Built for truck work
+          </p>
+          <h2 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+            The profile has to help you get booked.
+          </h2>
+          <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+            A food truck owner needs faster setup, cleaner host requests, and
+            one link that is useful the same day it goes live.
+          </p>
+        </div>
+        <div className="grid gap-3">
+          {ownerUseCases.map((item) => (
+            <div
+              key={item.title}
+              className="grid overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean sm:grid-cols-[10rem_1fr]"
+            >
+              <img
+                src={item.image}
+                alt=""
+                className="h-32 w-full object-cover sm:h-full"
+                loading="lazy"
+              />
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </div>
+                <h3 className="mt-2 text-lg font-black">{item.title}</h3>
+                <p className="mt-1 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                  {item.body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section
+        id="owner-tools"
+        className="border-y border-[color:var(--border-subtle)] bg-[var(--bg-card)]"
+      >
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+          <div className="max-w-2xl">
+            <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              Owner tools
+            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+              Tools that make the profile worth sharing.
+            </h2>
+            <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+              Start with the public profile. Add the tools that match how your
+              truck actually serves customers and hosts.
             </p>
           </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
-            {/* Free Features */}
-            <div>
-              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
-              <Card>
-                <CardHeader>
-                  <MapPin className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Find Parking Spots</CardTitle>
-                  <CardDescription>Browse available spots and book year-round</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
 
-            <div>
-              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
-              <Card>
-                <CardHeader>
-                  <Calendar className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Manage Schedule</CardTitle>
-                  <CardDescription>Post your schedule and manage bookings</CardDescription>
-                </CardHeader>
+          <div className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {ownerOutcomes.map((tool) => (
+              <Card
+                key={tool.title}
+                className="overflow-hidden border-[color:var(--border-subtle)] bg-[var(--bg-surface)] shadow-clean"
+              >
+                <img
+                  src={tool.image}
+                  alt=""
+                  className="h-36 w-full object-cover"
+                  loading="lazy"
+                />
+                <CardContent className="p-5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[color:var(--accent-text)] text-black">
+                    <tool.icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-black">{tool.title}</h3>
+                  <p className="mt-2 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                    {tool.body}
+                  </p>
+                </CardContent>
               </Card>
-            </div>
-
-            <div>
-              <div className="text-sm font-semibold text-muted-foreground mb-3">FREE</div>
-              <Card>
-                <CardHeader>
-                  <Share2 className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Affiliate System</CardTitle>
-                  <CardDescription>Earn commissions by sharing links</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
-
-            {/* Premium Features */}
-            <div>
-              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
-              <Card>
-                <CardHeader>
-                  <ShoppingCart className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Accept Pickup Orders</CardTitle>
-                  <CardDescription>Let customers pre-order and pay before they reach the window</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
-
-            <div>
-              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
-              <Card>
-                <CardHeader>
-                  <TrendingUp className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Track Growth</CardTitle>
-                  <CardDescription>Analytics, insights, and performance tracking</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
-
-            <div>
-              <div className="text-sm font-semibold text-primary mb-3">PREMIUM</div>
-              <Card>
-                <CardHeader>
-                  <Sparkles className="h-8 w-8 text-primary mb-2" />
-                  <CardTitle className="text-lg">Local Intelligence</CardTitle>
-                  <CardDescription>Market insights and trends</CardDescription>
-                </CardHeader>
-              </Card>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section className="py-16 bg-muted/50">
-        <div className="container">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3">Start Free with Premium Features</h2>
-            <p className="text-lg text-muted-foreground">
-              Get 30 days of premium access free. No credit card required.
+      <section id="setup" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              Setup path
+            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+              From signup to a useful truck link.
+            </h2>
+            <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+              The first job is simple: make the truck profile real enough for a
+              host or customer to take the next step.
+            </p>
+            <Button asChild className="mt-5 gap-2 font-black">
+              <Link
+                href={signupHref}
+                onClick={() => trackCta("create_profile_setup", signupHref)}
+              >
+                Start owner setup
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          <div className="grid gap-3">
+            {setupSteps.map((step, index) => (
+              <div
+                key={step.title}
+                className="grid overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean sm:grid-cols-[9rem_1fr]"
+              >
+                <img
+                  src={step.image}
+                  alt=""
+                  className="h-28 w-full object-cover sm:h-full"
+                  loading="lazy"
+                />
+                <div className="flex gap-4 p-4">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)] text-sm font-black text-black">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h3 className="font-black">{step.title}</h3>
+                    <p className="mt-1 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                      {step.body}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-[color:var(--border-subtle)] bg-[var(--bg-card)]">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[1fr_1.05fr] lg:items-center">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              Promotion link
+            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+              One link for the places you already promote.
+            </h2>
+            <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+              Put the profile behind your bio, ads, event pitches, QR codes,
+              flyers, text replies, and customer follow-ups.
             </p>
           </div>
-          
-          <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
-            {/* Free Features */}
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Free (After Trial)</h3>
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Search visibility</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Online menu</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Schedule posting</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Parking pass bookings</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Browse events</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Basic dashboard</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Recommendations</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Affiliate program</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Supplier directory</span>
-                </li>
-              </ul>
-            </div>
 
-            {/* Premium Features */}
-            <div>
-              <h3 className="text-xl font-semibold mb-4">Premium ($25/mo) - Early Adopter Lock-In</h3>
-              <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Everything in Free, plus:</span>
-                </li>
-                <li className="flex items-start gap-2 mt-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Map visibility</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Home page featured</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Pickup pre-ordering</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Publish deals</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Schedule management</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Live location tracking</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Social auto-posting</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Premium analytics</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">+</span>
-                  <span>Local Intelligence</span>
-                </li>
-              </ul>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              {
+                title: "Menu link",
+                body: "Point regulars to the current menu.",
+                image: "/backgrounds/night-market-plate.webp",
+              },
+              {
+                title: "Schedule link",
+                body: "Show today and upcoming stops.",
+                image: "/backgrounds/food-truck-night.jpg",
+              },
+              {
+                title: "Booking link",
+                body: "Let hosts request the truck cleanly.",
+                image: "/backgrounds/food-truck-day.jpg",
+              },
+              {
+                title: "Live link",
+                body: "Turn on location when serving.",
+                image: "/backgrounds/food-truck-night.jpg",
+              },
+            ].map((card) => (
+              <div
+                key={card.title}
+                className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+              >
+                <img
+                  src={card.image}
+                  alt=""
+                  className="h-28 w-full object-cover"
+                  loading="lazy"
+                />
+                <div className="p-4">
+                  <MapPin className="h-5 w-5 text-sky-500" />
+                  <h3 className="mt-3 font-black">{card.title}</h3>
+                  <p className="mt-1 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                    {card.body}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16">
-        <div className="container">
-          <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Get Started?</h2>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a href="/map">
-                <Button size="lg" className="text-lg px-8">
-                  <MapPin className="mr-2 h-5 w-5" />
-                  Find Spots Now
-                </Button>
-              </a>
-              {!isAuthenticated && (
-                <a href={signupHref}>
-                  <Button size="lg" variant="outline" className="text-lg px-8">
-                    List My Truck
-                  </Button>
-                </a>
-              )}
-            </div>
+      <section id="faq" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
+              FAQ
+            </p>
+            <h2 className="mt-2 text-3xl font-black tracking-normal">
+              Clear answers for owners.
+            </h2>
           </div>
+          <Button asChild variant="outline" className="gap-2 font-black">
+            <Link
+              href={signupHref}
+              onClick={() => trackCta("create_profile_faq", signupHref)}
+            >
+              Create profile
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mt-7 grid gap-3 md:grid-cols-3">
+          {faqItems.map((item) => (
+            <div
+              key={item.question}
+              className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean"
+            >
+              <h3 className="font-black">{item.question}</h3>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
+                {item.answer}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t py-8 bg-muted/50">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>&copy; 2026 MealScout. All rights reserved.</p>
+      <section className="mx-auto flex max-w-6xl flex-col gap-4 px-4 pb-12 sm:px-6 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-black">Ready to make the truck easier to book?</h2>
+          <p className="mt-1 text-sm font-semibold text-[color:var(--text-secondary)]">
+            Start with the profile. Add the ordering and promotion tools when
+            the basics are in place.
+          </p>
         </div>
-      </footer>
-    </div>
+        <Button asChild size="lg" className="gap-2 font-black">
+          <Link
+            href={signupHref}
+            onClick={() => trackCta("create_profile_footer", signupHref)}
+          >
+            Claim or create your truck
+            <ArrowRight className="h-5 w-5" />
+          </Link>
+        </Button>
+      </section>
+    </main>
   );
 }
