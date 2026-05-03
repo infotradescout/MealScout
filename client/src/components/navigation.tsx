@@ -210,7 +210,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [isHost, setIsHost] = useState(false);
   const canSeeParkingPassNav = canManageParkingPass;
   const currentPath = location.split("?")[0];
-  const hiddenGlobalNavRoutes = [
+  const hiddenAppNavRoutes = [
+    "/admin",
+    "/staff",
     "/truck-landing",
     "/truck-onboarding",
     "/claim-truck",
@@ -231,11 +233,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     "/admin/login",
     "/truck-landing",
   ];
-  const shouldHideGlobalNav =
-    isGlobalScope &&
-    hiddenGlobalNavRoutes.some(
-      (route) => currentPath === route || currentPath.startsWith(`${route}/`),
-    );
+  const shouldHideAppNav = hiddenAppNavRoutes.some(
+    (route) => currentPath === route || currentPath.startsWith(`${route}/`),
+  );
   const shouldHideGuestMobileNav =
     !user &&
     (currentPath === "/" ||
@@ -286,7 +286,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     };
   }, [user?.id]);
 
-  if (shouldHideGlobalNav || (!isGlobalScope && !showLocalNav)) {
+  if (shouldHideAppNav || (!isGlobalScope && !showLocalNav)) {
     return null;
   }
 

@@ -905,7 +905,9 @@ function Router() {
   );
 }
 
-const ownerSetupFullBleedRoutes = [
+const appChromeHiddenRoutes = [
+  "/admin",
+  "/staff",
   "/truck-landing",
   "/truck-onboarding",
   "/claim-truck",
@@ -914,7 +916,7 @@ const ownerSetupFullBleedRoutes = [
 function App() {
   const [location] = useLocation();
   const currentPath = location.split("?")[0];
-  const hideMobileNavPadding = ownerSetupFullBleedRoutes.some(
+  const hideMobileNavPadding = appChromeHiddenRoutes.some(
     (route) => currentPath === route || currentPath.startsWith(`${route}/`),
   );
 

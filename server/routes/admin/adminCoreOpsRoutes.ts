@@ -487,6 +487,24 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     },
   );
 
+  app.post(
+    "/api/admin/restaurants/:id/reject",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const reason =
+          String(req.body?.reason || "").trim() ||
+          "Rejected from admin restaurant approval queue.";
+        await storage.rejectRestaurant(req.params.id, req.user?.id || null, reason);
+        res.json({ message: "Restaurant rejected successfully" });
+      } catch (error) {
+        console.error("Error rejecting restaurant:", error);
+        res.status(500).json({ message: "Failed to reject restaurant" });
+      }
+    },
+  );
+
   app.delete(
     "/api/admin/restaurants/:id",
     isAuthenticated,
@@ -495,8 +513,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       try {
         await storage.deleteRestaurant(req.params.id);
         res.json({ message: "Restaurant deleted successfully" });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting restaurant:", error);
+        if (String(error?.code || "") === "23503") {
+          return res.status(409).json({
+            message:
+              "This restaurant has related records and cannot be deleted. Reject or deactivate it instead.",
+          });
+        }
         res.status(500).json({ message: "Failed to delete restaurant" });
       }
     },

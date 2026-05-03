@@ -214,10 +214,23 @@ interface DashboardStats {
 interface PendingRestaurant {
   id: string;
   name: string;
-  email: string;
-  cuisineType: string;
+  email?: string | null;
+  ownerEmail?: string | null;
+  cuisineType?: string | null;
+  businessType?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
   createdAt: string;
-  isActive: boolean;
+  isActive?: boolean | null;
+  isVerified?: boolean | null;
+  isFoodTruck?: boolean | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  facebookCoverUrl?: string | null;
+  googlePhotos?: unknown;
+  facebookPhotos?: unknown;
 }
 
 interface AdminRestaurantSearchResult {
@@ -280,6 +293,7 @@ const buildBriefSentence = (item: {
 }) => `${item.title}. ${item.why} ${item.next}`;
 
 const ADMIN_DEAL_FALLBACK_IMAGE_URL = "/backgrounds/night-market-plate.webp";
+const ADMIN_RESTAURANT_FALLBACK_IMAGE_URL = "/backgrounds/food-truck-day.jpg";
 
 const compactNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -382,6 +396,23 @@ const getAdminDealImageUrl = (deal: any) => {
   }
 
   return ADMIN_DEAL_FALLBACK_IMAGE_URL;
+};
+
+const getAdminRestaurantImageUrl = (restaurant: any) => {
+  const candidates = [
+    restaurant?.coverImageUrl,
+    restaurant?.logoUrl,
+    restaurant?.facebookCoverUrl,
+    firstUsablePhotoUrl(restaurant?.googlePhotos),
+    firstUsablePhotoUrl(restaurant?.facebookPhotos),
+  ];
+
+  for (const candidate of candidates) {
+    const optimized = getOptimizedImageUrl(candidate, 512);
+    if (optimized) return optimized;
+  }
+
+  return ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
 };
 
 const formatAdminDealRestaurantType = (restaurant: any) => {
@@ -5353,20 +5384,37 @@ export default function AdminDashboard() {
 
   // Reject restaurant mutation
   const rejectRestaurant = useMutation({
-    mutationFn: async (restaurantId: string) => {
+    mutationFn: async ({
+      restaurantId,
+      reason,
+    }: {
+      restaurantId: string;
+      reason?: string;
+    }) => {
       return await apiRequest(
-        "DELETE",
-        `/api/admin/restaurants/${restaurantId}`,
+        "POST",
+        `/api/admin/restaurants/${restaurantId}/reject`,
+        { reason },
       );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/restaurants/pending"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/search"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Restaurant Rejected",
-        description: "The restaurant application has been rejected.",
+        description: "The restaurant was removed from the approval queue.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to reject restaurant.",
+        variant: "destructive",
       });
     },
   });
@@ -8436,7 +8484,11 @@ export default function AdminDashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Pending Restaurant Approvals</CardTitle>
+                <CardTitle>Pending Business Approvals</CardTitle>
+                <CardDescription>
+                  Review inactive owner-created profiles before they go live.
+                  Rejecting records a review decision instead of deleting data.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {pendingRestaurants.length === 0 ? (
@@ -8444,46 +8496,123 @@ export default function AdminDashboard() {
                     No pending approvals
                   </p>
                 ) : (
-                  <div className="space-y-3">
-                    {pendingRestaurants.map((restaurant: PendingRestaurant) => (
-                      <div
-                        key={restaurant.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div>
-                          <div className="font-medium">{restaurant.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {restaurant.cuisineType} - {restaurant.email}
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {pendingRestaurants.map((restaurant: PendingRestaurant) => {
+                      const imageUrl = getAdminRestaurantImageUrl(restaurant);
+                      const location = [restaurant.city, restaurant.state]
+                        .map((value) => String(value || "").trim())
+                        .filter(Boolean)
+                        .join(", ");
+                      const ownerEmail = String(
+                        restaurant.ownerEmail || restaurant.email || "",
+                      ).trim();
+                      const typeLabel = restaurant.isFoodTruck
+                        ? "Food truck"
+                        : toTitleCase(
+                            String(restaurant.businessType || "restaurant"),
+                          );
+                      const rejectCurrent = () => {
+                        const input = window.prompt(
+                          `Reason for rejecting ${restaurant.name}?`,
+                          "Not ready for MealScout publishing.",
+                        );
+                        if (input === null) return;
+                        const reason =
+                          input.trim() || "Rejected from admin approval queue.";
+                        rejectRestaurant.mutate({
+                          restaurantId: restaurant.id,
+                          reason,
+                        });
+                      };
+
+                      return (
+                        <article
+                          key={restaurant.id}
+                          className="overflow-hidden rounded-lg border bg-card shadow-sm"
+                        >
+                          <div className="relative h-36 bg-muted">
+                            <img
+                              src={imageUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                              onError={(event) => {
+                                const img = event.currentTarget;
+                                if (
+                                  img.src.endsWith(
+                                    ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
+                                  )
+                                ) {
+                                  return;
+                                }
+                                img.src = ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+                              }}
+                            />
+                            <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                              <Badge>{typeLabel}</Badge>
+                              {restaurant.isVerified ? (
+                                <Badge variant="outline">Verified</Badge>
+                              ) : (
+                                <Badge variant="secondary">Needs review</Badge>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() =>
-                              approveRestaurant.mutate(restaurant.id)
-                            }
-                            disabled={approveRestaurant.isPending}
-                            data-testid={`button-approve-${restaurant.id}`}
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() =>
-                              rejectRestaurant.mutate(restaurant.id)
-                            }
-                            disabled={rejectRestaurant.isPending}
-                            data-testid={`button-reject-${restaurant.id}`}
-                          >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+
+                          <div className="space-y-3 p-4">
+                            <div>
+                              <h3 className="line-clamp-2 text-lg font-semibold">
+                                {restaurant.name}
+                              </h3>
+                              <div className="mt-1 space-y-1 text-sm text-muted-foreground">
+                                <p>
+                                  {[restaurant.cuisineType, location]
+                                    .map((value) =>
+                                      String(value || "").trim(),
+                                    )
+                                    .filter(Boolean)
+                                    .join(" - ") || "Cuisine/location missing"}
+                                </p>
+                                {restaurant.address ? (
+                                  <p className="line-clamp-1">
+                                    {restaurant.address}
+                                  </p>
+                                ) : null}
+                                <p className="line-clamp-1">
+                                  {ownerEmail || "Owner email missing"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() =>
+                                  approveRestaurant.mutate(restaurant.id)
+                                }
+                                disabled={approveRestaurant.isPending}
+                                data-testid={`button-approve-${restaurant.id}`}
+                                className="w-full gap-2"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={rejectCurrent}
+                                disabled={rejectRestaurant.isPending}
+                                data-testid={`button-reject-${restaurant.id}`}
+                                className="w-full gap-2"
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

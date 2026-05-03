@@ -2277,24 +2277,127 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getPendingRestaurants(): Promise<Restaurant[]> {
+  async getPendingRestaurants(): Promise<any[]> {
     return await db
-      .select()
+      .select({
+        id: restaurants.id,
+        ownerId: restaurants.ownerId,
+        name: restaurants.name,
+        address: restaurants.address,
+        phone: restaurants.phone,
+        businessType: restaurants.businessType,
+        cuisineType: restaurants.cuisineType,
+        isFoodTruck: restaurants.isFoodTruck,
+        isActive: restaurants.isActive,
+        isVerified: restaurants.isVerified,
+        logoUrl: restaurants.logoUrl,
+        coverImageUrl: restaurants.coverImageUrl,
+        city: restaurants.city,
+        state: restaurants.state,
+        googlePhotos: restaurants.googlePhotos,
+        facebookCoverUrl: restaurants.facebookCoverUrl,
+        facebookPhotos: restaurants.facebookPhotos,
+        profileSource: restaurants.profileSource,
+        createdAt: restaurants.createdAt,
+        updatedAt: restaurants.updatedAt,
+        email: users.email,
+        ownerEmail: users.email,
+      })
       .from(restaurants)
+      .leftJoin(users, eq(restaurants.ownerId, users.id))
       .where(
         and(
           eq(restaurants.isActive, false),
           isNull(restaurants.claimedFromImportId),
+          sql`not exists (
+            select 1
+            from ${verificationRequests}
+            where ${verificationRequests.restaurantId} = ${restaurants.id}
+              and ${verificationRequests.status} = 'rejected'
+          )`,
         ),
       )
       .orderBy(desc(restaurants.createdAt));
   }
 
   async approveRestaurant(restaurantId: string): Promise<void> {
-    await db
-      .update(restaurants)
-      .set({ isActive: true })
-      .where(eq(restaurants.id, restaurantId));
+    await db.transaction(async (tx: any) => {
+      const now = new Date();
+      await tx
+        .update(restaurants)
+        .set({ isActive: true, updatedAt: now })
+        .where(eq(restaurants.id, restaurantId));
+
+      await tx
+        .update(verificationRequests)
+        .set({
+          status: "approved",
+          reviewedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(verificationRequests.restaurantId, restaurantId),
+            eq(verificationRequests.status, "pending"),
+          ),
+        );
+    });
+  }
+
+  async rejectRestaurant(
+    restaurantId: string,
+    reviewerId?: string | null,
+    reason = "Rejected from admin restaurant approval queue.",
+  ): Promise<void> {
+    await db.transaction(async (tx: any) => {
+      const now = new Date();
+      await tx
+        .update(restaurants)
+        .set({
+          isActive: false,
+          isVerified: false,
+          updatedAt: now,
+        })
+        .where(eq(restaurants.id, restaurantId));
+
+      const pendingRequests = await tx
+        .select({ id: verificationRequests.id })
+        .from(verificationRequests)
+        .where(
+          and(
+            eq(verificationRequests.restaurantId, restaurantId),
+            eq(verificationRequests.status, "pending"),
+          ),
+        );
+
+      if (pendingRequests.length > 0) {
+        await tx
+          .update(verificationRequests)
+          .set({
+            status: "rejected",
+            reviewedAt: now,
+            reviewerId: reviewerId || null,
+            rejectionReason: reason,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(verificationRequests.restaurantId, restaurantId),
+              eq(verificationRequests.status, "pending"),
+            ),
+          );
+        return;
+      }
+
+      await tx.insert(verificationRequests).values({
+        restaurantId,
+        status: "rejected",
+        documents: [],
+        reviewedAt: now,
+        reviewerId: reviewerId || null,
+        rejectionReason: reason,
+      });
+    });
   }
 
   async deleteRestaurant(restaurantId: string): Promise<void> {
