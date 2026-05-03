@@ -39,6 +39,31 @@ const checks = [
     type: "text/html",
     includes: ["application/ld+json", "MealScout"],
   },
+  {
+    path: "/map?prerender=1",
+    type: "text/html",
+    includes: ["application/ld+json", "Food trucks"],
+  },
+  {
+    path: "/video?prerender=1",
+    type: "text/html",
+    includes: ["application/ld+json", "Local food videos"],
+  },
+  {
+    path: "/share-hub?prerender=1",
+    type: "text/html",
+    includes: ["application/ld+json", "Share MealScout"],
+  },
+  {
+    path: "/truck-onboarding?prerender=1",
+    type: "text/html",
+    includes: ["application/ld+json", "List or claim your food truck"],
+  },
+  {
+    path: "/events?prerender=1",
+    type: "text/html",
+    includes: ["application/ld+json", "Open food truck events"],
+  },
 ];
 
 let failures = 0;

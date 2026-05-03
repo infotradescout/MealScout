@@ -73,6 +73,25 @@ const telemetrySchema = z.object({
 const toDecimalString = (value: number, scale = 8) =>
   Number.isFinite(value) ? value.toFixed(scale) : null;
 
+const geoPingThrottle = new Map<string, number>();
+const GEO_PING_THROTTLE_MS = 2 * 60 * 1000;
+const GEO_PING_THROTTLE_MAX_KEYS = 5000;
+
+function shouldSkipGeoPing(key: string, now: number) {
+  const lastPing = geoPingThrottle.get(key) || 0;
+  if (now - lastPing < GEO_PING_THROTTLE_MS) return true;
+  geoPingThrottle.set(key, now);
+  if (geoPingThrottle.size > GEO_PING_THROTTLE_MAX_KEYS) {
+    for (const [entryKey, lastAt] of geoPingThrottle) {
+      if (now - lastAt > GEO_PING_THROTTLE_MS) {
+        geoPingThrottle.delete(entryKey);
+      }
+      if (geoPingThrottle.size <= GEO_PING_THROTTLE_MAX_KEYS) break;
+    }
+  }
+  return false;
+}
+
 const haversineKm = (
   aLat: number,
   aLng: number,
@@ -283,18 +302,18 @@ export function registerGeoAdRoutes(app: Express) {
       return res.status(400).json({ message: "Invalid location payload" });
     }
 
-    const session = req.session as any;
     const now = Date.now();
-    const lastPing = session?.lastGeoPingAt || 0;
-    if (now - lastPing < 2 * 60 * 1000) {
+    const visitorId = req.sessionID || req.session?.id || null;
+    const throttleKey =
+      visitorId ||
+      String(req.get("x-forwarded-for") || req.ip || "anonymous").split(",")[0];
+    if (shouldSkipGeoPing(throttleKey, now)) {
       return res.json({ ok: true, skipped: true });
     }
-    session.lastGeoPingAt = now;
 
     const roundedLat = Math.round(parsed.data.lat * 1000) / 1000;
     const roundedLng = Math.round(parsed.data.lng * 1000) / 1000;
 
-    const visitorId = req.sessionID || session?.id || null;
     const userId = req.user?.id || null;
     const userType = req.user?.userType || "guest";
 

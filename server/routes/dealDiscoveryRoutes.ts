@@ -43,7 +43,8 @@ function isReviewReadSchemaDrift(error: unknown): boolean {
   const message = String((error as any)?.message || "").toLowerCase();
 
   return (
-    (code === "42P01" && message.includes('relation "reviews" does not exist')) ||
+    (code === "42P01" &&
+      message.includes('relation "reviews" does not exist')) ||
     (code === "42703" && message.includes("reviews.rating_score_100"))
   );
 }
@@ -70,7 +71,9 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/deals/my-active", isAuthenticated, async (req: any, res) => {
     try {
-      const restaurantsByOwner = await storage.getRestaurantsByOwner(req.user.id);
+      const restaurantsByOwner = await storage.getRestaurantsByOwner(
+        req.user.id,
+      );
       const allDeals = await Promise.all(
         restaurantsByOwner.map(async (restaurant) => {
           const restaurantDeals = await storage.getDealsByRestaurant(
@@ -111,7 +114,9 @@ export function registerDealDiscoveryRoutes(
 
   app.get("/api/public/deals/city/:citySlug", async (req, res) => {
     try {
-      const citySlug = String(req.params.citySlug || "").trim().toLowerCase();
+      const citySlug = String(req.params.citySlug || "")
+        .trim()
+        .toLowerCase();
       if (!citySlug) {
         return res.status(400).json({ message: "City slug required" });
       }
@@ -268,7 +273,9 @@ export function registerDealDiscoveryRoutes(
     } catch (error: any) {
       console.error("Error fetching restaurant deals:", error);
       if (error.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid restaurant ID format" });
+        return res
+          .status(400)
+          .json({ message: "Invalid restaurant ID format" });
       }
       res.status(500).json({ message: "Failed to fetch restaurant deals" });
     }
@@ -278,11 +285,26 @@ export function registerDealDiscoveryRoutes(
     try {
       const lat = parseFloat(req.params.lat);
       const lng = parseFloat(req.params.lng);
-      const radius = parseFloat(req.query.radius as string) || 5;
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        Math.abs(lat) > 90 ||
+        Math.abs(lng) > 180
+      ) {
+        return res.status(400).json({ message: "Invalid coordinates" });
+      }
+      const radiusRaw = parseFloat(req.query.radius as string);
+      const radius = Number.isFinite(radiusRaw)
+        ? Math.max(0.5, Math.min(80, radiusRaw))
+        : 5;
 
       const nearbyDeals = await storage.getNearbyDeals(lat, lng, radius);
       const filteredDeals = await filterDealsByBusinessAccess(
         nearbyDeals as any[],
+      );
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=90, stale-while-revalidate=180",
       );
       res.json(filteredDeals);
     } catch (error) {
@@ -315,7 +337,9 @@ export function registerDealDiscoveryRoutes(
         sortBy: sortBy as string,
       });
 
-      const filteredDeals = await filterDealsByBusinessAccess(dealRows as any[]);
+      const filteredDeals = await filterDealsByBusinessAccess(
+        dealRows as any[],
+      );
       res.json(filteredDeals);
     } catch (error) {
       console.error("Error searching deals:", error);
@@ -427,7 +451,8 @@ export function registerDealDiscoveryRoutes(
         1,
         Math.min(
           100,
-          scoreFromPayload ?? Math.max(1, Math.min(5, payload.rating ?? 5)) * 20,
+          scoreFromPayload ??
+            Math.max(1, Math.min(5, payload.rating ?? 5)) * 20,
         ),
       );
       const normalizedRating = Math.max(
@@ -487,7 +512,9 @@ export function registerDealDiscoveryRoutes(
       }
 
       try {
-        const finalScore100 = Number(reviewData.ratingScore100 ?? normalizedScore) || normalizedScore;
+        const finalScore100 =
+          Number(reviewData.ratingScore100 ?? normalizedScore) ||
+          normalizedScore;
         const signalEvent = insertSentimentSignalEventSchema.parse({
           restaurantId: reviewData.restaurantId,
           userId: reviewData.userId,

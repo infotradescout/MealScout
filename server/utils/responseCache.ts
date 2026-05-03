@@ -139,8 +139,8 @@ function routeTtlSeconds(path: string): number | null {
     path === "/api/search/latest" ||
     path.startsWith("/api/search/suggestions/")
   )
-    return 45;
-  if (path.startsWith("/api/deals/nearby/")) return 45;
+    return path === "/api/search/trending" ? 120 : 45;
+  if (path.startsWith("/api/deals/nearby/")) return 90;
   if (
     path === "/api/deals/active" ||
     path === "/api/deals/featured" ||
@@ -149,7 +149,8 @@ function routeTtlSeconds(path: string): number | null {
     return 60;
   if (path.startsWith("/api/deals/restaurant/")) return 60;
   if (path.startsWith("/api/menus/")) return 30;
-  if (path === "/api/map/locations" || path === "/api/map/overlays") return 30;
+  if (path === "/api/map/locations") return 120;
+  if (path === "/api/map/overlays") return 30;
   if (path === "/api/parking-pass/host-status") return 60;
   if (path.startsWith("/api/map/place-")) return 300;
   if (path.startsWith("/api/public/discovery/")) return 120;

@@ -343,7 +343,10 @@ export function registerPublicMapRoutes(app: Express) {
           process.env.VITE_GOOGLE_MAPS_MAP_ID ||
           "",
       ).trim();
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=120, stale-while-revalidate=240",
+      );
       res.json({
         hasGoogleMapsKey: googleMapsApiKey.length > 0,
         googleMapsApiKey: googleMapsApiKey || null,
@@ -362,7 +365,10 @@ export function registerPublicMapRoutes(app: Express) {
 
   app.get("/api/map/locations", async (_req, res) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=120, stale-while-revalidate=240",
+      );
       if (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()) {
         return res.json(mapLocationsCache.payload);
       }
@@ -567,12 +573,13 @@ export function registerPublicMapRoutes(app: Express) {
         });
       };
 
-      const [openLocations, upcomingEvents] = await Promise.all([
+      const [openLocations, upcomingEvents, allHosts] = await Promise.all([
         storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
+        storage.getAllHosts(),
       ]);
 
-      const allHosts = (await storage.getAllHosts()) as Array<{
+      const typedAllHosts = allHosts as Array<{
         id: string;
         userId?: string | null;
         businessName: string;
@@ -589,7 +596,7 @@ export function registerPublicMapRoutes(app: Express) {
 
       const hostUserIds = Array.from(
         new Set(
-          allHosts
+          typedAllHosts
             .map((host) => String(host.userId || "").trim())
             .filter(Boolean),
         ),
@@ -612,7 +619,7 @@ export function registerPublicMapRoutes(app: Express) {
             )
           : null;
 
-      const hostProfiles = allHosts.filter((host) => {
+      const hostProfiles = typedAllHosts.filter((host) => {
         const address = String(host.address || "").trim();
         if (!address) return false;
         if (
