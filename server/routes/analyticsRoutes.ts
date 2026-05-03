@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -9,6 +9,7 @@ import { isAuthenticated } from "../unifiedAuth";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   insertDealFeedbackSchema,
+  restaurants,
   searchQueryEvents,
   supportTickets,
   type User,
@@ -102,9 +103,7 @@ function haversineKm(
   const lat2 = toRad(b.lat);
   const sinLat = Math.sin(dLat / 2);
   const sinLng = Math.sin(dLng / 2);
-  const h =
-    sinLat * sinLat +
-    Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
   return 2 * earthRadiusKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
@@ -125,10 +124,50 @@ async function getNearbyBusinessTrendRows({
   if (!hasOrigin && !interest) return [];
 
   const origin = hasOrigin ? { lat: lat as number, lng: lng as number } : null;
-  const rows = await storage.getAllRestaurants();
+  const predicates: any[] = [eq(restaurants.isActive, true)];
+  if (origin) {
+    const latDelta = Math.max(0.01, radiusKm / 111);
+    const lngDelta = Math.max(
+      0.01,
+      radiusKm /
+        (111 *
+          Math.max(0.2, Math.cos(((origin.lat as number) * Math.PI) / 180))),
+    );
+    predicates.push(isNotNull(restaurants.latitude));
+    predicates.push(isNotNull(restaurants.longitude));
+    predicates.push(
+      sql`${restaurants.latitude} between ${origin.lat - latDelta} and ${origin.lat + latDelta}`,
+    );
+    predicates.push(
+      sql`${restaurants.longitude} between ${origin.lng - lngDelta} and ${origin.lng + lngDelta}`,
+    );
+  }
+
+  const rows = await db
+    .select({
+      id: restaurants.id,
+      name: restaurants.name,
+      address: restaurants.address,
+      city: restaurants.city,
+      state: restaurants.state,
+      cuisineType: restaurants.cuisineType,
+      businessType: restaurants.businessType,
+      description: restaurants.description,
+      logoUrl: restaurants.logoUrl,
+      coverImageUrl: restaurants.coverImageUrl,
+      profileSource: restaurants.profileSource,
+      isActive: restaurants.isActive,
+      isVerified: restaurants.isVerified,
+      isFoodTruck: restaurants.isFoodTruck,
+      latitude: restaurants.latitude,
+      longitude: restaurants.longitude,
+    })
+    .from(restaurants)
+    .where(and(...predicates))
+    .limit(origin ? 1000 : 2000);
+
   return rows
     .map((restaurant: any) => {
-      if (!restaurant?.isActive) return null;
       if (!isPublicBusinessVisible(restaurant)) return null;
       const name = String(restaurant.name || "").trim();
       if (!name) return null;
@@ -172,9 +211,7 @@ async function getNearbyBusinessTrendRows({
     .slice(0, limit)
     .map((item: any) => {
       const miles =
-        typeof item.distanceKm === "number"
-          ? item.distanceKm * 0.621371
-          : null;
+        typeof item.distanceKm === "number" ? item.distanceKm * 0.621371 : null;
       return {
         query: String(item.restaurant.name || "").trim(),
         count: 0,
@@ -197,7 +234,9 @@ export function registerAnalyticsRoutes(app: Express) {
         category: z
           .enum(["bug", "feature", "payment", "account", "onboarding", "other"])
           .default("other"),
-        priority: z.enum(["low", "normal", "high", "critical"]).default("normal"),
+        priority: z
+          .enum(["low", "normal", "high", "critical"])
+          .default("normal"),
       });
       const parsed = schema.parse(req.body);
       const [ticket] = await db
@@ -276,7 +315,7 @@ export function registerAnalyticsRoutes(app: Express) {
         });
       }
       const nearbyNames = new Set(
-        nearbyRows.map((row) => normalizeSearchQuery(row.query)),
+        nearbyRows.map((row: any) => normalizeSearchQuery(row.query)),
       );
 
       const result: any = await db.execute(sql`
@@ -310,8 +349,14 @@ export function registerAnalyticsRoutes(app: Express) {
           return {
             query,
             count: Number(row.count || 0),
-            lastSeen: row.last_seen ? new Date(row.last_seen).toISOString() : null,
-            context: localNameMatch ? "Nearby" : interestMatch ? "Matches interest" : "Trending",
+            lastSeen: row.last_seen
+              ? new Date(row.last_seen).toISOString()
+              : null,
+            context: localNameMatch
+              ? "Nearby"
+              : interestMatch
+                ? "Matches interest"
+                : "Trending",
             source: "search_history",
             score,
             hidden:

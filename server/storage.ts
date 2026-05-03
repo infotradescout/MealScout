@@ -2383,6 +2383,15 @@ export class DatabaseStorage implements IStorage {
   ): Promise<any[]> {
     const now = new Date();
     const currentTime = now.toTimeString().slice(0, 5);
+    const latDelta = Math.max(0.01, radiusKm / 111);
+    const lngDelta = Math.max(
+      0.01,
+      radiusKm / (111 * Math.max(0.2, Math.cos((lat * Math.PI) / 180))),
+    );
+    const minLat = lat - latDelta;
+    const maxLat = lat + latDelta;
+    const minLng = lng - lngDelta;
+    const maxLng = lng + lngDelta;
 
     const dealsQuery = await db
       .select({
@@ -2418,11 +2427,13 @@ export class DatabaseStorage implements IStorage {
         },
         distance: sql<number>`
           (6371 * acos(
-            cos(radians(${lat})) *
-            cos(radians(${restaurants.latitude})) *
-            cos(radians(${restaurants.longitude}) - radians(${lng})) +
-            sin(radians(${lat})) *
-            sin(radians(${restaurants.latitude}))
+            least(1, greatest(-1,
+              cos(radians(${lat})) *
+              cos(radians(${restaurants.latitude})) *
+              cos(radians(${restaurants.longitude}) - radians(${lng})) +
+              sin(radians(${lat})) *
+              sin(radians(${restaurants.latitude}))
+            ))
           ))
         `.as("distance"),
       })
@@ -2432,6 +2443,10 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(deals.isActive, true),
           eq(restaurants.isActive, true),
+          isNotNull(restaurants.latitude),
+          isNotNull(restaurants.longitude),
+          sql`${restaurants.latitude} between ${minLat} and ${maxLat}`,
+          sql`${restaurants.longitude} between ${minLng} and ${maxLng}`,
           lte(deals.startDate, now),
           gte(deals.endDate, now),
           // Time window logic: handles normal hours, overnight hours, and 24/7
@@ -2447,11 +2462,13 @@ export class DatabaseStorage implements IStorage {
           )`,
           sql`
             (6371 * acos(
-              cos(radians(${lat})) *
-              cos(radians(${restaurants.latitude})) *
-              cos(radians(${restaurants.longitude}) - radians(${lng})) +
-              sin(radians(${lat})) *
-              sin(radians(${restaurants.latitude}))
+              least(1, greatest(-1,
+                cos(radians(${lat})) *
+                cos(radians(${restaurants.latitude})) *
+                cos(radians(${restaurants.longitude}) - radians(${lng})) +
+                sin(radians(${lat})) *
+                sin(radians(${restaurants.latitude}))
+              ))
             )) <= ${radiusKm}
           `,
         ),

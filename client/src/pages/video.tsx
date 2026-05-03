@@ -10,7 +10,10 @@ import { BackHeader } from "@/components/back-header";
 export default function VideoPage() {
   const { authState, isAuthenticated, isGuest } = useAuth();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<{ id: string; title: string } | null>(null);
+  const [replyTarget, setReplyTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
 
   const handleUploadClick = () => {
     if (isGuest) {
@@ -35,6 +38,14 @@ export default function VideoPage() {
     setIsUploadOpen(false);
     setReplyTarget(null);
   };
+  const schemaData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "MealScout Video Feed",
+    description:
+      "Local food videos, recommendations, and community food stories from MealScout.",
+    url: "https://www.mealscout.us/video",
+  };
 
   return (
     <div className="max-w-md mx-auto bg-background min-h-screen relative pb-20">
@@ -42,6 +53,7 @@ export default function VideoPage() {
         title="Video Stories - MealScout | Local Food Videos"
         description="Watch and share local food recommendation videos from the MealScout community."
         canonicalUrl="https://www.mealscout.us/video"
+        schemaData={schemaData}
       />
 
       <BackHeader title="Video" fallbackHref="/" />
@@ -70,7 +82,10 @@ export default function VideoPage() {
 
       {/* Feed */}
       <main className="px-0 pt-2 pb-4">
-        <VideoFeed onUploadClick={handleUploadClick} onReplyToStory={handleReplyToStory} />
+        <VideoFeed
+          onUploadClick={handleUploadClick}
+          onReplyToStory={handleReplyToStory}
+        />
       </main>
 
       {/* Upload modal (auth-only) */}
@@ -87,6 +102,3 @@ export default function VideoPage() {
     </div>
   );
 }
-
-
-
