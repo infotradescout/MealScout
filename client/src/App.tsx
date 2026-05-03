@@ -518,12 +518,14 @@ function Router() {
             <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
+            <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route path="/admin/events" component={EventsRouter} />
             <Route
               path="/event-coordinator/dashboard"
               component={EventsRouter}
             />
             <Route path="/events/public" component={EventsRouter} />
+            <Route path="/events/:slug" component={EventDetailPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/food-trucks/:citySlug" component={CityLanding} />
@@ -822,12 +824,14 @@ function Router() {
             <Route path="/event-signup" component={EventsRouter} />
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
+            <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route
               path="/food-truck-booking-software/:citySlug"
               component={FoodTruckOwnerIntentPage}
             />
             <Route path="/admin/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsRouter} />
+            <Route path="/events/:slug" component={EventDetailPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
             <Route path="/pensacola/spots" component={PensacolaSpots} />
             <Route

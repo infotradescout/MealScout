@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { format, isPast, isToday } from "date-fns";
+import { format } from "date-fns";
 import { SEOHead } from "@/components/seo-head";
 import {
   Calendar,
@@ -37,6 +37,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { PENSACOLA_RADIATE_MARKETS } from "@/lib/launchMarkets";
+import {
+  getLocationLine,
+  resolveListingImageUrl,
+} from "@/lib/listing-card-display";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,14 +100,101 @@ const normalizeEvents = (items: any[]): EventItem[] => {
     address: "Location details coming soon",
     locationType: "event",
   };
-  return (Array.isArray(items) ? items : []).map((ev) => ({
+  return dedupeEvents((Array.isArray(items) ? items : []).map((ev) => ({
     ...ev,
     host: { ...fallback, ...(ev?.host || {}) },
-  }));
+  })));
 };
 
 const locationLabel = (host: Host) =>
   [host.city, host.state].filter(Boolean).join(", ") || host.address;
+const EVENT_FALLBACK_IMAGE = "/backgrounds/food-truck-day.jpg";
+const clean = (value: unknown) => String(value || "").trim();
+const dateToken = (value: unknown) => {
+  const match = clean(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+};
+const localEventDate = (value: unknown) => {
+  const token = dateToken(value);
+  if (token) {
+    const [year, month, day] = token.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const date = new Date(value as any);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+};
+const isPastEventDate = (value: unknown) => {
+  const eventDate = localEventDate(value);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return eventDate.getTime() < today.getTime();
+};
+const eventDedupeKey = (event: EventItem) =>
+  [
+    clean(event.name).toLowerCase(),
+    dateToken(event.date) || clean(event.date).toLowerCase(),
+    clean(event.startTime).toLowerCase(),
+    clean(event.endTime).toLowerCase(),
+    clean(event.host?.id || event.host?.businessName).toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join("|") || `id:${event.id}`;
+const eventCompletenessScore = (event: EventItem) =>
+  (clean(event.host?.spotImageUrl) ? 4 : 0) +
+  (clean(event.description) ? 2 : 0) +
+  (clean(event.host?.address) ? 1 : 0) +
+  (clean(event.id) ? 1 : 0);
+const dedupeEvents = (items: EventItem[]) => {
+  const byKey = new Map<string, EventItem>();
+  items.forEach((event) => {
+    const key = eventDedupeKey(event);
+    const existing = byKey.get(key);
+    if (
+      !existing ||
+      eventCompletenessScore(event) > eventCompletenessScore(existing)
+    ) {
+      byKey.set(key, event);
+    }
+  });
+  return Array.from(byKey.values());
+};
+const fallbackEventImage = (event: EventItem) => {
+  const haystack = [
+    event.name,
+    event.description,
+    event.host?.businessName,
+    event.host?.city,
+  ]
+    .map((value) => clean(value).toLowerCase())
+    .join(" ");
+  if (
+    haystack.includes("night") ||
+    haystack.includes("evening") ||
+    haystack.includes("market") ||
+    haystack.includes("festival")
+  ) {
+    return "/backgrounds/food-truck-night.jpg";
+  }
+  return EVENT_FALLBACK_IMAGE;
+};
+const eventImageUrl = (event: EventItem) =>
+  clean(event.host?.spotImageUrl)
+    ? resolveListingImageUrl({
+        title: event.name,
+        name: event.name,
+        description: event.description,
+        businessType: "event",
+        hostBusinessName: event.host.businessName,
+        spotImageUrl: event.host.spotImageUrl,
+        hostSpotImageUrl: event.host.spotImageUrl,
+      }) || fallbackEventImage(event)
+    : fallbackEventImage(event);
+const fullLocationLabel = (host: Host) =>
+  getLocationLine({
+    address: host.address,
+    city: host.city,
+    state: host.state,
+  });
 
 // ---------------------------------------------------------------------------
 // EventCard — standalone event
@@ -124,20 +215,41 @@ function EventCard({
   onInterest: (id: string) => void;
   onJoin: () => void;
 }) {
-  const eventDate = new Date(event.date);
-  const past = isPast(eventDate) && !isToday(eventDate);
+  const eventDate = localEventDate(event.date);
+  const past = isPastEventDate(event.date);
+  const imageUrl = eventImageUrl(event);
 
   return (
     <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden flex flex-col">
-      {event.host.spotImageUrl && (
-        <div className="h-28 overflow-hidden shrink-0">
-          <img
-            src={event.host.spotImageUrl}
-            alt={event.host.businessName}
-            className="w-full h-full object-cover"
-          />
+      <div className="relative h-36 overflow-hidden shrink-0 bg-muted">
+        <img
+          src={imageUrl}
+          alt={`${event.name || event.host.businessName || "Open event"} photo`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={(imageEvent) => {
+            const target = imageEvent.currentTarget;
+            if (!target.dataset.localFallback) {
+              target.dataset.localFallback = "true";
+              target.src = fallbackEventImage(event);
+            }
+          }}
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+          <div className="flex items-center gap-2">
+            <Badge className="rounded-full bg-[color:var(--accent-text)] text-black hover:bg-[color:var(--accent-text)]">
+              {past ? "Past" : "Open"}
+            </Badge>
+            {event.series ? (
+              <Badge className="rounded-full border-white/30 bg-black/35 text-white backdrop-blur">
+                Recurring
+              </Badge>
+            ) : null}
+          </div>
         </div>
-      )}
+      </div>
       <CardContent className="p-5 space-y-4 flex-1 flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
@@ -189,7 +301,7 @@ function EventCard({
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
-            <span>{locationLabel(event.host)}</span>
+            <span className="line-clamp-2">{fullLocationLabel(event.host)}</span>
           </div>
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
@@ -230,7 +342,7 @@ function EventCard({
 
         {/* Action */}
         {!past && (
-          <div className="pt-1">
+          <div className="flex flex-col gap-2 pt-1">
             {isTruckOwner ? (
               <Button
                 className="w-full"
@@ -255,10 +367,15 @@ function EventCard({
             ) : (
               <Button className="w-full" variant="outline" onClick={onJoin}>
                 <Truck className="h-4 w-4 mr-2" />
-                Join as a Truck to Apply
+                Claim your truck to apply
                 <ArrowRight className="h-4 w-4 ml-auto" />
               </Button>
             )}
+            <Button asChild className="w-full" variant="ghost">
+              <a href={`/event/${encodeURIComponent(event.id)}`}>
+                View details
+              </a>
+            </Button>
           </div>
         )}
       </CardContent>
@@ -286,9 +403,37 @@ function SeriesGroupCard({
   onJoin: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const previewEvent = group.occurrences[0];
+  const imageUrl = previewEvent
+    ? eventImageUrl(previewEvent)
+    : EVENT_FALLBACK_IMAGE;
 
   return (
     <div className="bg-[var(--bg-card)] rounded-xl border border-[color:var(--border-subtle)] shadow-clean overflow-hidden">
+      <div className="relative h-36 overflow-hidden bg-muted">
+        <img
+          src={imageUrl}
+          alt={`${group.seriesName || group.host.businessName || "Open call"} photo`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={(imageEvent) => {
+            const target = imageEvent.currentTarget;
+            if (!target.dataset.localFallback) {
+              target.dataset.localFallback = "true";
+              target.src = previewEvent
+                ? fallbackEventImage(previewEvent)
+                : EVENT_FALLBACK_IMAGE;
+            }
+          }}
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+          <Badge className="rounded-full bg-[color:var(--accent-text)] text-black hover:bg-[color:var(--accent-text)]">
+            Recurring Open Call
+          </Badge>
+        </div>
+      </div>
       <button
         className="w-full text-left p-5 bg-[linear-gradient(110deg,rgba(255,77,46,0.07),rgba(245,158,11,0.07))] border-b border-[color:var(--border-subtle)] hover:bg-[linear-gradient(110deg,rgba(255,77,46,0.11),rgba(245,158,11,0.11))] transition-colors"
         onClick={() => setExpanded((v) => !v)}
@@ -324,8 +469,8 @@ function SeriesGroupCard({
                 <span>
                   {group.occurrences.length} date
                   {group.occurrences.length !== 1 ? "s" : ""} ·{" "}
-                  {format(new Date(group.earliestDate), "MMM d")} –{" "}
-                  {format(new Date(group.latestDate), "MMM d, yyyy")}
+                  {format(localEventDate(group.earliestDate), "MMM d")} -{" "}
+                  {format(localEventDate(group.latestDate), "MMM d, yyyy")}
                 </span>
               </div>
               {group.host.contactPhone && (
@@ -358,8 +503,7 @@ function SeriesGroupCard({
       {expanded && (
         <div className="divide-y divide-[color:var(--border-subtle)]">
           {group.occurrences.map((event) => {
-            const past =
-              isPast(new Date(event.date)) && !isToday(new Date(event.date));
+            const past = isPastEventDate(event.date);
             return (
               <div
                 key={event.id}
@@ -368,7 +512,7 @@ function SeriesGroupCard({
                 <div className="space-y-1 text-sm">
                   <div className="flex items-center gap-2 font-medium text-[color:var(--text-primary)]">
                     <Calendar className="h-4 w-4 text-[color:var(--accent-text)]" />
-                    {format(new Date(event.date), "EEEE, MMMM d, yyyy")}
+                    {format(localEventDate(event.date), "EEEE, MMMM d, yyyy")}
                   </div>
                   <div className="flex items-center gap-2 text-[color:var(--text-secondary)]">
                     <Clock className="h-4 w-4 text-[color:var(--accent-text)]" />
