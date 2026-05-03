@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -537,7 +537,10 @@ export function registerMediaRoutes(app: Express) {
               eq(videoStories.status, "ready"),
               eq(videoStories.isApproved, true),
               isNull(videoStories.deletedAt),
-              gte(videoStories.expiresAt, sql`NOW()`),
+              or(
+                isNull(videoStories.expiresAt),
+                gte(videoStories.expiresAt, sql`NOW()`),
+              ),
             ),
           )
           .orderBy(desc(videoStories.isFeatured), desc(videoStories.createdAt))

@@ -931,7 +931,10 @@ export function registerSeoRoutes(app: Express) {
             eq(videoStories.status, "ready"),
             eq(videoStories.isApproved, true),
             isNull(videoStories.deletedAt),
-            gte(videoStories.expiresAt, now),
+            or(
+              isNull(videoStories.expiresAt),
+              gte(videoStories.expiresAt, now),
+            ),
             isNotNull(videoStories.transcriptSource),
           ),
         )

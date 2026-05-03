@@ -571,9 +571,11 @@ export default function setupStoriesRoutes(app: Express) {
 
   // GET - Feed (infinite scroll)
   // Feed algorithm: 30% community (recent), 20% featured (sponsored), 20% trending, 20% nearby, 10% discovery
-  app.get('/api/stories/feed', isAuthenticated, async (req, res) => {
+  app.get('/api/stories/feed', async (req, res) => {
     try {
-      const userId = (req as any).user?.id;
+      const userId = (req as any).isAuthenticated?.()
+        ? (req as any).user?.id
+        : null;
       const page = parseInt(req.query.page as string) || 0;
       const limit = 10;
       const communityStoryLimit = 6;
@@ -591,7 +593,10 @@ export default function setupStoriesRoutes(app: Express) {
             eq(videoStories.status, 'ready'),
             eq(videoStories.isApproved, true),
             isNull(videoStories.deletedAt),
-            gte(videoStories.expiresAt, sql`NOW()`)
+            or(
+              isNull(videoStories.expiresAt),
+              gte(videoStories.expiresAt, sql`NOW()`)
+            )
           )
         )
         .orderBy(desc(videoStories.featuredStartedAt))
@@ -647,7 +652,10 @@ export default function setupStoriesRoutes(app: Express) {
             eq(videoStories.isApproved, true),
             isNull(videoStories.deletedAt),
             lte(videoStories.createdAt, sql`NOW()`),
-            gte(videoStories.expiresAt, sql`NOW()`)
+            or(
+              isNull(videoStories.expiresAt),
+              gte(videoStories.expiresAt, sql`NOW()`)
+            )
           )
         )
         .orderBy(desc(videoStories.createdAt))
@@ -713,15 +721,17 @@ export default function setupStoriesRoutes(app: Express) {
             return story;
           }
 
-          const userLiked = await db
-            .select({ count: count() })
-            .from(storyLikes)
-            .where(
-              and(
-                eq(storyLikes.storyId, story.id),
-                eq(storyLikes.userId, userId)
-              )
-            );
+          const userLiked = userId
+            ? await db
+                .select({ count: count() })
+                .from(storyLikes)
+                .where(
+                  and(
+                    eq(storyLikes.storyId, story.id),
+                    eq(storyLikes.userId, userId)
+                  )
+                )
+            : [];
 
           let replyToStory: { id: string; title: string } | null = null;
           if (story.replyToStoryId) {

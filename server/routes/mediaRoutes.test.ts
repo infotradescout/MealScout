@@ -127,6 +127,15 @@ describe("public media video helpers", () => {
     ).toBe(true);
   });
 
+  it("allows ready approved user video recommendations without expiration dates", () => {
+    expect(
+      helpers.isPublicUserVideoRecommendationRenderable(
+        baseRecommendationRow({ expiresAt: null }),
+        new Date("2026-05-02T12:00:00Z"),
+      ),
+    ).toBe(true);
+  });
+
   it("blocks user video recommendations that are not public-safe", () => {
     const now = new Date("2026-05-02T12:00:00Z");
 
