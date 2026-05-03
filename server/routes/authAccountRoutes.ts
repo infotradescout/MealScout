@@ -312,8 +312,8 @@ export function registerAuthAccountRoutes(app: Express) {
       if (debugAuthUser) {
         console.log("/api/auth/user called", {
           isAuthenticated: req.isAuthenticated(),
-          sessionID: req.sessionID,
-          userId: req.user?.id || null,
+          hasSession: Boolean(req.sessionID),
+          userRef: req.user?.id ? String(req.user.id).slice(0, 8) : null,
         });
       }
 
@@ -359,7 +359,12 @@ export function registerAuthAccountRoutes(app: Express) {
 
       user = await ensureFirstPartnerLifetimeAccess(user);
 
-      console.log("✅ Returning user:", user.id, user.email, user.userType);
+      if (debugAuthUser) {
+        console.log("/api/auth/user returning", {
+          role: user.userType || "unknown",
+          userRef: user.id ? String(user.id).slice(0, 8) : null,
+        });
+      }
 
       const safeUser: any = sanitizeUser(user) || {};
       const partnerProgram =
