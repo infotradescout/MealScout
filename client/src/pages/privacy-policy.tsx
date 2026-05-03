@@ -143,7 +143,7 @@ export default function PrivacyPolicy() {
                   <li>
                     <strong>With Service Providers:</strong> Third-party
                     companies that perform services on our behalf, such as
-                    payment processing and analytics
+                    payment processing, analytics, and advertising measurement
                   </li>
                   <li>
                     <strong>For Legal Requirements:</strong> When required by
@@ -188,6 +188,10 @@ export default function PrivacyPolicy() {
                     <li>
                       - <strong>Facebook Login:</strong> For social
                       authentication
+                    </li>
+                    <li>
+                      - <strong>Meta Pixel:</strong> For advertising measurement
+                      and campaign performance tracking
                     </li>
                     <li>
                       - <strong>Stripe:</strong> For secure payment processing

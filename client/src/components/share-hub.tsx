@@ -120,16 +120,6 @@ const SHARE_ITEMS: ShareHubItem[] = [
     icon: Users,
     message: "Here is how MealScout host locations work:",
   },
-  {
-    key: "directory",
-    title: "MealScout Directory",
-    description: "A clean index of public MealScout pages.",
-    href: "/sitemap",
-    audience: "general",
-    audienceLabel: "General",
-    icon: Link2,
-    message: "Here are useful MealScout links in one place:",
-  },
 ];
 
 const FILTERS: Array<{ key: "all" | ShareAudience; label: string }> = [

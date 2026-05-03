@@ -5,6 +5,7 @@ import "./index.css";
 import "./facebook-browser.css";
 import { LocaleProvider } from "@/lib/i18n";
 import { getInAppBrowserInfo } from "@/lib/inAppBrowser";
+import { installMetaPixel } from "@/lib/meta-pixel";
 
 function installBrowserModeClasses() {
   if (typeof document === "undefined" || typeof navigator === "undefined") {
@@ -63,6 +64,7 @@ function installPerformanceCompatShim() {
 
 installBrowserModeClasses();
 installPerformanceCompatShim();
+installMetaPixel();
 
 function shouldEnablePwaRuntime() {
   if (typeof window === "undefined") return false;

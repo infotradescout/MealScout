@@ -12,6 +12,7 @@ import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
 import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
 import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
+import { trackMetaPageView } from "@/lib/meta-pixel";
 
 // Eager load only critical pages (home, login) - everything else lazy loads
 import NotFound from "@/pages/not-found";
@@ -312,6 +313,10 @@ function Router() {
     !isAuthenticated || (authState === "loading" && isLikelyPublicRoute);
 
   useEffect(() => {
+    trackMetaPageView();
+  }, [location]);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       setAffiliateTag("");
       return;
@@ -555,6 +560,8 @@ function Router() {
             <Route path="/account-setup" component={AccountSetup} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
+            <Route path="/admin/dashboard" component={AdminLogin} />
+            <Route path="/admin/legacy-dashboard" component={AdminLogin} />
             <Route path="/admin/lead-import" component={AdminLogin} />
             <Route path="/admin/media/videos" component={AdminLogin} />
             <Route

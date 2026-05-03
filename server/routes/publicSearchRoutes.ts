@@ -89,10 +89,119 @@ const searchTokens = (term: string) =>
     .split(" ")
     .filter((token) => token.length >= 3 && token !== "the");
 
+const GENERIC_FOOD_DISCOVERY_TOKENS = new Set([
+  "american",
+  "asian",
+  "bakery",
+  "barbecue",
+  "bbq",
+  "breakfast",
+  "brunch",
+  "burger",
+  "burgers",
+  "cafe",
+  "cajun",
+  "chinese",
+  "coffee",
+  "creole",
+  "cuban",
+  "deal",
+  "deals",
+  "deli",
+  "delivery",
+  "dinner",
+  "fast",
+  "fish",
+  "food",
+  "foods",
+  "healthy",
+  "ice",
+  "indian",
+  "italian",
+  "japanese",
+  "korean",
+  "lunch",
+  "mexican",
+  "near",
+  "nearby",
+  "open",
+  "pizza",
+  "restaurant",
+  "restaurants",
+  "seafood",
+  "shrimp",
+  "shop",
+  "sushi",
+  "taco",
+  "tacos",
+  "thai",
+  "truck",
+  "trucks",
+  "vegan",
+  "vegetarian",
+]);
+
+const isBroadFoodDiscoveryQuery = (query: string) => {
+  const primary = firstSearchSegment(query);
+  if (!primary) return false;
+
+  const tokens = primary
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && token !== "best");
+
+  return (
+    tokens.length > 0 &&
+    tokens.every((token) => GENERIC_FOOD_DISCOVERY_TOKENS.has(token))
+  );
+};
+
 const toSearchCoordinate = (value: unknown, maxAbs: number) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || Math.abs(parsed) > maxAbs) return null;
   return parsed;
+};
+
+const DEFAULT_LOCAL_SEARCH_RADIUS_KM = 80;
+const MAX_LOCAL_SEARCH_RADIUS_KM = 250;
+
+const toPositiveNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const parseLocalOnly = (value: unknown) =>
+  ["1", "true", "yes"].includes(String(value || "").toLowerCase());
+
+const distanceKmBetween = (
+  lat1: number,
+  lng1: number,
+  lat2Input: unknown,
+  lng2Input: unknown,
+) => {
+  const lat2 = Number(lat2Input);
+  const lng2 = Number(lng2Input);
+  if (
+    !Number.isFinite(lat2) ||
+    !Number.isFinite(lng2) ||
+    Math.abs(lat2) > 90 ||
+    Math.abs(lng2) > 180
+  ) {
+    return null;
+  }
+
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
 const isGoogleLocalityOnly = (candidate: {
@@ -353,26 +462,55 @@ export function registerPublicSearchRoutes(app: Express) {
           title: deals.title,
           discountValue: deals.discountValue,
           restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantBusinessType: restaurants.businessType,
+          restaurantDescription: restaurants.description,
+          restaurantLogoUrl: restaurants.logoUrl,
+          restaurantCoverImageUrl: restaurants.coverImageUrl,
+          restaurantProfileSource: restaurants.profileSource,
         })
         .from(deals)
         .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
         .where(
           and(
             eq(deals.isActive, true),
+            eq(restaurants.isActive, true),
             or(
               sql`lower(${deals.title}) like ${searchValue}`,
               sql`lower(${restaurants.name}) like ${searchValue}`,
             ),
           ),
         )
-        .limit(6);
+        .limit(12);
       for (const row of dealRows) {
+        if (
+          !isPublicBusinessVisible({
+            name: row.restaurantName,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.restaurantCuisineType,
+            businessType: row.restaurantBusinessType,
+            description: row.restaurantDescription,
+            logoUrl: row.restaurantLogoUrl,
+            coverImageUrl: row.restaurantCoverImageUrl,
+            profileSource: row.restaurantProfileSource,
+          })
+        ) {
+          continue;
+        }
         suggestionsV2.push({
           id: `deal-${row.id}`,
           text: row.title,
           type: "deal",
           subtitle: `${row.restaurantName || "Restaurant"} - ${row.discountValue}% off`,
         });
+        if (suggestionsV2.filter((item) => item.type === "deal").length >= 6) {
+          break;
+        }
       }
 
       const hostRows = await db
@@ -553,6 +691,35 @@ export function registerPublicSearchRoutes(app: Express) {
       const primaryTerm = firstSearchSegment(query);
       const biasLat = toSearchCoordinate(req.query.lat, 90);
       const biasLng = toSearchCoordinate(req.query.lng, 180);
+      const hasBiasCoordinates = biasLat !== null && biasLng !== null;
+      const localOnly = parseLocalOnly(req.query.localOnly);
+      const localRadiusKm = Math.min(
+        MAX_LOCAL_SEARCH_RADIUS_KM,
+        Math.max(
+          1,
+          toPositiveNumber(req.query.radiusKm) ??
+            toPositiveNumber(req.query.radius) ??
+            DEFAULT_LOCAL_SEARCH_RADIUS_KM,
+        ),
+      );
+      if (localOnly && !hasBiasCoordinates) {
+        return res.json({
+          query,
+          restaurants: [],
+          deals: [],
+          parkingPassHosts: [],
+          videos: [],
+          events: [],
+          unclaimedListings: [],
+        });
+      }
+      const getDistanceFromSearchBias = (lat: unknown, lng: unknown) =>
+        hasBiasCoordinates ? distanceKmBetween(biasLat!, biasLng!, lat, lng) : null;
+      const isInsideRequestedLocalRadius = (lat: unknown, lng: unknown) => {
+        if (!localOnly || !hasBiasCoordinates) return true;
+        const distanceKm = getDistanceFromSearchBias(lat, lng);
+        return typeof distanceKm === "number" && distanceKm <= localRadiusKm;
+      };
 
       const restaurantMatches = await db
         .select({
@@ -571,6 +738,9 @@ export function registerPublicSearchRoutes(app: Express) {
           description: restaurants.description,
           logoUrl: restaurants.logoUrl,
           coverImageUrl: restaurants.coverImageUrl,
+          googlePhotos: restaurants.googlePhotos,
+          facebookCoverUrl: restaurants.facebookCoverUrl,
+          facebookPhotos: restaurants.facebookPhotos,
           operatingHours: restaurants.operatingHours,
           googleRating: restaurants.googleRating,
           googleReviewCount: restaurants.googleReviewCount,
@@ -597,15 +767,49 @@ export function registerPublicSearchRoutes(app: Express) {
             primaryTerm,
           );
           if (score <= 0) return null;
+
+          const distanceKm = hasBiasCoordinates
+            ? distanceKmBetween(
+                biasLat!,
+                biasLng!,
+                restaurant.latitude,
+                restaurant.longitude,
+              )
+            : null;
+          if (
+            localOnly &&
+            hasBiasCoordinates &&
+            (distanceKm === null || distanceKm > localRadiusKm)
+          ) {
+            return null;
+          }
+
           return {
             restaurant,
-            score: score + (restaurant?.isVerified ? 3 : 0),
+            distanceKm,
+            score:
+              score +
+              (restaurant?.isVerified ? 3 : 0) +
+              (distanceKm === null ? 0 : Math.max(0, 20 - distanceKm / 4)),
           };
         })
         .filter(Boolean)
-        .sort((a: any, b: any) => b.score - a.score)
+        .sort((a: any, b: any) => {
+          if (localOnly && hasBiasCoordinates) {
+            const aDistance = Number.isFinite(a.distanceKm)
+              ? Number(a.distanceKm)
+              : Number.POSITIVE_INFINITY;
+            const bDistance = Number.isFinite(b.distanceKm)
+              ? Number(b.distanceKm)
+              : Number.POSITIVE_INFINITY;
+            if (Math.abs(aDistance - bDistance) > 0.1) {
+              return aDistance - bDistance;
+            }
+          }
+          return b.score - a.score;
+        })
         .slice(0, 12)
-        .map(({ restaurant }: any) => ({
+        .map(({ restaurant, distanceKm }: any) => ({
           id: restaurant.id,
           name: restaurant.name,
           cuisineType: restaurant.cuisineType,
@@ -614,12 +818,23 @@ export function registerPublicSearchRoutes(app: Express) {
           state: restaurant.state,
           latitude: restaurant.latitude,
           longitude: restaurant.longitude,
+          businessType: restaurant.businessType,
+          description: restaurant.description,
+          logoUrl: restaurant.logoUrl,
+          coverImageUrl: restaurant.coverImageUrl,
+          googlePhotos: restaurant.googlePhotos,
+          facebookCoverUrl: restaurant.facebookCoverUrl,
+          facebookPhotos: restaurant.facebookPhotos,
           isFoodTruck: Boolean(restaurant.isFoodTruck),
           isVerified: Boolean(restaurant.isVerified),
           operatingHours:
             restaurant.operatingHours ?? restaurant.businessHours ?? null,
           googleRating: restaurant.googleRating,
           googleReviewCount: restaurant.googleReviewCount,
+          distance:
+            typeof distanceKm === "number"
+              ? Number(distanceKm.toFixed(2))
+              : undefined,
         }));
 
       let restaurantsOut = await Promise.all(
@@ -653,7 +868,9 @@ export function registerPublicSearchRoutes(app: Express) {
           await storage.searchDeals({
             query,
             sortBy: "relevance",
-            radius: 9999,
+            latitude: localOnly && hasBiasCoordinates ? biasLat! : undefined,
+            longitude: localOnly && hasBiasCoordinates ? biasLng! : undefined,
+            radius: localOnly && hasBiasCoordinates ? localRadiusKm : 9999,
           })
         ).slice(0, 12);
       } catch (dealSearchError) {
@@ -748,7 +965,8 @@ export function registerPublicSearchRoutes(app: Express) {
           (row: any) =>
             Array.isArray(row.qualityFlags) &&
             row.qualityFlags.length === 0 &&
-            Number(row.matchScore || 0) > 0,
+            Number(row.matchScore || 0) > 0 &&
+            isInsideRequestedLocalRadius(row.latitude, row.longitude),
         )
         .sort((a: any, b: any) => b.matchScore - a.matchScore)
         .slice(0, 12);
@@ -759,8 +977,21 @@ export function registerPublicSearchRoutes(app: Express) {
           id: videoStories.id,
           title: videoStories.title,
           description: videoStories.description,
+          thumbnailUrl: videoStories.thumbnailUrl,
           restaurantId: videoStories.restaurantId,
           restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantBusinessType: restaurants.businessType,
+          restaurantLogoUrl: restaurants.logoUrl,
+          restaurantCoverImageUrl: restaurants.coverImageUrl,
+          restaurantGooglePhotos: restaurants.googlePhotos,
+          restaurantFacebookCoverUrl: restaurants.facebookCoverUrl,
+          restaurantFacebookPhotos: restaurants.facebookPhotos,
+          restaurantLatitude: restaurants.latitude,
+          restaurantLongitude: restaurants.longitude,
           createdAt: videoStories.createdAt,
         })
         .from(videoStories)
@@ -782,6 +1013,12 @@ export function registerPublicSearchRoutes(app: Express) {
         )
         .orderBy(desc(videoStories.createdAt))
         .limit(12);
+      const videosOut = videoRows.filter((row: any) =>
+        isInsideRequestedLocalRadius(
+          row.restaurantLatitude,
+          row.restaurantLongitude,
+        ),
+      );
 
       const eventsRows = await db
         .select({
@@ -796,6 +1033,9 @@ export function registerPublicSearchRoutes(app: Express) {
           hostAddress: hosts.address,
           hostCity: hosts.city,
           hostState: hosts.state,
+          hostSpotImageUrl: hosts.spotImageUrl,
+          hostLatitude: hosts.latitude,
+          hostLongitude: hosts.longitude,
         })
         .from(events)
         .innerJoin(hosts, eq(events.hostId, hosts.id))
@@ -813,6 +1053,9 @@ export function registerPublicSearchRoutes(app: Express) {
         )
         .orderBy(asc(events.date))
         .limit(12);
+      const eventsOut = eventsRows.filter((row: any) =>
+        isInsideRequestedLocalRadius(row.hostLatitude, row.hostLongitude),
+      );
 
       // ----- Unclaimed listings (existing imports only; search stays read-only) -----
       const unclaimedSearchValue = `%${searchTerm}%`;
@@ -823,7 +1066,10 @@ export function registerPublicSearchRoutes(app: Express) {
           address: truckImportListings.address,
           city: truckImportListings.city,
           state: truckImportListings.state,
+          latitude: truckImportListings.latitude,
+          longitude: truckImportListings.longitude,
           phone: truckImportListings.phone,
+          cuisineType: truckImportListings.cuisineType,
           externalId: truckImportListings.externalId,
           confidenceScore: truckImportListings.confidenceScore,
           email: truckImportListings.email,
@@ -849,16 +1095,34 @@ export function registerPublicSearchRoutes(app: Express) {
         .orderBy(desc(truckImportListings.confidenceScore))
         .limit(6);
 
-      let unclaimedOut = existingUnclaimed.map((row: any) => ({
-        id: row.id,
-        name: row.name,
-        address: row.address,
-        city: row.city,
-        state: row.state,
-        source: row.source || null,
-        status: row.status || "unclaimed",
-        autoSeeded: false,
-      }));
+      let unclaimedOut = existingUnclaimed
+        .map((row: any) => {
+          const distanceKm = getDistanceFromSearchBias(
+            row.latitude,
+            row.longitude,
+          );
+
+          return {
+            id: row.id,
+            name: row.name,
+            address: row.address,
+            city: row.city,
+            state: row.state,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            cuisineType: row.cuisineType,
+            distance:
+              typeof distanceKm === "number"
+                ? Number(distanceKm.toFixed(2))
+                : undefined,
+            source: row.source || null,
+            status: row.status || "unclaimed",
+            autoSeeded: false,
+          };
+        })
+        .filter((row: any) =>
+          isInsideRequestedLocalRadius(row.latitude, row.longitude),
+        );
 
       // If nothing matched locally, Google Places can create a generated
       // restaurant profile only after it gives us a concrete food-business
@@ -873,7 +1137,8 @@ export function registerPublicSearchRoutes(app: Express) {
       const shouldAttemptExternalLookup =
         restaurantsOut.length === 0 &&
         unclaimedOut.length === 0 &&
-        query.length >= LOOKUP_MIN_QUERY_LEN;
+        query.length >= LOOKUP_MIN_QUERY_LEN &&
+        !isBroadFoodDiscoveryQuery(query);
 
       if (shouldAttemptExternalLookup) {
         try {
@@ -887,59 +1152,102 @@ export function registerPublicSearchRoutes(app: Express) {
             );
 
             if (foodCandidate) {
-              try {
-                const result = await ensureGoogleRestaurantProfile(
-                  foodCandidate.placeId,
+              const candidateDistanceKm =
+                hasBiasCoordinates && localOnly
+                  ? distanceKmBetween(
+                      biasLat!,
+                      biasLng!,
+                      foodCandidate.latitude,
+                      foodCandidate.longitude,
+                    )
+                  : null;
+              if (
+                localOnly &&
+                hasBiasCoordinates &&
+                (candidateDistanceKm === null ||
+                  candidateDistanceKm > localRadiusKm)
+              ) {
+                res.setHeader(
+                  "X-MealScout-Auto-Profile",
+                  "skipped-out-of-radius",
                 );
-                const restaurant = result.restaurant as any;
-                if (
-                  restaurant?.isActive !== false &&
-                  isPublicBusinessVisible(restaurant)
-                ) {
-                  let rating: number | null = null;
-                  try {
-                    const avg = await storage.getRestaurantAverageRating(
-                      String(restaurant.id),
-                    );
-                    if (Number.isFinite(avg) && avg > 0) rating = Number(avg);
-                  } catch {
-                    rating = null;
-                  }
+              } else {
+                try {
+                  const result = await ensureGoogleRestaurantProfile(
+                    foodCandidate.placeId,
+                  );
+                  const restaurant = result.restaurant as any;
+                  const distanceKm =
+                    hasBiasCoordinates && localOnly
+                      ? distanceKmBetween(
+                          biasLat!,
+                          biasLng!,
+                          restaurant?.latitude,
+                          restaurant?.longitude,
+                        )
+                      : null;
+                  if (
+                    restaurant?.isActive !== false &&
+                    isPublicBusinessVisible(restaurant) &&
+                    (!localOnly ||
+                      !hasBiasCoordinates ||
+                      (typeof distanceKm === "number" &&
+                        distanceKm <= localRadiusKm))
+                  ) {
+                    let rating: number | null = null;
+                    try {
+                      const avg = await storage.getRestaurantAverageRating(
+                        String(restaurant.id),
+                      );
+                      if (Number.isFinite(avg) && avg > 0) {
+                        rating = Number(avg);
+                      }
+                    } catch {
+                      rating = null;
+                    }
 
-                  restaurantsOut = [
-                    {
-                      id: restaurant.id,
-                      name: restaurant.name,
-                      cuisineType: restaurant.cuisineType,
-                      address: restaurant.address,
-                      city: restaurant.city,
-                      state: restaurant.state,
-                      latitude: restaurant.latitude,
-                      longitude: restaurant.longitude,
-                      isFoodTruck: Boolean(restaurant.isFoodTruck),
-                      isVerified: Boolean(restaurant.isVerified),
-                      operatingHours:
-                        restaurant.operatingHours ??
-                        restaurant.businessHours ??
-                        null,
-                      googleRating: restaurant.googleRating,
-                      googleReviewCount: restaurant.googleReviewCount,
-                      rating:
-                        rating ??
-                        (restaurant.googleRating
-                          ? Number(restaurant.googleRating)
-                          : null),
-                      autoPopulated: true,
-                      created: result.created,
-                    },
-                  ];
-                  res.setHeader("X-MealScout-Auto-Profile", "google");
+                    restaurantsOut = [
+                      {
+                        id: restaurant.id,
+                        name: restaurant.name,
+                        cuisineType: restaurant.cuisineType,
+                        address: restaurant.address,
+                        city: restaurant.city,
+                        state: restaurant.state,
+                        latitude: restaurant.latitude,
+                        longitude: restaurant.longitude,
+                        businessType: restaurant.businessType,
+                        description: restaurant.description,
+                        logoUrl: restaurant.logoUrl,
+                        coverImageUrl: restaurant.coverImageUrl,
+                        googlePhotos: restaurant.googlePhotos,
+                        facebookCoverUrl: restaurant.facebookCoverUrl,
+                        facebookPhotos: restaurant.facebookPhotos,
+                        isFoodTruck: Boolean(restaurant.isFoodTruck),
+                        isVerified: Boolean(restaurant.isVerified),
+                        operatingHours:
+                          restaurant.operatingHours ??
+                          restaurant.businessHours ??
+                          null,
+                        googleRating: restaurant.googleRating,
+                        googleReviewCount: restaurant.googleReviewCount,
+                        rating:
+                          rating ??
+                          (restaurant.googleRating
+                            ? Number(restaurant.googleRating)
+                            : null),
+                        autoPopulated: true,
+                        created: result.created,
+                      },
+                    ];
+                    res.setHeader("X-MealScout-Auto-Profile", "google");
+                  }
+                } catch (profileErr) {
+                  console.warn(
+                    "[search] Google profile creation failed:",
+                    profileErr,
+                  );
                 }
-              } catch (profileErr) {
-                console.warn(
-                  "[search] Google profile creation failed:",
-                  profileErr,
-                );
               }
 
               if (restaurantsOut.length === 0) {
@@ -985,8 +1293,8 @@ export function registerPublicSearchRoutes(app: Express) {
         restaurants: restaurantsOut,
         deals: dealsOut,
         parkingPassHosts: parkingPassHostsOut,
-        videos: videoRows,
-        events: eventsRows,
+        videos: videosOut,
+        events: eventsOut,
         unclaimedListings: unclaimedOut,
       });
     } catch (error) {

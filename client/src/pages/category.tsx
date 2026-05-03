@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import Navigation from "@/components/navigation";
@@ -20,6 +21,7 @@ import {
   Soup,
   Flame,
 } from "lucide-react";
+import { readDeviceLocation } from "@/lib/device-location";
 
 const categoryConfig = {
   pizza: {
@@ -108,8 +110,6 @@ const categoryConfig = {
   },
 };
 
-const lower = (value?: string) => String(value || "").toLowerCase();
-
 const categorySearchTerms = (
   config: (typeof categoryConfig)[keyof typeof categoryConfig],
 ) =>
@@ -127,7 +127,16 @@ const normalizeRestaurantForCard = (restaurant: any) => {
     id,
     name,
     address: String(restaurant.address || ""),
+    city: restaurant.city || null,
+    state: restaurant.state || null,
     cuisineType: String(restaurant.cuisineType || ""),
+    businessType: restaurant.businessType || null,
+    description: restaurant.description || null,
+    logoUrl: restaurant.logoUrl || null,
+    coverImageUrl: restaurant.coverImageUrl || null,
+    facebookCoverUrl: restaurant.facebookCoverUrl || null,
+    facebookPhotos: restaurant.facebookPhotos || null,
+    googlePhotos: restaurant.googlePhotos || null,
     isActive:
       typeof restaurant.isActive === "boolean"
         ? restaurant.isActive
@@ -166,25 +175,36 @@ export default function CategoryPage() {
   const config = category ? categoryConfig[categoryKey] : null;
 
   const searchTerms = config ? categorySearchTerms(config) : [];
-
-  const { data: featuredDeals, isLoading: dealsLoading } = useQuery({
-    queryKey: ["/api/deals/featured"],
-    queryFn: async () => {
-      const response = await fetch("/api/deals/featured");
-      if (!response.ok) throw new Error("Failed to fetch featured deals");
-      return response.json();
-    },
-    enabled: true,
-    retry: false,
-  });
+  const deviceLocation = useMemo(() => readDeviceLocation(), []);
+  const hasLocalContext = Boolean(deviceLocation);
 
   const { data: categorySearchResults, isLoading: restaurantsLoading } =
     useQuery({
-      queryKey: ["/api/search", searchTerms, "category", categoryKey],
+      queryKey: [
+        "/api/search",
+        searchTerms,
+        "category",
+        categoryKey,
+        deviceLocation?.lat,
+        deviceLocation?.lng,
+      ],
       queryFn: async () => {
+        if (!deviceLocation) {
+          return {
+            restaurantMap: new Map<string, any>(),
+            dealMap: new Map<string, any>(),
+          };
+        }
+
         const responses = await Promise.allSettled(
           searchTerms.map(async (term) => {
-            const params = new URLSearchParams({ q: term });
+            const params = new URLSearchParams({
+              q: term,
+              lat: String(deviceLocation.lat),
+              lng: String(deviceLocation.lng),
+              localOnly: "1",
+              radiusKm: "80",
+            });
             const response = await fetch(`/api/search?${params}`);
             if (!response.ok) throw new Error("Failed to search category");
             return response.json();
@@ -218,7 +238,7 @@ export default function CategoryPage() {
           },
         );
       },
-      enabled: Boolean(config && searchTerms.length > 0),
+      enabled: Boolean(config && searchTerms.length > 0 && hasLocalContext),
       retry: false,
       staleTime: 30_000,
     });
@@ -237,123 +257,21 @@ export default function CategoryPage() {
     );
   }
 
-  const allDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
-  const searchedRestaurants = categorySearchResults?.restaurantMap
-    ? Array.from(categorySearchResults.restaurantMap.values())
-    : [];
-  const searchedDeals = categorySearchResults?.dealMap
-    ? Array.from(categorySearchResults.dealMap.values())
-    : [];
-  const categoryDeals = allDeals.filter((deal: any) => {
-    const cuisineType = lower(deal.restaurant?.cuisineType);
-    const title = lower(deal.title);
-
-    switch (categoryKey) {
-      case "pizza":
-        return (
-          cuisineType.includes("pizza") ||
-          cuisineType.includes("italian") ||
-          title.includes("pizza") ||
-          title.includes("pasta")
-        );
-      case "burgers":
-        return (
-          cuisineType.includes("american") ||
-          cuisineType.includes("burger") ||
-          title.includes("burger") ||
-          title.includes("sandwich")
-        );
-      case "sushi":
-        return (
-          cuisineType.includes("japanese") ||
-          cuisineType.includes("sushi") ||
-          title.includes("sushi") ||
-          title.includes("sashimi")
-        );
-      case "chinese":
-        return (
-          cuisineType.includes("chinese") ||
-          title.includes("chinese") ||
-          title.includes("noodle") ||
-          title.includes("fried rice")
-        );
-      case "asian":
-        return (
-          cuisineType.includes("asian") ||
-          cuisineType.includes("thai") ||
-          cuisineType.includes("vietnamese") ||
-          title.includes("pho")
-        );
-      case "mexican":
-        return (
-          cuisineType.includes("mexican") ||
-          title.includes("taco") ||
-          title.includes("burrito") ||
-          title.includes("enchilada")
-        );
-      case "breakfast":
-        return (
-          title.includes("breakfast") ||
-          title.includes("brunch") ||
-          title.includes("pancake") ||
-          title.includes("waffle") ||
-          title.includes("eggs")
-        );
-      case "seafood":
-        return (
-          cuisineType.includes("seafood") ||
-          title.includes("fish") ||
-          title.includes("shrimp") ||
-          title.includes("lobster") ||
-          title.includes("crab")
-        );
-      case "bbq":
-        return (
-          cuisineType.includes("bbq") ||
-          cuisineType.includes("barbecue") ||
-          title.includes("bbq") ||
-          title.includes("ribs") ||
-          title.includes("brisket")
-        );
-      case "dessert":
-        return (
-          title.includes("dessert") ||
-          title.includes("ice cream") ||
-          title.includes("cake") ||
-          title.includes("cookie")
-        );
-      case "coffee":
-        return (
-          cuisineType.includes("cafe") ||
-          cuisineType.includes("coffee") ||
-          title.includes("coffee") ||
-          title.includes("latte") ||
-          title.includes("espresso")
-        );
-      case "healthy":
-        return (
-          title.includes("salad") ||
-          title.includes("smoothie") ||
-          cuisineType.includes("healthy") ||
-          title.includes("bowl")
-        );
-      default:
-        return false;
-    }
-  });
-  const mergedDealMap = new Map<string, any>();
-  [...searchedDeals, ...categoryDeals].forEach((deal: any) => {
-    const id = String(deal?.id || "").trim();
-    if (id) mergedDealMap.set(id, deal);
-  });
-  const displayDeals = Array.from(mergedDealMap.values());
+  const searchedRestaurants =
+    hasLocalContext && categorySearchResults?.restaurantMap
+      ? Array.from(categorySearchResults.restaurantMap.values())
+      : [];
+  const searchedDeals =
+    hasLocalContext && categorySearchResults?.dealMap
+      ? Array.from(categorySearchResults.dealMap.values())
+      : [];
+  const displayDeals = searchedDeals;
   const displayRestaurants = searchedRestaurants
     .map(normalizeRestaurantForCard)
     .filter(Boolean)
     .slice(0, 24);
   const totalResults = displayRestaurants.length + displayDeals.length;
-  const isLoading =
-    restaurantsLoading || (dealsLoading && !categorySearchResults);
+  const isLoading = hasLocalContext && restaurantsLoading;
 
   const canonicalUrl = `https://www.mealscout.us/category/${encodeURIComponent(category || "")}`;
   const seoTitle = `${config.title} Restaurants, Food Trucks & Deals Near You | MealScout`;
@@ -518,14 +436,25 @@ export default function CategoryPage() {
             <h3
               className={`font-bold text-lg bg-gradient-to-r ${config.gradient} text-transparent bg-clip-text mb-2`}
             >
-              No {config.title} results yet
+              {hasLocalContext
+                ? `No local ${config.title} results yet`
+                : "Choose a location first"}
             </h3>
             <p className="text-muted-foreground mb-6">
-              No matching restaurants, trucks, or active deals are listed yet.
+              {hasLocalContext
+                ? "No matching restaurants, trucks, or active deals are listed near your saved location yet."
+                : "MealScout will not mix unrelated markets on category pages. Open the map or search with a city to see nearby matches."}
             </p>
-            <Link href="/search">
-              <Button data-testid="button-browse-all">Search all food</Button>
-            </Link>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link href="/search">
+                <Button data-testid="button-browse-all">Search all food</Button>
+              </Link>
+              <Link href="/map">
+                <Button variant="outline" data-testid="button-open-map">
+                  Open map
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
 

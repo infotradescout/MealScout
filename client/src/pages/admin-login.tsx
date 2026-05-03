@@ -19,10 +19,11 @@ export default function AdminLogin() {
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.user?.userType === 'admin') {
+      const userType = String(data.user?.userType || "");
+      if (userType === "admin" || userType === "super_admin") {
         toast({
           title: "Admin Login Successful",
-          description: `Welcome back, ${data.user.firstName || 'Admin'}!`,
+          description: `Welcome back, ${data.user.firstName || "Admin"}!`,
         });
         // Redirect to admin dashboard
         window.location.href = "/admin/dashboard";

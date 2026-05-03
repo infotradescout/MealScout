@@ -2363,12 +2363,49 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select({
         id: deals.id,
+        restaurantId: deals.restaurantId,
+        category: deals.category,
         title: deals.title,
+        description: deals.description,
+        dealType: deals.dealType,
         discountValue: deals.discountValue,
+        minOrderAmount: deals.minOrderAmount,
+        imageUrl: deals.imageUrl,
+        startDate: deals.startDate,
+        endDate: deals.endDate,
+        startTime: deals.startTime,
+        endTime: deals.endTime,
+        availableDuringBusinessHours: deals.availableDuringBusinessHours,
+        isOngoing: deals.isOngoing,
+        totalUsesLimit: deals.totalUsesLimit,
+        perCustomerLimit: deals.perCustomerLimit,
+        currentUses: deals.currentUses,
         isActive: deals.isActive,
+        createdAt: deals.createdAt,
+        updatedAt: deals.updatedAt,
         restaurant: {
           id: restaurants.id,
           name: restaurants.name,
+          businessType: restaurants.businessType,
+          cuisineType: restaurants.cuisineType,
+          address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          phone: restaurants.phone,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          googlePhotos: restaurants.googlePhotos,
+          facebookCoverUrl: restaurants.facebookCoverUrl,
+          facebookPhotos: restaurants.facebookPhotos,
+          latitude: restaurants.latitude,
+          longitude: restaurants.longitude,
+          isVerified: restaurants.isVerified,
+          isFoodTruck: restaurants.isFoodTruck,
+          mobileOnline: restaurants.mobileOnline,
+          currentLatitude: restaurants.currentLatitude,
+          currentLongitude: restaurants.currentLongitude,
+          lastBroadcastAt: restaurants.lastBroadcastAt,
         },
       })
       .from(deals)
@@ -2414,11 +2451,23 @@ export class DatabaseStorage implements IStorage {
         createdAt: deals.createdAt,
         updatedAt: deals.updatedAt,
         restaurant: {
+          id: restaurants.id,
           name: restaurants.name,
+          address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          googlePhotos: restaurants.googlePhotos,
+          facebookCoverUrl: restaurants.facebookCoverUrl,
+          facebookPhotos: restaurants.facebookPhotos,
           phone: restaurants.phone,
           latitude: restaurants.latitude,
           longitude: restaurants.longitude,
+          isVerified: restaurants.isVerified,
           isFoodTruck: restaurants.isFoodTruck,
           mobileOnline: restaurants.mobileOnline,
           currentLatitude: restaurants.currentLatitude,
@@ -2547,10 +2596,27 @@ export class DatabaseStorage implements IStorage {
           id: restaurants.id,
           name: restaurants.name,
           address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          phone: restaurants.phone,
           latitude: restaurants.latitude,
           longitude: restaurants.longitude,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          googlePhotos: restaurants.googlePhotos,
+          facebookCoverUrl: restaurants.facebookCoverUrl,
+          facebookPhotos: restaurants.facebookPhotos,
+          profileSource: restaurants.profileSource,
+          isActive: restaurants.isActive,
           isVerified: restaurants.isVerified,
+          isFoodTruck: restaurants.isFoodTruck,
+          mobileOnline: restaurants.mobileOnline,
+          currentLatitude: restaurants.currentLatitude,
+          currentLongitude: restaurants.currentLongitude,
+          lastBroadcastAt: restaurants.lastBroadcastAt,
         })
         .from(restaurants)
         .where(inArray(restaurants.id, restaurantIds));
@@ -2563,6 +2629,11 @@ export class DatabaseStorage implements IStorage {
         ...deal,
         restaurantData: restaurantMap.get(deal.restaurantId),
       }));
+      searchResults = searchResults.filter(
+        (deal) =>
+          deal.restaurantData?.isActive !== false &&
+          isPublicBusinessVisible(deal.restaurantData),
+      );
     }
 
     // Apply search filters
@@ -2650,10 +2721,13 @@ export class DatabaseStorage implements IStorage {
       });
     }
 
-    // Limit results for performance and remove restaurantData before returning
+    // Limit results for performance and keep display-safe restaurant metadata.
     const finalResults = searchResults.slice(0, 100).map((deal) => {
       const { restaurantData, ...dealWithoutRestaurantData } = deal;
-      return dealWithoutRestaurantData;
+      return {
+        ...dealWithoutRestaurantData,
+        restaurant: restaurantData ?? dealWithoutRestaurantData.restaurant,
+      };
     });
 
     return finalResults;
@@ -2858,6 +2932,10 @@ export class DatabaseStorage implements IStorage {
         );
         return;
       }
+      console.warn(
+        "[seed] SEED_DEV_DATA is set, but public demo business seeding is disabled. Use verified imports or purpose-built non-public fixtures instead.",
+      );
+      return;
       // Check if data already exists
       const existingRestaurants = await db.select().from(restaurants).limit(1);
       if (existingRestaurants.length > 0) {
@@ -2967,18 +3045,6 @@ export class DatabaseStorage implements IStorage {
         latitude: "30.5047",
         longitude: "-90.4612",
         ownerId: owner1.id,
-      });
-
-      const restaurant2 = await this.createRestaurant({
-        name: "Red Lobster Hammond",
-        address: "1535 W Thomas St, Hammond, LA 70401",
-        city: "Hammond",
-        state: "LA",
-        phone: "+1 (985) 419-1235",
-        cuisineType: "Seafood",
-        latitude: "30.5125",
-        longitude: "-90.4897",
-        ownerId: owner2.id,
       });
 
       // New York City
@@ -3165,25 +3231,6 @@ export class DatabaseStorage implements IStorage {
         startTime: "06:00",
         endTime: "11:00",
         totalUsesLimit: 200,
-        perCustomerLimit: 1,
-        isActive: true,
-      });
-
-      const deal2 = await this.createDeal({
-        restaurantId: restaurant2.id,
-        title: "$5 Off Endless Shrimp",
-        description:
-          "Save $5 on our famous Endless Shrimp special! Choose from over 30 different shrimp preparations.",
-        dealType: "fixed",
-        discountValue: "5.00",
-        minOrderAmount: "19.99",
-        imageUrl:
-          "https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=500",
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        startTime: "15:00",
-        endTime: "21:00",
-        totalUsesLimit: 100,
         perCustomerLimit: 1,
         isActive: true,
       });
@@ -3449,14 +3496,6 @@ export class DatabaseStorage implements IStorage {
         rating: 5,
         comment:
           "Best beignets in Hammond! Just like being in New Orleans. The coffee is strong and perfect with the powdered sugar treats.",
-      });
-
-      await this.createReview({
-        userId: customer1.id,
-        restaurantId: restaurant2.id,
-        rating: 4,
-        comment:
-          "Great seafood as always! The endless shrimp deal is amazing - so many varieties to try. Service was quick and friendly.",
       });
 
       await this.createReview({
@@ -4018,14 +4057,40 @@ export class DatabaseStorage implements IStorage {
     const restaurantsWithHours = await db
       .select({
         id: restaurants.id,
+        name: restaurants.name,
+        address: restaurants.address,
+        city: restaurants.city,
+        state: restaurants.state,
+        phone: restaurants.phone,
+        latitude: restaurants.latitude,
+        longitude: restaurants.longitude,
+        cuisineType: restaurants.cuisineType,
+        businessType: restaurants.businessType,
+        description: restaurants.description,
+        logoUrl: restaurants.logoUrl,
+        coverImageUrl: restaurants.coverImageUrl,
+        googlePhotos: restaurants.googlePhotos,
+        facebookCoverUrl: restaurants.facebookCoverUrl,
+        facebookPhotos: restaurants.facebookPhotos,
+        profileSource: restaurants.profileSource,
+        isActive: restaurants.isActive,
+        isVerified: restaurants.isVerified,
+        isFoodTruck: restaurants.isFoodTruck,
+        mobileOnline: restaurants.mobileOnline,
+        currentLatitude: restaurants.currentLatitude,
+        currentLongitude: restaurants.currentLongitude,
+        lastBroadcastAt: restaurants.lastBroadcastAt,
         operatingHours: restaurants.operatingHours,
       })
       .from(restaurants)
       .where(inArray(restaurants.id, restaurantIds));
 
     // Create a map for quick lookup
-    const restaurantHoursMap = new Map(
-      restaurantsWithHours.map((r: any) => [r.id, r.operatingHours]),
+    const restaurantById = new Map<string, any>(
+      restaurantsWithHours.map((restaurant: any) => [
+        String(restaurant.id),
+        restaurant,
+      ]),
     );
 
     // Filter deals where restaurants are currently open
@@ -4035,8 +4100,17 @@ export class DatabaseStorage implements IStorage {
     ];
     const currentTime = now.getHours() * 60 + now.getMinutes();
 
-    return deals.filter((deal) => {
-      const operatingHours = restaurantHoursMap.get(deal.restaurantId);
+    const filteredDeals = deals.filter((deal) => {
+      const restaurant = restaurantById.get(String(deal.restaurantId));
+      if (
+        !restaurant ||
+        restaurant.isActive === false ||
+        !isPublicBusinessVisible(restaurant)
+      ) {
+        return false;
+      }
+
+      const operatingHours = restaurant.operatingHours;
 
       // Default to open if no hours set
       if (!operatingHours) return true;
@@ -4073,6 +4147,14 @@ export class DatabaseStorage implements IStorage {
       }
 
       return false; // Not within any time slot
+    });
+
+    return filteredDeals.map((deal) => {
+      const restaurant = restaurantById.get(String(deal.restaurantId));
+      return {
+        ...deal,
+        restaurant: restaurant ?? deal.restaurant,
+      };
     });
   }
 

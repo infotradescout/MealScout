@@ -72,7 +72,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <h2>3. Information Sharing</h2>
     <ul>
       <li><strong>With Business Partners:</strong> General location data with restaurants</li>
-      <li><strong>With Service Providers:</strong> Third-party payment processing and analytics</li>
+      <li><strong>With Service Providers:</strong> Third-party payment processing, analytics, and advertising measurement</li>
       <li><strong>For Legal Requirements:</strong> When required by law or legal process</li>
       <li><strong>With Your Consent:</strong> When you explicitly agree</li>
       <li><strong>Aggregated Data:</strong> De-identified data that cannot be linked to individuals</li>
@@ -84,6 +84,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <ul>
       <li><strong>Google OAuth:</strong> For secure authentication</li>
       <li><strong>Facebook Login:</strong> For social authentication</li>
+      <li><strong>Meta Pixel:</strong> For advertising measurement and campaign performance tracking</li>
       <li><strong>Stripe:</strong> For secure payment processing</li>
       <li><strong>BigDataCloud:</strong> For location geocoding services</li>
     </ul>

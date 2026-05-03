@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Flame, Clock, Star, UserPlus, Frown, Smile } from "lucide-react";
+import { Flame, MapPin, Star, UserPlus, Frown, Smile } from "lucide-react";
 import { GoldenForkIcon } from "@/components/award-badges";
 import { apiRequest } from "@/lib/queryClient";
 import { trackDealViewOnce } from "@/lib/dealViewTracking";
@@ -13,6 +13,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { authUrl } from "@/lib/api";
+import {
+  getCategoryLine,
+  getLocationLine,
+  resolveImageFallback,
+  resolveListingImageUrl,
+} from "@/lib/listing-card-display";
 
 const SAVED_DEALS_KEY = "mealscout_saved_deals";
 let followSnapshotPromise: Promise<Set<string>> | null = null;
@@ -74,7 +80,17 @@ interface Deal {
   isAiGenerated?: boolean;
   restaurant?: {
     name: string;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    businessType?: string | null;
+    description?: string | null;
     cuisineType?: string;
+    logoUrl?: string | null;
+    coverImageUrl?: string | null;
+    facebookCoverUrl?: string | null;
+    facebookPhotos?: unknown;
+    googlePhotos?: unknown;
     phone?: string;
     latitude?: number;
     longitude?: number;
@@ -183,6 +199,10 @@ export default function DealCard({
   );
   const [, setLocation] = useLocation();
   const lastUpdatedLabel = formatRelativeTime(deal.restaurant?.lastBroadcastAt);
+  const cardImageUrl = resolveListingImageUrl(deal);
+  const restaurantName = deal.restaurant?.name || "Local restaurant";
+  const categoryLine = getCategoryLine(deal);
+  const locationLine = getLocationLine(deal.restaurant || null);
 
   // Initialize saved state from localStorage for quick UX feedback
   useEffect(() => {
@@ -660,15 +680,16 @@ export default function DealCard({
         data-testid={`card-deal-${deal.id}`}
       >
         <CardContent className="p-0">
-          {deal.imageUrl ? (
-            <div className="deal-card-media relative h-24 overflow-hidden rounded-t-2xl">
+          <div className="deal-card-media relative h-32 overflow-hidden rounded-t-2xl bg-muted">
               <img
-                src={deal.imageUrl}
+                src={cardImageUrl}
                 alt={deal.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
+                onError={(event) => resolveImageFallback(event, deal)}
+                data-testid={`image-deal-${deal.id}`}
               />
               {/* Deal Badge - top left */}
               <div className="absolute top-1.5 left-1.5 bg-[#F59E0B] text-[#111111] px-1.5 py-0.5 rounded-lg shadow-clean-lg">
@@ -703,14 +724,12 @@ export default function DealCard({
               {/* Restaurant Name Overlay - bottom */}
               <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
                 <div className="flex items-center justify-between gap-2">
-                  {deal.restaurant?.name ? (
-                    <h3
-                      className="font-semibold text-white text-xs truncate"
-                      data-testid={`text-restaurant-name-${deal.id}`}
-                    >
-                      {deal.restaurant.name}
-                    </h3>
-                  ) : null}
+                  <h3
+                    className="font-semibold text-white text-xs truncate"
+                    data-testid={`text-restaurant-name-${deal.id}`}
+                  >
+                    {restaurantName}
+                  </h3>
                   {popularity && (
                     <span
                       className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold text-white"
@@ -720,14 +739,11 @@ export default function DealCard({
                     </span>
                   )}
                 </div>
-                {deal.restaurant?.cuisineType && (
-                  <p className="text-white/80 text-[10px] truncate">
-                    {deal.restaurant.cuisineType}
-                  </p>
-                )}
+                <p className="text-white/80 text-[10px] truncate">
+                  {categoryLine}
+                </p>
               </div>
             </div>
-          ) : null}
 
           {/* Content */}
           <div className="p-2" onClick={handleCardClick}>
@@ -737,6 +753,10 @@ export default function DealCard({
               data-testid={`text-restaurant-info-${deal.id}`}
             >
               {deal.title}
+            </p>
+            <p className="mb-1.5 flex items-start gap-1 text-[11px] leading-snug text-secondary">
+              <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+              <span className="line-clamp-2">{locationLine}</span>
             </p>
 
             {/* Rating + Distance */}

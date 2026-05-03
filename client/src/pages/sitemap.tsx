@@ -15,12 +15,78 @@ type SitemapCity = {
   cuisines: Array<{ slug: string; count: number }>;
 };
 
+type SitemapLink = {
+  href: string;
+  title: string;
+  description: string;
+};
+
 const titleCase = (value: string) =>
   value
     .split("-")
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const normalizeSitemapRoute = (href: string) =>
+  href.trim().replace(/\/+$/, "").toLowerCase() || "/";
+
+const dedupeSitemapLinks = (pages: SitemapLink[]) => {
+  const byRoute = new Map<string, SitemapLink>();
+  pages.forEach((page) => {
+    const key = normalizeSitemapRoute(page.href);
+    if (!byRoute.has(key)) {
+      byRoute.set(key, page);
+    }
+  });
+  return Array.from(byRoute.values());
+};
+
+const mergeSitemapCities = (cityData: SitemapCity[] | undefined) => {
+  if (!Array.isArray(cityData)) return [];
+
+  const bySlug = new Map<
+    string,
+    {
+      city: SitemapCity;
+      cuisines: Map<string, number>;
+    }
+  >();
+
+  cityData.forEach((city) => {
+    const slug = city.slug?.trim();
+    if (!slug) return;
+
+    const key = slug.toLowerCase();
+    const existing = bySlug.get(key);
+    const entry =
+      existing ??
+      {
+        city: { ...city, slug, cuisines: [] },
+        cuisines: new Map<string, number>(),
+      };
+
+    (city.cuisines || []).forEach((cuisine) => {
+      const cuisineSlug = cuisine.slug?.trim();
+      if (!cuisineSlug) return;
+
+      const cuisineKey = cuisineSlug.toLowerCase();
+      entry.cuisines.set(
+        cuisineKey,
+        (entry.cuisines.get(cuisineKey) || 0) + Number(cuisine.count || 0),
+      );
+    });
+
+    bySlug.set(key, entry);
+  });
+
+  return Array.from(bySlug.values()).map(({ city, cuisines }) => ({
+    ...city,
+    cuisines: Array.from(cuisines.entries())
+      .map(([slug, count]) => ({ slug, count }))
+      .sort((a, b) => b.count - a.count || a.slug.localeCompare(b.slug)),
+  }));
+};
 
 export default function Sitemap() {
   const { data: cityData } = useQuery<SitemapCity[]>({
@@ -33,13 +99,15 @@ export default function Sitemap() {
     staleTime: 60_000,
   });
 
-  const cities = Array.isArray(cityData) ? cityData.slice(0, 24) : [];
-  const cityCuisinePages = cities.flatMap((city) =>
-    (city.cuisines || []).slice(0, 4).map((cuisine) => ({
-      href: `/food-trucks/${city.slug}/${cuisine.slug}`,
-      title: `${titleCase(cuisine.slug)} in ${city.name}${city.state ? `, ${city.state}` : ""}`,
-      description: `Local ${titleCase(cuisine.slug).toLowerCase()} truck and deal pages.`,
-    })),
+  const cities = mergeSitemapCities(cityData).slice(0, 24);
+  const cityCuisinePages = dedupeSitemapLinks(
+    cities.flatMap((city) =>
+      (city.cuisines || []).slice(0, 4).map((cuisine) => ({
+        href: `/food-trucks/${city.slug}/${cuisine.slug}`,
+        title: `${titleCase(cuisine.slug)} in ${city.name}${city.state ? `, ${city.state}` : ""}`,
+        description: `Local ${titleCase(cuisine.slug).toLowerCase()} truck and deal pages.`,
+      })),
+    ),
   );
 
   const schemaData = {

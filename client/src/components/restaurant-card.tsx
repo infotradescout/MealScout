@@ -9,13 +9,28 @@ import {
   Activity,
 } from "lucide-react";
 import { format } from "date-fns";
+import {
+  getCategoryLine,
+  getLocationLine,
+  resolveImageFallback,
+  resolveListingImageUrl,
+} from "@/lib/listing-card-display";
 
 interface Restaurant {
   id: string;
   name: string;
   address: string;
+  city?: string | null;
+  state?: string | null;
   phone?: string;
   cuisineType?: string;
+  businessType?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  facebookCoverUrl?: string | null;
+  facebookPhotos?: unknown;
+  googlePhotos?: unknown;
   rating?: number | null;
   operatingHours?: unknown;
   isActive?: boolean;
@@ -131,58 +146,78 @@ export default function RestaurantCard({
       : null;
   const hoursPreview = getHoursPreview(restaurant.operatingHours);
   const profileSlug = toSlug(restaurant.name) || String(restaurant.id || "");
+  const imageUrl = resolveListingImageUrl(restaurant);
+  const categoryLine = getCategoryLine(restaurant);
+  const locationLine = getLocationLine(restaurant);
+
   return (
     <Link href={`/restaurant/${restaurant.id}/${profileSlug}`}>
       <Card
-        className={`bg-card border rounded-xl overflow-hidden shadow-clean hover:shadow-clean-lg transition-all duration-200 cursor-pointer ${
+        className={`group bg-card border rounded-xl overflow-hidden shadow-clean hover:shadow-clean-lg transition-all duration-200 cursor-pointer ${
           restaurant.isFoodTruck
             ? "border-orange-200 hover:border-orange-300"
             : "border-border"
         } ${isLiveFoodTruck ? "ring-2 ring-orange-200 ring-opacity-50" : ""}`}
         data-testid={`card-restaurant-${restaurant.id}`}
       >
-        <CardContent className="p-4 relative">
-          {/* Food Truck Live Badge */}
-          {isLiveFoodTruck && (
-            <div className="absolute top-2 right-2 z-10">
+        <CardContent className="p-0">
+          <div className="relative h-36 overflow-hidden bg-muted">
+            <img
+              src={imageUrl}
+              alt={`${restaurant.name} photo`}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={(event) => resolveImageFallback(event, restaurant)}
+              data-testid={`image-restaurant-${restaurant.id}`}
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-3">
+              <div className="flex min-w-0 items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <p
+                    className="truncate text-sm font-semibold text-white"
+                    data-testid={`text-restaurant-name-${restaurant.id}`}
+                  >
+                    {restaurant.name}
+                  </p>
+                  <p
+                    className="truncate text-xs text-white/85"
+                    data-testid={`text-restaurant-cuisine-${restaurant.id}`}
+                  >
+                    {categoryLine}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {restaurant.isVerified && (
+                    <CheckCircle
+                      className="h-4 w-4 text-emerald-300"
+                      data-testid={`icon-verified-${restaurant.id}`}
+                    />
+                  )}
+                  {restaurant.isFoodTruck && (
+                    <Truck
+                      className="h-4 w-4 text-orange-200"
+                      data-testid={`icon-food-truck-${restaurant.id}`}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+            {isLiveFoodTruck && (
               <div
-                className="flex items-center bg-gradient-to-r from-orange-500 to-red-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-clean-lg animate-pulse"
+                className="absolute right-2 top-2 z-10 flex items-center rounded-full bg-gradient-to-r from-orange-500 to-red-500 px-2 py-1 text-xs font-bold text-white shadow-clean-lg animate-pulse"
                 data-testid={`badge-live-${restaurant.id}`}
               >
                 <Radio className="w-3 h-3 mr-1" />
                 LIVE
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1">
-              <h3
-                className="font-semibold text-foreground mb-1 flex items-center space-x-2"
-                data-testid={`text-restaurant-name-${restaurant.id}`}
-              >
-                <span>{restaurant.name}</span>
-                {restaurant.isVerified && (
-                  <CheckCircle
-                    className="w-4 h-4 text-[color:var(--status-success)]"
-                    data-testid={`icon-verified-${restaurant.id}`}
-                  />
-                )}
-                {restaurant.isFoodTruck && (
-                  <Truck
-                    className="w-4 h-4 text-orange-500"
-                    data-testid={`icon-food-truck-${restaurant.id}`}
-                  />
-                )}
-              </h3>
-              <div className="flex items-center space-x-2 mb-1">
-                <p
-                  className="text-xs text-muted-foreground"
-                  data-testid={`text-restaurant-cuisine-${restaurant.id}`}
-                >
-                  {restaurant.cuisineType ||
-                    (restaurant.isFoodTruck ? "Food Truck" : "Restaurant")}
-                </p>
+          <div className="p-4">
+            <div className="mb-2">
+              <div className="mb-1 flex items-center gap-2">
                 {restaurant.isFoodTruck && (
                   <span
                     className="text-xs bg-orange-100 text-orange-600 px-1 py-0.5 rounded"
@@ -193,10 +228,11 @@ export default function RestaurantCard({
                 )}
               </div>
               <p
-                className="text-xs text-muted-foreground"
+                className="flex items-start gap-1 text-xs text-muted-foreground"
                 data-testid={`text-restaurant-address-${restaurant.id}`}
               >
-                {restaurant.address}
+                <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                <span className="line-clamp-2">{locationLine}</span>
               </p>
               {hoursPreview && (
                 <p
@@ -208,24 +244,10 @@ export default function RestaurantCard({
                 </p>
               )}
             </div>
-            <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
-                restaurant.isFoodTruck
-                  ? "bg-gradient-to-r from-orange-500 to-red-500"
-                  : "bg-primary"
-              }`}
-            >
-              {restaurant.isFoodTruck ? (
-                <Truck className="w-5 h-5 text-white" />
-              ) : (
-                <i className="fas fa-utensils text-white"></i>
-              )}
-            </div>
-          </div>
 
-          {/* Food Truck Specific Info */}
-          {restaurant.isFoodTruck &&
-            (showDistance || distance || restaurant.lastBroadcastAt) && (
+            {/* Food Truck Specific Info */}
+            {restaurant.isFoodTruck &&
+              (showDistance || distance || restaurant.lastBroadcastAt) && (
               <div
                 className="bg-orange-50 border border-orange-200 rounded-lg p-2 mb-3"
                 data-testid={`food-truck-info-${restaurant.id}`}
@@ -258,52 +280,53 @@ export default function RestaurantCard({
                     <Activity className="w-3 h-3 mr-1 animate-pulse" />
                     <span data-testid={`text-broadcasting-${restaurant.id}`}>
                       Broadcasting live location
-                    </span>
-                  </div>
-                )}
+                  </span>
+                </div>
+              )}
               </div>
             )}
 
-          {(rating != null ||
-            (restaurant.isFoodTruck && distance) ||
-            isLiveFoodTruck) && (
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center space-x-4">
-                {rating != null && (
-                  <div className="flex items-center space-x-1">
-                    <i className="fas fa-star text-yellow-400 text-xs"></i>
-                    <span
-                      className="text-xs text-muted-foreground"
-                      data-testid={`text-rating-${restaurant.id}`}
-                    >
-                      {rating.toFixed(1)}
-                    </span>
-                  </div>
-                )}
-                {restaurant.isFoodTruck && distance && (
-                  <div className="flex items-center space-x-1">
-                    <MapPin className="w-3 h-3 text-muted-foreground" />
-                    <span
-                      className="text-xs text-muted-foreground"
-                      data-testid={`text-truck-distance-${restaurant.id}`}
-                    >
-                      {distance < 1
-                        ? `${Math.round(distance * 1000)}m`
-                        : `${distance.toFixed(1)}km`}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {isLiveFoodTruck ? (
-                <div
-                  className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white animate-pulse"
-                  data-testid={`status-${restaurant.id}`}
-                >
-                  LIVE
+            {(rating != null ||
+              (restaurant.isFoodTruck && distance) ||
+              isLiveFoodTruck) && (
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center space-x-4">
+                  {rating != null && (
+                    <div className="flex items-center space-x-1">
+                      <i className="fas fa-star text-yellow-400 text-xs"></i>
+                      <span
+                        className="text-xs text-muted-foreground"
+                        data-testid={`text-rating-${restaurant.id}`}
+                      >
+                        {rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  {restaurant.isFoodTruck && distance && (
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="w-3 h-3 text-muted-foreground" />
+                      <span
+                        className="text-xs text-muted-foreground"
+                        data-testid={`text-truck-distance-${restaurant.id}`}
+                      >
+                        {distance < 1
+                          ? `${Math.round(distance * 1000)}m`
+                          : `${distance.toFixed(1)}km`}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              ) : null}
-            </div>
-          )}
+                {isLiveFoodTruck ? (
+                  <div
+                    className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-green-500 to-emerald-500 text-white animate-pulse"
+                    data-testid={`status-${restaurant.id}`}
+                  >
+                    LIVE
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </Link>

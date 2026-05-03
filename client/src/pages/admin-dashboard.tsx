@@ -36,6 +36,16 @@ import {
   CreditCard,
   UserMinus,
   Upload,
+  Search,
+  ExternalLink,
+  ListChecks,
+  Truck,
+  ClipboardCheck,
+  Megaphone,
+  Database,
+  Share2,
+  UserCog,
+  Utensils,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
@@ -87,19 +97,78 @@ const FOOD_TYPE_OPTIONS = [
   "Other",
 ];
 
-const ADMIN_DASHBOARD_TABS = new Set([
-  "overview",
-  "restaurants",
-  "lisa",
-  "users",
-  "staff",
-  "deals",
-  "verifications",
-  "onboarding",
-  "imports",
-  "host-locations",
-  "share-portal",
-]);
+const ADMIN_TAB_ITEMS = [
+  {
+    value: "overview",
+    label: "Overview",
+    description: "Health, delivery, payouts",
+    icon: BarChart3,
+  },
+  {
+    value: "restaurants",
+    label: "Restaurants",
+    description: "Profiles and approvals",
+    icon: Utensils,
+  },
+  {
+    value: "lisa",
+    label: "LISA",
+    description: "Signals and intelligence",
+    icon: Activity,
+  },
+  {
+    value: "users",
+    label: "Users",
+    description: "Accounts and roles",
+    icon: Users,
+  },
+  {
+    value: "staff",
+    label: "Staff",
+    description: "Team permissions",
+    icon: UserCog,
+  },
+  {
+    value: "deals",
+    label: "Deals",
+    description: "Offers and performance",
+    icon: Package,
+  },
+  {
+    value: "verifications",
+    label: "Verifications",
+    description: "Trust requests",
+    icon: ClipboardCheck,
+  },
+  {
+    value: "onboarding",
+    label: "Manual Onboarding",
+    description: "Provision accounts",
+    icon: ListChecks,
+  },
+  {
+    value: "imports",
+    label: "Admin Uploads",
+    description: "Truck import tools",
+    icon: Database,
+  },
+  {
+    value: "host-locations",
+    label: "Host Locations",
+    description: "Parking and venues",
+    icon: MapPin,
+  },
+  {
+    value: "share-portal",
+    label: "Share Portal",
+    description: "Growth links",
+    icon: Share2,
+  },
+] as const;
+
+const ADMIN_DASHBOARD_TABS = new Set<string>(
+  ADMIN_TAB_ITEMS.map((item) => item.value),
+);
 
 const readAdminDashboardQueryState = () => {
   if (typeof window === "undefined") {
@@ -209,6 +278,123 @@ const buildBriefSentence = (item: {
   why: string;
   next: string;
 }) => `${item.title}. ${item.why} ${item.next}`;
+
+const ADMIN_DEAL_FALLBACK_IMAGE_URL = "/backgrounds/night-market-plate.webp";
+
+const compactNumber = (value: unknown) => {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return "0";
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
+    parsed,
+  );
+};
+
+const formatAdminMoney = (value: unknown) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "";
+  return parsed.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: parsed % 1 === 0 ? 0 : 2,
+  });
+};
+
+const formatAdminDealOffer = (deal: any) => {
+  if (!deal?.discountValue) return "Limited time special";
+
+  const parsed = Number(deal.discountValue);
+  const cleanValue = Number.isFinite(parsed)
+    ? parsed.toLocaleString(undefined, {
+        maximumFractionDigits: parsed % 1 === 0 ? 0 : 2,
+      })
+    : String(deal.discountValue).trim();
+
+  if (deal.dealType === "fixed") {
+    return `${formatAdminMoney(deal.discountValue) || `$${cleanValue}`} off`;
+  }
+
+  return `${cleanValue}% off`;
+};
+
+const parseAdminDate = (value: unknown) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const formatAdminDate = (value: unknown) => {
+  const date = parseAdminDate(value);
+  return date
+    ? date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+};
+
+const formatAdminDealWindow = (deal: any) => {
+  if (deal?.isOngoing) return "Ongoing";
+
+  const start = formatAdminDate(deal?.startDate);
+  const end = formatAdminDate(deal?.endDate);
+
+  if (start && end) return `${start} - ${end}`;
+  if (end) return `Ends ${end}`;
+  if (start) return `Starts ${start}`;
+  return "No dates set";
+};
+
+const formatAdminDealTime = (deal: any) => {
+  if (deal?.availableDuringBusinessHours) return "Business hours";
+  const startTime = String(deal?.startTime || "").trim();
+  const endTime = String(deal?.endTime || "").trim();
+  if (startTime && endTime) return `${startTime} - ${endTime}`;
+  if (startTime) return `Starts ${startTime}`;
+  if (endTime) return `Ends ${endTime}`;
+  return "Time not set";
+};
+
+const firstUsablePhotoUrl = (value: unknown) => {
+  if (!Array.isArray(value)) return "";
+  for (const photo of value) {
+    const url =
+      typeof photo === "string"
+        ? photo
+        : String((photo as any)?.url || (photo as any)?.imageUrl || "");
+    if (url.trim()) return url.trim();
+  }
+  return "";
+};
+
+const getAdminDealImageUrl = (deal: any) => {
+  const candidates = [
+    deal?.imageUrl,
+    deal?.restaurant?.coverImageUrl,
+    deal?.restaurant?.logoUrl,
+    firstUsablePhotoUrl(deal?.restaurant?.googlePhotos),
+    firstUsablePhotoUrl(deal?.restaurant?.facebookPhotos),
+  ];
+
+  for (const candidate of candidates) {
+    const optimized = getOptimizedImageUrl(candidate, 512);
+    if (optimized) return optimized;
+  }
+
+  return ADMIN_DEAL_FALLBACK_IMAGE_URL;
+};
+
+const formatAdminDealRestaurantType = (restaurant: any) => {
+  if (!restaurant) return "Unassigned business";
+  if (restaurant.isFoodTruck) return "Food truck";
+  if (restaurant.businessType) return toTitleCase(String(restaurant.businessType));
+  return "Restaurant";
+};
+
+const formatAdminDealLocation = (restaurant: any) =>
+  [restaurant?.city, restaurant?.state].filter(Boolean).join(", ") ||
+  restaurant?.address ||
+  "No location set";
 
 interface DashboardTotalsResponse {
   generatedAt: string;
@@ -6067,545 +6253,473 @@ export default function AdminDashboard() {
         ? "Warning: 24h+ threshold backlog needs host follow-up."
         : "Healthy: no threshold backlog breaches.";
 
+  const selectedTabMeta =
+    ADMIN_TAB_ITEMS.find((item) => item.value === selectedTab) ??
+    ADMIN_TAB_ITEMS[0];
+  const SelectedTabIcon = selectedTabMeta.icon;
+  const roleMismatch =
+    dashboardTotals?.consistency &&
+    !dashboardTotals.consistency.rolesWithinUserTotal;
+  const staleCheckoutHolds = Number(
+    operations?.bookings?.staleCheckoutHolds ?? 0,
+  );
+  const failedPayments24h = Number(
+    operations?.bookings?.failedPaymentsLast24h ?? 0,
+  );
+  const openOperationalAlerts =
+    staleCheckoutHolds +
+    failedPayments24h +
+    demandStuck24h +
+    Number(roleMismatch ? dashboardStats.unclassifiedUsers ?? 0 : 0);
+  const visibleRevenue = Number(dashboardStats?.revenue ?? 0);
+  const searchValue =
+    selectedTab === "restaurants" ? restaurantSearchTerm : userSearch;
+  const searchPlaceholder =
+    selectedTab === "restaurants"
+      ? "Search restaurants, trucks, owners..."
+      : selectedTab === "host-locations"
+        ? "Search host locations from that tab..."
+        : "Search users by name, email, or account id...";
+  const primaryMetrics = [
+    {
+      label: "Users",
+      value: dashboardStats.totalUsers,
+      detail: `+${dashboardStats.newUsersToday} today`,
+      icon: Users,
+      tone: "border-blue-500/20 bg-blue-500/5",
+    },
+    {
+      label: "Restaurant Profiles",
+      value:
+        dashboardStats.totalRestaurantProfiles ??
+        dashboardStats.totalRestaurants,
+      detail: `${dashboardStats.totalRestaurantOwners ?? dashboardStats.memberCounts?.restaurantOwner ?? 0} owner accounts`,
+      icon: Store,
+      tone: "border-emerald-500/20 bg-emerald-500/5",
+    },
+    {
+      label: "Active Deals",
+      value: dashboardStats.activeDeals,
+      detail: `${dashboardStats.totalDeals} total`,
+      icon: Package,
+      tone: "border-orange-500/20 bg-orange-500/5",
+    },
+    {
+      label: "Claims Today",
+      value: dashboardStats.todayClaims,
+      detail: `${dashboardStats.totalClaims} lifetime`,
+      icon: Activity,
+      tone: "border-violet-500/20 bg-violet-500/5",
+    },
+  ];
+  const opsSnapshot = [
+    {
+      label: "Live Parking Hosts",
+      value: operations?.parkingPass?.hostsPublished ?? 0,
+      detail: `${operations?.parkingPass?.spotCapacityPublished ?? 0} published spots`,
+      icon: MapPin,
+    },
+    {
+      label: "Bookings Next 7d",
+      value: operations?.bookings?.parkingPassConfirmedNext7Days ?? 0,
+      detail: `${operations?.bookings?.parkingPassConfirmedToday ?? 0} today`,
+      icon: Calendar,
+    },
+    {
+      label: "Live Trucks",
+      value: operations?.trucks?.liveTrucks15m ?? 0,
+      detail: `${operations?.trucks?.activeSessions ?? 0} active sessions`,
+      icon: Truck,
+    },
+    {
+      label: "Open Alerts",
+      value: openOperationalAlerts,
+      detail:
+        openOperationalAlerts > 0
+          ? "Needs admin review"
+          : "No urgent flags",
+      icon: AlertCircle,
+    },
+  ];
+  const quickActionLinks = [
+    {
+      href: "/admin/control-center",
+      label: "Control Center",
+      description: "LISA stream, registry, and market intel",
+      icon: Activity,
+    },
+    {
+      href: "/admin/moderation/queue",
+      label: "Moderation Queue",
+      description: "Flagged content and trust cases",
+      icon: Shield,
+    },
+    {
+      href: "/admin/lead-import",
+      label: "Lead Import",
+      description: "Load prospect and expansion lists",
+      icon: Upload,
+    },
+    {
+      href: "/admin/affiliates",
+      label: "Affiliates",
+      description: "Partners, tags, and commission ops",
+      icon: Megaphone,
+    },
+  ];
+
+  const handleAdminTabChange = (value: string) => {
+    setSelectedTab(value);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", value);
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  const handleAdminSearchChange = (value: string) => {
+    if (selectedTab === "restaurants") {
+      setRestaurantSearchTerm(value);
+      return;
+    }
+    setUserSearch(value);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (value.trim()) {
+      url.searchParams.set("q", value);
+    } else {
+      url.searchParams.delete("q");
+    }
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  const jumpToSearchableWorkspace = () => {
+    if (selectedTab !== "restaurants" && selectedTab !== "users") {
+      handleAdminTabChange("users");
+    }
+  };
+
   return (
-    <div className="admin-dashboard max-w-7xl mx-auto min-h-screen bg-[var(--bg-app)] pb-20">
-      {/* Header */}
-      <header className="px-4 sm:px-6 py-4 sm:py-6 bg-[hsl(var(--background))] border-b border-white/5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Manage your MealScout platform and LISA intelligence feeds
-              </p>
+    <div className="admin-dashboard min-h-screen bg-[var(--bg-app)] pb-20">
+      <header className="border-b border-[color:var(--border-subtle)] bg-[hsl(var(--background))]/95">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)]">
+                <Shield className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-semibold tracking-normal sm:text-3xl">
+                    Admin Command Center
+                  </h1>
+                  <Badge variant={openOperationalAlerts > 0 ? "secondary" : "outline"}>
+                    {openOperationalAlerts > 0
+                      ? `${openOperationalAlerts} alerts`
+                      : "Operational"}
+                  </Badge>
+                </div>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  A cleaner control surface for platform health, account ops,
+                  LISA signals, marketplace work, and launch workflows.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline">
+                <Link href="/admin/control-center">
+                  <Activity className="h-4 w-4" />
+                  LISA Live
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/admin/moderation/queue">
+                  <Shield className="h-4 w-4" />
+                  Moderation
+                </Link>
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleLogout}
+                data-testid="button-logout-admin"
+              >
+                Logout
+              </Button>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            data-testid="button-logout-admin"
-          >
-            Logout
-          </Button>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={searchValue}
+                onChange={(event) => handleAdminSearchChange(event.target.value)}
+                onFocus={jumpToSearchableWorkspace}
+                className="h-11 w-full rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--field-bg)] pl-10 pr-3 text-sm shadow-sm"
+                placeholder={searchPlaceholder}
+                aria-label="Search admin records"
+              />
+            </div>
+            <div className="min-w-0">
+              <QuickDashboardAccess />
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Dashboard Switcher */}
-      <div className="px-4 sm:px-6 pt-4 sm:pt-6">
-        <QuickDashboardAccess />
-      </div>
-
-      {/* Stats Overview */}
-      <div className="px-4 sm:px-6 py-4 sm:py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card className="col-span-2 md:col-span-4 border-[color:var(--status-success)]/25 bg-[color:var(--status-success)]/5">
-            <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    LISA
-                  </span>
-                </div>
-                <h2 className="text-lg font-semibold">
-                  Livestream is in Control Center
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Open the live MealScout signal feed, truth registry, bot
-                  traffic, and market intelligence from the admin control
-                  center.
-                </p>
-              </div>
-              <Link href="/admin/control-center">
-                <Button>Open LISA Livestream</Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="col-span-2 md:col-span-4 border-[color:var(--status-warning)]/25 bg-[color:var(--status-warning)]/5">
-            <CardContent className="flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    MODERATION
-                  </span>
-                </div>
-                <h2 className="text-lg font-semibold">
-                  Review Flagged Content
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Review flagged recommendations and profile content, assign
-                  cases, and resolve reports.
-                </p>
-              </div>
-              <Link href="/admin/moderation/queue">
-                <Button variant="outline">Open Moderation Queue</Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {dashboardStats.totalUsers}
-                </div>
-                <Users className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                +{dashboardStats.newUsersToday} today
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Restaurant Profiles
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {dashboardStats.totalRestaurantProfiles ??
-                    dashboardStats.totalRestaurants}
-                </div>
-                <Store className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {dashboardStats.totalRestaurantOwners ??
-                  dashboardStats.memberCounts?.restaurantOwner ??
-                  0}{" "}
-                owner accounts - {pendingRestaurants.length} pending
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active Deals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {dashboardStats.activeDeals}
-                </div>
-                <Package className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                of {dashboardStats.totalDeals} total
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Claims Today
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {dashboardStats.todayClaims}
-                </div>
-                <Activity className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {dashboardStats.totalClaims} total
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Member Counts
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">
-              Role total {dashboardStats.memberCountsTotal ?? 0} of{" "}
-              {dashboardStats.totalUsers} users
-              {dashboardStats.unclassifiedUsers
-                ? ` - ${dashboardStats.unclassifiedUsers} unclassified`
-                : ""}
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Customers</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.customer ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Restaurant Owners</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.restaurantOwner ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Food Trucks</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.foodTruck ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Hosts</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.host ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Event Coordinators</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.eventCoordinator ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Staff</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.staff ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Admins</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.admin ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Super Admin</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.superAdmin ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Other</p>
-                <p className="font-semibold">
-                  {dashboardStats.memberCounts?.other ?? 0}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Operations
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Parking Passes (Live)</p>
-                <p className="font-semibold">
-                  {operations?.parkingPass?.seriesPublished ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  Parking Pass Hosts (Live)
-                </p>
-                <p className="font-semibold">
-                  {operations?.parkingPass?.hostsPublished ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  Parking Pass Spots (Capacity)
-                </p>
-                <p className="font-semibold">
-                  {operations?.parkingPass?.spotCapacityPublished ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Bookings (Today)</p>
-                <p className="font-semibold">
-                  {operations?.bookings?.parkingPassConfirmedToday ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  Bookings Confirmed (24h)
-                </p>
-                <p className="font-semibold">
-                  {operations?.bookings?.confirmedLast24h ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Bookings (Next 7d)</p>
-                <p className="font-semibold">
-                  {operations?.bookings?.parkingPassConfirmedNext7Days ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Open Call Accepted (7d)</p>
-                <p className="font-semibold">
-                  {operations?.openCalls?.acceptedNext7Days ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  Open Call Fill Rate (7d)
-                </p>
-                <p className="font-semibold">
-                  {operations?.openCalls?.fillRateNext7DaysPct?.toFixed?.(1) ??
-                    0}
-                  %
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {operations?.openCalls?.capacityNext7Days ?? 0} total capacity
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">
-                  Checkout Holds (Pending)
-                </p>
-                <p className="font-semibold">
-                  {operations?.bookings?.pendingCheckoutHolds ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Checkout Holds (Stale)</p>
-                <p
-                  className={`font-semibold ${
-                    (operations?.bookings?.staleCheckoutHolds ?? 0) > 0
-                      ? "text-[color:var(--status-error)]"
-                      : ""
-                  }`}
-                >
-                  {operations?.bookings?.staleCheckoutHolds ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Failed Payments (24h)</p>
-                <p
-                  className={`font-semibold ${
-                    (operations?.bookings?.failedPaymentsLast24h ?? 0) > 0
-                      ? "text-[color:var(--status-error)]"
-                      : ""
-                  }`}
-                >
-                  {operations?.bookings?.failedPaymentsLast24h ?? 0}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Live Trucks (15m)</p>
-                <p className="font-semibold">
-                  {operations?.trucks?.liveTrucks15m ?? 0}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {operations?.trucks?.activeSessions ?? 0} active sessions
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 pt-3 border-t flex gap-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => backfillGoogleProfiles.mutate()}
-                disabled={backfillGoogleProfiles.isPending}
-              >
-                {backfillGoogleProfiles.isPending
-                  ? "Running..."
-                  : "Backfill Google Profiles"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-        {mapPinAudit && (
-          <Card className="mb-6">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Map Pin Parity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-end mb-3">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => retryMapPinGeocode.mutate()}
-                  disabled={retryMapPinGeocode.isPending}
-                >
-                  {retryMapPinGeocode.isPending
-                    ? "Retrying..."
-                    : "Retry Missing Geocodes"}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Rendered host pins</p>
-                  <p className="font-semibold">
-                    {mapPinAudit.renderedHostLocationCandidates.mappable}/
-                    {mapPinAudit.renderedHostLocationCandidates.total}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Primary hosts mapped</p>
-                  <p className="font-semibold">
-                    {mapPinAudit.primaryHostProfiles.mappable}/
-                    {mapPinAudit.primaryHostProfiles.total}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">
-                    Extra addresses mapped
-                  </p>
-                  <p className="font-semibold">
-                    {mapPinAudit.additionalHostAddresses.mappable}/
-                    {mapPinAudit.additionalHostAddresses.included}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Open requests mapped</p>
-                  <p className="font-semibold">
-                    {mapPinAudit.openLocationRequests.mappable}/
-                    {mapPinAudit.openLocationRequests.total}
-                  </p>
-                </div>
-              </div>
-              {!!mapPinAudit.sampleMissing?.length && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Sample missing locations
-                  </p>
-                  {mapPinAudit.sampleMissing.map((missing) => (
-                    <div
-                      key={`${missing.source}:${missing.id}`}
-                      className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-md border border-[color:var(--border-subtle)] p-2"
-                    >
-                      <div className="text-xs">
-                        <div className="font-medium text-foreground">
-                          {[missing.address, missing.city, missing.state]
-                            .filter(Boolean)
-                            .join(", ") || "(no address)"}
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8">
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {primaryMetrics.map((metric) => {
+                const MetricIcon = metric.icon;
+                return (
+                  <Card key={metric.label} className={metric.tone}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium uppercase text-muted-foreground">
+                            {metric.label}
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold">
+                            {metric.value}
+                          </p>
                         </div>
-                        <div className="text-muted-foreground">
-                          {missing.source}
-                        </div>
+                        <MetricIcon className="h-5 w-5 text-primary" />
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={retryMapPinGeocodeItem.isPending}
-                        onClick={() =>
-                          retryMapPinGeocodeItem.mutate({
-                            source: missing.source,
-                            id: missing.id,
-                          })
-                        }
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {metric.detail}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <SelectedTabIcon className="h-5 w-5 text-primary" />
+                      {selectedTabMeta.label}
+                    </CardTitle>
+                    <CardDescription>
+                      {selectedTabMeta.description}
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">
+                    Revenue ${visibleRevenue.toFixed(2)}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {opsSnapshot.map((item) => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <div
+                        key={item.label}
+                        className="rounded-md border border-[color:var(--border-subtle)] p-3"
                       >
-                        Retry row
-                      </Button>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {item.label}
+                          </p>
+                          <ItemIcon className="h-4 w-4 text-primary" />
+                        </div>
+                        <p
+                          className={`mt-2 text-xl font-semibold ${
+                            item.label === "Open Alerts" &&
+                            openOperationalAlerts > 0
+                              ? "text-[color:var(--status-warning)]"
+                              : ""
+                          }`}
+                        >
+                          {item.value}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.detail}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-[color:var(--border-subtle)] pt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => backfillGoogleProfiles.mutate()}
+                    disabled={backfillGoogleProfiles.isPending}
+                  >
+                    {backfillGoogleProfiles.isPending
+                      ? "Running..."
+                      : "Backfill Google Profiles"}
+                  </Button>
+                  {mapPinAudit ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => retryMapPinGeocode.mutate()}
+                      disabled={retryMapPinGeocode.isPending}
+                    >
+                      {retryMapPinGeocode.isPending
+                        ? "Retrying..."
+                        : "Retry Missing Geocodes"}
+                    </Button>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Priority Work</CardTitle>
+                <CardDescription>Fast paths for admin focus.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {quickActionLinks.map((action) => {
+                  const ActionIcon = action.icon;
+                  return (
+                    <Link
+                      key={action.href}
+                      href={action.href}
+                      className="group flex items-center justify-between gap-3 rounded-md border border-[color:var(--border-subtle)] p-3 hover:bg-[color:var(--bg-surface-muted)]"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <ActionIcon className="h-4 w-4 shrink-0 text-primary" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">
+                            {action.label}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {action.description}
+                          </span>
+                        </span>
+                      </span>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Account Mix</CardTitle>
+                <CardDescription>
+                  {dashboardStats.memberCountsTotal ?? 0} assigned roles of{" "}
+                  {dashboardStats.totalUsers} users.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {[
+                    ["Customers", dashboardStats.memberCounts?.customer ?? 0],
+                    [
+                      "Owners",
+                      dashboardStats.memberCounts?.restaurantOwner ?? 0,
+                    ],
+                    ["Food Trucks", dashboardStats.memberCounts?.foodTruck ?? 0],
+                    ["Hosts", dashboardStats.memberCounts?.host ?? 0],
+                    [
+                      "Events",
+                      dashboardStats.memberCounts?.eventCoordinator ?? 0,
+                    ],
+                    ["Staff", dashboardStats.memberCounts?.staff ?? 0],
+                    ["Admins", dashboardStats.memberCounts?.admin ?? 0],
+                    [
+                      "Unclassified",
+                      dashboardStats.unclassifiedUsers ??
+                        dashboardStats.memberCounts?.other ??
+                        0,
+                    ],
+                  ].map(([label, value]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-md border border-[color:var(--border-subtle)] p-2"
+                    >
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="font-semibold">{value}</p>
                     </div>
                   ))}
                 </div>
-              )}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {mapPinAudit?.sampleMissing?.length ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Map Pin Exceptions</CardTitle>
+              <CardDescription>
+                Sample locations missing usable coordinates.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2 md:grid-cols-2">
+              {mapPinAudit.sampleMissing.map((missing) => (
+                <div
+                  key={`${missing.source}:${missing.id}`}
+                  className="flex flex-col gap-2 rounded-md border border-[color:var(--border-subtle)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 text-xs">
+                    <div className="truncate font-medium text-foreground">
+                      {[missing.address, missing.city, missing.state]
+                        .filter(Boolean)
+                        .join(", ") || "(no address)"}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {missing.source}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={retryMapPinGeocodeItem.isPending}
+                    onClick={() =>
+                      retryMapPinGeocodeItem.mutate({
+                        source: missing.source,
+                        id: missing.id,
+                      })
+                    }
+                  >
+                    Retry row
+                  </Button>
+                </div>
+              ))}
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {/* Main Content Tabs */}
         <Tabs
           value={selectedTab}
-          onValueChange={(value) => {
-            setSelectedTab(value);
-            if (typeof window === "undefined") return;
-            const url = new URL(window.location.href);
-            url.searchParams.set("tab", value);
-            window.history.replaceState({}, "", url.toString());
-          }}
+          onValueChange={handleAdminTabChange}
         >
-          <TabsList className="w-full inline-flex h-auto flex-wrap gap-1 p-1">
-            <TabsTrigger
-              value="overview"
-              data-testid="tab-overview"
-              className="flex-shrink-0"
-            >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="restaurants"
-              data-testid="tab-restaurants"
-              className="flex-shrink-0"
-            >
-              Restaurants
-            </TabsTrigger>
-            <TabsTrigger
-              value="lisa"
-              data-testid="tab-lisa"
-              className="flex-shrink-0"
-            >
-              LISA
-            </TabsTrigger>
-            <TabsTrigger
-              value="users"
-              data-testid="tab-users"
-              className="flex-shrink-0"
-            >
-              Users
-            </TabsTrigger>
-            <TabsTrigger
-              value="staff"
-              data-testid="tab-staff"
-              className="flex-shrink-0"
-            >
-              Staff
-            </TabsTrigger>
-            <TabsTrigger
-              value="deals"
-              data-testid="tab-deals"
-              className="flex-shrink-0"
-            >
-              Deals
-            </TabsTrigger>
-            <TabsTrigger
-              value="verifications"
-              data-testid="tab-verifications"
-              className="flex-shrink-0"
-            >
-              Verifications
-            </TabsTrigger>
-            <TabsTrigger
-              value="onboarding"
-              data-testid="tab-onboarding"
-              className="flex-shrink-0"
-            >
-              Manual Onboarding
-            </TabsTrigger>
-            <TabsTrigger
-              value="imports"
-              data-testid="tab-imports"
-              className="flex-shrink-0"
-            >
-              Admin Uploads
-            </TabsTrigger>
-            <TabsTrigger
-              value="host-locations"
-              data-testid="tab-host-locations"
-              className="flex-shrink-0"
-            >
-              Host Locations
-            </TabsTrigger>
-            <TabsTrigger
-              value="share-portal"
-              data-testid="tab-share-portal"
-              className="flex-shrink-0"
-            >
-              Share Portal
-            </TabsTrigger>
+          <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            {ADMIN_TAB_ITEMS.map((item) => {
+              const TabIcon = item.icon;
+              return (
+                <TabsTrigger
+                  key={item.value}
+                  value={item.value}
+                  data-testid={`tab-${item.value}`}
+                  className="min-h-[72px] justify-start gap-3 rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] px-3 py-3 text-left data-[state=active]:border-primary/40 data-[state=active]:bg-[color:var(--bg-surface-muted)]"
+                >
+                  <TabIcon className="h-4 w-4 text-primary" />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">
+                      {item.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground">
+                      {item.description}
+                    </span>
+                  </span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
           {/* Overview Tab */}
@@ -8720,119 +8834,226 @@ export default function AdminDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {deals.map((deal: any) => (
-                    <div
-                      key={deal.id}
-                      className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="font-medium text-lg">
-                            {deal.title}
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {deals.map((deal: any) => {
+                    const restaurant = deal.restaurant || {};
+                    const imageUrl = getAdminDealImageUrl(deal);
+                    const offer = formatAdminDealOffer(deal);
+                    const dateWindow = formatAdminDealWindow(deal);
+                    const timeWindow = formatAdminDealTime(deal);
+                    const location = formatAdminDealLocation(restaurant);
+                    const businessType =
+                      formatAdminDealRestaurantType(restaurant);
+                    const usageText = deal.totalUsesLimit
+                      ? `${compactNumber(deal.currentUses)} / ${compactNumber(
+                          deal.totalUsesLimit,
+                        )} uses`
+                      : `${compactNumber(deal.currentUses)} uses`;
+                    const minOrder = formatAdminMoney(deal.minOrderAmount);
+                    const description = String(deal.description || "").trim();
+
+                    return (
+                      <article
+                        key={deal.id}
+                        className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] shadow-sm transition-colors hover:bg-[color:var(--bg-surface-muted)]"
+                        data-testid={`card-admin-deal-${deal.id}`}
+                      >
+                        <div className="grid min-h-[220px] md:grid-cols-[210px_minmax(0,1fr)]">
+                          <div className="relative min-h-[180px] bg-muted md:min-h-full">
+                            <img
+                              src={imageUrl}
+                              alt={`${deal.title || "Deal"} image`}
+                              className="absolute inset-0 h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                              onError={(event) => {
+                                const img = event.currentTarget;
+                                if (img.src.endsWith(ADMIN_DEAL_FALLBACK_IMAGE_URL)) {
+                                  return;
+                                }
+                                img.src = ADMIN_DEAL_FALLBACK_IMAGE_URL;
+                              }}
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white">
+                              <p className="line-clamp-1 text-xs font-semibold">
+                                {restaurant.name || "No restaurant assigned"}
+                              </p>
+                              <p className="line-clamp-1 text-[11px] text-white/80">
+                                {businessType} · {location}
+                              </p>
+                            </div>
+                            <Badge className="absolute left-3 top-3">
+                              {offer}
+                            </Badge>
                           </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            {deal.restaurant?.name} -{" "}
-                            {deal.discountValue
-                              ? deal.dealType === "fixed"
-                                ? `$${deal.discountValue} off`
-                                : `${deal.discountValue}% off`
-                              : "Limited Time"}
-                            - Ends {new Date(deal.endDate).toLocaleDateString()}
+
+                          <div className="flex min-w-0 flex-col gap-4 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
+                                  {deal.title || "Untitled deal"}
+                                </h3>
+                                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                  {description ||
+                                    `${offer} from ${
+                                      restaurant.name || "this business"
+                                    }.`}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 flex-col items-end gap-1">
+                                <Badge
+                                  variant={
+                                    deal.isActive ? "default" : "secondary"
+                                  }
+                                >
+                                  {deal.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                                {deal.isFeatured ? (
+                                  <Badge variant="outline">Featured</Badge>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="grid gap-2 text-sm sm:grid-cols-2">
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Business
+                                </p>
+                                <p className="truncate font-medium">
+                                  {restaurant.name || "Unassigned"}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {[restaurant.cuisineType, businessType]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </p>
+                              </div>
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Offer
+                                </p>
+                                <p className="truncate font-medium">{offer}</p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {minOrder ? `Min order ${minOrder}` : "No minimum"}
+                                </p>
+                              </div>
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Validity
+                                </p>
+                                <p className="truncate font-medium">
+                                  {dateWindow}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {timeWindow}
+                                </p>
+                              </div>
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Activity
+                                </p>
+                                <p className="truncate font-medium">
+                                  {usageText}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  Per customer:{" "}
+                                  {deal.perCustomerLimit
+                                    ? compactNumber(deal.perCustomerLimit)
+                                    : "None"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-auto flex flex-col gap-3 border-t border-[color:var(--border-subtle)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  {dateWindow}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {timeWindow}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {location}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedDeal(deal);
+                                    setDealDetailsOpen(true);
+                                  }}
+                                  data-testid={`button-view-deal-${deal.id}`}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Details
+                                </Button>
+
+                                <Link href={`/deal-edit/${deal.id}`}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    data-testid={`button-edit-deal-${deal.id}`}
+                                  >
+                                    <Settings className="w-4 h-4" />
+                                    Edit
+                                  </Button>
+                                </Link>
+
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => cloneDeal.mutate(deal.id)}
+                                  disabled={cloneDeal.isPending}
+                                  data-testid={`button-clone-deal-${deal.id}`}
+                                >
+                                  <Package className="w-4 h-4" />
+                                  Clone
+                                </Button>
+
+                                <Switch
+                                  checked={Boolean(deal.isActive)}
+                                  onCheckedChange={(checked) =>
+                                    toggleDealStatus.mutate({
+                                      dealId: deal.id,
+                                      isActive: checked,
+                                    })
+                                  }
+                                  aria-label={`Toggle ${deal.title} active status`}
+                                  data-testid={`switch-deal-active-${deal.id}`}
+                                />
+
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        "Are you sure you want to delete this deal? This action cannot be undone.",
+                                      )
+                                    ) {
+                                      deleteDeal.mutate(deal.id);
+                                    }
+                                  }}
+                                  disabled={deleteDeal.isPending}
+                                  aria-label={`Delete ${deal.title}`}
+                                  data-testid={`button-delete-deal-${deal.id}`}
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={deal.isActive ? "default" : "secondary"}
-                          >
-                            {deal.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                          {deal.isFeatured && (
-                            <Badge variant="outline">Featured</Badge>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Activity className="w-4 h-4" />
-                            {deal.currentUses || 0} uses
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            {deal.startTime} - {deal.endTime}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedDeal(deal);
-                              setDealDetailsOpen(true);
-                            }}
-                            data-testid={`button-view-deal-${deal.id}`}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Details
-                          </Button>
-
-                          <Link href={`/deal-edit/${deal.id}`}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              data-testid={`button-edit-deal-${deal.id}`}
-                            >
-                              <Settings className="w-4 h-4 mr-1" />
-                              Edit
-                            </Button>
-                          </Link>
-
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => cloneDeal.mutate(deal.id)}
-                            disabled={cloneDeal.isPending}
-                            data-testid={`button-clone-deal-${deal.id}`}
-                          >
-                            <Package className="w-4 h-4 mr-1" />
-                            Clone
-                          </Button>
-
-                          <Switch
-                            checked={deal.isActive}
-                            onCheckedChange={(checked) =>
-                              toggleDealStatus.mutate({
-                                dealId: deal.id,
-                                isActive: checked,
-                              })
-                            }
-                            data-testid={`switch-deal-active-${deal.id}`}
-                          />
-
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  "Are you sure you want to delete this deal? This action cannot be undone.",
-                                )
-                              ) {
-                                deleteDeal.mutate(deal.id);
-                              }
-                            }}
-                            disabled={deleteDeal.isPending}
-                            data-testid={`button-delete-deal-${deal.id}`}
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

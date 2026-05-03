@@ -22,7 +22,6 @@ import {
   Search,
   Filter,
   MapPin,
-  Clock,
   X,
   SlidersHorizontal,
   Utensils,
@@ -49,6 +48,12 @@ import {
 import { trackUxEvent } from "@/utils/uxTelemetry";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
 import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
+import {
+  getCategoryLine,
+  getLocationLine,
+  resolveImageFallback,
+  resolveListingImageUrl,
+} from "@/lib/listing-card-display";
 
 type DiscoveryCity = {
   id: string;
@@ -1073,7 +1078,16 @@ export default function SearchPage() {
                       id: String(restaurant.id),
                       name: String(restaurant.name || "Local Spot"),
                       address: String(restaurant.address || ""),
+                      city: restaurant.city || null,
+                      state: restaurant.state || null,
                       cuisineType: String(restaurant.cuisineType || ""),
+                      businessType: restaurant.businessType || null,
+                      description: restaurant.description || null,
+                      logoUrl: restaurant.logoUrl || null,
+                      coverImageUrl: restaurant.coverImageUrl || null,
+                      facebookCoverUrl: restaurant.facebookCoverUrl || null,
+                      facebookPhotos: restaurant.facebookPhotos || null,
+                      googlePhotos: restaurant.googlePhotos || null,
                       isActive:
                         typeof restaurant.isActive === "boolean"
                           ? restaurant.isActive
@@ -1131,14 +1145,47 @@ export default function SearchPage() {
               {searchedParkingPassHosts.map((host: any) => {
                 const q =
                   `${host.address || ""}${host.city ? `, ${host.city}` : ""}${host.state ? `, ${host.state}` : ""}`.trim();
+                const parkingMedia = {
+                  name: host.businessName,
+                  title: host.businessName,
+                  businessType: "parking",
+                  imageUrl: host.spotImageUrl,
+                  spotImageUrl: host.spotImageUrl,
+                };
+                const imageUrl = resolveListingImageUrl(parkingMedia);
+                const categoryLine = getCategoryLine(parkingMedia);
+                const locationLine = getLocationLine(host);
                 return (
                   <Link
                     key={host.hostId}
                     href={`/parking-pass${q ? `?q=${encodeURIComponent(q)}` : ""}`}
                     data-testid={`card-parking-pass-${host.hostId}`}
                   >
-                    <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-4 space-y-2">
+                    <Card className="group overflow-hidden bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-0">
+                        <div className="relative h-32 overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={`${host.businessName || "Parking Pass spot"} photo`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(event) =>
+                              resolveImageFallback(event, parkingMedia)
+                            }
+                            data-testid={`image-parking-pass-${host.hostId}`}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {host.businessName || "Parking Pass spot"}
+                            </p>
+                            <p className="truncate text-xs text-white/85">
+                              {categoryLine}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-2">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h3 className="font-semibold text-foreground truncate">
@@ -1146,21 +1193,14 @@ export default function SearchPage() {
                             </h3>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
-                              <span className="truncate">{q}</span>
+                              <span className="truncate">{locationLine}</span>
                             </p>
                           </div>
                           <div className="text-xs rounded-full bg-primary/10 text-primary px-2 py-1">
                             Bookable
                           </div>
                         </div>
-                        {host.spotImageUrl ? (
-                          <img
-                            src={host.spotImageUrl}
-                            alt="Parking spot"
-                            className="w-full h-28 object-cover rounded-md border"
-                            loading="lazy"
-                          />
-                        ) : null}
+                        </div>
                       </CardContent>
                     </Card>
                   </Link>
@@ -1179,26 +1219,83 @@ export default function SearchPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {searchedVideos.map((story: any) => (
-                <Link
-                  key={story.id}
-                  href={`/video/${story.id}`}
-                  data-testid={`card-video-${story.id}`}
-                >
-                  <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-4 space-y-1">
-                      <div className="font-semibold text-foreground truncate">
-                        {story.title || "Video"}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {story.restaurantName
-                          ? `From ${story.restaurantName}`
-                          : "Video story"}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+              {searchedVideos.map((story: any) => {
+                const videoRestaurant = {
+                  name: story.restaurantName,
+                  address: story.restaurantAddress,
+                  city: story.restaurantCity,
+                  state: story.restaurantState,
+                  cuisineType: story.restaurantCuisineType,
+                  businessType: story.restaurantBusinessType,
+                  logoUrl: story.restaurantLogoUrl,
+                  coverImageUrl: story.restaurantCoverImageUrl,
+                  googlePhotos: story.restaurantGooglePhotos,
+                  facebookCoverUrl: story.restaurantFacebookCoverUrl,
+                  facebookPhotos: story.restaurantFacebookPhotos,
+                };
+                const videoMedia = {
+                  title: story.title,
+                  description: story.description,
+                  thumbnailUrl: story.thumbnailUrl,
+                  restaurantName: story.restaurantName,
+                  cuisineType: story.restaurantCuisineType,
+                  restaurant: videoRestaurant,
+                };
+                const imageUrl = resolveListingImageUrl(videoMedia);
+                const locationLine = getLocationLine(videoRestaurant);
+                return (
+                  <Link
+                    key={story.id}
+                    href={`/video/${story.id}`}
+                    data-testid={`card-video-${story.id}`}
+                  >
+                    <Card className="group overflow-hidden bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-0">
+                        <div className="relative h-32 overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={`${story.title || "Video"} preview`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(event) =>
+                              resolveImageFallback(event, videoMedia)
+                            }
+                            data-testid={`image-video-${story.id}`}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {story.title || "Video"}
+                            </p>
+                            <p className="truncate text-xs text-white/85">
+                              {story.restaurantName
+                                ? `From ${story.restaurantName}`
+                                : "Video story"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-1">
+                          <div className="font-semibold text-foreground truncate">
+                            {story.title || "Video"}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {story.restaurantName
+                              ? `From ${story.restaurantName}`
+                              : "Video story"}
+                          </div>
+                          <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span className="line-clamp-2">
+                              {locationLine}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1212,28 +1309,87 @@ export default function SearchPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {searchedEvents.map((event: any) => (
-                <Link
-                  key={event.id}
-                  href="/events"
-                  data-testid={`card-event-${event.id}`}
-                >
-                  <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
-                    <CardContent className="p-4 space-y-1">
-                      <div className="font-semibold text-foreground truncate">
-                        {event.name || event.hostBusinessName || "Event"}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {event.hostBusinessName}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {event.hostCity}
-                        {event.hostState ? `, ${event.hostState}` : ""}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+              {searchedEvents.map((event: any) => {
+                const eventMedia = {
+                  name: event.hostBusinessName,
+                  title: event.name,
+                  description: event.description,
+                  businessType: "event",
+                  imageUrl: event.hostSpotImageUrl,
+                  hostSpotImageUrl: event.hostSpotImageUrl,
+                };
+                const imageUrl = resolveListingImageUrl(eventMedia);
+                const categoryLine = getCategoryLine(eventMedia);
+                const locationLine = getLocationLine({
+                  address: event.hostAddress,
+                  city: event.hostCity,
+                  state: event.hostState,
+                });
+                const dateLabel = event.date
+                  ? new Date(event.date).toLocaleDateString([], {
+                      month: "short",
+                      day: "numeric",
+                    })
+                  : null;
+
+                return (
+                  <Link
+                    key={event.id}
+                    href="/events"
+                    data-testid={`card-event-${event.id}`}
+                  >
+                    <Card className="group overflow-hidden bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-0">
+                        <div className="relative h-32 overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={`${event.name || event.hostBusinessName || "Event"} photo`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(imageEvent) =>
+                              resolveImageFallback(imageEvent, eventMedia)
+                            }
+                            data-testid={`image-event-${event.id}`}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {event.name || event.hostBusinessName || "Event"}
+                            </p>
+                            <p className="truncate text-xs text-white/85">
+                              {categoryLine}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-foreground truncate">
+                                {event.name || event.hostBusinessName || "Event"}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {event.hostBusinessName}
+                              </div>
+                            </div>
+                            {dateLabel ? (
+                              <div className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
+                                {dateLabel}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span className="line-clamp-2">
+                              {locationLine}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1257,17 +1413,46 @@ export default function SearchPage() {
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {visibleUnclaimed.map((listing: any) => {
-                const locationLine = [listing.city, listing.state]
-                  .filter(Boolean)
-                  .join(", ");
+                const listingMedia = {
+                  name: listing.name,
+                  title: listing.name,
+                  cuisineType: listing.cuisineType,
+                  businessType: "food_truck",
+                };
+                const imageUrl = resolveListingImageUrl(listingMedia);
+                const categoryLine = getCategoryLine(listingMedia);
+                const locationLine = getLocationLine(listing);
                 return (
                   <Link
                     key={listing.id}
                     href={`/truck-onboarding?claim=1&q=${encodeURIComponent(listing.name || "")}&listingId=${encodeURIComponent(listing.id)}`}
                     data-testid={`card-unclaimed-${listing.id}`}
                   >
-                    <Card className="border-amber-200 bg-amber-50/40 shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-4 space-y-2">
+                    <Card className="group overflow-hidden border-amber-200 bg-amber-50/40 shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-0">
+                        <div className="relative h-32 overflow-hidden bg-muted">
+                          <img
+                            src={imageUrl}
+                            alt={`${listing.name || "Unclaimed listing"} photo`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={(event) =>
+                              resolveImageFallback(event, listingMedia)
+                            }
+                            data-testid={`image-unclaimed-${listing.id}`}
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-3">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {listing.name}
+                            </p>
+                            <p className="truncate text-xs text-white/85">
+                              {categoryLine}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-2">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h3 className="font-semibold text-foreground truncate">
@@ -1275,10 +1460,7 @@ export default function SearchPage() {
                             </h3>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <MapPin className="w-3 h-3 shrink-0" />
-                              <span className="truncate">
-                                {listing.address}
-                                {locationLine ? ` • ${locationLine}` : ""}
-                              </span>
+                              <span className="truncate">{locationLine}</span>
                             </p>
                           </div>
                           <div className="text-xs rounded-full bg-amber-200/70 text-amber-900 px-2 py-1 whitespace-nowrap">
@@ -1287,6 +1469,7 @@ export default function SearchPage() {
                         </div>
                         <div className="text-xs text-amber-900/80">
                           Tap to claim this profile
+                        </div>
                         </div>
                       </CardContent>
                     </Card>
