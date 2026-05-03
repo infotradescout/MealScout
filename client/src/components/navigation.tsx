@@ -213,6 +213,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const hiddenAppNavRoutes = [
     "/admin",
     "/staff",
+    "/events",
+    "/event",
+    "/truck-discovery",
     "/truck-landing",
     "/truck-onboarding",
     "/claim-truck",
@@ -231,6 +234,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     "/change-password",
     "/account-setup",
     "/admin/login",
+    "/events",
+    "/event",
+    "/truck-discovery",
     "/truck-landing",
   ];
   const shouldHideAppNav = hiddenAppNavRoutes.some(

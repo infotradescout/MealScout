@@ -908,6 +908,9 @@ function Router() {
 const appChromeHiddenRoutes = [
   "/admin",
   "/staff",
+  "/events",
+  "/event",
+  "/truck-discovery",
   "/truck-landing",
   "/truck-onboarding",
   "/claim-truck",
