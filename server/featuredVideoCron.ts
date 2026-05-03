@@ -1,4 +1,4 @@
-import { eq, and, isNull, lt, gte } from "drizzle-orm";
+import { eq, and, isNull, lt, gte, or } from "drizzle-orm";
 import { db } from "./db";
 import { timingSafeEqual } from "crypto";
 import { 
@@ -55,7 +55,10 @@ async function scoreVideosByEngagement(restaurantId: string): Promise<VideoScore
         eq(videoStories.status, "ready"),
         isNull(videoStories.deletedAt),
         // Not expired yet
-        gte(videoStories.expiresAt, new Date()),
+        or(
+          isNull(videoStories.expiresAt),
+          gte(videoStories.expiresAt, new Date()),
+        ),
         // Either never featured or featured ended more than 1 day ago
         // (to allow videos to cycle back in after a break)
       )

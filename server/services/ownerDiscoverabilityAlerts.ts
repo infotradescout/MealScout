@@ -32,6 +32,9 @@ type OwnerAlertRow = {
   blockers: string[];
 };
 
+let menuSchemaAvailableCache: boolean | null = null;
+let menuSchemaUnavailableLogged = false;
+
 function ownerName(owner: CandidateOwner): string {
   const full = [owner.firstName, owner.lastName]
     .filter(Boolean)
@@ -70,6 +73,40 @@ function computeBlockers(row: {
   if (row.menuCount === 0) blockers.push("no_menu");
   if (row.itemCount === 0) blockers.push("no_items");
   return blockers;
+}
+
+async function hasMenuSchema(): Promise<boolean> {
+  if (menuSchemaAvailableCache !== null) return menuSchemaAvailableCache;
+
+  try {
+    const regclassRows = await db.execute(sql<{
+      menus_table: string | null;
+      menu_items_table: string | null;
+    }>`
+      select
+        to_regclass('public.menus')::text as menus_table,
+        to_regclass('public.menu_items')::text as menu_items_table
+    `);
+    menuSchemaAvailableCache = Boolean(
+      regclassRows.rows?.[0]?.menus_table &&
+        regclassRows.rows?.[0]?.menu_items_table,
+    );
+  } catch (error: any) {
+    menuSchemaAvailableCache = false;
+    console.warn(
+      "[owner-discoverability-alerts] menu schema check failed; using zero counts:",
+      error?.message || error,
+    );
+  }
+
+  if (!menuSchemaAvailableCache && !menuSchemaUnavailableLogged) {
+    menuSchemaUnavailableLogged = true;
+    console.warn(
+      "[owner-discoverability-alerts] menu tables unavailable; using zero counts",
+    );
+  }
+
+  return menuSchemaAvailableCache;
 }
 
 async function gatherCandidates(): Promise<OwnerAlertRow[]> {
@@ -143,32 +180,35 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
   let menuRows: Array<{ id: string; restaurantId: string | null }> = [];
   let itemRows: Array<{ menuId: string | null; count: number }> = [];
   if (allRestaurantIds.length > 0) {
-    try {
-      menuRows = await db
-        .select({ id: menus.id, restaurantId: menus.restaurantId })
-        .from(menus)
-        .where(inArray(menus.restaurantId, allRestaurantIds));
+    const menuSchemaAvailable = await hasMenuSchema();
+    if (menuSchemaAvailable) {
+      try {
+        menuRows = await db
+          .select({ id: menus.id, restaurantId: menus.restaurantId })
+          .from(menus)
+          .where(inArray(menus.restaurantId, allRestaurantIds));
 
-      const allMenuIds = menuRows.map(
-        (m: { id: string; restaurantId: string | null }) => m.id,
-      );
-      itemRows = allMenuIds.length
-        ? await db
-            .select({
-              menuId: menuItems.menuId,
-              count: sql<number>`COUNT(*)::int`,
-            })
-            .from(menuItems)
-            .where(inArray(menuItems.menuId, allMenuIds))
-            .groupBy(menuItems.menuId)
-        : [];
-    } catch (error) {
-      console.warn(
-        "[owner-discoverability-alerts] menu tables unavailable; using zero counts",
-        error,
-      );
-      menuRows = [];
-      itemRows = [];
+        const allMenuIds = menuRows.map(
+          (m: { id: string; restaurantId: string | null }) => m.id,
+        );
+        itemRows = allMenuIds.length
+          ? await db
+              .select({
+                menuId: menuItems.menuId,
+                count: sql<number>`COUNT(*)::int`,
+              })
+              .from(menuItems)
+              .where(inArray(menuItems.menuId, allMenuIds))
+              .groupBy(menuItems.menuId)
+          : [];
+      } catch (error: any) {
+        console.warn(
+          "[owner-discoverability-alerts] menu count query failed; using zero counts:",
+          error?.message || error,
+        );
+        menuRows = [];
+        itemRows = [];
+      }
     }
   }
 

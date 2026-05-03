@@ -88,6 +88,15 @@ describe("public video feed safety", () => {
     ).toBe(false);
   });
 
+  it("allows ready approved stories without an expiration date", () => {
+    expect(
+      helpers.isPublicFeedStoryRenderable(
+        baseFeedStory({ expiresAt: null }),
+        new Date("2026-05-02T12:00:00Z"),
+      ),
+    ).toBe(true);
+  });
+
   const baseFeedMediaAsset = (
     overrides: Partial<PublicFeedMediaAssetRow> = {},
   ): PublicFeedMediaAssetRow => ({

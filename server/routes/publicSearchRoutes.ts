@@ -455,7 +455,10 @@ export function registerPublicSearchRoutes(app: Express) {
         .where(
           and(
             eq(videoStories.status, "ready"),
-            gte(videoStories.expiresAt, nowSql as any),
+            or(
+              isNull(videoStories.expiresAt),
+              gte(videoStories.expiresAt, nowSql as any),
+            ),
             isNull(videoStories.deletedAt),
             or(
               sql`lower(coalesce(${videoStories.title}, '')) like ${searchValue}`,
@@ -765,7 +768,10 @@ export function registerPublicSearchRoutes(app: Express) {
         .where(
           and(
             eq(videoStories.status, "ready"),
-            gte(videoStories.expiresAt, nowSql as any),
+            or(
+              isNull(videoStories.expiresAt),
+              gte(videoStories.expiresAt, nowSql as any),
+            ),
             isNull(videoStories.deletedAt),
             or(
               sql`lower(coalesce(${videoStories.title}, '')) like ${searchValue}`,
