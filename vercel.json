@@ -12,6 +12,42 @@
   ],
   "routes": [
     {
+      "src": "/",
+      "has": [{ "type": "query", "key": "prerender" }],
+      "dest": "https://mealscout.onrender.com/?prerender=1"
+    },
+    {
+      "src": "/(map|search|video|share-hub|truck-onboarding|restaurant-signup|events|request-truck|for-restaurants|for-hosts|host-location-partner)",
+      "has": [{ "type": "query", "key": "prerender" }],
+      "dest": "https://mealscout.onrender.com/$1?prerender=1"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": {
+            "re": ".*(bot|Bot|crawler|Crawler|spider|Spider|facebookexternalhit|Facebot|whatsapp|WhatsApp|telegrambot|TelegramBot|slackbot|Slackbot|discordbot|Discordbot|linkedinbot|LinkedInBot|twitterbot|Twitterbot|applebot|Applebot|gptbot|GPTBot|claudebot|ClaudeBot|perplexitybot|PerplexityBot|bytespider|Bytespider|ccbot|CCBot).*"
+          }
+        }
+      ],
+      "dest": "https://mealscout.onrender.com/"
+    },
+    {
+      "src": "/(map|search|video|share-hub|truck-onboarding|restaurant-signup|events|request-truck|for-restaurants|for-hosts|host-location-partner)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": {
+            "re": ".*(bot|Bot|crawler|Crawler|spider|Spider|facebookexternalhit|Facebot|whatsapp|WhatsApp|telegrambot|TelegramBot|slackbot|Slackbot|discordbot|Discordbot|linkedinbot|LinkedInBot|twitterbot|Twitterbot|applebot|Applebot|gptbot|GPTBot|claudebot|ClaudeBot|perplexitybot|PerplexityBot|bytespider|Bytespider|ccbot|CCBot).*"
+          }
+        }
+      ],
+      "dest": "https://mealscout.onrender.com/$1"
+    },
+    {
       "src": "/sitemap(.*)\\.xml",
       "dest": "https://mealscout.onrender.com/sitemap$1.xml"
     },
