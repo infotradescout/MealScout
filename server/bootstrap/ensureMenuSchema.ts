@@ -9,6 +9,7 @@ const MENU_MIGRATIONS = [
   "097_add_menu_import_url.sql",
 ] as const;
 const STARTER_MENU_BACKFILL = "098_backfill_starter_menus.sql";
+const STARTER_MENU_CLEANUP = "099_cleanup_system_backfilled_menus.sql";
 
 function splitSqlStatements(sqlText: string): string[] {
   const statements: string[] = [];
@@ -170,6 +171,7 @@ export async function ensureMenuSchema() {
 
   if (await isMenuSchemaReady()) {
     await runMigrationFile(STARTER_MENU_BACKFILL);
+    await runMigrationFile(STARTER_MENU_CLEANUP);
     console.log("[menu-schema] ready");
     return;
   }
@@ -180,6 +182,7 @@ export async function ensureMenuSchema() {
   }
   await applyCompatibilityRepairs();
   await runMigrationFile(STARTER_MENU_BACKFILL);
+  await runMigrationFile(STARTER_MENU_CLEANUP);
 
   if (!(await isMenuSchemaReady())) {
     throw new Error("Menu schema migration completed but readiness check still failed");

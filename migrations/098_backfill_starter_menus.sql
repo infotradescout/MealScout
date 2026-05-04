@@ -19,8 +19,12 @@ WITH inserted_menus AS (
     TRUE,
     FALSE,
     'system_backfill'
-  FROM restaurants r
+FROM restaurants r
+  JOIN users u ON u.id = r.owner_id
   WHERE r.owner_id IS NOT NULL
+    AND u.user_type IN ('restaurant_owner', 'food_truck')
+    AND lower(coalesce(u.email, '')) <> 'system-import@mealscout.us'
+    AND lower(coalesce(u.email, '')) NOT LIKE 'deleted+%@mealscout.invalid'
     AND NOT EXISTS (
       SELECT 1
       FROM menus m
