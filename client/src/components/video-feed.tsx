@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useReducer } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { VIDEO_FEED_COPY as COPY } from '@/copy/videoFeed.copy';
 import ShareButton from '@/components/share-button';
+import { RecommendationComments } from '@/components/recommendation-comments';
 import { apiUrl } from '@/lib/api';
 
 /**
@@ -353,7 +354,13 @@ function UserVideoCard({ video, isVisible, onReplyToStory }: UserVideoCardProps)
         {/* Comments Section */}
         {showComments && (
           <div className="mt-4 pt-4 border-t border-[var(--border-strong)]">
-            <p className="text-sm text-[color:var(--text-muted)]">{COPY.userVideo.comments.placeholder}</p>
+            <RecommendationComments
+              targetType="story"
+              targetId={video.videoId}
+              initialCount={video.commentCount}
+              defaultOpen
+              hideToggle
+            />
           </div>
         )}
       </div>

@@ -31,7 +31,7 @@ export const VIDEO_FEED_COPY = {
       comment: "Comment",
     },
     comments: {
-      placeholder: "Comments coming soon...",
+      placeholder: "Be the first to respond.",
     },
   },
 

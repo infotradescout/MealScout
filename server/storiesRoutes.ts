@@ -806,8 +806,19 @@ export default function setupStoriesRoutes(app: Express) {
 
       // Get comments (limit to 5, load more on demand)
       const comments = await db
-        .select()
+        .select({
+          id: storyComments.id,
+          storyId: storyComments.storyId,
+          userId: storyComments.userId,
+          parentCommentId: storyComments.parentCommentId,
+          text: storyComments.text,
+          createdAt: storyComments.createdAt,
+          updatedAt: storyComments.updatedAt,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
         .from(storyComments)
+        .innerJoin(users, eq(users.id, storyComments.userId))
         .where(
           and(
             eq(storyComments.storyId, storyId),
@@ -874,7 +885,18 @@ export default function setupStoriesRoutes(app: Express) {
         creator: creator[0],
         restaurant: restaurant?.[0] || null,
         reviewerLevel: reviewerLevel[0] || null,
-        comments,
+        comments: comments.map((comment: any) => ({
+          id: comment.id,
+          storyId: comment.storyId,
+          userId: comment.userId,
+          parentCommentId: comment.parentCommentId,
+          text: comment.text,
+          createdAt: comment.createdAt,
+          updatedAt: comment.updatedAt,
+          authorName:
+            [comment.firstName, comment.lastName].filter(Boolean).join(' ').trim() ||
+            'MealScout member',
+        })),
         awards,
         userLiked,
         replyToStory,
@@ -883,6 +905,55 @@ export default function setupStoriesRoutes(app: Express) {
     } catch (error) {
       console.error('Error fetching story details:', error);
       res.status(500).json({ message: 'Failed to fetch story' });
+    }
+  });
+
+  // GET - Comments for a story
+  app.get('/api/stories/:storyId/comments', async (req, res) => {
+    try {
+      const { storyId } = req.params;
+      const limit = Math.max(1, Math.min(100, Number.parseInt(String(req.query.limit || '30'), 10) || 30));
+
+      const comments = await db
+        .select({
+          id: storyComments.id,
+          storyId: storyComments.storyId,
+          userId: storyComments.userId,
+          parentCommentId: storyComments.parentCommentId,
+          text: storyComments.text,
+          createdAt: storyComments.createdAt,
+          updatedAt: storyComments.updatedAt,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        })
+        .from(storyComments)
+        .innerJoin(users, eq(users.id, storyComments.userId))
+        .where(
+          and(
+            eq(storyComments.storyId, storyId),
+            eq(storyComments.isApproved, true),
+          ),
+        )
+        .orderBy(desc(storyComments.createdAt))
+        .limit(limit);
+
+      res.json({
+        comments: comments.map((comment: any) => ({
+          id: comment.id,
+          storyId: comment.storyId,
+          userId: comment.userId,
+          parentCommentId: comment.parentCommentId,
+          text: comment.text,
+          createdAt: comment.createdAt,
+          updatedAt: comment.updatedAt,
+          authorName:
+            [comment.firstName, comment.lastName].filter(Boolean).join(' ').trim() ||
+            'MealScout member',
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching story comments:', error);
+      res.status(500).json({ message: 'Failed to fetch comments' });
     }
   });
 
@@ -1081,13 +1152,14 @@ export default function setupStoriesRoutes(app: Express) {
         const { storyId } = req.params;
         const userId = (req as any).user?.id;
         const { text, parentCommentId } = req.body;
+        const commentText = String(text || '').trim();
 
         // Validate input
-        if (!text || text.trim().length === 0) {
+        if (!commentText) {
           return res.status(400).json({ message: 'Comment text is required' });
         }
 
-        if (text.length > 500) {
+        if (commentText.length > 500) {
           return res
             .status(400)
             .json({ message: 'Comment must be less than 500 characters' });
@@ -1110,7 +1182,7 @@ export default function setupStoriesRoutes(app: Express) {
           .values({
             storyId,
             userId,
-            text,
+            text: commentText,
             parentCommentId: parentCommentId || null,
           })
           .returning();
@@ -1125,7 +1197,14 @@ export default function setupStoriesRoutes(app: Express) {
 
         res.status(201).json({
           message: 'Comment added successfully',
-          comment: comment[0],
+          comment: {
+            ...comment[0],
+            authorName:
+              [((req as any).user?.firstName), ((req as any).user?.lastName)]
+                .filter(Boolean)
+                .join(' ')
+                .trim() || 'MealScout member',
+          },
         });
       } catch (error) {
         console.error('Error adding comment:', error);

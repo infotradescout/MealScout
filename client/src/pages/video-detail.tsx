@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Navigation from "@/components/navigation";
 import { BackHeader } from "@/components/back-header";
 import { VideoTranscript } from "@/components/video-transcript";
+import { RecommendationComments } from "@/components/recommendation-comments";
 import { MinimalFAQ } from "@/components/seo-faq";
 import { SEOHead } from "@/components/seo-head";
 import { generateVideoSchema } from "@/lib/schema-helpers";
@@ -274,6 +275,12 @@ export default function VideoDetailPage() {
             Share
           </Button>
         </div>
+
+        <RecommendationComments
+          targetType="story"
+          targetId={videoId}
+          initialCount={Number(videoData.commentCount || 0)}
+        />
 
         {/* Transcript - Hidden by default, crawlable */}
         {videoData.transcript && (

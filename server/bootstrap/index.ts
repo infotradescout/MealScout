@@ -11,3 +11,4 @@ export { ensureMenuSchema } from "./ensureMenuSchema";
 export { ensureMessagingSchema } from "./ensureMessagingSchema";
 export { ensureSentimentSchema } from "./ensureSentimentSchema";
 export { ensureJobBoardSchema } from "./ensureJobBoardSchema";
+export { ensureRecommendationCommentsSchema } from "./ensureRecommendationCommentsSchema";

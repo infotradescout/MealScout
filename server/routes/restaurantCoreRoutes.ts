@@ -2524,6 +2524,7 @@ export function registerRestaurantCoreRoutes(
           like_count: number;
           dislike_count: number;
           share_count: number;
+          comment_count: number;
           viewer_reaction: string | null;
         }>`
           select
@@ -2538,11 +2539,13 @@ export function registerRestaurantCoreRoutes(
             coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
             coalesce(sum(case rr.reaction_type when 'dislike' then 1 else 0 end), 0)::int as dislike_count,
             coalesce(count(distinct rs.id), 0)::int as share_count,
+            coalesce(count(distinct rc.id), 0)::int as comment_count,
             max(case when rr.user_id = ${viewerId} then rr.reaction_type else null end) as viewer_reaction
           from restaurant_user_recommendations rur
           inner join users u on u.id = rur.user_id
           left join recommendation_reactions rr on rr.recommendation_id = rur.id
           left join recommendation_shares rs on rs.recommendation_id = rur.id
+          left join recommendation_comments rc on rc.recommendation_id = rur.id and rc.is_approved = true
           where rur.restaurant_id = ${restaurantId}
           group by rur.id, rur.user_id, rur.created_at, rur.updated_at, rur.sentiment_score_100, rur.menu_item_name, u.first_name, u.last_name
           order by rur.created_at desc
@@ -2572,6 +2575,7 @@ export function registerRestaurantCoreRoutes(
           likeCount: Number(row.like_count) || 0,
           dislikeCount: Number(row.dislike_count) || 0,
           shareCount: Number(row.share_count) || 0,
+          commentCount: Number(row.comment_count) || 0,
           viewerReaction:
             row.viewer_reaction === "like" || row.viewer_reaction === "dislike"
               ? row.viewer_reaction
@@ -2666,6 +2670,149 @@ export function registerRestaurantCoreRoutes(
       } catch (error) {
         console.error("Error reacting to recommendation:", error);
         res.status(500).json({ message: "Failed to save reaction" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/recommendations/:recommendationId/comments",
+    async (req: any, res) => {
+      try {
+        const recommendationId = String(req.params.recommendationId || "").trim();
+        const limit = Math.max(
+          1,
+          Math.min(100, Number.parseInt(String(req.query.limit || "30"), 10) || 30),
+        );
+        if (!recommendationId) {
+          return res.status(400).json({ message: "Invalid recommendation id" });
+        }
+
+        const commentsResult = await db.execute(sql<{
+          id: string;
+          recommendation_id: string;
+          user_id: string;
+          parent_comment_id: string | null;
+          text: string;
+          created_at: Date;
+          updated_at: Date | null;
+          first_name: string | null;
+          last_name: string | null;
+        }>`
+          select
+            rc.id,
+            rc.recommendation_id,
+            rc.user_id,
+            rc.parent_comment_id,
+            rc.text,
+            rc.created_at,
+            rc.updated_at,
+            u.first_name,
+            u.last_name
+          from recommendation_comments rc
+          inner join users u on u.id = rc.user_id
+          where rc.recommendation_id = ${recommendationId}
+            and rc.is_approved = true
+          order by rc.created_at desc
+          limit ${limit}
+        `);
+
+        const comments = Array.isArray((commentsResult as any).rows)
+          ? (commentsResult as any).rows
+          : [];
+
+        res.json({
+          comments: comments.map((comment: any) => ({
+            id: String(comment.id || ""),
+            recommendationId: String(comment.recommendation_id || ""),
+            userId: String(comment.user_id || ""),
+            parentCommentId: comment.parent_comment_id || null,
+            text: String(comment.text || ""),
+            createdAt: comment.created_at,
+            updatedAt: comment.updated_at,
+            authorName:
+              [comment.first_name, comment.last_name].filter(Boolean).join(" ").trim() ||
+              "MealScout member",
+          })),
+        });
+      } catch (error) {
+        console.error("Error fetching recommendation comments:", error);
+        res.status(500).json({ message: "Failed to fetch comments" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/recommendations/:recommendationId/comments",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const recommendationId = String(req.params.recommendationId || "").trim();
+        const userId = String(req.user?.id || "").trim();
+        const text = String(req.body?.text || "").trim();
+        const parentCommentId = req.body?.parentCommentId
+          ? String(req.body.parentCommentId).trim()
+          : null;
+
+        if (!recommendationId) {
+          return res.status(400).json({ message: "Invalid recommendation id" });
+        }
+        if (!text) {
+          return res.status(400).json({ message: "Comment text is required" });
+        }
+        if (text.length > 500) {
+          return res
+            .status(400)
+            .json({ message: "Comment must be less than 500 characters" });
+        }
+
+        const recommendationExists = await db
+          .select({ id: restaurantUserRecommendations.id })
+          .from(restaurantUserRecommendations)
+          .where(eq(restaurantUserRecommendations.id, recommendationId))
+          .limit(1);
+
+        if (!recommendationExists.length) {
+          return res.status(404).json({ message: "Recommendation not found" });
+        }
+
+        const inserted = await db.execute(sql<{
+          id: string;
+          recommendation_id: string;
+          user_id: string;
+          parent_comment_id: string | null;
+          text: string;
+          created_at: Date;
+          updated_at: Date | null;
+        }>`
+          insert into recommendation_comments (
+            recommendation_id,
+            user_id,
+            parent_comment_id,
+            text
+          )
+          values (${recommendationId}, ${userId}, ${parentCommentId}, ${text})
+          returning id, recommendation_id, user_id, parent_comment_id, text, created_at, updated_at
+        `);
+
+        const comment = ((inserted as any).rows || [])[0];
+        res.status(201).json({
+          message: "Comment added successfully",
+          comment: {
+            id: String(comment?.id || ""),
+            recommendationId: String(comment?.recommendation_id || recommendationId),
+            userId,
+            parentCommentId: comment?.parent_comment_id || null,
+            text: String(comment?.text || text),
+            createdAt: comment?.created_at || new Date(),
+            updatedAt: comment?.updated_at || null,
+            authorName:
+              [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" ").trim() ||
+              "MealScout member",
+          },
+        });
+      } catch (error) {
+        console.error("Error adding recommendation comment:", error);
+        res.status(500).json({ message: "Failed to add comment" });
       }
     },
   );

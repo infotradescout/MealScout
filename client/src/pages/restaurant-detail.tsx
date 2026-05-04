@@ -69,6 +69,7 @@ import {
   type ParkingScheduleItem,
 } from "@/components/parking-schedule-calendar";
 import PublicVideoGallery from "@/components/PublicVideoGallery";
+import { RecommendationComments } from "@/components/recommendation-comments";
 import { VideoUploadModal } from "@/components/video-upload-modal";
 import { PublicHelpWantedBanner } from "@/components/PublicHelpWantedBanner";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
@@ -86,6 +87,7 @@ type PublicRecommendation = {
   likeCount: number;
   dislikeCount: number;
   shareCount: number;
+  commentCount: number;
   viewerReaction: "like" | "dislike" | null;
 };
 
@@ -2081,6 +2083,14 @@ export default function RestaurantDetailPage() {
                       <FlagRecommendationDialog recommendationId={rec.id} />
                     </div>
                   </div>
+                  <RecommendationComments
+                    targetType="recommendation"
+                    targetId={rec.id}
+                    initialCount={rec.commentCount}
+                    onCountChange={() => {
+                      void refetchRecommendations();
+                    }}
+                  />
                 </CardContent>
               </Card>
             ))}

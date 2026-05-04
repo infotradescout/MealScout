@@ -14,6 +14,7 @@ import {
   ensureMessagingSchema,
   ensureSentimentSchema,
   ensureJobBoardSchema,
+  ensureRecommendationCommentsSchema,
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
@@ -1363,6 +1364,7 @@ app.use((req, res, next) => {
   await ensureSentimentSchema();
   await ensureMessagingSchema();
   await ensureJobBoardSchema();
+  await ensureRecommendationCommentsSchema();
 
   const server = await registerRoutes(app);
 
@@ -1555,6 +1557,7 @@ app.use((req, res, next) => {
           await ensureSentimentSchema();
           await ensureMessagingSchema();
           await ensureJobBoardSchema();
+          await ensureRecommendationCommentsSchema();
           await storage.ensureAdminExists();
 
           // Never seed fake content unless explicitly enabled for local development.
