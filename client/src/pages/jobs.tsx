@@ -21,6 +21,10 @@ import { cn } from "@/lib/utils";
 
 type Job = {
   id: string;
+  businessEntity?: string | null;
+  businessName?: string | null;
+  businessProfileUrl?: string | null;
+  hostId?: string | null;
   title: string;
   roleType?: string | null;
   employmentType?: string | null;
@@ -78,6 +82,7 @@ export default function JobsPage() {
       if (!needle) return true;
       return [
         job.title,
+        job.businessName,
         job.restaurantName,
         job.city,
         job.state,
@@ -120,7 +125,7 @@ export default function JobsPage() {
               </h1>
               <p className="mt-4 max-w-2xl text-base font-semibold text-[color:var(--text-secondary)] sm:text-lg">
                 Browse open roles from local trucks, restaurants, bars, and
-                event crews. Apply once you find a fit.
+                event crews, and host locations. Apply once you find a fit.
               </p>
             </div>
             <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
@@ -210,7 +215,7 @@ export default function JobsPage() {
                         {job.title}
                       </h2>
                       <p className="mt-1 font-semibold text-[color:var(--text-secondary)]">
-                        {job.restaurantName}
+                        {job.businessName || job.restaurantName}
                       </p>
                     </div>
                     <div className="mt-auto space-y-2 text-sm font-semibold text-[color:var(--text-secondary)]">

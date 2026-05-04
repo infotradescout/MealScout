@@ -9,7 +9,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { restaurants, users } from "./legacy";
+import { hosts, restaurants, users } from "./legacy";
 
 export const jobPostings = pgTable(
   "job_postings",
@@ -17,9 +17,12 @@ export const jobPostings = pgTable(
     id: varchar("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    restaurantId: varchar("restaurant_id")
-      .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
+    hostId: varchar("host_id").references(() => hosts.id, {
+      onDelete: "cascade",
+    }),
     postedByUserId: varchar("posted_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -46,6 +49,7 @@ export const jobPostings = pgTable(
   },
   (table) => [
     index("idx_job_postings_restaurant").on(table.restaurantId),
+    index("idx_job_postings_host").on(table.hostId),
     index("idx_job_postings_status").on(table.status),
     index("idx_job_postings_city_state").on(table.city, table.state),
     index("idx_job_postings_role_type").on(table.roleType),
@@ -62,9 +66,12 @@ export const jobApplications = pgTable(
     jobId: varchar("job_id")
       .notNull()
       .references(() => jobPostings.id, { onDelete: "cascade" }),
-    restaurantId: varchar("restaurant_id")
-      .notNull()
-      .references(() => restaurants.id, { onDelete: "cascade" }),
+    restaurantId: varchar("restaurant_id").references(() => restaurants.id, {
+      onDelete: "cascade",
+    }),
+    hostId: varchar("host_id").references(() => hosts.id, {
+      onDelete: "cascade",
+    }),
     applicantUserId: varchar("applicant_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -84,6 +91,7 @@ export const jobApplications = pgTable(
   (table) => [
     index("idx_job_applications_job").on(table.jobId),
     index("idx_job_applications_restaurant").on(table.restaurantId),
+    index("idx_job_applications_host").on(table.hostId),
     index("idx_job_applications_status").on(table.status),
     index("idx_job_applications_created").on(table.createdAt),
     index("idx_job_applications_email").on(table.applicantEmail),
@@ -94,6 +102,10 @@ export const jobPostingsRelations = relations(jobPostings, ({ one, many }) => ({
   restaurant: one(restaurants, {
     fields: [jobPostings.restaurantId],
     references: [restaurants.id],
+  }),
+  host: one(hosts, {
+    fields: [jobPostings.hostId],
+    references: [hosts.id],
   }),
   postedBy: one(users, {
     fields: [jobPostings.postedByUserId],
@@ -112,6 +124,10 @@ export const jobApplicationsRelations = relations(
     restaurant: one(restaurants, {
       fields: [jobApplications.restaurantId],
       references: [restaurants.id],
+    }),
+    host: one(hosts, {
+      fields: [jobApplications.hostId],
+      references: [hosts.id],
     }),
     applicant: one(users, {
       fields: [jobApplications.applicantUserId],

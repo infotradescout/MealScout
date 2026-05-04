@@ -66,6 +66,8 @@ import { registerPushRoutes } from "./routes/pushRoutes";
 import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import { registerJobBoardRoutes } from "./routes/jobBoardRoutes";
+import { registerInsuranceVerificationRoutes } from "./routes/insuranceVerificationRoutes";
+import { registerMealScoutCreditsRoutes } from "./routes/mealScoutCreditsRoutes";
 import {
   notifyNearbyDealSubscribers,
   notifyHostCapacityWarning,
@@ -109,6 +111,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBusinessTeamRoutes(app);
   registerMessagingRoutes(app);
   registerJobBoardRoutes(app);
+  registerInsuranceVerificationRoutes(app);
+  registerMealScoutCreditsRoutes(app);
 
   registerDealManagementRoutes(app, {
     logAudit,

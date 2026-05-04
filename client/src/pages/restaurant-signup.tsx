@@ -45,6 +45,8 @@ import { authUrl } from "@/lib/api";
  * No inline labels, helper text, or validation messages.
  */
 
+const BUSINESS_TYPES = ["restaurant", "bar", "food_truck", "caterer"] as const;
+
 const restaurantSchema = z
   .object({
     name: z.string().min(1, COPY.validation.restaurant.nameRequired),
@@ -52,7 +54,7 @@ const restaurantSchema = z
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
     phone: z.string().optional().or(z.literal("")),
-    businessType: z.enum(["restaurant", "bar", "food_truck"], {
+    businessType: z.enum(BUSINESS_TYPES, {
       required_error: COPY.validation.restaurant.businessTypeRequired,
     }),
     cuisineType: z.string().optional(),
@@ -181,7 +183,7 @@ const OWNER_INTENT_COPY: Record<
   },
   catering_leads: {
     title: "Create a catering-ready profile",
-    body: "Add the basics buyers need before requesting your truck: menu style, service area, and contact details.",
+    body: "Add the basics buyers need before booking catering: menu style, service area, and contact details.",
     nextLabel: "Next: booking tools",
     nextTarget: "booking",
   },
@@ -330,9 +332,12 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  const isCaterer = selectedBusinessType === "caterer";
   const mainHero =
     selectedBusinessType === "food_truck"
       ? COPY.main.hero.foodTruck
+      : isCaterer
+        ? COPY.main.hero.caterer
       : COPY.main.hero.restaurant;
 
   useEffect(() => {
@@ -366,7 +371,8 @@ export default function RestaurantSignup() {
       if (
         businessType === "food_truck" ||
         businessType === "restaurant" ||
-        businessType === "bar"
+        businessType === "bar" ||
+        businessType === "caterer"
       ) {
         form.setValue("businessType", businessType as any);
       }
@@ -557,6 +563,7 @@ export default function RestaurantSignup() {
 
       if (
         data.businessType !== "food_truck" &&
+        data.businessType !== "caterer" &&
         (data.hasParking || data.hasWifi || data.hasOutdoorSeating)
       ) {
         restaurantDataPayload.amenities = {
@@ -1386,6 +1393,7 @@ export default function RestaurantSignup() {
                               Restaurant
                             </SelectItem>
                             <SelectItem value="bar">Bar</SelectItem>
+                            <SelectItem value="caterer">Caterer</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-[color:var(--text-secondary)]">
@@ -1508,12 +1516,16 @@ export default function RestaurantSignup() {
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel data-testid="label-address">
-                          {COPY.forms.restaurant.addressLabel}
+                          {isCaterer
+                            ? COPY.forms.restaurant.catererAddressLabel
+                            : COPY.forms.restaurant.addressLabel}
                         </FormLabel>
                         <FormControl>
                           <Input
                             placeholder={
-                              COPY.forms.restaurant.addressPlaceholder
+                              isCaterer
+                                ? COPY.forms.restaurant.catererAddressPlaceholder
+                                : COPY.forms.restaurant.addressPlaceholder
                             }
                             data-testid="input-address"
                             {...field}
@@ -1730,7 +1742,8 @@ export default function RestaurantSignup() {
                           )}
                         />
                       </div>
-                      {selectedBusinessType !== "food_truck" && (
+                      {selectedBusinessType !== "food_truck" &&
+                        selectedBusinessType !== "caterer" && (
                         <div className="grid gap-2 sm:grid-cols-3">
                           <FormField
                             control={form.control}

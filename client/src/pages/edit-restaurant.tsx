@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
-type BusinessType = "restaurant" | "bar" | "food_truck";
+type BusinessType = "restaurant" | "bar" | "food_truck" | "caterer";
 
 type RestaurantProfile = {
   id: string;
@@ -85,7 +85,7 @@ const toForm = (restaurant?: RestaurantProfile | null): ProfileForm => {
   const businessType = String(restaurant.businessType || "restaurant");
   return {
     name: restaurant.name || "",
-    businessType: ["restaurant", "bar", "food_truck"].includes(businessType)
+    businessType: ["restaurant", "bar", "food_truck", "caterer"].includes(businessType)
       ? (businessType as BusinessType)
       : "restaurant",
     cuisineType: restaurant.cuisineType || "",
@@ -323,6 +323,7 @@ export default function EditRestaurantPage() {
                   <SelectContent>
                     <SelectItem value="restaurant">Restaurant</SelectItem>
                     <SelectItem value="bar">Bar</SelectItem>
+                    <SelectItem value="caterer">Caterer</SelectItem>
                     <SelectItem value="food_truck">Food truck</SelectItem>
                   </SelectContent>
                 </Select>

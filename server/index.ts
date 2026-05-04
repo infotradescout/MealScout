@@ -34,7 +34,14 @@ import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
 import { publicResponseCache } from "./utils/responseCache";
-import { hosts, videoStories, restaurants, requestLogs, users } from "@shared/schema";
+import {
+  hosts,
+  videoStories,
+  restaurants,
+  requestLogs,
+  suppliers,
+  users,
+} from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
@@ -617,6 +624,19 @@ const extractPublicProfileId = (value: unknown) => {
   return uuid?.[0] || raw;
 };
 
+const publicProfileSlug = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const isUuidLike = (value: unknown) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim(),
+  );
+
 const resolveCleanProfileAttributionTarget = async (pathValue: string) => {
   const segments = String(pathValue || "")
     .split("/")
@@ -647,10 +667,18 @@ const resolveCleanProfileAttributionTarget = async (pathValue: string) => {
         : "";
 
   if (restaurantId) {
+    const slug = publicProfileSlug(restaurantId);
     const [row] = await db
       .select({ ownerId: restaurants.ownerId })
       .from(restaurants)
-      .where(and(eq(restaurants.id, restaurantId), eq(restaurants.isActive, true)))
+      .where(
+        and(
+          eq(restaurants.isActive, true),
+          isUuidLike(restaurantId)
+            ? eq(restaurants.id, restaurantId)
+            : sql`regexp_replace(regexp_replace(lower(coalesce(${restaurants.name}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+        ),
+      )
       .limit(1);
     const ownerId = String(row?.ownerId || "").trim();
     return ownerId ? { ownerId, sourcePath: pathValue } : null;
@@ -664,10 +692,40 @@ const resolveCleanProfileAttributionTarget = async (pathValue: string) => {
         : "";
 
   if (hostId) {
+    const slug = publicProfileSlug(hostId);
     const [row] = await db
       .select({ ownerId: hosts.userId })
       .from(hosts)
-      .where(eq(hosts.id, hostId))
+      .where(
+        isUuidLike(hostId)
+          ? eq(hosts.id, hostId)
+          : sql`regexp_replace(regexp_replace(lower(coalesce(${hosts.businessName}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+      )
+      .limit(1);
+    const ownerId = String(row?.ownerId || "").trim();
+    return ownerId ? { ownerId, sourcePath: pathValue } : null;
+  }
+
+  const supplierId =
+    surfaceKey === "supplier"
+      ? extractPublicProfileId(second)
+      : surfaceKey === "p" && profileType === "supplier"
+        ? extractPublicProfileId(third)
+        : "";
+
+  if (supplierId) {
+    const slug = publicProfileSlug(supplierId);
+    const [row] = await db
+      .select({ ownerId: suppliers.userId })
+      .from(suppliers)
+      .where(
+        and(
+          eq(suppliers.isActive, true),
+          isUuidLike(supplierId)
+            ? eq(suppliers.id, supplierId)
+            : sql`regexp_replace(regexp_replace(lower(coalesce(${suppliers.businessName}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+        ),
+      )
       .limit(1);
     const ownerId = String(row?.ownerId || "").trim();
     return ownerId ? { ownerId, sourcePath: pathValue } : null;

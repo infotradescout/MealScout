@@ -23,24 +23,28 @@ const roleLabel = (value?: string | null) =>
 
 export function PublicHelpWantedBanner({
   restaurantId,
+  hostId,
   className,
   variant = "light",
 }: {
   restaurantId?: string | null;
+  hostId?: string | null;
   className?: string;
   variant?: "light" | "dark";
 }) {
+  const targetType = hostId ? "host" : "restaurant";
+  const targetId = hostId || restaurantId || "";
   const { data } = useQuery<{
     activeJob: PublicJob | null;
     openCount: number;
   }>({
-    queryKey: ["/api/jobs/restaurant", restaurantId, "open"],
-    enabled: Boolean(restaurantId),
+    queryKey: [`/api/jobs/${targetType}`, targetId, "open"],
+    enabled: Boolean(targetId),
     retry: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       const res = await fetch(
-        `/api/jobs/restaurant/${encodeURIComponent(String(restaurantId || ""))}/open`,
+        `/api/jobs/${targetType}/${encodeURIComponent(String(targetId))}/open`,
       );
       if (!res.ok) return { activeJob: null, openCount: 0 };
       return res.json();

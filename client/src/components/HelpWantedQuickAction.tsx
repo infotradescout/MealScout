@@ -73,29 +73,40 @@ const defaultForm = {
 
 export function HelpWantedQuickAction({
   restaurantId,
+  hostId,
   restaurantName,
+  businessName,
   compact = false,
 }: {
   restaurantId?: string | null;
+  hostId?: string | null;
   restaurantName?: string | null;
+  businessName?: string | null;
   compact?: boolean;
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
+  const targetType = hostId ? "host" : "restaurant";
+  const targetId = hostId || restaurantId || "";
+  const targetName = businessName || restaurantName || "Your profile";
+  const targetQuery = hostId
+    ? `hostId=${encodeURIComponent(String(hostId))}`
+    : `restaurantId=${encodeURIComponent(String(restaurantId || ""))}`;
+  const targetBody = hostId ? { hostId } : { restaurantId };
 
   const { data, isLoading } = useQuery<{
     activeJob: OwnerJob | null;
     openJobs: OwnerJob[];
     jobs: OwnerJob[];
   }>({
-    queryKey: ["/api/owner/jobs", restaurantId],
-    enabled: Boolean(restaurantId),
+    queryKey: ["/api/owner/jobs", targetType, targetId],
+    enabled: Boolean(targetId),
     retry: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       const res = await fetch(
-        `/api/owner/jobs?restaurantId=${encodeURIComponent(String(restaurantId || ""))}`,
+        `/api/owner/jobs?${targetQuery}`,
         { credentials: "include" },
       );
       if (!res.ok) return { activeJob: null, openJobs: [], jobs: [] };
@@ -119,20 +130,22 @@ export function HelpWantedQuickAction({
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["/api/owner/jobs", restaurantId] }),
       queryClient.invalidateQueries({
-        queryKey: ["/api/jobs/restaurant", restaurantId, "open"],
+        queryKey: ["/api/owner/jobs", targetType, targetId],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: [`/api/jobs/${targetType}`, targetId, "open"],
       }),
     ]);
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!restaurantId) throw new Error("Choose a business first.");
+      if (!targetId) throw new Error("Choose a business first.");
       const title = form.title.trim();
       if (!title) throw new Error("Add the role you are hiring for.");
       const response = await apiRequest("POST", "/api/owner/jobs/help-wanted", {
-        restaurantId,
+        ...targetBody,
         title,
         roleType: form.roleType,
         employmentType: form.employmentType,
@@ -162,11 +175,11 @@ export function HelpWantedQuickAction({
 
   const closeMutation = useMutation({
     mutationFn: async () => {
-      if (!restaurantId) throw new Error("Choose a business first.");
+      if (!targetId) throw new Error("Choose a business first.");
       const response = await apiRequest(
         "POST",
         "/api/owner/jobs/help-wanted/close",
-        { restaurantId },
+        targetBody,
       );
       return response.json();
     },
@@ -186,7 +199,7 @@ export function HelpWantedQuickAction({
     },
   });
 
-  if (!restaurantId) return null;
+  if (!targetId) return null;
 
   return (
     <div
@@ -215,7 +228,7 @@ export function HelpWantedQuickAction({
             </div>
             <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
               {activeJob
-                ? `${restaurantName || "Your profile"} is showing "${activeJob.title}".`
+                ? `${targetName} is showing "${activeJob.title}".`
                 : "Turn on a profile banner that sends applicants to a real job page."}
             </p>
           </div>

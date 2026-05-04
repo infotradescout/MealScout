@@ -32,6 +32,7 @@ type RecentSignupKind =
   | "customer"
   | "food_truck"
   | "restaurant"
+  | "caterer"
   | "host"
   | "supplier"
   | "team";
@@ -39,7 +40,7 @@ type RecentSignupKind =
 type RecentSignup = {
   key: string;
   kind: RecentSignupKind;
-  entity: "restaurant" | "host" | "user";
+  entity: "restaurant" | "host" | "supplier" | "user";
   id: string;
   displayName: string;
   typeLabel: string;
@@ -48,6 +49,7 @@ type RecentSignup = {
   locationLabel?: string | null;
   description?: string | null;
   imageUrl?: string | null;
+  shareImageUrl?: string | null;
   websiteUrl?: string | null;
   menuUrl?: string | null;
   orderUrl?: string | null;
@@ -59,6 +61,7 @@ type RecentSignup = {
   canonicalProfilePath?: string | null;
   profileCompleteness?: Record<string, boolean>;
   profileUrl: string;
+  shareUrl?: string | null;
   profilePath: string;
   isPublic: boolean;
   linkLabel?: string | null;
@@ -131,6 +134,14 @@ const toneByKind: Record<
     badge: "bg-emerald-400 text-black",
     noun: "restaurant",
   },
+  caterer: {
+    label: "Caterer",
+    gradient:
+      "linear-gradient(135deg, #111111 0%, #241b32 40%, #143229 100%)",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
+    noun: "caterer",
+  },
   host: {
     label: "Host",
     gradient:
@@ -189,6 +200,17 @@ const compactList = (items?: string[] | null, limit = 3) =>
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .slice(0, limit);
+
+const shortShareUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    const path = `${url.hostname.replace(/^www\./, "")}${url.pathname}`;
+    return path.length > 34 ? `${path.slice(0, 31)}...` : path;
+  } catch {
+    const raw = String(value || "").replace(/^https?:\/\//, "");
+    return raw.length > 34 ? `${raw.slice(0, 31)}...` : raw;
+  }
+};
 
 const completionLabel = (signup: RecentSignup) => {
   const checks = signup.profileCompleteness || {};
@@ -287,7 +309,7 @@ export default function RecentSignupShare() {
         "/api/admin/recent-signups/facebook-share",
         {
           caption: signup.caption,
-          profileUrl: signup.profileUrl,
+          profileUrl: signup.shareUrl || signup.profileUrl,
           graphicDataUrl,
         },
       );
@@ -460,11 +482,25 @@ export default function RecentSignupShare() {
             const isDownloading = busyKey === `${signup.key}:download`;
             const description = summarize(signup.description);
             const menuHighlights = compactList(signup.menuItemNames);
-            const hasBusinessImage = Boolean(signup.imageUrl);
+            const graphicImageUrl = signup.shareImageUrl || signup.imageUrl;
+            const hasBusinessImage = Boolean(graphicImageUrl);
             const readiness = completionLabel(signup);
             const profileDestination = signup.isPublic
               ? "Public profile"
               : "Visitor fallback";
+            const cleanShareUrl = signup.shareUrl || signup.profileUrl;
+            const graphicUrlLabel = shortShareUrl(cleanShareUrl);
+            const detailParts = [
+              signup.category || signup.typeLabel,
+              signup.locationLabel,
+            ].filter(Boolean);
+            const statusText = signup.isPublic
+              ? "Live public profile"
+              : "Profile finishing";
+            const featuredLine =
+              menuHighlights.length > 0
+                ? menuHighlights.join(" / ")
+                : description || `Find ${signup.displayName} on MealScout`;
 
             return (
               <Card key={signup.key} className="overflow-hidden">
@@ -518,114 +554,131 @@ export default function RecentSignupShare() {
                     ref={(node) => {
                       graphicRefs.current[signup.key] = node;
                     }}
-                    className="relative aspect-[1200/630] overflow-hidden rounded-xl border bg-neutral-950 p-6 text-white shadow-sm sm:p-8"
+                    className="relative aspect-[1200/630] overflow-hidden rounded-xl border bg-neutral-950 text-white shadow-sm"
                     style={{ background: tone.gradient }}
                   >
                     {hasBusinessImage ? (
                       <img
-                        src={signup.imageUrl || ""}
-                        alt=""
+                        src={graphicImageUrl || ""}
+                        alt={`${signup.displayName} profile image`}
                         crossOrigin="anonymous"
-                        className="absolute inset-0 h-full w-full object-cover opacity-55"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : null}
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/68 to-black/25" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/78 to-black/45" />
+                    <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
                     <div
-                      className="absolute inset-0 opacity-30"
+                      className="absolute inset-0 opacity-20"
                       style={{
                         backgroundImage:
-                          "linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.06) 1px, transparent 1px)",
-                        backgroundSize: "58px 58px",
+                          "linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.07) 1px, transparent 1px)",
+                        backgroundSize: "64px 64px",
                       }}
                     />
+                    <div className="absolute right-0 top-0 h-full w-[42%] bg-black/50 backdrop-blur-[1px]" />
                     <div
-                      className="absolute -right-20 top-0 h-full w-1/2 skew-x-[-14deg] opacity-30"
-                      style={{ backgroundColor: tone.accent }}
+                      className="absolute right-[34%] top-0 h-full w-28 skew-x-[-12deg]"
+                      style={{ backgroundColor: tone.accent, opacity: 0.9 }}
                     />
-                    <div className="relative flex h-full flex-col justify-between">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.18em] text-white/80">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black">
+
+                    <div className="relative grid h-full grid-cols-[1.05fr_0.95fr]">
+                      <div className="flex h-full flex-col justify-between p-8">
+                        <div className="inline-flex w-fit items-center gap-3 rounded-full bg-black/45 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-white shadow">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs tracking-normal text-black">
                             MS
                           </span>
                           MealScout
                         </div>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          <Badge className={tone.badge}>
-                            New {signup.nounLabel || tone.noun}
-                          </Badge>
-                          {signup.isPublic ? (
-                            <Badge className="bg-white/90 text-black">
-                              Public profile
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-white/20 text-white">
-                              Profile finishing
-                            </Badge>
-                          )}
+
+                        <div className="max-w-[92%] space-y-4">
+                          <div
+                            className="inline-flex rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-black shadow"
+                            style={{ backgroundColor: tone.accent }}
+                          >
+                            New {signup.nounLabel || tone.noun} in town
+                          </div>
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-[0.24em] text-white/70">
+                              Just joined MealScout
+                            </p>
+                            <h3 className="mt-2 text-balance text-5xl font-black leading-[0.95] sm:text-6xl">
+                              {signup.displayName}
+                            </h3>
+                          </div>
+                          {detailParts.length ? (
+                            <div className="flex flex-wrap items-center gap-3 text-xl font-bold text-white/90">
+                              {detailParts.map((part, index) => (
+                                <span key={`${part}-${index}`} className="flex items-center gap-3">
+                                  {index > 0 ? (
+                                    <span className="text-white/35">/</span>
+                                  ) : null}
+                                  {part}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm font-semibold text-white/75">
+                          <MapPin className="h-4 w-4" />
+                          {graphicUrlLabel}
                         </div>
                       </div>
 
-                      <div className="max-w-[82%] space-y-4">
+                      <div className="relative flex h-full flex-col justify-between p-8 pl-12">
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <span
+                            className="rounded-full px-4 py-2 text-sm font-black text-black shadow"
+                            style={{ backgroundColor: tone.accent }}
+                          >
+                            {tone.label}
+                          </span>
+                          <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-black shadow">
+                            {statusText}
+                          </span>
+                        </div>
+
                         {hasBusinessImage ? (
-                          <div className="inline-flex rounded-2xl border border-white/20 bg-black/35 px-4 py-2 text-sm font-black uppercase tracking-[0.2em] text-white shadow">
-                            Now on MealScout
-                          </div>
+                          <div className="min-h-20" />
                         ) : (
                           <div
-                            className="flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black text-black"
+                            className="flex h-32 w-32 items-center justify-center self-end rounded-[2rem] text-5xl font-black text-black shadow-2xl"
                             style={{ backgroundColor: tone.accent }}
                           >
                             {initialsFor(signup.displayName)}
                           </div>
                         )}
-                        <div>
-                          <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/70">
-                            Just joined MealScout
-                          </p>
-                          <h3 className="mt-2 text-balance text-4xl font-black leading-tight sm:text-5xl">
-                            {signup.displayName}
-                          </h3>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-lg font-semibold text-white/90">
-                          <span>{signup.category || signup.typeLabel}</span>
-                          {signup.locationLabel ? (
-                            <>
-                              <span className="text-white/35">/</span>
-                              <span>{signup.locationLabel}</span>
-                            </>
-                          ) : null}
-                        </div>
-                        {description ? (
-                          <p className="line-clamp-2 max-w-2xl text-base font-medium text-white/80">
-                            {description}
-                          </p>
-                        ) : null}
-                        {menuHighlights.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {menuHighlights.map((item) => (
-                              <span
-                                key={item}
-                                className="rounded-full bg-white/15 px-3 py-1 text-sm font-bold text-white"
-                              >
-                                {item}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
 
-                      <div className="flex items-end justify-between gap-4">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-white/75">
-                          <MapPin className="h-4 w-4" />
-                          {signup.isPublic
-                            ? "Find their profile on MealScout"
-                            : "Profile finishing - visitors go to the map"}
-                        </div>
-                        <div className="rounded-full bg-black/40 px-4 py-2 text-sm font-semibold text-white/85">
-                          {signup.isPublic
-                            ? "mealscout.us/profile"
-                            : "mealscout.us/map"}
+                        <div className="space-y-4 rounded-3xl border border-white/15 bg-black/55 p-5 shadow-2xl backdrop-blur-sm">
+                          <p className="text-xs font-black uppercase tracking-[0.22em] text-white/55">
+                            Featured
+                          </p>
+                          <p className="line-clamp-3 text-2xl font-black leading-tight text-white">
+                            {featuredLine}
+                          </p>
+                          {menuHighlights.length ? (
+                            <div className="flex flex-wrap gap-2">
+                              {menuHighlights.map((item) => (
+                                <span
+                                  key={item}
+                                  className="rounded-full bg-white px-3 py-1 text-sm font-black text-black"
+                                >
+                                  {item}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="flex items-center justify-between gap-4 border-t border-white/15 pt-4">
+                            <span className="text-sm font-bold text-white/70">
+                              Follow updates, menus, and stops
+                            </span>
+                            <span
+                              className="rounded-full px-4 py-2 text-sm font-black text-black"
+                              style={{ backgroundColor: tone.accent }}
+                            >
+                              View profile
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -659,7 +712,7 @@ export default function RecentSignupShare() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => copyText(signup.profileUrl, "Profile link")}
+                      onClick={() => copyText(cleanShareUrl, "Profile link")}
                     >
                       <Link2 className="mr-2 h-4 w-4" />
                       Link

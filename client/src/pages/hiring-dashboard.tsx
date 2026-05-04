@@ -65,6 +65,8 @@ type HiringBusiness = Pick<
   Restaurant,
   "id" | "name" | "businessType" | "ownerId"
 > & {
+  entityType?: "restaurant" | "host";
+  targetKey?: string;
   cuisineType?: string | null;
   city?: string | null;
   state?: string | null;
@@ -134,16 +136,25 @@ export default function HiringDashboardPage() {
   const { toast } = useToast();
   const params = new URLSearchParams(location.includes("?") ? location.split("?")[1] : "");
   const initialRestaurantId = params.get("restaurantId") || "";
+  const initialHostId = params.get("hostId") || "";
+  const initialBusinessKey = initialHostId
+    ? `host:${initialHostId}`
+    : initialRestaurantId
+      ? `restaurant:${initialRestaurantId}`
+      : "";
   const isStaffOrAdmin = ["staff", "admin", "super_admin"].includes(
     String(user?.userType || "").toLowerCase(),
   );
-  const [selectedRestaurant, setSelectedRestaurant] = useState(initialRestaurantId);
+  const [selectedBusinessKey, setSelectedBusinessKey] =
+    useState(initialBusinessKey);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [businessSearch, setBusinessSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
 
   const { data: businessData, isLoading: loadingRestaurants } = useQuery<{
     restaurants: HiringBusiness[];
+    hosts?: HiringBusiness[];
+    businesses?: HiringBusiness[];
     scope: "all" | "managed";
   }>({
     queryKey: [
@@ -151,6 +162,7 @@ export default function HiringDashboardPage() {
       isStaffOrAdmin ? "all" : "managed",
       businessSearch,
       initialRestaurantId,
+      initialHostId,
     ],
     enabled: Boolean(user?.id),
     queryFn: async () => {
@@ -163,37 +175,66 @@ export default function HiringDashboardPage() {
       if (initialRestaurantId) {
         query.set("includeRestaurantId", initialRestaurantId);
       }
+      if (initialHostId) {
+        query.set("includeHostId", initialHostId);
+      }
       const res = await fetch(`/api/owner/jobs/businesses?${query}`, {
         credentials: "include",
       });
-      if (!res.ok) return { restaurants: [], scope: "managed" as const };
+      if (!res.ok) {
+        return { restaurants: [], hosts: [], businesses: [], scope: "managed" as const };
+      }
       return res.json();
     },
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const restaurants = businessData?.restaurants || [];
+  const businesses =
+    businessData?.businesses ||
+    (businessData?.restaurants || []).map((row) => ({
+      ...row,
+      entityType: "restaurant" as const,
+      targetKey: `restaurant:${row.id}`,
+    }));
 
   useEffect(() => {
-    if (selectedRestaurant || restaurants.length === 0) return;
-    setSelectedRestaurant(restaurants[0]?.id || "");
-  }, [restaurants, selectedRestaurant]);
+    if (selectedBusinessKey || businesses.length === 0) return;
+    setSelectedBusinessKey(
+      businesses[0]?.targetKey ||
+        `${businesses[0]?.entityType || "restaurant"}:${businesses[0]?.id || ""}`,
+    );
+  }, [businesses, selectedBusinessKey]);
 
-  const currentRestaurant = restaurants.find((r) => r.id === selectedRestaurant);
-  const selectedRestaurantName = currentRestaurant?.name || "Selected business";
+  const currentBusiness = businesses.find((business) => {
+    const key =
+      business.targetKey || `${business.entityType || "restaurant"}:${business.id}`;
+    return key === selectedBusinessKey;
+  });
+  const selectedTargetType = currentBusiness?.entityType || "restaurant";
+  const selectedRestaurant =
+    selectedTargetType === "restaurant" ? currentBusiness?.id || "" : "";
+  const selectedHost =
+    selectedTargetType === "host" ? currentBusiness?.id || "" : "";
+  const selectedBusinessName = currentBusiness?.name || "Selected business";
+  const selectedTargetQuery = selectedHost
+    ? `hostId=${encodeURIComponent(selectedHost)}`
+    : `restaurantId=${encodeURIComponent(selectedRestaurant)}`;
+  const selectedTargetBody = selectedHost
+    ? { hostId: selectedHost }
+    : { restaurantId: selectedRestaurant };
 
   const { data: jobsData, isLoading: loadingJobs } = useQuery<{
     jobs: OwnerJob[];
     openJobs: OwnerJob[];
     activeJob: OwnerJob | null;
   }>({
-    queryKey: ["/api/owner/jobs", selectedRestaurant],
-    enabled: Boolean(selectedRestaurant),
+    queryKey: ["/api/owner/jobs", selectedBusinessKey],
+    enabled: Boolean(currentBusiness?.id),
     retry: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       const res = await fetch(
-        `/api/owner/jobs?restaurantId=${encodeURIComponent(selectedRestaurant)}`,
+        `/api/owner/jobs?${selectedTargetQuery}`,
         { credentials: "include" },
       );
       if (!res.ok) return { jobs: [], openJobs: [], activeJob: null };
@@ -230,10 +271,10 @@ export default function HiringDashboardPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedRestaurant) throw new Error("Choose a business first.");
+      if (!currentBusiness?.id) throw new Error("Choose a business first.");
       if (!form.title.trim()) throw new Error("Add a job title.");
       const response = await apiRequest("POST", "/api/owner/jobs", {
-        restaurantId: selectedRestaurant,
+        ...selectedTargetBody,
         title: form.title.trim(),
         roleType: form.roleType,
         employmentType: form.employmentType,
@@ -249,7 +290,7 @@ export default function HiringDashboardPage() {
     },
     onSuccess: async (payload: any) => {
       await queryClient.invalidateQueries({
-        queryKey: ["/api/owner/jobs", selectedRestaurant],
+        queryKey: ["/api/owner/jobs", selectedBusinessKey],
       });
       setSelectedJobId(payload?.job?.id || "");
       setForm(emptyForm);
@@ -271,7 +312,7 @@ export default function HiringDashboardPage() {
     mutationFn: async ({ job, status }: { job: OwnerJob; status: string }) => {
       const response = await apiRequest("PATCH", `/api/owner/jobs/${job.id}`, {
         ...job,
-        restaurantId: selectedRestaurant,
+        ...selectedTargetBody,
         status,
       });
       return response.json();
@@ -279,10 +320,10 @@ export default function HiringDashboardPage() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["/api/owner/jobs", selectedRestaurant],
+          queryKey: ["/api/owner/jobs", selectedBusinessKey],
         }),
         queryClient.invalidateQueries({
-          queryKey: ["/api/jobs/restaurant", selectedRestaurant, "open"],
+          queryKey: [`/api/jobs/${selectedTargetType}`, currentBusiness?.id, "open"],
         }),
       ]);
     },
@@ -349,22 +390,28 @@ export default function HiringDashboardPage() {
                   />
                 ) : null}
                 <Select
-                  value={selectedRestaurant}
+                  value={selectedBusinessKey}
                   onValueChange={(value) => {
-                    setSelectedRestaurant(value);
+                    setSelectedBusinessKey(value);
                     setSelectedJobId("");
                   }}
-                  disabled={loadingRestaurants || restaurants.length === 0}
+                  disabled={loadingRestaurants || businesses.length === 0}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Choose business" />
                   </SelectTrigger>
                   <SelectContent>
-                    {restaurants.map((restaurant) => (
-                      <SelectItem key={restaurant.id} value={restaurant.id}>
-                        {businessOptionLabel(restaurant)}
-                      </SelectItem>
-                    ))}
+                    {businesses.map((business) => {
+                      const key =
+                        business.targetKey ||
+                        `${business.entityType || "restaurant"}:${business.id}`;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {businessOptionLabel(business)}
+                          {business.entityType === "host" ? " · Host" : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 {isStaffOrAdmin ? (
@@ -402,7 +449,8 @@ export default function HiringDashboardPage() {
 
           <HelpWantedQuickAction
             restaurantId={selectedRestaurant}
-            restaurantName={selectedRestaurantName}
+            hostId={selectedHost}
+            businessName={selectedBusinessName}
           />
         </aside>
 
@@ -560,7 +608,7 @@ export default function HiringDashboardPage() {
               </div>
               <Button
                 className="w-full sm:w-fit"
-                disabled={createMutation.isPending || !selectedRestaurant}
+                disabled={createMutation.isPending || !currentBusiness?.id}
                 onClick={() => createMutation.mutate()}
               >
                 {createMutation.isPending ? (

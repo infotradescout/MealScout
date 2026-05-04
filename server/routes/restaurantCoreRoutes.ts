@@ -36,6 +36,7 @@ import {
   insertRestaurantUserRecommendationSchema,
   insertSentimentSignalEventSchema,
   insertVerificationRequestSchema,
+  businessInsuranceVerifications,
   deals,
   restaurantFavorites,
   restaurantFollows,
@@ -909,6 +910,49 @@ export function registerRestaurantCoreRoutes(
           verificationStatus === "not_submitted" && primaryRestaurant
             ? await getVerificationSnooze(primaryRestaurant.id)
             : { snoozed: false, snoozedAt: null, snoozedUntil: null };
+        let insuranceStatus: "valid" | "pending" | "rejected" | "expired" | "not_submitted" =
+          "not_submitted";
+        if (primaryRestaurant) {
+          const insuranceEntityType = isFoodTruckOwner ? "food_truck" : "restaurant";
+          const [insuranceRecord] = await db
+            .select({
+              status: businessInsuranceVerifications.status,
+              expiresAt: businessInsuranceVerifications.expiresAt,
+              attestedCommercialCoverage:
+                businessInsuranceVerifications.attestedCommercialCoverage,
+              attestedJurisdictionCompliance:
+                businessInsuranceVerifications.attestedJurisdictionCompliance,
+            })
+            .from(businessInsuranceVerifications)
+            .where(
+              and(
+                eq(businessInsuranceVerifications.entityType, insuranceEntityType),
+                eq(businessInsuranceVerifications.entityId, primaryRestaurant.id),
+              ),
+            )
+            .orderBy(desc(businessInsuranceVerifications.createdAt))
+            .limit(1);
+          if (insuranceRecord) {
+            const expiresAt = insuranceRecord.expiresAt
+              ? new Date(insuranceRecord.expiresAt)
+              : null;
+            const isExpired = Boolean(
+              expiresAt && expiresAt.getTime() <= Date.now(),
+            );
+            if (insuranceRecord.status === "approved") {
+              insuranceStatus =
+                isExpired ||
+                !insuranceRecord.attestedCommercialCoverage ||
+                !insuranceRecord.attestedJurisdictionCompliance
+                  ? "expired"
+                  : "valid";
+            } else if (insuranceRecord.status === "rejected") {
+              insuranceStatus = "rejected";
+            } else {
+              insuranceStatus = "pending";
+            }
+          }
+        }
         let hasActiveRestaurantSubscription = false;
         if (restaurantIds.length > 0) {
           const [activeSub] = await db
@@ -984,6 +1028,14 @@ export function registerRestaurantCoreRoutes(
                   : "Give customers something useful to order or preview.",
               },
               {
+                id: "verify-insurance",
+                label: "Verify commercial insurance",
+                done: insuranceStatus === "valid",
+                href: "/restaurant/dashboard",
+                cta: insuranceStatus === "pending" ? "Review pending" : "Submit insurance",
+                why: "Valid commercial insurance is required for trucks, restaurants, and hosts.",
+              },
+              {
                 id: "go-live",
                 label: "Go live",
                 done: isDiscoverable,
@@ -1034,6 +1086,14 @@ export function registerRestaurantCoreRoutes(
                 why: "A clear profile helps customers trust you and choose you faster.",
               },
               {
+                id: "verify-insurance",
+                label: "Verify commercial insurance",
+                done: insuranceStatus === "valid",
+                href: "/restaurant/dashboard",
+                cta: insuranceStatus === "pending" ? "Review pending" : "Submit insurance",
+                why: "Valid commercial insurance is required for businesses on MealScout.",
+              },
+              {
                 id: "get-verified",
                 label: "Get verified",
                 done: isVerified,
@@ -1071,6 +1131,9 @@ export function registerRestaurantCoreRoutes(
         if (!isFoodTruckOwner && !primaryRestaurant?.isVerified) {
           visibilityBlockers.push("unverified");
         }
+        if (insuranceStatus !== "valid") {
+          visibilityBlockers.push("insurance_required");
+        }
         if (previewRestaurant) {
           const previewChecks = getPublicBusinessVisibilityChecks(
             previewRestaurant as any,
@@ -1102,6 +1165,11 @@ export function registerRestaurantCoreRoutes(
             snoozed: verificationSnooze.snoozed,
             snoozedAt: verificationSnooze.snoozedAt,
             snoozedUntil: verificationSnooze.snoozedUntil,
+          },
+          insurance: {
+            required: true,
+            status: insuranceStatus,
+            valid: insuranceStatus === "valid",
           },
           publicProfileChecks: {
             blockers: primaryProfileChecks.blockers,

@@ -82,6 +82,14 @@ export const HOST_ONBOARDING_COPY = {
         description:
           "Perfect for mobile kitchens that change locations throughout the week.",
       },
+      caterer: {
+        label: "Caterer",
+        title: "Book more catering without a storefront flow",
+        subtitle:
+          "Build a catering-ready profile for private events, office meals, parties, and recurring service.",
+        description:
+          "Perfect for businesses that serve events, prep from a commissary, or travel to customers.",
+      },
       bar: {
         label: "Bar",
         description:
@@ -313,13 +321,15 @@ export const HOST_ONBOARDING_COPY = {
       businessTypeLabel: "Business Type",
       businessTypePlaceholder: "Select your business type...",
       businessTypeHelp:
-        "Food Truck is for mobile units. Restaurant/Bar is for fixed-location businesses.",
+        "Choose the setup that matches how customers find you: mobile, fixed-location, or catering.",
       stationaryConfirmLabel:
         "I confirm this is a fixed location (not a food truck).",
       stationaryWarning:
         "If this business moves locations, select Food Truck instead.",
       addressLabel: "Business Address",
       addressPlaceholder: "123 Main Street, Chicago, IL",
+      catererAddressLabel: "Commissary or Pickup Address",
+      catererAddressPlaceholder: "Optional if you serve customers off-site",
       cityLabel: "City",
       cityPlaceholder: "Chicago",
       stateLabel: "State",

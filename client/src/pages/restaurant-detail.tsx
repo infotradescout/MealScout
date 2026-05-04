@@ -141,7 +141,37 @@ const formatMoney = (cents: number) =>
 export default function RestaurantDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const [location, setLocation] = useLocation();
-  const restaurantId = params.id || extractUuidFromSlug(params.slug);
+  const routeProfileKind = location.startsWith("/truck/")
+    ? "truck"
+    : location.startsWith("/bar/")
+      ? "bar"
+      : "restaurant";
+  const rawRestaurantParam = params.id || params.slug || "";
+  const directRestaurantId =
+    extractUuidFromSlug(rawRestaurantParam) ||
+    (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      rawRestaurantParam,
+    )
+      ? rawRestaurantParam
+      : null);
+  const needsSlugResolution = Boolean(rawRestaurantParam && !directRestaurantId);
+  const { data: resolvedRestaurant } = useQuery<{ id: string; profilePath?: string }>({
+    queryKey: ["public-profile-resolve", routeProfileKind, rawRestaurantParam],
+    enabled: needsSlugResolution,
+    retry: false,
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/public/resolve-profile/${encodeURIComponent(routeProfileKind)}/${encodeURIComponent(rawRestaurantParam)}`,
+        { credentials: "include" },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.message || "Profile not found");
+      }
+      return payload;
+    },
+  });
+  const restaurantId = directRestaurantId || resolvedRestaurant?.id || null;
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);

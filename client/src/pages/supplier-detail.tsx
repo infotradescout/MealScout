@@ -56,7 +56,13 @@ const formatMoney = (cents: number) => `$${(Number(cents || 0) / 100).toFixed(2)
 export default function SupplierDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
   const supplierParam = params.supplierId || params.slug || "";
-  const supplierId = extractUuidFromSlug(supplierParam) || supplierParam;
+  const directSupplierId =
+    extractUuidFromSlug(supplierParam) ||
+    (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      supplierParam,
+    )
+      ? supplierParam
+      : null);
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -78,9 +84,25 @@ export default function SupplierDetailPage() {
   >("offsite");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [importFile, setImportFile] = useState<File | null>(null);
+  const { data: resolvedSupplier } = useQuery<{ id: string; profilePath?: string }>({
+    queryKey: ["public-profile-resolve", "supplier", supplierParam],
+    enabled: Boolean(supplierParam && !directSupplierId),
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/public/resolve-profile/supplier/${encodeURIComponent(supplierParam)}`,
+        { credentials: "include" },
+      );
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message || "Supplier not found");
+      return payload;
+    },
+  });
+  const supplierId = directSupplierId || resolvedSupplier?.id || "";
 
   const { data: supplier } = useQuery<Supplier>({
     queryKey: ["/api/suppliers", supplierId],
+    enabled: Boolean(supplierId),
     queryFn: async () => {
       const res = await fetch(`/api/suppliers/${supplierId}`, {
         credentials: "include",
@@ -89,7 +111,6 @@ export default function SupplierDetailPage() {
       if (!res.ok) throw new Error(data?.message || "Failed to load supplier");
       return data;
     },
-    enabled: Boolean(supplierId),
     staleTime: 60_000,
     gcTime: 10 * 60_000,
   });

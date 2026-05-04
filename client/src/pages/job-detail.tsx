@@ -28,6 +28,10 @@ import { apiUrl } from "@/lib/api";
 type Job = {
   id: string;
   restaurantId?: string | null;
+  hostId?: string | null;
+  businessEntity?: string | null;
+  businessName?: string | null;
+  businessProfileUrl?: string | null;
   title: string;
   roleType?: string | null;
   employmentType?: string | null;
@@ -188,11 +192,15 @@ export default function JobDetailPage() {
   });
 
   const job = data?.job;
+  const displayBusinessName =
+    job?.businessName || job?.restaurantName || "MealScout business";
+  const displayBusinessProfileUrl =
+    job?.businessProfileUrl || job?.restaurantProfileUrl || "/jobs";
   const title = job
-    ? `${job.title} at ${job.restaurantName} | MealScout Jobs`
+    ? `${job.title} at ${displayBusinessName} | MealScout Jobs`
     : "MealScout Jobs";
   const description = job
-    ? `Apply for ${job.title} at ${job.restaurantName}${job.city ? ` in ${job.city}${job.state ? `, ${job.state}` : ""}` : ""}. ${job.compensationLabel || payRangeLabel(job) || "Local food and hospitality role."}`
+    ? `Apply for ${job.title} at ${displayBusinessName}${job.city ? ` in ${job.city}${job.state ? `, ${job.state}` : ""}` : ""}. ${job.compensationLabel || payRangeLabel(job) || "Local food and hospitality role."}`
     : "Apply for local food truck, restaurant, bar, and event jobs on MealScout.";
 
   const structuredData = useMemo(() => {
@@ -215,10 +223,10 @@ export default function JobDetailPage() {
       directApply: true,
       hiringOrganization: {
         "@type": "Organization",
-        name: job.restaurantName,
+        name: displayBusinessName,
         sameAs:
           externalUrl(job.restaurantWebsiteUrl) ||
-          `https://www.mealscout.us${job.restaurantProfileUrl}`,
+          `https://www.mealscout.us${displayBusinessProfileUrl}`,
         logo: absoluteUrl(job.restaurantLogoUrl),
       },
       employmentType: employmentTypeForSchema(job.employmentType),
@@ -226,7 +234,7 @@ export default function JobDetailPage() {
       industry: "Food service",
       jobLocation: {
         "@type": "Place",
-        name: job.locationLabel || job.restaurantName,
+        name: job.locationLabel || displayBusinessName,
         address: {
           "@type": "PostalAddress",
           streetAddress: job.restaurantAddress || undefined,
@@ -238,7 +246,7 @@ export default function JobDetailPage() {
       baseSalary: buildBaseSalary(job),
       url: canonicalUrl,
     };
-  }, [description, job]);
+  }, [description, displayBusinessName, displayBusinessProfileUrl, job]);
 
   const applyMutation = useMutation({
     mutationFn: async () => {
@@ -352,10 +360,10 @@ export default function JobDetailPage() {
               <h1 className="mt-4 max-w-3xl text-4xl font-black leading-none tracking-normal sm:text-6xl">
                 {job.title}
               </h1>
-              <Link href={job.restaurantProfileUrl as any}>
+              <Link href={displayBusinessProfileUrl as any}>
                 <a className="mt-4 inline-flex items-center gap-2 text-lg font-black text-amber-600 hover:underline">
                   <Store className="h-5 w-5" />
-                  {job.restaurantName}
+                  {displayBusinessName}
                 </a>
               </Link>
 
@@ -444,7 +452,7 @@ export default function JobDetailPage() {
                   <CheckCircle className="h-8 w-8" />
                   <h2 className="mt-3 text-xl font-black">Sent</h2>
                   <p className="mt-1 text-sm font-semibold">
-                    Your application was sent to {job.restaurantName}.
+                    Your application was sent to {displayBusinessName}.
                   </p>
                   <Link href="/jobs">
                     <Button className="mt-4 w-full">Browse More Jobs</Button>

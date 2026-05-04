@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import BusinessProfileImport from "@/components/BusinessProfileImport";
 import BusinessPhotoGallery from "@/components/BusinessPhotoGallery";
+import { HelpWantedQuickAction } from "@/components/HelpWantedQuickAction";
 
 interface HostProfile {
   id: string;
@@ -25,6 +26,12 @@ interface HostProfile {
   stripePayoutsEnabled?: boolean;
   stripeOnboardingCompleted?: boolean;
   amenities?: Record<string, boolean> | null;
+  showFuelPrices?: boolean;
+  gasPriceRegularCents?: number | null;
+  gasPriceMidgradeCents?: number | null;
+  gasPricePremiumCents?: number | null;
+  gasPriceDieselCents?: number | null;
+  gasPriceUpdatedAt?: string | null;
 }
 
 interface HostEarningsSummary {
@@ -78,6 +85,14 @@ function HostDashboard() {
   const [demandQueue, setDemandQueue] = useState<LocationDemandItem[]>([]);
   const [isLoadingDemand, setIsLoadingDemand] = useState(false);
   const [ownedRestaurants, setOwnedRestaurants] = useState<any[]>([]);
+  const [fuelForm, setFuelForm] = useState({
+    showFuelPrices: false,
+    regular: "",
+    midgrade: "",
+    premium: "",
+    diesel: "",
+  });
+  const [isSavingFuelPrices, setIsSavingFuelPrices] = useState(false);
 
   useEffect(() => {
     if (!isLoading) {
@@ -154,6 +169,70 @@ function HostDashboard() {
     const selected = hosts.find((item) => item.id === selectedHostId) || null;
     setHost(selected);
   }, [hosts, selectedHostId]);
+
+  const centsToDollars = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0
+      ? (value / 100).toFixed(2)
+      : "";
+
+  const dollarsToCents = (value: string) => {
+    const normalized = value.replace(/[^0-9.]/g, "");
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+  };
+
+  useEffect(() => {
+    if (!host) return;
+    setFuelForm({
+      showFuelPrices: Boolean(host.showFuelPrices),
+      regular: centsToDollars(host.gasPriceRegularCents),
+      midgrade: centsToDollars(host.gasPriceMidgradeCents),
+      premium: centsToDollars(host.gasPricePremiumCents),
+      diesel: centsToDollars(host.gasPriceDieselCents),
+    });
+  }, [host?.id, host?.showFuelPrices, host?.gasPriceRegularCents, host?.gasPriceMidgradeCents, host?.gasPricePremiumCents, host?.gasPriceDieselCents]);
+
+  const saveFuelPrices = async () => {
+    if (!host?.id) return;
+    setIsSavingFuelPrices(true);
+    try {
+      const res = await fetch(`/api/hosts/${encodeURIComponent(host.id)}/fuel-prices`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          showFuelPrices: fuelForm.showFuelPrices,
+          regularCents: dollarsToCents(fuelForm.regular),
+          midgradeCents: dollarsToCents(fuelForm.midgrade),
+          premiumCents: dollarsToCents(fuelForm.premium),
+          dieselCents: dollarsToCents(fuelForm.diesel),
+        }),
+      });
+      const updated = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(updated?.message || "Could not save fuel prices");
+      }
+      setHost(updated);
+      setHosts((prev) =>
+        prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
+      );
+      toast({
+        title: "Fuel prices updated",
+        description: fuelForm.showFuelPrices
+          ? "Your public map pin can now show live gas prices."
+          : "Fuel prices are hidden from the public map.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Unable to save fuel prices",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingFuelPrices(false);
+    }
+  };
 
   const loadHostEarnings = async () => {
     setIsLoadingEarnings(true);
@@ -447,6 +526,8 @@ function HostDashboard() {
       : host.stripeOnboardingCompleted
         ? "Waiting on Stripe checks"
         : "Onboarding in progress";
+  const isGasStationHost =
+    String(host.locationType || "").toLowerCase() === "gas_station";
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12 bg-[var(--bg-layered)] min-h-screen">
@@ -813,6 +894,71 @@ function HostDashboard() {
           Events are managed separately from Parking Pass. This Host Dashboard only manages Parking Pass listings, payouts, and bookings.
         </p>
       </section>
+
+      <HelpWantedQuickAction
+        hostId={host.id}
+        businessName={host.businessName}
+        compact
+      />
+
+      {(isGasStationHost || host.showFuelPrices) && (
+        <section className="mb-12 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-[color:var(--text-primary)]">
+                Live Gas Prices
+              </h2>
+              <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                Show current fuel prices on your public map pin so trucks can plan stops.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] px-3 py-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={fuelForm.showFuelPrices}
+                onChange={(event) =>
+                  setFuelForm((prev) => ({
+                    ...prev,
+                    showFuelPrices: event.target.checked,
+                  }))
+                }
+              />
+              Public
+            </label>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["regular", "Regular"],
+              ["midgrade", "Midgrade"],
+              ["premium", "Premium"],
+              ["diesel", "Diesel"],
+            ].map(([key, label]) => (
+              <label key={key} className="grid gap-1 text-sm font-semibold">
+                {label}
+                <input
+                  value={(fuelForm as any)[key]}
+                  inputMode="decimal"
+                  placeholder="3.49"
+                  className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 text-sm"
+                  onChange={(event) =>
+                    setFuelForm((prev) => ({ ...prev, [key]: event.target.value }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={saveFuelPrices} disabled={isSavingFuelPrices}>
+              {isSavingFuelPrices ? "Saving..." : "Save Fuel Prices"}
+            </Button>
+            {host.gasPriceUpdatedAt ? (
+              <span className="text-xs text-[color:var(--text-muted)]">
+                Updated {new Date(host.gasPriceUpdatedAt).toLocaleString()}
+              </span>
+            ) : null}
+          </div>
+        </section>
+      )}
 
       {/* ── Profile Import & Photo Gallery ────────────────────── */}
       {host && (

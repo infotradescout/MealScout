@@ -164,18 +164,6 @@ const absoluteUrl = (href: string) => {
   return `${window.location.origin}${href}`;
 };
 
-const appendRefParam = (url: string, ref: string) => {
-  try {
-    const next = new URL(url, window.location.origin);
-    if (!next.searchParams.has("ref")) {
-      next.searchParams.set("ref", ref);
-    }
-    return next.toString();
-  } catch {
-    return url;
-  }
-};
-
 export default function ShareHub({
   mode,
   title,
@@ -253,8 +241,14 @@ export default function ShareHub({
       const isTruck =
         Boolean(restaurant.isFoodTruck) ||
         String(restaurant.businessType || "").toLowerCase() === "food_truck";
-      const businessLabel = isTruck ? "Food Truck" : "Public Profile";
-      const profileHref = `/restaurant/${restaurant.id}/${slug}`;
+      const isCaterer =
+        String(restaurant.businessType || "").toLowerCase() === "caterer";
+      const businessLabel = isTruck
+        ? "Food Truck"
+        : isCaterer
+          ? "Caterer"
+          : "Public Profile";
+      const profileHref = isTruck ? `/truck/${slug}` : `/restaurant/${slug}`;
 
       selfPromoItems.push({
         key: `restaurant-profile:${restaurant.id}`,
@@ -263,11 +257,13 @@ export default function ShareHub({
         href: profileHref,
         audience: "customers",
         audienceLabel: businessLabel,
-        icon: isTruck ? Truck : Store,
+        icon: isTruck ? Truck : isCaterer ? Users : Store,
         priority: 0,
         cleanOwnerLink: true,
         shareHint: "Clean link. You still get credit.",
-        message: `Follow, order, and book ${name} on MealScout:`,
+        message: isCaterer
+          ? `Book catering with ${name} on MealScout:`
+          : `Follow, order, and book ${name} on MealScout:`,
       });
 
       if (index === 0) {
@@ -296,7 +292,7 @@ export default function ShareHub({
           key: `host-profile:${host.id}`,
           title: index === 0 ? "My Host Profile" : `${name} Host Link`,
           description: "Share your truck-friendly location page.",
-          href: `/location/${slug}--${host.id}`,
+          href: `/location/${slug}`,
           audience: "hosts",
           audienceLabel: "Host Profile",
           icon: Building2,
@@ -344,7 +340,9 @@ export default function ShareHub({
     if (cached) return cached;
     const cleanUrl = absoluteUrl(item.href);
     if (item.cleanOwnerLink || item.href.startsWith("/ref/")) return cleanUrl;
-    return affiliateTag ? appendRefParam(cleanUrl, affiliateTag) : cleanUrl;
+    return affiliateTag
+      ? absoluteUrl(`/ref/${encodeURIComponent(affiliateTag)}${item.href}`)
+      : cleanUrl;
   };
 
   const getItemShareUrl = async (item: ShareHubItem) => {

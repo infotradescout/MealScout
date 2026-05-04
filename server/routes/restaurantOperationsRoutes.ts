@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -12,6 +12,7 @@ import { reverseGeocode } from "../utils/geocoding";
 import { broadcastLocationUpdate, broadcastStatusUpdate } from "../websocket";
 import {
   insertFoodTruckLocationSchema,
+  businessInsuranceVerifications,
   restaurants,
   telemetryEvents,
   truckManualSchedules,
@@ -48,7 +49,9 @@ export function registerRestaurantOperationsRoutes(
       city: z.string().trim().min(1).max(120).optional(),
       state: z.string().trim().min(2).max(32).optional(),
       phone: z.string().trim().max(40).optional().nullable(),
-      businessType: z.enum(["restaurant", "bar", "food_truck"]).optional(),
+      businessType: z
+        .enum(["restaurant", "bar", "food_truck", "caterer"])
+        .optional(),
       cuisineType: z.string().trim().max(80).optional().nullable(),
       description: z.string().trim().max(1200).optional().nullable(),
       websiteUrl: urlOrEmpty,
@@ -56,6 +59,8 @@ export function registerRestaurantOperationsRoutes(
       facebookPageUrl: urlOrEmpty,
       logoUrl: urlOrEmpty,
       coverImageUrl: urlOrEmpty,
+      offersCatering: z.boolean().optional(),
+      cateringDetails: z.record(z.any()).optional().nullable(),
     })
     .strict();
 
@@ -326,6 +331,36 @@ export function registerRestaurantOperationsRoutes(
           !isFoodTruckBusiness && verificationStatus === "not_submitted"
             ? await getVerificationSnooze(restaurantId)
             : { snoozed: false, snoozedAt: null, snoozedUntil: null };
+        const [insuranceRecord] = await db
+          .select({
+            status: businessInsuranceVerifications.status,
+            expiresAt: businessInsuranceVerifications.expiresAt,
+            attestedCommercialCoverage:
+              businessInsuranceVerifications.attestedCommercialCoverage,
+            attestedJurisdictionCompliance:
+              businessInsuranceVerifications.attestedJurisdictionCompliance,
+          })
+          .from(businessInsuranceVerifications)
+          .where(
+            and(
+              eq(
+                businessInsuranceVerifications.entityType,
+                isFoodTruckBusiness ? "food_truck" : "restaurant",
+              ),
+              eq(businessInsuranceVerifications.entityId, restaurantId),
+            ),
+          )
+          .orderBy(desc(businessInsuranceVerifications.createdAt))
+          .limit(1);
+        const insuranceExpiresAt = insuranceRecord?.expiresAt
+          ? new Date(insuranceRecord.expiresAt)
+          : null;
+        const insuranceValid =
+          insuranceRecord?.status === "approved" &&
+          Boolean(insuranceExpiresAt) &&
+          insuranceExpiresAt!.getTime() > Date.now() &&
+          insuranceRecord.attestedCommercialCoverage &&
+          insuranceRecord.attestedJurisdictionCompliance;
 
         res.json({
           restaurantId,
@@ -348,6 +383,14 @@ export function registerRestaurantOperationsRoutes(
             snoozed: verificationSnooze.snoozed,
             snoozedAt: verificationSnooze.snoozedAt,
             snoozedUntil: verificationSnooze.snoozedUntil,
+          },
+          insurance: {
+            required: true,
+            valid: Boolean(insuranceValid),
+            status: insuranceValid
+              ? "valid"
+              : insuranceRecord?.status || "not_submitted",
+            expiresAt: insuranceRecord?.expiresAt || null,
           },
         });
       } catch (error) {

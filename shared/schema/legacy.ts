@@ -192,7 +192,7 @@ export const restaurants = pgTable("restaurants", {
   name: varchar("name").notNull(),
   address: text("address").notNull(),
   phone: varchar("phone"),
-  businessType: varchar("business_type").notNull().default("restaurant"), // 'restaurant' | 'bar' | 'food_truck'
+  businessType: varchar("business_type").notNull().default("restaurant"), // 'restaurant' | 'bar' | 'food_truck' | 'caterer'
   cuisineType: varchar("cuisine_type"),
   promoCode: varchar("promo_code"), // For tracking beta access and special offers
   claimedFromImportId: varchar("claimed_from_import_id"),
@@ -221,6 +221,8 @@ export const restaurants = pgTable("restaurants", {
   xUrl: varchar("x_url"), // X profile
   socialAutopostSettings: jsonb("social_autopost_settings"),
   amenities: jsonb("amenities"), // { parking: boolean, wifi: boolean, outdoor_seating: boolean, etc }
+  offersCatering: boolean("offers_catering").notNull().default(false),
+  cateringDetails: jsonb("catering_details"),
   // Golden Plate Award for top-performing restaurants (awarded every 90 days)
   hasGoldenPlate: boolean("has_golden_plate").default(false),
   goldenPlateEarnedAt: timestamp("golden_plate_earned_at"),
@@ -3409,6 +3411,13 @@ export const hosts = pgTable(
     businessHours: jsonb("business_hours"), // { monday: { open: '9:00', close: '17:00' }, ... }
     businessWebsite: text("business_website"),
     menuUrl: varchar("menu_url"),
+    showFuelPrices: boolean("show_fuel_prices").notNull().default(false),
+    gasPriceRegularCents: integer("gas_price_regular_cents"),
+    gasPriceMidgradeCents: integer("gas_price_midgrade_cents"),
+    gasPricePremiumCents: integer("gas_price_premium_cents"),
+    gasPriceDieselCents: integer("gas_price_diesel_cents"),
+    gasPriceUpdatedAt: timestamp("gas_price_updated_at"),
+    gasPriceSource: varchar("gas_price_source").default("manual"),
     // Facebook Pages auto-populated profile data
     facebookPageId: varchar("facebook_page_id"),
     facebookPageUrl: text("facebook_page_url"),
@@ -3428,6 +3437,7 @@ export const hosts = pgTable(
     index("idx_hosts_location").on(table.latitude, table.longitude),
     index("idx_hosts_stripe_account").on(table.stripeConnectAccountId),
     index("idx_hosts_google_place").on(table.googlePlaceId),
+    index("idx_hosts_show_fuel_prices").on(table.showFuelPrices),
   ],
 );
 

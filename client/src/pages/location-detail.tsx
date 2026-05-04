@@ -6,6 +6,7 @@ import { SEOHead } from "@/components/seo-head";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PublicVideoGallery from "@/components/PublicVideoGallery";
+import { PublicHelpWantedBanner } from "@/components/PublicHelpWantedBanner";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { generatePlaceSchema } from "@/lib/schema-helpers";
 
@@ -41,7 +42,27 @@ function formatMoney(cents?: number | null) {
 
 export default function LocationDetailPage() {
   const params = useParams() as Record<string, string | undefined>;
-  const hostId = extractUuidFromSlug(params.slug);
+  const rawHostSlug = params.slug || "";
+  const directHostId = extractUuidFromSlug(rawHostSlug);
+  const { data: resolvedHost } = useQuery<{ id: string; profilePath?: string }>({
+    queryKey: ["public-profile-resolve", "location", rawHostSlug],
+    enabled: Boolean(rawHostSlug && !directHostId),
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(
+        apiUrl(
+          `/api/public/resolve-profile/location/${encodeURIComponent(rawHostSlug)}`,
+        ),
+        { credentials: "include" },
+      );
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || "Location not found");
+      }
+      return payload;
+    },
+  });
+  const hostId = directHostId || resolvedHost?.id || null;
 
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: ["public-profile", "host", hostId],
@@ -176,6 +197,14 @@ export default function LocationDetailPage() {
             ) : null}
           </div>
         </div>
+
+        {hostId ? (
+          <PublicHelpWantedBanner
+            hostId={String(hostId)}
+            className="mt-8"
+            variant="light"
+          />
+        ) : null}
 
         {hostId ? (
           <div className="mt-8">

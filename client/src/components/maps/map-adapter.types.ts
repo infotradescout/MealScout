@@ -5,6 +5,7 @@ export type MapMarkerKind =
   | "truck"
   | "parking"
   | "event"
+  | "supplier"
   | "deal"
   | "geo_ad";
 

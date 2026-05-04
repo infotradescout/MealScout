@@ -151,12 +151,25 @@ export function registerRestaurantSignupRoutes(
       if (instagramUrl) minimalRestaurantPayload.instagramUrl = instagramUrl;
       if (facebookPageUrl)
         minimalRestaurantPayload.facebookPageUrl = facebookPageUrl;
+      if (minimalRestaurantPayload.businessType === "caterer") {
+        minimalRestaurantPayload.offersCatering = true;
+        minimalRestaurantPayload.cateringDetails = {
+          headline: "Catering available",
+          description: description || "",
+          serviceArea: [minimalRestaurantPayload.city, minimalRestaurantPayload.state]
+            .filter(Boolean)
+            .join(", "),
+        };
+      }
 
       const amenities = (validatedRestaurantData as any).amenities;
       const hasAmenities =
         amenities &&
         (amenities.parking || amenities.wifi || amenities.outdoor_seating);
-      if (hasAmenities && minimalRestaurantPayload.businessType !== "food_truck") {
+      if (
+        hasAmenities &&
+        !["food_truck", "caterer"].includes(minimalRestaurantPayload.businessType)
+      ) {
         minimalRestaurantPayload.amenities = amenities;
       }
 

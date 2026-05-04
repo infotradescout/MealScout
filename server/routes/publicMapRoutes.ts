@@ -36,16 +36,18 @@ import {
   hosts,
   locationRequests,
   restaurants,
+  suppliers,
+  supplierProducts,
   users,
 } from "@shared/schema";
 
 let mapLocationsCache: {
   expiresAt: number;
-  payload: { hostLocations: any[]; eventLocations: any[] };
+  payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
 let mapLocationsLastGood: {
-  payload: { hostLocations: any[]; eventLocations: any[] };
+  payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
 type FootTrafficPayload = {
@@ -573,10 +575,45 @@ export function registerPublicMapRoutes(app: Express) {
         });
       };
 
-      const [openLocations, upcomingEvents, allHosts] = await Promise.all([
+      const [
+        openLocations,
+        upcomingEvents,
+        allHosts,
+        activeSuppliers,
+        activeSupplierProducts,
+      ] = await Promise.all([
         storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
         storage.getAllHosts(),
+        db
+          .select({
+            id: suppliers.id,
+            businessName: suppliers.businessName,
+            address: suppliers.address,
+            city: suppliers.city,
+            state: suppliers.state,
+            latitude: suppliers.latitude,
+            longitude: suppliers.longitude,
+            contactPhone: suppliers.contactPhone,
+            contactEmail: suppliers.contactEmail,
+            offersDelivery: suppliers.offersDelivery,
+            deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
+            updatedAt: suppliers.updatedAt,
+          })
+          .from(suppliers)
+          .where(eq(suppliers.isActive, true))
+          .limit(250)
+          .catch(() => []),
+        db
+          .select({
+            supplierId: supplierProducts.supplierId,
+            name: supplierProducts.name,
+            description: supplierProducts.description,
+          })
+          .from(supplierProducts)
+          .where(eq(supplierProducts.isActive, true))
+          .limit(1000)
+          .catch(() => []),
       ]);
 
       const typedAllHosts = allHosts as Array<{
@@ -592,6 +629,13 @@ export function registerPublicMapRoutes(app: Express) {
         expectedFootTraffic?: number | null;
         notes?: string | null;
         isVerified?: boolean | null;
+        showFuelPrices?: boolean | null;
+        gasPriceRegularCents?: number | null;
+        gasPriceMidgradeCents?: number | null;
+        gasPricePremiumCents?: number | null;
+        gasPriceDieselCents?: number | null;
+        gasPriceUpdatedAt?: Date | string | null;
+        gasPriceSource?: string | null;
       }>;
 
       const hostUserIds = Array.from(
@@ -683,6 +727,17 @@ export function registerPublicMapRoutes(app: Express) {
         googleFormattedPhone: (host as any).googleFormattedPhone ?? null,
         businessHours: (host as any).businessHours ?? null,
         businessWebsite: (host as any).businessWebsite ?? null,
+        showFuelPrices: Boolean((host as any).showFuelPrices),
+        fuelPrices: (host as any).showFuelPrices
+          ? {
+              regularCents: (host as any).gasPriceRegularCents ?? null,
+              midgradeCents: (host as any).gasPriceMidgradeCents ?? null,
+              premiumCents: (host as any).gasPricePremiumCents ?? null,
+              dieselCents: (host as any).gasPriceDieselCents ?? null,
+              updatedAt: (host as any).gasPriceUpdatedAt ?? null,
+              source: (host as any).gasPriceSource ?? null,
+            }
+          : null,
       }));
 
       const hostLocations = [
@@ -734,6 +789,92 @@ export function registerPublicMapRoutes(app: Express) {
         seriesId: event.seriesId,
         bookedRestaurantId: event.bookedRestaurantId,
       }));
+
+      const supplierProductsById = new Map<string, string[]>();
+      (activeSupplierProducts as any[]).forEach((product) => {
+        const supplierId = String(product.supplierId || "").trim();
+        if (!supplierId) return;
+        const label = [product.name, product.description]
+          .filter(Boolean)
+          .join(" - ")
+          .trim();
+        if (!label) return;
+        const previous = supplierProductsById.get(supplierId) || [];
+        previous.push(label);
+        supplierProductsById.set(supplierId, previous);
+      });
+
+      const classifySupplier = (supplier: any) => {
+        const products = supplierProductsById.get(String(supplier.id)) || [];
+        const haystack = [
+          supplier.businessName,
+          supplier.address,
+          supplier.city,
+          supplier.state,
+          ...products,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (
+          /\b(propane|lp gas|lpg|cylinder|tank refill|gas refill)\b/i.test(
+            haystack,
+          )
+        ) {
+          return {
+            category: "propane_dealer",
+            categoryLabel: "Propane dealer",
+          };
+        }
+        if (
+          /\b(equipment|manufacturer|fabricat|trailer|commissary|kitchen|generator|repair|service|parts)\b/i.test(
+            haystack,
+          )
+        ) {
+          return {
+            category: "equipment_supplier",
+            categoryLabel: "Equipment supplier",
+          };
+        }
+        return {
+          category: "supplier",
+          categoryLabel: "Supplier",
+        };
+      };
+
+      const supplierLocations = (activeSuppliers as any[])
+        .filter((supplier) => {
+          const hasAddress = String(supplier.address || "").trim();
+          const lat = parseCoord(supplier.latitude);
+          const lng = parseCoord(supplier.longitude);
+          return hasAddress || (lat !== null && lng !== null);
+        })
+        .map((supplier) => {
+          const classified = classifySupplier(supplier);
+          return {
+            id: supplier.id,
+            type: "supplier" as const,
+            supplierId: supplier.id,
+            name: supplier.businessName,
+            address: supplier.address,
+            city: supplier.city ?? null,
+            state: supplier.state ?? null,
+            latitude: supplier.latitude ?? null,
+            longitude: supplier.longitude ?? null,
+            contactPhone: supplier.contactPhone ?? null,
+            contactEmail: supplier.contactEmail ?? null,
+            offersDelivery: Boolean(supplier.offersDelivery),
+            deliveryRadiusMiles: supplier.deliveryRadiusMiles ?? null,
+            productHighlights: (
+              supplierProductsById.get(String(supplier.id)) || []
+            ).slice(0, 3),
+            profileUrl: `/suppliers?supplier=${encodeURIComponent(
+              String(supplier.id),
+            )}`,
+            ...classified,
+          };
+        });
 
       const applyCoords = (
         target: { latitude?: string | null; longitude?: string | null },
@@ -918,6 +1059,32 @@ export function registerPublicMapRoutes(app: Express) {
         });
       }
 
+      for (const supplier of supplierLocations) {
+        const lat = parseCoord(supplier.latitude);
+        const lng = parseCoord(supplier.longitude);
+        if (lat !== null && lng !== null) continue;
+        const address = buildFullAddress(
+          supplier.address,
+          supplier.city,
+          supplier.state,
+        );
+        if (!address) continue;
+        queueGeocode(
+          address,
+          (coords) => applyCoords(supplier, coords),
+          async (coords) => {
+            await db
+              .update(suppliers)
+              .set({
+                latitude: coords.lat.toString(),
+                longitude: coords.lng.toString(),
+                updatedAt: new Date(),
+              })
+              .where(eq(suppliers.id, supplier.supplierId));
+          },
+        );
+      }
+
       const pendingTasks = Array.from(pendingByAddress.values()).slice(
         0,
         MAX_GEOCODE_PER_REQUEST,
@@ -935,7 +1102,7 @@ export function registerPublicMapRoutes(app: Express) {
         );
       }
 
-      const payload = { hostLocations, eventLocations };
+      const payload = { hostLocations, eventLocations, supplierLocations };
       mapLocationsCache = {
         payload,
         expiresAt:
@@ -953,7 +1120,9 @@ export function registerPublicMapRoutes(app: Express) {
         res.setHeader("X-MealScout-Stale", "1");
         return res.json(mapLocationsLastGood.payload);
       }
-      res.status(200).json({ hostLocations: [], eventLocations: [] });
+      res
+        .status(200)
+        .json({ hostLocations: [], eventLocations: [], supplierLocations: [] });
     }
   });
 
@@ -981,6 +1150,7 @@ export function registerPublicMapRoutes(app: Express) {
         mapLocationsLastGood?.payload || {
           hostLocations: [],
           eventLocations: [],
+          supplierLocations: [],
         };
 
       const parseCoord = (value?: string | number | null) => {
@@ -1006,10 +1176,19 @@ export function registerPublicMapRoutes(app: Express) {
           return pointInBounds(expandedBounds, lat, lng);
         },
       );
+      const supplierLocations = (payloadSource.supplierLocations || []).filter(
+        (supplier) => {
+          const lat = parseCoord(supplier?.latitude);
+          const lng = parseCoord(supplier?.longitude);
+          if (lat === null || lng === null) return false;
+          return pointInBounds(expandedBounds, lat, lng);
+        },
+      );
 
       const maxPerLayer = zoom <= 9 ? 800 : zoom <= 12 ? 1200 : 2000;
       const clippedHosts = hostLocations.slice(0, maxPerLayer);
       const clippedEvents = eventLocations.slice(0, maxPerLayer);
+      const clippedSuppliers = supplierLocations.slice(0, maxPerLayer);
 
       const version = String(
         mapLocationsCache?.expiresAt ||
@@ -1024,6 +1203,7 @@ export function registerPublicMapRoutes(app: Express) {
         bounds,
         hostLocations: clippedHosts,
         eventLocations: clippedEvents,
+        supplierLocations: clippedSuppliers,
       });
     } catch (error) {
       console.error("Error building map overlays feed:", error);
@@ -1032,6 +1212,7 @@ export function registerPublicMapRoutes(app: Express) {
         zoom: Number(req.query.zoom || 12) || 12,
         hostLocations: [],
         eventLocations: [],
+        supplierLocations: [],
       });
     }
   });

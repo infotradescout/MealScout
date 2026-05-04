@@ -114,6 +114,8 @@ const markerColor = (marker: MapAdapterMarker) => {
       return "#0EA5E9";
     case "event":
       return "#D946EF";
+    case "supplier":
+      return "#14B8A6";
     case "deal":
       return "#22C55E";
     case "geo_ad":
@@ -131,6 +133,8 @@ const markerTypeLabel = (kind: MapAdapterMarker["kind"]) => {
       return "Host";
     case "event":
       return "Event";
+    case "supplier":
+      return "Supplier";
     case "deal":
       return "Deal";
     case "geo_ad":

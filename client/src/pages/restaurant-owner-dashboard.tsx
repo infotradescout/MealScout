@@ -68,6 +68,8 @@ import {
   RotateCcw,
   ShieldCheck,
   Briefcase,
+  ExternalLink,
+  UtensilsCrossed,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
@@ -225,6 +227,14 @@ export default function RestaurantOwnerDashboard() {
   const [verificationUploadOpen, setVerificationUploadOpen] = useState(false);
   const [verificationSkippedToday, setVerificationSkippedToday] =
     useState(false);
+  const [cateringForm, setCateringForm] = useState({
+    headline: "",
+    description: "",
+    serviceArea: "",
+    minimumGuests: "",
+    leadTimeDays: "",
+    contactPreference: "",
+  });
 
   // Food truck state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -625,9 +635,29 @@ export default function RestaurantOwnerDashboard() {
     }
     if (selectedRestaurant) return;
     if (restaurants.length > 0) {
-      setSelectedRestaurant(restaurants[0].id);
+      let storedRestaurantId = "";
+      try {
+        storedRestaurantId =
+          window.localStorage.getItem(LAST_RESTAURANT_KEY)?.trim() || "";
+      } catch {
+        storedRestaurantId = "";
+      }
+      const storedRestaurant = restaurants.find(
+        (restaurant) => restaurant.id === storedRestaurantId,
+      );
+      if (storedRestaurant) {
+        setSelectedRestaurant(storedRestaurant.id);
+        return;
+      }
+      const firstTruck = restaurants.find(
+        (restaurant) =>
+          restaurant.isFoodTruck ||
+          String((restaurant as any).businessType || "").toLowerCase() ===
+            "food_truck",
+      );
+      setSelectedRestaurant((isFoodTruck && firstTruck ? firstTruck : restaurants[0]).id);
     }
-  }, [restaurants, selectedRestaurant, requestedRestaurantId]);
+  }, [restaurants, selectedRestaurant, requestedRestaurantId, isFoodTruck]);
 
   useEffect(() => {
     if (!selectedRestaurant) return;
@@ -642,6 +672,26 @@ export default function RestaurantOwnerDashboard() {
   const currentRestaurant = restaurants.find(
     (r) => r.id === selectedRestaurant,
   );
+  const isFoodTruckBusiness = (restaurant: Partial<Restaurant> | null | undefined) =>
+    Boolean(
+      restaurant?.isFoodTruck ||
+        String((restaurant as any)?.businessType || "").toLowerCase() ===
+          "food_truck",
+    );
+  const foodTruckRestaurants = restaurants.filter(isFoodTruckBusiness);
+  const selectedBusinessIndex = restaurants.findIndex(
+    (restaurant) => restaurant.id === selectedRestaurant,
+  );
+  const ownerBusinessLabel = currentRestaurant
+    ? isFoodTruckBusiness(currentRestaurant)
+      ? "truck"
+      : String((currentRestaurant as any).businessType || "business").replace(
+          "_",
+          " ",
+        )
+    : "business";
+  const selectedDisplayNumber =
+    selectedBusinessIndex >= 0 ? selectedBusinessIndex + 1 : 1;
   const selectedRestaurantIsFoodTruck = Boolean(
     isFoodTruck ||
     currentRestaurant?.isFoodTruck ||
@@ -682,6 +732,7 @@ export default function RestaurantOwnerDashboard() {
   const hiringPath = selectedRestaurant
     ? `/hiring?restaurantId=${encodeURIComponent(selectedRestaurant)}`
     : "/hiring";
+  const addTruckPath = "/truck-onboarding?claim=1&flow=truck-owner&src=owner-dashboard";
   const subscribeDealCreationPath = selectedRestaurant
     ? `/subscribe?next=${encodeURIComponent(
         `/deal-creation?restaurantId=${selectedRestaurant}`,
@@ -691,6 +742,60 @@ export default function RestaurantOwnerDashboard() {
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
   const liveShareDescription = "Find us live right now on the MealScout map.";
+  const currentBusinessType = String(
+    (currentRestaurant as any)?.businessType || "",
+  ).toLowerCase();
+  const offersCatering = Boolean(
+    (currentRestaurant as any)?.offersCatering || currentBusinessType === "caterer",
+  );
+  const cateringDetails =
+    ((currentRestaurant as any)?.cateringDetails as Record<string, any> | null) ||
+    {};
+  const cateringProfilePath = selectedRestaurant
+    ? `/restaurant/${selectedRestaurant}?service=catering`
+    : "/map";
+  const setSelectedBusiness = (restaurantId: string) => {
+    setSelectedRestaurant(restaurantId);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set("restaurantId", restaurantId);
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState(null, "", nextUrl);
+    } catch {
+      // URL sync is a convenience only.
+    }
+  };
+
+  const getProfileCompletion = (restaurant: Partial<Restaurant>) => {
+    const fields = [
+      restaurant.name,
+      restaurant.address || (restaurant as any).city,
+      restaurant.phone || (restaurant as any).contactPhone,
+      (restaurant as any).description,
+      (restaurant as any).logoUrl || (restaurant as any).imageUrl,
+    ];
+    const done = fields.filter((value) => String(value || "").trim()).length;
+    return Math.round((done / fields.length) * 100);
+  };
+
+  useEffect(() => {
+    setCateringForm({
+      headline: String(cateringDetails.headline || ""),
+      description: String(cateringDetails.description || ""),
+      serviceArea: String(cateringDetails.serviceArea || ""),
+      minimumGuests:
+        cateringDetails.minimumGuests === undefined ||
+        cateringDetails.minimumGuests === null
+          ? ""
+          : String(cateringDetails.minimumGuests),
+      leadTimeDays:
+        cateringDetails.leadTimeDays === undefined ||
+        cateringDetails.leadTimeDays === null
+          ? ""
+          : String(cateringDetails.leadTimeDays),
+      contactPreference: String(cateringDetails.contactPreference || ""),
+    });
+  }, [selectedRestaurant, currentRestaurant?.updatedAt]);
 
   useEffect(() => {
     if (!selectedRestaurant || !needsVerificationSubmission) {
@@ -1391,6 +1496,50 @@ export default function RestaurantOwnerDashboard() {
     },
   });
 
+  const updateCateringMutation = useMutation({
+    mutationFn: async (offers: boolean) => {
+      const details = {
+        headline: cateringForm.headline.trim(),
+        description: cateringForm.description.trim(),
+        serviceArea: cateringForm.serviceArea.trim(),
+        minimumGuests: cateringForm.minimumGuests
+          ? Number(cateringForm.minimumGuests)
+          : null,
+        leadTimeDays: cateringForm.leadTimeDays
+          ? Number(cateringForm.leadTimeDays)
+          : null,
+        contactPreference: cateringForm.contactPreference.trim(),
+      };
+
+      return await apiRequest(
+        "PATCH",
+        `/api/restaurants/${selectedRestaurant}/profile`,
+        {
+          offersCatering: offers,
+          cateringDetails: details,
+        },
+      );
+    },
+    onSuccess: (_data, offers) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/restaurants/my-restaurants"],
+      });
+      toast({
+        title: offers ? "Catering turned on" : "Catering turned off",
+        description: offers
+          ? "Your catering details are saved for this business."
+          : "The catering section is no longer promoted from this profile.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Unable to save catering",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const submitVerificationMutation = useMutation({
     mutationFn: async () => {
       if (!selectedRestaurant) {
@@ -1525,6 +1674,7 @@ export default function RestaurantOwnerDashboard() {
   });
   const availableTabs = [
     ...(canManageDeals ? (["active", "inactive"] as const) : []),
+    ...(canManageProfile ? (["catering"] as const) : []),
     ...(canViewAnalytics ? (["analytics"] as const) : []),
     ...(canManageBilling ? (["credits"] as const) : []),
     ...(canManageParkingPass ? (["bookings", "foodtruck"] as const) : []),
@@ -1573,17 +1723,26 @@ export default function RestaurantOwnerDashboard() {
   }
 
   if (restaurants.length === 0) {
+    const emptyStateIsTruck = isFoodTruck || user?.userType === "food_truck";
     return (
       <div className="container mx-auto px-4 py-8 bg-[var(--bg-layered)] min-h-screen">
         <div className="max-w-2xl mx-auto text-center space-y-6">
-          <Store className="h-16 w-16 mx-auto text-muted-foreground" />
-          <h1 className="text-3xl font-bold">No Restaurant Found</h1>
+          {emptyStateIsTruck ? (
+            <Truck className="h-16 w-16 mx-auto text-muted-foreground" />
+          ) : (
+            <Store className="h-16 w-16 mx-auto text-muted-foreground" />
+          )}
+          <h1 className="text-3xl font-bold">
+            {emptyStateIsTruck ? "No Truck Found" : "No Restaurant Found"}
+          </h1>
           <p className="text-muted-foreground">
-            You need to register your restaurant first to create specials.
+            {emptyStateIsTruck
+              ? "Create or claim your first truck, then add every truck you operate from the same dashboard."
+              : "Register your business first to manage specials, hiring, menus, and profile tools."}
           </p>
-          <Link href="/restaurant-signup">
+          <Link href={emptyStateIsTruck ? addTruckPath : "/restaurant-signup"}>
             <Button size="lg" data-testid="button-register-restaurant">
-              Register Your Restaurant
+              {emptyStateIsTruck ? "Add Your First Truck" : "Register Your Business"}
             </Button>
           </Link>
         </div>
@@ -1667,22 +1826,170 @@ export default function RestaurantOwnerDashboard() {
       {restaurants.length > 1 && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-[color:var(--text-secondary)] mb-2">
-            Select Restaurant
+            Select business
           </label>
           <select
             value={selectedRestaurant}
-            onChange={(e) => setSelectedRestaurant(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
+            onChange={(e) => setSelectedBusiness(e.target.value)}
+            className="w-full max-w-md rounded-lg border bg-[var(--bg-card)] px-3 py-2"
             data-testid="select-restaurant"
           >
             {restaurants.map((restaurant) => (
               <option key={restaurant.id} value={restaurant.id}>
                 {restaurant.name}
+                {isFoodTruckBusiness(restaurant) ? " - Food truck" : ""}
               </option>
             ))}
           </select>
         </div>
       )}
+
+      {restaurants.length > 1 ? (
+        <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xl">
+                  <Truck className="h-5 w-5 text-[color:var(--accent-text)]" />
+                  Multi-location command center
+                </CardTitle>
+                <CardDescription>
+                  Manage every truck or location from one place. Pick the one
+                  you are working on, then jump straight to the right tool.
+                </CardDescription>
+              </div>
+              <Link href={addTruckPath}>
+                <Button variant="outline" className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add another truck
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xs font-semibold uppercase text-[color:var(--text-secondary)]">
+                  Businesses
+                </div>
+                <div className="mt-1 text-2xl font-black">
+                  {restaurants.length}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xs font-semibold uppercase text-[color:var(--text-secondary)]">
+                  Trucks
+                </div>
+                <div className="mt-1 text-2xl font-black">
+                  {foodTruckRestaurants.length}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
+                <div className="text-xs font-semibold uppercase text-[color:var(--text-secondary)]">
+                  Active
+                </div>
+                <div className="mt-1 text-2xl font-black">
+                  {
+                    restaurants.filter(
+                      (restaurant) => (restaurant as any).isActive !== false,
+                    ).length
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              {restaurants.map((restaurant, index) => {
+                const isSelected = restaurant.id === selectedRestaurant;
+                const isTruck = isFoodTruckBusiness(restaurant);
+                const completion = getProfileCompletion(restaurant);
+                return (
+                  <div
+                    key={restaurant.id}
+                    className={`rounded-xl border p-4 transition ${
+                      isSelected
+                        ? "border-[color:var(--accent-text)] bg-[color:var(--accent-muted)]/20"
+                        : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-black uppercase text-[color:var(--text-secondary)]">
+                            #{index + 1}
+                          </span>
+                          <Badge variant={isTruck ? "default" : "outline"}>
+                            {isTruck ? "Truck" : "Business"}
+                          </Badge>
+                          {isSelected ? <Badge variant="secondary">Selected</Badge> : null}
+                        </div>
+                        <h3 className="mt-2 truncate text-lg font-black">
+                          {restaurant.name || "Unnamed business"}
+                        </h3>
+                        <p className="mt-1 line-clamp-1 text-sm text-[color:var(--text-secondary)]">
+                          {restaurant.address ||
+                            [restaurant.city, restaurant.state]
+                              .filter(Boolean)
+                              .join(", ") ||
+                            "No public location yet"}
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                          Profile
+                        </div>
+                        <div className="text-xl font-black">{completion}%</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <Button
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        onClick={() => setSelectedBusiness(restaurant.id)}
+                      >
+                        {isSelected ? "Managing" : "Manage"}
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link href={`/menu-builder/${restaurant.id}`}>
+                          <Store className="mr-2 h-4 w-4" />
+                          Menu
+                        </Link>
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link
+                          href={`/hiring?restaurantId=${encodeURIComponent(
+                            restaurant.id,
+                          )}`}
+                        >
+                          <Briefcase className="mr-2 h-4 w-4" />
+                          Jobs
+                        </Link>
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link href={`/restaurant/${restaurant.id}`}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Profile
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {currentRestaurant ? (
+        <div className="mb-4 text-sm text-[color:var(--text-secondary)]">
+          Managing {ownerBusinessLabel} {selectedDisplayNumber} of{" "}
+          {restaurants.length}:{" "}
+          <span className="font-semibold text-[color:var(--text-primary)]">
+            {currentRestaurant.name}
+          </span>
+        </div>
+      ) : null}
 
       {selectedRestaurant && currentRestaurant && canManageProfile ? (
         <div className="mb-6">
@@ -2241,6 +2548,12 @@ export default function RestaurantOwnerDashboard() {
               Inactive Specials
             </TabsTrigger>
           ) : null}
+          {canManageProfile ? (
+            <TabsTrigger value="catering" className="px-3 text-xs sm:text-sm">
+              <UtensilsCrossed className="mr-1 hidden h-4 w-4 sm:block" />
+              Catering
+            </TabsTrigger>
+          ) : null}
           {canViewAnalytics ? (
             <TabsTrigger value="analytics" className="px-3 text-xs sm:text-sm">
               Analytics
@@ -2487,6 +2800,203 @@ export default function RestaurantOwnerDashboard() {
                   </CardContent>
                 </Card>
               )}
+          </TabsContent>
+        ) : null}
+
+        {canManageProfile ? (
+          <TabsContent value="catering" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <UtensilsCrossed className="h-5 w-5" />
+                      Catering
+                    </CardTitle>
+                    <CardDescription>
+                      Offer catering from this profile without changing the
+                      business type customers already recognize.
+                    </CardDescription>
+                  </div>
+                  <Badge variant={offersCatering ? "default" : "outline"}>
+                    {offersCatering ? "Catering on" : "Catering off"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold">
+                        Promote catering for {currentRestaurant?.name}
+                      </h3>
+                      <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                        Use this for office meals, private events, parties,
+                        pop-ups, recurring service, and large orders.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={offersCatering ? "outline" : "default"}
+                      onClick={() =>
+                        updateCateringMutation.mutate(!offersCatering)
+                      }
+                      disabled={
+                        !selectedRestaurant || updateCateringMutation.isPending
+                      }
+                      data-testid="button-toggle-catering"
+                    >
+                      {updateCateringMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <UtensilsCrossed className="mr-2 h-4 w-4" />
+                      )}
+                      {offersCatering ? "Turn off" : "Turn on"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium">Headline</label>
+                    <Input
+                      value={cateringForm.headline}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          headline: event.target.value,
+                        }))
+                      }
+                      placeholder="Catering for offices, parties, and private events"
+                      data-testid="input-catering-headline"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium">Details</label>
+                    <textarea
+                      value={cateringForm.description}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          description: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      maxLength={800}
+                      placeholder="Tell people what you cater, what events fit best, and how to start."
+                      className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]"
+                      data-testid="textarea-catering-description"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Service area</label>
+                    <Input
+                      value={cateringForm.serviceArea}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          serviceArea: event.target.value,
+                        }))
+                      }
+                      placeholder="Pensacola, Gulf Breeze, Milton"
+                      data-testid="input-catering-service-area"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Contact preference
+                    </label>
+                    <Input
+                      value={cateringForm.contactPreference}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          contactPreference: event.target.value,
+                        }))
+                      }
+                      placeholder="Call, text, email, or MealScout message"
+                      data-testid="input-catering-contact-preference"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Minimum guests
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={cateringForm.minimumGuests}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          minimumGuests: event.target.value,
+                        }))
+                      }
+                      placeholder="25"
+                      data-testid="input-catering-minimum-guests"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Lead time in days
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={cateringForm.leadTimeDays}
+                      onChange={(event) =>
+                        setCateringForm((prev) => ({
+                          ...prev,
+                          leadTimeDays: event.target.value,
+                        }))
+                      }
+                      placeholder="3"
+                      data-testid="input-catering-lead-time"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button
+                    type="button"
+                    onClick={() => updateCateringMutation.mutate(true)}
+                    disabled={
+                      !selectedRestaurant || updateCateringMutation.isPending
+                    }
+                    data-testid="button-save-catering"
+                  >
+                    {updateCateringMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save catering
+                  </Button>
+                  {offersCatering ? (
+                    <>
+                      <Button variant="outline" asChild>
+                        <Link href={cateringProfilePath}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          View public profile
+                        </Link>
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link href={`/menu-builder/${selectedRestaurant}`}>
+                          <Store className="mr-2 h-4 w-4" />
+                          Catering menu
+                        </Link>
+                      </Button>
+                      <Button variant="outline" asChild>
+                        <Link href="/messages">
+                          <MessageCircle className="mr-2 h-4 w-4" />
+                          Messages
+                        </Link>
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         ) : null}
 

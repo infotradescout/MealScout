@@ -1849,7 +1849,7 @@ export function registerUserAdminRoutes(
         const businessType = String(
           req.body?.businessType || "restaurant",
         ).toLowerCase();
-        if (!["restaurant", "bar", "food_truck"].includes(businessType)) {
+        if (!["restaurant", "bar", "food_truck", "caterer"].includes(businessType)) {
           return res.status(400).json({
             message: "Invalid businessType",
           });
@@ -1867,6 +1867,7 @@ export function registerUserAdminRoutes(
           ),
           businessType,
           isFoodTruck: businessType === "food_truck",
+          offersCatering: businessType === "caterer",
           isActive: req.body?.isActive ?? true,
           isVerified: req.body?.isVerified ?? true,
           description: req.body?.description || null,

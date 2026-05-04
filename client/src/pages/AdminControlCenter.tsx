@@ -381,6 +381,8 @@ type BriefActionLogResponse = {
 const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 const LISA_FEED_LIMIT = 40;
 
+const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+
 function formatSignalTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown time";
@@ -821,11 +823,11 @@ export default function AdminControlCenter() {
   });
 
   useEffect(() => {
-    setLiveClaims(lisaFeed?.items ?? []);
+    setLiveClaims(asArray<LisaClaimStreamItem>(lisaFeed?.items));
   }, [lisaFeed]);
 
   useEffect(() => {
-    setSignalFeed(unifiedSignals?.items ?? []);
+    setSignalFeed(asArray<UnifiedSignalItem>(unifiedSignals?.items));
   }, [unifiedSignals]);
 
   useEffect(() => {
@@ -932,16 +934,16 @@ export default function AdminControlCenter() {
       );
 
     return {
-      apps: unique(signalFeed.map((signal) => signal.family)),
-      sources: unique(signalFeed.map((signal) => signal.source)),
-      subjects: unique(signalFeed.map((signal) => signal.subjectType)),
-      claimTypes: unique(signalFeed.map((signal) => signal.streamType)),
+      apps: unique(asArray<UnifiedSignalItem>(signalFeed).map((signal) => signal.family)),
+      sources: unique(asArray<UnifiedSignalItem>(signalFeed).map((signal) => signal.source)),
+      subjects: unique(asArray<UnifiedSignalItem>(signalFeed).map((signal) => signal.subjectType)),
+      claimTypes: unique(asArray<UnifiedSignalItem>(signalFeed).map((signal) => signal.streamType)),
     };
   }, [signalFeed]);
 
   const filteredSignals = useMemo(() => {
     const query = laneQuery.trim().toLowerCase();
-    return signalFeed
+    return asArray<UnifiedSignalItem>(signalFeed)
       .filter((signal) => {
         if (usefulOnly && isOperationalNoiseSignal(signal)) return false;
         if (appFilter !== "all" && signal.family !== appFilter) return false;
@@ -1041,7 +1043,9 @@ export default function AdminControlCenter() {
 
   const promotionBriefCandidates = useMemo(() => {
     if (marketIntel?.signalContract?.mode === "truth_only") return [];
-    return (marketIntel?.contentMomentum ?? []).slice(0, 4).map((item) => {
+    return asArray<MarketIntelResponse["contentMomentum"][number]>(
+      marketIntel?.contentMomentum,
+    ).slice(0, 4).map((item) => {
       const linkedEntity = item.restaurantId
         ? canonicalEntityMap.get(`restaurant:${item.restaurantId}`)
         : null;
@@ -1066,7 +1070,7 @@ export default function AdminControlCenter() {
 
   const improvementBriefCandidates = useMemo(() => {
     if (marketIntel?.signalContract?.mode === "truth_only") return [];
-    return (priorityEntities?.items ?? []).slice(0, 4).map((item) => ({
+    return asArray<PriorityEntityItem>(priorityEntities?.items).slice(0, 4).map((item) => ({
       briefKey: `improve:${item.id}`,
       title: item.title || "Top page to improve",
       why: `Demand is forming here, but the page is still ${toPlainLabel(item.quality)} and ${toPlainLabel(item.machineReadiness)}.`,
@@ -1083,7 +1087,9 @@ export default function AdminControlCenter() {
 
   const acquisitionBriefCandidates = useMemo(() => {
     if (marketIntel?.signalContract?.mode === "truth_only") return [];
-    return (marketIntel?.acquisitionTargets ?? []).slice(0, 4).map((item) => {
+    return asArray<MarketIntelResponse["acquisitionTargets"][number]>(
+      marketIntel?.acquisitionTargets,
+    ).slice(0, 4).map((item) => {
       const entityId = String(item.id || "").split(":")[1] || item.id;
       const linkedEntity =
         canonicalEntityMap.get(`${item.entityType}:${entityId}`) ?? null;
@@ -1128,7 +1134,7 @@ export default function AdminControlCenter() {
   }, [filteredSignals, marketIntel]);
 
   const knowledgeGapCounts = useMemo(() => {
-    const items = canonicalEntities?.items ?? [];
+    const items = asArray<CanonicalEntityItem>(canonicalEntities?.items);
     return items.reduce(
       (acc, entity) => {
         for (const gap of entity.knowledgeGaps || []) {
@@ -1141,7 +1147,7 @@ export default function AdminControlCenter() {
   }, [canonicalEntities]);
 
   const actionPlaybookCounts = useMemo(() => {
-    const items = canonicalEntities?.items ?? [];
+    const items = asArray<CanonicalEntityItem>(canonicalEntities?.items);
     return items.reduce(
       (acc, entity) => {
         for (const action of entity.recommendedActions || []) {
@@ -1154,7 +1160,7 @@ export default function AdminControlCenter() {
   }, [canonicalEntities]);
 
   const latestRemediationByAction = useMemo(() => {
-    const items = remediationLog?.latest ?? [];
+    const items = asArray<RemediationLogItem>(remediationLog?.latest);
     return items.reduce(
       (acc, item) => {
         acc[`${item.entityType}:${item.entityId}:${item.actionId}`] = item;
@@ -1166,7 +1172,7 @@ export default function AdminControlCenter() {
 
   const latestBriefActionByKey = useMemo(() => {
     const map = new Map<string, BriefActionLogItem>();
-    for (const item of briefActionLog?.latest ?? []) {
+    for (const item of asArray<BriefActionLogItem>(briefActionLog?.latest)) {
       map.set(item.briefKey, item);
     }
     return map;
@@ -1642,8 +1648,12 @@ export default function AdminControlCenter() {
                 <CardDescription>Recent, evidence-backed events with direct operator next steps</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {(marketIntel?.recentTruthFeed ?? []).length ? (
-                  (marketIntel?.recentTruthFeed ?? []).map((item) => (
+                {asArray<NonNullable<MarketIntelResponse["recentTruthFeed"]>[number]>(
+                  marketIntel?.recentTruthFeed,
+                ).length ? (
+                  asArray<NonNullable<MarketIntelResponse["recentTruthFeed"]>[number]>(
+                    marketIntel?.recentTruthFeed,
+                  ).map((item) => (
                     <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
                       <div className="text-sm">{item.summary}</div>
                       <div className="mt-1 text-xs text-[color:var(--text-muted)]">{item.evidence}</div>
@@ -1800,7 +1810,7 @@ export default function AdminControlCenter() {
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   {canonicalEntities
-                    ? Object.entries(canonicalEntities.counts).map(([key, count]) => (
+                    ? Object.entries(canonicalEntities.counts || {}).map(([key, count]) => (
                         <Badge key={key} variant="outline">
                           {key} ({count})
                         </Badge>
@@ -1851,8 +1861,8 @@ export default function AdminControlCenter() {
                     <p className="text-sm text-[color:var(--text-muted)]">
                       Loading canonical entities...
                     </p>
-                  ) : canonicalEntities?.items?.length ? (
-                    canonicalEntities.items.slice(0, 8).map((entity) => (
+                  ) : asArray<CanonicalEntityItem>(canonicalEntities?.items).length ? (
+                    asArray<CanonicalEntityItem>(canonicalEntities?.items).slice(0, 8).map((entity) => (
                       <button
                         key={entity.id}
                         type="button"
@@ -1885,12 +1895,12 @@ export default function AdminControlCenter() {
                           {buildEntitySummary(entity)}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {(entity.knowledgeGaps || []).slice(0, 2).map((gap) => (
+                          {asArray<string>(entity.knowledgeGaps).slice(0, 2).map((gap) => (
                             <Badge key={gap} variant="outline">
                               missing: {toPlainLabel(gap)}
                             </Badge>
                           ))}
-                          {(entity.opportunities || []).slice(0, 2).map((opportunity) => (
+                          {asArray<string>(entity.opportunities).slice(0, 2).map((opportunity) => (
                             <Badge key={opportunity} variant="outline">
                               next: {toPlainLabel(opportunity)}
                             </Badge>
@@ -2000,7 +2010,7 @@ export default function AdminControlCenter() {
                         </p>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {marketIntel.brief.recommendedPackage.map((item) => (
+                        {asArray<string>(marketIntel.brief?.recommendedPackage).map((item) => (
                           <Badge key={item} variant="outline">
                             {item}
                           </Badge>
@@ -2015,7 +2025,7 @@ export default function AdminControlCenter() {
                           {marketIntel.changeSinceYesterday.summary}
                         </div>
                         <div className="mt-3 space-y-3">
-                          {marketIntel.changeSinceYesterday.items.slice(0, 4).map((item) => (
+                          {asArray<MarketIntelResponse["changeSinceYesterday"]["items"][number]>(marketIntel.changeSinceYesterday?.items).slice(0, 4).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2080,7 +2090,7 @@ export default function AdminControlCenter() {
                           </div>
                         ) : null}
                         <div className="mt-3 space-y-3">
-                          {marketIntel.priceScout.bestDeals.slice(0, 3).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(marketIntel.priceScout?.bestDeals).slice(0, 3).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2104,7 +2114,9 @@ export default function AdminControlCenter() {
                             <div className="text-xs font-medium text-[color:var(--text-muted)]">
                               Supply lane spotlight
                             </div>
-                            {marketIntel.priceScout.supplyLaneSummary.spotlight
+                            {asArray<NonNullable<MarketIntelResponse["priceScout"]["supplyLaneSummary"]>["spotlight"][number]>(
+                              marketIntel.priceScout.supplyLaneSummary.spotlight,
+                            )
                               .slice(0, 3)
                               .map((signal) => (
                                 <div
@@ -2185,7 +2197,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Food trend watch</div>
                         <div className="mt-3 space-y-3">
-                          {marketIntel.trendWatch.slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["trendWatch"][number]>(marketIntel.trendWatch).slice(0, 6).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2214,7 +2226,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Top search demand</div>
                         <div className="mt-3 space-y-2">
-                          {marketIntel.advertiserSignals.topQueries.slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["advertiserSignals"]["topQueries"][number]>(marketIntel.advertiserSignals?.topQueries).slice(0, 6).map((item) => (
                             <div
                               key={item.query}
                               className="flex items-center justify-between text-sm"
@@ -2229,7 +2241,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Location demand</div>
                         <div className="mt-3 space-y-2">
-                          {marketIntel.advertiserSignals.cityDemand.slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["advertiserSignals"]["cityDemand"][number]>(marketIntel.advertiserSignals?.cityDemand).slice(0, 6).map((item) => (
                             <div
                               key={`${item.businessName}-${item.address}`}
                               className="flex items-center justify-between text-sm"
@@ -2249,7 +2261,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Cuisine clusters</div>
                         <div className="mt-3 space-y-2">
-                          {marketIntel.advertiserSignals.cuisineDemand.slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["advertiserSignals"]["cuisineDemand"][number]>(marketIntel.advertiserSignals?.cuisineDemand).slice(0, 6).map((item) => (
                             <div
                               key={item.cuisineType || "unknown"}
                               className="flex items-center justify-between text-sm"
@@ -2271,7 +2283,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Content momentum</div>
                         <div className="mt-3 space-y-3">
-                          {marketIntel.contentMomentum.slice(0, 5).map((item) => (
+                          {asArray<MarketIntelResponse["contentMomentum"][number]>(marketIntel.contentMomentum).slice(0, 5).map((item) => (
                             <div key={item.id} className="rounded-lg border border-[var(--border-subtle)] p-3">
                               <div className="font-medium">{item.title}</div>
                               <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -2289,7 +2301,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Strategic acquisition targets</div>
                         <div className="mt-3 space-y-3">
-                          {marketIntel.acquisitionTargets.slice(0, 5).map((item) => (
+                          {asArray<MarketIntelResponse["acquisitionTargets"][number]>(marketIntel.acquisitionTargets).slice(0, 5).map((item) => (
                             <button
                               key={item.id}
                               type="button"
@@ -2338,7 +2350,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Best live value deals</div>
                         <div className="mt-3 space-y-3">
-                          {marketIntel.priceScout.bestDeals.slice(0, 5).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(marketIntel.priceScout?.bestDeals).slice(0, 5).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2369,7 +2381,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Best value cuisines</div>
                         <div className="mt-3 space-y-2">
-                          {marketIntel.priceScout.cuisineValue.slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["cuisineValue"][number]>(marketIntel.priceScout?.cuisineValue).slice(0, 6).map((item) => (
                             <div
                               key={item.cuisineType}
                               className="flex items-center justify-between gap-2 text-sm"
@@ -2411,7 +2423,7 @@ export default function AdminControlCenter() {
                     Loading priority queue...
                   </p>
                 ) : priorityEntities?.items?.length ? (
-                  priorityEntities.items.map((entity) => (
+                  asArray<PriorityEntityItem>(priorityEntities.items).map((entity) => (
                     <button
                       key={`priority-${entity.id}`}
                       type="button"
@@ -2435,7 +2447,7 @@ export default function AdminControlCenter() {
                         {buildPrioritySummary(entity)}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {entity.reasons.slice(0, 2).map((reason) => (
+                        {asArray<string>(entity.reasons).slice(0, 2).map((reason) => (
                           <Badge key={reason} variant="outline">
                             {toPlainLabel(reason)}
                           </Badge>
@@ -2467,7 +2479,7 @@ export default function AdminControlCenter() {
                     Loading authority delta...
                   </p>
                 ) : authorityGap?.items?.length ? (
-                  authorityGap.items.map((entity) => (
+                  asArray<AuthorityGapItem>(authorityGap.items).map((entity) => (
                     <button
                       key={`authority-${entity.id}`}
                       type="button"
@@ -2493,7 +2505,7 @@ export default function AdminControlCenter() {
                         <Badge variant="outline">{toPlainLabel(entity.freshness)}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {entity.knowledgeGaps.slice(0, 2).map((gap) => (
+                        {asArray<string>(entity.knowledgeGaps).slice(0, 2).map((gap) => (
                           <Badge key={gap} variant="outline">
                             {toPlainLabel(gap)}
                           </Badge>
@@ -2573,7 +2585,7 @@ export default function AdminControlCenter() {
                         <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                           <div className="text-sm font-medium">Traffic mix</div>
                           <div className="mt-3 space-y-2">
-                            {Object.entries(botTraffic.categories)
+                            {Object.entries(botTraffic.categories || {})
                               .sort((a, b) => b[1] - a[1])
                               .map(([category, count]) => (
                                 <div
@@ -2592,7 +2604,7 @@ export default function AdminControlCenter() {
                         <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                           <div className="text-sm font-medium">Interpretation</div>
                           <div className="mt-3 space-y-2 text-sm text-[color:var(--text-muted)]">
-                            {botTraffic.notes.map((note) => (
+                            {asArray<string>(botTraffic.notes).map((note) => (
                               <p key={note}>{note}</p>
                             ))}
                           </div>
@@ -2602,7 +2614,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Top crawler agents</div>
                         <div className="mt-3 max-h-[360px] space-y-3 overflow-y-auto pr-1">
-                          {botTraffic.topAgents.map((agent) => (
+                          {asArray<BotTrafficResponse["topAgents"][number]>(botTraffic.topAgents).map((agent) => (
                             <div
                               key={`${agent.label}-${agent.category}`}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2622,7 +2634,7 @@ export default function AdminControlCenter() {
                                 {agent.sampleUserAgent || "No user agent captured"}
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
-                                {agent.topPaths.map((path) => (
+                                {asArray<BotTrafficResponse["topAgents"][number]["topPaths"][number]>(agent.topPaths).map((path) => (
                                   <Badge key={path.path} variant="outline">
                                     {path.path} ({path.hits})
                                   </Badge>
@@ -2637,7 +2649,7 @@ export default function AdminControlCenter() {
                     <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                       <div className="text-sm font-medium">Most requested paths</div>
                       <div className="mt-3 space-y-2">
-                        {botTraffic.topPaths.slice(0, 10).map((path) => (
+                        {asArray<BotTrafficResponse["topPaths"][number]>(botTraffic.topPaths).slice(0, 10).map((path) => (
                           <div
                             key={path.path}
                             className="flex flex-col gap-2 rounded-lg border border-[var(--border-subtle)] px-3 py-2 md:flex-row md:items-center md:justify-between"

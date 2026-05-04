@@ -125,6 +125,52 @@ export function registerSystemUtilityRoutes(
     res.redirect(`/?ref=${safeTag}`);
   });
 
+  app.get("/ref/:tag/*", async (req: any, res) => {
+    const tag = String(req.params?.tag || "").trim();
+    const rest = String(req.params?.[0] || "").replace(/^\/+/, "");
+    const targetPath = `/${rest || ""}`;
+    if (!tag) return res.redirect(targetPath || "/");
+
+    try {
+      const { resolveAffiliateUserId } = await import("../affiliateTagService");
+      const { recordReferralClick } = await import("../referralService");
+      const affiliateUserId = await resolveAffiliateUserId(tag);
+      let referralRecordId: string | null = null;
+
+      if (affiliateUserId) {
+        const result = await recordReferralClick(
+          affiliateUserId,
+          targetPath || "/",
+          req.get("user-agent") || undefined,
+          req.ip || undefined,
+        );
+        referralRecordId = result?.referralId || null;
+      }
+
+      res.cookie("referralId", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      res.cookie("referralTag", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      if (referralRecordId) {
+        res.cookie("referralRecordId", referralRecordId, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    } catch (error) {
+      console.error("[affiliate] Failed to process clean referral path:", error);
+    }
+
+    res.redirect(targetPath || "/");
+  });
+
   app.post(
     "/api/cron/auto-close",
     findIncidentHandler(incidentRoutes, "/cron/auto-close"),

@@ -824,6 +824,135 @@ export function registerPublicDiscoveryRoutes(app: Express) {
     }
   });
 
+  app.get("/api/public/resolve-profile/:entity/:slug", async (req, res) => {
+    try {
+      const entity = String(req.params.entity || "").toLowerCase().trim();
+      const slug = toSlug(String(req.params.slug || ""));
+      if (!slug) {
+        return res.status(400).json({ message: "Profile slug is required" });
+      }
+
+      if (entity === "restaurant" || entity === "truck" || entity === "bar") {
+        const rows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
+            isActive: restaurants.isActive,
+            ownerId: restaurants.ownerId,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .where(
+            and(
+              eq(restaurants.isActive, true),
+              entity === "truck"
+                ? eq(restaurants.isFoodTruck, true)
+                : entity === "bar"
+                  ? eq(restaurants.businessType, "bar")
+                  : sql`true`,
+              sql`regexp_replace(regexp_replace(lower(coalesce(${restaurants.name}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+            ),
+          )
+          .orderBy(desc(restaurants.isVerified), desc(restaurants.createdAt))
+          .limit(5);
+
+        const row = (rows as any[]).find((candidate) =>
+          isPublicProfileVisibleForVisitors({
+            accountSettings: candidate.ownerAccountSettings,
+          }),
+        );
+        if (!row) return res.status(404).json({ message: "Profile not found" });
+
+        const resolvedSlug = toSlug(row.name) || row.id;
+        const profilePath =
+          row.isFoodTruck || row.businessType === "food_truck"
+            ? `/truck/${resolvedSlug}`
+            : row.businessType === "bar"
+              ? `/bar/${resolvedSlug}`
+              : `/restaurant/${resolvedSlug}`;
+
+        return res.json({
+          entity: row.isFoodTruck ? "truck" : row.businessType === "bar" ? "bar" : "restaurant",
+          id: row.id,
+          profilePath,
+        });
+      }
+
+      if (entity === "host" || entity === "location") {
+        const rows = await db
+          .select({
+            id: hosts.id,
+            businessName: hosts.businessName,
+            userId: hosts.userId,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(hosts)
+          .leftJoin(users, eq(hosts.userId, users.id))
+          .where(
+            and(
+              sql`regexp_replace(regexp_replace(lower(coalesce(${hosts.businessName}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+            ),
+          )
+          .orderBy(desc(hosts.isVerified), desc(hosts.createdAt))
+          .limit(5);
+
+        const row = (rows as any[]).find((candidate) =>
+          isPublicProfileVisibleForVisitors({
+            accountSettings: candidate.ownerAccountSettings,
+          }),
+        );
+        if (!row) return res.status(404).json({ message: "Profile not found" });
+        const resolvedSlug = toSlug(row.businessName) || row.id;
+        return res.json({
+          entity: "host",
+          id: row.id,
+          profilePath: `/location/${resolvedSlug}`,
+        });
+      }
+
+      if (entity === "supplier") {
+        const rows = await db
+          .select({
+            id: suppliers.id,
+            businessName: suppliers.businessName,
+            userId: suppliers.userId,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(suppliers)
+          .leftJoin(users, eq(suppliers.userId, users.id))
+          .where(
+            and(
+              eq(suppliers.isActive, true),
+              sql`regexp_replace(regexp_replace(lower(coalesce(${suppliers.businessName}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
+            ),
+          )
+          .orderBy(desc(suppliers.createdAt))
+          .limit(5);
+
+        const row = (rows as any[]).find((candidate) =>
+          isPublicProfileVisibleForVisitors({
+            accountSettings: candidate.ownerAccountSettings,
+          }),
+        );
+        if (!row) return res.status(404).json({ message: "Profile not found" });
+        const resolvedSlug = toSlug(row.businessName) || row.id;
+        return res.json({
+          entity: "supplier",
+          id: row.id,
+          profilePath: `/supplier/${resolvedSlug}`,
+        });
+      }
+
+      return res.status(400).json({ message: "Unsupported profile entity" });
+    } catch (error) {
+      console.error("Error resolving public profile slug:", error);
+      res.status(500).json({ message: "Failed to resolve profile" });
+    }
+  });
+
   app.get("/api/public/evidence/:entity/:id", async (req, res) => {
     try {
       if (!requireStaffOrAdmin(req, res)) {

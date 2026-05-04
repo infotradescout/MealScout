@@ -6,6 +6,7 @@ import {
   eq,
   gt,
   ilike,
+  isNotNull,
   isNull,
   or,
   sql,
@@ -24,9 +25,11 @@ import {
 } from "../services/businessTeamAccess";
 import { submitIndexNowUrls } from "../services/indexNow";
 import { isAuthenticated } from "../unifiedAuth";
+import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 import {
   jobApplications,
   jobPostings,
+  hosts,
   restaurants,
   users,
 } from "@shared/schema";
@@ -89,7 +92,8 @@ const optionalString = z
   .nullable();
 
 const jobPayloadSchema = z.object({
-  restaurantId: z.string().min(1),
+  restaurantId: z.string().min(1).optional().nullable(),
+  hostId: z.string().min(1).optional().nullable(),
   title: z.string().min(2).max(160),
   roleType: optionalString,
   employmentType: optionalString,
@@ -180,6 +184,7 @@ const openJobWindow = () =>
 const publicJobSelect = {
   id: jobPostings.id,
   restaurantId: jobPostings.restaurantId,
+  hostId: jobPostings.hostId,
   title: jobPostings.title,
   roleType: jobPostings.roleType,
   employmentType: jobPostings.employmentType,
@@ -204,40 +209,68 @@ const publicJobSelect = {
   restaurantCity: restaurants.city,
   restaurantState: restaurants.state,
   restaurantWebsiteUrl: restaurants.websiteUrl,
+  hostName: hosts.businessName,
+  hostLocationType: hosts.locationType,
+  hostAddress: hosts.address,
+  hostCity: hosts.city,
+  hostState: hosts.state,
+  hostWebsiteUrl: hosts.businessWebsite,
+  hostImageUrl: hosts.spotImageUrl,
 };
 
-type PublicJobRow = typeof publicJobSelect & {
-  id: string;
-  title: string;
-  restaurantName: string;
-};
+type PublicJobRow = any;
 
 const decorateJob = (row: any) => {
+  const isHostJob = Boolean(row.hostId);
+  const businessId = isHostJob ? row.hostId : row.restaurantId;
+  const businessName =
+    (isHostJob ? row.hostName : row.restaurantName) ||
+    row.restaurantName ||
+    row.hostName ||
+    "MealScout business";
   const slug =
-    toSlug(`${row.restaurantName || "mealscout"} ${row.title || "job"}`) ||
+    toSlug(`${businessName || "mealscout"} ${row.title || "job"}`) ||
     row.id;
+  const businessSlug = toSlug(businessName) || businessId || "business";
+  const businessProfileUrl = isHostJob
+    ? `/p/host/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`
+    : `/restaurant/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`;
   return {
     ...row,
+    businessEntity: isHostJob ? "host" : "restaurant",
+    businessId,
+    businessName,
+    businessProfileUrl,
+    restaurantName: row.restaurantName || businessName,
+    restaurantProfileUrl: businessProfileUrl,
+    hostProfileUrl: isHostJob ? businessProfileUrl : null,
+    restaurantLogoUrl: row.restaurantLogoUrl || row.hostImageUrl || null,
+    restaurantCoverImageUrl:
+      row.restaurantCoverImageUrl || row.hostImageUrl || null,
+    restaurantAddress: row.restaurantAddress || row.hostAddress || null,
+    restaurantCity: row.restaurantCity || row.hostCity || null,
+    restaurantState: row.restaurantState || row.hostState || null,
+    restaurantWebsiteUrl: row.restaurantWebsiteUrl || row.hostWebsiteUrl || null,
     slug,
     publicUrl: `/jobs/${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`,
-    restaurantProfileUrl: `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(toSlug(row.restaurantName) || row.restaurantId)}`,
   };
 };
 
-const absoluteJobUrl = (job: any, restaurantName?: string | null) => {
+const absoluteJobUrl = (job: any, businessName?: string | null) => {
   const decorated = decorateJob({
     ...job,
-    restaurantName: restaurantName || job?.restaurantName || "",
+    restaurantName: businessName || job?.restaurantName || "",
+    hostName: businessName || job?.hostName || "",
   });
   return `${resolveBaseUrl()}${decorated.publicUrl}`;
 };
 
 const submitJobToIndexNow = (
   job: any,
-  restaurantName?: string | null,
+  businessName?: string | null,
   reason = "job-updated",
 ) => {
-  const url = absoluteJobUrl(job, restaurantName);
+  const url = absoluteJobUrl(job, businessName);
   submitIndexNowUrls([url])
     .then((result) => {
       if (result.ok) {
@@ -255,7 +288,8 @@ const submitJobToIndexNow = (
 const normalizeJobPayload = (raw: z.infer<typeof jobPayloadSchema>) => {
   const status = trimToValue(raw.status, "open", 40);
   return {
-    restaurantId: raw.restaurantId,
+    restaurantId: trimToNull(raw.restaurantId, 80),
+    hostId: trimToNull(raw.hostId, 80),
     title: trimToValue(raw.title, "Help wanted", 160),
     roleType: trimToValue(raw.roleType, "other", 80),
     employmentType: trimToValue(raw.employmentType, "part_time", 80),
@@ -276,6 +310,41 @@ const normalizeJobPayload = (raw: z.infer<typeof jobPayloadSchema>) => {
     status: JOB_STATUSES.has(status) ? status : "open",
     expiresAt: toOptionalDate(raw.expiresAt),
   };
+};
+
+type BusinessTarget = {
+  restaurantId?: string | null;
+  hostId?: string | null;
+};
+
+const normalizeBusinessTarget = (target: BusinessTarget): BusinessTarget => ({
+  restaurantId: trimToNull(target.restaurantId, 80),
+  hostId: trimToNull(target.hostId, 80),
+});
+
+const getTargetError = (target: BusinessTarget) => {
+  const normalized = normalizeBusinessTarget(target);
+  if (normalized.restaurantId && normalized.hostId) {
+    return "Choose either a restaurant or a host, not both.";
+  }
+  if (!normalized.restaurantId && !normalized.hostId) {
+    return "Business is required.";
+  }
+  return null;
+};
+
+const jobTargetWhere = (target: BusinessTarget) => {
+  const normalized = normalizeBusinessTarget(target);
+  return normalized.hostId
+    ? eq(jobPostings.hostId, normalized.hostId)
+    : eq(jobPostings.restaurantId, String(normalized.restaurantId || ""));
+};
+
+const applicationTargetWhere = (target: BusinessTarget) => {
+  const normalized = normalizeBusinessTarget(target);
+  return normalized.hostId
+    ? eq(jobApplications.hostId, normalized.hostId)
+    : eq(jobApplications.restaurantId, String(normalized.restaurantId || ""));
 };
 
 const requireRestaurantAccess = async (
@@ -300,8 +369,76 @@ const requireRestaurantAccess = async (
   return true;
 };
 
+const requireHostAccess = async (req: any, res: Response, hostId: string) => {
+  const userId = String(req.user?.id || "");
+  if (!userId) {
+    res.status(401).json({ message: "Please sign in first." });
+    return false;
+  }
+  const [host] = await db
+    .select({ id: hosts.id, userId: hosts.userId })
+    .from(hosts)
+    .where(eq(hosts.id, hostId))
+    .limit(1);
+  if (!host) {
+    res.status(404).json({ message: "Host profile not found." });
+    return false;
+  }
+  if (String(host.userId) === userId || isStaffOrAdminUser(req.user)) {
+    return true;
+  }
+  res.status(403).json({ message: "You do not have access to this business." });
+  return false;
+};
+
+const requireBusinessTargetAccess = async (
+  req: any,
+  res: Response,
+  target: BusinessTarget,
+) => {
+  const normalized = normalizeBusinessTarget(target);
+  const targetError = getTargetError(normalized);
+  if (targetError) {
+    res.status(400).json({ message: targetError });
+    return false;
+  }
+  if (normalized.hostId) {
+    return requireHostAccess(req, res, normalized.hostId);
+  }
+  return requireRestaurantAccess(req, res, String(normalized.restaurantId));
+};
+
+const loadBusinessForTarget = async (target: BusinessTarget) => {
+  const normalized = normalizeBusinessTarget(target);
+  if (normalized.hostId) {
+    const [host] = await db
+      .select({
+        id: hosts.id,
+        name: hosts.businessName,
+        city: hosts.city,
+        state: hosts.state,
+      })
+      .from(hosts)
+      .where(eq(hosts.id, normalized.hostId))
+      .limit(1);
+    return host || null;
+  }
+  const [restaurant] = await db
+    .select({
+      id: restaurants.id,
+      name: restaurants.name,
+      city: restaurants.city,
+      state: restaurants.state,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.id, String(normalized.restaurantId || "")))
+    .limit(1);
+  return restaurant || null;
+};
+
 async function getPublicJobs(params: {
   restaurantId?: string;
+  hostId?: string;
   city?: string;
   state?: string;
   roleType?: string;
@@ -312,11 +449,17 @@ async function getPublicJobs(params: {
   const clauses = [
     eq(jobPostings.status, "open"),
     openJobWindow(),
-    eq(restaurants.isActive, true),
+    or(
+      and(isNotNull(jobPostings.restaurantId), eq(restaurants.isActive, true)),
+      isNotNull(jobPostings.hostId),
+    )!,
   ];
 
   if (params.restaurantId) {
     clauses.push(eq(jobPostings.restaurantId, params.restaurantId));
+  }
+  if (params.hostId) {
+    clauses.push(eq(jobPostings.hostId, params.hostId));
   }
   if (params.city) {
     clauses.push(ilike(jobPostings.city, params.city));
@@ -334,6 +477,7 @@ async function getPublicJobs(params: {
         ilike(jobPostings.title, term),
         ilike(jobPostings.description, term),
         ilike(restaurants.name, term),
+        ilike(hosts.businessName, term),
       )!,
     );
   }
@@ -341,7 +485,8 @@ async function getPublicJobs(params: {
   const rows = await db
     .select(publicJobSelect)
     .from(jobPostings)
-    .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+    .leftJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+    .leftJoin(hosts, eq(hosts.id, jobPostings.hostId))
     .where(and(...clauses))
     .orderBy(desc(jobPostings.createdAt))
     .limit(limit);
@@ -353,15 +498,25 @@ async function sendApplicationNotice(params: {
   job: any;
   application: any;
 }) {
-  const [owner] = await db
-    .select({
-      email: users.email,
-      restaurantName: restaurants.name,
-    })
-    .from(restaurants)
-    .innerJoin(users, eq(users.id, restaurants.ownerId))
-    .where(eq(restaurants.id, params.job.restaurantId))
-    .limit(1);
+  const [owner] = params.job.hostId
+    ? await db
+        .select({
+          email: users.email,
+          businessName: hosts.businessName,
+        })
+        .from(hosts)
+        .innerJoin(users, eq(users.id, hosts.userId))
+        .where(eq(hosts.id, params.job.hostId))
+        .limit(1)
+    : await db
+        .select({
+          email: users.email,
+          businessName: restaurants.name,
+        })
+        .from(restaurants)
+        .innerJoin(users, eq(users.id, restaurants.ownerId))
+        .where(eq(restaurants.id, params.job.restaurantId))
+        .limit(1);
 
   if (!owner?.email) return;
 
@@ -371,7 +526,7 @@ async function sendApplicationNotice(params: {
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.55;color:#1f2937">
       <h2 style="margin:0 0 12px">New job application</h2>
-      <p><strong>${escapeHtml(params.application.applicantName)}</strong> applied for <strong>${escapeHtml(params.job.title)}</strong> at ${escapeHtml(owner.restaurantName)}.</p>
+      <p><strong>${escapeHtml(params.application.applicantName)}</strong> applied for <strong>${escapeHtml(params.job.title)}</strong> at ${escapeHtml(owner.businessName)}.</p>
       <p><strong>Email:</strong> ${escapeHtml(params.application.applicantEmail)}</p>
       ${params.application.applicantPhone ? `<p><strong>Phone:</strong> ${escapeHtml(params.application.applicantPhone)}</p>` : ""}
       ${params.application.availability ? `<p><strong>Availability:</strong><br>${escapeHtml(params.application.availability)}</p>` : ""}
@@ -401,6 +556,7 @@ export function registerJobBoardRoutes(app: Express) {
     try {
       const jobs = await getPublicJobs({
         restaurantId: trimToNull(req.query.restaurantId, 80) || undefined,
+        hostId: trimToNull(req.query.hostId, 80) || undefined,
         city: trimToNull(req.query.city, 120) || undefined,
         state: trimToNull(req.query.state, 80) || undefined,
         roleType: trimToNull(req.query.roleType, 80) || undefined,
@@ -429,19 +585,41 @@ export function registerJobBoardRoutes(app: Express) {
     }
   });
 
+  app.get("/api/jobs/host/:hostId/open", async (req, res) => {
+    try {
+      const hostId = String(req.params.hostId || "").trim();
+      const jobs = await getPublicJobs({ hostId, limit: 12 });
+      res.json({
+        jobs,
+        activeJob: jobs[0] || null,
+        openCount: jobs.length,
+      });
+    } catch (error) {
+      console.error("[jobs] failed to load host jobs:", error);
+      res.status(500).json({ message: "Failed to load open jobs" });
+    }
+  });
+
   app.get("/api/jobs/:jobId", async (req, res) => {
     try {
       const jobId = String(req.params.jobId || "").trim();
       const [job] = await db
         .select(publicJobSelect)
         .from(jobPostings)
-        .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+        .leftJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+        .leftJoin(hosts, eq(hosts.id, jobPostings.hostId))
         .where(
           and(
             eq(jobPostings.id, jobId),
             eq(jobPostings.status, "open"),
             openJobWindow(),
-            eq(restaurants.isActive, true),
+            or(
+              and(
+                isNotNull(jobPostings.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+              isNotNull(jobPostings.hostId),
+            )!,
           ),
         )
         .limit(1);
@@ -461,13 +639,20 @@ export function registerJobBoardRoutes(app: Express) {
       const [job] = await db
         .select(publicJobSelect)
         .from(jobPostings)
-        .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+        .leftJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+        .leftJoin(hosts, eq(hosts.id, jobPostings.hostId))
         .where(
           and(
             eq(jobPostings.id, jobId),
             eq(jobPostings.status, "open"),
             openJobWindow(),
-            eq(restaurants.isActive, true),
+            or(
+              and(
+                isNotNull(jobPostings.restaurantId),
+                eq(restaurants.isActive, true),
+              ),
+              isNotNull(jobPostings.hostId),
+            )!,
           ),
         )
         .limit(1);
@@ -513,7 +698,8 @@ export function registerJobBoardRoutes(app: Express) {
         .insert(jobApplications)
         .values({
           jobId,
-          restaurantId: job.restaurantId,
+          restaurantId: job.restaurantId || null,
+          hostId: job.hostId || null,
           applicantUserId:
             req.isAuthenticated?.() && req.user?.id ? req.user.id : null,
           applicantName: trimToValue(parsed.data.applicantName, "Applicant", 160),
@@ -556,6 +742,7 @@ export function registerJobBoardRoutes(app: Express) {
       if (isStaffOrAdminUser(req.user)) {
         const search = trimToNull(req.query.q, 120);
         const includeRestaurantId = trimToNull(req.query.includeRestaurantId, 80);
+        const includeHostId = trimToNull(req.query.includeHostId, 80);
         const limit = Math.min(
           Math.max(Number.parseInt(String(req.query.limit || "150"), 10) || 150, 1),
           500,
@@ -616,11 +803,115 @@ export function registerJobBoardRoutes(app: Express) {
           }
         }
 
-        return res.json({ restaurants: rows, scope: "all" });
+        const hostClauses = [];
+        if (search) {
+          const term = `%${search.replace(/[%_]/g, "\\$&")}%`;
+          hostClauses.push(
+            or(
+              ilike(hosts.businessName, term),
+              ilike(hosts.locationType, term),
+              ilike(hosts.city, term),
+              ilike(hosts.state, term),
+            )!,
+          );
+        }
+
+        let hostRows = await db
+          .select({
+            id: hosts.id,
+            name: hosts.businessName,
+            businessType: hosts.locationType,
+            cuisineType: hosts.locationType,
+            city: hosts.city,
+            state: hosts.state,
+            ownerId: hosts.userId,
+            isFoodTruck: sql<boolean>`false`,
+            isActive: sql<boolean>`true`,
+          })
+          .from(hosts)
+          .where(hostClauses.length ? and(...hostClauses) : undefined)
+          .orderBy(desc(hosts.createdAt))
+          .limit(limit);
+
+        if (
+          includeHostId &&
+          !hostRows.some((row: { id: string }) => row.id === includeHostId)
+        ) {
+          const [included] = await db
+            .select({
+              id: hosts.id,
+              name: hosts.businessName,
+              businessType: hosts.locationType,
+              cuisineType: hosts.locationType,
+              city: hosts.city,
+              state: hosts.state,
+              ownerId: hosts.userId,
+              isFoodTruck: sql<boolean>`false`,
+              isActive: sql<boolean>`true`,
+            })
+            .from(hosts)
+            .where(eq(hosts.id, includeHostId))
+            .limit(1);
+
+          if (included) {
+            hostRows = [included, ...hostRows].slice(0, limit);
+          }
+        }
+
+        const businesses = [
+          ...rows.map((row: any) => ({
+            ...row,
+            entityType: "restaurant",
+            targetKey: `restaurant:${row.id}`,
+          })),
+          ...hostRows.map((row: any) => ({
+            ...row,
+            entityType: "host",
+            targetKey: `host:${row.id}`,
+          })),
+        ];
+
+        return res.json({
+          restaurants: rows,
+          hosts: hostRows,
+          businesses,
+          scope: "all",
+        });
       }
 
       const context = await getBusinessAccessContext(String(req.user.id));
-      res.json({ restaurants: context.restaurants, scope: "managed" });
+      const hostRows = await db
+        .select({
+          id: hosts.id,
+          name: hosts.businessName,
+          businessType: hosts.locationType,
+          cuisineType: hosts.locationType,
+          city: hosts.city,
+          state: hosts.state,
+          ownerId: hosts.userId,
+          isFoodTruck: sql<boolean>`false`,
+          isActive: sql<boolean>`true`,
+        })
+        .from(hosts)
+        .where(eq(hosts.userId, String(req.user.id)))
+        .orderBy(desc(hosts.createdAt));
+      res.json({
+        restaurants: context.restaurants,
+        hosts: hostRows,
+        businesses: [
+          ...context.restaurants.map((row: any) => ({
+            ...row,
+            entityType: "restaurant",
+            targetKey: `restaurant:${row.id}`,
+          })),
+          ...hostRows.map((row: any) => ({
+            ...row,
+            entityType: "host",
+            targetKey: `host:${row.id}`,
+          })),
+        ],
+        scope: "managed",
+      });
     } catch (error) {
       console.error("[jobs] failed to load hiring businesses:", error);
       res.status(500).json({ message: "Failed to load businesses" });
@@ -629,30 +920,28 @@ export function registerJobBoardRoutes(app: Express) {
 
   app.get("/api/owner/jobs", isAuthenticated, async (req: any, res) => {
     try {
-      const restaurantId = String(req.query.restaurantId || "").trim();
-      if (!restaurantId) {
-        return res.status(400).json({ message: "Restaurant is required" });
-      }
-      if (!(await requireRestaurantAccess(req, res, restaurantId))) return;
+      const target = normalizeBusinessTarget({
+        restaurantId: req.query.restaurantId,
+        hostId: req.query.hostId,
+      });
+      if (!(await requireBusinessTargetAccess(req, res, target))) return;
 
       const jobs = await db
         .select()
         .from(jobPostings)
-        .where(eq(jobPostings.restaurantId, restaurantId))
+        .where(jobTargetWhere(target))
         .orderBy(desc(jobPostings.createdAt));
 
-      const counts = await db.execute(sql`
-        select job_id, count(*)::int as count
-        from job_applications
-        where restaurant_id = ${restaurantId}
-        group by job_id
-      `);
-      const countByJob = new Map(
-        (counts.rows || []).map((row: any) => [
-          String(row.job_id),
-          Number(row.count || 0),
-        ]),
-      );
+      const counts = await db
+        .select({ jobId: jobApplications.jobId })
+        .from(jobApplications)
+        .where(applicationTargetWhere(target));
+      const countByJob = new Map<string, number>();
+      (counts as Array<{ jobId?: string | null }>).forEach((row) => {
+        const key = String(row.jobId || "");
+        if (!key) return;
+        countByJob.set(key, (countByJob.get(key) || 0) + 1);
+      });
 
       const decorated = jobs.map((job: any) => ({
         ...job,
@@ -681,35 +970,39 @@ export function registerJobBoardRoutes(app: Express) {
         });
       }
       const payload = normalizeJobPayload(parsed.data);
-      if (!(await requireRestaurantAccess(req, res, payload.restaurantId))) {
-        return;
-      }
+      if (!(await requireBusinessTargetAccess(req, res, payload))) return;
 
-      const [restaurant] = await db
-        .select({
-          city: restaurants.city,
-          state: restaurants.state,
-          name: restaurants.name,
-        })
-        .from(restaurants)
-        .where(eq(restaurants.id, payload.restaurantId))
-        .limit(1);
+      const business = await loadBusinessForTarget(payload);
 
       const [job] = await db
         .insert(jobPostings)
         .values({
           ...payload,
           postedByUserId: req.user.id,
-          city: payload.city || restaurant?.city || null,
-          state: payload.state || restaurant?.state || null,
+          city: payload.city || business?.city || null,
+          state: payload.state || business?.state || null,
           locationLabel:
             payload.locationLabel ||
-            [restaurant?.city, restaurant?.state].filter(Boolean).join(", ") ||
+            [business?.city, business?.state].filter(Boolean).join(", ") ||
             null,
         })
         .returning();
 
-      submitJobToIndexNow(job, restaurant?.name, "job-created");
+      submitJobToIndexNow(job, business?.name, "job-created");
+      recordMealScoutCreditAction({
+        userId: req.user.id,
+        action: "job_post_created",
+        sourceId: job.id,
+        entityType: payload.hostId ? "host" : "restaurant",
+        entityId: payload.hostId || payload.restaurantId || null,
+        metadata: {
+          title: job.title,
+          roleType: job.roleType,
+          businessName: business?.name || null,
+        },
+      }).catch((creditError) => {
+        console.error("[credits] failed to record job_post_created:", creditError);
+      });
       res.status(201).json({ job });
     } catch (error) {
       console.error("[jobs] failed to create job:", error);
@@ -733,26 +1026,16 @@ export function registerJobBoardRoutes(app: Express) {
           });
         }
         const payload = normalizeJobPayload(parsed.data);
-        if (!(await requireRestaurantAccess(req, res, payload.restaurantId))) {
-          return;
-        }
+        if (!(await requireBusinessTargetAccess(req, res, payload))) return;
 
-        const [restaurant] = await db
-          .select({
-            city: restaurants.city,
-            state: restaurants.state,
-            name: restaurants.name,
-          })
-          .from(restaurants)
-          .where(eq(restaurants.id, payload.restaurantId))
-          .limit(1);
+        const business = await loadBusinessForTarget(payload);
 
         const [existing] = await db
           .select()
           .from(jobPostings)
           .where(
             and(
-              eq(jobPostings.restaurantId, payload.restaurantId),
+              jobTargetWhere(payload),
               eq(jobPostings.status, "open"),
             ),
           )
@@ -765,11 +1048,11 @@ export function registerJobBoardRoutes(app: Express) {
             .set({
               ...payload,
               postedByUserId: req.user.id,
-              city: payload.city || restaurant?.city || null,
-              state: payload.state || restaurant?.state || null,
+              city: payload.city || business?.city || null,
+              state: payload.state || business?.state || null,
               locationLabel:
                 payload.locationLabel ||
-                [restaurant?.city, restaurant?.state]
+                [business?.city, business?.state]
                   .filter(Boolean)
                   .join(", ") ||
                 null,
@@ -777,7 +1060,7 @@ export function registerJobBoardRoutes(app: Express) {
             })
             .where(eq(jobPostings.id, existing.id))
             .returning();
-          submitJobToIndexNow(job, restaurant?.name, "help-wanted-updated");
+          submitJobToIndexNow(job, business?.name, "help-wanted-updated");
           return res.json({ job, mode: "updated" });
         }
 
@@ -786,19 +1069,33 @@ export function registerJobBoardRoutes(app: Express) {
           .values({
             ...payload,
             postedByUserId: req.user.id,
-            city: payload.city || restaurant?.city || null,
-            state: payload.state || restaurant?.state || null,
+            city: payload.city || business?.city || null,
+            state: payload.state || business?.state || null,
             locationLabel:
               payload.locationLabel ||
-              [restaurant?.city, restaurant?.state].filter(Boolean).join(", ") ||
+              [business?.city, business?.state].filter(Boolean).join(", ") ||
               null,
             description:
               payload.description ||
-              `Join the team at ${restaurant?.name || "this MealScout business"}. Share your availability and experience so they can follow up quickly.`,
+              `Join the team at ${business?.name || "this MealScout business"}. Share your availability and experience so they can follow up quickly.`,
           })
           .returning();
 
-        submitJobToIndexNow(job, restaurant?.name, "help-wanted-created");
+        submitJobToIndexNow(job, business?.name, "help-wanted-created");
+        recordMealScoutCreditAction({
+          userId: req.user.id,
+          action: "help_wanted_enabled",
+          sourceId: job.id,
+          entityType: payload.hostId ? "host" : "restaurant",
+          entityId: payload.hostId || payload.restaurantId || null,
+          metadata: {
+            title: job.title,
+            roleType: job.roleType,
+            businessName: business?.name || null,
+          },
+        }).catch((creditError) => {
+          console.error("[credits] failed to record help_wanted_enabled:", creditError);
+        });
         res.status(201).json({ job, mode: "created" });
       } catch (error) {
         console.error("[jobs] failed to toggle help wanted:", error);
@@ -812,23 +1109,22 @@ export function registerJobBoardRoutes(app: Express) {
     isAuthenticated,
     async (req: any, res) => {
       try {
-        const restaurantId = String(req.body?.restaurantId || "").trim();
-        if (!restaurantId) {
-          return res.status(400).json({ message: "Restaurant is required" });
-        }
-        if (!(await requireRestaurantAccess(req, res, restaurantId))) return;
+        const target = normalizeBusinessTarget({
+          restaurantId: req.body?.restaurantId,
+          hostId: req.body?.hostId,
+        });
+        if (!(await requireBusinessTargetAccess(req, res, target))) return;
+        const business = await loadBusinessForTarget(target);
 
         const jobsToClose = await db
           .select({
             id: jobPostings.id,
             title: jobPostings.title,
-            restaurantName: restaurants.name,
           })
           .from(jobPostings)
-          .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
           .where(
             and(
-              eq(jobPostings.restaurantId, restaurantId),
+              jobTargetWhere(target),
               eq(jobPostings.status, "open"),
             ),
           );
@@ -838,14 +1134,14 @@ export function registerJobBoardRoutes(app: Express) {
           .set({ status: "closed", updatedAt: new Date() })
           .where(
             and(
-              eq(jobPostings.restaurantId, restaurantId),
+              jobTargetWhere(target),
               eq(jobPostings.status, "open"),
             ),
           )
           .returning({ id: jobPostings.id });
 
-        jobsToClose.forEach((job: { id: string; title: string; restaurantName: string }) =>
-          submitJobToIndexNow(job, job.restaurantName, "help-wanted-closed"),
+        jobsToClose.forEach((job: { id: string; title: string }) =>
+          submitJobToIndexNow(job, business?.name, "help-wanted-closed"),
         );
         res.json({ closed: closedJobs.length });
       } catch (error) {
@@ -866,20 +1162,19 @@ export function registerJobBoardRoutes(app: Express) {
       if (!existing) {
         return res.status(404).json({ message: "Hiring post not found" });
       }
-      if (!(await requireRestaurantAccess(req, res, existing.restaurantId))) {
-        return;
-      }
+      const target = normalizeBusinessTarget({
+        restaurantId: existing.restaurantId,
+        hostId: existing.hostId,
+      });
+      if (!(await requireBusinessTargetAccess(req, res, target))) return;
 
-      const [restaurant] = await db
-        .select({ name: restaurants.name })
-        .from(restaurants)
-        .where(eq(restaurants.id, existing.restaurantId))
-        .limit(1);
+      const business = await loadBusinessForTarget(target);
 
       const parsed = jobPayloadSchema.safeParse({
         ...existing,
         ...req.body,
         restaurantId: existing.restaurantId,
+        hostId: existing.hostId,
         title: req.body?.title ?? existing.title,
       });
       if (!parsed.success) {
@@ -913,7 +1208,7 @@ export function registerJobBoardRoutes(app: Express) {
         .where(eq(jobPostings.id, jobId))
         .returning();
 
-      submitJobToIndexNow(job, restaurant?.name, "job-updated");
+      submitJobToIndexNow(job, business?.name, "job-updated");
       res.json({ job });
     } catch (error) {
       console.error("[jobs] failed to update job:", error);
@@ -935,9 +1230,13 @@ export function registerJobBoardRoutes(app: Express) {
         if (!job) {
           return res.status(404).json({ message: "Hiring post not found" });
         }
-        if (!(await requireRestaurantAccess(req, res, job.restaurantId))) {
+        if (
+          !(await requireBusinessTargetAccess(req, res, {
+            restaurantId: job.restaurantId,
+            hostId: job.hostId,
+          }))
+        )
           return;
-        }
 
         const applications = await db
           .select()
@@ -967,7 +1266,10 @@ export function registerJobBoardRoutes(app: Express) {
           return res.status(404).json({ message: "Application not found" });
         }
         if (
-          !(await requireRestaurantAccess(req, res, existing.restaurantId))
+          !(await requireBusinessTargetAccess(req, res, {
+            restaurantId: existing.restaurantId,
+            hostId: existing.hostId,
+          }))
         ) {
           return;
         }

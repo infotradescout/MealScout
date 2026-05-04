@@ -459,6 +459,63 @@ export function registerHostRoutes(app: Express) {
     }
   });
 
+  app.patch(
+    "/api/hosts/:hostId/fuel-prices",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { hostId } = req.params;
+        const host = await storage.getHost(hostId);
+        if (!host || !canManageHost(req.user, host)) {
+          return res.status(404).json({ message: "Host profile not found" });
+        }
+
+        const fuelSchema = z.object({
+          showFuelPrices: z.coerce.boolean().optional(),
+          regularCents: z.coerce.number().int().min(0).max(200000).optional().nullable(),
+          midgradeCents: z.coerce.number().int().min(0).max(200000).optional().nullable(),
+          premiumCents: z.coerce.number().int().min(0).max(200000).optional().nullable(),
+          dieselCents: z.coerce.number().int().min(0).max(200000).optional().nullable(),
+        });
+        const parsed = fuelSchema.parse(req.body || {});
+        const hasAnyPrice = [
+          parsed.regularCents,
+          parsed.midgradeCents,
+          parsed.premiumCents,
+          parsed.dieselCents,
+        ].some((value) => Number(value || 0) > 0);
+
+        const [updated] = await db
+          .update(hosts)
+          .set({
+            showFuelPrices:
+              parsed.showFuelPrices !== undefined
+                ? parsed.showFuelPrices
+                : Boolean((host as any).showFuelPrices || hasAnyPrice),
+            gasPriceRegularCents: parsed.regularCents ?? null,
+            gasPriceMidgradeCents: parsed.midgradeCents ?? null,
+            gasPricePremiumCents: parsed.premiumCents ?? null,
+            gasPriceDieselCents: parsed.dieselCents ?? null,
+            gasPriceUpdatedAt: new Date(),
+            gasPriceSource: "manual",
+            updatedAt: new Date(),
+          })
+          .where(eq(hosts.id, host.id))
+          .returning();
+
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error updating host fuel prices:", error);
+        if (error instanceof z.ZodError) {
+          return res
+            .status(400)
+            .json({ message: "Invalid fuel price data", errors: error.errors });
+        }
+        res.status(500).json({ message: "Failed to update fuel prices" });
+      }
+    },
+  );
+
   app.post(
     "/api/hosts/:hostId/spot-image",
     isAuthenticated,

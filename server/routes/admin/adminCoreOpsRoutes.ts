@@ -24,6 +24,8 @@ import {
   users,
   restaurants,
   hosts,
+  suppliers,
+  supplierProducts,
   mediaAssets,
   menus,
   menuItems,
@@ -123,10 +125,33 @@ const firstAdminPhotoUrl = (...values: unknown[]) => {
           "",
       ).trim();
       if (url) return url;
+
+      const googlePhotoName = String(
+        photo?.name || photo?.photoName || photo?.photoReference || "",
+      ).trim();
+      if (googlePhotoName) {
+        return `/api/google/photo?name=${encodeURIComponent(
+          googlePhotoName,
+        )}&maxWidth=1200`;
+      }
     }
   }
 
   return null;
+};
+
+const absoluteAdminUrl = (baseUrl: string, value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return `${baseUrl}${raw}`;
+  return `https://${raw}`;
+};
+
+const proxiedAdminImageUrl = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return `/api/admin/recent-signups/image?url=${encodeURIComponent(raw)}`;
 };
 
 const formatSignupLocation = (row: {
@@ -140,18 +165,27 @@ const formatSignupLocation = (row: {
 
 const publicRestaurantPath = (row: any, isFoodTruck: boolean) => {
   const slug = toShareSlug(row?.name) || row?.id;
+  const businessType = String(row?.businessType || "").toLowerCase();
   if (isFoodTruck) {
-    return `/truck/${encodeURIComponent(`${slug}--${row.id}`)}`;
+    return `/truck/${encodeURIComponent(slug)}`;
   }
-  if (String(row?.businessType || "").toLowerCase() === "bar") {
-    return `/bar/${encodeURIComponent(`${slug}--${row.id}`)}`;
+  if (businessType === "bar") {
+    return `/bar/${encodeURIComponent(slug)}`;
   }
-  return `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`;
+  if (businessType === "caterer") {
+    return `/restaurant/${encodeURIComponent(slug)}`;
+  }
+  return `/restaurant/${encodeURIComponent(slug)}`;
 };
 
 const publicHostPath = (row: any) => {
   const slug = toShareSlug(row?.businessName) || row?.id;
-  return `/location/${encodeURIComponent(`${slug}--${row.id}`)}`;
+  return `/location/${encodeURIComponent(slug)}`;
+};
+
+const publicSupplierPath = (row: any) => {
+  const slug = toShareSlug(row?.businessName) || row?.id;
+  return `/supplier/${encodeURIComponent(slug)}`;
 };
 
 const splitMenuHighlights = (value: unknown) =>
@@ -167,11 +201,16 @@ const buildSignupCaption = (signup: {
   typeLabel: string;
   locationLabel: string;
   profileUrl: string;
+  shareUrl?: string;
   isPublic: boolean;
   category?: string | null;
   menuItemNames?: string[] | null;
   videoCount?: number | null;
+  websiteUrl?: string | null;
+  menuUrl?: string | null;
+  orderUrl?: string | null;
 }) => {
+  const publicUrl = signup.shareUrl || signup.profileUrl;
   const location =
     signup.locationLabel && signup.locationLabel !== "local"
       ? ` in ${signup.locationLabel}`
@@ -185,32 +224,40 @@ const buildSignupCaption = (signup: {
     Number(signup.videoCount || 0) > 0
       ? " Videos and profile updates are live on MealScout."
       : "";
+  const nextBestLink =
+    signup.orderUrl || signup.menuUrl || signup.websiteUrl
+      ? ` More info is connected from the profile.`
+      : "";
 
   if (signup.kind === "customer") {
-    return `Welcome ${signup.displayName} to MealScout. Find local food trucks, restaurants, hosts, and events here: ${signup.profileUrl}`;
+    return `Welcome ${signup.displayName} to MealScout. Find local food trucks, restaurants, hosts, and events here: ${publicUrl}`;
   }
 
   if (signup.kind === "team") {
-    return `Welcome ${signup.displayName} to the MealScout crew. Local food discovery starts here: ${signup.profileUrl}`;
+    return `Welcome ${signup.displayName} to the MealScout crew. Local food discovery starts here: ${publicUrl}`;
   }
 
   if (signup.kind === "supplier") {
-    return `Say hello to ${signup.displayName} on MealScout. ${signup.typeLabel} helping local food businesses stay stocked: ${signup.profileUrl}`;
+    return `Say hello to ${signup.displayName} on MealScout. ${signup.typeLabel} helping local food businesses stay stocked: ${publicUrl}`;
   }
 
   if (!signup.isPublic) {
-    return `Fresh local food activity is landing on MealScout. This ${signup.typeLabel.toLowerCase()} profile is still being finished, so we will route visitors to nearby trucks, restaurants, hosts, and events for now: ${signup.profileUrl}`;
+    return `Fresh local food activity is landing on MealScout. This ${signup.typeLabel.toLowerCase()} profile is still being finished, so we will route visitors to nearby trucks, restaurants, hosts, and events for now: ${publicUrl}`;
   }
 
   if (signup.kind === "food_truck") {
-    return `New on MealScout: ${signup.displayName}, a ${category}food truck${location}.${menu}${videos} Track their menu, schedule, and updates here: ${signup.profileUrl}`;
+    return `New on MealScout: ${signup.displayName}, a ${category}food truck${location}.${menu}${videos}${nextBestLink} Track their menu, schedule, and updates here: ${publicUrl}`;
+  }
+
+  if (signup.kind === "caterer") {
+    return `New on MealScout: ${signup.displayName}, a ${category}caterer${location}.${menu}${videos}${nextBestLink} See their catering-ready profile here: ${publicUrl}`;
   }
 
   if (signup.kind === "host") {
-    return `New MealScout host: ${signup.displayName}${location}. Hosts publish truck opportunities and parking availability directly through MealScout. See the public profile: ${signup.profileUrl}`;
+    return `New MealScout host: ${signup.displayName}${location}. Hosts publish truck opportunities and parking availability directly through MealScout. See the public profile: ${publicUrl}`;
   }
 
-  return `Say hello to ${signup.displayName} on MealScout. ${category}${signup.typeLabel}${location}.${menu}${videos} See the public profile: ${signup.profileUrl}`;
+  return `Say hello to ${signup.displayName} on MealScout. ${category}${signup.typeLabel}${location}.${menu}${videos}${nextBestLink} See the public profile: ${publicUrl}`;
 };
 
 const signupUserTypeLabel = (userType: unknown) => {
@@ -277,6 +324,35 @@ const dataUrlToBlob = (dataUrl: string) => {
   const mimeType = match[1] || "image/png";
   const buffer = Buffer.from(match[2], "base64");
   return new Blob([buffer], { type: mimeType });
+};
+
+const fetchAdminImageResponse = async (url: string) => {
+  const parsed = new URL(url);
+  if (!["http:", "https:"].includes(parsed.protocol)) return null;
+
+  const response = await fetch(parsed.toString(), {
+    headers: {
+      "user-agent":
+        "MealScoutBot/1.0 (+https://www.mealscout.us; image proxy for admin sharing)",
+      accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().startsWith("image/")) return null;
+
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > 8 * 1024 * 1024) return null;
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > 8 * 1024 * 1024) return null;
+
+  return {
+    contentType,
+    buffer: Buffer.from(arrayBuffer),
+  };
 };
 
 let adminMenuSchemaAvailableCache: boolean | null = null;
@@ -1094,6 +1170,33 @@ export function registerAdminCoreOpsRoutes(app: Express) {
   );
 
   app.get(
+    "/api/admin/recent-signups/image",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawUrl = String(req.query?.url || "").trim();
+        if (!rawUrl) {
+          return res.status(400).send("Missing image URL");
+        }
+
+        const image = await fetchAdminImageResponse(rawUrl);
+        if (!image) {
+          return res.status(404).send("Image unavailable");
+        }
+
+        res.setHeader("Content-Type", image.contentType);
+        res.setHeader("Cache-Control", "private, max-age=3600");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.send(image.buffer);
+      } catch (error) {
+        console.warn("[admin/recent-signups/image] proxy failed:", error);
+        res.status(404).send("Image unavailable");
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/recent-signups",
     isAuthenticated,
     isStaffOrAdmin,
@@ -1108,6 +1211,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             id: users.id,
             userType: users.userType,
             email: users.email,
+            isDisabled: users.isDisabled,
             firstName: users.firstName,
             lastName: users.lastName,
             phone: users.phone,
@@ -1122,7 +1226,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             createdAt: users.createdAt,
           })
           .from(users)
-          .where(gte(users.createdAt, cutoff))
+          .where(
+            and(
+              gte(users.createdAt, cutoff),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
           .orderBy(desc(users.createdAt))
           .limit(500);
 
@@ -1146,6 +1255,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           recentUserIds.length > 0
             ? or(gte(hosts.createdAt, cutoff), inArray(hosts.userId, recentUserIds))
             : gte(hosts.createdAt, cutoff);
+        const recentOrOwnedSupplierWhere =
+          recentUserIds.length > 0
+            ? or(
+                gte(suppliers.createdAt, cutoff),
+                inArray(suppliers.userId, recentUserIds),
+              )
+            : gte(suppliers.createdAt, cutoff);
 
         const restaurantRows = await db
           .select({
@@ -1183,7 +1299,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           })
           .from(restaurants)
           .leftJoin(users, eq(restaurants.ownerId, users.id))
-          .where(recentOrOwnedRestaurantWhere)
+          .where(
+            and(
+              recentOrOwnedRestaurantWhere,
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
           .orderBy(desc(restaurants.createdAt))
           .limit(600);
 
@@ -1219,14 +1340,56 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           })
           .from(hosts)
           .leftJoin(users, eq(hosts.userId, users.id))
-          .where(recentOrOwnedHostWhere)
+          .where(
+            and(
+              recentOrOwnedHostWhere,
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
           .orderBy(desc(hosts.createdAt))
+          .limit(600);
+
+        const supplierRows = await db
+          .select({
+            id: suppliers.id,
+            userId: suppliers.userId,
+            businessName: suppliers.businessName,
+            address: suppliers.address,
+            city: suppliers.city,
+            state: suppliers.state,
+            contactPhone: suppliers.contactPhone,
+            contactEmail: suppliers.contactEmail,
+            isActive: suppliers.isActive,
+            onlinePaymentsEnabled: suppliers.onlinePaymentsEnabled,
+            offersDelivery: suppliers.offersDelivery,
+            deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
+            onlinePaymentsNotes: suppliers.onlinePaymentsNotes,
+            deliveryNotes: suppliers.deliveryNotes,
+            createdAt: suppliers.createdAt,
+            ownerEmail: users.email,
+            ownerFirstName: users.firstName,
+            ownerLastName: users.lastName,
+            ownerProfileImageUrl: users.profileImageUrl,
+            ownerAffiliateTag: users.affiliateTag,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(suppliers)
+          .leftJoin(users, eq(suppliers.userId, users.id))
+          .where(
+            and(
+              recentOrOwnedSupplierWhere,
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
+          .orderBy(desc(suppliers.createdAt))
           .limit(600);
 
         const restaurantRowsAny = restaurantRows as any[];
         const hostRowsAny = hostRows as any[];
+        const supplierRowsAny = supplierRows as any[];
         const restaurantsByOwner = new Map<string, any[]>();
         const hostsByOwner = new Map<string, any[]>();
+        const suppliersByOwner = new Map<string, any[]>();
         const restaurantIds = Array.from(
           new Set(
             restaurantRowsAny
@@ -1241,11 +1404,23 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               .filter(Boolean),
           ),
         );
+        const supplierIds = Array.from(
+          new Set(
+            supplierRowsAny
+              .map((row) => String(row.id || "").trim())
+              .filter(Boolean),
+          ),
+        );
         const menuStatsByRestaurant = new Map<
           string,
           { itemCount: number; itemNames: string[]; menuCount: number }
         >();
+        const productStatsBySupplier = new Map<
+          string,
+          { itemCount: number; itemNames: string[]; imageUrl: string | null }
+        >();
         const videoCountsByEntity = new Map<string, number>();
+        const videoThumbByEntity = new Map<string, string>();
 
         if (restaurantIds.length) {
           try {
@@ -1307,6 +1482,33 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 Number(row.count || 0),
               );
             }
+
+            const videoThumbRows = await db
+              .select({
+                ownerId: mediaAssets.ownerId,
+                thumbnailUrl: mediaAssets.thumbnailUrl,
+                fileUrl: mediaAssets.fileUrl,
+              })
+              .from(mediaAssets)
+              .where(
+                and(
+                  inArray(mediaAssets.ownerId, restaurantIds),
+                  inArray(mediaAssets.ownerType, ["restaurant", "food_truck"] as any),
+                  eq(mediaAssets.mediaType, "video"),
+                  eq(mediaAssets.status, "active"),
+                  eq(mediaAssets.visibility, "public"),
+                  isNull(mediaAssets.deletedAt),
+                ),
+              )
+              .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt))
+              .limit(200);
+
+            for (const row of videoThumbRows as any[]) {
+              const key = `restaurant:${row.ownerId}`;
+              if (videoThumbByEntity.has(key)) continue;
+              const thumb = firstAdminPhotoUrl(row.thumbnailUrl, row.fileUrl);
+              if (thumb) videoThumbByEntity.set(key, thumb);
+            }
           } catch (error) {
             console.warn(
               "[admin/recent-signups] restaurant video stats unavailable; continuing",
@@ -1338,9 +1540,69 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             for (const row of videoRows as any[]) {
               videoCountsByEntity.set(`host:${row.ownerId}`, Number(row.count || 0));
             }
+
+            const videoThumbRows = await db
+              .select({
+                ownerId: mediaAssets.ownerId,
+                thumbnailUrl: mediaAssets.thumbnailUrl,
+                fileUrl: mediaAssets.fileUrl,
+              })
+              .from(mediaAssets)
+              .where(
+                and(
+                  inArray(mediaAssets.ownerId, hostIds),
+                  eq(mediaAssets.ownerType, "host"),
+                  eq(mediaAssets.mediaType, "video"),
+                  eq(mediaAssets.status, "active"),
+                  eq(mediaAssets.visibility, "public"),
+                  isNull(mediaAssets.deletedAt),
+                ),
+              )
+              .orderBy(desc(mediaAssets.isFeatured), desc(mediaAssets.createdAt))
+              .limit(200);
+
+            for (const row of videoThumbRows as any[]) {
+              const key = `host:${row.ownerId}`;
+              if (videoThumbByEntity.has(key)) continue;
+              const thumb = firstAdminPhotoUrl(row.thumbnailUrl, row.fileUrl);
+              if (thumb) videoThumbByEntity.set(key, thumb);
+            }
           } catch (error) {
             console.warn(
               "[admin/recent-signups] host video stats unavailable; continuing",
+              error,
+            );
+          }
+        }
+
+        if (supplierIds.length) {
+          try {
+            const productRows = await db
+              .select({
+                supplierId: supplierProducts.supplierId,
+                itemCount:
+                  sql<number>`count(*) filter (where ${supplierProducts.isActive} = true)`.mapWith(
+                    Number,
+                  ),
+                itemNames:
+                  sql<string>`string_agg(distinct ${supplierProducts.name}, ', ') filter (where ${supplierProducts.isActive} = true)`,
+                imageUrl:
+                  sql<string>`max(${supplierProducts.imageUrl}) filter (where ${supplierProducts.isActive} = true and ${supplierProducts.imageUrl} is not null)`,
+              })
+              .from(supplierProducts)
+              .where(inArray(supplierProducts.supplierId, supplierIds))
+              .groupBy(supplierProducts.supplierId);
+
+            for (const row of productRows as any[]) {
+              productStatsBySupplier.set(String(row.supplierId), {
+                itemCount: Number(row.itemCount || 0),
+                itemNames: splitMenuHighlights(row.itemNames),
+                imageUrl: firstAdminPhotoUrl(row.imageUrl),
+              });
+            }
+          } catch (error) {
+            console.warn(
+              "[admin/recent-signups] supplier product stats unavailable; continuing",
               error,
             );
           }
@@ -1367,6 +1629,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           hostsByOwner.set(ownerId, rows);
         }
 
+        for (const row of supplierRowsAny) {
+          const ownerId = String(row.userId || "").trim();
+          if (!ownerId) continue;
+          const rows = suppliersByOwner.get(ownerId) || [];
+          rows.push(row);
+          suppliersByOwner.set(ownerId, rows);
+        }
+
         const createRestaurantSignup = (
           row: any,
           options: { key?: string; createdAt?: unknown; source?: string } = {},
@@ -1374,11 +1644,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const isFoodTruck =
             Boolean(row.isFoodTruck) ||
             String(row.businessType || "").toLowerCase() === "food_truck";
-          const kind = isFoodTruck ? "food_truck" : "restaurant";
+          const businessType = String(row.businessType || "").toLowerCase();
+          const isCaterer = businessType === "caterer";
+          const kind = isFoodTruck ? "food_truck" : isCaterer ? "caterer" : "restaurant";
           const isBar = String(row.businessType || "").toLowerCase() === "bar";
           const typeLabel = isFoodTruck
             ? "Food Truck"
-            : isBar
+            : isCaterer
+              ? "Caterer"
+              : isBar
               ? "Restaurant or Bar"
               : "Restaurant";
           const owner = { accountSettings: row.ownerAccountSettings };
@@ -1386,7 +1660,20 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const canonicalProfilePath = publicRestaurantPath(row, isFoodTruck);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
+          const shareUrl = profileUrl;
           const locationLabel = formatSignupLocation(row);
+          const imageUrl = absoluteAdminUrl(
+            baseUrl,
+            firstAdminPhotoUrl(
+              row.coverImageUrl,
+              row.facebookCoverUrl,
+              row.facebookPhotos,
+              row.logoUrl,
+              row.googlePhotos,
+              videoThumbByEntity.get(`restaurant:${row.id}`),
+              row.ownerProfileImageUrl,
+            ),
+          );
           const menuStats = menuStatsByRestaurant.get(String(row.id)) || {
             itemCount: 0,
             itemNames: [],
@@ -1402,20 +1689,18 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             typeLabel,
             category:
               row.cuisineType ||
-              (isFoodTruck ? "Mobile food" : row.businessType || "Local food"),
+              (isFoodTruck
+                ? "Mobile food"
+                : isCaterer
+                  ? "Catering"
+                  : row.businessType || "Local food"),
             locationLabel,
             city: row.city || null,
             state: row.state || null,
             address: row.address || null,
             description: row.description || null,
-            imageUrl: firstAdminPhotoUrl(
-              row.coverImageUrl,
-              row.facebookCoverUrl,
-              row.facebookPhotos,
-              row.logoUrl,
-              row.googlePhotos,
-              row.ownerProfileImageUrl,
-            ),
+            imageUrl: imageUrl || null,
+            shareImageUrl: proxiedAdminImageUrl(imageUrl),
             websiteUrl: row.websiteUrl || null,
             menuUrl: row.menuUrl || null,
             orderUrl: row.orderUrl || null,
@@ -1426,18 +1711,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             canonicalProfilePath,
             profilePath,
             profileUrl,
+            shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
             profileCompleteness: {
               hasImage: Boolean(
-                firstAdminPhotoUrl(
-                  row.coverImageUrl,
-                  row.facebookCoverUrl,
-                  row.facebookPhotos,
-                  row.logoUrl,
-                  row.googlePhotos,
-                  row.ownerProfileImageUrl,
-                ),
+                imageUrl,
               ),
               hasDescription: Boolean(String(row.description || "").trim()),
               hasMenu: menuStats.itemCount > 0 || Boolean(row.menuUrl),
@@ -1474,13 +1753,18 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const canonicalProfilePath = publicHostPath(row);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
+          const shareUrl = profileUrl;
           const locationLabel = formatSignupLocation(row);
-          const hostImageUrl = firstAdminPhotoUrl(
-            row.spotImageUrl,
-            row.facebookCoverUrl,
-            row.facebookPhotos,
-            row.googlePhotos,
-            row.ownerProfileImageUrl,
+          const hostImageUrl = absoluteAdminUrl(
+            baseUrl,
+            firstAdminPhotoUrl(
+              row.spotImageUrl,
+              row.facebookCoverUrl,
+              row.facebookPhotos,
+              row.googlePhotos,
+              videoThumbByEntity.get(`host:${row.id}`),
+              row.ownerProfileImageUrl,
+            ),
           );
           const signup = {
             key: options.key || `host:${row.id}`,
@@ -1498,13 +1782,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             state: row.state || null,
             address: row.address || null,
             description: row.description || row.notes || null,
-            imageUrl: hostImageUrl,
+            imageUrl: hostImageUrl || null,
+            shareImageUrl: proxiedAdminImageUrl(hostImageUrl),
             websiteUrl: row.businessWebsite || null,
             spotCount: Number(row.spotCount || 0),
             videoCount: videoCountsByEntity.get(`host:${row.id}`) || 0,
             canonicalProfilePath,
             profilePath,
             profileUrl,
+            shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
             profileCompleteness: {
@@ -1533,14 +1819,98 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           };
         };
 
+        const createSupplierSignup = (
+          row: any,
+          options: { key?: string; createdAt?: unknown; source?: string } = {},
+        ) => {
+          const owner = { accountSettings: row.ownerAccountSettings };
+          const isPublic = row.isActive !== false && isOwnerProfilePublic(owner);
+          const canonicalProfilePath = publicSupplierPath(row);
+          const profilePath = isPublic ? canonicalProfilePath : "/suppliers";
+          const profileUrl = `${baseUrl}${profilePath}`;
+          const shareUrl = profileUrl;
+          const locationLabel = formatSignupLocation(row);
+          const productStats = productStatsBySupplier.get(String(row.id)) || {
+            itemCount: 0,
+            itemNames: [],
+            imageUrl: null,
+          };
+          const imageUrl = absoluteAdminUrl(
+            baseUrl,
+            firstAdminPhotoUrl(productStats.imageUrl, row.ownerProfileImageUrl),
+          );
+          const description =
+            row.onlinePaymentsNotes ||
+            row.deliveryNotes ||
+            (row.offersDelivery
+              ? "Supplies local food businesses with delivery available."
+              : "Supplies local food businesses through MealScout.");
+          const signup = {
+            key: options.key || `supplier:${row.id}`,
+            kind: "supplier",
+            entity: "supplier",
+            id: row.id,
+            ownerId: row.userId,
+            displayName: row.businessName,
+            typeLabel: "Supplier",
+            category: row.offersDelivery
+              ? "Supplier with delivery"
+              : "Food business supplier",
+            locationLabel,
+            city: row.city || null,
+            state: row.state || null,
+            address: row.address || null,
+            description,
+            imageUrl: imageUrl || null,
+            shareImageUrl: proxiedAdminImageUrl(imageUrl),
+            websiteUrl: null,
+            menuItemCount: productStats.itemCount,
+            menuItemNames: productStats.itemNames,
+            canonicalProfilePath,
+            profilePath,
+            profileUrl,
+            shareUrl,
+            isPublic,
+            isVerified: Boolean(row.onlinePaymentsEnabled),
+            profileCompleteness: {
+              hasImage: Boolean(imageUrl),
+              hasDescription: Boolean(String(description || "").trim()),
+              hasProducts: productStats.itemCount > 0,
+              hasLocation: Boolean(locationLabel && locationLabel !== "local"),
+              isPublic,
+            },
+            createdAt: options.createdAt || row.createdAt,
+            ownerName:
+              [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
+              null,
+            ownerEmail: row.ownerEmail || row.contactEmail || null,
+            ownerAffiliateTag: row.ownerAffiliateTag || null,
+            facebookPageId: null,
+            facebookPageUrl: null,
+            source: options.source || "supplier_onboarding",
+          };
+
+          return {
+            ...signup,
+            caption: buildSignupCaption(signup),
+          };
+        };
+
         const createUserSignup = (row: any) => {
           const kind = signupKindForUserType(row.userType);
           const typeLabel = signupUserTypeLabel(row.userType);
           const displayName = displayNameForSignupUser(row);
           const locationLabel =
             String(row.postalCode || "").trim() || "MealScout";
-          const profilePath = "/map";
+          const profilePath = row.affiliateTag
+            ? `/ref/${encodeURIComponent(String(row.affiliateTag))}`
+            : "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
+          const shareUrl = profileUrl;
+          const imageUrl = absoluteAdminUrl(
+            baseUrl,
+            firstAdminPhotoUrl(row.profileImageUrl),
+          );
           const signup = {
             key: `user:${row.id}`,
             kind,
@@ -1556,9 +1926,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             state: null,
             address: null,
             description: row.publicBio || null,
-            imageUrl: firstAdminPhotoUrl(row.profileImageUrl),
+            imageUrl: imageUrl || null,
+            shareImageUrl: proxiedAdminImageUrl(imageUrl),
             profilePath,
             profileUrl,
+            shareUrl,
             isPublic: true,
             linkLabel: "Map link",
             isVerified: Boolean(row.emailVerified),
@@ -1585,10 +1957,21 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             .toLowerCase();
           const ownedRestaurants = restaurantsByOwner.get(userId) || [];
           const ownedHosts = hostsByOwner.get(userId) || [];
+          const ownedSuppliers = suppliersByOwner.get(userId) || [];
           const preferredHost =
             normalizedType === "host" || normalizedType === "event_coordinator";
+          const preferredSupplier = normalizedType === "supplier";
 
-          if (!preferredHost && ownedRestaurants[0]) {
+          if (preferredSupplier && ownedSuppliers[0]) {
+            representedBusinessKeys.add(`supplier:${ownedSuppliers[0].id}`);
+            return createSupplierSignup(ownedSuppliers[0], {
+              key: `user:${userId}`,
+              createdAt: row.createdAt,
+              source: "user_signup",
+            });
+          }
+
+          if (!preferredHost && !preferredSupplier && ownedRestaurants[0]) {
             representedBusinessKeys.add(`restaurant:${ownedRestaurants[0].id}`);
             return createRestaurantSignup(ownedRestaurants[0], {
               key: `user:${userId}`,
@@ -1615,6 +1998,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             });
           }
 
+          if (ownedSuppliers[0]) {
+            representedBusinessKeys.add(`supplier:${ownedSuppliers[0].id}`);
+            return createSupplierSignup(ownedSuppliers[0], {
+              key: `user:${userId}`,
+              createdAt: row.createdAt,
+              source: "user_signup",
+            });
+          }
+
           return createUserSignup(row);
         });
 
@@ -1633,6 +2025,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
                 !representedBusinessKeys.has(`host:${row.id}`),
             )
             .map((row) => createHostSignup(row)),
+          ...supplierRowsAny
+            .filter(
+              (row) =>
+                isInsideWindow(row.createdAt) &&
+                !representedBusinessKeys.has(`supplier:${row.id}`),
+            )
+            .map((row) => createSupplierSignup(row)),
         ];
 
         const signups = [...userSignups, ...businessOnlySignups].sort(

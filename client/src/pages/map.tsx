@@ -379,6 +379,34 @@ type HostLocation = {
   businessHours?: any | null;
   businessWebsite?: string | null;
   menuUrl?: string | null;
+  showFuelPrices?: boolean | null;
+  fuelPrices?: {
+    regularCents?: number | null;
+    midgradeCents?: number | null;
+    premiumCents?: number | null;
+    dieselCents?: number | null;
+    updatedAt?: string | null;
+    source?: string | null;
+  } | null;
+};
+
+type SupplierLocation = {
+  id: string;
+  supplierId?: string | null;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  category?: string | null;
+  categoryLabel?: string | null;
+  contactPhone?: string | null;
+  contactEmail?: string | null;
+  offersDelivery?: boolean | null;
+  deliveryRadiusMiles?: number | null;
+  productHighlights?: string[];
+  profileUrl?: string | null;
 };
 
 type HostProfile = {
@@ -452,6 +480,27 @@ const parseGoogleCategories = (value: any): string[] => {
 const formatGoogleCategory = (value: string) =>
   value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
+const formatFuelPrice = (value?: number | null) =>
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? `$${(value / 100).toFixed(2)}`
+    : null;
+
+const fuelPriceSummary = (fuelPrices?: HostLocation["fuelPrices"]) => {
+  if (!fuelPrices) return null;
+  const pieces = [
+    ["Reg", fuelPrices.regularCents],
+    ["Mid", fuelPrices.midgradeCents],
+    ["Prem", fuelPrices.premiumCents],
+    ["Diesel", fuelPrices.dieselCents],
+  ]
+    .map(([label, value]) => {
+      const price = formatFuelPrice(value as number | null);
+      return price ? `${label} ${price}` : null;
+    })
+    .filter(Boolean);
+  return pieces.length ? pieces.join(" · ") : null;
+};
+
 type EventLocation = {
   id: string;
   name: string;
@@ -471,6 +520,7 @@ type EventLocation = {
 type MapLocationsResponse = {
   hostLocations: HostLocation[];
   eventLocations: EventLocation[];
+  supplierLocations: SupplierLocation[];
 };
 
 type MapViewportOverlaysResponse = {
@@ -478,6 +528,7 @@ type MapViewportOverlaysResponse = {
   zoom?: number;
   hostLocations: HostLocation[];
   eventLocations: EventLocation[];
+  supplierLocations: SupplierLocation[];
 };
 
 type MapRuntimeResponse = {
@@ -933,6 +984,7 @@ function HostMarkerLayer({
           ? qualityFlagsByHostId.get(hostId) || []
           : [];
         const distanceLabel = formatDistance(coords);
+        const fuelSummary = fuelPriceSummary(host.fuelPrices);
         const hostImageUrl = resolveHostImageUrl(host);
         const hostIsVerified =
           String(host.status || "").toLowerCase() === "verified";
@@ -968,6 +1020,11 @@ function HostMarkerLayer({
                 <div className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border border-[color:var(--border-subtle)]">
                   {availableLabel}
                 </div>
+                {host.showFuelPrices && fuelSummary && (
+                  <div className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border border-emerald-400/40 text-emerald-700">
+                    Gas: {fuelSummary}
+                  </div>
+                )}
                 {hostIsVerified && (
                   <div className="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide border border-[color:var(--status-success)]/40 text-[color:var(--status-success)]">
                     Verified host
@@ -1146,6 +1203,9 @@ export default function MapPage() {
   >(null);
   const [hostCoords, setHostCoords] = useState<Record<string, GeoPoint>>({});
   const [eventCoords, setEventCoords] = useState<Record<string, GeoPoint>>({});
+  const [supplierCoords, setSupplierCoords] = useState<Record<string, GeoPoint>>(
+    {},
+  );
   const geocodeInFlight = useRef(false);
   const [geocodeCache, setGeocodeCache] = useState<
     Record<string, GeocodeCacheEntry>
@@ -1708,6 +1768,15 @@ export default function MapPage() {
     return eventCoords[event.id] ?? null;
   };
 
+  const resolveSupplierCoords = (supplier: SupplierLocation) => {
+    const lat = toNumberOrNull(supplier.latitude);
+    const lng = toNumberOrNull(supplier.longitude);
+    if (lat !== null && lng !== null) {
+      return { lat, lng };
+    }
+    return supplierCoords[supplier.id] ?? null;
+  };
+
   const formatDistance = (coords: GeoPoint) => {
     if (!userLocation) return null;
     const distanceKm = haversineKm(userLocation, coords);
@@ -1723,7 +1792,7 @@ export default function MapPage() {
   };
 
   // Fetch host + event locations for map
-  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v2";
+  const MAP_LOCATIONS_CACHE_KEY = "mealscout:map:locations:v3";
   const MAP_LOCATIONS_CACHE_TTL_MS = 30 * 60 * 1000;
   const [cachedMapLocations, setCachedMapLocations] =
     useState<MapLocationsResponse | null>(() => {
@@ -1820,13 +1889,18 @@ export default function MapPage() {
   }, []);
 
   const mapLocations: MapLocationsResponse = useMemo(() => {
-    return (
+    const source =
       mapLocationsData ??
       cachedMapLocations ?? {
         hostLocations: [],
         eventLocations: [],
-      }
-    );
+        supplierLocations: [],
+      };
+    return {
+      hostLocations: source.hostLocations || [],
+      eventLocations: source.eventLocations || [],
+      supplierLocations: source.supplierLocations || [],
+    };
   }, [mapLocationsData, cachedMapLocations]);
 
   const { data: viewportOverlaysData } = useQuery<MapViewportOverlaysResponse>({
@@ -1851,6 +1925,7 @@ export default function MapPage() {
           zoom: zoomLevel,
           hostLocations: [],
           eventLocations: [],
+          supplierLocations: [],
         };
       }
       const params = new URLSearchParams({
@@ -1879,6 +1954,7 @@ export default function MapPage() {
       return {
         hostLocations: viewportOverlaysData.hostLocations,
         eventLocations: viewportOverlaysData.eventLocations,
+        supplierLocations: viewportOverlaysData.supplierLocations || [],
       };
     }
     return mapLocations;
@@ -2143,17 +2219,23 @@ export default function MapPage() {
 
   const visibleHostLocations = useMemo(() => {
     if (!activeMapLocations?.hostLocations?.length) return [];
-    if (effectiveBookableHostIds.size === 0) return [];
     // Host parking pins should follow the live viewport; don't require "Search this area"
     // (which is primarily for refreshing/filtering other content like deals).
     const boundsForPins = mapBounds ?? appliedMapBounds;
     return activeMapLocations.hostLocations.filter((host) => {
       const hostId = host.hostId ? String(host.hostId) : "";
-      if (!hostId) return false;
+      const hasPublicFuelPrices = Boolean(
+        host.showFuelPrices && fuelPriceSummary(host.fuelPrices),
+      );
+      if (!hostId && !hasPublicFuelPrices) return false;
       if (
         effectiveBookableHostIds.size > 0 &&
-        !effectiveBookableHostIds.has(hostId)
+        !effectiveBookableHostIds.has(hostId) &&
+        !hasPublicFuelPrices
       ) {
+        return false;
+      }
+      if (effectiveBookableHostIds.size === 0 && !hasPublicFuelPrices) {
         return false;
       }
       const coords = resolveHostCoords(host);
@@ -2197,6 +2279,16 @@ export default function MapPage() {
       return appliedMapBounds.contains([coords.lat, coords.lng]);
     });
   }, [activeMapLocations, eventCoords, appliedMapBounds]);
+
+  const visibleSupplierLocations = useMemo(() => {
+    if (!activeMapLocations?.supplierLocations?.length) return [];
+    return activeMapLocations.supplierLocations.filter((supplier) => {
+      const coords = resolveSupplierCoords(supplier);
+      if (!coords) return false;
+      if (!appliedMapBounds) return true;
+      return appliedMapBounds.contains([coords.lat, coords.lng]);
+    });
+  }, [activeMapLocations, supplierCoords, appliedMapBounds]);
 
   const hostMarkerCoordsById = useMemo(() => {
     const groups = new Map<string, Array<{ id: string; coords: GeoPoint }>>();
@@ -2269,7 +2361,8 @@ export default function MapPage() {
   useEffect(() => {
     if (
       !activeMapLocations?.hostLocations?.length &&
-      !activeMapLocations?.eventLocations?.length
+      !activeMapLocations?.eventLocations?.length &&
+      !activeMapLocations?.supplierLocations?.length
     ) {
       return;
     }
@@ -2292,11 +2385,23 @@ export default function MapPage() {
       }
     });
 
+    const nextSuppliers: Record<string, GeoPoint> = {};
+    activeMapLocations?.supplierLocations?.forEach((supplier) => {
+      const lat = toNumberOrNull(supplier.latitude);
+      const lng = toNumberOrNull(supplier.longitude);
+      if (lat !== null && lng !== null) {
+        nextSuppliers[supplier.id] = { lat, lng };
+      }
+    });
+
     if (Object.keys(nextHosts).length) {
       setHostCoords((prev) => ({ ...prev, ...nextHosts }));
     }
     if (Object.keys(nextEvents).length) {
       setEventCoords((prev) => ({ ...prev, ...nextEvents }));
+    }
+    if (Object.keys(nextSuppliers).length) {
+      setSupplierCoords((prev) => ({ ...prev, ...nextSuppliers }));
     }
   }, [activeMapLocations]);
 
@@ -2349,6 +2454,24 @@ export default function MapPage() {
       }
     });
 
+    mapLocations?.supplierLocations?.forEach((supplier) => {
+      const lat = toNumberOrNull(supplier.latitude);
+      const lng = toNumberOrNull(supplier.longitude);
+      if (lat !== null && lng !== null) {
+        return;
+      }
+      if (!supplierCoords[supplier.id]) {
+        const address = buildFullAddress(
+          supplier.address,
+          supplier.city,
+          supplier.state,
+        );
+        if (!address) return;
+        queue.push(`supplier:${supplier.id}`);
+        addressByKey[`supplier:${supplier.id}`] = address;
+      }
+    });
+
     if (queue.length) {
       const limitedQueue = queue.slice(0, maxQueue);
       geocodeInFlight.current = true;
@@ -2356,6 +2479,7 @@ export default function MapPage() {
         try {
           const newHostCoords: Record<string, GeoPoint> = {};
           const newEventCoords: Record<string, GeoPoint> = {};
+          const newSupplierCoords: Record<string, GeoPoint> = {};
           const newFailures: Record<string, GeocodeFailureEntry> = {};
 
           for (const key of limitedQueue) {
@@ -2368,6 +2492,8 @@ export default function MapPage() {
                 newHostCoords[key.replace("host:", "")] = point;
               } else if (key.startsWith("event:")) {
                 newEventCoords[key.replace("event:", "")] = point;
+              } else if (key.startsWith("supplier:")) {
+                newSupplierCoords[key.replace("supplier:", "")] = point;
               }
               continue;
             }
@@ -2386,6 +2512,8 @@ export default function MapPage() {
               newHostCoords[key.replace("host:", "")] = point;
             } else if (key.startsWith("event:")) {
               newEventCoords[key.replace("event:", "")] = point;
+            } else if (key.startsWith("supplier:")) {
+              newSupplierCoords[key.replace("supplier:", "")] = point;
             }
             setGeocodeCache((prev) => ({
               ...prev,
@@ -2401,6 +2529,9 @@ export default function MapPage() {
           if (Object.keys(newEventCoords).length) {
             setEventCoords((prev) => ({ ...prev, ...newEventCoords }));
           }
+          if (Object.keys(newSupplierCoords).length) {
+            setSupplierCoords((prev) => ({ ...prev, ...newSupplierCoords }));
+          }
           if (Object.keys(newFailures).length) {
             setGeocodeFailures((prev) => ({ ...prev, ...newFailures }));
           }
@@ -2413,6 +2544,7 @@ export default function MapPage() {
     mapLocations,
     hostCoords,
     eventCoords,
+    supplierCoords,
     geocodeCache,
     geocodeFailures,
     mapBounds,
@@ -2468,7 +2600,9 @@ export default function MapPage() {
   const crowdSightingPins = visibleCommunitySightings.length;
   const hostPins = visibleHostLocations.length;
   const eventPins = visibleEventLocations.length;
-  const activityPins = liveTruckPins + crowdSightingPins + hostPins + eventPins;
+  const supplierPins = visibleSupplierLocations.length;
+  const activityPins =
+    liveTruckPins + crowdSightingPins + hostPins + eventPins + supplierPins;
   const totalHostParkingLocations = effectiveBookableHostIds.size;
   const mapHostParkingLocations = visibleHostLocations.length;
   const isNightTheme =
@@ -2480,12 +2614,12 @@ export default function MapPage() {
   const userMapAttribution =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
   const headerSubtitle = isLocating
-    ? "Locating live trucks and host spots..."
+    ? "Locating live trucks, host spots, and supplier stops..."
     : hasLocation && activityPins > 0
-      ? "Live trucks and host locations nearby"
+      ? "Live trucks, hosts, and supplier stops nearby"
       : hasLocation
-        ? "No live trucks or hosts nearby right now"
-        : "Set your location to see live trucks and hosts.";
+        ? "No live trucks, hosts, or suppliers nearby right now"
+        : "Set your location to see live trucks, hosts, and suppliers.";
 
   const handleRefreshHostParking = async () => {
     await queryClient.invalidateQueries({
@@ -2699,6 +2833,20 @@ export default function MapPage() {
       });
     });
 
+    visibleSupplierLocations.forEach((supplier) => {
+      const coords = resolveSupplierCoords(supplier);
+      if (!coords) return;
+      next.push({
+        id: `supplier:${supplier.id}`,
+        sourceId: supplier.id,
+        kind: "supplier",
+        lat: coords.lat,
+        lng: coords.lng,
+        title: supplier.name,
+        subtitle: supplier.categoryLabel || "Supplier",
+      });
+    });
+
     return next;
   }, [
     userLocation,
@@ -2708,9 +2856,11 @@ export default function MapPage() {
     visibleUnhostedCommunitySightings,
     visibleHostLocations,
     visibleEventLocations,
+    visibleSupplierLocations,
     hostMarkerCoordsById,
     resolveHostCoords,
     resolveEventCoords,
+    resolveSupplierCoords,
     businessPopularityByRestaurant,
   ]);
 
@@ -2919,6 +3069,18 @@ export default function MapPage() {
         const lat = coords?.lat ?? marker.lat;
         const lng = coords?.lng ?? marker.lng;
         window.open(`https://maps.google.com/?q=${lat},${lng}`, "_blank");
+        return;
+      }
+
+      if (marker.kind === "supplier") {
+        const supplier = visibleSupplierLocations.find(
+          (item) => item.id === marker.sourceId,
+        );
+        if (supplier?.profileUrl) {
+          window.location.href = supplier.profileUrl;
+          return;
+        }
+        window.location.href = "/suppliers";
       }
     },
     [
@@ -2929,6 +3091,7 @@ export default function MapPage() {
       visibleUnhostedCommunitySightings,
       visibleHostLocations,
       visibleEventLocations,
+      visibleSupplierLocations,
       resolveEventCoords,
       selectParkingHost,
     ],
@@ -3721,7 +3884,7 @@ export default function MapPage() {
               >
                 <div className="pointer-events-auto max-w-xs rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 px-4 py-3 text-center shadow-clean backdrop-blur">
                   <p className="text-sm font-medium text-foreground mb-1">
-                    No trucks, events, or hosts in this area
+                    No trucks, events, hosts, or suppliers in this area
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Zoom out or pan the map to explore another area.
@@ -3799,7 +3962,9 @@ export default function MapPage() {
           {/* Paid parking state overlay */}
           {isUsingGoogleMap &&
             !isBookableHostIdsLoading &&
-            totalHostParkingLocations === 0 && (
+            totalHostParkingLocations === 0 &&
+            hostPins === 0 &&
+            supplierPins === 0 && (
               <div className="absolute inset-0 z-10 flex items-center justify-center">
                 <div className="pointer-events-auto bg-[var(--bg-card)] rounded-xl px-4 py-3 text-center shadow-clean max-w-xs border border-[color:var(--border-subtle)]">
                   <p className="text-sm font-medium text-foreground mb-1">
@@ -4036,6 +4201,12 @@ export default function MapPage() {
                 <div className="mb-1.5 inline-flex w-fit items-center rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold tracking-wide">
                   {selectedParkingHost.availabilityLabel}
                 </div>
+                {selectedParkingHost.host.showFuelPrices &&
+                  fuelPriceSummary(selectedParkingHost.host.fuelPrices) && (
+                    <div className="mb-1.5 rounded-md border border-emerald-400/40 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900">
+                      Gas: {fuelPriceSummary(selectedParkingHost.host.fuelPrices)}
+                    </div>
+                  )}
                 {selectedParkingHost.distanceLabel && (
                   <p className="mb-1 text-[11px] text-muted-foreground">
                     {selectedParkingHost.distanceLabel} away
@@ -4204,7 +4375,8 @@ export default function MapPage() {
             <p className="mt-1 text-xs text-muted-foreground">
               {visibleLiveTrucks.length} live trucks ·{" "}
               {visibleHostLocations.length} hosts ·{" "}
-              {visibleEventLocations.length} events · {deals.length} deals
+              {visibleEventLocations.length} events ·{" "}
+              {visibleSupplierLocations.length} suppliers · {deals.length} deals
             </p>
           </header>
 
@@ -4311,6 +4483,40 @@ export default function MapPage() {
                           Details →
                         </span>
                       </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {visibleSupplierLocations.length > 0 && (
+              <section data-testid="list-section-suppliers">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Suppliers
+                </h3>
+                <ul className="divide-y divide-[color:var(--border-subtle)] rounded-xl border border-[color:var(--border-subtle)]">
+                  {visibleSupplierLocations.slice(0, 50).map((supplier) => (
+                    <li key={supplier.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                        onClick={() => {
+                          window.location.href = supplier.profileUrl || "/suppliers";
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {supplier.name}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {supplier.categoryLabel || "Supplier"}
+                            {supplier.address ? ` · ${supplier.address}` : ""}
+                          </div>
+                        </div>
+                        <span className="shrink-0 self-center text-xs text-muted-foreground">
+                          Open →
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ul>

@@ -13,7 +13,6 @@
  * - Home page
  */
 
-import { appendReferralParam } from './referralService';
 import { ensureAffiliateTag } from "./affiliateTagService";
 
 /**
@@ -32,17 +31,14 @@ export function generateShareableUrl(
   baseUrl: string,
   affiliateTag?: string,
 ): string {
-  // Build full URL
-  const fullUrl = baseUrl.startsWith('http')
-    ? `${baseUrl}${path}`
-    : `${baseUrl}${path}`;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
 
-  // Append affiliate param if user is logged in
   if (!affiliateTag) {
-    return fullUrl;
+    return `${normalizedBase}${normalizedPath}`;
   }
 
-  return appendReferralParam(fullUrl, affiliateTag);
+  return `${normalizedBase}/ref/${encodeURIComponent(affiliateTag)}${normalizedPath}`;
 }
 
 /**
@@ -62,7 +58,7 @@ export function shareUrlMiddleware(req: any, res: any, next: any) {
   res.locals.appendAffiliateParam = (url: string) => {
     const tag = req.user?.affiliateTag || req.user?.id;
     if (!tag) return url;
-    return appendReferralParam(url, tag);
+    return generateShareableUrl(url, baseUrl, tag);
   };
 
   next();

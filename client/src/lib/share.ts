@@ -47,35 +47,6 @@ function getStoredAffiliateRef(): string | null {
   return null;
 }
 
-function appendRefParam(url: string, ref: string): string {
-  try {
-    const normalized = new URL(url, window.location.origin);
-    if (!normalized.searchParams.has("ref")) {
-      normalized.searchParams.set("ref", ref);
-    }
-    return normalized.toString();
-  } catch {
-    return url;
-  }
-}
-
-function normalizeHost(host: string) {
-  return host.replace(/^www\./, "");
-}
-
-function shouldAppendRef(input: string, ref: string | null): boolean {
-  if (!ref) return false;
-  if (!input.startsWith("http")) return true;
-  try {
-    const inputUrl = new URL(input);
-    return (
-      normalizeHost(inputUrl.host) === normalizeHost(window.location.host)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function normalizeSharePath(input: string): string {
   if (!input) return "/";
 
@@ -106,8 +77,8 @@ export async function getAffiliateShareUrl(input: string): Promise<string> {
     : `${window.location.origin}${path}`;
   const storedRef = getStoredAffiliateRef();
   const fallback =
-    storedRef && shouldAppendRef(baseFallback, storedRef)
-      ? appendRefParam(baseFallback, storedRef)
+    storedRef
+      ? `${window.location.origin}/ref/${encodeURIComponent(storedRef)}${path}`
       : baseFallback;
 
   try {
