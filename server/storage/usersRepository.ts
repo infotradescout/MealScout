@@ -131,6 +131,53 @@ function duplicateAccountError(kind: "email" | "phone") {
   return error;
 }
 
+function disabledAccountError() {
+  const error: any = new Error("This account is disabled. Please contact MealScout support.");
+  error.status = 403;
+  error.code = "ACCOUNT_DISABLED";
+  return error;
+}
+
+function assertAccountCanAuthenticate(user: Pick<User, "isDisabled">) {
+  if (user.isDisabled === true) throw disabledAccountError();
+}
+
+function mergeAppContext(
+  current: User["appContext"] | null | undefined,
+  incoming: "mealscout" | "tradescout",
+): "mealscout" | "tradescout" | "both" {
+  if (!current) return incoming;
+  if (current === incoming || current === "both") return current;
+  return "both";
+}
+
+function chooseLinkedEmail(
+  currentEmail?: string | null,
+  providerEmail?: string | null,
+): string | null | undefined {
+  const normalizedProviderEmail = normalizeEmail(providerEmail);
+  if (!normalizedProviderEmail) return currentEmail;
+  const normalizedCurrentEmail = normalizeEmail(currentEmail);
+  if (!normalizedCurrentEmail || normalizedCurrentEmail === normalizedProviderEmail) {
+    return normalizedProviderEmail;
+  }
+  return currentEmail;
+}
+
+function linkedAuthUserTypePatch(
+  current: Pick<User, "userType" | "affiliatePercent">,
+  requested: User["userType"],
+): Partial<Pick<User, "userType" | "affiliatePercent">> {
+  const lockedTypes = new Set(["staff", "admin", "super_admin"]);
+  if (!requested || requested === "customer") return {};
+  if (lockedTypes.has(String(current.userType || ""))) return {};
+  if (current.userType !== "customer") return {};
+  return {
+    userType: requested,
+    affiliatePercent: current.affiliatePercent ?? getDefaultAffiliatePercent(requested),
+  };
+}
+
 async function findUserByNormalizedEmail(value?: string | null): Promise<User | undefined> {
   const normalized = normalizeEmail(value);
   if (!normalized) return undefined;
@@ -327,15 +374,17 @@ export function createUsersRepository() {
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            assertAccountCanAuthenticate(current);
+            const newAppContext = mergeAppContext(current.appContext, appContext);
             const [user] = await db
               .update(users)
               .set({
-                email: tsEmail ?? current.email,
+                email: chooseLinkedEmail(current.email, tsEmail),
                 ...(tsEmail ? { emailVerified: true } : {}),
-                firstName: tsData.firstName ?? current.firstName,
-                lastName: tsData.lastName ?? current.lastName,
+                firstName: tsData.firstName || current.firstName,
+                lastName: tsData.lastName || current.lastName,
                 appContext: newAppContext,
+                ...linkedAuthUserTypePatch(current, userType),
                 updatedAt: new Date(),
               })
               .where(eq(users.id, current.id))
@@ -348,15 +397,17 @@ export function createUsersRepository() {
             const emailUser = await findUserByNormalizedEmail(tsEmail);
             if (emailUser) {
               const current = emailUser;
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              assertAccountCanAuthenticate(current);
+              const newAppContext = mergeAppContext(current.appContext, appContext);
               const [user] = await db
                 .update(users)
                 .set({
                   tradescoutId: tsData.tradescoutId,
                   emailVerified: true,
-                  firstName: tsData.firstName ?? current.firstName,
-                  lastName: tsData.lastName ?? current.lastName,
+                  firstName: tsData.firstName || current.firstName,
+                  lastName: tsData.lastName || current.lastName,
                   appContext: newAppContext,
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))
@@ -388,17 +439,19 @@ export function createUsersRepository() {
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            assertAccountCanAuthenticate(current);
+            const newAppContext = mergeAppContext(current.appContext, appContext);
             const [user] = await db
               .update(users)
               .set({
-                email: googleEmail ?? current.email,
+                email: chooseLinkedEmail(current.email, googleEmail),
                 emailVerified: true,
-                firstName: googleData.firstName,
-                lastName: googleData.lastName,
-                profileImageUrl: googleData.profileImageUrl,
+                firstName: googleData.firstName || current.firstName,
+                lastName: googleData.lastName || current.lastName,
+                profileImageUrl: googleData.profileImageUrl || current.profileImageUrl,
                 googleAccessToken: googleData.googleAccessToken,
                 appContext: newAppContext,
+                ...linkedAuthUserTypePatch(current, userType),
                 updatedAt: new Date(),
               })
               .where(eq(users.id, existingUser[0].id))
@@ -411,7 +464,8 @@ export function createUsersRepository() {
             const emailUser = await findUserByNormalizedEmail(googleEmail);
             if (emailUser) {
               const current = emailUser;
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              assertAccountCanAuthenticate(current);
+              const newAppContext = mergeAppContext(current.appContext, appContext);
               const [user] = await db
                 .update(users)
                 .set({
@@ -422,6 +476,7 @@ export function createUsersRepository() {
                   profileImageUrl: googleData.profileImageUrl || current.profileImageUrl,
                   googleAccessToken: googleData.googleAccessToken,
                   appContext: newAppContext,
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))
@@ -455,17 +510,19 @@ export function createUsersRepository() {
 
           if (existingUser.length > 0) {
             const current = existingUser[0];
-            const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+            assertAccountCanAuthenticate(current);
+            const newAppContext = mergeAppContext(current.appContext, appContext);
             const [user] = await db
               .update(users)
               .set({
-                email: facebookEmail ?? current.email,
+                email: chooseLinkedEmail(current.email, facebookEmail),
                 emailVerified: true,
-                firstName: facebookData.firstName,
-                lastName: facebookData.lastName,
-                profileImageUrl: facebookData.profileImageUrl,
+                firstName: facebookData.firstName || current.firstName,
+                lastName: facebookData.lastName || current.lastName,
+                profileImageUrl: facebookData.profileImageUrl || current.profileImageUrl,
                 facebookAccessToken: facebookData.facebookAccessToken,
                 appContext: newAppContext,
+                ...linkedAuthUserTypePatch(current, userType),
                 updatedAt: new Date(),
               })
               .where(eq(users.id, existingUser[0].id))
@@ -478,7 +535,8 @@ export function createUsersRepository() {
             const emailUser = await findUserByNormalizedEmail(facebookEmail);
             if (emailUser) {
               const current = emailUser;
-              const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
+              assertAccountCanAuthenticate(current);
+              const newAppContext = mergeAppContext(current.appContext, appContext);
               const [user] = await db
                 .update(users)
                 .set({
@@ -489,6 +547,7 @@ export function createUsersRepository() {
                   profileImageUrl: facebookData.profileImageUrl || current.profileImageUrl,
                   facebookAccessToken: facebookData.facebookAccessToken,
                   appContext: newAppContext,
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))
@@ -574,14 +633,17 @@ export function createUsersRepository() {
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
+              assertAccountCanAuthenticate(current);
               const [user] = await db
                 .update(users)
                 .set({
                   tradescoutId: tsData.tradescoutId,
-                  email: tsEmail ?? current.email,
+                  email: chooseLinkedEmail(current.email, tsEmail),
                   ...(tsEmail ? { emailVerified: true } : {}),
-                  firstName: tsData.firstName ?? current.firstName,
-                  lastName: tsData.lastName ?? current.lastName,
+                  firstName: tsData.firstName || current.firstName,
+                  lastName: tsData.lastName || current.lastName,
+                  appContext: mergeAppContext(current.appContext, appContext),
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))
@@ -603,16 +665,19 @@ export function createUsersRepository() {
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
+              assertAccountCanAuthenticate(current);
               const [user] = await db
                 .update(users)
                 .set({
                   googleId: googleData.googleId,
-                  email: googleEmail ?? current.email,
+                  email: chooseLinkedEmail(current.email, googleEmail),
                   emailVerified: true,
                   firstName: googleData.firstName || current.firstName,
                   lastName: googleData.lastName || current.lastName,
                   profileImageUrl: googleData.profileImageUrl || current.profileImageUrl,
                   googleAccessToken: googleData.googleAccessToken,
+                  appContext: mergeAppContext(current.appContext, appContext),
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))
@@ -634,16 +699,19 @@ export function createUsersRepository() {
               .limit(1);
             if (existingUser.length > 0) {
               const current = existingUser[0];
+              assertAccountCanAuthenticate(current);
               const [user] = await db
                 .update(users)
                 .set({
                   facebookId: facebookData.facebookId,
-                  email: facebookEmail ?? current.email,
+                  email: chooseLinkedEmail(current.email, facebookEmail),
                   emailVerified: true,
                   firstName: facebookData.firstName || current.firstName,
                   lastName: facebookData.lastName || current.lastName,
                   profileImageUrl: facebookData.profileImageUrl || current.profileImageUrl,
                   facebookAccessToken: facebookData.facebookAccessToken,
+                  appContext: mergeAppContext(current.appContext, appContext),
+                  ...linkedAuthUserTypePatch(current, userType),
                   updatedAt: new Date(),
                 })
                 .where(eq(users.id, current.id))

@@ -507,7 +507,7 @@ export default function TruckOnboardingPage() {
         ...funnelContext,
         authMode: "signup",
       });
-      await apiRequest("POST", "/api/auth/restaurant/register", {
+      const signupRes = await apiRequest("POST", "/api/auth/restaurant/register", {
         firstName: signup.firstName.trim(),
         lastName: signup.lastName.trim(),
         email: signup.email.trim(),
@@ -534,6 +534,34 @@ export default function TruckOnboardingPage() {
         utmMedium: funnelContext.utmMedium,
         utmCampaign: funnelContext.utmCampaign,
       });
+      const payload = await signupRes.json().catch(() => null);
+      if (payload?.requiresEmailVerification === false) {
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/restaurants/my-restaurants"],
+        });
+        const restaurantId = String(payload?.restaurantId || "").trim();
+        const nextUrl = restaurantId
+          ? `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(
+              restaurantId,
+            )}&src=truck-onboarding&intent=${encodeURIComponent(
+              incomingIntent || "general",
+            )}&goLive=1`
+          : "/restaurant-owner-dashboard?src=truck-onboarding&goLive=1";
+        trackFunnelEvent(FUNNEL_EVENTS.signupCompleted, {
+          ...funnelContext,
+          stage: "existing_account_upgraded",
+          accountType: "business",
+          businessSubType: "food_truck",
+          restaurantId: restaurantId || null,
+        });
+        toast({
+          title: "Truck profile connected",
+          description: "Your existing MealScout account is ready for this truck.",
+        });
+        window.location.href = nextUrl;
+        return;
+      }
       try {
         window.sessionStorage.setItem(
           "mealscout:lastSignupEmail",

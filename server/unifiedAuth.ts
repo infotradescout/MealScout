@@ -1457,6 +1457,85 @@ export async function setupUnifiedAuth(app: Express) {
         restaurantData,
       } = req.body;
 
+      const normalizedBusinessType = [
+        "restaurant",
+        "bar",
+        "food_truck",
+        "caterer",
+        "private_chef",
+      ].includes(String(businessType || ""))
+        ? String(businessType)
+        : "restaurant";
+      const businessUserType =
+        normalizedBusinessType === "food_truck"
+          ? "food_truck"
+          : normalizedBusinessType === "caterer"
+            ? "caterer"
+            : normalizedBusinessType === "private_chef"
+              ? "private_chef"
+              : "restaurant_owner";
+
+      if (req.isAuthenticated?.() && req.user?.id) {
+        let user = (await storage.getUser(req.user.id)) || req.user;
+        if (!user.emailVerified) {
+          return res.status(403).json({
+            error: "Please verify your email before creating a business profile.",
+            code: "email_not_verified",
+          });
+        }
+
+        const normalizedPhone = normalizePhone(
+          phone || user.phone || restaurantData?.phone || "",
+        );
+        if (normalizedPhone.length < 10) {
+          return res
+            .status(400)
+            .json({ error: "Valid phone number is required" });
+        }
+
+        if (user.userType === "customer") {
+          user = await storage.updateUserType(user.id, businessUserType);
+        } else if (
+          ![
+            "restaurant_owner",
+            "caterer",
+            "private_chef",
+            "food_truck",
+          ].includes(String(user.userType || ""))
+        ) {
+          return res.status(409).json({
+            error:
+              "This signed-in account cannot create this business profile. Please use the correct MealScout account.",
+            code: "account_type_mismatch",
+          });
+        }
+
+        const profileUpdates: any = {};
+        if (!user.firstName && firstName) profileUpdates.firstName = firstName;
+        if (!user.lastName && lastName) profileUpdates.lastName = lastName;
+        if (!user.phone) profileUpdates.phone = normalizedPhone;
+        if (Object.keys(profileUpdates).length > 0) {
+          user = await storage.updateUser(user.id, profileUpdates);
+        }
+
+        kickAffiliateTag(user);
+        await applyAffiliateReferral(req, user);
+        const starterBusinessProfile = await maybeCreateStarterBusinessProfile({
+          user,
+          restaurantData,
+          normalizedBusinessType,
+          fallbackPhone: normalizedPhone,
+        });
+
+        return res.status(200).json({
+          message: "Business profile connected to your existing MealScout account.",
+          requiresEmailVerification: false,
+          accountLinked: true,
+          restaurantId: starterBusinessProfile?.id || null,
+          starterProfileCreated: Boolean(starterBusinessProfile),
+        });
+      }
+
       if (!email || !firstName || !lastName || !phone || !password) {
         return res.status(400).json({ error: "All fields are required" });
       }
@@ -1507,24 +1586,6 @@ export async function setupUnifiedAuth(app: Express) {
         phone: normalizedPhone,
         passwordHash,
       };
-
-      const normalizedBusinessType = [
-        "restaurant",
-        "bar",
-        "food_truck",
-        "caterer",
-        "private_chef",
-      ].includes(String(businessType || ""))
-        ? String(businessType)
-        : "restaurant";
-      const businessUserType =
-        normalizedBusinessType === "food_truck"
-          ? "food_truck"
-          : normalizedBusinessType === "caterer"
-            ? "caterer"
-            : normalizedBusinessType === "private_chef"
-              ? "private_chef"
-              : "restaurant_owner";
 
       const user = await storage.upsertUserByAuth(
         "email",

@@ -498,6 +498,29 @@ export default function RestaurantSignup() {
       return await res.json();
     },
     onSuccess: async (payload: any) => {
+      if (payload?.requiresEmailVerification === false) {
+        await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/restaurants/my-restaurants"],
+        });
+        const restaurantId = String(payload?.restaurantId || "").trim();
+        toast({
+          title: "Business profile connected",
+          description:
+            payload?.message ||
+            "Your existing MealScout account is ready for this business.",
+        });
+        if (restaurantId) {
+          window.location.assign(
+            `/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(
+              restaurantId,
+            )}&src=onboarding&showOnboardingPrompt=1`,
+          );
+          return;
+        }
+        window.location.reload();
+        return;
+      }
       toast({
         title: "Verify your email",
         description:
