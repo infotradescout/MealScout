@@ -18,7 +18,10 @@ import {
   isCloudinaryConfigured,
   uploadRawToCloudinary,
 } from "../imageUpload";
-import { hasBusinessPermissionForRestaurant } from "../services/businessTeamAccess";
+import {
+  getBusinessAccessContext,
+  hasBusinessPermissionForRestaurant,
+} from "../services/businessTeamAccess";
 import { isAuthenticated } from "../unifiedAuth";
 import {
   jobApplications,
@@ -142,6 +145,11 @@ const toOptionalDate = (value: unknown) => {
   const parsed = new Date(raw);
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 };
+
+const isStaffOrAdminUser = (user: any) =>
+  ["staff", "admin", "super_admin"].includes(
+    String(user?.userType || "").toLowerCase(),
+  );
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -509,6 +517,82 @@ export function registerJobBoardRoutes(app: Express) {
       }
       console.error("[jobs] failed to submit application:", error);
       res.status(500).json({ message: "Failed to submit application" });
+    }
+  });
+
+  app.get("/api/owner/jobs/businesses", isAuthenticated, async (req: any, res) => {
+    try {
+      if (isStaffOrAdminUser(req.user)) {
+        const search = trimToNull(req.query.q, 120);
+        const includeRestaurantId = trimToNull(req.query.includeRestaurantId, 80);
+        const limit = Math.min(
+          Math.max(Number.parseInt(String(req.query.limit || "150"), 10) || 150, 1),
+          500,
+        );
+        const clauses = [eq(restaurants.isActive, true)];
+
+        if (search) {
+          const term = `%${search.replace(/[%_]/g, "\\$&")}%`;
+          clauses.push(
+            or(
+              ilike(restaurants.name, term),
+              ilike(restaurants.cuisineType, term),
+              ilike(restaurants.city, term),
+              ilike(restaurants.state, term),
+            )!,
+          );
+        }
+
+        let rows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            businessType: restaurants.businessType,
+            cuisineType: restaurants.cuisineType,
+            city: restaurants.city,
+            state: restaurants.state,
+            ownerId: restaurants.ownerId,
+            isFoodTruck: restaurants.isFoodTruck,
+            isActive: restaurants.isActive,
+          })
+          .from(restaurants)
+          .where(and(...clauses))
+          .orderBy(desc(restaurants.createdAt))
+          .limit(limit);
+
+        if (
+          includeRestaurantId &&
+          !rows.some((row: { id: string }) => row.id === includeRestaurantId)
+        ) {
+          const [included] = await db
+            .select({
+              id: restaurants.id,
+              name: restaurants.name,
+              businessType: restaurants.businessType,
+              cuisineType: restaurants.cuisineType,
+              city: restaurants.city,
+              state: restaurants.state,
+              ownerId: restaurants.ownerId,
+              isFoodTruck: restaurants.isFoodTruck,
+              isActive: restaurants.isActive,
+            })
+            .from(restaurants)
+            .where(eq(restaurants.id, includeRestaurantId))
+            .limit(1);
+
+          if (included) {
+            rows = [included, ...rows].slice(0, limit);
+          }
+        }
+
+        return res.json({ restaurants: rows, scope: "all" });
+      }
+
+      const context = await getBusinessAccessContext(String(req.user.id));
+      res.json({ restaurants: context.restaurants, scope: "managed" });
+    } catch (error) {
+      console.error("[jobs] failed to load hiring businesses:", error);
+      res.status(500).json({ message: "Failed to load businesses" });
     }
   });
 

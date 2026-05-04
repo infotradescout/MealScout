@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Restaurant } from "@shared/schema";
@@ -58,6 +59,17 @@ type JobApplication = {
   experienceSummary?: string | null;
   status: string;
   createdAt?: string | null;
+};
+
+type HiringBusiness = Pick<
+  Restaurant,
+  "id" | "name" | "businessType" | "ownerId"
+> & {
+  cuisineType?: string | null;
+  city?: string | null;
+  state?: string | null;
+  isFoodTruck?: boolean | null;
+  isActive?: boolean | null;
 };
 
 const roleOptions = [
@@ -111,22 +123,56 @@ const labelize = (value?: string | null) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const businessOptionLabel = (business: HiringBusiness) => {
+  const location = [business.city, business.state].filter(Boolean).join(", ");
+  return [business.name, location].filter(Boolean).join(" - ");
+};
+
 export default function HiringDashboardPage() {
   const [location] = useLocation();
+  const { user } = useAuth();
   const { toast } = useToast();
   const params = new URLSearchParams(location.includes("?") ? location.split("?")[1] : "");
   const initialRestaurantId = params.get("restaurantId") || "";
+  const isStaffOrAdmin = ["staff", "admin", "super_admin"].includes(
+    String(user?.userType || "").toLowerCase(),
+  );
   const [selectedRestaurant, setSelectedRestaurant] = useState(initialRestaurantId);
   const [selectedJobId, setSelectedJobId] = useState("");
+  const [businessSearch, setBusinessSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
 
-  const { data: restaurants = [], isLoading: loadingRestaurants } = useQuery<
-    Restaurant[]
-  >({
-    queryKey: ["/api/restaurants/my-restaurants"],
+  const { data: businessData, isLoading: loadingRestaurants } = useQuery<{
+    restaurants: HiringBusiness[];
+    scope: "all" | "managed";
+  }>({
+    queryKey: [
+      "/api/owner/jobs/businesses",
+      isStaffOrAdmin ? "all" : "managed",
+      businessSearch,
+      initialRestaurantId,
+    ],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const query = new URLSearchParams({
+        limit: isStaffOrAdmin ? "100" : "150",
+      });
+      if (isStaffOrAdmin && businessSearch.trim()) {
+        query.set("q", businessSearch.trim());
+      }
+      if (initialRestaurantId) {
+        query.set("includeRestaurantId", initialRestaurantId);
+      }
+      const res = await fetch(`/api/owner/jobs/businesses?${query}`, {
+        credentials: "include",
+      });
+      if (!res.ok) return { restaurants: [], scope: "managed" as const };
+      return res.json();
+    },
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const restaurants = businessData?.restaurants || [];
 
   useEffect(() => {
     if (selectedRestaurant || restaurants.length === 0) return;
@@ -134,6 +180,7 @@ export default function HiringDashboardPage() {
   }, [restaurants, selectedRestaurant]);
 
   const currentRestaurant = restaurants.find((r) => r.id === selectedRestaurant);
+  const selectedRestaurantName = currentRestaurant?.name || "Selected business";
 
   const { data: jobsData, isLoading: loadingJobs } = useQuery<{
     jobs: OwnerJob[];
@@ -294,6 +341,13 @@ export default function HiringDashboardPage() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label>Business</Label>
+                {isStaffOrAdmin ? (
+                  <Input
+                    value={businessSearch}
+                    placeholder="Search any business by name, city, or cuisine"
+                    onChange={(event) => setBusinessSearch(event.target.value)}
+                  />
+                ) : null}
                 <Select
                   value={selectedRestaurant}
                   onValueChange={(value) => {
@@ -308,11 +362,16 @@ export default function HiringDashboardPage() {
                   <SelectContent>
                     {restaurants.map((restaurant) => (
                       <SelectItem key={restaurant.id} value={restaurant.id}>
-                        {restaurant.name}
+                        {businessOptionLabel(restaurant)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {isStaffOrAdmin ? (
+                  <p className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                    Staff can post openings for any active MealScout business.
+                  </p>
+                ) : null}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3">
@@ -343,7 +402,7 @@ export default function HiringDashboardPage() {
 
           <HelpWantedQuickAction
             restaurantId={selectedRestaurant}
-            restaurantName={currentRestaurant?.name}
+            restaurantName={selectedRestaurantName}
           />
         </aside>
 
