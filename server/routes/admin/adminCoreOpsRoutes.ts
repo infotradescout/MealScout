@@ -22,6 +22,7 @@ import {
   foodTruckSessions,
   users,
   restaurants,
+  hosts,
   menus,
   menuItems,
   menuImportLogs,
@@ -78,6 +79,84 @@ const labelPublicDataIssue = (issue: string) => {
     missing_description_or_photo: "Missing description/photo",
   };
   return labels[issue] || issue.replace(/_/g, " ");
+};
+
+const resolveAdminPublicBaseUrl = () =>
+  String(
+    process.env.PUBLIC_BASE_URL ||
+      process.env.SERVICE_URL ||
+      "https://www.mealscout.us",
+  ).replace(/\/+$/, "");
+
+const toShareSlug = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const profileVisibilityForUser = (user: any) =>
+  String(user?.accountSettings?.privacy?.profileVisibility || "public")
+    .trim()
+    .toLowerCase();
+
+const isOwnerProfilePublic = (user: any) =>
+  profileVisibilityForUser(user) === "public";
+
+const firstAdminPhotoUrl = (...values: unknown[]) => {
+  for (const value of values) {
+    const direct = String(value || "").trim();
+    if (/^https?:\/\//i.test(direct) || direct.startsWith("/")) {
+      return direct;
+    }
+
+    const gallery = parseAdminAuditPhotos(value);
+    for (const photo of gallery) {
+      const url = String(
+        photo?.url ||
+          photo?.imageUrl ||
+          photo?.photoUrl ||
+          photo?.src ||
+          "",
+      ).trim();
+      if (url) return url;
+    }
+  }
+
+  return null;
+};
+
+const formatSignupLocation = (row: {
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+}) =>
+  [row.city, row.state].filter(Boolean).join(", ") ||
+  String(row.address || "").trim() ||
+  "local";
+
+const buildSignupCaption = (signup: {
+  displayName: string;
+  typeLabel: string;
+  locationLabel: string;
+  profileUrl: string;
+  isPublic: boolean;
+}) => {
+  if (!signup.isPublic) {
+    return `${signup.displayName} just joined MealScout. Their public profile is still being finished, but you can explore nearby food and events here: ${signup.profileUrl}`;
+  }
+
+  return `Welcome ${signup.displayName} to MealScout. Check out this ${signup.typeLabel.toLowerCase()} in ${signup.locationLabel}: ${signup.profileUrl}`;
+};
+
+const dataUrlToBlob = (dataUrl: string) => {
+  const match = /^data:([^;,]+);base64,(.+)$/i.exec(dataUrl || "");
+  if (!match) return null;
+
+  const mimeType = match[1] || "image/png";
+  const buffer = Buffer.from(match[2], "base64");
+  return new Blob([buffer], { type: mimeType });
 };
 
 let adminMenuSchemaAvailableCache: boolean | null = null;
@@ -890,6 +969,317 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/recent-signups",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const hours = Math.min(168, Math.max(1, Number(req.query?.hours) || 48));
+        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const baseUrl = resolveAdminPublicBaseUrl();
+
+        const restaurantRows = await db
+          .select({
+            id: restaurants.id,
+            ownerId: restaurants.ownerId,
+            name: restaurants.name,
+            address: restaurants.address,
+            city: restaurants.city,
+            state: restaurants.state,
+            phone: restaurants.phone,
+            businessType: restaurants.businessType,
+            cuisineType: restaurants.cuisineType,
+            isFoodTruck: restaurants.isFoodTruck,
+            isActive: restaurants.isActive,
+            isVerified: restaurants.isVerified,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            facebookCoverUrl: restaurants.facebookCoverUrl,
+            googlePhotos: restaurants.googlePhotos,
+            description: restaurants.description,
+            websiteUrl: restaurants.websiteUrl,
+            instagramUrl: restaurants.instagramUrl,
+            facebookPageId: restaurants.facebookPageId,
+            facebookPageUrl: restaurants.facebookPageUrl,
+            createdAt: restaurants.createdAt,
+            ownerEmail: users.email,
+            ownerFirstName: users.firstName,
+            ownerLastName: users.lastName,
+            ownerProfileImageUrl: users.profileImageUrl,
+            ownerAffiliateTag: users.affiliateTag,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .where(gte(restaurants.createdAt, cutoff))
+          .orderBy(desc(restaurants.createdAt))
+          .limit(250);
+
+        const hostRows = await db
+          .select({
+            id: hosts.id,
+            userId: hosts.userId,
+            businessName: hosts.businessName,
+            address: hosts.address,
+            city: hosts.city,
+            state: hosts.state,
+            locationType: hosts.locationType,
+            expectedFootTraffic: hosts.expectedFootTraffic,
+            contactPhone: hosts.contactPhone,
+            notes: hosts.notes,
+            isVerified: hosts.isVerified,
+            spotCount: hosts.spotCount,
+            spotImageUrl: hosts.spotImageUrl,
+            description: hosts.description,
+            businessWebsite: hosts.businessWebsite,
+            facebookPageId: hosts.facebookPageId,
+            facebookPageUrl: hosts.facebookPageUrl,
+            facebookCoverUrl: hosts.facebookCoverUrl,
+            googlePhotos: hosts.googlePhotos,
+            createdAt: hosts.createdAt,
+            ownerEmail: users.email,
+            ownerFirstName: users.firstName,
+            ownerLastName: users.lastName,
+            ownerProfileImageUrl: users.profileImageUrl,
+            ownerAffiliateTag: users.affiliateTag,
+            ownerAccountSettings: users.accountSettings,
+          })
+          .from(hosts)
+          .leftJoin(users, eq(hosts.userId, users.id))
+          .where(gte(hosts.createdAt, cutoff))
+          .orderBy(desc(hosts.createdAt))
+          .limit(250);
+
+        const restaurantSignups = (restaurantRows as any[]).map((row) => {
+          const isFoodTruck =
+            Boolean(row.isFoodTruck) ||
+            String(row.businessType || "").toLowerCase() === "food_truck";
+          const kind = isFoodTruck ? "food_truck" : "restaurant";
+          const typeLabel = isFoodTruck ? "Food Truck" : "Restaurant";
+          const slug = toShareSlug(row.name) || row.id;
+          const profilePath = `/p/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`;
+          const profileUrl = `${baseUrl}${profilePath}`;
+          const owner = { accountSettings: row.ownerAccountSettings };
+          const isPublic = row.isActive !== false && isOwnerProfilePublic(owner);
+          const locationLabel = formatSignupLocation(row);
+          const signup = {
+            key: `restaurant:${row.id}`,
+            kind,
+            entity: "restaurant",
+            id: row.id,
+            ownerId: row.ownerId,
+            displayName: row.name,
+            typeLabel,
+            category:
+              row.cuisineType ||
+              (isFoodTruck ? "Mobile food" : row.businessType || "Local food"),
+            locationLabel,
+            city: row.city || null,
+            state: row.state || null,
+            address: row.address || null,
+            description: row.description || null,
+            imageUrl: firstAdminPhotoUrl(
+              row.coverImageUrl,
+              row.facebookCoverUrl,
+              row.logoUrl,
+              row.googlePhotos,
+              row.ownerProfileImageUrl,
+            ),
+            profilePath,
+            profileUrl,
+            isPublic,
+            isVerified: Boolean(row.isVerified),
+            createdAt: row.createdAt,
+            ownerName:
+              [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
+              null,
+            ownerEmail: row.ownerEmail || null,
+            ownerAffiliateTag: row.ownerAffiliateTag || null,
+            facebookPageId: row.facebookPageId || null,
+            facebookPageUrl: row.facebookPageUrl || null,
+            source: "restaurant_onboarding",
+          };
+
+          return {
+            ...signup,
+            caption: buildSignupCaption(signup),
+          };
+        });
+
+        const hostSignups = (hostRows as any[]).map((row) => {
+          const isEventCoordinator =
+            String(row.locationType || "").toLowerCase() ===
+            "event_coordinator";
+          const typeLabel = isEventCoordinator ? "Event Host" : "Host Location";
+          const slug = toShareSlug(row.businessName) || row.id;
+          const profilePath = `/p/host/${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`;
+          const profileUrl = `${baseUrl}${profilePath}`;
+          const owner = { accountSettings: row.ownerAccountSettings };
+          const isPublic = isOwnerProfilePublic(owner);
+          const locationLabel = formatSignupLocation(row);
+          const signup = {
+            key: `host:${row.id}`,
+            kind: "host",
+            entity: "host",
+            id: row.id,
+            ownerId: row.userId,
+            displayName: row.businessName,
+            typeLabel,
+            category: isEventCoordinator
+              ? "Events and organizers"
+              : "Truck-friendly space",
+            locationLabel,
+            city: row.city || null,
+            state: row.state || null,
+            address: row.address || null,
+            description: row.description || row.notes || null,
+            imageUrl: firstAdminPhotoUrl(
+              row.spotImageUrl,
+              row.facebookCoverUrl,
+              row.googlePhotos,
+              row.ownerProfileImageUrl,
+            ),
+            profilePath,
+            profileUrl,
+            isPublic,
+            isVerified: Boolean(row.isVerified),
+            createdAt: row.createdAt,
+            ownerName:
+              [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
+              null,
+            ownerEmail: row.ownerEmail || null,
+            ownerAffiliateTag: row.ownerAffiliateTag || null,
+            facebookPageId: row.facebookPageId || null,
+            facebookPageUrl: row.facebookPageUrl || null,
+            source: "host_onboarding",
+          };
+
+          return {
+            ...signup,
+            caption: buildSignupCaption(signup),
+          };
+        });
+
+        const signups = [...restaurantSignups, ...hostSignups].sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime(),
+        );
+
+        res.json({
+          windowHours: hours,
+          generatedAt: new Date().toISOString(),
+          summary: {
+            total: signups.length,
+            foodTrucks: signups.filter((item) => item.kind === "food_truck")
+              .length,
+            restaurants: signups.filter((item) => item.kind === "restaurant")
+              .length,
+            hosts: signups.filter((item) => item.kind === "host").length,
+            notPublic: signups.filter((item) => !item.isPublic).length,
+          },
+          signups,
+          facebookPagePostingConfigured: Boolean(
+            (process.env.MEALSCOUT_FB_PAGE_ID || process.env.FACEBOOK_PAGE_ID) &&
+              (process.env.MEALSCOUT_FB_PAGE_TOKEN ||
+                process.env.FACEBOOK_PAGE_ACCESS_TOKEN),
+          ),
+        });
+      } catch (error: any) {
+        console.error("[admin/recent-signups] failed:", error);
+        res.status(500).json({
+          message: "Failed to load recent signups",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/recent-signups/facebook-share",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const caption = String(req.body?.caption || "").trim().slice(0, 2000);
+        const profileUrl = String(req.body?.profileUrl || "")
+          .trim()
+          .slice(0, 1000);
+        const graphicDataUrl = String(req.body?.graphicDataUrl || "").trim();
+        const pageId =
+          process.env.MEALSCOUT_FB_PAGE_ID || process.env.FACEBOOK_PAGE_ID;
+        const pageToken =
+          process.env.MEALSCOUT_FB_PAGE_TOKEN ||
+          process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+        const fallbackUrl =
+          profileUrl || `${resolveAdminPublicBaseUrl()}/map`;
+        const fallbackShareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+          fallbackUrl,
+        )}&quote=${encodeURIComponent(caption)}`;
+
+        if (!caption) {
+          return res.status(400).json({ message: "Caption is required" });
+        }
+
+        if (!pageId || !pageToken) {
+          return res.json({
+            ok: false,
+            needsConfig: true,
+            fallbackShareUrl,
+            message:
+              "Facebook Page posting is not configured. Set MEALSCOUT_FB_PAGE_ID and MEALSCOUT_FB_PAGE_TOKEN.",
+          });
+        }
+
+        const imageBlob = dataUrlToBlob(graphicDataUrl);
+        if (!imageBlob) {
+          return res.status(400).json({
+            message: "A PNG graphic data URL is required for Facebook posting",
+          });
+        }
+
+        const form = new FormData();
+        form.set("access_token", pageToken);
+        form.set("caption", caption);
+        form.set("published", "true");
+        form.set("source", imageBlob, "mealscout-new-signup.png");
+
+        const fbRes = await fetch(
+          `https://graph.facebook.com/v19.0/${encodeURIComponent(pageId)}/photos`,
+          {
+            method: "POST",
+            body: form,
+          },
+        );
+        const data = await fbRes.json().catch(() => ({}));
+        if (!fbRes.ok) {
+          return res.json({
+            ok: false,
+            fallbackShareUrl,
+            message:
+              data?.error?.message ||
+              "Facebook rejected the post. You can use the fallback share dialog.",
+            facebookError: data?.error || data || null,
+          });
+        }
+
+        res.json({
+          ok: true,
+          facebookPhotoId: data?.id || null,
+          facebookPostId: data?.post_id || null,
+          taggingSupported: false,
+        });
+      } catch (error: any) {
+        console.error("[admin/recent-signups/facebook-share] failed:", error);
+        res.status(500).json({
+          message: "Failed to share recent signup",
+          error: String(error?.message || error),
+        });
       }
     },
   );

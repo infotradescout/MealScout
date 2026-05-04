@@ -64,6 +64,21 @@ const machineReadinessBucket = (score: number) => {
 const roundToWholeHours = (value: number | null) =>
   value == null ? null : Math.max(0, Math.round(value));
 
+const publicProfileVisibility = (user: any) =>
+  String(user?.accountSettings?.privacy?.profileVisibility || "public")
+    .trim()
+    .toLowerCase();
+
+const isPublicProfileVisibleForVisitors = (user: any) =>
+  publicProfileVisibility(user) === "public";
+
+const sendPrivateProfileResponse = (res: any) =>
+  res.status(403).json({
+    message: "This profile is not public yet.",
+    redirectPath: "/map",
+    homePath: "/",
+  });
+
 const parseArray = (value: unknown): any[] => {
   if (Array.isArray(value)) return value;
   if (typeof value !== "string") return [];
@@ -590,8 +605,11 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       if (entity === "restaurant") {
         let row = await storage.getRestaurant(id);
-        if (!row || !row.isActive) {
+        if (!row) {
           return res.status(404).json({ message: "Profile not found" });
+        }
+        if (!row.isActive) {
+          return sendPrivateProfileResponse(res);
         }
 
         if (!hasRichRestaurantProfile(row)) {
@@ -607,6 +625,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
 
         const ownerUser = await storage.getUser(row.ownerId);
+        if (!isPublicProfileVisibleForVisitors(ownerUser)) {
+          return sendPrivateProfileResponse(res);
+        }
         const baseSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const importedGallery = googlePhotoUrls(row.googlePhotos);
         const googleHighlights = importedHighlights(row.googleCategories);
@@ -681,6 +702,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         }
 
         const ownerUser = await storage.getUser(row.userId);
+        if (!isPublicProfileVisibleForVisitors(ownerUser)) {
+          return sendPrivateProfileResponse(res);
+        }
         const baseSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const importedGallery = googlePhotoUrls(row.googlePhotos);
         const googleHighlights = importedHighlights(row.googleCategories);
@@ -741,6 +765,9 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return res.status(404).json({ message: "Profile not found" });
         }
         const ownerUser = await storage.getUser(row.userId);
+        if (!isPublicProfileVisibleForVisitors(ownerUser)) {
+          return sendPrivateProfileResponse(res);
+        }
         const profileSettings = (ownerUser?.publicProfileSettings || {}) as any;
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;

@@ -16,6 +16,7 @@ import {
   ExternalLink,
   UtensilsCrossed,
   ShieldCheck,
+  Home,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import PublicVideoGallery from "@/components/PublicVideoGallery";
@@ -87,6 +88,12 @@ type PublicProfile = {
     facebookPageUrl?: string | null;
     xUrl?: string | null;
   };
+};
+
+type PublicProfileError = Error & {
+  status?: number;
+  redirectPath?: string;
+  homePath?: string;
 };
 
 type MapRuntimeResponse = {
@@ -187,15 +194,26 @@ export default function PublicProfilePage() {
     "overview" | "specials" | "merch"
   >("overview");
 
-  const { data, isLoading } = useQuery<PublicProfile>({
+  const { data, isLoading, error } = useQuery<
+    PublicProfile,
+    PublicProfileError
+  >({
     queryKey: ["/api/public/profiles", profileType, profileId],
     enabled: !!profileType && !!profileId,
+    retry: false,
     queryFn: async () => {
       const res = await fetch(
         `/api/public/profiles/${encodeURIComponent(String(profileType || ""))}/${encodeURIComponent(String(profileId || ""))}`,
       );
       if (!res.ok) {
-        throw new Error("Profile not found");
+        const payload = await res.json().catch(() => ({}));
+        const profileError = new Error(
+          payload?.message || "Profile not found",
+        ) as PublicProfileError;
+        profileError.status = res.status;
+        profileError.redirectPath = payload?.redirectPath || "/map";
+        profileError.homePath = payload?.homePath || "/";
+        throw profileError;
       }
       return res.json();
     },
@@ -351,6 +369,43 @@ export default function PublicProfilePage() {
   }
 
   if (!data) {
+    if (error?.status === 403) {
+      return (
+        <div className="mx-auto flex min-h-[70vh] max-w-3xl items-center px-4 py-10">
+          <Card className="w-full border-amber-200 bg-amber-50/70">
+            <CardHeader>
+              <Badge className="w-fit bg-amber-500 text-black">
+                Profile not public yet
+              </Badge>
+              <CardTitle className="text-2xl">
+                This profile is still being finished
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                They joined MealScout, but this profile is not public yet.
+                Explore nearby food while they finish setup.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link href={error.redirectPath || "/map"}>
+                  <Button className="w-full sm:w-auto">
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Open food map
+                  </Button>
+                </Link>
+                <Link href={error.homePath || "/"}>
+                  <Button variant="outline" className="w-full sm:w-auto">
+                    <Home className="mr-2 h-4 w-4" />
+                    Go home
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-2xl font-semibold">Profile not found</h1>

@@ -49,6 +49,7 @@ import {
 import { Link, useLocation } from "wouter";
 import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
+import RecentSignupShare from "@/components/admin/recent-signup-share";
 import ShareHub from "@/components/share-hub";
 import { getOptimizedImageUrl } from "@/lib/images";
 import {
@@ -168,6 +169,12 @@ const ADMIN_TAB_ITEMS = [
     label: "Share Portal",
     description: "Growth links",
     icon: Share2,
+  },
+  {
+    value: "recent-signups",
+    label: "Recent Signups",
+    description: "48h graphics",
+    icon: Megaphone,
   },
 ] as const;
 
@@ -10148,6 +10155,10 @@ export default function AdminDashboard() {
               title="Share Portal"
               description="One-click growth and onboarding links for owners, food trucks, and host-location partners."
             />
+          </TabsContent>
+
+          <TabsContent value="recent-signups" className="space-y-4">
+            <RecentSignupShare />
           </TabsContent>
         </Tabs>
       </div>
