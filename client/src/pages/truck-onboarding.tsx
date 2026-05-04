@@ -235,6 +235,13 @@ export default function TruckOnboardingPage() {
     initialParams.get("source") || initialParams.get("src") || "direct",
   ).trim();
   const incomingFlow = String(initialParams.get("flow") || "truck-owner").trim();
+  const incomingUtmSource = String(initialParams.get("utm_source") || "").trim();
+  const incomingUtmMedium = String(initialParams.get("utm_medium") || "").trim();
+  const incomingUtmCampaign = String(
+    initialParams.get("utm_campaign") || "",
+  ).trim();
+  const incomingUtmContent = String(initialParams.get("utm_content") || "").trim();
+  const incomingUtmTerm = String(initialParams.get("utm_term") || "").trim();
   const hasClaimIntent =
     incomingClaimQuery.length > 0 || initialParams.get("claim") === "1";
 
@@ -264,13 +271,20 @@ export default function TruckOnboardingPage() {
   const [submittingVerification, setSubmittingVerification] = useState(false);
   const [snoozingVerification, setSnoozingVerification] = useState(false);
   const autoSearchRan = useRef(false);
+  const signupStartedTracked = useRef(false);
   const funnelContext = useMemo(
     () => ({
       page: "truck-onboarding",
+      sourcePage: "/truck-onboarding",
       audience: "food_truck_owner",
       source: incomingSource || "direct",
       flow: incomingFlow || "truck-owner",
       intent: incomingIntent || "general",
+      utmSource: incomingUtmSource || null,
+      utmMedium: incomingUtmMedium || null,
+      utmCampaign: incomingUtmCampaign || null,
+      utmContent: incomingUtmContent || null,
+      utmTerm: incomingUtmTerm || null,
       hasClaimIntent,
       claimQueryProvided: incomingClaimQuery.length > 0,
     }),
@@ -280,6 +294,11 @@ export default function TruckOnboardingPage() {
       incomingFlow,
       incomingIntent,
       incomingSource,
+      incomingUtmCampaign,
+      incomingUtmContent,
+      incomingUtmMedium,
+      incomingUtmSource,
+      incomingUtmTerm,
     ],
   );
 
@@ -470,6 +489,16 @@ export default function TruckOnboardingPage() {
   };
 
   const updateSignup = (key: keyof SignupFields, value: string) => {
+    if (!signupStartedTracked.current && String(value || "").trim()) {
+      signupStartedTracked.current = true;
+      trackFunnelEvent(FUNNEL_EVENTS.signupStarted, {
+        ...funnelContext,
+        stage: "owner_account_started",
+        accountType: "business",
+        businessSubType: "food_truck",
+        firstField: key,
+      });
+    }
     setSignup((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -537,6 +566,14 @@ export default function TruckOnboardingPage() {
         phone: signup.phone.trim(),
         password: signup.password,
         businessType: "food_truck",
+        accountType: "business",
+        sourcePage: "/truck-onboarding",
+        source: funnelContext.source,
+        flow: funnelContext.flow,
+        intent: funnelContext.intent,
+        utmSource: funnelContext.utmSource,
+        utmMedium: funnelContext.utmMedium,
+        utmCampaign: funnelContext.utmCampaign,
       });
       try {
         window.sessionStorage.setItem(

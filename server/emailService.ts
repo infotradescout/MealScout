@@ -25,6 +25,30 @@ type EmailAttempt = {
   mode: string;
 };
 
+type AdminSignupNotificationContext = {
+  signupMethod?: string;
+  restaurant?: Restaurant;
+  sourcePage?: string | null;
+  landingSource?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  referrer?: string | null;
+  device?: string | null;
+  userAgent?: string | null;
+  signupResult?: string | null;
+  accountType?: string | null;
+  businessType?: string | null;
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 class EmailDeliveryAudit {
   private attempts: EmailAttempt[] = [];
   private maxItems = 200;
@@ -794,13 +818,26 @@ This notification was generated automatically by the MealScout system.
 
   static getAdminSignupNotificationTemplate(
     user: User,
-    context?: { signupMethod?: string; restaurant?: Restaurant },
+    context?: AdminSignupNotificationContext,
   ): { html: string; text: string } {
     const userTypeDisplay = this.getUserTypeDisplay(user.userType);
     const isBusinessReviewRole = ["restaurant_owner", "food_truck"].includes(
       String(user.userType || ""),
     );
     const signupMethod = context?.signupMethod || "Email";
+    const acquisitionRows = [
+      ["Account Type", context?.accountType],
+      ["Business Type", context?.businessType],
+      ["Source Page", context?.sourcePage],
+      ["Landing Source", context?.landingSource || context?.utmSource],
+      ["Campaign", context?.utmCampaign],
+      ["Medium", context?.utmMedium],
+      ["Device", context?.device],
+      ["Referrer", context?.referrer],
+      ["Signup Result", context?.signupResult],
+    ]
+      .map(([label, value]) => [label, String(value || "").trim()])
+      .filter(([, value]) => value);
 
     let restaurantInfo = "";
     if (context?.restaurant) {
@@ -822,6 +859,29 @@ This notification was generated automatically by the MealScout system.
         </div>
       `;
     }
+    const acquisitionInfo = acquisitionRows.length
+      ? `
+        <div class="feature">
+          <div class="feature-icon">📈</div>
+          <div class="feature-text">
+            <div class="feature-title">Acquisition Details</div>
+            <div class="feature-desc">
+              ${acquisitionRows
+                .map(
+                  ([label, value]) =>
+                    `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}<br>`,
+                )
+                .join("")}
+            </div>
+          </div>
+        </div>
+      `
+      : "";
+    const acquisitionText = acquisitionRows.length
+      ? `\nAcquisition Details:\n${acquisitionRows
+          .map(([label, value]) => `${label}: ${value}`)
+          .join("\n")}\n`
+      : "";
 
     const content = `
       <h2>New MealScout Signup 🎉</h2>
@@ -848,6 +908,7 @@ This notification was generated automatically by the MealScout system.
             </div>
           </div>
         </div>
+        ${acquisitionInfo}
         ${restaurantInfo}
       </div>
 
@@ -882,6 +943,7 @@ Registration Date: ${new Date().toLocaleDateString()}
 User ID: ${user.id || "Pending"}
 Account Status: Active
 Email Verified: ${user.emailVerified ? "Yes" : "Pending"}
+${acquisitionText}
 
 ${
   context?.restaurant
@@ -1627,7 +1689,7 @@ export class EmailService {
   // Send admin signup notification with enhanced details
   async sendAdminSignupNotification(
     user: User,
-    context?: { signupMethod?: string; restaurant?: Restaurant },
+    context?: AdminSignupNotificationContext,
   ): Promise<boolean> {
     const template = EmailTemplates.getAdminSignupNotificationTemplate(
       user,
@@ -2095,7 +2157,7 @@ View other available events: https://mealscout.io/truck/dashboard`;
 
 export function renderAdminSignupEmail(
   user: User,
-  context?: { signupMethod?: string; restaurant?: Restaurant },
+  context?: AdminSignupNotificationContext,
 ): { html: string; text: string } {
   return EmailTemplates.getAdminSignupNotificationTemplate(user, context);
 }

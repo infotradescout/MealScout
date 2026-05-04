@@ -80,6 +80,45 @@ const labelPublicDataIssue = (issue: string) => {
   return labels[issue] || issue.replace(/_/g, " ");
 };
 
+let adminMenuSchemaAvailableCache: boolean | null = null;
+let adminMenuSchemaWarningLogged = false;
+const hasAdminMenuSchema = async () => {
+  if (adminMenuSchemaAvailableCache !== null) {
+    return adminMenuSchemaAvailableCache;
+  }
+
+  try {
+    const result = await db.execute(sql`
+      select
+        to_regclass('public.menus')::text as menus_table,
+        to_regclass('public.menu_items')::text as menu_items_table,
+        to_regclass('public.menu_import_logs')::text as menu_import_logs_table
+    `);
+    const row = result.rows?.[0] as any;
+    adminMenuSchemaAvailableCache = Boolean(
+      row?.menus_table && row?.menu_items_table && row?.menu_import_logs_table,
+    );
+  } catch (error) {
+    adminMenuSchemaAvailableCache = false;
+    if (!adminMenuSchemaWarningLogged) {
+      console.warn(
+        "[admin/launch-week] menu schema check failed; using zero menu counts:",
+        error,
+      );
+      adminMenuSchemaWarningLogged = true;
+    }
+  }
+
+  if (!adminMenuSchemaAvailableCache && !adminMenuSchemaWarningLogged) {
+    console.warn(
+      "[admin/launch-week] menu tables unavailable; using zero menu counts",
+    );
+    adminMenuSchemaWarningLogged = true;
+  }
+
+  return adminMenuSchemaAvailableCache;
+};
+
 export function registerAdminCoreOpsRoutes(app: Express) {
   app.get(
     "/api/admin/stats",
@@ -914,7 +953,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
 
         // Menu + item counts per restaurant (1 query)
         const restaurantIds = restaurantsForOwners.map((r: any) => r.id);
-        const menuCounts = restaurantIds.length
+        const menuSchemaAvailable = await hasAdminMenuSchema();
+        const menuCounts = restaurantIds.length && menuSchemaAvailable
           ? await db
               .select({
                 restaurantId: menus.restaurantId,
@@ -937,7 +977,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           });
         }
 
-        const importRows = restaurantIds.length
+        const importRows = restaurantIds.length && menuSchemaAvailable
           ? await db
               .select({
                 restaurantId: menuImportLogs.restaurantId,

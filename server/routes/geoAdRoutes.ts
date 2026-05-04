@@ -70,6 +70,17 @@ const telemetrySchema = z.object({
   properties: z.record(z.unknown()).optional(),
 });
 
+const classifyTelemetryDevice = (userAgent: string) => {
+  const ua = userAgent.toLowerCase();
+  if (ua.includes("fban") || ua.includes("fb_iab")) return "facebook_iab";
+  if (ua.includes("instagram")) return "instagram_iab";
+  if (/iphone|ipad|android|mobile/.test(ua)) return "mobile_web";
+  if (/bot|crawler|spider|facebookexternalhit|claudebot|bingbot/.test(ua)) {
+    return "bot";
+  }
+  return "desktop_web";
+};
+
 const toDecimalString = (value: number, scale = 8) =>
   Number.isFinite(value) ? value.toFixed(scale) : null;
 
@@ -361,6 +372,8 @@ export function registerGeoAdRoutes(app: Express) {
       unknown
     >;
     const hasUser = Boolean(req.user?.id);
+    const userAgent = String(req.get("user-agent") || "").trim();
+    const browserContext = classifyTelemetryDevice(userAgent);
     const inferredClientPath =
       typeof incomingProperties.path === "string" &&
       incomingProperties.path.trim().length > 0
@@ -384,6 +397,8 @@ export function registerGeoAdRoutes(app: Express) {
         clientPath: inferredClientPath,
         requestPath: req.path,
         anonSessionId: hasUser ? null : String(req.sessionID || ""),
+        userAgent,
+        browserContext,
       },
     });
 

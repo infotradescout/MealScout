@@ -231,6 +231,17 @@ export default function AdminTelemetry() {
     };
   })();
   const funnelSteps = tractionFunnel?.steps || {};
+  const truckOwnerFunnel = tractionFunnel?.truckOwner || {};
+  const truckSteps = truckOwnerFunnel.steps || {};
+  const truckRates = truckOwnerFunnel.rates || {};
+  const truckActors = truckOwnerFunnel.actorCounts || {};
+  const truckBlockedReasons = (truckOwnerFunnel.blockedReasons || []).slice(0, 8);
+  const truckSources = (truckOwnerFunnel.sources || []).slice(0, 8);
+  const truckStages = (truckOwnerFunnel.stages || []).slice(0, 8);
+  const signupRoleAudit = tractionFunnel?.signupRoleAudit || {};
+  const roleCounts = signupRoleAudit.roleCounts || [];
+  const recentSignups = (signupRoleAudit.recentSignups || []).slice(0, 8);
+  const privilegedRecentSignups = signupRoleAudit.privilegedRecentSignups || [];
   const funnelAllZero =
     Number(funnelSteps.landingView || 0) === 0 &&
     Number(funnelSteps.primaryCtaClick || 0) === 0 &&
@@ -238,6 +249,11 @@ export default function AdminTelemetry() {
     Number(funnelSteps.signupSubmitted || 0) === 0 &&
     Number(funnelSteps.signupCompleted || 0) === 0 &&
     Number(funnelSteps.activationStarted || 0) === 0;
+  const truckFunnelAllZero =
+    Number(truckSteps.onboardingView || 0) === 0 &&
+    Number(truckSteps.signupSubmitted || 0) === 0 &&
+    Number(truckSteps.signupCompleted || 0) === 0 &&
+    Number(truckSteps.profileSubmitted || 0) === 0;
 
   if (loadingVelocity || loadingFillRates || loadingCoverage || loadingUxRecovery || loadingOpenCallSeries || loadingPremiumOps || loadingTractionFunnel || loadingHeartbeat) {
     return (
@@ -399,6 +415,216 @@ export default function AdminTelemetry() {
               </AlertDescription>
             </Alert>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Truck Owner Funnel (30d)</CardTitle>
+          <CardDescription>
+            Food-truck onboarding from first page view through verified account and profile setup.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium text-muted-foreground">Onboarding Views</div>
+              <div className="text-2xl font-bold">{Number(truckSteps.onboardingView || 0)}</div>
+              <div className="text-xs text-muted-foreground">
+                {Number(truckActors.onboardingView || 0)} unique
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium text-muted-foreground">Signup Submitted</div>
+              <div className="text-2xl font-bold">{Number(truckSteps.signupSubmitted || 0)}</div>
+              <div className="text-xs text-muted-foreground">
+                {Number(truckRates.viewToSignupSubmit || 0).toFixed(1)}% of views
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium text-muted-foreground">Signup Completed</div>
+              <div className="text-2xl font-bold">{Number(truckSteps.signupCompleted || 0)}</div>
+              <div className="text-xs text-muted-foreground">
+                {Number(truckRates.submitToCompleted || 0).toFixed(1)}% after submit
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium text-muted-foreground">Signup Blocked</div>
+              <div className="text-2xl font-bold">{Number(truckSteps.signupBlocked || 0)}</div>
+              <div className="text-xs text-muted-foreground">
+                {Number(truckRates.blockRate || 0).toFixed(1)}% block rate
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs font-medium text-muted-foreground">Profiles Completed</div>
+              <div className="text-2xl font-bold">{Number(truckSteps.profileCompleted || 0)}</div>
+              <div className="text-xs text-muted-foreground">
+                {Number(truckRates.profileSubmitToCompleted || 0).toFixed(1)}% after submit
+              </div>
+            </div>
+          </div>
+
+          {truckFunnelAllZero ? (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>No Truck Funnel Events Yet</AlertTitle>
+              <AlertDescription>
+                Recent traffic is hitting the app, but no truck-onboarding funnel events are present for this window.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-md border p-4">
+              <div className="mb-3 text-sm font-semibold">Dropoff Reasons</div>
+              <div className="space-y-2">
+                {truckBlockedReasons.length ? (
+                  truckBlockedReasons.map((row: any) => (
+                    <div key={row.reason} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{row.reason}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {Number(row.uniqueActors || 0)} unique actor(s)
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-semibold">{Number(row.count || 0)}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No blocked signup reasons captured.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-md border p-4">
+              <div className="mb-3 text-sm font-semibold">Sources / Devices</div>
+              <div className="space-y-2">
+                {truckSources.length ? (
+                  truckSources.map((row: any) => (
+                    <div
+                      key={`${row.source}:${row.campaign}:${row.device}`}
+                      className="flex items-start justify-between gap-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">
+                          {row.source} · {row.device}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Campaign: {row.campaign || "none"} · {Number(row.uniqueActors || 0)} unique
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-semibold">{Number(row.count || 0)}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No source/device breakdown captured.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-md border p-4">
+              <div className="mb-3 text-sm font-semibold">Stage Views</div>
+              <div className="space-y-2">
+                {truckStages.length ? (
+                  truckStages.map((row: any) => (
+                    <div
+                      key={`${row.stage}:${row.authMode}:${row.truckMode}`}
+                      className="flex items-start justify-between gap-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{row.stage}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {row.authMode} · {row.truckMode} · {Number(row.uniqueActors || 0)} unique
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-semibold">{Number(row.count || 0)}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-muted-foreground">No stage views captured.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Signup Role Audit (30d)</CardTitle>
+          <CardDescription>
+            Confirms new accounts are being created as customer, food truck, supplier, host, or staff roles as intended.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {privilegedRecentSignups.length ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Privileged Signup Detected</AlertTitle>
+              <AlertDescription>
+                {privilegedRecentSignups.length} recent signup(s) have admin, super admin, or staff privileges. Review immediately.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-3 md:grid-cols-4">
+            {roleCounts.length ? (
+              roleCounts.map((row: any) => (
+                <div
+                  key={row.userType}
+                  className={`rounded-md border p-3 ${
+                    row.privileged ? "border-destructive bg-destructive/5" : ""
+                  }`}
+                >
+                  <div className="truncate text-xs font-medium text-muted-foreground">
+                    {row.userType}
+                  </div>
+                  <div className="text-2xl font-bold">{Number(row.count || 0)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {Number(row.verified || 0)} verified · {Number(row.disabled || 0)} disabled
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground">No recent signups in this window.</div>
+            )}
+          </div>
+
+          <div className="rounded-md border">
+            <div className="grid grid-cols-[1.1fr_1.3fr_0.8fr_0.8fr] gap-3 border-b px-3 py-2 text-xs font-semibold text-muted-foreground">
+              <div>Name</div>
+              <div>Email</div>
+              <div>Role</div>
+              <div>Status</div>
+            </div>
+            {recentSignups.length ? (
+              recentSignups.map((row: any) => (
+                <div
+                  key={row.id}
+                  className={`grid grid-cols-[1.1fr_1.3fr_0.8fr_0.8fr] gap-3 border-b px-3 py-2 text-sm last:border-b-0 ${
+                    row.privileged ? "bg-destructive/5" : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{row.name || "No name"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {row.createdAt ? new Date(row.createdAt).toLocaleString() : "Unknown date"}
+                    </div>
+                  </div>
+                  <div className="truncate">{row.email || "No email"}</div>
+                  <div className="truncate">{row.userType || "unknown"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {row.emailVerified ? "Verified" : "Pending"}
+                    {row.isDisabled ? " · Disabled" : ""}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-sm text-muted-foreground">
+                No signup rows found.
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

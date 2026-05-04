@@ -53,6 +53,16 @@ const TRACTION_FUNNEL_EVENT_NAMES = [
   "funnel_signup_submitted",
   "funnel_signup_completed",
   "funnel_activation_started",
+  "funnel_truck_onboarding_view",
+  "funnel_truck_onboarding_stage_view",
+  "funnel_truck_onboarding_signup_blocked",
+  "funnel_truck_onboarding_signup_submitted",
+  "funnel_truck_onboarding_signup_completed",
+  "funnel_truck_onboarding_login_submitted",
+  "funnel_truck_onboarding_login_completed",
+  "funnel_truck_onboarding_claim_search",
+  "funnel_truck_onboarding_profile_submitted",
+  "funnel_truck_onboarding_profile_completed",
 ] as const;
 
 const IMPORT_SYSTEM_EMAIL =
@@ -632,7 +642,28 @@ router.get("/funnel", isAdmin, async (req, res) => {
     const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 90);
     const startDate = getRange(days);
 
-    const [totalsRows, accountTypeRows] = await Promise.all([
+    const truckFunnelEventNames = [
+      "funnel_truck_onboarding_view",
+      "funnel_truck_onboarding_stage_view",
+      "funnel_truck_onboarding_signup_blocked",
+      "funnel_truck_onboarding_signup_submitted",
+      "funnel_truck_onboarding_signup_completed",
+      "funnel_truck_onboarding_login_submitted",
+      "funnel_truck_onboarding_login_completed",
+      "funnel_truck_onboarding_claim_search",
+      "funnel_truck_onboarding_profile_submitted",
+      "funnel_truck_onboarding_profile_completed",
+    ] as const;
+
+    const [
+      totalsRows,
+      accountTypeRows,
+      truckStageRows,
+      truckBlockedRows,
+      truckSourceRows,
+      signupRoleRows,
+      recentSignupRows,
+    ] = await Promise.all([
       db
         .select({
           eventName: telemetryEvents.eventName,
@@ -666,6 +697,87 @@ router.get("/funnel", isAdmin, async (req, res) => {
           ),
         )
         .groupBy(sql`coalesce(${telemetryEvents.properties}->>'accountType', 'unknown')`),
+      db
+        .select({
+          stage: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'stage', ''), 'unknown')`,
+          authMode: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'authMode', ''), 'unknown')`,
+          truckMode: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'truckMode', ''), 'unknown')`,
+          count: sql<number>`count(*)`,
+          uniqueActors: sql<number>`count(distinct coalesce(${telemetryEvents.userId}::text, nullif(${telemetryEvents.properties}->>'anonSessionId', '')))`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            eq(telemetryEvents.eventName, "funnel_truck_onboarding_stage_view"),
+          ),
+        )
+        .groupBy(
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'stage', ''), 'unknown')`,
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'authMode', ''), 'unknown')`,
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'truckMode', ''), 'unknown')`,
+        ),
+      db
+        .select({
+          reason: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'reason', ''), nullif(${telemetryEvents.properties}->>'message', ''), 'unknown')`,
+          count: sql<number>`count(*)`,
+          uniqueActors: sql<number>`count(distinct coalesce(${telemetryEvents.userId}::text, nullif(${telemetryEvents.properties}->>'anonSessionId', '')))`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            eq(telemetryEvents.eventName, "funnel_truck_onboarding_signup_blocked"),
+          ),
+        )
+        .groupBy(
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'reason', ''), nullif(${telemetryEvents.properties}->>'message', ''), 'unknown')`,
+        ),
+      db
+        .select({
+          source: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'source', ''), nullif(${telemetryEvents.properties}->>'utmSource', ''), 'direct')`,
+          campaign: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'utmCampaign', ''), nullif(${telemetryEvents.properties}->>'campaign', ''), 'none')`,
+          device: sql<string>`coalesce(nullif(${telemetryEvents.properties}->>'browserContext', ''), nullif(${telemetryEvents.properties}->>'device', ''), 'unknown')`,
+          count: sql<number>`count(*)`,
+          uniqueActors: sql<number>`count(distinct coalesce(${telemetryEvents.userId}::text, nullif(${telemetryEvents.properties}->>'anonSessionId', '')))`,
+        })
+        .from(telemetryEvents)
+        .where(
+          and(
+            gte(telemetryEvents.createdAt, startDate),
+            inArray(telemetryEvents.eventName, [...truckFunnelEventNames]),
+          ),
+        )
+        .groupBy(
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'source', ''), nullif(${telemetryEvents.properties}->>'utmSource', ''), 'direct')`,
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'utmCampaign', ''), nullif(${telemetryEvents.properties}->>'campaign', ''), 'none')`,
+          sql`coalesce(nullif(${telemetryEvents.properties}->>'browserContext', ''), nullif(${telemetryEvents.properties}->>'device', ''), 'unknown')`,
+        ),
+      db
+        .select({
+          userType: users.userType,
+          count: sql<number>`count(*)`,
+          verified: sql<number>`count(*) filter (where ${users.emailVerified} = true)`,
+          disabled: sql<number>`count(*) filter (where coalesce(${users.isDisabled}, false) = true)`,
+        })
+        .from(users)
+        .where(gte(users.createdAt, startDate))
+        .groupBy(users.userType),
+      db
+        .select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          userType: users.userType,
+          emailVerified: users.emailVerified,
+          isDisabled: users.isDisabled,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(gte(users.createdAt, startDate))
+        .orderBy(desc(users.createdAt))
+        .limit(50),
     ]);
 
     const totalsByEvent = Object.fromEntries(
@@ -687,11 +799,45 @@ router.get("/funnel", isAdmin, async (req, res) => {
       signupCompleted: totalsByEvent.funnel_signup_completed?.count || 0,
       activationStarted: totalsByEvent.funnel_activation_started?.count || 0,
     };
+    const truckStepCounts = {
+      onboardingView: totalsByEvent.funnel_truck_onboarding_view?.count || 0,
+      stageView: totalsByEvent.funnel_truck_onboarding_stage_view?.count || 0,
+      signupStarted: totalsByEvent.funnel_signup_started?.count || 0,
+      signupBlocked:
+        totalsByEvent.funnel_truck_onboarding_signup_blocked?.count || 0,
+      signupSubmitted:
+        totalsByEvent.funnel_truck_onboarding_signup_submitted?.count || 0,
+      signupCompleted:
+        totalsByEvent.funnel_truck_onboarding_signup_completed?.count || 0,
+      loginSubmitted:
+        totalsByEvent.funnel_truck_onboarding_login_submitted?.count || 0,
+      loginCompleted:
+        totalsByEvent.funnel_truck_onboarding_login_completed?.count || 0,
+      claimSearch: totalsByEvent.funnel_truck_onboarding_claim_search?.count || 0,
+      profileSubmitted:
+        totalsByEvent.funnel_truck_onboarding_profile_submitted?.count || 0,
+      profileCompleted:
+        totalsByEvent.funnel_truck_onboarding_profile_completed?.count || 0,
+    };
 
     const rate = (numerator: number, denominator: number) => {
       if (!denominator || denominator <= 0) return 0;
       return Number(((numerator / denominator) * 100).toFixed(2));
     };
+    const privilegedUserTypes = new Set(["admin", "super_admin", "staff"]);
+    const recentSignups = (recentSignupRows as any[]).map((row) => ({
+      id: String(row.id || ""),
+      email: String(row.email || ""),
+      name: [row.firstName, row.lastName]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .join(" "),
+      userType: String(row.userType || "unknown"),
+      emailVerified: Boolean(row.emailVerified),
+      isDisabled: Boolean(row.isDisabled),
+      createdAt: row.createdAt,
+      privileged: privilegedUserTypes.has(String(row.userType || "")),
+    }));
 
     res.json({
       days,
@@ -715,6 +861,92 @@ router.get("/funnel", isAdmin, async (req, res) => {
         accountType: String(row.accountType || "unknown"),
         count: Number(row.count || 0),
       })),
+      truckOwner: {
+        steps: truckStepCounts,
+        rates: {
+          viewToSignupSubmit: rate(
+            truckStepCounts.signupSubmitted,
+            truckStepCounts.onboardingView,
+          ),
+          submitToCompleted: rate(
+            truckStepCounts.signupCompleted,
+            truckStepCounts.signupSubmitted,
+          ),
+          completedToProfileSubmitted: rate(
+            truckStepCounts.profileSubmitted,
+            truckStepCounts.signupCompleted,
+          ),
+          profileSubmitToCompleted: rate(
+            truckStepCounts.profileCompleted,
+            truckStepCounts.profileSubmitted,
+          ),
+          loginSubmitToCompleted: rate(
+            truckStepCounts.loginCompleted,
+            truckStepCounts.loginSubmitted,
+          ),
+          blockRate: rate(
+            truckStepCounts.signupBlocked,
+            truckStepCounts.signupBlocked + truckStepCounts.signupSubmitted,
+          ),
+        },
+        actorCounts: {
+          onboardingView:
+            totalsByEvent.funnel_truck_onboarding_view?.uniqueActors || 0,
+          signupBlocked:
+            totalsByEvent.funnel_truck_onboarding_signup_blocked?.uniqueActors ||
+            0,
+          signupSubmitted:
+            totalsByEvent.funnel_truck_onboarding_signup_submitted
+              ?.uniqueActors || 0,
+          signupCompleted:
+            totalsByEvent.funnel_truck_onboarding_signup_completed
+              ?.uniqueActors || 0,
+          profileSubmitted:
+            totalsByEvent.funnel_truck_onboarding_profile_submitted
+              ?.uniqueActors || 0,
+          profileCompleted:
+            totalsByEvent.funnel_truck_onboarding_profile_completed
+              ?.uniqueActors || 0,
+        },
+        blockedReasons: (truckBlockedRows as any[])
+          .map((row) => ({
+            reason: String(row.reason || "unknown"),
+            count: Number(row.count || 0),
+            uniqueActors: Number(row.uniqueActors || 0),
+          }))
+          .sort((a, b) => b.count - a.count),
+        stages: (truckStageRows as any[])
+          .map((row) => ({
+            stage: String(row.stage || "unknown"),
+            authMode: String(row.authMode || "unknown"),
+            truckMode: String(row.truckMode || "unknown"),
+            count: Number(row.count || 0),
+            uniqueActors: Number(row.uniqueActors || 0),
+          }))
+          .sort((a, b) => b.count - a.count),
+        sources: (truckSourceRows as any[])
+          .map((row) => ({
+            source: String(row.source || "direct"),
+            campaign: String(row.campaign || "none"),
+            device: String(row.device || "unknown"),
+            count: Number(row.count || 0),
+            uniqueActors: Number(row.uniqueActors || 0),
+          }))
+          .sort((a, b) => b.count - a.count),
+      },
+      signupRoleAudit: {
+        roleCounts: (signupRoleRows as any[])
+          .map((row) => ({
+            userType: String(row.userType || "unknown"),
+            count: Number(row.count || 0),
+            verified: Number(row.verified || 0),
+            disabled: Number(row.disabled || 0),
+            privileged: privilegedUserTypes.has(String(row.userType || "")),
+          }))
+          .sort((a, b) => b.count - a.count),
+        recentSignups,
+        privilegedRecentSignups: recentSignups.filter((row) => row.privileged),
+      },
     });
   } catch (error) {
     console.error("Error fetching traction funnel telemetry:", error);

@@ -117,6 +117,72 @@ function requiresEmailVerification(user: User | undefined | null) {
   return !["admin", "super_admin"].includes(String(user.userType || ""));
 }
 
+const firstRequestValue = (...values: unknown[]) => {
+  for (const value of values) {
+    const clean = String(value || "").trim();
+    if (clean) return clean;
+  }
+  return "";
+};
+
+const pathFromUrl = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return `${url.pathname}${url.search || ""}`;
+  } catch {
+    return raw.startsWith("/") ? raw : "";
+  }
+};
+
+const classifySignupDevice = (userAgent: string) => {
+  const ua = userAgent.toLowerCase();
+  if (ua.includes("fban") || ua.includes("fb_iab")) return "facebook_iab";
+  if (ua.includes("instagram")) return "instagram_iab";
+  if (/iphone|ipad|android|mobile/.test(ua)) return "mobile_web";
+  if (/bot|crawler|spider|facebookexternalhit|claudebot|bingbot/.test(ua)) {
+    return "bot";
+  }
+  return "desktop_web";
+};
+
+const buildAdminSignupContext = (
+  req: any,
+  signupMethod: string,
+  extras: Record<string, string | null | undefined> = {},
+) => {
+  const body = req.body || {};
+  const query = req.query || {};
+  const referrer = String(req.get?.("referer") || "").trim();
+  const userAgent = String(req.get?.("user-agent") || "").trim();
+
+  return {
+    signupMethod,
+    sourcePage: firstRequestValue(
+      body.sourcePage,
+      body.page,
+      query.sourcePage,
+      pathFromUrl(referrer),
+    ),
+    landingSource: firstRequestValue(
+      body.source,
+      body.src,
+      query.source,
+      query.src,
+      query.utm_source,
+    ),
+    utmSource: firstRequestValue(body.utmSource, query.utm_source),
+    utmMedium: firstRequestValue(body.utmMedium, query.utm_medium),
+    utmCampaign: firstRequestValue(body.utmCampaign, query.utm_campaign),
+    referrer,
+    device: classifySignupDevice(userAgent),
+    userAgent: userAgent.slice(0, 400),
+    signupResult: "created_requires_email_verification",
+    ...extras,
+  };
+};
+
 function isEmailVerificationBypassPath(path: string) {
   return (
     path === "/api/auth/user" ||
@@ -453,9 +519,13 @@ export async function setupUnifiedAuth(app: Express) {
             void sendWelcomeOrVerification(user, req, "customer");
             // Send admin signup notification with context asynchronously
             emailService
-              .sendAdminSignupNotification(user, {
-                signupMethod: "google",
-              })
+              .sendAdminSignupNotification(
+                user,
+                buildAdminSignupContext(req, "google", {
+                  accountType: "customer",
+                  signupResult: "oauth_authenticated",
+                }),
+              )
               .catch((err) =>
                 console.error("Failed to send admin signup notification:", err),
               );
@@ -561,9 +631,14 @@ export async function setupUnifiedAuth(app: Express) {
             void sendWelcomeOrVerification(user, req, "restaurant owner");
             // Send admin signup notification with context asynchronously
             emailService
-              .sendAdminSignupNotification(user, {
-                signupMethod: "google",
-              })
+              .sendAdminSignupNotification(
+                user,
+                buildAdminSignupContext(req, "google", {
+                  accountType: "business",
+                  businessType: String(user.userType || "restaurant_owner"),
+                  signupResult: "oauth_authenticated",
+                }),
+              )
               .catch((err) =>
                 console.error("Failed to send admin signup notification:", err),
               );
@@ -804,9 +879,20 @@ export async function setupUnifiedAuth(app: Express) {
             void sendWelcomeOrVerification(user, req, "customer");
             // Send admin signup notification with context asynchronously
             emailService
-              .sendAdminSignupNotification(user, {
-                signupMethod: "facebook",
-              })
+              .sendAdminSignupNotification(
+                user,
+                buildAdminSignupContext(req, "facebook", {
+                  accountType:
+                    String(user.userType || userType) === "customer"
+                      ? "customer"
+                      : "business",
+                  businessType:
+                    String(user.userType || userType) === "customer"
+                      ? null
+                      : String(user.userType || userType),
+                  signupResult: "oauth_authenticated",
+                }),
+              )
               .catch((err) =>
                 console.error("Failed to send admin signup notification:", err),
               );
@@ -1072,9 +1158,12 @@ export async function setupUnifiedAuth(app: Express) {
       void sendWelcomeOrVerification(user, req, "customer");
       // Send admin signup notification with context asynchronously
       emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
+        .sendAdminSignupNotification(
+          user,
+          buildAdminSignupContext(req, "email", {
+            accountType: "customer",
+          }),
+        )
         .catch((err) =>
           console.error("Failed to send admin signup notification:", err),
         );
@@ -1155,9 +1244,13 @@ export async function setupUnifiedAuth(app: Express) {
 
       void sendWelcomeOrVerification(user, req, "event coordinator");
       emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
+        .sendAdminSignupNotification(
+          user,
+          buildAdminSignupContext(req, "email", {
+            accountType: "event",
+            businessType: "event_coordinator",
+          }),
+        )
         .catch((err) =>
           console.error("Failed to send admin signup notification:", err),
         );
@@ -1269,9 +1362,13 @@ export async function setupUnifiedAuth(app: Express) {
       );
       // Send admin signup notification with context asynchronously
       emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
+        .sendAdminSignupNotification(
+          user,
+          buildAdminSignupContext(req, "email", {
+            accountType: "business",
+            businessType: normalizedBusinessType,
+          }),
+        )
         .catch((err) =>
           console.error("Failed to send admin signup notification:", err),
         );
@@ -1356,9 +1453,13 @@ export async function setupUnifiedAuth(app: Express) {
       void sendWelcomeOrVerification(user, req, "supplier");
       // Send admin signup notification with context asynchronously
       emailService
-        .sendAdminSignupNotification(user, {
-          signupMethod: "email",
-        })
+        .sendAdminSignupNotification(
+          user,
+          buildAdminSignupContext(req, "email", {
+            accountType: "supplier",
+            businessType: "supplier",
+          }),
+        )
         .catch((err) =>
           console.error("Failed to send admin signup notification:", err),
         );
