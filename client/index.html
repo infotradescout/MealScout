@@ -24,6 +24,10 @@
       name="googlebot"
       content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
     />
+    <meta
+      name="bingbot"
+      content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+    />
     <meta name="application-name" content="MealScout" />
     <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
     <link
@@ -37,6 +41,17 @@
       type="text/plain"
       href="/llms.txt"
       title="MealScout LLM guide"
+    />
+    <link
+      rel="alternate"
+      type="application/ld+json"
+      href="/ai-summary.json"
+      title="MealScout AI facts"
+    />
+    <link
+      rel="help"
+      href="/answers/mealscout"
+      title="MealScout quick facts"
     />
 
     <meta property="og:title" content="MealScout | Find Food Trucks Near You" />
@@ -102,16 +117,27 @@
       />
     </noscript>
 
-    <!-- Organization Schema for LLMO & Google Search -->
+    <!-- Organization Schema for LLMO & Search -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "Organization",
+        "@id": "https://www.mealscout.us/#organization",
         "name": "MealScout",
         "url": "https://www.mealscout.us",
         "logo": "https://www.mealscout.us/logo.png",
-        "description": "Find food trucks near you or discover verified places to park and serve. MealScout helps food trucks source locations and helps customers find trucks.",
+        "description": "MealScout helps people find local food trucks, restaurants, bars, events, deals, host locations, videos, and pickup menus.",
         "foundingDate": "2025",
+        "knowsAbout": [
+          "Food trucks",
+          "Restaurants",
+          "Bars",
+          "Local food deals",
+          "Food truck events",
+          "Host locations",
+          "Pickup menus",
+          "Food truck booking"
+        ],
         "sameAs": [
           "https://www.facebook.com/mealscout",
           "https://twitter.com/mealscout"
@@ -129,13 +155,41 @@
       {
         "@context": "https://schema.org",
         "@type": "WebSite",
+        "@id": "https://www.mealscout.us/#website",
         "name": "MealScout",
         "url": "https://www.mealscout.us",
+        "publisher": {
+          "@id": "https://www.mealscout.us/#organization"
+        },
         "potentialAction": {
           "@type": "SearchAction",
           "target": "https://www.mealscout.us/search?q={search_term_string}",
           "query-input": "required name=search_term_string"
         }
+      }
+    </script>
+
+    <!-- WebApplication Schema for AI/Search Entity Understanding -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "@id": "https://www.mealscout.us/#app",
+        "name": "MealScout",
+        "url": "https://www.mealscout.us",
+        "applicationCategory": "FoodDiscoveryApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "description": "A local food discovery platform for finding nearby food trucks, restaurants, bars, events, host locations, deals, videos, and pickup menus.",
+        "featureList": [
+          "Live food map",
+          "Food truck and restaurant profiles",
+          "Local deals",
+          "Public and private event pages",
+          "Host-location discovery",
+          "Food videos",
+          "Pickup menus when businesses publish them"
+        ]
       }
     </script>
   </head>

@@ -11,7 +11,10 @@ const checks = [
       "Sitemap:",
       "/sitemap-index.xml",
       "/llms.txt",
+      "/ai-summary.json",
       "/opensearch.xml",
+      "Meta-ExternalAgent",
+      "bingbot",
     ],
   },
   {
@@ -27,7 +30,38 @@ const checks = [
   {
     path: "/llms.txt",
     type: "text/plain",
-    includes: ["# MealScout", "Priority Pages", "Business Profile Pages"],
+    includes: [
+      "# MealScout",
+      "Quick Facts for AI Answers",
+      "Menu highlights:",
+      "Machine-Readable Resources",
+      "Business Profile Pages",
+    ],
+  },
+  {
+    path: "/ai-summary.json",
+    type: "application/ld+json",
+    includes: [
+      '"@context": "https://schema.org"',
+      '"name": "MealScout"',
+      '"menuHighlights"',
+      '"answerGuidance"',
+    ],
+  },
+  {
+    path: "/.well-known/ai-summary.json",
+    type: "application/ld+json",
+    includes: ['"@context": "https://schema.org"', '"name": "MealScout"'],
+  },
+  {
+    path: "/answers/mealscout",
+    type: "text/html",
+    includes: [
+      "MealScout Quick Facts",
+      "Menu Highlights",
+      "The MealScout website is available online 24/7",
+      "info.mealscout@gmail.com",
+    ],
   },
   {
     path: "/opensearch.xml",

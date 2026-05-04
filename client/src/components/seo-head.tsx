@@ -163,6 +163,7 @@ export function SEOHead({
       : "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1";
     setMetaTag("robots", robotsContent);
     setMetaTag("googlebot", robotsContent);
+    setMetaTag("bingbot", robotsContent);
 
     // Open Graph tags
     setMetaTag("og:title", title, true);

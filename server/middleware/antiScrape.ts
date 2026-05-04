@@ -5,7 +5,7 @@ const allowedBots = ['TradeScout', 'tradescout'];
 const allowedBrowsers = ['Chrome', 'Firefox', 'Safari', 'Edge', 'OPR', 'Brave'];
 const bannedSignatures = ['curl', 'python', 'wget', 'httpclient', 'libwww', 'scrapy', 'postman'];
 const knownSearchOrLlmBots =
-  /(googlebot|google-inspectiontool|bingbot|adidxbot|duckduckbot|applebot|facebookexternalhit|linkedinbot|gptbot|oai-searchbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
+  /(googlebot|google-inspectiontool|bingbot|bingpreview|adidxbot|duckduckbot|applebot|facebookexternalhit|facebot|facebookbot|meta-externalagent|meta-externalfetcher|linkedinbot|gptbot|oai-searchbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
 
 const isSeoCriticalPath = (path: string) => {
   const value = String(path || "").toLowerCase();
@@ -16,7 +16,17 @@ const isSeoCriticalPath = (path: string) => {
   return (
     value === "/robots.txt" ||
     value === "/llms.txt" ||
+    value === "/.well-known/llms.txt" ||
     value === "/ai.txt" ||
+    value === "/.well-known/ai.txt" ||
+    value === "/ai-summary.json" ||
+    value === "/.well-known/ai-summary.json" ||
+    value === "/meal-scout.json" ||
+    value === "/meta.json" ||
+    value === "/answers/mealscout" ||
+    value === "/answers/mealscout.txt" ||
+    value === "/opensearch.xml" ||
+    value === "/.well-known/opensearch.xml" ||
     (indexNowKeyPath && value === indexNowKeyPath) ||
     value === "/sitemap.xml" ||
     /^\/sitemap[\w-]*\.xml$/.test(value)

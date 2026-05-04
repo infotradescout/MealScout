@@ -153,7 +153,11 @@ const classifySignupDevice = (userAgent: string) => {
   if (ua.includes("fban") || ua.includes("fb_iab")) return "facebook_iab";
   if (ua.includes("instagram")) return "instagram_iab";
   if (/iphone|ipad|android|mobile/.test(ua)) return "mobile_web";
-  if (/bot|crawler|spider|facebookexternalhit|claudebot|bingbot/.test(ua)) {
+  if (
+    /bot|crawler|spider|preview|fetcher|facebookexternalhit|facebot|facebookbot|meta-externalagent|meta-externalfetcher|claudebot|bingbot|bingpreview|adidxbot/.test(
+      ua,
+    )
+  ) {
     return "bot";
   }
   return "desktop_web";

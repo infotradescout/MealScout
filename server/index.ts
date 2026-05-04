@@ -537,9 +537,9 @@ if (process.env.NODE_ENV === "production") {
 app.use(antiScrape);
 
 const llmBotPattern =
-  /(gptbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai)/i;
+  /(gptbot|chatgpt-user|claudebot|anthropic-ai|perplexitybot|bytespider|ccbot|cohere-ai|meta-externalagent|meta-externalfetcher)/i;
 const botPattern =
-  /(bot|crawler|spider|slurp|facebookexternalhit|whatsapp|discordbot|telegrambot|linkedinbot)/i;
+  /(bot|crawler|spider|slurp|preview|fetcher|bingbot|bingpreview|adidxbot|facebookexternalhit|facebot|facebookbot|meta-externalagent|meta-externalfetcher|whatsapp|discordbot|telegrambot|linkedinbot)/i;
 
 const deriveActorType = (userAgent: string) => {
   if (!userAgent) return "human";
