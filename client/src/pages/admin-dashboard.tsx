@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import Navigation from "@/components/navigation";
 import {
   Shield,
   Users,
@@ -231,6 +230,19 @@ interface PendingRestaurant {
   facebookCoverUrl?: string | null;
   googlePhotos?: unknown;
   facebookPhotos?: unknown;
+  profileSource?: string | null;
+  claimedFromImportId?: string | null;
+  ownerFirstName?: string | null;
+  ownerLastName?: string | null;
+  ownerUserType?: string | null;
+  reviewSource?: "verification_request" | "truck_claim" | "inactive_profile" | string;
+  reviewLabel?: string | null;
+  submittedAt?: string | null;
+  verificationRequestId?: string | null;
+  claimRequestId?: string | null;
+  documentsCount?: number | null;
+  licenseNumber?: string | null;
+  rejectionReason?: string | null;
 }
 
 interface AdminRestaurantSearchResult {
@@ -238,11 +250,20 @@ interface AdminRestaurantSearchResult {
   name: string;
   ownerEmail?: string | null;
   cuisineType?: string | null;
+  businessType?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  phone?: string | null;
   isActive?: boolean | null;
   isVerified?: boolean | null;
+  isFoodTruck?: boolean | null;
+  logoUrl?: string | null;
+  coverImageUrl?: string | null;
+  facebookCoverUrl?: string | null;
+  googlePhotos?: unknown;
+  facebookPhotos?: unknown;
+  profileSource?: string | null;
   createdAt?: string | null;
 }
 
@@ -413,6 +434,40 @@ const getAdminRestaurantImageUrl = (restaurant: any) => {
   }
 
   return ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+};
+
+const formatAdminBusinessType = (business: any) => {
+  if (business?.isFoodTruck) return "Food truck";
+  const raw = String(business?.businessType || "").trim();
+  return raw ? toTitleCase(raw) : "Business";
+};
+
+const formatAdminBusinessLocation = (business: any) =>
+  [business?.address, business?.city, business?.state]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(", ") || "Location missing";
+
+const getApprovalSourceLabel = (restaurant: PendingRestaurant) => {
+  if (restaurant.reviewLabel) return restaurant.reviewLabel;
+  if (restaurant.claimedFromImportId) return "Imported truck claim";
+  if (restaurant.reviewSource === "inactive_profile") {
+    return "Inactive owner profile";
+  }
+  return "Verification request";
+};
+
+const getApprovalReadinessFlags = (restaurant: PendingRestaurant) => {
+  const flags: string[] = [];
+  if (!String(restaurant.address || "").trim()) flags.push("address");
+  if (!String(restaurant.city || "").trim()) flags.push("city");
+  if (!String(restaurant.state || "").trim()) flags.push("state");
+  if (!String(restaurant.phone || "").trim()) flags.push("phone");
+  if (!String(restaurant.cuisineType || "").trim()) flags.push("cuisine");
+  if (!String(restaurant.ownerEmail || restaurant.email || "").trim()) {
+    flags.push("owner email");
+  }
+  return flags;
 };
 
 const formatAdminDealRestaurantType = (restaurant: any) => {
@@ -2653,6 +2708,12 @@ export default function AdminDashboard() {
     () => readAdminDashboardQueryState().q,
   );
   const [restaurantSearchTerm, setRestaurantSearchTerm] = useState("");
+  const [restaurantRejectTarget, setRestaurantRejectTarget] =
+    useState<PendingRestaurant | null>(null);
+  const [restaurantRejectReason, setRestaurantRejectReason] = useState("");
+  const [verificationRejectTarget, setVerificationRejectTarget] =
+    useState<any | null>(null);
+  const [verificationRejectReason, setVerificationRejectReason] = useState("");
   const [userTypeFilter, setUserTypeFilter] = useState("all");
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
   const [dealDetailsOpen, setDealDetailsOpen] = useState(false);
@@ -2820,6 +2881,38 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/restaurants/pending"],
     enabled: !!adminUser && selectedTab === "restaurants",
   });
+
+  const approvalQueueRows = useMemo(
+    () =>
+      Array.isArray(pendingRestaurants)
+        ? (pendingRestaurants as PendingRestaurant[])
+        : [],
+    [pendingRestaurants],
+  );
+
+  const approvalQueueStats = useMemo(() => {
+    const rows = approvalQueueRows;
+    const missingCriticalInfo = rows.filter(
+      (restaurant) => getApprovalReadinessFlags(restaurant).length > 0,
+    ).length;
+    return {
+      total: rows.length,
+      trucks: rows.filter(
+        (restaurant) =>
+          restaurant.isFoodTruck ||
+          String(restaurant.businessType || "").toLowerCase() === "food_truck",
+      ).length,
+      claims: rows.filter(
+        (restaurant) =>
+          restaurant.claimedFromImportId ||
+          restaurant.reviewSource === "truck_claim",
+      ).length,
+      verificationRequests: rows.filter(
+        (restaurant) => restaurant.reviewSource === "verification_request",
+      ).length,
+      missingCriticalInfo,
+    };
+  }, [approvalQueueRows]);
 
   const restaurantSearchQuery = restaurantSearchTerm.trim();
   const {
@@ -5367,16 +5460,18 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/restaurants/search"],
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Restaurant Approved",
         description: "The restaurant has been activated successfully.",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to approve restaurant. Please try again.",
+        description:
+          error?.message || "Failed to approve restaurant. Please try again.",
         variant: "destructive",
       });
     },
@@ -5398,12 +5493,15 @@ export default function AdminDashboard() {
       );
     },
     onSuccess: () => {
+      setRestaurantRejectTarget(null);
+      setRestaurantRejectReason("");
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/restaurants/pending"],
       });
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/restaurants/search"],
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Restaurant Rejected",
@@ -5448,7 +5546,6 @@ export default function AdminDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/deals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       setDealDetailsOpen(false);
       toast({
         title: "Deal Deleted",
@@ -6119,7 +6216,12 @@ export default function AdminDashboard() {
       );
     },
     onSuccess: () => {
+      setVerificationRejectTarget(null);
+      setVerificationRejectReason("");
       queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/pending"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Verification Approved",
@@ -6151,7 +6253,12 @@ export default function AdminDashboard() {
       );
     },
     onSuccess: () => {
+      setVerificationRejectTarget(null);
+      setVerificationRejectReason("");
       queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/pending"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Verification Rejected",
@@ -8367,256 +8474,407 @@ export default function AdminDashboard() {
 
           {/* Restaurants Tab */}
           <TabsContent value="restaurants" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Search & Activate Restaurants</CardTitle>
-                <CardDescription>
-                  Find an existing restaurant by name, city, cuisine, address,
-                  or owner email, then activate it manually.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <input
-                  type="search"
-                  value={restaurantSearchTerm}
-                  onChange={(event) =>
-                    setRestaurantSearchTerm(event.target.value)
-                  }
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder="Search restaurants or owner email"
-                  data-testid="input-admin-restaurant-search"
-                />
-                {restaurantSearchQuery.length > 0 &&
-                  restaurantSearchQuery.length < 2 && (
-                    <p className="text-sm text-muted-foreground">
-                      Type at least 2 characters to search.
-                    </p>
-                  )}
-                {searchingRestaurants ? (
-                  <p className="text-sm text-muted-foreground">Searching...</p>
-                ) : restaurantSearchQuery.length >= 2 &&
-                  restaurantSearchResults.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No restaurants matched that search.
-                  </p>
-                ) : restaurantSearchResults.length > 0 ? (
-                  <div className="space-y-3">
-                    {restaurantSearchResults.map((restaurant) => {
-                      const location = [restaurant.city, restaurant.state]
-                        .map((value) => String(value || "").trim())
-                        .filter(Boolean)
-                        .join(", ");
-                      const details = [
-                        restaurant.cuisineType,
-                        location,
-                        restaurant.ownerEmail,
-                      ]
-                        .map((value) => String(value || "").trim())
-                        .filter(Boolean)
-                        .join(" - ");
-
-                      return (
-                        <div
-                          key={restaurant.id}
-                          className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <div className="font-medium">{restaurant.name}</div>
-                            {details && (
-                              <div className="text-sm text-muted-foreground">
-                                {details}
-                              </div>
-                            )}
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              <Badge
-                                variant={
-                                  restaurant.isActive ? "default" : "secondary"
-                                }
-                              >
-                                {restaurant.isActive ? "Active" : "Inactive"}
-                              </Badge>
-                              <Badge
-                                variant={
-                                  restaurant.isVerified ? "default" : "outline"
-                                }
-                              >
-                                {restaurant.isVerified
-                                  ? "Verified"
-                                  : "Unverified"}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Link href={`/restaurant/${restaurant.id}`}>
-                              <Button size="sm" variant="outline">
-                                View
-                              </Button>
-                            </Link>
-                            <Link
-                              href={`/menu-builder?adminRestaurantId=${encodeURIComponent(restaurant.id)}`}
-                            >
-                              <Button size="sm" variant="outline">
-                                Menu
-                              </Button>
-                            </Link>
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                approveRestaurant.mutate(restaurant.id)
-                              }
-                              disabled={
-                                restaurant.isActive === true ||
-                                approveRestaurant.isPending
-                              }
-                              data-testid={`button-activate-restaurant-${restaurant.id}`}
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Activate
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.62fr)_minmax(340px,0.38fr)]">
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <CardTitle>Approval Queue</CardTitle>
+                      <CardDescription>
+                        Real owner submissions, truck claims, and review-ready
+                        profiles. Every card includes media and enough context
+                        to make a decision.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline">
+                      {approvalQueueStats.total} waiting
+                    </Badge>
                   </div>
-                ) : null}
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      ["Total", approvalQueueStats.total],
+                      ["Food trucks", approvalQueueStats.trucks],
+                      ["Import claims", approvalQueueStats.claims],
+                      ["Missing info", approvalQueueStats.missingCriticalInfo],
+                    ].map(([label, value]) => (
+                      <div
+                        key={String(label)}
+                        className="rounded-md border border-[color:var(--border-subtle)] p-3"
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          {label}
+                        </p>
+                        <p className="mt-1 text-xl font-semibold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Pending Business Approvals</CardTitle>
-                <CardDescription>
-                  Review inactive owner-created profiles before they go live.
-                  Rejecting records a review decision instead of deleting data.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {pendingRestaurants.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    No pending approvals
-                  </p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {pendingRestaurants.map((restaurant: PendingRestaurant) => {
-                      const imageUrl = getAdminRestaurantImageUrl(restaurant);
-                      const location = [restaurant.city, restaurant.state]
-                        .map((value) => String(value || "").trim())
-                        .filter(Boolean)
-                        .join(", ");
-                      const ownerEmail = String(
-                        restaurant.ownerEmail || restaurant.email || "",
-                      ).trim();
-                      const typeLabel = restaurant.isFoodTruck
-                        ? "Food truck"
-                        : toTitleCase(
-                            String(restaurant.businessType || "restaurant"),
-                          );
-                      const rejectCurrent = () => {
-                        const input = window.prompt(
-                          `Reason for rejecting ${restaurant.name}?`,
-                          "Not ready for MealScout publishing.",
+                  {approvalQueueRows.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-[color:var(--border-subtle)] p-8 text-center text-sm text-muted-foreground">
+                      <ClipboardCheck className="mx-auto mb-3 h-8 w-8 opacity-60" />
+                      No pending approvals are waiting right now.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {approvalQueueRows.map((restaurant: PendingRestaurant) => {
+                        const imageUrl = getAdminRestaurantImageUrl(restaurant);
+                        const location = formatAdminBusinessLocation(restaurant);
+                        const ownerEmail = String(
+                          restaurant.ownerEmail || restaurant.email || "",
+                        ).trim();
+                        const typeLabel = formatAdminBusinessType(restaurant);
+                        const sourceLabel =
+                          getApprovalSourceLabel(restaurant);
+                        const readinessFlags =
+                          getApprovalReadinessFlags(restaurant);
+                        const submittedDate = formatAdminDate(
+                          restaurant.submittedAt || restaurant.createdAt,
                         );
-                        if (input === null) return;
-                        const reason =
-                          input.trim() || "Rejected from admin approval queue.";
-                        rejectRestaurant.mutate({
-                          restaurantId: restaurant.id,
-                          reason,
-                        });
-                      };
+                        const ownerName = [
+                          restaurant.ownerFirstName,
+                          restaurant.ownerLastName,
+                        ]
+                          .map((value) => String(value || "").trim())
+                          .filter(Boolean)
+                          .join(" ");
 
-                      return (
-                        <article
-                          key={restaurant.id}
-                          className="overflow-hidden rounded-lg border bg-card shadow-sm"
-                        >
-                          <div className="relative h-36 bg-muted">
-                            <img
-                              src={imageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              onError={(event) => {
-                                const img = event.currentTarget;
-                                if (
-                                  img.src.endsWith(
-                                    ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
-                                  )
-                                ) {
-                                  return;
-                                }
-                                img.src = ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
-                              }}
-                            />
-                            <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-                              <Badge>{typeLabel}</Badge>
-                              {restaurant.isVerified ? (
-                                <Badge variant="outline">Verified</Badge>
-                              ) : (
-                                <Badge variant="secondary">Needs review</Badge>
-                              )}
+                        return (
+                          <article
+                            key={restaurant.id}
+                            className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] shadow-sm"
+                          >
+                            <div className="relative aspect-[16/9] bg-muted">
+                              <img
+                                src={imageUrl}
+                                alt={`${restaurant.name} profile image`}
+                                className="absolute inset-0 h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                                referrerPolicy="no-referrer"
+                                onError={(event) => {
+                                  const img = event.currentTarget;
+                                  if (
+                                    img.src.endsWith(
+                                      ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
+                                    )
+                                  ) {
+                                    return;
+                                  }
+                                  img.src =
+                                    ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+                                }}
+                              />
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-white">
+                                <div className="flex flex-wrap gap-2">
+                                  <Badge>{typeLabel}</Badge>
+                                  <Badge variant="secondary">
+                                    {sourceLabel}
+                                  </Badge>
+                                </div>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="space-y-3 p-4">
-                            <div>
-                              <h3 className="line-clamp-2 text-lg font-semibold">
-                                {restaurant.name}
-                              </h3>
-                              <div className="mt-1 space-y-1 text-sm text-muted-foreground">
-                                <p>
+                            <div className="space-y-4 p-4">
+                              <div>
+                                <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
+                                  {restaurant.name || "Unnamed business"}
+                                </h3>
+                                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                                   {[restaurant.cuisineType, location]
                                     .map((value) =>
                                       String(value || "").trim(),
                                     )
                                     .filter(Boolean)
-                                    .join(" - ") || "Cuisine/location missing"}
-                                </p>
-                                {restaurant.address ? (
-                                  <p className="line-clamp-1">
-                                    {restaurant.address}
-                                  </p>
-                                ) : null}
-                                <p className="line-clamp-1">
-                                  {ownerEmail || "Owner email missing"}
+                                    .join(" - ")}
                                 </p>
                               </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() =>
-                                  approveRestaurant.mutate(restaurant.id)
-                                }
-                                disabled={approveRestaurant.isPending}
-                                data-testid={`button-approve-${restaurant.id}`}
-                                className="w-full gap-2"
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={rejectCurrent}
-                                disabled={rejectRestaurant.isPending}
-                                data-testid={`button-reject-${restaurant.id}`}
-                                className="w-full gap-2"
-                              >
-                                <XCircle className="h-4 w-4" />
-                                Reject
-                              </Button>
+                              <div className="grid gap-2 text-sm">
+                                <div className="flex min-w-0 items-start gap-2">
+                                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                  <span className="line-clamp-2">
+                                    {location}
+                                  </span>
+                                </div>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Mail className="h-4 w-4 shrink-0 text-primary" />
+                                  <span className="truncate">
+                                    {ownerEmail || "Owner email missing"}
+                                  </span>
+                                </div>
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Phone className="h-4 w-4 shrink-0 text-primary" />
+                                  <span className="truncate">
+                                    {restaurant.phone || "Phone missing"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="grid gap-2 text-xs sm:grid-cols-2">
+                                <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                  <p className="text-muted-foreground">
+                                    Submitted
+                                  </p>
+                                  <p className="font-medium">
+                                    {submittedDate || "Unknown"}
+                                  </p>
+                                </div>
+                                <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                  <p className="text-muted-foreground">
+                                    Evidence
+                                  </p>
+                                  <p className="font-medium">
+                                    {Number(restaurant.documentsCount || 0)} docs
+                                    {restaurant.licenseNumber
+                                      ? ` - ${restaurant.licenseNumber}`
+                                      : ""}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                {ownerName ? (
+                                  <Badge variant="outline">{ownerName}</Badge>
+                                ) : null}
+                                {restaurant.claimedFromImportId ? (
+                                  <Badge variant="outline">Imported</Badge>
+                                ) : null}
+                                {readinessFlags.length ? (
+                                  <Badge variant="secondary">
+                                    Missing {readinessFlags.join(", ")}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">
+                                    Profile info ready
+                                  </Badge>
+                                )}
+                              </div>
+
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() =>
+                                    approveRestaurant.mutate(restaurant.id)
+                                  }
+                                  disabled={approveRestaurant.isPending}
+                                  data-testid={`button-approve-${restaurant.id}`}
+                                  className="w-full gap-2"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setRestaurantRejectTarget(restaurant);
+                                    setRestaurantRejectReason(
+                                      "Not ready for MealScout publishing.",
+                                    );
+                                  }}
+                                  disabled={rejectRestaurant.isPending}
+                                  data-testid={`button-reject-${restaurant.id}`}
+                                  className="w-full gap-2"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Reject
+                                </Button>
+                              </div>
+
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <Button asChild size="sm" variant="outline">
+                                  <Link href={`/restaurant/${restaurant.id}`}>
+                                    <Eye className="h-4 w-4" />
+                                    Public page
+                                  </Link>
+                                </Button>
+                                <Button asChild size="sm" variant="outline">
+                                  <Link
+                                    href={`/edit-restaurant/${restaurant.id}`}
+                                  >
+                                    <Settings className="h-4 w-4" />
+                                    Edit profile
+                                  </Link>
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        </article>
-                      );
-                    })}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Search & Activate</CardTitle>
+                  <CardDescription>
+                    Find a business by name, city, cuisine, address, phone, or
+                    owner email. Results use the same image-first format as the
+                    approval queue.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="search"
+                      value={restaurantSearchTerm}
+                      onChange={(event) =>
+                        setRestaurantSearchTerm(event.target.value)
+                      }
+                      className="h-11 w-full rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--field-bg)] pl-10 pr-3 text-sm shadow-sm"
+                      placeholder="Search trucks, restaurants, or owners"
+                      data-testid="input-admin-restaurant-search"
+                    />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  {restaurantSearchQuery.length > 0 &&
+                    restaurantSearchQuery.length < 2 && (
+                      <p className="text-sm text-muted-foreground">
+                        Type at least 2 characters to search.
+                      </p>
+                    )}
+
+                  {searchingRestaurants ? (
+                    <div className="rounded-md border border-[color:var(--border-subtle)] p-4 text-sm text-muted-foreground">
+                      Searching...
+                    </div>
+                  ) : restaurantSearchQuery.length >= 2 &&
+                    restaurantSearchResults.length === 0 ? (
+                    <div className="rounded-md border border-[color:var(--border-subtle)] p-4 text-sm text-muted-foreground">
+                      No businesses matched that search.
+                    </div>
+                  ) : restaurantSearchResults.length > 0 ? (
+                    <div className="space-y-3">
+                      {restaurantSearchResults.map((restaurant) => {
+                        const imageUrl = getAdminRestaurantImageUrl(restaurant);
+                        const location =
+                          formatAdminBusinessLocation(restaurant);
+                        const typeLabel =
+                          formatAdminBusinessType(restaurant);
+                        const ownerEmail = String(
+                          restaurant.ownerEmail || "",
+                        ).trim();
+
+                        return (
+                          <article
+                            key={restaurant.id}
+                            className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)]"
+                          >
+                            <div className="grid sm:grid-cols-[112px_minmax(0,1fr)]">
+                              <div className="relative h-32 bg-muted sm:h-full">
+                                <img
+                                  src={imageUrl}
+                                  alt={`${restaurant.name} profile image`}
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  loading="lazy"
+                                  decoding="async"
+                                  referrerPolicy="no-referrer"
+                                  onError={(event) => {
+                                    const img = event.currentTarget;
+                                    if (
+                                      img.src.endsWith(
+                                        ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
+                                      )
+                                    ) {
+                                      return;
+                                    }
+                                    img.src =
+                                      ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+                                  }}
+                                />
+                              </div>
+                              <div className="space-y-3 p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <h3 className="line-clamp-2 font-semibold leading-tight">
+                                      {restaurant.name || "Unnamed business"}
+                                    </h3>
+                                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                      {[restaurant.cuisineType, typeLabel]
+                                        .filter(Boolean)
+                                        .join(" - ")}
+                                    </p>
+                                  </div>
+                                  <Badge
+                                    variant={
+                                      restaurant.isActive
+                                        ? "default"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {restaurant.isActive
+                                      ? "Live"
+                                      : "Inactive"}
+                                  </Badge>
+                                </div>
+
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                  <p className="line-clamp-1">{location}</p>
+                                  <p className="line-clamp-1">
+                                    {ownerEmail || "Owner email missing"}
+                                  </p>
+                                </div>
+
+                                <div className="grid gap-2">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      <Link href={`/restaurant/${restaurant.id}`}>
+                                        View
+                                      </Link>
+                                    </Button>
+                                    <Button
+                                      asChild
+                                      size="sm"
+                                      variant="outline"
+                                    >
+                                      <Link
+                                        href={`/menu-builder?adminRestaurantId=${encodeURIComponent(restaurant.id)}`}
+                                      >
+                                        Menu
+                                      </Link>
+                                    </Button>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      approveRestaurant.mutate(restaurant.id)
+                                    }
+                                    disabled={
+                                      restaurant.isActive === true ||
+                                      approveRestaurant.isPending
+                                    }
+                                    data-testid={`button-activate-restaurant-${restaurant.id}`}
+                                    className="w-full gap-2"
+                                  >
+                                    <CheckCircle className="h-4 w-4" />
+                                    Activate & verify
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed border-[color:var(--border-subtle)] p-4 text-sm text-muted-foreground">
+                      Search when you need to manually rescue or activate a
+                      profile outside the review queue.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Users Tab */}
@@ -9211,155 +9469,216 @@ export default function AdminDashboard() {
                     <p>No verification requests found</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {verificationRequests.map((request: any) => (
-                      <div key={request.id} className="border rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="font-semibold text-lg">
-                              {request.restaurant?.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {[
-                                request.restaurant?.address,
-                                request.restaurant?.city,
-                                request.restaurant?.state,
-                              ]
-                                .filter(Boolean)
-                                .join(", ")}
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {request.restaurant?.claimedFromImportId ? (
-                                <Badge variant="outline">Imported claim</Badge>
-                              ) : null}
-                              {request.restaurant?.isActive === false ? (
-                                <Badge variant="secondary">Not live yet</Badge>
-                              ) : null}
-                              {request.licenseNumber ? (
-                                <Badge variant="outline">
-                                  License {request.licenseNumber}
-                                </Badge>
-                              ) : null}
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {verificationRequests.map((request: any) => {
+                      const restaurant = request.restaurant || {};
+                      const imageUrl = getAdminRestaurantImageUrl(restaurant);
+                      const businessType = formatAdminBusinessType(restaurant);
+                      const location = formatAdminBusinessLocation(restaurant);
+                      const documents = Array.isArray(request.documents)
+                        ? request.documents
+                        : [];
+
+                      return (
+                        <article
+                          key={request.id}
+                          className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)]"
+                        >
+                          <div className="relative aspect-[16/9] bg-muted">
+                            <img
+                              src={imageUrl}
+                              alt={`${restaurant.name || "Business"} verification image`}
+                              className="absolute inset-0 h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                              onError={(event) => {
+                                const img = event.currentTarget;
+                                if (
+                                  img.src.endsWith(
+                                    ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
+                                  )
+                                ) {
+                                  return;
+                                }
+                                img.src = ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+                              }}
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-white">
+                              <div className="flex flex-wrap gap-2">
+                                <Badge>{businessType}</Badge>
+                                {restaurant.claimedFromImportId ? (
+                                  <Badge variant="secondary">
+                                    Imported claim
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary">
+                                    Fresh signup
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <Badge
-                            variant={
-                              request.status === "pending"
-                                ? "secondary"
-                                : request.status === "approved"
-                                  ? "default"
-                                  : "destructive"
-                            }
-                            className="flex items-center space-x-1"
-                          >
-                            {request.status === "pending" && (
-                              <Clock className="w-3 h-3" />
-                            )}
-                            {request.status === "approved" && (
-                              <CheckCircle className="w-3 h-3" />
-                            )}
-                            {request.status === "rejected" && (
-                              <XCircle className="w-3 h-3" />
-                            )}
-                            <span className="capitalize">{request.status}</span>
-                          </Badge>
-                        </div>
 
-                        <div className="mb-4">
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Submitted:{" "}
-                            {new Date(request.submittedAt).toLocaleDateString()}
-                          </p>
-                          {request.documents &&
-                            request.documents.length > 0 && (
+                          <div className="space-y-4 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
+                                  {restaurant.name || "Unnamed business"}
+                                </h3>
+                                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                  {[restaurant.cuisineType, location]
+                                    .filter(Boolean)
+                                    .join(" - ")}
+                                </p>
+                              </div>
+                              <Badge
+                                variant={
+                                  request.status === "pending"
+                                    ? "secondary"
+                                    : request.status === "approved"
+                                      ? "default"
+                                      : "destructive"
+                                }
+                                className="shrink-0 gap-1"
+                              >
+                                {request.status === "pending" ? (
+                                  <Clock className="h-3 w-3" />
+                                ) : request.status === "approved" ? (
+                                  <CheckCircle className="h-3 w-3" />
+                                ) : (
+                                  <XCircle className="h-3 w-3" />
+                                )}
+                                <span className="capitalize">
+                                  {request.status}
+                                </span>
+                              </Badge>
+                            </div>
+
+                            <div className="grid gap-2 text-sm">
+                              <div className="flex min-w-0 items-start gap-2">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                <span className="line-clamp-2">
+                                  {location}
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Mail className="h-4 w-4 shrink-0 text-primary" />
+                                <span className="truncate">
+                                  {restaurant.ownerEmail ||
+                                    "Owner email missing"}
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Phone className="h-4 w-4 shrink-0 text-primary" />
+                                <span className="truncate">
+                                  {restaurant.phone || "Phone missing"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-2 text-xs sm:grid-cols-2">
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-muted-foreground">
+                                  Submitted
+                                </p>
+                                <p className="font-medium">
+                                  {formatAdminDate(request.submittedAt) ||
+                                    "Unknown"}
+                                </p>
+                              </div>
+                              <div className="rounded-md border border-[color:var(--border-subtle)] p-2">
+                                <p className="text-muted-foreground">
+                                  Evidence
+                                </p>
+                                <p className="font-medium">
+                                  {documents.length} docs
+                                  {request.licenseNumber
+                                    ? ` - ${request.licenseNumber}`
+                                    : ""}
+                                </p>
+                              </div>
+                            </div>
+
+                            {documents.length > 0 ? (
                               <div>
-                                <p className="text-sm font-medium mb-2">
-                                  Documents ({request.documents.length}):
+                                <p className="mb-2 text-sm font-medium">
+                                  Documents
                                 </p>
                                 <div className="flex flex-wrap gap-2">
-                                  {request.documents.map(
-                                    (doc: string, index: number) => (
-                                      <div key={index} className="relative">
-                                        {doc.startsWith("data:image") ? (
-                                          <img
-                                            src={doc}
-                                            alt={`Document ${index + 1}`}
-                                            className="w-20 h-20 object-cover rounded cursor-pointer border"
-                                            onClick={() =>
-                                              window.open(doc, "_blank")
-                                            }
-                                            data-testid={`img-document-${request.id}-${index}`}
-                                          />
-                                        ) : (
-                                          <div
-                                            className="w-20 h-20 bg-[var(--bg-surface-muted)] rounded flex items-center justify-center cursor-pointer border"
-                                            onClick={() =>
-                                              window.open(doc, "_blank")
-                                            }
-                                            data-testid={`doc-document-${request.id}-${index}`}
-                                          >
-                                            <i className="fas fa-file-pdf text-2xl text-[color:var(--status-error)]"></i>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ),
-                                  )}
+                                  {documents.map((doc: string, index: number) => (
+                                    <button
+                                      key={`${request.id}-${index}`}
+                                      type="button"
+                                      className="h-20 w-20 overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-surface-muted)]"
+                                      onClick={() => window.open(doc, "_blank")}
+                                      data-testid={`doc-document-${request.id}-${index}`}
+                                    >
+                                      {doc.startsWith("data:image") ? (
+                                        <img
+                                          src={doc}
+                                          alt={`Document ${index + 1}`}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <span className="flex h-full w-full items-center justify-center text-xs">
+                                          File
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))}
                                 </div>
                               </div>
-                            )}
-                        </div>
+                            ) : null}
 
-                        {request.rejectionReason && (
-                          <div className="mb-4 p-3 bg-destructive/10 rounded-md">
-                            <p className="text-sm font-medium text-destructive mb-1">
-                              Rejection Reason:
-                            </p>
-                            <p className="text-sm text-destructive">
-                              {request.rejectionReason}
-                            </p>
-                          </div>
-                        )}
+                            {request.rejectionReason ? (
+                              <div className="rounded-md bg-destructive/10 p-3">
+                                <p className="text-sm font-medium text-destructive">
+                                  Rejection reason
+                                </p>
+                                <p className="mt-1 text-sm text-destructive">
+                                  {request.rejectionReason}
+                                </p>
+                              </div>
+                            ) : null}
 
-                        {request.status === "pending" && (
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() =>
-                                approveVerification.mutate(request.id)
-                              }
-                              disabled={approveVerification.isPending}
-                              data-testid={`button-approve-verification-${request.id}`}
-                              className="flex items-center space-x-1"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Approve</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                const reason = window.prompt(
-                                  "Please provide a reason for rejection:",
-                                );
-                                if (reason && reason.trim()) {
-                                  rejectVerification.mutate({
-                                    requestId: request.id,
-                                    reason: reason.trim(),
-                                  });
-                                }
-                              }}
-                              disabled={rejectVerification.isPending}
-                              data-testid={`button-reject-verification-${request.id}`}
-                              className="flex items-center space-x-1"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              <span>Reject</span>
-                            </Button>
+                            {request.status === "pending" ? (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() =>
+                                    approveVerification.mutate(request.id)
+                                  }
+                                  disabled={approveVerification.isPending}
+                                  data-testid={`button-approve-verification-${request.id}`}
+                                  className="w-full gap-2"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setVerificationRejectTarget(request);
+                                    setVerificationRejectReason(
+                                      "Verification evidence was not sufficient for approval.",
+                                    );
+                                  }}
+                                  disabled={rejectVerification.isPending}
+                                  data-testid={`button-reject-verification-${request.id}`}
+                                  className="w-full gap-2"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Reject
+                                </Button>
+                              </div>
+                            ) : null}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -9445,6 +9764,155 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog
+        open={!!restaurantRejectTarget}
+        onOpenChange={(open) => {
+          if (open) return;
+          setRestaurantRejectTarget(null);
+          setRestaurantRejectReason("");
+        }}
+      >
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reject Approval Request</DialogTitle>
+            <DialogDescription>
+              Record a clear reason so the profile leaves the queue without
+              deleting business data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <p className="font-medium">
+                {restaurantRejectTarget?.name || "Selected business"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {restaurantRejectTarget
+                  ? formatAdminBusinessLocation(restaurantRejectTarget)
+                  : ""}
+              </p>
+            </div>
+            <label className="block space-y-2 text-sm">
+              <span className="font-medium">Rejection reason</span>
+              <textarea
+                value={restaurantRejectReason}
+                onChange={(event) =>
+                  setRestaurantRejectReason(event.target.value)
+                }
+                className="min-h-[120px] w-full rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--field-bg)] px-3 py-2"
+                placeholder="Example: Missing permit details or not enough information to publish."
+              />
+            </label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRestaurantRejectTarget(null);
+                  setRestaurantRejectReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={
+                  rejectRestaurant.isPending ||
+                  !restaurantRejectTarget ||
+                  restaurantRejectReason.trim().length < 3
+                }
+                onClick={() => {
+                  if (!restaurantRejectTarget) return;
+                  rejectRestaurant.mutate({
+                    restaurantId: restaurantRejectTarget.id,
+                    reason:
+                      restaurantRejectReason.trim() ||
+                      "Rejected from admin approval queue.",
+                  });
+                }}
+              >
+                <XCircle className="h-4 w-4" />
+                Reject request
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!verificationRejectTarget}
+        onOpenChange={(open) => {
+          if (open) return;
+          setVerificationRejectTarget(null);
+          setVerificationRejectReason("");
+        }}
+      >
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reject Verification</DialogTitle>
+            <DialogDescription>
+              Send a clear review decision without deleting the business
+              profile.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border border-[color:var(--border-subtle)] p-3">
+              <p className="font-medium">
+                {verificationRejectTarget?.restaurant?.name ||
+                  "Selected business"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {verificationRejectTarget?.restaurant
+                  ? formatAdminBusinessLocation(
+                      verificationRejectTarget.restaurant,
+                    )
+                  : ""}
+              </p>
+            </div>
+            <label className="block space-y-2 text-sm">
+              <span className="font-medium">Rejection reason</span>
+              <textarea
+                value={verificationRejectReason}
+                onChange={(event) =>
+                  setVerificationRejectReason(event.target.value)
+                }
+                className="min-h-[120px] w-full rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--field-bg)] px-3 py-2"
+                placeholder="Example: License photo is unreadable or does not match the business name."
+              />
+            </label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setVerificationRejectTarget(null);
+                  setVerificationRejectReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={
+                  rejectVerification.isPending ||
+                  !verificationRejectTarget ||
+                  verificationRejectReason.trim().length < 3
+                }
+                onClick={() => {
+                  if (!verificationRejectTarget) return;
+                  rejectVerification.mutate({
+                    requestId: verificationRejectTarget.id,
+                    reason:
+                      verificationRejectReason.trim() ||
+                      "Verification evidence was not sufficient for approval.",
+                  });
+                }}
+              >
+                <XCircle className="h-4 w-4" />
+                Reject verification
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* User Details Dialog */}
       <Dialog open={userDetailsOpen} onOpenChange={setUserDetailsOpen}>
@@ -11625,7 +12093,6 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      <Navigation />
     </div>
   );
 }

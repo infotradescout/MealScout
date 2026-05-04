@@ -427,8 +427,17 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             address: restaurants.address,
             city: restaurants.city,
             state: restaurants.state,
+            phone: restaurants.phone,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
             isActive: restaurants.isActive,
             isVerified: restaurants.isVerified,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            facebookCoverUrl: restaurants.facebookCoverUrl,
+            googlePhotos: restaurants.googlePhotos,
+            facebookPhotos: restaurants.facebookPhotos,
+            profileSource: restaurants.profileSource,
             createdAt: restaurants.createdAt,
             ownerEmail: users.email,
           })
@@ -478,10 +487,16 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
-        await storage.approveRestaurant(req.params.id);
+        await storage.approveRestaurant(req.params.id, req.user?.id || null);
         res.json({ message: "Restaurant approved successfully" });
       } catch (error) {
         console.error("Error approving restaurant:", error);
+        if (
+          error instanceof Error &&
+          error.message === "Restaurant not found"
+        ) {
+          return res.status(404).json({ message: error.message });
+        }
         res.status(500).json({ message: "Failed to approve restaurant" });
       }
     },

@@ -106,6 +106,8 @@ import {
   claims,
   type Claim,
   type InsertClaim,
+  truckClaimRequests,
+  truckImportListings,
 } from "@shared/schema";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import { db, pool } from "./db";
@@ -2278,30 +2280,120 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPendingRestaurants(): Promise<any[]> {
-    return await db
+    const userIsUsable = and(
+      sql`coalesce(${users.isDisabled}, false) = false`,
+      sql`lower(coalesce(${users.email}, '')) not like 'deleted+%@mealscout.invalid'`,
+      sql`lower(coalesce(${users.email}, '')) not in ('system-import@mealscout.us', 'import@mealscout.us')`,
+    );
+
+    const baseSelect = {
+      id: restaurants.id,
+      ownerId: restaurants.ownerId,
+      name: restaurants.name,
+      address: restaurants.address,
+      phone: restaurants.phone,
+      businessType: restaurants.businessType,
+      cuisineType: restaurants.cuisineType,
+      isFoodTruck: restaurants.isFoodTruck,
+      isActive: restaurants.isActive,
+      isVerified: restaurants.isVerified,
+      logoUrl: restaurants.logoUrl,
+      coverImageUrl: restaurants.coverImageUrl,
+      city: restaurants.city,
+      state: restaurants.state,
+      googlePhotos: restaurants.googlePhotos,
+      facebookCoverUrl: restaurants.facebookCoverUrl,
+      facebookPhotos: restaurants.facebookPhotos,
+      profileSource: restaurants.profileSource,
+      claimedFromImportId: restaurants.claimedFromImportId,
+      createdAt: restaurants.createdAt,
+      updatedAt: restaurants.updatedAt,
+      email: users.email,
+      ownerEmail: users.email,
+      ownerFirstName: users.firstName,
+      ownerLastName: users.lastName,
+      ownerUserType: users.userType,
+    } as const;
+
+    const explicitReviewRows = await db
       .select({
-        id: restaurants.id,
-        ownerId: restaurants.ownerId,
-        name: restaurants.name,
-        address: restaurants.address,
-        phone: restaurants.phone,
-        businessType: restaurants.businessType,
-        cuisineType: restaurants.cuisineType,
-        isFoodTruck: restaurants.isFoodTruck,
-        isActive: restaurants.isActive,
-        isVerified: restaurants.isVerified,
-        logoUrl: restaurants.logoUrl,
-        coverImageUrl: restaurants.coverImageUrl,
-        city: restaurants.city,
-        state: restaurants.state,
-        googlePhotos: restaurants.googlePhotos,
-        facebookCoverUrl: restaurants.facebookCoverUrl,
-        facebookPhotos: restaurants.facebookPhotos,
-        profileSource: restaurants.profileSource,
-        createdAt: restaurants.createdAt,
-        updatedAt: restaurants.updatedAt,
-        email: users.email,
-        ownerEmail: users.email,
+        ...baseSelect,
+        reviewSource: sql<string>`'verification_request'`,
+        reviewLabel: sql<string>`case when ${restaurants.claimedFromImportId} is null then 'Verification request' else 'Imported truck claim' end`,
+        submittedAt: verificationRequests.submittedAt,
+        verificationRequestId: verificationRequests.id,
+        claimRequestId: sql<string | null>`null`,
+        documentsCount: sql<number>`coalesce(array_length(${verificationRequests.documents}, 1), 0)`,
+        licenseNumber: verificationRequests.licenseNumber,
+        rejectionReason: verificationRequests.rejectionReason,
+      })
+      .from(verificationRequests)
+      .innerJoin(restaurants, eq(verificationRequests.restaurantId, restaurants.id))
+      .leftJoin(users, eq(restaurants.ownerId, users.id))
+      .where(
+        and(
+          eq(verificationRequests.status, "pending"),
+          userIsUsable,
+        ),
+      )
+      .orderBy(desc(verificationRequests.submittedAt))
+      .limit(100);
+
+    let claimRows: any[] = [];
+    try {
+      claimRows = await db
+        .select({
+          ...baseSelect,
+          reviewSource: sql<string>`'truck_claim'`,
+          reviewLabel: sql<string>`'Imported truck claim'`,
+          submittedAt: truckClaimRequests.submittedAt,
+          verificationRequestId: sql<string | null>`null`,
+          claimRequestId: truckClaimRequests.id,
+          documentsCount: sql<number>`0`,
+          licenseNumber: sql<string | null>`null`,
+          rejectionReason: truckClaimRequests.rejectionReason,
+        })
+        .from(truckClaimRequests)
+        .innerJoin(restaurants, eq(truckClaimRequests.restaurantId, restaurants.id))
+        .innerJoin(
+          truckImportListings,
+          eq(truckClaimRequests.listingId, truckImportListings.id),
+        )
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
+        .where(
+          and(
+            eq(truckClaimRequests.status, "pending"),
+            userIsUsable,
+            sql`not exists (
+              select 1
+              from ${verificationRequests}
+              where ${verificationRequests.restaurantId} = ${restaurants.id}
+                and ${verificationRequests.status} = 'pending'
+            )`,
+          ),
+        )
+        .orderBy(desc(truckClaimRequests.submittedAt))
+        .limit(100);
+    } catch (error: any) {
+      if (String(error?.code || "") !== "42P01") {
+        throw error;
+      }
+      console.warn(
+        "[admin] truck claim queue skipped because import tables are missing",
+      );
+    }
+
+    const fallbackInactiveRows = await db
+      .select({
+        ...baseSelect,
+        reviewSource: sql<string>`'inactive_profile'`,
+        reviewLabel: sql<string>`'Inactive owner profile'`,
+        submittedAt: restaurants.createdAt,
+        verificationRequestId: sql<string | null>`null`,
+        claimRequestId: sql<string | null>`null`,
+        documentsCount: sql<number>`0`,
+        licenseNumber: sql<string | null>`null`,
+        rejectionReason: sql<string | null>`null`,
       })
       .from(restaurants)
       .leftJoin(users, eq(restaurants.ownerId, users.id))
@@ -2309,23 +2401,55 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(restaurants.isActive, false),
           isNull(restaurants.claimedFromImportId),
+          userIsUsable,
+          sql`lower(coalesce(${restaurants.profileSource}, 'manual')) not in ('google', 'facebook', 'search_query_seed')`,
           sql`not exists (
             select 1
             from ${verificationRequests}
             where ${verificationRequests.restaurantId} = ${restaurants.id}
-              and ${verificationRequests.status} = 'rejected'
+              and ${verificationRequests.status} in ('pending', 'rejected')
           )`,
         ),
       )
-      .orderBy(desc(restaurants.createdAt));
+      .orderBy(desc(restaurants.createdAt))
+      .limit(50);
+
+    const rows = [
+      ...explicitReviewRows,
+      ...claimRows,
+      ...fallbackInactiveRows,
+    ];
+    const seen = new Set<string>();
+    return rows.filter((row: any) => {
+      const id = String(row?.id || "").trim();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
   }
 
-  async approveRestaurant(restaurantId: string): Promise<void> {
+  async approveRestaurant(
+    restaurantId: string,
+    reviewerId?: string | null,
+  ): Promise<void> {
     await db.transaction(async (tx: any) => {
       const now = new Date();
+      const [restaurant] = await tx
+        .select({
+          id: restaurants.id,
+          claimedFromImportId: restaurants.claimedFromImportId,
+        })
+        .from(restaurants)
+        .where(eq(restaurants.id, restaurantId))
+        .limit(1);
+
+      if (!restaurant) {
+        throw new Error("Restaurant not found");
+      }
+
       await tx
         .update(restaurants)
-        .set({ isActive: true, updatedAt: now })
+        .set({ isActive: true, isVerified: true, updatedAt: now })
         .where(eq(restaurants.id, restaurantId));
 
       await tx
@@ -2333,6 +2457,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           status: "approved",
           reviewedAt: now,
+          reviewerId: reviewerId || null,
           updatedAt: now,
         })
         .where(
@@ -2341,6 +2466,28 @@ export class DatabaseStorage implements IStorage {
             eq(verificationRequests.status, "pending"),
           ),
         );
+
+      await tx
+        .update(truckClaimRequests)
+        .set({
+          status: "approved",
+          reviewedAt: now,
+          reviewerId: reviewerId || null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(truckClaimRequests.restaurantId, restaurantId),
+            eq(truckClaimRequests.status, "pending"),
+          ),
+        );
+
+      if (restaurant.claimedFromImportId) {
+        await tx
+          .update(truckImportListings)
+          .set({ status: "claimed", updatedAt: now })
+          .where(eq(truckImportListings.id, restaurant.claimedFromImportId));
+      }
     });
   }
 
@@ -2386,17 +2533,43 @@ export class DatabaseStorage implements IStorage {
               eq(verificationRequests.status, "pending"),
             ),
           );
-        return;
+      } else {
+        await tx.insert(verificationRequests).values({
+          restaurantId,
+          status: "rejected",
+          documents: [],
+          reviewedAt: now,
+          reviewerId: reviewerId || null,
+          rejectionReason: reason,
+        });
       }
 
-      await tx.insert(verificationRequests).values({
-        restaurantId,
-        status: "rejected",
-        documents: [],
-        reviewedAt: now,
-        reviewerId: reviewerId || null,
-        rejectionReason: reason,
-      });
+      const claimRows = await tx
+        .update(truckClaimRequests)
+        .set({
+          status: "rejected",
+          reviewedAt: now,
+          reviewerId: reviewerId || null,
+          rejectionReason: reason,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(truckClaimRequests.restaurantId, restaurantId),
+            eq(truckClaimRequests.status, "pending"),
+          ),
+        )
+        .returning({ listingId: truckClaimRequests.listingId });
+
+      const listingIds = claimRows
+        .map((row: any) => String(row?.listingId || "").trim())
+        .filter(Boolean);
+      if (listingIds.length > 0) {
+        await tx
+          .update(truckImportListings)
+          .set({ status: "rejected", updatedAt: now })
+          .where(inArray(truckImportListings.id, listingIds));
+      }
     });
   }
 
@@ -3792,11 +3965,22 @@ export class DatabaseStorage implements IStorage {
         name: string;
         address: string;
         ownerId: string;
+        phone: string | null;
+        businessType: string | null;
+        cuisineType: string | null;
         city: string | null;
         state: string | null;
         isActive: boolean | null;
         isVerified: boolean | null;
+        isFoodTruck: boolean | null;
+        logoUrl: string | null;
+        coverImageUrl: string | null;
+        facebookCoverUrl: string | null;
+        googlePhotos: unknown;
+        facebookPhotos: unknown;
+        profileSource: string | null;
         claimedFromImportId: string | null;
+        ownerEmail: string | null;
       };
     })[]
   > {
@@ -3818,11 +4002,22 @@ export class DatabaseStorage implements IStorage {
           name: restaurants.name,
           address: restaurants.address,
           ownerId: restaurants.ownerId,
+          phone: restaurants.phone,
+          businessType: restaurants.businessType,
+          cuisineType: restaurants.cuisineType,
           city: restaurants.city,
           state: restaurants.state,
           isActive: restaurants.isActive,
           isVerified: restaurants.isVerified,
+          isFoodTruck: restaurants.isFoodTruck,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          facebookCoverUrl: restaurants.facebookCoverUrl,
+          googlePhotos: restaurants.googlePhotos,
+          facebookPhotos: restaurants.facebookPhotos,
+          profileSource: restaurants.profileSource,
           claimedFromImportId: restaurants.claimedFromImportId,
+          ownerEmail: users.email,
         },
       })
       .from(verificationRequests)
