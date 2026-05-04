@@ -105,8 +105,29 @@ function normalizeEmail(value?: string | null): string | null {
   return normalized || null;
 }
 
+function normalizePhone(value?: string | null): string | null {
+  const normalized = String(value || "").replace(/\D/g, "");
+  return normalized || null;
+}
+
 function emailMatchesNormalized(value: string) {
   return sql`lower(btrim(${users.email})) = ${value}`;
+}
+
+function phoneMatchesNormalized(value: string) {
+  return sql`regexp_replace(coalesce(${users.phone}, ''), '\\D', '', 'g') = ${value}`;
+}
+
+function duplicateAccountError(kind: "email" | "phone") {
+  const error: any = new Error(
+    kind === "email"
+      ? "An account already exists for this email. Please sign in instead."
+      : "An account already exists for this phone number. Please sign in instead.",
+  );
+  error.code = kind === "email" ? "ACCOUNT_EXISTS_EMAIL" : "ACCOUNT_EXISTS_PHONE";
+  error.status = 409;
+  error.duplicateField = kind;
+  return error;
 }
 
 async function findUserByNormalizedEmail(value?: string | null): Promise<User | undefined> {
@@ -196,7 +217,7 @@ export function createUsersRepository() {
       const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail) return undefined;
       try {
-        const rows = await selectUsersSafe(`where lower("email") = lower($1) limit 1`, [normalizedEmail]);
+        const rows = await selectUsersSafe(`where lower(btrim("email")) = $1 limit 1`, [normalizedEmail]);
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
@@ -206,7 +227,7 @@ export function createUsersRepository() {
         const [user] = await db
           .select()
           .from(users)
-          .where(and(sql`lower(${users.email}) = ${normalizedEmail}`, or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(and(emailMatchesNormalized(normalizedEmail), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
         return user;
       }
     },
@@ -215,7 +236,10 @@ export function createUsersRepository() {
       const normalizedPhone = String(phone || "").trim();
       if (!normalizedPhone) return undefined;
       try {
-        const rows = await selectUsersSafe(`where "phone" = $1 limit 1`, [normalizedPhone]);
+        const rows = await selectUsersSafe(
+          `where regexp_replace(coalesce("phone", ''), '\\D', '', 'g') = $1 limit 1`,
+          [normalizePhone(normalizedPhone)],
+        );
         const row = (rows[0] as any) || undefined;
         if (!row) return undefined;
         if (row.isDisabled === true) return undefined;
@@ -225,7 +249,7 @@ export function createUsersRepository() {
         const [user] = await db
           .select()
           .from(users)
-          .where(and(eq(users.phone, normalizedPhone), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
+          .where(and(phoneMatchesNormalized(normalizePhone(normalizedPhone) || normalizedPhone), or(eq(users.isDisabled, false), isNull(users.isDisabled))));
         return user;
       }
     },
@@ -489,14 +513,38 @@ export function createUsersRepository() {
           return user;
         } else {
           const emailData = userData as EmailUserData;
+          const email = normalizeEmail(emailData.email);
+          const phone = normalizePhone(emailData.phone);
+          if (!email) {
+            const err: any = new Error("Valid email is required");
+            err.status = 400;
+            throw err;
+          }
+
+          const existingEmail = await findUserByNormalizedEmail(email);
+          if (existingEmail) {
+            throw duplicateAccountError("email");
+          }
+
+          if (phone) {
+            const existingPhone = await db
+              .select({ id: users.id })
+              .from(users)
+              .where(and(phoneMatchesNormalized(phone), or(eq(users.isDisabled, false), isNull(users.isDisabled))))
+              .limit(1);
+            if (existingPhone.length > 0) {
+              throw duplicateAccountError("phone");
+            }
+          }
+
           const [user] = await db
             .insert(users)
             .values({
               userType,
-              email: emailData.email,
+              email,
               firstName: emailData.firstName,
               lastName: emailData.lastName,
-              phone: emailData.phone,
+              phone: phone ?? emailData.phone,
               passwordHash: emailData.passwordHash,
               emailVerified: false,
               appContext,
@@ -639,7 +687,7 @@ export function createUsersRepository() {
       const [existing] = await db
         .select({ id: users.id })
         .from(users)
-        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .where(emailMatchesNormalized(normalizedEmail))
         .limit(1);
       if (existing) {
         const err: any = new Error("Email already in use");
@@ -701,7 +749,7 @@ export function createUsersRepository() {
       const [existing] = await db
         .select({ id: users.id })
         .from(users)
-        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .where(emailMatchesNormalized(normalizedEmail))
         .limit(1);
       if (existing) {
         const err: any = new Error("Email already in use");

@@ -5226,16 +5226,30 @@ export class DatabaseStorage implements IStorage {
     mustResetPassword: boolean;
   }): Promise<{ userId: string }> {
     const normalizedEmail = String(data.email || "").trim().toLowerCase();
+    const normalizedPhone = String(data.phone || "").replace(/\D/g, "");
     if (!normalizedEmail) throw new Error("Valid email is required");
     const [existing] = await db
       .select({ id: users.id })
       .from(users)
-      .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+      .where(sql`lower(btrim(${users.email})) = ${normalizedEmail}`)
       .limit(1);
     if (existing) {
       const err: any = new Error("Email already in use");
       err.code = "23505";
       throw err;
+    }
+    if (normalizedPhone) {
+      const [existingPhone] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(sql`regexp_replace(coalesce(${users.phone}, ''), '\\D', '', 'g') = ${normalizedPhone}`)
+        .limit(1);
+      if (existingPhone) {
+        const err: any = new Error("Phone already in use");
+        err.code = "23505";
+        err.duplicateField = "phone";
+        throw err;
+      }
     }
 
     const [user] = await db
@@ -5244,7 +5258,7 @@ export class DatabaseStorage implements IStorage {
         email: normalizedEmail,
         firstName: data.firstName,
         lastName: data.lastName,
-        phone: data.phone,
+        phone: normalizedPhone || data.phone,
         userType: data.userType,
         passwordHash: data.passwordHash,
         mustResetPassword: data.mustResetPassword,

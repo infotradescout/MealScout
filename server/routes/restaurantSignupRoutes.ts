@@ -27,6 +27,32 @@ export function registerRestaurantSignupRoutes(
   app: Express,
   { ensureTrialForUser, queueSocialPost }: RestaurantSignupRouteDependencies,
 ) {
+  const normalizePhone = (value: unknown) => String(value || "").replace(/\D/g, "");
+  const duplicateSignupResponse = (error: any) => {
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    const duplicateField = String(error?.duplicateField || "");
+    const isDuplicate =
+      error?.status === 409 ||
+      code === "23505" ||
+      code.startsWith("ACCOUNT_EXISTS") ||
+      /already (exists|in use)|duplicate key/i.test(message);
+    if (!isDuplicate) return null;
+    return {
+      status: 409,
+      body: {
+        message:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "An account already exists for this phone number. Please sign in instead."
+            : "An account already exists for this email. Please sign in instead.",
+        code:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "account_exists_phone"
+            : "account_exists_email",
+      },
+    };
+  };
+
   app.post("/api/restaurants/signup", async (req: any, res) => {
     try {
       const { userData, restaurantData } = req.body;
@@ -70,8 +96,25 @@ export function registerRestaurantSignupRoutes(
         );
         if (existingUser) {
           return res
-            .status(400)
-            .json({ message: "User with this email already exists" });
+            .status(409)
+            .json({
+              message:
+                "An account already exists for this email. Please sign in instead.",
+              code: "account_exists_email",
+            });
+        }
+
+        const existingPhone = await storage.getUserByPhone(
+          normalizePhone(validatedUserData.phone),
+        );
+        if (existingPhone) {
+          return res
+            .status(409)
+            .json({
+              message:
+                "An account already exists for this phone number. Please sign in instead.",
+              code: "account_exists_phone",
+            });
         }
 
         const passwordHash = await bcrypt.hash(validatedUserData.password, 10);
@@ -384,6 +427,8 @@ export function registerRestaurantSignupRoutes(
       });
     } catch (error: any) {
       console.error("Error in restaurant signup:", error);
+      const duplicate = duplicateSignupResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(400).json({
         message: error.message || "Failed to create restaurant account",
       });

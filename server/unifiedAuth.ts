@@ -1024,6 +1024,30 @@ export async function setupUnifiedAuth(app: Express) {
   }
 
   const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
+  const duplicateAccountResponse = (error: any) => {
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    const duplicateField = String(error?.duplicateField || "");
+    const isDuplicate =
+      error?.status === 409 ||
+      code === "23505" ||
+      code.startsWith("ACCOUNT_EXISTS") ||
+      /already (exists|in use)|duplicate key/i.test(message);
+    if (!isDuplicate) return null;
+    return {
+      status: 409,
+      body: {
+        error:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "An account already exists for this phone number. Please sign in instead."
+            : "An account already exists for this email. Please sign in instead.",
+        code:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "account_exists_phone"
+            : "account_exists_email",
+      },
+    };
+  };
   const normalizePublicHttpUrl = (value: unknown): string => {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -1323,6 +1347,8 @@ export async function setupUnifiedAuth(app: Express) {
       });
     } catch (error) {
       console.error("Customer registration error:", error);
+      const duplicate = duplicateAccountResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1410,6 +1436,8 @@ export async function setupUnifiedAuth(app: Express) {
       });
     } catch (error) {
       console.error("Event coordinator registration error:", error);
+      const duplicate = duplicateAccountResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1546,6 +1574,8 @@ export async function setupUnifiedAuth(app: Express) {
       });
     } catch (error) {
       console.error("Restaurant registration error:", error);
+      const duplicate = duplicateAccountResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1637,6 +1667,8 @@ export async function setupUnifiedAuth(app: Express) {
       });
     } catch (error) {
       console.error("Supplier registration error:", error);
+      const duplicate = duplicateAccountResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(500).json({ error: "Internal server error" });
     }
   });

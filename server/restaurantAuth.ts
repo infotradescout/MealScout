@@ -11,6 +11,32 @@ import {
 } from "./utils/passwordPolicy";
 
 export async function setupRestaurantAuth(app: Express) {
+  const normalizePhone = (value: unknown) => String(value || "").replace(/\D/g, "");
+  const duplicateResponse = (error: any) => {
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    const duplicateField = String(error?.duplicateField || "");
+    const isDuplicate =
+      error?.status === 409 ||
+      code === "23505" ||
+      code.startsWith("ACCOUNT_EXISTS") ||
+      /already (exists|in use)|duplicate key/i.test(message);
+    if (!isDuplicate) return null;
+    return {
+      status: 409,
+      body: {
+        error:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "An account already exists for this phone number. Please sign in instead."
+            : "An account already exists for this email. Please sign in instead.",
+        code:
+          duplicateField === "phone" || code === "ACCOUNT_EXISTS_PHONE"
+            ? "account_exists_phone"
+            : "account_exists_email",
+      },
+    };
+  };
+
   // Check for Google OAuth environment variables
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     // Google Strategy for restaurant owners
@@ -75,7 +101,19 @@ export async function setupRestaurantAuth(app: Express) {
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ error: "User with this email already exists" });
+        return res.status(409).json({
+          error: "An account already exists for this email. Please sign in instead.",
+          code: "account_exists_email",
+        });
+      }
+      const normalizedPhone = normalizePhone(phone);
+      const existingPhone = await storage.getUserByPhone(normalizedPhone);
+      if (existingPhone) {
+        return res.status(409).json({
+          error:
+            "An account already exists for this phone number. Please sign in instead.",
+          code: "account_exists_phone",
+        });
       }
 
       // Hash password
@@ -85,7 +123,7 @@ export async function setupRestaurantAuth(app: Express) {
         email,
         firstName,
         lastName,
-        phone,
+        phone: normalizedPhone,
         passwordHash,
       };
 
@@ -101,6 +139,8 @@ export async function setupRestaurantAuth(app: Express) {
       });
     } catch (error) {
       console.error("Restaurant registration error:", error);
+      const duplicate = duplicateResponse(error);
+      if (duplicate) return res.status(duplicate.status).json(duplicate.body);
       res.status(500).json({ error: "Internal server error" });
     }
   });
