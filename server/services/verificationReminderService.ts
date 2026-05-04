@@ -9,12 +9,19 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { emailService } from "../emailService";
-import { restaurants, telemetryEvents, users, verificationRequests } from "@shared/schema";
+import {
+  businessInsuranceVerifications,
+  hosts,
+  restaurants,
+  telemetryEvents,
+  users,
+} from "@shared/schema";
 import { getVerificationSnooze } from "./verificationSnooze";
 
 type ReminderCandidate = {
-  restaurantId: string;
-  restaurantName: string | null;
+  entityType: "restaurant" | "food_truck" | "host";
+  entityId: string;
+  businessName: string | null;
   ownerId: string;
   ownerEmail: string | null;
   ownerFirstName: string | null;
@@ -41,13 +48,14 @@ function dayKey(date = new Date()): string {
 }
 
 async function reminderAlreadySent(
-  restaurantId: string,
+  candidate: Pick<ReminderCandidate, "entityId" | "entityType">,
   key: string,
 ): Promise<boolean> {
   const existing = await db.query.telemetryEvents.findFirst({
     where: and(
       eq(telemetryEvents.eventName, "verification_daily_reminder_sent"),
-      sql`${telemetryEvents.properties}->>'restaurantId' = ${restaurantId}`,
+      sql`${telemetryEvents.properties}->>'entityId' = ${candidate.entityId}`,
+      sql`${telemetryEvents.properties}->>'entityType' = ${candidate.entityType}`,
       sql`${telemetryEvents.properties}->>'dayKey' = ${key}`,
     ),
   });
@@ -59,8 +67,9 @@ async function markReminderSent(candidate: ReminderCandidate, key: string) {
     eventName: "verification_daily_reminder_sent",
     userId: candidate.ownerId,
     properties: {
-      restaurantId: candidate.restaurantId,
-      restaurantName: candidate.restaurantName,
+      entityType: candidate.entityType,
+      entityId: candidate.entityId,
+      businessName: candidate.businessName,
       dayKey: key,
     },
   });
@@ -72,37 +81,40 @@ function buildEmail(candidate: ReminderCandidate): {
   text: string;
 } {
   const ownerName = candidate.ownerFirstName || "there";
-  const businessName = candidate.restaurantName || "your truck";
-  const verifyUrl = `${baseUrl()}/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(
-    candidate.restaurantId,
-  )}&src=verification-reminder&goLive=1`;
+  const businessName = candidate.businessName || "your business";
+  const verifyUrl =
+    candidate.entityType === "host"
+      ? `${baseUrl()}/host/dashboard?src=insurance-reminder`
+      : `${baseUrl()}/restaurant-owner-dashboard?restaurantId=${encodeURIComponent(
+          candidate.entityId,
+        )}&src=insurance-reminder&goLive=1`;
 
-  const subject = `Quick reminder: verify ${businessName}`;
+  const subject = `Quick insurance step for ${businessName}`;
   const html = `
     <!doctype html>
     <html>
       <body style="font-family: Arial, sans-serif; color: #111827; line-height: 1.55; margin: 0; padding: 0; background: #f9fafb;">
         <div style="max-width: 620px; margin: 0 auto; padding: 24px;">
           <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 22px;">
-            <h2 style="margin: 0 0 12px;">Hi ${ownerName}, verify ${businessName} when you have a document nearby</h2>
+            <h2 style="margin: 0 0 12px;">Hi ${ownerName}, finish the insurance step for ${businessName} when you have a document nearby</h2>
             <p style="margin: 0 0 12px;">
-              You can keep setting up MealScout without submitting documents immediately. Verification is still needed before we can fully trust and approve the public listing.
+              You can keep setting up MealScout without doing this immediately. Valid commercial insurance for your jurisdiction is still needed before the business can be fully trusted on the platform.
             </p>
             <p style="margin: 0 0 18px;">
-              A photo or PDF of a permit, business document, or truck ownership proof is enough to start review.
+              A photo or PDF of your certificate of insurance or related commercial coverage document is enough to start review.
             </p>
             <p style="margin: 24px 0;">
-              <a href="${verifyUrl}" style="background: #f97316; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none; font-weight: 700;">Submit verification</a>
+              <a href="${verifyUrl}" style="background: #f97316; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none; font-weight: 700;">Submit insurance</a>
             </p>
             <p style="margin: 18px 0 0; color: #6b7280; font-size: 13px;">
-              We will remind you once per day until a verification request is submitted.
+              Friendly reminder: we keep this light, at most once per day while this step is still open.
             </p>
           </div>
         </div>
       </body>
     </html>
   `;
-  const text = `Hi ${ownerName}, verify ${businessName} when you have a document nearby. Submit here: ${verifyUrl}`;
+  const text = `Hi ${ownerName}, finish the insurance step for ${businessName} when you have a document nearby. Submit here: ${verifyUrl}`;
 
   return { subject, html, text };
 }
@@ -110,34 +122,72 @@ function buildEmail(candidate: ReminderCandidate): {
 async function fetchCandidates(): Promise<ReminderCandidate[]> {
   const graceCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  return db
-    .select({
-      restaurantId: restaurants.id,
-      restaurantName: restaurants.name,
-      ownerId: users.id,
-      ownerEmail: users.email,
-      ownerFirstName: users.firstName,
-      accountSettings: users.accountSettings,
-    })
-    .from(restaurants)
-    .innerJoin(users, eq(restaurants.ownerId, users.id))
-    .where(
-      and(
-        eq(restaurants.isVerified, false),
-        eq(users.userType, "restaurant_owner"),
-        sql`coalesce(${restaurants.isFoodTruck}, false) = false`,
-        sql`lower(coalesce(${restaurants.businessType}, '')) <> 'food_truck'`,
-        eq(users.emailVerified, true),
-        sql`coalesce(${users.isDisabled}, false) = false`,
-        sql`${restaurants.createdAt} <= ${graceCutoff}`,
-        sql`not exists (
-          select 1 from ${verificationRequests} vr
-          where vr.restaurant_id = ${restaurants.id}
-            and vr.status = 'pending'
-        )`,
-      ),
-    )
-    .limit(150);
+  const result = await db.execute(sql<ReminderCandidate>`
+    select
+      case
+        when coalesce(r.is_food_truck, false) = true
+          or lower(coalesce(r.business_type, '')) = 'food_truck'
+        then 'food_truck'
+        else 'restaurant'
+      end as "entityType",
+      r.id as "entityId",
+      r.name as "businessName",
+      u.id as "ownerId",
+      u.email as "ownerEmail",
+      u.first_name as "ownerFirstName",
+      u.account_settings as "accountSettings"
+    from ${restaurants} r
+    join ${users} u on u.id = r.owner_id
+    where coalesce(r.is_active, true) = true
+      and u.email_verified = true
+      and coalesce(u.is_disabled, false) = false
+      and r.created_at <= ${graceCutoff}
+      and not exists (
+        select 1
+        from ${businessInsuranceVerifications} biv
+        where biv.entity_id = r.id
+          and biv.entity_type in ('restaurant', 'food_truck')
+          and (
+            biv.status = 'pending'
+            or (
+              biv.status = 'approved'
+              and (biv.expires_at is null or biv.expires_at > now())
+            )
+          )
+      )
+    union all
+    select
+      'host' as "entityType",
+      h.id as "entityId",
+      h.business_name as "businessName",
+      u.id as "ownerId",
+      u.email as "ownerEmail",
+      u.first_name as "ownerFirstName",
+      u.account_settings as "accountSettings"
+    from ${hosts} h
+    join ${users} u on u.id = h.user_id
+    where u.email_verified = true
+      and coalesce(u.is_disabled, false) = false
+      and coalesce(h.created_at, now()) <= ${graceCutoff}
+      and not exists (
+        select 1
+        from ${businessInsuranceVerifications} biv
+        where biv.entity_id = h.id
+          and biv.entity_type = 'host'
+          and (
+            biv.status = 'pending'
+            or (
+              biv.status = 'approved'
+              and (biv.expires_at is null or biv.expires_at > now())
+            )
+          )
+      )
+    limit 150
+  `);
+
+  return Array.isArray((result as any).rows)
+    ? ((result as any).rows as ReminderCandidate[])
+    : ((result as any) as ReminderCandidate[]);
 }
 
 export async function runVerificationReminderCron(): Promise<{
@@ -162,11 +212,11 @@ export async function runVerificationReminderCron(): Promise<{
       skipped += 1;
       continue;
     }
-    if (await reminderAlreadySent(candidate.restaurantId, key)) {
+    if (await reminderAlreadySent(candidate, key)) {
       skipped += 1;
       continue;
     }
-    const snooze = await getVerificationSnooze(candidate.restaurantId);
+    const snooze = await getVerificationSnooze(candidate.entityId);
     if (snooze.snoozed) {
       skipped += 1;
       continue;
@@ -189,7 +239,7 @@ export async function runVerificationReminderCron(): Promise<{
     } catch (error) {
       errors += 1;
       console.error(
-        `[verification-reminders] failed for ${candidate.restaurantId}:`,
+        `[verification-reminders] failed for ${candidate.entityType}:${candidate.entityId}:`,
         error,
       );
     }

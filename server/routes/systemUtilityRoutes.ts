@@ -1,8 +1,11 @@
 import type { Express } from "express";
+import { eq } from "drizzle-orm";
 
+import { db } from "../db";
 import { getMapEndpointWatchdogSnapshot } from "../mapEndpointWatchdog";
 import { storage } from "../storage";
 import { isAdmin, isAuthenticated } from "../unifiedAuth";
+import { hosts, restaurants, users } from "@shared/schema";
 
 type IncidentRoutesLike = {
   stack?: Array<{
@@ -24,10 +27,106 @@ const findIncidentHandler = (
   incidentRoutes.stack?.find((layer) => layer.route?.path === path)?.handle ||
   ((_req: any, res: any) => res.status(404).json({ error: "Not found" }));
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function extractCleanProfileEntity(path: string):
+  | { entityType: "restaurant"; id: string }
+  | { entityType: "host"; id: string }
+  | null {
+  const segments = String(path || "")
+    .split("?")[0]
+    .split("/")
+    .filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const [kind, first, second] = segments;
+  if ((kind === "truck" || kind === "bar") && first) {
+    const marker = first.lastIndexOf("--");
+    const id = marker >= 0 ? first.slice(marker + 2) : "";
+    return uuidPattern.test(id) ? { entityType: "restaurant", id } : null;
+  }
+  if (kind === "restaurant" && first && uuidPattern.test(first)) {
+    return { entityType: "restaurant", id: first };
+  }
+  if (kind === "menu" && first && uuidPattern.test(first)) {
+    return { entityType: "restaurant", id: first };
+  }
+  if (kind === "location" && first) {
+    const marker = first.lastIndexOf("--");
+    const id = marker >= 0 ? first.slice(marker + 2) : second || "";
+    return uuidPattern.test(id) ? { entityType: "host", id } : null;
+  }
+  return null;
+}
+
 export function registerSystemUtilityRoutes(
   app: Express,
   { incidentRoutes }: SystemUtilityRouteDependencies,
 ) {
+  app.use(async (req: any, res, next) => {
+    if (req.method !== "GET") return next();
+    if (req.cookies?.referralTag || req.cookies?.referralId) return next();
+
+    const entity = extractCleanProfileEntity(req.path || "");
+    if (!entity) return next();
+
+    try {
+      const ownerRows =
+        entity.entityType === "host"
+          ? await db
+              .select({
+                ownerId: users.id,
+                affiliateTag: users.affiliateTag,
+              })
+              .from(hosts)
+              .innerJoin(users, eq(hosts.userId, users.id))
+              .where(eq(hosts.id, entity.id))
+              .limit(1)
+          : await db
+              .select({
+                ownerId: users.id,
+                affiliateTag: users.affiliateTag,
+              })
+              .from(restaurants)
+              .innerJoin(users, eq(restaurants.ownerId, users.id))
+              .where(eq(restaurants.id, entity.id))
+              .limit(1);
+      const owner = ownerRows[0];
+      const tag = String(owner?.affiliateTag || "").trim();
+      if (owner?.ownerId && tag) {
+        const { recordReferralClick } = await import("../referralService");
+        const result = await recordReferralClick(
+          owner.ownerId,
+          req.originalUrl || req.path || "/",
+          req.get("user-agent") || undefined,
+          req.ip || undefined,
+        );
+        res.cookie("referralId", tag, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: false,
+          sameSite: "lax",
+        });
+        res.cookie("referralTag", tag, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: false,
+          sameSite: "lax",
+        });
+        if (result?.referralId) {
+          res.cookie("referralRecordId", result.referralId, {
+            maxAge: 1000 * 60 * 60 * 24 * 365,
+            httpOnly: true,
+            sameSite: "lax",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[affiliate] Failed to process clean profile attribution:", error);
+    }
+
+    next();
+  });
+
   app.get("/health", (_req, res) => {
     res.status(200).json({
       status: "ok",

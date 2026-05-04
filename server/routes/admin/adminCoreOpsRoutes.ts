@@ -1202,7 +1202,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     isStaffOrAdmin,
     async (req: any, res) => {
       try {
-        const hours = Math.min(168, Math.max(1, Number(req.query?.hours) || 48));
+        const includeAll =
+          req.query?.all === "1" || String(req.query?.hours || "") === "all";
+        const hours = includeAll
+          ? 0
+          : Math.min(168, Math.max(1, Number(req.query?.hours) || 48));
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
         const baseUrl = resolveAdminPublicBaseUrl();
 
@@ -1228,7 +1232,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .from(users)
           .where(
             and(
-              gte(users.createdAt, cutoff),
+              includeAll ? sql`true` : gte(users.createdAt, cutoff),
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
           )
@@ -1245,18 +1249,24 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         );
 
         const recentOrOwnedRestaurantWhere =
-          recentUserIds.length > 0
+          includeAll
+            ? sql`true`
+            : recentUserIds.length > 0
             ? or(
                 gte(restaurants.createdAt, cutoff),
                 inArray(restaurants.ownerId, recentUserIds),
               )
             : gte(restaurants.createdAt, cutoff);
         const recentOrOwnedHostWhere =
-          recentUserIds.length > 0
+          includeAll
+            ? sql`true`
+            : recentUserIds.length > 0
             ? or(gte(hosts.createdAt, cutoff), inArray(hosts.userId, recentUserIds))
             : gte(hosts.createdAt, cutoff);
         const recentOrOwnedSupplierWhere =
-          recentUserIds.length > 0
+          includeAll
+            ? sql`true`
+            : recentUserIds.length > 0
             ? or(
                 gte(suppliers.createdAt, cutoff),
                 inArray(suppliers.userId, recentUserIds),
@@ -2041,7 +2051,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         );
 
         res.json({
-          windowHours: hours,
+          windowHours: includeAll ? null : hours,
+          includeAll,
           generatedAt: new Date().toISOString(),
           summary: {
             total: signups.length,

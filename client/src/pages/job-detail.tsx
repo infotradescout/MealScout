@@ -196,6 +196,11 @@ export default function JobDetailPage() {
     job?.businessName || job?.restaurantName || "MealScout business";
   const displayBusinessProfileUrl =
     job?.businessProfileUrl || job?.restaurantProfileUrl || "/jobs";
+  const heroImageUrl =
+    job?.restaurantCoverImageUrl || job?.restaurantLogoUrl || "";
+  const businessTypeLabel =
+    labelize(job?.restaurantBusinessType || job?.businessEntity) ||
+    "Local business";
   const title = job
     ? `${job.title} at ${displayBusinessName} | MealScout Jobs`
     : "MealScout Jobs";
@@ -348,6 +353,24 @@ export default function JobDetailPage() {
           </Link>
 
           <Card className="overflow-hidden border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
+            {heroImageUrl ? (
+              <div className="relative h-56 overflow-hidden bg-black sm:h-72">
+                <img
+                  src={heroImageUrl}
+                  alt={`${displayBusinessName} hiring`}
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/20 to-transparent" />
+                <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+                  <Badge className="bg-amber-500 text-black hover:bg-amber-500">
+                    Now hiring
+                  </Badge>
+                  <Badge className="bg-white text-black hover:bg-white">
+                    {businessTypeLabel}
+                  </Badge>
+                </div>
+              </div>
+            ) : null}
             <CardContent className="p-5 sm:p-7">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-amber-500 text-black hover:bg-amber-500">
@@ -356,6 +379,7 @@ export default function JobDetailPage() {
                 <Badge variant="secondary">
                   {labelize(job.employmentType) || "Role"}
                 </Badge>
+                <Badge variant="outline">{businessTypeLabel}</Badge>
               </div>
               <h1 className="mt-4 max-w-3xl text-4xl font-black leading-none tracking-normal sm:text-6xl">
                 {job.title}

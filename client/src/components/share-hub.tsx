@@ -248,7 +248,10 @@ export default function ShareHub({
         : isCaterer
           ? "Caterer"
           : "Public Profile";
-      const profileHref = isTruck ? `/truck/${slug}` : `/restaurant/${slug}`;
+      const profileSlug = `${slug}--${restaurant.id}`;
+      const profileHref = isTruck
+        ? `/truck/${profileSlug}`
+        : `/restaurant/${restaurant.id}/${slug}`;
 
       selfPromoItems.push({
         key: `restaurant-profile:${restaurant.id}`,
@@ -288,11 +291,12 @@ export default function ShareHub({
       .forEach((host, index) => {
         const name = String(host.businessName || "My host location").trim();
         const slug = toSlug(name) || host.id;
+        const profileSlug = `${slug}--${host.id}`;
         selfPromoItems.push({
           key: `host-profile:${host.id}`,
           title: index === 0 ? "My Host Profile" : `${name} Host Link`,
           description: "Share your truck-friendly location page.",
-          href: `/location/${slug}`,
+          href: `/location/${profileSlug}`,
           audience: "hosts",
           audienceLabel: "Host Profile",
           icon: Building2,

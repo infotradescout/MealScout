@@ -33,7 +33,7 @@ export function buildOwnerProfileRecoveryPromptCopy({
     return {
       title: `Finish your MealScout ${business} profile`,
       message:
-        "A complete profile is the quickest way to start getting real views. Add the basics so people can find you, share you, and know what you serve.",
+        "Finishing your profile is the quickest way to start getting real views. Add the basics so people can find you, share you, and know what you serve.",
       cta: "Finish profile",
     };
   }
@@ -50,7 +50,7 @@ export function buildOwnerProfileRecoveryPromptCopy({
   return {
     title: "Make your profile easier to choose",
     message:
-      "A few more public details can help people trust your listing faster and get you the best MealScout experience possible.",
+      "A few more public details can help people trust your listing faster, share you with confidence, and get you the best MealScout experience possible.",
     cta: "Add details",
   };
 }

@@ -38,6 +38,8 @@ import {
   ExternalLink,
   MessageCircle,
   Video,
+  CalendarDays,
+  UtensilsCrossed,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
 import { MinimalFAQ } from "@/components/seo-faq";
@@ -647,6 +649,39 @@ export default function RestaurantDetailPage() {
   const websitePrimaryUrl = toExternalUrl(
     (restaurant as any)?.websiteUrl || (restaurant as any)?.website,
   );
+  const rawCateringDetails = (restaurant as any)?.cateringDetails;
+  const cateringDetails =
+    rawCateringDetails && typeof rawCateringDetails === "object"
+      ? (rawCateringDetails as Record<string, any>)
+      : {};
+  const businessType = String((restaurant as any)?.businessType || "").toLowerCase();
+  const offersCatering = Boolean(
+    (restaurant as any)?.offersCatering || businessType === "caterer",
+  );
+  const cateringHeadline = String(
+    cateringDetails.headline ||
+      cateringDetails.title ||
+      `${restaurantName} catering${isFoodTruck ? " and events" : ""}`,
+  ).trim();
+  const cateringDescription = String(
+    cateringDetails.description ||
+      cateringDetails.notes ||
+      `${restaurantName} can support local catering, events, offices, private parties, and pop-ups through MealScout.`,
+  ).trim();
+  const cateringServiceArea = String(
+    cateringDetails.serviceArea ||
+      cateringDetails.serviceAreaLabel ||
+      locationLabel ||
+      "",
+  ).trim();
+  const cateringMinimumGuests =
+    Number(cateringDetails.minimumGuests || cateringDetails.minGuests || 0) || null;
+  const cateringLeadTimeDays =
+    Number(cateringDetails.leadTimeDays || cateringDetails.advanceNoticeDays || 0) ||
+    null;
+  const cateringContactPreference = String(
+    cateringDetails.contactPreference || cateringDetails.preferredContact || "",
+  ).trim();
   const googleRating = Number((restaurant as any)?.googleRating || 0);
   const googleReviewCount = Number((restaurant as any)?.googleReviewCount || 0);
   const phoneHref = toPhoneHref(phoneNumber);
@@ -714,7 +749,7 @@ export default function RestaurantDetailPage() {
     nextStop?.startTime && nextStop?.endTime
       ? `${nextStop.startTime} - ${nextStop.endTime}`
       : "";
-  const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering. ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
+  const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering.${offersCatering ? ` Catering is available for local events and private bookings.` : ""} ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const getPopularItemAction = (itemName: string) => {
     const normalizedName = itemName.toLowerCase().trim();
@@ -758,6 +793,17 @@ export default function RestaurantDetailPage() {
     telephone: (restaurant as any)?.phone || "",
     servesCuisine: cuisineType,
     url: canonicalProfileUrl,
+    makesOffer: offersCatering
+      ? {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: cateringHeadline,
+            description: cateringDescription,
+            areaServed: cateringServiceArea || locationLabel || undefined,
+          },
+        }
+      : undefined,
     additionalProperty: isVerifiedMemberProfile
       ? [
           {
@@ -1002,6 +1048,21 @@ export default function RestaurantDetailPage() {
               Menu
             </Button>
           )}
+          {offersCatering ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+              onClick={() =>
+                document
+                  .getElementById("catering")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              <UtensilsCrossed className="mr-2 h-4 w-4" />
+              Catering
+            </Button>
+          ) : null}
           <Link href={messageHref}>
             <Button
               variant="outline"
@@ -1189,6 +1250,85 @@ export default function RestaurantDetailPage() {
                   />
                 </div>
               ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        {offersCatering ? (
+          <section
+            id="catering"
+            className="rounded-3xl border border-white/10 bg-[#111112] p-4 shadow-clean"
+          >
+            <div className="mb-3 flex items-center gap-2 text-[color:var(--accent-text)]">
+              <UtensilsCrossed className="h-5 w-5" />
+              <h2 className="text-lg font-black uppercase tracking-normal">
+                Catering
+              </h2>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-[1fr_16rem]">
+              <div>
+                <h3 className="text-2xl font-black text-white">
+                  {cateringHeadline}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/75">
+                  {cateringDescription}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {cateringServiceArea ? (
+                    <Badge className="bg-white text-black hover:bg-white">
+                      <MapPin className="mr-1 h-3.5 w-3.5" />
+                      {cateringServiceArea}
+                    </Badge>
+                  ) : null}
+                  {cateringMinimumGuests ? (
+                    <Badge variant="outline" className="border-white/20 text-white">
+                      {cateringMinimumGuests}+ guests
+                    </Badge>
+                  ) : null}
+                  {cateringLeadTimeDays ? (
+                    <Badge variant="outline" className="border-white/20 text-white">
+                      <CalendarDays className="mr-1 h-3.5 w-3.5" />
+                      {cateringLeadTimeDays}+ day notice
+                    </Badge>
+                  ) : null}
+                  {cateringContactPreference ? (
+                    <Badge variant="outline" className="border-white/20 text-white">
+                      {cateringContactPreference}
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Link href={messageHref}>
+                  <Button className="w-full rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90">
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Ask about catering
+                  </Button>
+                </Link>
+                {menuPrimaryUrl ? (
+                  menuPrimaryIsInternal ? (
+                    <Link href={menuPrimaryUrl}>
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+                      >
+                        <List className="mr-2 h-4 w-4" />
+                        View menu
+                      </Button>
+                    </Link>
+                  ) : (
+                    <a href={menuPrimaryUrl} target="_blank" rel="noreferrer">
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+                      >
+                        <List className="mr-2 h-4 w-4" />
+                        View menu
+                      </Button>
+                    </a>
+                  )
+                ) : null}
+              </div>
             </div>
           </section>
         ) : null}

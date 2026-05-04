@@ -74,7 +74,8 @@ type RecentSignup = {
 };
 
 type RecentSignupsResponse = {
-  windowHours: number;
+  windowHours: number | null;
+  includeAll?: boolean;
   generatedAt: string;
   summary: {
     total: number;
@@ -242,9 +243,9 @@ export default function RecentSignupShare() {
 
   const { data, isLoading, isFetching, refetch } =
     useQuery<RecentSignupsResponse>({
-      queryKey: ["/api/admin/recent-signups", "48h"],
+      queryKey: ["/api/admin/recent-signups", "all"],
       queryFn: async () => {
-        const res = await fetch("/api/admin/recent-signups?hours=48", {
+        const res = await fetch("/api/admin/recent-signups?all=1", {
           credentials: "include",
         });
         if (!res.ok) {
@@ -264,13 +265,34 @@ export default function RecentSignupShare() {
     }
 
     const html2canvas = (await import("html2canvas")).default;
-    const canvas = await html2canvas(target, {
-      backgroundColor: null,
-      scale: 2,
-      logging: false,
-      useCORS: true,
-    });
-    return canvas.toDataURL("image/png", 0.95);
+    const clone = target.cloneNode(true) as HTMLElement;
+    clone.style.position = "fixed";
+    clone.style.left = "-10000px";
+    clone.style.top = "0";
+    clone.style.width = "1200px";
+    clone.style.height = "630px";
+    clone.style.maxWidth = "1200px";
+    clone.style.minWidth = "1200px";
+    clone.style.transform = "none";
+    clone.style.zIndex = "-1";
+    document.body.appendChild(clone);
+
+    try {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const canvas = await html2canvas(clone, {
+        backgroundColor: null,
+        width: 1200,
+        height: 630,
+        windowWidth: 1200,
+        windowHeight: 630,
+        scale: 1,
+        logging: false,
+        useCORS: true,
+      });
+      return canvas.toDataURL("image/png", 0.95);
+    } finally {
+      clone.remove();
+    }
   };
 
   const copyText = async (text: string, label: string) => {
@@ -359,8 +381,8 @@ export default function RecentSignupShare() {
               Recent Signup Graphics
             </CardTitle>
             <CardDescription>
-              Ready-to-share welcome cards for every new user from the last 48
-              hours, with business profile details added when available.
+              Ready-to-share welcome cards for active users and businesses, with
+              profile details added when available.
             </CardDescription>
           </div>
           <Button
@@ -554,19 +576,10 @@ export default function RecentSignupShare() {
                     ref={(node) => {
                       graphicRefs.current[signup.key] = node;
                     }}
-                    className="relative aspect-[1200/630] overflow-hidden rounded-xl border bg-neutral-950 text-white shadow-sm"
+                    className="relative aspect-[1200/630] overflow-hidden rounded-[1.75rem] border bg-neutral-950 text-white shadow-sm"
                     style={{ background: tone.gradient }}
                   >
-                    {hasBusinessImage ? (
-                      <img
-                        src={graphicImageUrl || ""}
-                        alt={`${signup.displayName} profile image`}
-                        crossOrigin="anonymous"
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                    ) : null}
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/78 to-black/45" />
-                    <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
+                    <div className="absolute inset-0 bg-black" />
                     <div
                       className="absolute inset-0 opacity-20"
                       style={{
@@ -575,14 +588,33 @@ export default function RecentSignupShare() {
                         backgroundSize: "64px 64px",
                       }}
                     />
-                    <div className="absolute right-0 top-0 h-full w-[42%] bg-black/50 backdrop-blur-[1px]" />
                     <div
-                      className="absolute right-[34%] top-0 h-full w-28 skew-x-[-12deg]"
+                      className="absolute bottom-0 right-0 top-0 w-[46%]"
                       style={{ backgroundColor: tone.accent, opacity: 0.9 }}
                     />
+                    {hasBusinessImage ? (
+                      <div className="absolute bottom-8 right-8 top-8 w-[42%] overflow-hidden rounded-[2rem] border border-white/15 shadow-2xl">
+                        <img
+                          src={graphicImageUrl || ""}
+                          alt={`${signup.displayName} profile image`}
+                          crossOrigin="anonymous"
+                          className="h-full w-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
+                      </div>
+                    ) : (
+                      <div className="absolute bottom-8 right-8 top-8 flex w-[42%] items-center justify-center rounded-[2rem] border border-white/15 bg-black/25 shadow-2xl">
+                        <div
+                          className="flex h-44 w-44 items-center justify-center rounded-[2.25rem] text-7xl font-black text-black shadow-2xl"
+                          style={{ backgroundColor: tone.accent }}
+                        >
+                          {initialsFor(signup.displayName)}
+                        </div>
+                      </div>
+                    )}
 
-                    <div className="relative grid h-full grid-cols-[1.05fr_0.95fr]">
-                      <div className="flex h-full flex-col justify-between p-8">
+                    <div className="relative flex h-full">
+                      <div className="flex h-full w-[58%] flex-col justify-between p-10">
                         <div className="inline-flex w-fit items-center gap-3 rounded-full bg-black/45 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-white shadow">
                           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs tracking-normal text-black">
                             MS
@@ -590,7 +622,7 @@ export default function RecentSignupShare() {
                           MealScout
                         </div>
 
-                        <div className="max-w-[92%] space-y-4">
+                        <div className="max-w-[95%] space-y-4">
                           <div
                             className="inline-flex rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-black shadow"
                             style={{ backgroundColor: tone.accent }}
@@ -601,12 +633,12 @@ export default function RecentSignupShare() {
                             <p className="text-sm font-black uppercase tracking-[0.24em] text-white/70">
                               Just joined MealScout
                             </p>
-                            <h3 className="mt-2 text-balance text-5xl font-black leading-[0.95] sm:text-6xl">
+                            <h3 className="mt-2 text-balance text-[4.4rem] font-black leading-[0.9]">
                               {signup.displayName}
                             </h3>
                           </div>
                           {detailParts.length ? (
-                            <div className="flex flex-wrap items-center gap-3 text-xl font-bold text-white/90">
+                            <div className="flex flex-wrap items-center gap-3 text-2xl font-bold text-white/90">
                               {detailParts.map((part, index) => (
                                 <span key={`${part}-${index}`} className="flex items-center gap-3">
                                   {index > 0 ? (
@@ -625,8 +657,8 @@ export default function RecentSignupShare() {
                         </div>
                       </div>
 
-                      <div className="relative flex h-full flex-col justify-between p-8 pl-12">
-                        <div className="flex flex-wrap justify-end gap-2">
+                      <div className="relative flex h-full flex-1 flex-col justify-between p-10 pl-4">
+                        <div className="ml-auto flex max-w-[92%] flex-wrap justify-end gap-2">
                           <span
                             className="rounded-full px-4 py-2 text-sm font-black text-black shadow"
                             style={{ backgroundColor: tone.accent }}
@@ -638,22 +670,13 @@ export default function RecentSignupShare() {
                           </span>
                         </div>
 
-                        {hasBusinessImage ? (
-                          <div className="min-h-20" />
-                        ) : (
-                          <div
-                            className="flex h-32 w-32 items-center justify-center self-end rounded-[2rem] text-5xl font-black text-black shadow-2xl"
-                            style={{ backgroundColor: tone.accent }}
-                          >
-                            {initialsFor(signup.displayName)}
-                          </div>
-                        )}
+                        <div aria-hidden="true" className="min-h-40" />
 
-                        <div className="space-y-4 rounded-3xl border border-white/15 bg-black/55 p-5 shadow-2xl backdrop-blur-sm">
+                        <div className="ml-auto max-w-[92%] space-y-4 rounded-[1.5rem] border border-white/15 bg-black/72 p-6 shadow-2xl backdrop-blur-sm">
                           <p className="text-xs font-black uppercase tracking-[0.22em] text-white/55">
                             Featured
                           </p>
-                          <p className="line-clamp-3 text-2xl font-black leading-tight text-white">
+                          <p className="line-clamp-3 text-[1.7rem] font-black leading-tight text-white">
                             {featuredLine}
                           </p>
                           {menuHighlights.length ? (

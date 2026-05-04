@@ -347,6 +347,25 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
   const isTruck = Boolean(row.isFoodTruck) || row.businessType === "food_truck";
   const isBar = row.businessType === "bar";
   const ownerType = isTruck ? "food_truck" : "restaurant";
+  const rawCateringDetails =
+    row.cateringDetails && typeof row.cateringDetails === "object"
+      ? (row.cateringDetails as Record<string, any>)
+      : {};
+  const offersCatering = Boolean(
+    row.offersCatering || row.businessType === "caterer",
+  );
+  const cateringHeadline = cleanText(
+    rawCateringDetails.headline || rawCateringDetails.title,
+    `${name} catering${isTruck ? " and events" : ""}`,
+  );
+  const cateringDescription = cleanText(
+    rawCateringDetails.description || rawCateringDetails.notes,
+    `${name} can support local catering, events, offices, private parties, and pop-ups through MealScout.`,
+  );
+  const cateringArea = cleanText(
+    rawCateringDetails.serviceArea || rawCateringDetails.serviceAreaLabel,
+    cityState,
+  );
   const canonicalPath = isTruck
     ? `/truck/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
     : isBar
@@ -363,8 +382,11 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     row.description || row.facebookAbout,
     `${name}${cityState ? ` in ${cityState}` : ""} on MealScout. View profile details, specials, videos, menu information, and location updates.${menuSentence}`,
   );
+  const cateringSentence = offersCatering
+    ? ` Catering is available for local events and private bookings.`
+    : "";
   const description = cleanText(
-    `${baseDescription}${baseDescription.includes(menuHighlights[0] || "__none__") ? "" : menuSentence}`,
+    `${baseDescription}${baseDescription.includes(menuHighlights[0] || "__none__") ? "" : menuSentence}${cateringSentence}`,
   );
 
   const localBusiness = {
@@ -388,6 +410,17 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
             })),
           }
         : undefined,
+    makesOffer: offersCatering
+      ? {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            name: cateringHeadline,
+            description: cateringDescription,
+            areaServed: cateringArea || cityState || undefined,
+          },
+        }
+      : undefined,
     address: {
       "@type": "PostalAddress",
       streetAddress: row.address || undefined,
@@ -419,6 +452,9 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     schema: [localBusiness, ...videoSchemas(baseUrl, videos, name)],
     links: [
       { label: "Open profile", href: canonicalPath },
+      ...(offersCatering
+        ? [{ label: "Catering", href: `${canonicalPath}?service=catering` }]
+        : []),
       { label: "Find food nearby", href: "/find-food" },
       { label: "MealScout map", href: "/map" },
     ],
@@ -430,6 +466,9 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
         : row.menuUrl
           ? "Menu link available on this MealScout profile."
           : "",
+      offersCatering
+        ? `${cateringHeadline}: ${cateringDescription}${cateringArea ? ` Area served: ${cateringArea}.` : ""}`
+        : "",
       videos.length
         ? `${videos.length} public video${videos.length === 1 ? "" : "s"} available on this profile.`
         : "",
@@ -680,6 +719,7 @@ async function jobPage(baseUrl: string, jobId: string) {
     .select({
       id: jobPostings.id,
       restaurantId: jobPostings.restaurantId,
+      hostId: jobPostings.hostId,
       title: jobPostings.title,
       roleType: jobPostings.roleType,
       employmentType: jobPostings.employmentType,
@@ -703,15 +743,26 @@ async function jobPage(baseUrl: string, jobId: string) {
       restaurantState: restaurants.state,
       restaurantWebsiteUrl: restaurants.websiteUrl,
       restaurantLogoUrl: restaurants.logoUrl,
+      restaurantCoverImageUrl: restaurants.coverImageUrl,
+      hostName: hosts.businessName,
+      hostAddress: hosts.address,
+      hostCity: hosts.city,
+      hostState: hosts.state,
+      hostWebsiteUrl: hosts.businessWebsite,
+      hostLogoUrl: hosts.spotImageUrl,
     })
     .from(jobPostings)
-    .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+    .leftJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+    .leftJoin(hosts, eq(hosts.id, jobPostings.hostId))
     .where(
       and(
         eq(jobPostings.id, jobId),
         eq(jobPostings.status, "open"),
         or(isNull(jobPostings.expiresAt), gt(jobPostings.expiresAt, new Date())),
-        eq(restaurants.isActive, true),
+        or(
+          eq(restaurants.isActive, true),
+          sql`${jobPostings.hostId} is not null`,
+        ),
       ),
     )
     .limit(1);
@@ -719,9 +770,13 @@ async function jobPage(baseUrl: string, jobId: string) {
   if (!row) return null;
 
   const title = cleanText(row.title, "MealScout job");
-  const restaurantName = cleanText(row.restaurantName, "MealScout business");
-  const city = cleanText(row.city || row.restaurantCity);
-  const state = cleanText(row.state || row.restaurantState);
+  const isHostJob = Boolean(row.hostId) && !row.restaurantId;
+  const restaurantName = cleanText(
+    isHostJob ? row.hostName : row.restaurantName,
+    "MealScout business",
+  );
+  const city = cleanText(row.city || (isHostJob ? row.hostCity : row.restaurantCity));
+  const state = cleanText(row.state || (isHostJob ? row.hostState : row.restaurantState));
   const cityState = [city, state].filter(Boolean).join(", ");
   const pay = payRangeLabel(row);
   const canonicalPath = `/jobs/${encodeURIComponent(row.id)}/${encodeURIComponent(
@@ -754,7 +809,11 @@ async function jobPage(baseUrl: string, jobId: string) {
     title: `${title} at ${restaurantName}${cityState ? ` in ${cityState}` : ""} | MealScout Jobs`,
     description: `${description}${pay ? ` ${pay}.` : ""}`,
     canonicalPath,
-    imageUrl: row.restaurantLogoUrl || "/og-default.jpg",
+    imageUrl:
+      row.restaurantCoverImageUrl ||
+      row.restaurantLogoUrl ||
+      row.hostLogoUrl ||
+      "/og-default.jpg",
     schema: {
       "@context": "https://schema.org",
       "@type": "JobPosting",
@@ -775,15 +834,17 @@ async function jobPage(baseUrl: string, jobId: string) {
         "@type": "Organization",
         name: restaurantName,
         sameAs:
-          externalUrl(row.restaurantWebsiteUrl) ||
+          externalUrl(isHostJob ? row.hostWebsiteUrl : row.restaurantWebsiteUrl) ||
           absoluteUrl(
             baseUrl,
-            `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(
-              toSlug(restaurantName) || row.restaurantId,
-            )}`,
+            isHostJob
+              ? `/location/${encodeURIComponent(`${toSlug(restaurantName) || row.hostId}--${row.hostId}`)}`
+              : `/restaurant/${encodeURIComponent(row.restaurantId || "")}/${encodeURIComponent(
+                  toSlug(restaurantName) || row.restaurantId || "",
+                )}`,
           ),
-        logo: row.restaurantLogoUrl
-          ? absoluteUrl(baseUrl, row.restaurantLogoUrl)
+        logo: (row.restaurantLogoUrl || row.hostLogoUrl)
+          ? absoluteUrl(baseUrl, row.restaurantLogoUrl || row.hostLogoUrl)
           : undefined,
       },
       jobLocation: {
@@ -791,7 +852,7 @@ async function jobPage(baseUrl: string, jobId: string) {
         name: row.locationLabel || restaurantName,
         address: {
           "@type": "PostalAddress",
-          streetAddress: row.restaurantAddress || undefined,
+          streetAddress: (isHostJob ? row.hostAddress : row.restaurantAddress) || undefined,
           addressLocality: city || undefined,
           addressRegion: state || undefined,
           addressCountry: "US",
@@ -805,9 +866,11 @@ async function jobPage(baseUrl: string, jobId: string) {
       { label: "Browse MealScout jobs", href: "/jobs" },
       {
         label: `Open ${restaurantName}`,
-        href: `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(
-          toSlug(restaurantName) || row.restaurantId,
-        )}`,
+        href: isHostJob
+          ? `/location/${encodeURIComponent(`${toSlug(restaurantName) || row.hostId}--${row.hostId}`)}`
+          : `/restaurant/${encodeURIComponent(row.restaurantId || "")}/${encodeURIComponent(
+              toSlug(restaurantName) || row.restaurantId || "",
+            )}`,
       },
     ],
     body: [
