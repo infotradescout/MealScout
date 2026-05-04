@@ -173,6 +173,46 @@ export async function uploadVideoToCloudinary(
   });
 }
 
+// Upload raw documents such as resumes to Cloudinary
+export async function uploadRawToCloudinary(
+  fileBuffer: Buffer,
+  folder: string,
+  publicId?: string,
+): Promise<{
+  publicId: string;
+  url: string;
+  secureUrl: string;
+  format: string;
+  bytes: number;
+}> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'raw',
+        folder: `mealscout/${folder}`,
+        public_id: publicId,
+      },
+      (error, result: any) => {
+        if (error) {
+          reject(error);
+        } else if (result) {
+          resolve({
+            publicId: result.public_id,
+            url: result.url,
+            secureUrl: result.secure_url,
+            format: result.format || '',
+            bytes: result.bytes,
+          });
+        } else {
+          reject(new Error('Document upload failed'));
+        }
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+}
+
 // Delete media from Cloudinary
 export async function deleteFromCloudinary(
   publicId: string,

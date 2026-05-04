@@ -186,6 +186,25 @@ export function registerAcquisitionPrerenderRoutes(
       serviceType: "Public sharing hub",
     },
     {
+      path: "/jobs",
+      title: "Food Truck and Restaurant Jobs | MealScout Hiring",
+      description:
+        "Browse open MealScout jobs from local food trucks, restaurants, bars, and host locations, including delivery driver, kitchen, counter, event, and management roles.",
+      h1: "Food truck and restaurant jobs on MealScout",
+      body: [
+        "MealScout jobs connect local food businesses with applicants who already care about food, events, service, and neighborhood growth.",
+        "Every open role gets its own public page with business details, job information, and a direct application form.",
+        "Owners can add a Help Wanted banner to their public profile when they are hiring, then remove it as soon as the role is filled.",
+      ],
+      ctaLinks: [
+        { label: "Browse Jobs", href: "/jobs" },
+        { label: "Find Food Businesses", href: "/map" },
+        { label: "Owner Dashboard", href: "/restaurant-owner-dashboard" },
+      ],
+      schemaType: "WebApplication",
+      serviceType: "Local restaurant and food truck hiring board",
+    },
+    {
       path: "/truck-onboarding",
       title: "List or Claim Your Food Truck | MealScout",
       description:

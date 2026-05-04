@@ -68,6 +68,7 @@ import {
 } from "@/components/parking-schedule-calendar";
 import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { VideoUploadModal } from "@/components/video-upload-modal";
+import { PublicHelpWantedBanner } from "@/components/PublicHelpWantedBanner";
 import { extractUuidFromSlug } from "@/lib/seo-slug";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -994,6 +995,13 @@ export default function RestaurantDetailPage() {
             className="h-12 rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
           />
         </div>
+
+        {restaurantId ? (
+          <PublicHelpWantedBanner
+            restaurantId={String(restaurantId)}
+            variant="dark"
+          />
+        ) : null}
 
         {!isVerifiedMemberProfile ? (
           <div className="rounded-2xl border border-amber-500/45 bg-amber-500/10 p-4">

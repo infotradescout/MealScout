@@ -67,6 +67,7 @@ import {
   Save,
   RotateCcw,
   ShieldCheck,
+  Briefcase,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import RestaurantCreditRedemptionForm from "@/components/RestaurantCreditRedemptionForm";
@@ -91,6 +92,7 @@ import type { Deal, Restaurant } from "@shared/schema";
 import { BackHeader } from "@/components/back-header";
 import OwnerOnboardingChecklist from "@/components/OwnerOnboardingChecklist";
 import { SEOHead } from "@/components/seo-head";
+import { HelpWantedQuickAction } from "@/components/HelpWantedQuickAction";
 
 interface DashboardStats {
   totalDeals: number;
@@ -280,6 +282,12 @@ export default function RestaurantOwnerDashboard() {
     isRestaurantOwner ||
     isFoodTruck ||
     businessAccess?.permissions?.viewAnalytics === true;
+  const canManageProfile =
+    isAdmin ||
+    isStaff ||
+    isRestaurantOwner ||
+    isFoodTruck ||
+    businessAccess?.permissions?.manageProfile === true;
 
   useEffect(() => {
     if (!user) return;
@@ -671,6 +679,9 @@ export default function RestaurantOwnerDashboard() {
   const dealCreationPath = selectedRestaurant
     ? `/deal-creation?restaurantId=${encodeURIComponent(selectedRestaurant)}`
     : "/deal-creation";
+  const hiringPath = selectedRestaurant
+    ? `/hiring?restaurantId=${encodeURIComponent(selectedRestaurant)}`
+    : "/hiring";
   const subscribeDealCreationPath = selectedRestaurant
     ? `/subscribe?next=${encodeURIComponent(
         `/deal-creation?restaurantId=${selectedRestaurant}`,
@@ -1620,6 +1631,18 @@ export default function RestaurantOwnerDashboard() {
                 </Link>
               )
             ) : null}
+            {canManageProfile ? (
+              <Link href={hiringPath}>
+                <Button
+                  variant="outline"
+                  data-testid="button-owner-hiring"
+                  className="w-full sm:w-auto"
+                >
+                  <Briefcase className="mr-2 h-4 w-4" />
+                  Hiring
+                </Button>
+              </Link>
+            ) : null}
             {canManageBilling ? (
               <Link href="/subscription">
                 <Button
@@ -1660,6 +1683,16 @@ export default function RestaurantOwnerDashboard() {
           </select>
         </div>
       )}
+
+      {selectedRestaurant && currentRestaurant && canManageProfile ? (
+        <div className="mb-6">
+          <HelpWantedQuickAction
+            restaurantId={selectedRestaurant}
+            restaurantName={currentRestaurant.name}
+            compact
+          />
+        </div>
+      ) : null}
 
       {selectedRestaurantIsFoodTruck && currentRestaurant && (
         <Card className="mb-6 border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">

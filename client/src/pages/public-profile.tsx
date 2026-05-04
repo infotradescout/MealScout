@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
 import { getAffiliateShareUrl } from "@/lib/share";
+import { PublicHelpWantedBanner } from "@/components/PublicHelpWantedBanner";
 
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
@@ -1090,6 +1091,10 @@ export default function PublicProfilePage() {
                 </Link>
               </div>
             </div>
+          ) : null}
+
+          {data.entity === "restaurant" ? (
+            <PublicHelpWantedBanner restaurantId={data.id} />
           ) : null}
 
           {data.entity === "restaurant" && restaurantActionCards.length > 2 ? (

@@ -153,6 +153,9 @@ const BusinessTeamPage = lazy(() => import("@/pages/business-team"));
 const BusinessTeamAcceptPage = lazy(
   () => import("@/pages/business-team-accept"),
 );
+const JobsPage = lazy(() => import("@/pages/jobs"));
+const JobDetailPage = lazy(() => import("@/pages/job-detail"));
+const HiringDashboardPage = lazy(() => import("@/pages/hiring-dashboard"));
 const MenuBuilderPage = lazy(() => import("@/pages/menu-builder"));
 const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
@@ -181,6 +184,7 @@ const publicRoutePrefixes = [
   "/truck-onboarding",
   "/claim-truck",
   "/share-hub",
+  "/jobs",
   "/deal-creation",
   "/deal/",
   "/search",
@@ -611,6 +615,12 @@ function Router() {
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/share-hub" component={ShareHubPage} />
             <Route
+              path="/jobs/:jobId/:jobSlug"
+              component={JobDetailPage}
+            />
+            <Route path="/jobs/:jobId" component={JobDetailPage} />
+            <Route path="/jobs" component={JobsPage} />
+            <Route
               path="/business-team/accept"
               component={BusinessTeamAcceptPage}
             />
@@ -682,6 +692,7 @@ function Router() {
               path="/restaurant/dashboard"
               component={RestaurantOwnerDashboard}
             />
+            <Route path="/hiring" component={HiringDashboardPage} />
             <Route
               path="/edit-restaurant/:restaurantId"
               component={EditRestaurantPage}
@@ -940,6 +951,12 @@ function Router() {
             <Route path="/parking-pass" component={ParkingPassPage} />
             <Route path="/parking-pass-manage" component={ParkingPassManage} />
             <Route path="/share-hub" component={ShareHubPage} />
+            <Route
+              path="/jobs/:jobId/:jobSlug"
+              component={JobDetailPage}
+            />
+            <Route path="/jobs/:jobId" component={JobDetailPage} />
+            <Route path="/jobs" component={JobsPage} />
             <Route path="/business-team" component={BusinessTeamPage} />
             <Route
               path="/business-team/accept"

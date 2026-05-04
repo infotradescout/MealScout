@@ -13,3 +13,4 @@ export * from "./schema/misc";
 export * from "./schema/moderation";
 export * from "./schema/media";
 export * from "./schema/messaging";
+export * from "./schema/jobs";

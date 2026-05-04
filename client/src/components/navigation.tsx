@@ -36,6 +36,7 @@ import {
   MessageCircle,
   Menu,
   TrendingUp,
+  Briefcase,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -564,6 +565,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         fallbackLabel: "Events",
         group: "Discover",
       },
+      {
+        path: "/jobs",
+        icon: Briefcase,
+        fallbackLabel: "Jobs",
+        group: "Discover",
+      },
     );
 
     if (!user) {
@@ -633,6 +640,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             path: "/deal-creation",
             icon: Plus,
             fallbackLabel: "Create Special",
+            group: "Business",
+          });
+        }
+        if (canManageBusinessProfile) {
+          items.push({
+            path: "/hiring",
+            icon: Briefcase,
+            fallbackLabel: "Hiring",
             group: "Business",
           });
         }

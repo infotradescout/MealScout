@@ -13,6 +13,7 @@ import {
   ensureMenuSchema,
   ensureMessagingSchema,
   ensureSentimentSchema,
+  ensureJobBoardSchema,
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
@@ -1301,6 +1302,7 @@ app.use((req, res, next) => {
   await ensureLaunchSchemaCompatibility();
   await ensureSentimentSchema();
   await ensureMessagingSchema();
+  await ensureJobBoardSchema();
 
   const server = await registerRoutes(app);
 
@@ -1492,6 +1494,7 @@ app.use((req, res, next) => {
           await ensureMenuSchema();
           await ensureSentimentSchema();
           await ensureMessagingSchema();
+          await ensureJobBoardSchema();
           await storage.ensureAdminExists();
 
           // Never seed fake content unless explicitly enabled for local development.
