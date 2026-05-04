@@ -175,7 +175,7 @@ const OWNER_INTENT_COPY: Record<
   },
   booking_software: {
     title: "Create a booking-ready profile",
-    body: "This flow is focused on host requests, catering leads, and event details instead of generic restaurant setup.",
+    body: "This flow is focused on host-posted leads, catering details, and event opportunities instead of generic restaurant setup.",
     nextLabel: "Next: booking tools",
     nextTarget: "booking",
   },

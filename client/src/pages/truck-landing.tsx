@@ -31,8 +31,8 @@ const rawSignupHref = "/truck-onboarding?claim=1&flow=truck-owner";
 
 const ownerOutcomes = [
   {
-    title: "Booking requests",
-    body: "Hosts can ask for date, time, location, headcount, and notes from your profile.",
+    title: "Host-posted opportunities",
+    body: "Hosts and organizers post date, time, location, crowd size, and notes so you can decide fast.",
     icon: ClipboardList,
     image: "/backgrounds/food-truck-day.jpg",
   },
@@ -70,8 +70,8 @@ const ownerOutcomes = [
 
 const ownerUseCases = [
   {
-    title: "Turn DMs into booking requests",
-    body: "Give offices, lots, breweries, schools, and event organizers one clean request path.",
+    title: "Turn scattered DMs into clear leads",
+    body: "Give offices, lots, breweries, schools, and event organizers one place to post the terms trucks need.",
     label: "Events",
     icon: Users,
     image: "/backgrounds/food-truck-night.jpg",
@@ -95,7 +95,7 @@ const ownerUseCases = [
 const setupSteps = [
   {
     title: "Claim or create your truck",
-    body: "Attach the profile to the owner account that will manage menu, schedule, and requests.",
+    body: "Attach the profile to the owner account that will manage menu, schedule, and booking leads.",
     image: "/backgrounds/food-truck-day.jpg",
   },
   {
@@ -119,7 +119,7 @@ const faqItems = [
   {
     question: "Do I need online ordering ready first?",
     answer:
-      "No. You can launch with profile details, menu, schedule, and booking requests before turning on pickup ordering.",
+      "No. You can launch with profile details, menu, schedule, and host-posted opportunities before turning on pickup ordering.",
   },
   {
     question: "Does this replace my social pages?",
@@ -137,7 +137,7 @@ const schemaData = {
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       description:
-        "Food truck owner tools for profile claims, menus, schedules, host requests, live location, and direct pickup ordering.",
+        "Food truck owner tools for profile claims, menus, schedules, host-posted opportunities, live location, and direct pickup ordering.",
       offers: {
         "@type": "Offer",
         price: "0",
@@ -223,7 +223,7 @@ export default function TruckLanding() {
     <main className="min-h-screen bg-[var(--bg-surface)] text-[color:var(--text-primary)]">
       <SEOHead
         title="Food Truck Booking, Menu, Schedule, and Pickup Ordering Tools | MealScout"
-        description="Create or claim your food truck profile, publish your menu and schedule, receive host booking requests, show live location, and turn on direct pickup ordering."
+        description="Create or claim your food truck profile, publish your menu and schedule, review host-posted opportunities, show live location, and turn on direct pickup ordering."
         canonicalUrl="https://www.mealscout.us/truck-landing"
         ogImage="/backgrounds/food-truck-day.jpg"
         schemaData={schemaData}
@@ -285,7 +285,7 @@ export default function TruckLanding() {
 
             <p className="mt-5 max-w-2xl text-lg font-semibold leading-relaxed text-white/88 sm:text-xl">
               Claim or create your truck profile, publish the menu and schedule,
-              collect host requests, show live status, and add pickup ordering
+              review host-posted opportunities, show live status, and add pickup ordering
               from one owner link.
             </p>
 
@@ -382,7 +382,7 @@ export default function TruckLanding() {
             The profile has to help you get booked.
           </h2>
           <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
-            A food truck owner needs faster setup, cleaner host requests, and
+            A food truck owner needs faster setup, cleaner host-posted leads, and
             one link that is useful the same day it goes live.
           </p>
         </div>
@@ -540,7 +540,7 @@ export default function TruckLanding() {
               },
               {
                 title: "Booking link",
-                body: "Let hosts request the truck cleanly.",
+                body: "Let hosts post the opportunity clearly.",
                 image: "/backgrounds/food-truck-day.jpg",
               },
               {

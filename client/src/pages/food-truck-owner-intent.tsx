@@ -58,11 +58,11 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck business tools",
     seoTitle: "Food Truck Business Tools for Orders, Bookings, and Social | MealScout",
     seoDescription:
-      "MealScout gives food truck owners one place to publish schedules, take direct pickup orders, receive booking requests, post updates, and grow repeat customers.",
+      "MealScout gives food truck owners one place to publish schedules, take direct pickup orders, review host-posted opportunities, post updates, and grow repeat customers.",
     eyebrow: "Food truck business tools",
     headline: "Run orders, bookings, schedules, and social from one food truck hub.",
     subhead:
-      "MealScout is built for owners who need more than another directory listing. Create a truck profile, publish where you are serving, take direct orders, receive host requests, and turn your schedule into shareable updates.",
+      "MealScout is built for owners who need more than another directory listing. Create a truck profile, publish where you are serving, take direct orders, review host-posted leads, and turn your schedule into shareable updates.",
     primaryCta: { href: signupHref, label: "Create free truck profile" },
     secondaryCta: { href: "/pensacola/spots", label: "View Pensacola spots" },
     intentTerms: [
@@ -72,7 +72,7 @@ const pages: OwnerIntentPage[] = [
       "food truck social media tools",
     ],
     promise:
-      "One owner workspace for the jobs food trucks repeat every week: tell customers where you are, collect orders, answer booking requests, and keep your own customer relationship.",
+      "One owner workspace for the jobs food trucks repeat every week: tell customers where you are, collect orders, evaluate booking leads, and keep your own customer relationship.",
     proof: [
       {
         title: "Direct ordering",
@@ -80,8 +80,8 @@ const pages: OwnerIntentPage[] = [
         icon: ShoppingBag,
       },
       {
-        title: "Booking requests",
-        body: "Make it easier for hosts to request your truck for offices, apartments, events, and catering.",
+        title: "Host-posted opportunities",
+        body: "Let hosts and organizers post the date, location, timing, crowd, and notes trucks need before committing.",
         icon: ClipboardList,
       },
       {
@@ -93,14 +93,14 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Claim or create your food truck profile.",
       "Add your menu, schedule, service area, and booking preferences.",
-      "Use one public link for orders, schedule updates, and host requests.",
+      "Use one public link for orders, schedule updates, and host-posted opportunities.",
       "Keep building repeat customers instead of sending every interaction through scattered apps.",
     ],
     faqs: [
       {
         question: "What business tools does MealScout provide for food trucks?",
         answer:
-          "MealScout supports food truck profiles, online menus, pickup ordering, schedule publishing, host booking requests, parking spot discovery, deal promotion, and social-ready updates.",
+          "MealScout supports food truck profiles, online menus, pickup ordering, schedule publishing, host-posted opportunities, parking spot discovery, deal promotion, and social-ready updates.",
       },
       {
         question: "Is MealScout only a food truck directory?",
@@ -284,13 +284,13 @@ const pages: OwnerIntentPage[] = [
     path: "/food-truck-booking-software",
     intentKey: "booking_software",
     sitemapTitle: "Food truck booking software",
-    seoTitle: "Food Truck Booking Software for Host Requests | MealScout",
+    seoTitle: "Food Truck Booking Software for Host-Posted Leads | MealScout",
     seoDescription:
-      "Food truck booking software for host requests, catering leads, apartment events, office lunches, brewery rotations, and event details.",
+      "Food truck booking software for host-posted leads, catering details, apartment events, office lunches, brewery rotations, and event opportunities.",
     eyebrow: "Food truck booking software",
-    headline: "Let hosts request your truck without running every lead through DMs.",
+    headline: "Let hosts post the opportunity without running every lead through DMs.",
     subhead:
-      "MealScout gives food truck owners a booking-ready profile so hosts can understand what you serve, where you operate, and how to request you for offices, apartments, breweries, events, and catering.",
+      "MealScout gives food truck owners a booking-ready profile so hosts can understand what you serve, where you operate, and what details to post for offices, apartments, breweries, events, and catering.",
     primaryCta: { href: signupHref, label: "Create booking profile" },
     secondaryCta: { href: "/food-truck-opportunities/pensacola", label: "View Pensacola opportunities" },
     intentTerms: [
@@ -300,7 +300,7 @@ const pages: OwnerIntentPage[] = [
       "food truck event management software",
     ],
     promise:
-      "Make your truck easier to request, compare, and approve without making hosts manage a spreadsheet or chase messages.",
+      "Make your truck easier to compare and approve without making hosts manage a spreadsheet or chase messages.",
     proof: [
       {
         title: "Request-ready profile",
@@ -321,14 +321,14 @@ const pages: OwnerIntentPage[] = [
     workflow: [
       "Create a truck profile built for bookings.",
       "Add cuisine, service radius, truck requirements, and catering notes.",
-      "Let hosts submit requests or post spots trucks can review.",
+      "Let hosts post spots, timing, and requirements trucks can review.",
       "Keep confirmations and next steps attached to the booking flow.",
     ],
     faqs: [
       {
         question: "What should food truck booking software include?",
         answer:
-          "It should include a booking profile, event details, schedule context, host requirements, contact flow, and a way to manage requests without losing information in DMs.",
+          "It should include a booking profile, event details, schedule context, host requirements, contact flow, and a way to manage leads without losing information in DMs.",
       },
       {
         question: "Does MealScout support host-posted food truck spots?",
@@ -341,15 +341,15 @@ const pages: OwnerIntentPage[] = [
     path: "/food-truck-catering-leads",
     intentKey: "catering_leads",
     sitemapTitle: "Food truck catering leads",
-    seoTitle: "Food Truck Catering Leads and Event Requests | MealScout",
+    seoTitle: "Food Truck Catering Leads and Event Opportunities | MealScout",
     seoDescription:
-      "Get food truck catering leads by creating a MealScout profile hosts can request for offices, apartments, schools, breweries, private events, and local gatherings.",
+      "Get food truck catering leads by creating a MealScout profile hosts can review before posting offices, apartments, schools, breweries, private events, and local gatherings.",
     eyebrow: "Food truck catering leads",
-    headline: "Give catering and event buyers a clear way to request your truck.",
+    headline: "Give catering and event buyers a clear way to post the opportunity.",
     subhead:
-      "MealScout turns your truck into a requestable local food business with menu, schedule, service area, and event details in one place.",
+      "MealScout turns your truck into a bookable local food business with menu, schedule, service area, and event details in one place.",
     primaryCta: { href: signupHref, label: "Create catering profile" },
-    secondaryCta: { href: "/request-truck", label: "See host request flow" },
+    secondaryCta: { href: "/request-truck", label: "See host posting flow" },
     intentTerms: [
       "food truck catering leads",
       "food truck event leads",
@@ -357,7 +357,7 @@ const pages: OwnerIntentPage[] = [
       "food truck catering request form",
     ],
     promise:
-      "Help buyers understand your truck before they reach out, then route serious requests into a clearer booking path.",
+      "Help buyers understand your truck before they reach out, then route serious leads into a clearer booking path.",
     proof: [
       {
         title: "Catering-ready details",
@@ -371,26 +371,26 @@ const pages: OwnerIntentPage[] = [
       },
       {
         title: "Direct path",
-        body: "Turn interested buyers into requests instead of making them guess how to contact you.",
+        body: "Turn interested buyers into structured leads instead of making them guess how to contact you.",
         icon: ArrowRight,
       },
     ],
     workflow: [
       "Publish a catering-friendly truck profile.",
       "Show the events, group sizes, and service areas you can handle.",
-      "Let hosts submit the details you need up front.",
+      "Let hosts post the details you need up front.",
       "Use the request as the starting point for pricing and confirmation.",
     ],
     faqs: [
       {
         question: "How do food trucks get more catering leads?",
         answer:
-          "Food trucks get better leads when hosts can see menu style, service area, schedule, event fit, and a clear request path before contacting the owner.",
+          "Food trucks get better leads when hosts can see menu style, service area, schedule, event fit, and a clear posting path before contacting the owner.",
       },
       {
-        question: "Can MealScout help food trucks get event requests?",
+        question: "Can MealScout help food trucks get event leads?",
         answer:
-          "MealScout provides public profiles, host request flows, and opportunity pages designed to connect food trucks with local event demand.",
+          "MealScout provides public profiles, host-posted opportunity flows, and opportunity pages designed to connect food trucks with local event demand.",
       },
     ],
   },
@@ -457,7 +457,7 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Pensacola food truck opportunities",
     seoTitle: "Food Truck Opportunities in Pensacola | MealScout",
     seoDescription:
-      "Find Pensacola food truck opportunities, host-posted spots, parking pass locations, event requests, and booking tools through MealScout.",
+      "Find Pensacola food truck opportunities, host-posted spots, parking pass locations, event leads, and booking tools through MealScout.",
     eyebrow: "Pensacola food truck opportunities",
     headline: "Pensacola hosts and locations are the first MealScout food truck market.",
     subhead:
@@ -480,7 +480,7 @@ const pages: OwnerIntentPage[] = [
       },
       {
         title: "Owner profile",
-        body: "Create one profile for schedule, menu, orders, booking requests, and visibility.",
+        body: "Create one profile for schedule, menu, orders, booking leads, and visibility.",
         icon: Store,
       },
       {
@@ -493,7 +493,7 @@ const pages: OwnerIntentPage[] = [
       "View Pensacola spots and opportunity pages.",
       "Claim or create your truck profile.",
       "Add your schedule, menu, service area, and booking preferences.",
-      "Use MealScout as the local operating link behind orders, requests, and visibility.",
+      "Use MealScout as the local operating link behind orders, leads, and visibility.",
     ],
     faqs: [
       {
@@ -514,11 +514,11 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck vendor opportunities",
     seoTitle: "Food Truck Vendor Opportunities and Open Spots | MealScout",
     seoDescription:
-      "Find food truck vendor opportunities, open host spots, parking passes, market requests, and event leads through MealScout owner tools.",
+      "Find food truck vendor opportunities, open host spots, parking passes, market postings, and event leads through MealScout owner tools.",
     eyebrow: "Food truck vendor opportunities",
     headline: "Find the kinds of food truck opportunities owners are already searching for.",
     subhead:
-      "MealScout turns host demand, parking passes, public events, and booking requests into a clearer opportunity path for food truck operators.",
+      "MealScout turns host demand, parking passes, public events, and booking leads into a clearer opportunity path for food truck operators.",
     primaryCta: { href: "/pensacola/spots", label: "View open spots" },
     secondaryCta: { href: signupHref, label: "Create truck profile" },
     intentTerms: [
@@ -536,8 +536,8 @@ const pages: OwnerIntentPage[] = [
         icon: Truck,
       },
       {
-        title: "Event requests",
-        body: "Connect owner profiles to events, catering requests, and public open calls.",
+        title: "Event leads",
+        body: "Connect owner profiles to events, catering leads, and public open calls.",
         icon: ClipboardList,
       },
       {
@@ -556,7 +556,7 @@ const pages: OwnerIntentPage[] = [
       {
         question: "Where can food trucks find vendor opportunities?",
         answer:
-          "Food trucks can look for open events, host-posted spots, parking pass locations, markets accepting vendors, and booking request platforms like MealScout.",
+          "Food trucks can look for open events, host-posted spots, parking pass locations, markets accepting vendors, and booking lead platforms like MealScout.",
       },
       {
         question: "How does MealScout help with food truck opportunities?",
@@ -742,11 +742,11 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck website builder",
     seoTitle: "Food Truck Website Builder Alternative for Menus and Bookings | MealScout",
     seoDescription:
-      "A food truck website builder alternative with profile pages, menus, schedules, direct ordering, deals, and booking requests through MealScout.",
+      "A food truck website builder alternative with profile pages, menus, schedules, direct ordering, deals, and booking leads through MealScout.",
     eyebrow: "Food truck website builder",
     headline: "A food truck profile that works harder than a static website.",
     subhead:
-      "MealScout gives owners a public page for the things customers and hosts actually need: where you are, what you serve, how to order, and how to request the truck.",
+      "MealScout gives owners a public page for the things customers and hosts actually need: where you are, what you serve, how to order, and how to post an opportunity.",
     primaryCta: { href: signupHref, label: "Create food truck page" },
     secondaryCta: { href: "/food-truck-online-ordering", label: "Add ordering" },
     intentTerms: [
@@ -756,7 +756,7 @@ const pages: OwnerIntentPage[] = [
       "food truck booking website",
     ],
     promise:
-      "Replace a stale brochure page with a living truck profile tied to menus, schedules, orders, deals, and booking requests.",
+      "Replace a stale brochure page with a living truck profile tied to menus, schedules, orders, deals, and booking leads.",
     proof: [
       {
         title: "Public profile",
@@ -769,8 +769,8 @@ const pages: OwnerIntentPage[] = [
         icon: MousePointerClick,
       },
       {
-        title: "Booking requests",
-        body: "Help event buyers request the truck without searching for old contact details.",
+        title: "Booking leads",
+        body: "Help event buyers post clear details without searching for old contact info.",
         icon: ClipboardList,
       },
     ],
@@ -784,7 +784,7 @@ const pages: OwnerIntentPage[] = [
       {
         question: "Do food trucks need a website?",
         answer:
-          "Food trucks need a reliable public page for menus, schedules, ordering, and booking requests. That can be a traditional website or an active MealScout profile.",
+          "Food trucks need a reliable public page for menus, schedules, ordering, and booking leads. That can be a traditional website or an active MealScout profile.",
       },
       {
         question: "Can MealScout replace a basic food truck website?",
@@ -799,7 +799,7 @@ const pages: OwnerIntentPage[] = [
     sitemapTitle: "Food truck marketing ideas",
     seoTitle: "Food Truck Marketing Ideas That Lead to Orders and Bookings | MealScout",
     seoDescription:
-      "Food truck marketing ideas for schedules, social posts, direct ordering, deals, customer lists, and booking requests with MealScout.",
+      "Food truck marketing ideas for schedules, social posts, direct ordering, deals, customer lists, and booking leads with MealScout.",
     eyebrow: "Food truck marketing ideas",
     headline: "Market the action you want customers or hosts to take next.",
     subhead:
@@ -827,7 +827,7 @@ const pages: OwnerIntentPage[] = [
       },
       {
         title: "Booking marketing",
-        body: "Give hosts a direct path to request the truck for catering and events.",
+        body: "Give hosts a direct path to post catering and event details.",
         icon: Mail,
       },
     ],

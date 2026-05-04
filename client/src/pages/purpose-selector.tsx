@@ -39,7 +39,7 @@ const purposeCards: Array<{
     purpose: "host",
     title: "Host food trucks",
     description:
-      "Add a location, set availability, and let trucks request your spot.",
+      "Add a location, set availability, and let trucks book or express interest in your spot.",
     action: "Add my spot",
     icon: Store,
   },

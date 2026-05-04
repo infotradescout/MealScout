@@ -404,8 +404,8 @@ export default function EventsPublicHub() {
         <section className="rounded-[2rem] border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean sm:p-6">
           <h2 className="text-xl font-black">Need a different path?</h2>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Hosts can request trucks, and truck owners can make sure their
-            profile is ready before applying.
+            Hosts and organizers post the event details, and truck owners can
+            make sure their profile is ready before applying.
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <Link href="/request-truck">
