@@ -47,6 +47,17 @@ type RecentSignup = {
   category?: string | null;
   locationLabel?: string | null;
   description?: string | null;
+  imageUrl?: string | null;
+  websiteUrl?: string | null;
+  menuUrl?: string | null;
+  orderUrl?: string | null;
+  menuCount?: number | null;
+  menuItemCount?: number | null;
+  menuItemNames?: string[] | null;
+  videoCount?: number | null;
+  spotCount?: number | null;
+  canonicalProfilePath?: string | null;
+  profileCompleteness?: Record<string, boolean>;
   profileUrl: string;
   profilePath: string;
   isPublic: boolean;
@@ -172,6 +183,28 @@ const summarize = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 150);
+
+const compactList = (items?: string[] | null, limit = 3) =>
+  (items || [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, limit);
+
+const completionLabel = (signup: RecentSignup) => {
+  const checks = signup.profileCompleteness || {};
+  const missing = Object.entries(checks)
+    .filter(([key, value]) => key !== "isPublic" && !value)
+    .map(([key]) =>
+      key
+        .replace(/^has/, "")
+        .replace(/([A-Z])/g, " $1")
+        .trim()
+        .toLowerCase(),
+    );
+  if (!signup.isPublic) return "Not public yet";
+  if (!missing.length) return "Launch-ready";
+  return `Missing ${missing.slice(0, 2).join(", ")}`;
+};
 
 const downloadDataUrl = (dataUrl: string, filename: string) => {
   const link = document.createElement("a");
@@ -426,6 +459,12 @@ export default function RecentSignupShare() {
             const isPosting = busyKey === `${signup.key}:facebook`;
             const isDownloading = busyKey === `${signup.key}:download`;
             const description = summarize(signup.description);
+            const menuHighlights = compactList(signup.menuItemNames);
+            const hasBusinessImage = Boolean(signup.imageUrl);
+            const readiness = completionLabel(signup);
+            const profileDestination = signup.isPublic
+              ? "Public profile"
+              : "Visitor fallback";
 
             return (
               <Card key={signup.key} className="overflow-hidden">
@@ -450,9 +489,27 @@ export default function RecentSignupShare() {
                     <div className="flex flex-wrap gap-2">
                       <Badge className={tone.badge}>{tone.label}</Badge>
                       <Badge variant={signup.isPublic ? "outline" : "secondary"}>
-                        {signup.linkLabel ||
-                          (signup.isPublic ? "Public link" : "Map redirect link")}
+                        {signup.linkLabel || profileDestination}
                       </Badge>
+                      <Badge variant="outline">{readiness}</Badge>
+                      {Number(signup.menuItemCount || 0) > 0 ? (
+                        <Badge variant="outline">
+                          {signup.menuItemCount} menu item
+                          {Number(signup.menuItemCount) === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
+                      {Number(signup.videoCount || 0) > 0 ? (
+                        <Badge variant="outline">
+                          {signup.videoCount} video
+                          {Number(signup.videoCount) === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
+                      {signup.spotCount ? (
+                        <Badge variant="outline">
+                          {signup.spotCount} host spot
+                          {Number(signup.spotCount) === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                 </CardHeader>
@@ -464,6 +521,15 @@ export default function RecentSignupShare() {
                     className="relative aspect-[1200/630] overflow-hidden rounded-xl border bg-neutral-950 p-6 text-white shadow-sm sm:p-8"
                     style={{ background: tone.gradient }}
                   >
+                    {hasBusinessImage ? (
+                      <img
+                        src={signup.imageUrl || ""}
+                        alt=""
+                        crossOrigin="anonymous"
+                        className="absolute inset-0 h-full w-full object-cover opacity-55"
+                      />
+                    ) : null}
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/68 to-black/25" />
                     <div
                       className="absolute inset-0 opacity-30"
                       style={{
@@ -484,18 +550,35 @@ export default function RecentSignupShare() {
                           </span>
                           MealScout
                         </div>
-                        <Badge className={tone.badge}>
-                          New {signup.nounLabel || tone.noun}
-                        </Badge>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Badge className={tone.badge}>
+                            New {signup.nounLabel || tone.noun}
+                          </Badge>
+                          {signup.isPublic ? (
+                            <Badge className="bg-white/90 text-black">
+                              Public profile
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-white/20 text-white">
+                              Profile finishing
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="max-w-[78%] space-y-4">
-                        <div
-                          className="flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black text-black"
-                          style={{ backgroundColor: tone.accent }}
-                        >
-                          {initialsFor(signup.displayName)}
-                        </div>
+                      <div className="max-w-[82%] space-y-4">
+                        {hasBusinessImage ? (
+                          <div className="inline-flex rounded-2xl border border-white/20 bg-black/35 px-4 py-2 text-sm font-black uppercase tracking-[0.2em] text-white shadow">
+                            Now on MealScout
+                          </div>
+                        ) : (
+                          <div
+                            className="flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black text-black"
+                            style={{ backgroundColor: tone.accent }}
+                          >
+                            {initialsFor(signup.displayName)}
+                          </div>
+                        )}
                         <div>
                           <p className="text-sm font-bold uppercase tracking-[0.2em] text-white/70">
                             Just joined MealScout
@@ -518,15 +601,31 @@ export default function RecentSignupShare() {
                             {description}
                           </p>
                         ) : null}
+                        {menuHighlights.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {menuHighlights.map((item) => (
+                              <span
+                                key={item}
+                                className="rounded-full bg-white/15 px-3 py-1 text-sm font-bold text-white"
+                              >
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="flex items-end justify-between gap-4">
                         <div className="flex items-center gap-2 text-sm font-semibold text-white/75">
                           <MapPin className="h-4 w-4" />
-                          Find them on MealScout
+                          {signup.isPublic
+                            ? "Find their profile on MealScout"
+                            : "Profile finishing - visitors go to the map"}
                         </div>
                         <div className="rounded-full bg-black/40 px-4 py-2 text-sm font-semibold text-white/85">
-                          mealscout.us
+                          {signup.isPublic
+                            ? "mealscout.us/profile"
+                            : "mealscout.us/map"}
                         </div>
                       </div>
                     </div>

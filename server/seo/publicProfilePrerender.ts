@@ -1,5 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import {
@@ -8,6 +8,8 @@ import {
   hosts,
   jobPostings,
   mediaAssets,
+  menus,
+  menuItems,
   restaurants,
   suppliers,
 } from "@shared/schema";
@@ -237,6 +239,40 @@ const videoSchemas = (
       : undefined,
   }));
 
+const menuSnippetForRestaurant = async (restaurantId: string) => {
+  try {
+    const [row] = await db
+      .select({
+        itemCount:
+          sql<number>`count(${menuItems.id}) filter (where ${menuItems.isAvailable} = true)`.mapWith(
+            Number,
+          ),
+        itemNames:
+          sql<string>`string_agg(distinct ${menuItems.name}, ', ') filter (where ${menuItems.isAvailable} = true)`,
+      })
+      .from(menus)
+      .leftJoin(menuItems, eq(menuItems.menuId, menus.id))
+      .where(and(eq(menus.restaurantId, restaurantId), eq(menus.isActive, true)))
+      .groupBy(menus.restaurantId);
+
+    const itemNames = String(row?.itemNames || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    return {
+      itemCount: Number(row?.itemCount || 0),
+      itemNames,
+    };
+  } catch (error) {
+    console.warn("[seo-prerender] menu snippet unavailable", {
+      restaurantId,
+      error,
+    });
+    return { itemCount: 0, itemNames: [] as string[] };
+  }
+};
+
 const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   const canonicalUrl = absoluteUrl(baseUrl, page.canonicalPath);
   const image = absoluteUrl(baseUrl, page.imageUrl || "/og-default.jpg");
@@ -317,10 +353,18 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
       ? `/bar/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
       : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
   const videos = await publicVideosFor(ownerType, row.id);
+  const menuSnippet = await menuSnippetForRestaurant(row.id);
   const image = videos[0]?.thumbnailUrl || resolveRestaurantImage(baseUrl, row);
-  const description = cleanText(
+  const menuHighlights = menuSnippet.itemNames.slice(0, 5);
+  const menuSentence = menuHighlights.length
+    ? ` Menu highlights include ${menuHighlights.join(", ")}.`
+    : "";
+  const baseDescription = cleanText(
     row.description || row.facebookAbout,
-    `${name}${cityState ? ` in ${cityState}` : ""} on MealScout. View profile details, specials, videos, and location information.`,
+    `${name}${cityState ? ` in ${cityState}` : ""} on MealScout. View profile details, specials, videos, menu information, and location updates.${menuSentence}`,
+  );
+  const description = cleanText(
+    `${baseDescription}${baseDescription.includes(menuHighlights[0] || "__none__") ? "" : menuSentence}`,
   );
 
   const localBusiness = {
@@ -332,6 +376,18 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     image,
     telephone: row.phone || row.googleFormattedPhone || undefined,
     servesCuisine: row.cuisineType || undefined,
+    hasMenu: row.menuUrl
+      ? externalUrl(row.menuUrl)
+      : menuSnippet.itemNames.length
+        ? {
+            "@type": "Menu",
+            name: `${name} menu`,
+            hasMenuItem: menuSnippet.itemNames.slice(0, 8).map((item) => ({
+              "@type": "MenuItem",
+              name: item,
+            })),
+          }
+        : undefined,
     address: {
       "@type": "PostalAddress",
       streetAddress: row.address || undefined,
@@ -369,6 +425,11 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     body: [
       row.cuisineType ? `Cuisine: ${row.cuisineType}` : "",
       cityState ? `Area: ${cityState}` : "",
+      menuSnippet.itemCount
+        ? `Menu on MealScout: ${menuSnippet.itemCount} item${menuSnippet.itemCount === 1 ? "" : "s"}${menuHighlights.length ? ` including ${menuHighlights.join(", ")}` : ""}.`
+        : row.menuUrl
+          ? "Menu link available on this MealScout profile."
+          : "",
       videos.length
         ? `${videos.length} public video${videos.length === 1 ? "" : "s"} available on this profile.`
         : "",
