@@ -28,21 +28,29 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-type RecentSignupKind = "food_truck" | "restaurant" | "host";
+type RecentSignupKind =
+  | "customer"
+  | "food_truck"
+  | "restaurant"
+  | "host"
+  | "supplier"
+  | "team";
 
 type RecentSignup = {
   key: string;
   kind: RecentSignupKind;
-  entity: "restaurant" | "host";
+  entity: "restaurant" | "host" | "user";
   id: string;
   displayName: string;
   typeLabel: string;
+  nounLabel?: string | null;
   category?: string | null;
   locationLabel?: string | null;
   description?: string | null;
   profileUrl: string;
   profilePath: string;
   isPublic: boolean;
+  linkLabel?: string | null;
   isVerified: boolean;
   createdAt: string;
   ownerName?: string | null;
@@ -56,9 +64,13 @@ type RecentSignupsResponse = {
   generatedAt: string;
   summary: {
     total: number;
+    users: number;
+    customers: number;
     foodTrucks: number;
     restaurants: number;
     hosts: number;
+    suppliers: number;
+    team: number;
     notPublic: number;
   };
   signups: RecentSignup[];
@@ -84,6 +96,14 @@ const toneByKind: Record<
     noun: string;
   }
 > = {
+  customer: {
+    label: "Customer",
+    gradient:
+      "linear-gradient(135deg, #111111 0%, #23211a 38%, #10302b 100%)",
+    accent: "#facc15",
+    badge: "bg-yellow-300 text-black",
+    noun: "member",
+  },
   food_truck: {
     label: "Food Truck",
     gradient:
@@ -107,6 +127,22 @@ const toneByKind: Record<
     accent: "#38bdf8",
     badge: "bg-sky-300 text-black",
     noun: "host",
+  },
+  supplier: {
+    label: "Supplier",
+    gradient:
+      "linear-gradient(135deg, #111111 0%, #1d2530 40%, #2e2614 100%)",
+    accent: "#a3e635",
+    badge: "bg-lime-300 text-black",
+    noun: "supplier",
+  },
+  team: {
+    label: "Team",
+    gradient:
+      "linear-gradient(135deg, #111111 0%, #27242f 40%, #302515 100%)",
+    accent: "#f97316",
+    badge: "bg-orange-400 text-black",
+    noun: "team member",
   },
 };
 
@@ -268,8 +304,8 @@ export default function RecentSignupShare() {
               Recent Signup Graphics
             </CardTitle>
             <CardDescription>
-              Ready-to-share welcome cards for new trucks, restaurants, and
-              hosts from the last 48 hours.
+              Ready-to-share welcome cards for every new user from the last 48
+              hours, with business profile details added when available.
             </CardDescription>
           </div>
           <Button
@@ -287,11 +323,23 @@ export default function RecentSignupShare() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground">All signups</p>
               <p className="text-2xl font-semibold">
                 {data?.summary.total ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Users</p>
+              <p className="text-2xl font-semibold">
+                {data?.summary.users ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Customers</p>
+              <p className="text-2xl font-semibold">
+                {data?.summary.customers ?? 0}
               </p>
             </div>
             <div className="rounded-lg border p-3">
@@ -312,6 +360,22 @@ export default function RecentSignupShare() {
                 {data?.summary.hosts ?? 0}
               </p>
             </div>
+            {(data?.summary.suppliers ?? 0) > 0 ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Suppliers</p>
+                <p className="text-2xl font-semibold">
+                  {data?.summary.suppliers ?? 0}
+                </p>
+              </div>
+            ) : null}
+            {(data?.summary.team ?? 0) > 0 ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Team</p>
+                <p className="text-2xl font-semibold">
+                  {data?.summary.team ?? 0}
+                </p>
+              </div>
+            ) : null}
             <div className="rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">Not public yet</p>
               <p className="text-2xl font-semibold">
@@ -347,18 +411,18 @@ export default function RecentSignupShare() {
           <CardContent className="flex min-h-40 flex-col items-center justify-center gap-2 text-center">
             <ImageIcon className="h-8 w-8 text-muted-foreground" />
             <p className="font-medium">
-              No new truck, restaurant, or host signups in the last 48 hours.
+              No new user signups in the last 48 hours.
             </p>
             <p className="max-w-md text-sm text-muted-foreground">
-              When someone joins, their welcome graphic will appear here with a
-              caption and profile link ready to share.
+              When someone joins, their welcome graphic will appear here with
+              share copy and the best public destination available.
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-2">
           {signups.map((signup) => {
-            const tone = toneByKind[signup.kind] || toneByKind.restaurant;
+            const tone = toneByKind[signup.kind] || toneByKind.customer;
             const isPosting = busyKey === `${signup.key}:facebook`;
             const isDownloading = busyKey === `${signup.key}:download`;
             const description = summarize(signup.description);
@@ -386,7 +450,8 @@ export default function RecentSignupShare() {
                     <div className="flex flex-wrap gap-2">
                       <Badge className={tone.badge}>{tone.label}</Badge>
                       <Badge variant={signup.isPublic ? "outline" : "secondary"}>
-                        {signup.isPublic ? "Public link" : "Map redirect link"}
+                        {signup.linkLabel ||
+                          (signup.isPublic ? "Public link" : "Map redirect link")}
                       </Badge>
                     </div>
                   </div>
@@ -420,7 +485,7 @@ export default function RecentSignupShare() {
                           MealScout
                         </div>
                         <Badge className={tone.badge}>
-                          New {tone.noun}
+                          New {signup.nounLabel || tone.noun}
                         </Badge>
                       </div>
 

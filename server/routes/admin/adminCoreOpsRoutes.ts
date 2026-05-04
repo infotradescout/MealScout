@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import crypto from "crypto";
 import Stripe from "stripe";
-import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
@@ -138,16 +138,86 @@ const formatSignupLocation = (row: {
 
 const buildSignupCaption = (signup: {
   displayName: string;
+  kind?: string;
   typeLabel: string;
   locationLabel: string;
   profileUrl: string;
   isPublic: boolean;
 }) => {
+  if (signup.kind === "customer") {
+    return `Welcome ${signup.displayName} to MealScout. Find local food trucks, restaurants, hosts, and events here: ${signup.profileUrl}`;
+  }
+
+  if (signup.kind === "team") {
+    return `Welcome ${signup.displayName} to the MealScout crew. Local food discovery starts here: ${signup.profileUrl}`;
+  }
+
+  if (signup.kind === "supplier") {
+    return `Say hello to ${signup.displayName} on MealScout. ${signup.typeLabel} helping local food businesses stay stocked: ${signup.profileUrl}`;
+  }
+
   if (!signup.isPublic) {
     return `Fresh local food activity is landing on MealScout. Tap through for nearby trucks, restaurants, hosts, and events: ${signup.profileUrl}`;
   }
 
   return `Say hello to ${signup.displayName} on MealScout. ${signup.typeLabel} in ${signup.locationLabel}. See the profile: ${signup.profileUrl}`;
+};
+
+const signupUserTypeLabel = (userType: unknown) => {
+  const normalized = String(userType || "customer").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    customer: "Customer",
+    restaurant_owner: "Restaurant Owner",
+    food_truck: "Food Truck Owner",
+    supplier: "Supplier",
+    host: "Host",
+    event_coordinator: "Event Organizer",
+    staff: "Team Member",
+    admin: "Admin",
+    super_admin: "Admin",
+  };
+  return labels[normalized] || "MealScout User";
+};
+
+const signupKindForUserType = (userType: unknown) => {
+  const normalized = String(userType || "customer").trim().toLowerCase();
+  if (normalized === "food_truck") return "food_truck";
+  if (normalized === "restaurant_owner") return "restaurant";
+  if (normalized === "host" || normalized === "event_coordinator") {
+    return "host";
+  }
+  if (normalized === "supplier") return "supplier";
+  if (normalized === "staff" || normalized === "admin" || normalized === "super_admin") {
+    return "team";
+  }
+  return "customer";
+};
+
+const signupCategoryForUserType = (userType: unknown) => {
+  const normalized = String(userType || "customer").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    customer: "Local food fan",
+    restaurant_owner: "Business owner",
+    food_truck: "Mobile food owner",
+    supplier: "Food business supplier",
+    host: "Truck-friendly host",
+    event_coordinator: "Event organizer",
+    staff: "MealScout team",
+    admin: "MealScout team",
+    super_admin: "MealScout team",
+  };
+  return labels[normalized] || "MealScout member";
+};
+
+const displayNameForSignupUser = (user: any) => {
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+  if (fullName) return fullName;
+
+  const email = String(user?.email || "").trim();
+  if (email && email.includes("@")) return email.split("@")[0];
+  if (email) return email;
+
+  return "New MealScout member";
 };
 
 const dataUrlToBlob = (dataUrl: string) => {
@@ -983,6 +1053,50 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
         const baseUrl = resolveAdminPublicBaseUrl();
 
+        const userRows = await db
+          .select({
+            id: users.id,
+            userType: users.userType,
+            email: users.email,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            phone: users.phone,
+            profileImageUrl: users.profileImageUrl,
+            affiliateTag: users.affiliateTag,
+            postalCode: users.postalCode,
+            publicHandle: users.publicHandle,
+            publicBio: users.publicBio,
+            emailVerified: users.emailVerified,
+            accountSettings: users.accountSettings,
+            publicProfileSettings: users.publicProfileSettings,
+            createdAt: users.createdAt,
+          })
+          .from(users)
+          .where(gte(users.createdAt, cutoff))
+          .orderBy(desc(users.createdAt))
+          .limit(500);
+
+        const recentUserRows = userRows as any[];
+        const recentUserIds = Array.from(
+          new Set(
+            recentUserRows
+              .map((row) => String(row.id || "").trim())
+              .filter(Boolean),
+          ),
+        );
+
+        const recentOrOwnedRestaurantWhere =
+          recentUserIds.length > 0
+            ? or(
+                gte(restaurants.createdAt, cutoff),
+                inArray(restaurants.ownerId, recentUserIds),
+              )
+            : gte(restaurants.createdAt, cutoff);
+        const recentOrOwnedHostWhere =
+          recentUserIds.length > 0
+            ? or(gte(hosts.createdAt, cutoff), inArray(hosts.userId, recentUserIds))
+            : gte(hosts.createdAt, cutoff);
+
         const restaurantRows = await db
           .select({
             id: restaurants.id,
@@ -1016,9 +1130,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           })
           .from(restaurants)
           .leftJoin(users, eq(restaurants.ownerId, users.id))
-          .where(gte(restaurants.createdAt, cutoff))
+          .where(recentOrOwnedRestaurantWhere)
           .orderBy(desc(restaurants.createdAt))
-          .limit(250);
+          .limit(600);
 
         const hostRows = await db
           .select({
@@ -1051,11 +1165,39 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           })
           .from(hosts)
           .leftJoin(users, eq(hosts.userId, users.id))
-          .where(gte(hosts.createdAt, cutoff))
+          .where(recentOrOwnedHostWhere)
           .orderBy(desc(hosts.createdAt))
-          .limit(250);
+          .limit(600);
 
-        const restaurantSignups = (restaurantRows as any[]).map((row) => {
+        const restaurantRowsAny = restaurantRows as any[];
+        const hostRowsAny = hostRows as any[];
+        const restaurantsByOwner = new Map<string, any[]>();
+        const hostsByOwner = new Map<string, any[]>();
+        const isInsideWindow = (value: unknown) => {
+          const time = new Date(value as any).getTime();
+          return Number.isFinite(time) && time >= cutoff.getTime();
+        };
+
+        for (const row of restaurantRowsAny) {
+          const ownerId = String(row.ownerId || "").trim();
+          if (!ownerId) continue;
+          const rows = restaurantsByOwner.get(ownerId) || [];
+          rows.push(row);
+          restaurantsByOwner.set(ownerId, rows);
+        }
+
+        for (const row of hostRowsAny) {
+          const ownerId = String(row.userId || "").trim();
+          if (!ownerId) continue;
+          const rows = hostsByOwner.get(ownerId) || [];
+          rows.push(row);
+          hostsByOwner.set(ownerId, rows);
+        }
+
+        const createRestaurantSignup = (
+          row: any,
+          options: { key?: string; createdAt?: unknown; source?: string } = {},
+        ) => {
           const isFoodTruck =
             Boolean(row.isFoodTruck) ||
             String(row.businessType || "").toLowerCase() === "food_truck";
@@ -1068,7 +1210,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const isPublic = row.isActive !== false && isOwnerProfilePublic(owner);
           const locationLabel = formatSignupLocation(row);
           const signup = {
-            key: `restaurant:${row.id}`,
+            key: options.key || `restaurant:${row.id}`,
             kind,
             entity: "restaurant",
             id: row.id,
@@ -1094,7 +1236,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             profileUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
-            createdAt: row.createdAt,
+            createdAt: options.createdAt || row.createdAt,
             ownerName:
               [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
               null,
@@ -1102,16 +1244,19 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             ownerAffiliateTag: row.ownerAffiliateTag || null,
             facebookPageId: row.facebookPageId || null,
             facebookPageUrl: row.facebookPageUrl || null,
-            source: "restaurant_onboarding",
+            source: options.source || "restaurant_onboarding",
           };
 
           return {
             ...signup,
             caption: buildSignupCaption(signup),
           };
-        });
+        };
 
-        const hostSignups = (hostRows as any[]).map((row) => {
+        const createHostSignup = (
+          row: any,
+          options: { key?: string; createdAt?: unknown; source?: string } = {},
+        ) => {
           const isEventCoordinator =
             String(row.locationType || "").toLowerCase() ===
             "event_coordinator";
@@ -1123,7 +1268,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const isPublic = isOwnerProfilePublic(owner);
           const locationLabel = formatSignupLocation(row);
           const signup = {
-            key: `host:${row.id}`,
+            key: options.key || `host:${row.id}`,
             kind: "host",
             entity: "host",
             id: row.id,
@@ -1148,7 +1293,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             profileUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
-            createdAt: row.createdAt,
+            createdAt: options.createdAt || row.createdAt,
             ownerName:
               [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
               null,
@@ -1156,16 +1301,118 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             ownerAffiliateTag: row.ownerAffiliateTag || null,
             facebookPageId: row.facebookPageId || null,
             facebookPageUrl: row.facebookPageUrl || null,
-            source: "host_onboarding",
+            source: options.source || "host_onboarding",
           };
 
           return {
             ...signup,
             caption: buildSignupCaption(signup),
           };
+        };
+
+        const createUserSignup = (row: any) => {
+          const kind = signupKindForUserType(row.userType);
+          const typeLabel = signupUserTypeLabel(row.userType);
+          const displayName = displayNameForSignupUser(row);
+          const locationLabel =
+            String(row.postalCode || "").trim() || "MealScout";
+          const profilePath = "/map";
+          const profileUrl = `${baseUrl}${profilePath}`;
+          const signup = {
+            key: `user:${row.id}`,
+            kind,
+            entity: "user",
+            id: row.id,
+            ownerId: row.id,
+            displayName,
+            typeLabel,
+            category: signupCategoryForUserType(row.userType),
+            nounLabel: typeLabel.toLowerCase(),
+            locationLabel,
+            city: null,
+            state: null,
+            address: null,
+            description: row.publicBio || null,
+            imageUrl: firstAdminPhotoUrl(row.profileImageUrl),
+            profilePath,
+            profileUrl,
+            isPublic: true,
+            linkLabel: "Map link",
+            isVerified: Boolean(row.emailVerified),
+            createdAt: row.createdAt,
+            ownerName: displayName,
+            ownerEmail: row.email || null,
+            ownerAffiliateTag: row.affiliateTag || null,
+            facebookPageId: null,
+            facebookPageUrl: null,
+            source: "user_signup",
+          };
+
+          return {
+            ...signup,
+            caption: buildSignupCaption(signup),
+          };
+        };
+
+        const representedBusinessKeys = new Set<string>();
+        const userSignups = recentUserRows.map((row) => {
+          const userId = String(row.id || "");
+          const normalizedType = String(row.userType || "customer")
+            .trim()
+            .toLowerCase();
+          const ownedRestaurants = restaurantsByOwner.get(userId) || [];
+          const ownedHosts = hostsByOwner.get(userId) || [];
+          const preferredHost =
+            normalizedType === "host" || normalizedType === "event_coordinator";
+
+          if (!preferredHost && ownedRestaurants[0]) {
+            representedBusinessKeys.add(`restaurant:${ownedRestaurants[0].id}`);
+            return createRestaurantSignup(ownedRestaurants[0], {
+              key: `user:${userId}`,
+              createdAt: row.createdAt,
+              source: "user_signup",
+            });
+          }
+
+          if (ownedHosts[0]) {
+            representedBusinessKeys.add(`host:${ownedHosts[0].id}`);
+            return createHostSignup(ownedHosts[0], {
+              key: `user:${userId}`,
+              createdAt: row.createdAt,
+              source: "user_signup",
+            });
+          }
+
+          if (ownedRestaurants[0]) {
+            representedBusinessKeys.add(`restaurant:${ownedRestaurants[0].id}`);
+            return createRestaurantSignup(ownedRestaurants[0], {
+              key: `user:${userId}`,
+              createdAt: row.createdAt,
+              source: "user_signup",
+            });
+          }
+
+          return createUserSignup(row);
         });
 
-        const signups = [...restaurantSignups, ...hostSignups].sort(
+        const businessOnlySignups = [
+          ...restaurantRowsAny
+            .filter(
+              (row) =>
+                isInsideWindow(row.createdAt) &&
+                !representedBusinessKeys.has(`restaurant:${row.id}`),
+            )
+            .map((row) => createRestaurantSignup(row)),
+          ...hostRowsAny
+            .filter(
+              (row) =>
+                isInsideWindow(row.createdAt) &&
+                !representedBusinessKeys.has(`host:${row.id}`),
+            )
+            .map((row) => createHostSignup(row)),
+        ];
+
+        const signups = [...userSignups, ...businessOnlySignups].sort(
           (a, b) =>
             new Date(b.createdAt || 0).getTime() -
             new Date(a.createdAt || 0).getTime(),
@@ -1176,11 +1423,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           generatedAt: new Date().toISOString(),
           summary: {
             total: signups.length,
+            users: recentUserRows.length,
+            customers: signups.filter((item) => item.kind === "customer").length,
             foodTrucks: signups.filter((item) => item.kind === "food_truck")
               .length,
             restaurants: signups.filter((item) => item.kind === "restaurant")
               .length,
             hosts: signups.filter((item) => item.kind === "host").length,
+            suppliers: signups.filter((item) => item.kind === "supplier").length,
+            team: signups.filter((item) => item.kind === "team").length,
             notPublic: signups.filter((item) => !item.isPublic).length,
           },
           signups,
