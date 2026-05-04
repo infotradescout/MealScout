@@ -615,12 +615,12 @@ export default function RecentSignupShare() {
             const nameLength = signup.displayName.length;
             const graphicNameClass =
               nameLength > 46
-                ? "text-[3.3rem]"
+                ? "text-[3rem]"
                 : nameLength > 32
-                  ? "text-[4rem]"
+                  ? "text-[3.7rem]"
                   : nameLength > 22
-                    ? "text-[4.8rem]"
-                    : "text-[5.6rem]";
+                    ? "text-[4.4rem]"
+                    : "text-[5.1rem]";
             const graphicSubline =
               menuHighlights.length > 0
                 ? menuHighlights.slice(0, 3).join(" / ")
@@ -696,16 +696,7 @@ export default function RecentSignupShare() {
                       background: hasBusinessImage ? "#050505" : tone.gradient,
                     }}
                   >
-                    {hasBusinessImage ? (
-                      <img
-                        src={graphicImageUrl || ""}
-                        alt={imageAlt}
-                        crossOrigin="anonymous"
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                    ) : null}
-                    <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/35" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/35" />
+                    <div className="absolute inset-0 bg-[#050505]" />
                     <div
                       className="absolute inset-0 opacity-[0.14]"
                       style={{
@@ -714,43 +705,43 @@ export default function RecentSignupShare() {
                         backgroundSize: "70px 70px",
                       }}
                     />
-                    <div
-                      className="absolute -right-[7%] top-0 h-full w-[42%] opacity-90"
-                      style={{
-                        backgroundColor: tone.accent,
-                        clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)",
-                      }}
-                    />
-                    {!hasBusinessImage ? (
-                      <div className="absolute right-[7%] top-1/2 flex h-[19rem] w-[19rem] -translate-y-1/2 items-center justify-center rounded-[2.25rem] bg-white/15 text-[7rem] font-black text-black/90">
-                        <span className="rounded-[2rem] bg-white px-10 py-8">
-                          {initialsFor(signup.displayName)}
-                        </span>
-                      </div>
-                    ) : null}
+                    <div className="absolute inset-y-0 right-0 w-[43%]">
+                      <div
+                        className="absolute inset-0"
+                        style={{ backgroundColor: tone.accent }}
+                      />
+                      {hasBusinessImage ? (
+                        <>
+                          <img
+                            src={graphicImageUrl || ""}
+                            alt={imageAlt}
+                            crossOrigin="anonymous"
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="flex h-[18rem] w-[18rem] items-center justify-center rounded-[3rem] bg-black/20 text-[7.25rem] font-black text-black shadow-[inset_0_0_0_1px_rgba(0,0,0,.12)]">
+                            {initialsFor(signup.displayName)}
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute left-0 top-0 h-full w-[5rem] bg-gradient-to-r from-[#050505] to-transparent" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-[7rem] bg-gradient-to-t from-black/85 to-transparent" />
 
-                    <div className="relative flex h-full flex-col justify-between p-10">
+                    <div className="relative flex h-full flex-col justify-between p-10 pr-[47%]">
                       <div className="flex items-start justify-between gap-6">
                         <div className="inline-flex items-center gap-3 text-sm font-black uppercase text-white">
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs text-black">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xs tracking-normal text-black">
                             MS
                           </span>
                           <span>MealScout</span>
                         </div>
-                        <div className="flex max-w-[34rem] flex-wrap justify-end gap-2">
-                          <span
-                            className="rounded-full px-5 py-2 text-sm font-black text-black"
-                            style={{ backgroundColor: tone.accent }}
-                          >
-                            {tone.label}
-                          </span>
-                          <span className="rounded-full bg-white px-5 py-2 text-sm font-black text-black">
-                            {statusText}
-                          </span>
-                        </div>
                       </div>
 
-                      <div className="max-w-[47rem]">
+                      <div className="max-w-[40rem]">
                         <div
                           className="mb-5 inline-flex rounded-full px-5 py-2 text-sm font-black uppercase text-black"
                           style={{ backgroundColor: tone.accent }}
@@ -761,18 +752,18 @@ export default function RecentSignupShare() {
                           Just joined MealScout
                         </p>
                         <h3
-                          className={`mt-3 max-w-[12ch] break-words ${graphicNameClass} font-black leading-[0.9]`}
+                          className={`mt-3 max-w-[15ch] break-words ${graphicNameClass} font-black leading-[0.92]`}
                         >
                           {signup.displayName}
                         </h3>
                         {graphicSubline ? (
-                          <p className="mt-5 line-clamp-2 max-w-[44rem] text-2xl font-black leading-tight text-white/90">
+                          <p className="mt-5 line-clamp-2 max-w-[38rem] text-[1.6rem] font-black leading-tight text-white/90">
                             {graphicSubline}
                           </p>
                         ) : null}
                       </div>
 
-                      <div className="flex items-end justify-between gap-6">
+                      <div className="flex items-end justify-between gap-8">
                         <div className="min-w-0">
                           <p className="mb-2 text-xs font-black uppercase text-white/55">
                             Find them on MealScout
@@ -782,15 +773,26 @@ export default function RecentSignupShare() {
                             <span className="truncate">{graphicUrlLabel}</span>
                           </div>
                         </div>
-                        <div className="max-w-[23rem] text-right">
-                          <p className="mb-3 line-clamp-2 text-2xl font-black leading-tight text-white">
-                            {graphicAction}
-                          </p>
-                          <span className="inline-flex rounded-full bg-white px-6 py-3 text-sm font-black text-black">
-                            View profile
-                          </span>
-                        </div>
                       </div>
+                    </div>
+                    <div className="absolute right-8 top-8 flex max-w-[29rem] flex-wrap justify-end gap-2">
+                      <span className="rounded-full bg-black/70 px-5 py-2 text-sm font-black text-white backdrop-blur">
+                        {tone.label}
+                      </span>
+                      <span className="rounded-full bg-white px-5 py-2 text-sm font-black text-black">
+                        {statusText}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-8 right-8 max-w-[25rem] rounded-[1.35rem] bg-black/70 p-6 text-white backdrop-blur">
+                      <p className="mb-4 line-clamp-2 text-[1.75rem] font-black leading-tight">
+                        {graphicAction}
+                      </p>
+                      <span
+                        className="inline-flex rounded-full px-5 py-2 text-sm font-black text-black"
+                        style={{ backgroundColor: tone.accent }}
+                      >
+                        View profile
+                      </span>
                     </div>
                   </div>
 
