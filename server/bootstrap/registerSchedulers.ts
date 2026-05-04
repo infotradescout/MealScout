@@ -32,6 +32,7 @@ import { registerStoryCronJobs } from "../storiesCronJobs";
 import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { sendAdminDailyDigest } from "../services/adminDailyDigest";
 import { sendOwnerDiscoverabilityAlerts } from "../services/ownerDiscoverabilityAlerts";
+import { runOwnerProfileRecoveryCron } from "../services/ownerProfileRecovery";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities, sentimentSignalEvents } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
@@ -124,6 +125,27 @@ export async function registerSchedulers(app: Express): Promise<void> {
         }
       } catch (error) {
         console.error("❌ Owner Discoverability Alert failed:", error);
+      }
+    });
+  }
+
+  // Owner recovery: signed-up owners whose public profile still has no useful
+  // business/menu data. This catches pre-fix signups and new interrupted flows.
+  if (
+    String(process.env.OWNER_PROFILE_RECOVERY_ENABLED || "true").toLowerCase() !==
+    "false"
+  ) {
+    const expression =
+      process.env.OWNER_PROFILE_RECOVERY_CRON || "*/30 * * * *";
+    cron.schedule(expression, async () => {
+      console.log("⏰ Triggering Owner Profile Recovery scan");
+      try {
+        const result = await runOwnerProfileRecoveryCron();
+        console.log(
+          `[owner-profile-recovery] considered=${result.considered} sent=${result.sent} skipped=${result.skipped} errors=${result.errors}`,
+        );
+      } catch (error) {
+        console.error("❌ Owner Profile Recovery failed:", error);
       }
     });
   }

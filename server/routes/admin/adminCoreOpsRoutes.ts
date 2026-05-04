@@ -10,6 +10,7 @@ import { db } from "../../db";
 import { emailService, isEmailConfigured } from "../../emailService";
 import { sendAdminDailyDigest } from "../../services/adminDailyDigest";
 import { sendOwnerDiscoverabilityAlerts } from "../../services/ownerDiscoverabilityAlerts";
+import { sendOwnerProfileRecoveryEmail } from "../../services/ownerProfileRecovery";
 import {
   getPublicBusinessVisibilityChecks,
   isPublicBusinessVisible,
@@ -1843,7 +1844,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
   );
 
   // POST /api/admin/launch-week/owners/:userId/action
-  // Body: { action: "resend-verification" | "send-menu-nudge" | "send-help-offer" | "verify-restaurants" }
+  // Body: { action: "resend-verification" | "send-profile-recovery" | "send-menu-nudge" | "send-help-offer" | "verify-restaurants" }
   // One-click triage actions for owners flagged on the Launch Week dashboard.
   app.post(
     "/api/admin/launch-week/owners/:userId/action",
@@ -1855,6 +1856,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const action = String(req.body?.action || "");
         const validActions = new Set([
           "resend-verification",
+          "send-profile-recovery",
           "send-menu-nudge",
           "send-help-offer",
           "verify-restaurants",
@@ -1874,6 +1876,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
 
         const requiresEmail =
           action === "resend-verification" ||
+          action === "send-profile-recovery" ||
           action === "send-menu-nudge" ||
           action === "send-help-offer";
         if (requiresEmail && !user.email) {
@@ -1919,6 +1922,28 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             `[admin/launch-week] resend-verification by=${adminId} to=${user.email} ok=${ok}`,
           );
           return res.json({ ok });
+        }
+
+        if (action === "send-profile-recovery") {
+          if (!isEmailConfigured()) {
+            return res
+              .status(503)
+              .json({ message: "Email provider not configured" });
+          }
+          const result = await sendOwnerProfileRecoveryEmail({
+            user: user as any,
+            baseUrl,
+            force: Boolean(req.body?.force),
+            requestMeta: {
+              requestIp: req.ip || undefined,
+              userAgent: req.get("User-Agent") || undefined,
+              adminId,
+            },
+          });
+          console.log(
+            `[admin/launch-week] profile-recovery by=${adminId} owner=${user.id} ok=${result.ok} skipped=${result.skipped || "none"}`,
+          );
+          return res.json(result);
         }
 
         if (action === "send-menu-nudge") {

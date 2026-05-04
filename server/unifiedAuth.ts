@@ -2232,6 +2232,13 @@ export async function setupUnifiedAuth(app: Express) {
         process.env.CLIENT_ORIGIN ||
         process.env.PUBLIC_BASE_URL ||
         "http://localhost:5000";
+      const requestedNext = String(req.query.next || "").trim();
+      const safeNext =
+        requestedNext.startsWith("/") &&
+        !requestedNext.startsWith("//") &&
+        !requestedNext.includes("://")
+          ? requestedNext
+          : "";
 
       // After verification, send users to a role-appropriate place *after* they log in.
       // The login page honors `?redirect=` (safe, same-origin paths only).
@@ -2255,7 +2262,7 @@ export async function setupUnifiedAuth(app: Express) {
       })();
 
       const redirectUrl = `${redirectBase}/login?verified=1&redirect=${encodeURIComponent(
-        defaultRedirectPath,
+        safeNext || defaultRedirectPath,
       )}`;
       res.redirect(redirectUrl);
     } catch (error) {
