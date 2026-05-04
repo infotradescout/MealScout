@@ -237,11 +237,11 @@ export default function RecentSignupShare() {
       }
       toast({
         title: result.needsConfig
-          ? "Facebook Page token needed"
-          : "Facebook needs manual review",
+          ? "Connect Facebook Page to post directly"
+          : "Manual Facebook share opened",
         description:
           result.message ||
-          "Opened the fallback share dialog with the profile link.",
+          "Opened a manual Facebook share window with the profile link.",
       });
     } catch (error: any) {
       const fallbackShareUrl = error?.payload?.fallbackShareUrl;
@@ -268,8 +268,8 @@ export default function RecentSignupShare() {
               Recent Signup Graphics
             </CardTitle>
             <CardDescription>
-              Auto-filled welcome cards for trucks, restaurants, and hosts that
-              joined in the last 48 hours.
+              Ready-to-share welcome cards for new trucks, restaurants, and
+              hosts from the last 48 hours.
             </CardDescription>
           </div>
           <Button
@@ -325,11 +325,11 @@ export default function RecentSignupShare() {
             >
               {data?.facebookPagePostingConfigured
                 ? "Facebook Page posting ready"
-                : "Facebook Page token not configured"}
+                : "Facebook Page not connected"}
             </Badge>
             <span>
-              Real Page posting uses MEALSCOUT_FB_PAGE_ID and
-              MEALSCOUT_FB_PAGE_TOKEN.
+              Direct posting opens from here once the MealScout Facebook Page is
+              connected.
             </span>
           </div>
         </CardContent>
@@ -386,7 +386,7 @@ export default function RecentSignupShare() {
                     <div className="flex flex-wrap gap-2">
                       <Badge className={tone.badge}>{tone.label}</Badge>
                       <Badge variant={signup.isPublic ? "outline" : "secondary"}>
-                        {signup.isPublic ? "Public link" : "Private fallback"}
+                        {signup.isPublic ? "Public link" : "Map redirect link"}
                       </Badge>
                     </div>
                   </div>

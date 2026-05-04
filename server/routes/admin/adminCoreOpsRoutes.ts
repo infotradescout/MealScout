@@ -144,10 +144,10 @@ const buildSignupCaption = (signup: {
   isPublic: boolean;
 }) => {
   if (!signup.isPublic) {
-    return `${signup.displayName} just joined MealScout. Their public profile is still being finished, but you can explore nearby food and events here: ${signup.profileUrl}`;
+    return `Fresh local food activity is landing on MealScout. Tap through for nearby trucks, restaurants, hosts, and events: ${signup.profileUrl}`;
   }
 
-  return `Welcome ${signup.displayName} to MealScout. Check out this ${signup.typeLabel.toLowerCase()} in ${signup.locationLabel}: ${signup.profileUrl}`;
+  return `Say hello to ${signup.displayName} on MealScout. ${signup.typeLabel} in ${signup.locationLabel}. See the profile: ${signup.profileUrl}`;
 };
 
 const dataUrlToBlob = (dataUrl: string) => {
@@ -1232,7 +1232,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             needsConfig: true,
             fallbackShareUrl,
             message:
-              "Facebook Page posting is not configured. Set MEALSCOUT_FB_PAGE_ID and MEALSCOUT_FB_PAGE_TOKEN.",
+              "Direct Facebook Page posting is not connected yet. A manual share window is available.",
           });
         }
 
@@ -1263,7 +1263,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             fallbackShareUrl,
             message:
               data?.error?.message ||
-              "Facebook rejected the post. You can use the fallback share dialog.",
+              "Facebook did not accept the direct post. A manual share window is available.",
             facebookError: data?.error || data || null,
           });
         }

@@ -375,16 +375,16 @@ export default function PublicProfilePage() {
           <Card className="w-full border-amber-200 bg-amber-50/70">
             <CardHeader>
               <Badge className="w-fit bg-amber-500 text-black">
-                Profile not public yet
+                Page unavailable
               </Badge>
               <CardTitle className="text-2xl">
-                This profile is still being finished
+                This MealScout page is unavailable
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
-                They joined MealScout, but this profile is not public yet.
-                Explore nearby food while they finish setup.
+                This profile is not available right now. Explore live trucks,
+                restaurants, hosts, and events nearby.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Link href={error.redirectPath || "/map"}>
@@ -396,7 +396,7 @@ export default function PublicProfilePage() {
                 <Link href={error.homePath || "/"}>
                   <Button variant="outline" className="w-full sm:w-auto">
                     <Home className="mr-2 h-4 w-4" />
-                    Go home
+                    MealScout home
                   </Button>
                 </Link>
               </div>

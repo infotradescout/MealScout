@@ -74,7 +74,7 @@ const isPublicProfileVisibleForVisitors = (user: any) =>
 
 const sendPrivateProfileResponse = (res: any) =>
   res.status(403).json({
-    message: "This profile is not public yet.",
+    message: "This MealScout page is unavailable.",
     redirectPath: "/map",
     homePath: "/",
   });
