@@ -3052,6 +3052,22 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "users",
   });
 
+  const { data: pendingInsuranceVerifications = EMPTY_ARRAY } = useQuery<any[]>({
+    queryKey: ["/api/admin/insurance-verifications", "pending"],
+    queryFn: async () => {
+      const response = await fetch(
+        "/api/admin/insurance-verifications?status=pending",
+        { credentials: "include" },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.message || "Failed to load business proof queue");
+      }
+      return response.json();
+    },
+    enabled: !!adminUser && selectedTab === "users",
+  });
+
   const userById = useMemo(() => {
     const map = new Map<string, any>();
     for (const u of users) {
@@ -3060,6 +3076,17 @@ export default function AdminDashboard() {
     }
     return map;
   }, [users]);
+
+  const pendingInsuranceByOwnerId = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const row of pendingInsuranceVerifications) {
+      const ownerId = String(row?.ownerId || "").trim();
+      if (ownerId && !map.has(ownerId)) {
+        map.set(ownerId, row);
+      }
+    }
+    return map;
+  }, [pendingInsuranceVerifications]);
 
   const { data: mapPinAudit } = useQuery<MapPinAudit>({
     queryKey: ["/api/admin/map-pin-audit"],
@@ -5871,6 +5898,42 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to verify user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveBusinessInsurance = useMutation({
+    mutationFn: async (verificationId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/admin/insurance-verifications/${verificationId}/approve`,
+        {
+          reviewerNotes:
+            "Approved from User Management after reviewing uploaded business insurance proof.",
+        },
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications", "pending"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications"],
+      });
+      toast({
+        title: "Business Proof Approved",
+        description:
+          "Insurance/business legitimacy verification has been marked approved.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Business proof required",
+        description:
+          error.message ||
+          "The business must upload insurance or acceptable proof before approval.",
         variant: "destructive",
       });
     },
@@ -8854,7 +8917,7 @@ export default function AdminDashboard() {
                                   className="w-full gap-2"
                                 >
                                   <CheckCircle className="h-4 w-4" />
-                                  Approve
+                                  Approve Profile
                                 </Button>
                                 <Button
                                   size="sm"
@@ -9446,7 +9509,17 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 <div className="space-y-3 mt-3">
-                  {filteredUsers.map((user: any) => (
+                  {filteredUsers.map((user: any) => {
+                    const isBusinessUser = [
+                      "restaurant_owner",
+                      "caterer",
+                      "food_truck",
+                      "host",
+                    ].includes(String(user.userType || ""));
+                    const pendingInsurance = pendingInsuranceByOwnerId.get(
+                      String(user.id || ""),
+                    );
+                    return (
                     <div
                       key={user.id}
                       className="flex flex-col gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between"
@@ -9531,7 +9604,35 @@ export default function AdminDashboard() {
                               data-testid={`button-verify-user-${user.id}`}
                             >
                               <CheckCircle className="w-3 h-3 mr-1" />
-                              Auto Verify
+                              Verify Email
+                            </Button>
+                          )}
+                          {isAdminOrSuper && isBusinessUser && (
+                            <Button
+                              size="sm"
+                              variant={pendingInsurance ? "default" : "outline"}
+                              onClick={() => {
+                                if (!pendingInsurance?.id) {
+                                  toast({
+                                    title: "Proof upload required",
+                                    description:
+                                      "Business verification requires uploaded insurance or acceptable business proof first.",
+                                    variant: "destructive",
+                                  });
+                                  return;
+                                }
+                                approveBusinessInsurance.mutate(
+                                  String(pendingInsurance.id),
+                                );
+                              }}
+                              disabled={
+                                approveBusinessInsurance.isPending ||
+                                !pendingInsurance?.id
+                              }
+                              data-testid={`button-verify-business-${user.id}`}
+                            >
+                              <Shield className="w-3 h-3 mr-1" />
+                              {pendingInsurance ? "Verify Business" : "Needs Proof"}
                             </Button>
                           )}
                           <Button
@@ -9600,7 +9701,8 @@ export default function AdminDashboard() {
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
