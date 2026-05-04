@@ -118,7 +118,7 @@ export const roleLandingContent = {
     starter: {
       kicker: "Start now",
       title: "Free to join",
-      copy: "Build your presence today. Upgrade anytime to premium tools for $25/month.",
+      copy: "Create your profile today. Upgrade anytime to premium tools for $25/month.",
       bullets: [
         "Signup is free",
         "Premium tools: $25/month",

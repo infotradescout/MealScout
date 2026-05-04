@@ -191,8 +191,8 @@ export function EventBookingModal({
   const initiateBooking = async () => {
     if (!stripePromise) {
       toast({
-        title: "Payments Unavailable",
-        description: "Stripe is not configured for this environment.",
+        title: "Payments unavailable",
+        description: "Payments are temporarily unavailable. Try again shortly.",
         variant: "destructive",
       });
       return;

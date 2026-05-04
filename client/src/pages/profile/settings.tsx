@@ -1021,11 +1021,11 @@ export default function SettingsPage() {
                       Upload directly to your profile gallery (max 12 images).
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Active upload provider:{" "}
+                      Image uploads:{" "}
                       {data?.media?.provider || "unknown"}{" "}
                       {data?.media?.configured
-                        ? "(configured)"
-                        : "(not configured)"}
+                        ? "(ready)"
+                        : "(needs attention)"}
                     </p>
                   </div>
                 </div>

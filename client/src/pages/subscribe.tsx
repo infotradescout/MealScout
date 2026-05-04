@@ -160,7 +160,7 @@ const PaymentForm = ({
 
       if (result.error) {
         toast({
-          title: intentType === "setup" ? "Setup Failed" : "Payment Failed",
+          title: intentType === "setup" ? "Payment method failed" : "Payment failed",
           description: result.error.message,
           variant: "destructive",
         });
@@ -168,8 +168,8 @@ const PaymentForm = ({
         toast({
           title:
             intentType === "setup"
-              ? "Setup Successful!"
-              : "Payment Successful!",
+              ? "Payment method saved"
+              : "Payment successful",
           description: "Premium is now active on your account.",
         });
         const paymentIntentId =
@@ -186,7 +186,7 @@ const PaymentForm = ({
       }
     } catch (error: any) {
       toast({
-        title: intentType === "setup" ? "Setup Error" : "Payment Error",
+        title: intentType === "setup" ? "Payment method error" : "Payment error",
         description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
@@ -1050,7 +1050,7 @@ export default function Subscribe() {
     );
   }
 
-  // Show message if Stripe is not configured
+  // Show message if payments are unavailable.
   if (!stripePromise) {
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen">
@@ -1065,10 +1065,10 @@ export default function Subscribe() {
             <CardContent className="p-6 text-center">
               <i className="fas fa-cog text-muted-foreground text-3xl mb-4"></i>
               <h2 className="text-lg font-semibold text-foreground mb-2">
-                Payment Setup Required
+                Payments temporarily unavailable
               </h2>
               <p className="text-muted-foreground mb-4">
-                Stripe payment processing is not yet configured.
+                Premium checkout is not available right now.
               </p>
               <Button
                 className="w-full mb-2"
@@ -1360,7 +1360,7 @@ export default function Subscribe() {
               <CardContent className="p-6 text-center">
                 <i className="fas fa-exclamation-triangle text-destructive text-3xl mb-4"></i>
                 <h2 className="text-lg font-semibold text-foreground mb-2">
-                  Setup Error
+                  Payment error
                 </h2>
                 <p
                   className="text-muted-foreground mb-4"

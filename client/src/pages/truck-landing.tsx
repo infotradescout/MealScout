@@ -61,7 +61,7 @@ const ownerOutcomes = [
     image: "/backgrounds/food-truck-night.jpg",
   },
   {
-    title: "Setup checklist",
+    title: "Profile checklist",
     body: "See what is missing before sending hosts or customers to your truck profile.",
     icon: BarChart3,
     image: "/backgrounds/night-market-plate.webp",
@@ -92,10 +92,10 @@ const ownerUseCases = [
   },
 ];
 
-const setupSteps = [
+const profileSteps = [
   {
     title: "Claim or create your truck",
-    body: "Attach the profile to the owner account that will manage menu, schedule, and booking leads.",
+    body: "Claim the page that will carry your menu, schedule, and booking leads.",
     image: "/backgrounds/food-truck-day.jpg",
   },
   {
@@ -254,7 +254,7 @@ export default function TruckLanding() {
                 Owner Tools
               </a>
               <a href="#setup" className="hover:text-white">
-                Setup
+                Profile
               </a>
               <a href="#faq" className="hover:text-white">
                 FAQ
@@ -317,7 +317,7 @@ export default function TruckLanding() {
             <div className="mt-6 grid gap-2 text-sm font-bold text-white/86 sm:grid-cols-3">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                Free profile setup
+                Free truck profile
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-300" />
@@ -382,7 +382,7 @@ export default function TruckLanding() {
             The profile has to help you get booked.
           </h2>
           <p className="mt-3 text-base font-semibold leading-relaxed text-[color:var(--text-secondary)]">
-            A food truck owner needs faster setup, cleaner host-posted leads, and
+            A food truck owner needs faster publishing, cleaner host-posted leads, and
             one link that is useful the same day it goes live.
           </p>
         </div>
@@ -462,7 +462,7 @@ export default function TruckLanding() {
         <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
-              Setup path
+              Profile path
             </p>
             <h2 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
               From signup to a useful truck link.
@@ -474,16 +474,16 @@ export default function TruckLanding() {
             <Button asChild className="mt-5 gap-2 font-black">
               <Link
                 href={signupHref}
-                onClick={() => trackCta("create_profile_setup", signupHref)}
+                onClick={() => trackCta("create_truck_profile", signupHref)}
               >
-                Start owner setup
+                Create my truck profile
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
           </div>
 
           <div className="grid gap-3">
-            {setupSteps.map((step, index) => (
+            {profileSteps.map((step, index) => (
               <div
                 key={step.title}
                 className="grid overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean sm:grid-cols-[9rem_1fr]"

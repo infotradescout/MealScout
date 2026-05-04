@@ -125,7 +125,7 @@ export default function AccountSetup() {
     onSuccess: () => {
       setSetupComplete(true);
       toast({
-        title: "Account Setup Complete!",
+        title: "Account ready",
         description: "Your account is ready. You can now log in.",
       });
       // Redirect to login after 2 seconds
@@ -135,10 +135,10 @@ export default function AccountSetup() {
     },
     onError: (error: any) => {
       toast({
-        title: "Setup Failed",
+        title: "Account not finished",
         description:
           error.message ||
-          "Failed to complete account setup. Please try again.",
+          "We could not finish your account. Please try again.",
         variant: "destructive",
       });
     },

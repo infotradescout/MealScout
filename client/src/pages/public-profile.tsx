@@ -45,6 +45,7 @@ type PublicProfile = {
   canonicalUrl: string;
   profilePath: string;
   viewerIsOwner?: boolean;
+  ownerAffiliateTag?: string | null;
   profileSettings?: {
     templatePreset?: "classic" | "story" | "bold" | "minimal";
     theme?: "sunset" | "slate" | "forest" | "amber";
@@ -361,6 +362,33 @@ export default function PublicProfilePage() {
   useEffect(() => {
     setRestaurantTab("overview");
   }, [data?.id]);
+
+  useEffect(() => {
+    const tag = String(data?.ownerAffiliateTag || "").trim();
+    if (!tag || data?.viewerIsOwner) return;
+
+    const key = `mealscout:profile-credit:${data?.entity}:${data?.id}:${tag}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      // Keep the clean profile link usable if browser storage is blocked.
+    }
+
+    const source = data?.profilePath || window.location.pathname;
+    fetch(
+      `/api/affiliate/ref/${encodeURIComponent(tag)}?source=${encodeURIComponent(source)}`,
+      {
+        credentials: "include",
+      },
+    ).catch(() => {});
+  }, [
+    data?.entity,
+    data?.id,
+    data?.ownerAffiliateTag,
+    data?.profilePath,
+    data?.viewerIsOwner,
+  ]);
 
   if (isLoading) {
     return (
@@ -738,7 +766,7 @@ export default function PublicProfilePage() {
       toast({
         title: "Profile link copied",
         description: data.viewerIsOwner
-          ? "Clean link copied. Referral credit still routes back to you."
+          ? "Clean link copied. You still get credit."
           : "Share this page anywhere.",
       });
     } catch {

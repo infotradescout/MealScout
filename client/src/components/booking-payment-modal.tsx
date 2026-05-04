@@ -163,7 +163,7 @@ function PaymentForm({
           <div className="flex items-start gap-2 text-sm">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
-              Stripe payment may fail inside Facebook or Messenger in-app browsers. Open this page in Safari or Chrome to complete payment.
+              Payments may not finish inside Facebook or Messenger. Open this page in Safari or Chrome to complete your booking.
             </div>
           </div>
           <Button
@@ -280,8 +280,8 @@ export function BookingPaymentModal({
       cancelOnInitiateRef.current = false;
       if (!stripePromise) {
         toast({
-          title: "Payments Unavailable",
-          description: "Stripe is not configured for this environment.",
+          title: "Payments unavailable",
+          description: "Payments are temporarily unavailable. Try again shortly.",
           variant: "destructive",
         });
         onOpenChange(false);
@@ -552,7 +552,7 @@ export function BookingPaymentModal({
         {clientSecret && hostPaymentsReady === false ? (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
             <strong>Note:</strong> This host is still setting up their payout account. Your payment
-            will be held securely by MealScout and released to the host once they complete setup.
+            will be held securely by MealScout and released to the host once they are ready to receive payouts.
             Your booking is fully guaranteed.
           </div>
         ) : null}

@@ -117,7 +117,7 @@ export default function ClaimTruckPage() {
       if (data?.hadEmail === false) {
         toast({
           title: "No email on file",
-          description: "Ask an admin to add an email, or claim it manually.",
+          description: "Claim it manually, or add the owner email from your dashboard.",
           variant: "destructive",
         });
         return;
@@ -126,8 +126,8 @@ export default function ClaimTruckPage() {
       toast({
         title: data?.emailSent ? "Email sent to owner" : "Email could not be sent",
         description: data?.emailSent
-          ? "We sent them a link to finish setting up their account."
-          : "An admin should check Email Delivery in the dashboard.",
+          ? "We sent them a link to claim this business."
+          : "Check email delivery from your dashboard.",
         variant: data?.emailSent ? "default" : "destructive",
       });
 
@@ -160,7 +160,7 @@ export default function ClaimTruckPage() {
           <CardHeader>
             <CardTitle>Find your business</CardTitle>
             <CardDescription>
-              Search by name, license/external ID, city, or state. If your business is unclaimed, you can claim it or request a setup reminder.
+              Search by name, license ID, city, or state. If your business is unclaimed, you can claim it or send the owner link.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -231,13 +231,13 @@ export default function ClaimTruckPage() {
                             onClick={() => handleRequest(row.id)}
                             disabled={!canRequest || requestingId === row.id}
                           >
-                            {requestingId === row.id ? "Requesting..." : "Request setup"}
+                            {requestingId === row.id ? "Sending..." : "Send owner link"}
                           </Button>
                         </div>
                       </div>
                       {!canClaim && row.invited ? (
                         <div className="text-xs text-muted-foreground">
-                          This business already has an invited owner. Use “Request setup” to remind them.
+                          This business already has an invited owner. Send the owner link to remind them.
                         </div>
                       ) : null}
                     </div>

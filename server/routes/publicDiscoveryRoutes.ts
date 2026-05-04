@@ -648,6 +648,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           entity: "restaurant",
           id: row.id,
           viewerIsOwner: String((req as any).user?.id || "") === String(row.ownerId),
+          ownerAffiliateTag: ownerUser?.affiliateTag || null,
           isVerified: Boolean(row.isVerified),
           title: row.name,
           subtitle:
@@ -725,6 +726,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           entity: "host",
           id: row.id,
           viewerIsOwner: String((req as any).user?.id || "") === String(row.userId),
+          ownerAffiliateTag: ownerUser?.affiliateTag || null,
           title: row.businessName,
           subtitle:
             row.locationType === "event_coordinator"
@@ -788,6 +790,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           entity: "supplier",
           id: row.id,
           viewerIsOwner: String((req as any).user?.id || "") === String(row.userId),
+          ownerAffiliateTag: ownerUser?.affiliateTag || null,
           title: row.businessName,
           subtitle: "Supplier",
           description:

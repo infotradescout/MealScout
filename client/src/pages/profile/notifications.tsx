@@ -263,7 +263,7 @@ export default function NotificationsPage() {
       }
     } catch (error: any) {
       toast({
-        title: "Push setup failed",
+        title: "Notifications not turned on",
         description:
           error?.message ||
           "Unable to register push notifications. Check browser permissions and try again.",

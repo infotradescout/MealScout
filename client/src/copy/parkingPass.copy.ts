@@ -78,7 +78,7 @@ export const PARKING_PASS_COPY = {
     },
     rulesHeader: "Host rules",
     rulesItems: [
-      "Power access, noise limits, and cleanup expectations are configured per host.",
+      "Each host sets power access, noise limits, and cleanup expectations.",
       "These appear here as structured, read-only rules.",
     ],
     bufferTitle: "Buffer",

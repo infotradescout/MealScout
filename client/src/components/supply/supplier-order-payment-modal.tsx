@@ -165,7 +165,7 @@ export function SupplierOrderPaymentModal(props: {
     if (!stripePromise) {
       toast({
         title: "Payments unavailable",
-        description: "Stripe is not configured for this environment.",
+        description: "Payments are temporarily unavailable. Try again shortly.",
         variant: "destructive",
       });
       props.onOpenChange(false);

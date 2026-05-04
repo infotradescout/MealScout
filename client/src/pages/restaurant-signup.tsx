@@ -741,7 +741,7 @@ export default function RestaurantSignup() {
       if (data?.hadEmail === false) {
         toast({
           title: "No email on file",
-          description: "Ask an admin to add an email, or claim it manually.",
+          description: "Claim it manually, or add the owner email from your dashboard.",
           variant: "destructive",
         });
         return;
@@ -751,8 +751,8 @@ export default function RestaurantSignup() {
           ? "Email sent to owner"
           : "Email could not be sent",
         description: data?.emailSent
-          ? "We sent them a link to finish setting up their account."
-          : "An admin should check Email Delivery in the dashboard.",
+          ? "We sent them a link to claim this business."
+          : "Check email delivery from your dashboard.",
         variant: data?.emailSent ? "default" : "destructive",
       });
     } catch (error: any) {

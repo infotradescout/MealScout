@@ -266,7 +266,7 @@ export default function ShareHub({
         icon: isTruck ? Truck : Store,
         priority: 0,
         cleanOwnerLink: true,
-        shareHint: "Clean link. Owner credit stays on.",
+        shareHint: "Clean link. You still get credit.",
         message: `Follow, order, and book ${name} on MealScout:`,
       });
 
@@ -280,7 +280,7 @@ export default function ShareHub({
           audienceLabel: "Menu",
           icon: Link2,
           cleanOwnerLink: true,
-          shareHint: "Clean link. Owner credit stays on.",
+          shareHint: "Clean link. You still get credit.",
           message: `See the menu for ${name} on MealScout:`,
         });
       }
@@ -301,7 +301,7 @@ export default function ShareHub({
           audienceLabel: "Host Profile",
           icon: Building2,
           cleanOwnerLink: true,
-          shareHint: "Clean link. Owner credit stays on.",
+          shareHint: "Clean link. You still get credit.",
           message: `Book or request food truck parking at ${name} on MealScout:`,
         });
       });
@@ -414,7 +414,7 @@ export default function ShareHub({
       toast({
         title: "Copied",
         description: item.cleanOwnerLink
-          ? "Clean link copied. Referral credit still routes back to you."
+          ? "Clean link copied. You still get credit."
           : item.title,
       });
     } catch {
@@ -563,7 +563,7 @@ export default function ShareHub({
           return (
             <article
               key={item.key}
-              className="flex min-h-[14.5rem] flex-col rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean"
+              className="flex min-h-[13rem] flex-col rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean"
             >
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">

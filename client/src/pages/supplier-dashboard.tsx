@@ -387,7 +387,7 @@ export default function SupplierDashboardPage() {
         credentials: "include",
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.message || "Failed to start onboarding");
+      if (!res.ok) throw new Error(data?.message || "Unable to open payout connection");
       return data as { onboardingUrl: string };
     },
     onSuccess: (data) => {
@@ -395,16 +395,16 @@ export default function SupplierDashboardPage() {
         window.location.href = data.onboardingUrl;
       } else {
         toast({
-          title: "Onboarding unavailable",
-          description: "No onboarding URL returned.",
+          title: "Payouts unavailable",
+          description: "We could not open the payout connection page.",
           variant: "destructive",
         });
       }
     },
     onError: (error: any) => {
       toast({
-        title: "Stripe setup failed",
-        description: error?.message || "Unable to start Stripe onboarding",
+        title: "Payout connection failed",
+        description: error?.message || "Unable to open payout connection.",
         variant: "destructive",
       });
     },
@@ -714,7 +714,7 @@ export default function SupplierDashboardPage() {
                 </div>
                 <div className="pt-2 flex items-center justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
-                    Payouts setup:{" "}
+                    Payouts:{" "}
                     {stripeStatus?.connected
                       ? stripeStatus.payoutsEnabled
                         ? "Active"
@@ -727,7 +727,7 @@ export default function SupplierDashboardPage() {
                     disabled={startStripeOnboarding.isPending}
                     onClick={() => startStripeOnboarding.mutate()}
                   >
-                    {stripeStatus?.connected ? "Manage Stripe" : "Enable payouts"}
+                    {stripeStatus?.connected ? "Manage payouts" : "Enable payouts"}
                   </Button>
                 </div>
               </CardContent>

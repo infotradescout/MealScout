@@ -524,7 +524,7 @@ export default function TruckOnboardingPage() {
       });
       toast({
         title: "Verify your email",
-        description: "We sent a verification link. Use it, then continue here.",
+        description: "Open the email link, then continue here.",
       });
       window.location.href = verifyUrl;
     } catch (signupError: any) {
@@ -578,7 +578,7 @@ export default function TruckOnboardingPage() {
       });
       toast({
         title: "Signed in",
-        description: "Now finish your truck setup.",
+        description: "Now add or choose your truck.",
       });
     } catch (loginError: any) {
       if (loginError instanceof ApiError && loginError.status === 403) {
@@ -590,7 +590,7 @@ export default function TruckOnboardingPage() {
         } catch {}
         toast({
           title: "Verify your email",
-          description: "Your account exists, but the email still needs verification.",
+          description: "Your account exists. Open the email link to continue.",
           variant: "destructive",
         });
         window.location.href = makeVerifyEmailUrl();
@@ -661,15 +661,15 @@ export default function TruckOnboardingPage() {
       });
       const data = await res.json().catch(() => ({}));
       toast({
-        title: data?.emailSent ? "Setup email sent" : "Setup email not sent",
+        title: data?.emailSent ? "Owner email sent" : "Owner email not sent",
         description: data?.emailSent
-          ? "We sent the invited owner a link to finish setup."
-          : "This listing needs an email before a reminder can be sent.",
+          ? "We sent the owner a link to claim this truck."
+          : "This listing needs an owner email before we can send a link.",
         variant: data?.emailSent ? "default" : "destructive",
       });
       await searchClaims();
     } catch (error: any) {
-      setClaimError(error?.message || "Unable to request setup.");
+      setClaimError(error?.message || "Unable to send owner email.");
     } finally {
       setRequestingId(null);
     }
@@ -678,7 +678,7 @@ export default function TruckOnboardingPage() {
   const selectClaim = (listing: ClaimRow) => {
     if (listing.canClaim === false) {
       setClaimError(
-        "This truck already has an invited owner. Request setup instead.",
+        "This truck already has an invited owner. Send the owner link instead.",
       );
       return;
     }
@@ -802,7 +802,7 @@ export default function TruckOnboardingPage() {
       if (payload?.requiresEmailVerification) {
         toast({
           title: "Verify your email",
-          description: "Verification is required before setup can continue.",
+          description: "Open the email link before continuing.",
         });
         window.location.href = makeVerifyEmailUrl();
         return;
@@ -824,7 +824,7 @@ export default function TruckOnboardingPage() {
       });
       toast({
         title: "Truck profile created",
-        description: "Your profile is ready for menu and live-location setup.",
+        description: "Your profile is ready for your menu and live map tools.",
       });
     } catch (error: any) {
       trackFunnelEvent(FUNNEL_EVENTS.truckOnboardingProfileSubmitted, {
@@ -836,7 +836,7 @@ export default function TruckOnboardingPage() {
         hasClaimSelection: Boolean(claimSelection),
       });
       toast({
-        title: "Truck setup failed",
+        title: "Truck profile not saved",
         description: error?.message || "Try again in a moment.",
         variant: "destructive",
       });
@@ -1123,7 +1123,7 @@ export default function TruckOnboardingPage() {
                             disabled={!canRequest || requestingId === row.id}
                             onClick={() => handleRequestSetup(row.id)}
                           >
-                            {requestingId === row.id ? "Sending..." : "Request setup"}
+                            {requestingId === row.id ? "Sending..." : "Send owner link"}
                           </Button>
                         )}
                       </div>
@@ -1225,7 +1225,7 @@ export default function TruckOnboardingPage() {
               <div>
                 <div className="text-sm font-semibold">Optional profile details</div>
                 <div className="text-xs text-[color:var(--text-secondary)]">
-                  Add them now, or finish setup faster and fill them in later.
+                  Add them now, or publish faster and fill them in later.
                 </div>
               </div>
               <Button
@@ -1313,7 +1313,7 @@ export default function TruckOnboardingPage() {
         done: true,
         href: "/truck-onboarding",
         cta: "Create profile",
-        why: "Truck is attached to this owner account.",
+        why: "This truck now belongs to this owner account.",
       },
       {
         id: "add-menu",
@@ -1357,7 +1357,7 @@ export default function TruckOnboardingPage() {
               <div>
                 <h2 className="text-xl font-black">
                   {setupComplete
-                    ? "Truck onboarding is complete"
+                    ? "Truck profile is ready"
                     : "Truck profile is saved"}
                 </h2>
                 <p className="text-sm text-[color:var(--text-secondary)]">
@@ -1371,13 +1371,13 @@ export default function TruckOnboardingPage() {
             {loadingOnboardingStatus ? (
               <div className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm text-[color:var(--text-secondary)]">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Checking setup status...
+                Checking profile status...
               </div>
             ) : (
               <>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold">
-                    Setup progress
+                    Profile progress
                   </div>
                   {onboardingStatus ? (
                     <Badge variant={setupComplete ? "default" : "secondary"}>
@@ -1468,7 +1468,7 @@ export default function TruckOnboardingPage() {
                   <div>
                     <div className="font-black">Add first menu item</div>
                     <div className="text-sm text-[color:var(--text-secondary)]">
-                      Required before the checklist marks menu setup done.
+                      Add one item so customers can see what you serve.
                     </div>
                   </div>
                 </div>
@@ -1539,13 +1539,13 @@ export default function TruckOnboardingPage() {
   return (
     <main className="min-h-screen bg-[var(--bg-layered)] pb-[calc(5rem+env(safe-area-inset-bottom))] text-[color:var(--text-primary)]">
       <SEOHead
-        title="Food Truck Onboarding | MealScout"
+        title="Food Truck Profile | MealScout"
         description="Create or claim your food truck profile, add basics, and continue to menu and live map tools."
         canonicalUrl="https://www.mealscout.us/truck-onboarding"
         noIndex={true}
       />
       <BackHeader
-        title="Truck Onboarding"
+        title="List Your Truck"
         fallbackHref="/truck-landing"
         icon={Truck}
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
@@ -1559,7 +1559,7 @@ export default function TruckOnboardingPage() {
                 List your food truck
               </h1>
               <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
-                {stageOrder[currentStepIndex]?.label || "Setup"} - Step{" "}
+                {stageOrder[currentStepIndex]?.label || "Truck"} - Step{" "}
                 {currentStepIndex + 1} of {stageOrder.length}
               </div>
             </div>

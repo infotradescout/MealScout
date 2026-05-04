@@ -16,7 +16,7 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "Post your public profile, menu, map, and invite links. Your own profile shares stay clean while referral credit stays attached."
+      ? "Share your profile, menu, map, and invite links. Your own profile link looks clean to customers, and you still get credit."
       : "Profile-aware links for owners, customers, hosts, and launch outreach.";
   const schemaData = {
     "@context": "https://schema.org",
@@ -33,7 +33,7 @@ export default function ShareHubPage() {
         "Add a Food Truck",
         "Add a Restaurant",
         "Host a Truck",
-        "Book a Truck",
+        "Create an Event",
       ].map((name, index) => ({
         "@type": "ListItem",
         position: index + 1,
@@ -54,7 +54,7 @@ export default function ShareHubPage() {
       <main className="mx-auto w-full max-w-5xl px-4 py-5">
         <ShareHub
           mode={mode}
-          title="Share links that pay you back"
+          title="Share links that work for you"
           description={description}
           enableAffiliateLookup={isAuthenticated}
         />

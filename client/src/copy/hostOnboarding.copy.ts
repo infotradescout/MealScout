@@ -154,7 +154,7 @@ export const HOST_ONBOARDING_COPY = {
       ],
     },
     formCard: {
-      title: "Free Profile Setup",
+      title: "Free Profile",
       badge: "No payment required to create your profile.",
       freeProfileLine:
         "Profiles stay active for parking pass access and search visibility.",

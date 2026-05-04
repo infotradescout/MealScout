@@ -219,7 +219,7 @@ export default function BusinessProfileImport({
         toast({
           title: "No pages found",
           description:
-            "No Facebook Pages found for your account. Make sure you're an admin of a Facebook Page.",
+            "No Facebook Pages found for your account. Make sure you can manage that Facebook Page.",
           variant: "destructive",
         });
         setShowManualFb(true);

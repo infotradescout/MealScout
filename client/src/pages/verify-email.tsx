@@ -115,7 +115,7 @@ export default function VerifyEmailPage() {
     <div className="min-h-screen bg-[var(--bg-layered)]">
       <SEOHead
         title="Verify Your Email - MealScout"
-        description="Verify your email to activate your MealScout account and continue onboarding."
+        description="Confirm your email to activate your MealScout account."
         canonicalUrl="https://www.mealscout.us/verify-email"
         noIndex={true}
       />
@@ -136,7 +136,7 @@ export default function VerifyEmailPage() {
                 Check your inbox
               </h1>
               <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
-                We sent a verification link to complete account setup.
+                We sent a link to confirm your email.
               </p>
               {email ? (
                 <p className="mt-2 text-sm text-[color:var(--text-primary)] font-medium">
@@ -164,7 +164,7 @@ export default function VerifyEmailPage() {
               data-testid="message-verify-email-required"
             >
               <LockKeyhole className="h-4 w-4 shrink-0" />
-              Open the email verification link to unlock login.
+              Open the email link before signing in.
             </div>
 
             <Link href={signupPath}>

@@ -4169,7 +4169,7 @@ export default function ParkingPassPage() {
                       <div className="rounded-xl border border-slate-200 bg-white/70 p-4 space-y-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="text-sm font-semibold text-slate-900">
-                            Setup checklist
+                            Parking readiness
                           </div>
                           <span
                             className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${

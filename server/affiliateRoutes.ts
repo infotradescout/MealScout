@@ -645,9 +645,13 @@ router.get('/ref/:tag', async (req, res) => {
 
     // Record the referral click
     const { recordReferralClick } = await import('./referralService');
+    const sourcePath =
+      typeof req.query.source === "string" && req.query.source.startsWith("/")
+        ? req.query.source
+        : req.originalUrl || "/";
     const result = await recordReferralClick(
       affiliateUserId,
-      req.originalUrl || '/',
+      sourcePath,
       req.get('user-agent') || undefined,
       req.ip || undefined,
     );

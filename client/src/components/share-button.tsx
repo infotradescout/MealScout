@@ -50,7 +50,7 @@ export default function ShareButton({
       toast({
         title: 'Link copied!',
         description: cleanUrl
-          ? 'Clean link copied. Referral credit still routes back to you.'
+          ? 'Clean link copied. You still get credit.'
           : 'Share link copied to clipboard',
       });
       trackShare();
