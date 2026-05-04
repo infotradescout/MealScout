@@ -24,7 +24,7 @@ import {
   PASSWORD_REQUIREMENTS,
 } from "./utils/passwordPolicy";
 import { db } from "./db";
-import { users } from "@shared/schema";
+import { insertRestaurantSchema, menus, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import {
   ensureAffiliateTag,
@@ -1003,6 +1003,133 @@ export async function setupUnifiedAuth(app: Express) {
   }
 
   const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
+  const normalizePublicHttpUrl = (value: unknown): string => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+      if (!["http:", "https:"].includes(parsed.protocol)) return "";
+      return parsed.toString();
+    } catch {
+      return "";
+    }
+  };
+
+  const queueStarterMenuImport = ({
+    menu,
+    userId,
+    url,
+  }: {
+    menu: any;
+    userId: string;
+    url: string;
+  }) => {
+    if (!menu?.id || !url) return;
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const {
+            detectSourceFromUrl,
+            importMenuItemsFromPublicUrl,
+          } = await import("./routes/menuRoutes");
+          await importMenuItemsFromPublicUrl({
+            menu,
+            menuId: menu.id,
+            userId,
+            url,
+            source: detectSourceFromUrl(url) as any,
+          });
+        } catch (error) {
+          console.warn("[auth/register] starter menu import failed:", error);
+        }
+      })();
+    }, 0);
+  };
+
+  const maybeCreateStarterBusinessProfile = async ({
+    user,
+    restaurantData,
+    normalizedBusinessType,
+    fallbackPhone,
+  }: {
+    user: User;
+    restaurantData: any;
+    normalizedBusinessType: string;
+    fallbackPhone: string;
+  }) => {
+    const data =
+      restaurantData && typeof restaurantData === "object" ? restaurantData : {};
+    const name = String(
+      data.name || data.businessName || data.truckName || "",
+    ).trim();
+    const city = String(data.city || "").trim();
+    const state = String(data.state || "").trim().toUpperCase();
+    if (!name || !city || state.length < 2) return null;
+    const menuUrl = normalizePublicHttpUrl(data.menuUrl || data.websiteMenuUrl);
+
+    const payload: Record<string, any> = {
+      name,
+      address: String(data.address || `${city}, ${state}`).trim(),
+      city,
+      state,
+      businessType: normalizedBusinessType,
+      ownerId: user.id,
+      isFoodTruck: normalizedBusinessType === "food_truck",
+      isActive: true,
+    };
+
+    const phone = String(data.phone || fallbackPhone || "").trim();
+    if (phone) payload.phone = phone;
+
+    const optionalFields = [
+      "cuisineType",
+      "description",
+      "websiteUrl",
+      "instagramUrl",
+      "facebookPageUrl",
+    ];
+    for (const field of optionalFields) {
+      const value = String(data[field] || "").trim();
+      if (value) payload[field] = value;
+    }
+
+    try {
+      const validated = insertRestaurantSchema.parse(payload);
+      const restaurant = await storage.createRestaurant(validated as any);
+      try {
+        const [starterMenu] = await db
+          .insert(menus)
+          .values({
+            restaurantId: restaurant.id,
+            name: "All Day Menu",
+            serviceType: "all",
+            isActive: true,
+            acceptsCash: true,
+            hidePlatformFee: false,
+            ...(menuUrl
+              ? {
+                  importUrl: menuUrl,
+                  importSource: "website",
+                }
+              : {}),
+          })
+          .returning();
+        if (starterMenu && menuUrl) {
+          queueStarterMenuImport({
+            menu: starterMenu,
+            userId: user.id,
+            url: menuUrl,
+          });
+        }
+      } catch (error) {
+        console.warn("[auth/register] starter menu creation failed:", error);
+      }
+      return restaurant;
+    } catch (error) {
+      console.warn("[auth/register] starter business profile creation failed:", error);
+      return null;
+    }
+  };
   const requirePhoneVerification = false;
 
   const verifyPhoneCode = async (phone: string, code: string) => {
@@ -1277,6 +1404,7 @@ export async function setupUnifiedAuth(app: Express) {
         password,
         otpCode,
         businessType,
+        restaurantData,
       } = req.body;
 
       if (!email || !firstName || !lastName || !phone || !password) {
@@ -1349,6 +1477,12 @@ export async function setupUnifiedAuth(app: Express) {
       );
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
+      const starterBusinessProfile = await maybeCreateStarterBusinessProfile({
+        user,
+        restaurantData,
+        normalizedBusinessType,
+        fallbackPhone: normalizedPhone,
+      });
 
       // Send welcome email with verification link (don't block auth flow)
       void sendWelcomeOrVerification(
@@ -1378,6 +1512,8 @@ export async function setupUnifiedAuth(app: Express) {
         message:
           "Business account created. Please verify your email before logging in.",
         requiresEmailVerification: true,
+        restaurantId: starterBusinessProfile?.id || null,
+        starterProfileCreated: Boolean(starterBusinessProfile),
       });
     } catch (error) {
       console.error("Restaurant registration error:", error);

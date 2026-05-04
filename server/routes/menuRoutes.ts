@@ -69,7 +69,7 @@ const MENU_SERVICE_TYPES = new Set([
   "weekend_brunch",
 ]);
 
-type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
+export type ExternalMenuSource = (typeof EXTERNAL_MENU_SOURCES)[number];
 
 export const MENU_URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 const MENU_URL_IMPORT_MAX_REDIRECTS = 5;
@@ -354,7 +354,7 @@ function normalizeMenuServiceType(value: unknown): string {
   return MENU_SERVICE_TYPES.has(mapped) ? mapped : "all";
 }
 
-async function importMenuItemsFromPublicUrl({
+export async function importMenuItemsFromPublicUrl({
   menu,
   menuId,
   userId,

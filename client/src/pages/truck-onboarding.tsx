@@ -116,6 +116,11 @@ type SignupFields = {
   lastName: string;
   email: string;
   phone: string;
+  truckName: string;
+  city: string;
+  state: string;
+  cuisineType: string;
+  menuUrl: string;
   password: string;
   confirmPassword: string;
 };
@@ -143,6 +148,11 @@ const emptySignup: SignupFields = {
   lastName: "",
   email: "",
   phone: "",
+  truckName: "",
+  city: "",
+  state: "",
+  cuisineType: "",
+  menuUrl: "",
   password: "",
   confirmPassword: "",
 };
@@ -194,6 +204,18 @@ const isTruckRestaurant = (restaurant: OwnedRestaurant) =>
 const normalizeState = (value: string) => String(value || "").trim().toUpperCase();
 
 const compactPhone = (value: string) => String(value || "").replace(/\D/g, "");
+
+const normalizePublicHttpUrl = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (!["http:", "https:"].includes(parsed.protocol)) return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+};
 
 const getSafeCurrentOnboardingPath = () => {
   if (typeof window === "undefined") return "/truck-onboarding";
@@ -435,6 +457,9 @@ export default function TruckOnboardingPage() {
       signup.lastName,
       signup.email,
       signup.phone,
+      signup.truckName,
+      signup.city,
+      signup.state,
       signup.password,
       signup.confirmPassword,
     ].some((value) => !String(value || "").trim());
@@ -442,6 +467,10 @@ export default function TruckOnboardingPage() {
     if (!signup.email.includes("@")) return "Enter a valid email address.";
     if (compactPhone(signup.phone).length < 10) {
       return "Enter a valid phone number.";
+    }
+    if (normalizeState(signup.state).length < 2) return "Enter a valid state.";
+    if (signup.menuUrl.trim() && !normalizePublicHttpUrl(signup.menuUrl)) {
+      return "Enter a valid menu link.";
     }
     if (!PASSWORD_REGEX.test(signup.password)) return PASSWORD_REQUIREMENTS;
     if (signup.password !== signup.confirmPassword) {
@@ -490,6 +519,17 @@ export default function TruckOnboardingPage() {
         source: funnelContext.source,
         flow: funnelContext.flow,
         intent: funnelContext.intent,
+        restaurantData: {
+          name: signup.truckName.trim(),
+          address: `${signup.city.trim()}, ${normalizeState(signup.state)}`,
+          city: signup.city.trim(),
+          state: normalizeState(signup.state),
+          phone: signup.phone.trim(),
+          businessType: "food_truck",
+          isFoodTruck: true,
+          cuisineType: signup.cuisineType.trim() || "Mobile food",
+          menuUrl: normalizePublicHttpUrl(signup.menuUrl),
+        },
         utmSource: funnelContext.utmSource,
         utmMedium: funnelContext.utmMedium,
         utmCampaign: funnelContext.utmCampaign,
@@ -920,6 +960,46 @@ export default function TruckOnboardingPage() {
                 type="tel"
                 autoComplete="tel"
               />
+              <Input
+                value={signup.truckName}
+                onChange={(event) =>
+                  updateSignup("truckName", event.target.value)
+                }
+                placeholder="Truck name"
+                autoComplete="organization"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  value={signup.city}
+                  onChange={(event) => updateSignup("city", event.target.value)}
+                  placeholder="City"
+                  autoComplete="address-level2"
+                />
+                <Input
+                  value={signup.state}
+                  onChange={(event) => updateSignup("state", event.target.value)}
+                  placeholder="State"
+                  autoComplete="address-level1"
+                  maxLength={2}
+                />
+              </div>
+              <Input
+                value={signup.cuisineType}
+                onChange={(event) =>
+                  updateSignup("cuisineType", event.target.value)
+                }
+                placeholder="Cuisine or specialty"
+                autoComplete="off"
+              />
+              <Input
+                value={signup.menuUrl}
+                onChange={(event) =>
+                  updateSignup("menuUrl", event.target.value)
+                }
+                placeholder="Menu link"
+                type="text"
+                autoComplete="url"
+              />
               <div className="relative">
                 <Input
                   value={signup.password}
@@ -957,7 +1037,7 @@ export default function TruckOnboardingPage() {
                 className="w-full gap-2"
               >
                 {submittingAuth ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Create account
+                Create account and profile
               </Button>
             </form>
           ) : (
