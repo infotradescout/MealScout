@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import {
   ArrowRight,
   Calendar,
+  ChefHat,
   Clock,
   MapPin,
   Truck,
@@ -407,13 +408,22 @@ export default function EventsPublicHub() {
             Hosts and organizers post the event details, and truck owners can
             make sure their profile is ready before applying.
           </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
             <Link href="/request-truck">
               <Button
                 variant="outline"
                 className="h-12 w-full rounded-full font-bold"
               >
                 Book one truck
+              </Button>
+            </Link>
+            <Link href="/request-truck?vendor=private_chef">
+              <Button
+                variant="outline"
+                className="h-12 w-full rounded-full font-bold"
+              >
+                <ChefHat className="mr-2 h-4 w-4" />
+                Private chef
               </Button>
             </Link>
             <Link href="/truck-discovery">

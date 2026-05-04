@@ -427,7 +427,7 @@ export default function EventDetailPage() {
                   ) : openForAction ? (
                     <Button asChild className="h-12 rounded-full font-bold">
                       <a href="/truck-onboarding?source=event-detail">
-                        Claim your truck to apply
+                        Claim your truck or chef profile to apply
                       </a>
                     </Button>
                   ) : null}

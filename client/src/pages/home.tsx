@@ -1452,7 +1452,7 @@ export default function Home() {
 
       <section className="section section--full section--surface py-8">
         <div className="content">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <Link href="/events">
               <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/50 cursor-pointer">
                 <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--accent-text)] mb-2">
@@ -1470,6 +1470,16 @@ export default function Home() {
                 </p>
                 <p className="text-lg font-bold text-foreground">
                   Request a food truck
+                </p>
+              </div>
+            </Link>
+            <Link href="/request-truck?vendor=private_chef">
+              <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-6 hover:shadow-clean-lg transition-all hover:border-[color:var(--accent-text)]/50 cursor-pointer">
+                <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--accent-text)] mb-2">
+                  Private Chefs
+                </p>
+                <p className="text-lg font-bold text-foreground">
+                  Book chef service
                 </p>
               </div>
             </Link>
@@ -1544,6 +1554,20 @@ export default function Home() {
                 >
                   <Truck className="w-4 h-4 mr-1" />
                   Start a request
+                </Button>
+              </Link>
+              <Link href="/request-truck?vendor=private_chef">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPointerDown={() => {
+                    trackUxEvent("home_private_chef_request_click", {
+                      surface: "home_events_showcase",
+                    });
+                  }}
+                >
+                  <ChefHat className="w-4 h-4 mr-1" />
+                  Book a Private Chef
                 </Button>
               </Link>
               <Link href="/events">

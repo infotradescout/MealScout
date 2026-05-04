@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import Navigation from "@/components/navigation";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Truck } from "lucide-react";
+import { ArrowLeft, ChefHat, Truck } from "lucide-react";
 
 export default function RequestTruckPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
+  const routeParams = useMemo(() => {
+    const query = location.includes("?") ? location.split("?")[1] : "";
+    return new URLSearchParams(query);
+  }, [location]);
+  const isPrivateChefRequest = routeParams.get("vendor") === "private_chef";
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     requesterName: "",
@@ -21,10 +26,26 @@ export default function RequestTruckPage() {
     occasion: "",
     guestCount: "",
     requestedTruckCount: "1",
+    requestedVendorType: isPrivateChefRequest ? "private_chef" : "food_truck",
     eventVisibility: "private",
     eventCadence: "one_time",
     details: "",
   });
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      requestedVendorType: isPrivateChefRequest ? "private_chef" : "food_truck",
+    }));
+  }, [isPrivateChefRequest]);
+
+  const pageTitle = isPrivateChefRequest
+    ? "Request a Private Chef"
+    : "Request a Food Truck";
+  const introCopy = isPrivateChefRequest
+    ? "Private dinners, tastings, meal prep, parties, and special events. Choose public or private first, then one-time or recurring so we can route the right details."
+    : "Birthdays, private parties, school events, and neighborhood gatherings. Choose public or private first, then one-time or recurring so we can match the right workflow for your event.";
+  const Icon = isPrivateChefRequest ? ChefHat : Truck;
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -57,7 +78,9 @@ export default function RequestTruckPage() {
       }
       toast({
         title: "Request submitted",
-        description: "We received your truck request and will follow up.",
+        description: isPrivateChefRequest
+          ? "We received your private chef request and will follow up."
+          : "We received your truck request and will follow up.",
       });
       setLocation("/events");
     } catch (error: any) {
@@ -86,16 +109,31 @@ export default function RequestTruckPage() {
         <section className="rounded-3xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)]/95 p-6 shadow-clean-lg">
           <div className="mb-6">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[color:var(--action-primary)]/30 bg-[color:var(--action-primary)]/15">
-              <Truck className="h-6 w-6 text-[color:var(--action-primary)]" />
+              <Icon className="h-6 w-6 text-[color:var(--action-primary)]" />
             </span>
             <h1 className="mt-3 text-3xl font-black tracking-tight text-[color:var(--text-primary)]">
-              Request a Food Truck
+              {pageTitle}
             </h1>
             <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
-              Birthdays, private parties, school events, and neighborhood
-              gatherings. Choose public or private first, then one-time or
-              recurring so we can match the right workflow for your event.
+              {introCopy}
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 rounded-full"
+              onClick={() =>
+                setLocation(
+                  isPrivateChefRequest
+                    ? "/request-truck"
+                    : "/request-truck?vendor=private_chef",
+                )
+              }
+            >
+              {isPrivateChefRequest
+                ? "Need a food truck instead?"
+                : "Book a Private Chef instead"}
+            </Button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -184,7 +222,9 @@ export default function RequestTruckPage() {
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="requestedTruckCount">
-                  How many food trucks do you need? *
+                  {isPrivateChefRequest
+                    ? "How many private chefs do you need? *"
+                    : "How many food trucks do you need? *"}
                 </Label>
                 <Input
                   id="requestedTruckCount"
@@ -250,7 +290,11 @@ export default function RequestTruckPage() {
                 value={formData.details}
                 onChange={handleChange}
                 rows={4}
-                placeholder="Cuisine preferences, budget, timing, and setup notes."
+                placeholder={
+                  isPrivateChefRequest
+                    ? "Menu style, budget, dietary needs, kitchen access, timing, and service notes."
+                    : "Cuisine preferences, budget, timing, and setup notes."
+                }
               />
             </div>
 
@@ -259,7 +303,11 @@ export default function RequestTruckPage() {
               className="w-full h-11"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "Submitting..." : "Submit Request"}
+              {isSubmitting
+                ? "Submitting..."
+                : isPrivateChefRequest
+                  ? "Submit Private Chef Request"
+                  : "Submit Request"}
             </Button>
           </form>
         </section>

@@ -7,6 +7,7 @@ import {
   Clock,
   ShieldCheck,
   Truck,
+  ChefHat,
   ChevronRight,
   ClipboardList,
   Send,
@@ -256,6 +257,14 @@ export default function EventsPage() {
       badge: "Private request",
       icon: Truck,
       onSelect: () => setLocation("/request-truck"),
+    },
+    {
+      title: "Book a private chef",
+      description:
+        "Request a chef for dinners, tastings, meal prep, private parties, or recurring service.",
+      badge: "Private chef",
+      icon: ChefHat,
+      onSelect: () => setLocation("/request-truck?vendor=private_chef"),
     },
     {
       title: "Find trucks for an event",

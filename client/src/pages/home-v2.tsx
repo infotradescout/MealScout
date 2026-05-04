@@ -1131,7 +1131,7 @@ export default function Home() {
                   </div>
                 </Link>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <Link href="/favorites">
                   <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
                     <div className="flex flex-col items-center gap-3">
@@ -1176,6 +1176,18 @@ export default function Home() {
                       </div>
                       <span className="text-sm font-semibold text-center">
                         Events
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+                <Link href="/request-truck?vendor=private_chef">
+                  <div className="group min-h-[8.5rem] rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 hover:border-[color:var(--accent-text)]/50 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-3 rounded-xl bg-emerald-500/15 group-hover:bg-emerald-500/25 transition-colors">
+                        <ChefHat className="w-6 h-6 text-emerald-500" />
+                      </div>
+                      <span className="text-sm font-semibold text-center">
+                        Private Chef
                       </span>
                     </div>
                   </div>

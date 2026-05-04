@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   Building2,
   CalendarDays,
+  ChefHat,
   Check,
   Clapperboard,
   Copy,
@@ -127,6 +128,17 @@ const SHARE_ITEMS: ShareHubItem[] = [
     icon: CalendarDays,
     message:
       "Create an event on MealScout. Pick public or private, then one-time or recurring so the flow matches:",
+  },
+  {
+    key: "book-private-chef",
+    title: "Book a Private Chef",
+    description: "For dinners, tastings, parties, and recurring service.",
+    href: "/request-truck?vendor=private_chef",
+    audience: "events",
+    audienceLabel: "Events",
+    icon: ChefHat,
+    message:
+      "Book a private chef on MealScout for dinners, events, tastings, meal prep, or recurring service:",
   },
   {
     key: "for-hosts",
