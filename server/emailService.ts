@@ -186,6 +186,32 @@ interface PremiumWeeklySummaryEmailData {
 
 // Email templates
 class EmailTemplates {
+  public static getUserTypeDisplay(
+    userType: User["userType"] | string | null | undefined,
+  ): string {
+    const normalized = String(userType || "").trim().toLowerCase();
+    const labels: Record<string, string> = {
+      customer: "Customer",
+      restaurant_owner: "Restaurant Owner",
+      food_truck: "Food Truck Owner",
+      supplier: "Supplier",
+      host: "Host / Venue",
+      event_coordinator: "Event Organizer",
+      staff: "Staff",
+      admin: "Admin",
+      super_admin: "Super Admin",
+    };
+
+    if (labels[normalized]) return labels[normalized];
+    if (!normalized) return "Unknown";
+
+    return normalized
+      .split(/[_\s-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
   public static getBaseTemplate(title: string, content: string): string {
     return `
 <!DOCTYPE html>
@@ -702,12 +728,7 @@ The MealScout Team
     user: User,
     restaurant?: Restaurant,
   ): { html: string; text: string } {
-    const userTypeDisplay =
-      user.userType === "customer"
-        ? "Customer"
-        : user.userType === "restaurant_owner"
-          ? "Restaurant Owner"
-          : "Admin";
+    const userTypeDisplay = this.getUserTypeDisplay(user.userType);
 
     let locationInfo = "";
     if (restaurant) {
@@ -775,12 +796,10 @@ This notification was generated automatically by the MealScout system.
     user: User,
     context?: { signupMethod?: string; restaurant?: Restaurant },
   ): { html: string; text: string } {
-    const userTypeDisplay =
-      user.userType === "customer"
-        ? "Customer"
-        : user.userType === "restaurant_owner"
-          ? "Restaurant Owner"
-          : "Admin";
+    const userTypeDisplay = this.getUserTypeDisplay(user.userType);
+    const isBusinessReviewRole = ["restaurant_owner", "food_truck"].includes(
+      String(user.userType || ""),
+    );
     const signupMethod = context?.signupMethod || "Email";
 
     let restaurantInfo = "";
@@ -806,7 +825,7 @@ This notification was generated automatically by the MealScout system.
 
     const content = `
       <h2>New MealScout Signup 🎉</h2>
-      <p>A new user has registered for MealScout and requires admin attention.</p>
+      <p>A new account was created in MealScout. Role and verification details are below.</p>
 
       <div class="highlight-box">
         <strong>📋 User Summary</strong><br>
@@ -833,11 +852,11 @@ This notification was generated automatically by the MealScout system.
       </div>
 
       ${
-        user.userType === "restaurant_owner"
+        isBusinessReviewRole
           ? `
         <div class="highlight-box" style="border-left-color: #f7931e;">
           <strong>⚠️ Action Required</strong><br>
-          This restaurant owner account may require verification review before full platform access is granted.
+          This ${userTypeDisplay.toLowerCase()} account may require verification review before full platform access is granted.
         </div>
       `
           : ""
@@ -852,7 +871,7 @@ This notification was generated automatically by the MealScout system.
     const html = this.getBaseTemplate("New MealScout Signup", content);
     const text = `New MealScout Signup
 
-A new user has registered for MealScout:
+A new account was created in MealScout:
 
 User Information:
 Name: ${user.firstName || ""} ${user.lastName || ""}
@@ -877,7 +896,7 @@ Verified: ${context.restaurant.isVerified ? "Yes" : "Pending"}`
     : ""
 }
 
-${user.userType === "restaurant_owner" ? "ACTION REQUIRED: This restaurant owner account may require verification review." : ""}
+${isBusinessReviewRole ? `ACTION REQUIRED: This ${userTypeDisplay.toLowerCase()} account may require verification review.` : ""}
 
 You can manage this user account through the MealScout admin dashboard.
 
@@ -1599,7 +1618,7 @@ export class EmailService {
 
     return await this.sendEmail({
       to: EMAIL_CONFIG.adminEmail,
-      subject: `New ${user.userType === "customer" ? "Customer" : user.userType === "restaurant_owner" ? "Restaurant Owner" : "Admin"} Registration - ${user.firstName || ""} ${user.lastName || ""}`,
+      subject: `New ${EmailTemplates.getUserTypeDisplay(user.userType)} Registration - ${user.firstName || ""} ${user.lastName || ""}`,
       html: template.html,
       text: template.text,
     });

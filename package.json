@@ -68,6 +68,7 @@
     "test:flows": "tsx scripts/userFlows.ts",
     "test:onboarding-completion": "tsx scripts/testOnboardingCompletionEndpoint.ts",
     "test:public-profile-visibility": "tsx scripts/testPublicProfileVisibilityRules.ts",
+    "test:admin-signup-email": "tsx scripts/testAdminSignupEmail.ts",
     "test:owner-discoverability-flow": "tsx scripts/testOwnerDiscoverabilityFlow.ts",
     "test:host-parking-pass-boundaries": "tsx scripts/testHostDashboardParkingPassBoundaries.ts",
     "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
