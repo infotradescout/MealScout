@@ -7,6 +7,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { isAuthenticated } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
+import { getOwnerProfileRecoveryPromptForUser } from "../services/ownerProfileRecovery";
 import {
   isPasswordStrong,
   PASSWORD_REQUIREMENTS,
@@ -367,6 +368,15 @@ export function registerAuthAccountRoutes(app: Express) {
       }
 
       const safeUser: any = sanitizeUser(user) || {};
+      try {
+        const ownerProfilePrompt =
+          await getOwnerProfileRecoveryPromptForUser(user);
+        if (ownerProfilePrompt) {
+          safeUser.ownerProfilePrompt = ownerProfilePrompt;
+        }
+      } catch (promptError) {
+        console.warn("Unable to load owner profile prompt:", promptError);
+      }
       const partnerProgram =
         user?.accountSettings && typeof user.accountSettings === "object"
           ? (user.accountSettings as any).partnerProgram

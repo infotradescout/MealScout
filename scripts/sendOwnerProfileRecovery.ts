@@ -5,7 +5,7 @@ import {
 
 const lookbackDays = Math.max(
   1,
-  Number(process.env.OWNER_PROFILE_RECOVERY_LOOKBACK_DAYS || 14),
+  Number(process.env.OWNER_PROFILE_RECOVERY_LOOKBACK_DAYS || 365),
 );
 const shouldSend =
   String(process.env.SEND_OWNER_PROFILE_RECOVERY || "").toLowerCase() ===
@@ -18,6 +18,10 @@ const thresholdMinutes = Math.max(
   1,
   Number(process.env.OWNER_PROFILE_RECOVERY_THRESHOLD_MINUTES || 20),
 );
+const intervalHours = Math.max(
+  1,
+  Number(process.env.OWNER_PROFILE_RECOVERY_EMAIL_INTERVAL_HOURS || 24),
+);
 
 const maskEmail = (value: unknown) =>
   String(value || "").replace(/^(.).+(@.*)$/, "$1***$2");
@@ -25,10 +29,11 @@ const maskEmail = (value: unknown) =>
 const candidates = await findOwnerProfileRecoveryCandidates({
   lookbackDays,
   thresholdMinutes,
+  intervalHours,
   includeAlreadySent: force,
 });
 console.log(
-  `[owner-profile-recovery] candidates=${candidates.length} lookbackDays=${lookbackDays} thresholdMinutes=${thresholdMinutes} mode=${shouldSend ? "send" : "dry-run"} force=${force}`,
+  `[owner-profile-recovery] candidates=${candidates.length} lookbackDays=${lookbackDays} thresholdMinutes=${thresholdMinutes} intervalHours=${intervalHours} mode=${shouldSend ? "send" : "dry-run"} force=${force}`,
 );
 
 let sent = 0;

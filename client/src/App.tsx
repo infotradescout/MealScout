@@ -2,6 +2,7 @@ import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { ToastAction } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -315,7 +316,8 @@ function Router() {
   const { authState, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const shownAnnouncementRef = useRef<string>("");
-  const [location] = useLocation();
+  const shownOwnerProfilePromptRef = useRef<string>("");
+  const [location, setLocation] = useLocation();
   const [affiliateTag, setAffiliateTag] = useState<string>("");
   const isLikelyPublicRoute = isPublicPath(location);
   const shouldUseGuestRoutes =
@@ -366,6 +368,52 @@ function Router() {
       description: message,
     });
   }, [user, toast]);
+
+  useEffect(() => {
+    const prompt = (user as any)?.ownerProfilePrompt;
+    const href = String(prompt?.href || "").trim();
+    if (!isAuthenticated || !href) return;
+    if (!href.startsWith("/") || href.startsWith("//")) return;
+
+    const currentPath = location.split("?")[0];
+    const setupPaths = [
+      "/truck-onboarding",
+      "/restaurant-signup",
+      "/menu-builder",
+      "/edit-restaurant",
+    ];
+    if (
+      setupPaths.some(
+        (path) => currentPath === path || currentPath.startsWith(`${path}/`),
+      )
+    ) {
+      return;
+    }
+
+    const key = `${user?.id || "owner"}:${prompt.reason || "profile"}:${href}`;
+    if (shownOwnerProfilePromptRef.current === key) return;
+    try {
+      const storageKey = `ms-owner-profile-prompt:${key}`;
+      if (window.sessionStorage.getItem(storageKey) === "1") return;
+      window.sessionStorage.setItem(storageKey, "1");
+    } catch {}
+    shownOwnerProfilePromptRef.current = key;
+
+    toast({
+      title: prompt.title || "Finish your profile",
+      description:
+        prompt.message ||
+        "A complete profile helps people find you and gives visitors the best first impression.",
+      action: (
+        <ToastAction
+          altText={prompt.cta || "Continue"}
+          onClick={() => setLocation(href)}
+        >
+          {prompt.cta || "Continue"}
+        </ToastAction>
+      ),
+    });
+  }, [isAuthenticated, location, setLocation, toast, user]);
 
   // Canonical guard: never redirect until authState resolves
   if (authState === "loading" && !isLikelyPublicRoute) {

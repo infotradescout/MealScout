@@ -7,6 +7,17 @@ import { setAffiliateRef } from "@/lib/share";
 
 export type AuthState = "loading" | "authenticated" | "guest";
 
+export type OwnerProfilePrompt = {
+  reason: string;
+  title: string;
+  message: string;
+  cta: string;
+  href: string;
+  missingKeys: string[];
+  missingLabels: string[];
+  restaurantId: string | null;
+};
+
 export function useAuth() {
   const [, setLocation] = useLocation();
   const {
@@ -16,7 +27,11 @@ export function useAuth() {
     error,
     refetch,
   } = useQuery<
-    User & { requiresPasswordReset?: boolean; loginAnnouncement?: string }
+    User & {
+      requiresPasswordReset?: boolean;
+      loginAnnouncement?: string;
+      ownerProfilePrompt?: OwnerProfilePrompt;
+    }
   >({
     queryKey: ["/api/auth/user"],
     queryFn: getQueryFn({ on401: "returnNull", timeoutMs: 6000 }),

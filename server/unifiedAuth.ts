@@ -30,6 +30,7 @@ import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
 } from "./affiliateTagService";
+import { getOwnerProfileRecoveryPromptForUser } from "./services/ownerProfileRecovery";
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -115,6 +116,17 @@ function requiresEmailVerification(user: User | undefined | null) {
   if (!user?.email) return false;
   if (user.emailVerified) return false;
   return !["admin", "super_admin"].includes(String(user.userType || ""));
+}
+
+async function sanitizeUserWithOwnerProfilePrompt(user: User) {
+  const safeUser: any = sanitizeUser(user) || {};
+  try {
+    const prompt = await getOwnerProfileRecoveryPromptForUser(user);
+    if (prompt) safeUser.ownerProfilePrompt = prompt;
+  } catch (error) {
+    console.warn("[auth] owner profile prompt unavailable:", error);
+  }
+  return safeUser;
 }
 
 const firstRequestValue = (...values: unknown[]) => {
@@ -1657,7 +1669,10 @@ export async function setupUnifiedAuth(app: Express) {
       }
 
       await establishAuthenticatedSession(req, user);
-      res.json({ user: sanitizeUser(user), message: "Login successful" });
+      res.json({
+        user: await sanitizeUserWithOwnerProfilePrompt(user),
+        message: "Login successful",
+      });
     } catch (error) {
       console.error("Restaurant login error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1707,7 +1722,10 @@ export async function setupUnifiedAuth(app: Express) {
       }
 
       await establishAuthenticatedSession(req, user);
-      res.json({ user: sanitizeUser(user), message: "Login successful" });
+      res.json({
+        user: await sanitizeUserWithOwnerProfilePrompt(user),
+        message: "Login successful",
+      });
     } catch (error) {
       console.error("❌ Login error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1830,7 +1848,7 @@ export async function setupUnifiedAuth(app: Express) {
 
       await establishAuthenticatedSession(req, user);
       res.json({
-        user: sanitizeUser(user),
+        user: await sanitizeUserWithOwnerProfilePrompt(user),
         message: "TradeScout SSO login successful",
       });
     } catch (error) {
