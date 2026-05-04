@@ -156,10 +156,104 @@ const absoluteAdminUrl = (baseUrl: string, value: unknown) => {
   return `https://${raw}`;
 };
 
+const normalizeAdminPath = (value: unknown, fallback = "/map") => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      return `${url.pathname || fallback}${url.search || ""}${url.hash || ""}`;
+    } catch {
+      return fallback;
+    }
+  }
+  return raw.startsWith("/") ? raw : `/${raw}`;
+};
+
+const cleanAffiliateSharePath = (
+  affiliateTag: unknown,
+  destinationPath: unknown,
+  fallback = "/map",
+) => {
+  const targetPath = normalizeAdminPath(destinationPath, fallback);
+  const tag = String(affiliateTag || "").trim();
+  if (!tag) return targetPath;
+  return `/ref/${encodeURIComponent(tag)}${targetPath === "/" ? "" : targetPath}`;
+};
+
 const proxiedAdminImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
   return `/api/admin/recent-signups/image?url=${encodeURIComponent(raw)}`;
+};
+
+const RECENT_SIGNUP_HARD_TEST_PATTERN =
+  /\b(test|testing|dummy|fake|placeholder|asdf|qwer|lorem|ipsum)\b/i;
+const RECENT_SIGNUP_SYNTHETIC_EMAIL_PATTERN =
+  /(@example\.(?:com|net|org|test)$|@test\.com$|@mailinator\.com$|@yopmail\.com$|@invalid\.)/i;
+const RECENT_SIGNUP_SYNTHETIC_PROFILE_SOURCES = new Set([
+  "search_query_seed",
+  "demo_seed",
+  "sample_seed",
+  "development_seed",
+  "fixture",
+  "test_fixture",
+  "admin_quarantine",
+]);
+
+const isFilteredRecentSignup = (signup: any) => {
+  const fields = [
+    signup?.displayName,
+    signup?.ownerEmail,
+    signup?.category,
+    signup?.description,
+    signup?.city,
+    signup?.state,
+    signup?.address,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const haystack = fields.join(" ");
+  const email = String(signup?.ownerEmail || "").trim().toLowerCase();
+  const profileSource = String(signup?.profileSource || "").trim().toLowerCase();
+  const name = String(signup?.displayName || "").trim();
+
+  if (RECENT_SIGNUP_SYNTHETIC_PROFILE_SOURCES.has(profileSource)) return true;
+  if (email && RECENT_SIGNUP_SYNTHETIC_EMAIL_PATTERN.test(email)) return true;
+  if (RECENT_SIGNUP_HARD_TEST_PATTERN.test(haystack)) return true;
+  if (/onboarding\s+test/i.test(haystack)) return true;
+  if (
+    signup?.entity !== "user" &&
+    /\b(?:restaurant|truck|business|vendor|host)\b/i.test(name) &&
+    /\d{8,}/.test(name)
+  ) {
+    return true;
+  }
+
+  if (signup?.entity !== "user") {
+    const checks = getPublicBusinessVisibilityChecks({
+      name: signup?.displayName,
+      address: signup?.address,
+      city: signup?.city,
+      state: signup?.state,
+      cuisineType: signup?.category,
+      businessType: signup?.kind,
+      description: signup?.description,
+      imageUrl: signup?.imageUrl,
+      ownerEmail: signup?.ownerEmail,
+      profileSource: signup?.profileSource,
+    });
+    return checks.blockers.some((issue) =>
+      [
+        "flagged_test_data",
+        "non_public_profile_source",
+        "non_public_owner_email",
+        "closed_permanently",
+      ].includes(issue),
+    );
+  }
+
+  return false;
 };
 
 const formatSignupLocation = (row: {
@@ -1337,6 +1431,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       try {
         const includeAll =
           req.query?.all === "1" || String(req.query?.hours || "") === "all";
+        const includeFiltered =
+          req.query?.includeFiltered === "1" || req.query?.debug === "1";
         const hours = includeAll
           ? 0
           : Math.min(168, Math.max(1, Number(req.query?.hours) || 48));
@@ -1454,6 +1550,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               recentOrOwnedRestaurantWhere,
+              sql`${users.id} is not null`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
           )
@@ -1504,6 +1601,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               recentOrOwnedHostWhere,
+              sql`${users.id} is not null`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
           )
@@ -1539,6 +1637,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               recentOrOwnedSupplierWhere,
+              sql`${users.id} is not null`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
           )
@@ -1833,7 +1932,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const canonicalProfilePath = publicRestaurantPath(row, isFoodTruck);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
-          const shareUrl = profileUrl;
+          const sharePath = cleanAffiliateSharePath(
+            row.ownerAffiliateTag,
+            profilePath,
+          );
+          const shareUrl = `${baseUrl}${sharePath}`;
           const locationLabel = formatSignupLocation(row);
           const imageUrl = absoluteAdminUrl(
             baseUrl,
@@ -1884,6 +1987,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             canonicalProfilePath,
             profilePath,
             profileUrl,
+            sharePath,
             shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
@@ -1931,7 +2035,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const canonicalProfilePath = publicHostPath(row);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
-          const shareUrl = profileUrl;
+          const sharePath = cleanAffiliateSharePath(
+            row.ownerAffiliateTag,
+            profilePath,
+          );
+          const shareUrl = `${baseUrl}${sharePath}`;
           const locationLabel = formatSignupLocation(row);
           const hostImageUrl = absoluteAdminUrl(
             baseUrl,
@@ -1968,6 +2076,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             canonicalProfilePath,
             profilePath,
             profileUrl,
+            sharePath,
             shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
@@ -2011,7 +2120,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const canonicalProfilePath = publicSupplierPath(row);
           const profilePath = isPublic ? canonicalProfilePath : "/suppliers";
           const profileUrl = `${baseUrl}${profilePath}`;
-          const shareUrl = profileUrl;
+          const sharePath = cleanAffiliateSharePath(
+            row.ownerAffiliateTag,
+            profilePath,
+            "/suppliers",
+          );
+          const shareUrl = `${baseUrl}${sharePath}`;
           const locationLabel = formatSignupLocation(row);
           const productStats = productStatsBySupplier.get(String(row.id)) || {
             itemCount: 0,
@@ -2052,6 +2166,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             canonicalProfilePath,
             profilePath,
             profileUrl,
+            sharePath,
             shareUrl,
             isPublic,
             isVerified: Boolean(row.onlinePaymentsEnabled),
@@ -2085,9 +2200,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const displayName = displayNameForSignupUser(row);
           const locationLabel =
             String(row.postalCode || "").trim() || "MealScout";
-          const profilePath = row.affiliateTag
-            ? `/ref/${encodeURIComponent(String(row.affiliateTag))}`
-            : "/map";
+          const profilePath = cleanAffiliateSharePath(
+            row.affiliateTag,
+            "/map",
+          );
           const profileUrl = `${baseUrl}${profilePath}`;
           const shareUrl = profileUrl;
           const imageUrl = absoluteAdminUrl(
@@ -2113,9 +2229,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             shareImageUrl: proxiedAdminImageUrl(imageUrl),
             profilePath,
             profileUrl,
+            sharePath: profilePath,
             shareUrl,
             isPublic: true,
-            linkLabel: "Map link",
+            linkLabel: "Referral link",
             isVerified: Boolean(row.emailVerified),
             createdAt: row.createdAt,
             ownerName: displayName,
@@ -2217,15 +2334,21 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             .map((row) => createSupplierSignup(row)),
         ];
 
-        const signups = [...userSignups, ...businessOnlySignups].sort(
+        const rawSignups = [...userSignups, ...businessOnlySignups].sort(
           (a, b) =>
             new Date(b.createdAt || 0).getTime() -
             new Date(a.createdAt || 0).getTime(),
         );
+        const filteredOut = rawSignups.filter(isFilteredRecentSignup);
+        const signups = includeFiltered
+          ? rawSignups
+          : rawSignups.filter((item) => !isFilteredRecentSignup(item));
 
         res.json({
           windowHours: includeAll ? null : hours,
           includeAll,
+          includeFiltered,
+          filteredOut: filteredOut.length,
           generatedAt: new Date().toISOString(),
           summary: {
             total: signups.length,
@@ -2254,6 +2377,134 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         console.error("[admin/recent-signups] failed:", error);
         res.status(500).json({
           message: "Failed to load recent signups",
+          error: String(error?.message || error),
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/recent-signups/backfill-google",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const includeAll =
+          req.body?.all === true ||
+          req.query?.all === "1" ||
+          String(req.body?.hours || req.query?.hours || "") === "all";
+        const hours = includeAll
+          ? 0
+          : Math.min(
+              168,
+              Math.max(1, Number(req.body?.hours || req.query?.hours) || 48),
+            );
+        const limit = Math.min(
+          120,
+          Math.max(1, Number(req.body?.limit || req.query?.limit) || 60),
+        );
+        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+        const restaurantRows = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            address: restaurants.address,
+            city: restaurants.city,
+            state: restaurants.state,
+            phone: restaurants.phone,
+            description: restaurants.description,
+            websiteUrl: restaurants.websiteUrl,
+            googlePlaceId: restaurants.googlePlaceId,
+            googlePhotos: restaurants.googlePhotos,
+            profileSource: restaurants.profileSource,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .where(
+            and(
+              includeAll ? sql`true` : gte(restaurants.createdAt, cutoff),
+              sql`${users.id} is not null`,
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
+          .orderBy(desc(restaurants.createdAt))
+          .limit(limit);
+
+        const hostRows = await db
+          .select({
+            id: hosts.id,
+            businessName: hosts.businessName,
+            address: hosts.address,
+            city: hosts.city,
+            state: hosts.state,
+            contactPhone: hosts.contactPhone,
+            description: hosts.description,
+            businessWebsite: hosts.businessWebsite,
+            googlePlaceId: hosts.googlePlaceId,
+            googlePhotos: hosts.googlePhotos,
+            profileSource: hosts.profileSource,
+          })
+          .from(hosts)
+          .leftJoin(users, eq(hosts.userId, users.id))
+          .where(
+            and(
+              includeAll ? sql`true` : gte(hosts.createdAt, cutoff),
+              sql`${users.id} is not null`,
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
+          .orderBy(desc(hosts.createdAt))
+          .limit(Math.ceil(limit / 2));
+
+        const restaurantTargets = (restaurantRows as any[])
+          .filter(shouldAttemptGoogleRestaurantAutoLink)
+          .slice(0, Math.ceil(limit * 0.7));
+        const hostTargets = (hostRows as any[])
+          .filter(shouldAttemptGoogleHostAutoLink)
+          .slice(0, Math.ceil(limit * 0.3));
+
+        const [restaurantResults, hostResults] = await Promise.all([
+          Promise.allSettled(
+            restaurantTargets.map((row) =>
+              populateRestaurantProfile(String(row.id)),
+            ),
+          ),
+          Promise.allSettled(
+            hostTargets.map((row) => populateHostProfile(String(row.id))),
+          ),
+        ]);
+
+        const restaurantLinked = restaurantResults.filter(
+          (result) =>
+            result.status === "fulfilled" && Boolean(result.value?.success),
+        ).length;
+        const hostLinked = hostResults.filter(
+          (result) =>
+            result.status === "fulfilled" && Boolean(result.value?.success),
+        ).length;
+
+        res.json({
+          ok: true,
+          includeAll,
+          windowHours: includeAll ? null : hours,
+          scanned: {
+            restaurants: restaurantRows.length,
+            hosts: hostRows.length,
+          },
+          attempted: {
+            restaurants: restaurantTargets.length,
+            hosts: hostTargets.length,
+          },
+          linked: {
+            restaurants: restaurantLinked,
+            hosts: hostLinked,
+          },
+        });
+      } catch (error: any) {
+        console.error("[admin/recent-signups/backfill-google] failed:", error);
+        res.status(500).json({
+          message: "Failed to backfill Google listing data",
           error: String(error?.message || error),
         });
       }

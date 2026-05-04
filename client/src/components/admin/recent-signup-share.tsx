@@ -63,6 +63,7 @@ type RecentSignup = {
   profileCompleteness?: Record<string, boolean>;
   profileUrl: string;
   shareUrl?: string | null;
+  sharePath?: string | null;
   profilePath: string;
   isPublic: boolean;
   linkLabel?: string | null;
@@ -82,6 +83,8 @@ type RecentSignup = {
 type RecentSignupsResponse = {
   windowHours: number | null;
   includeAll?: boolean;
+  includeFiltered?: boolean;
+  filteredOut?: number;
   generatedAt: string;
   summary: {
     total: number;
@@ -217,15 +220,43 @@ const compactList = (items?: string[] | null, limit = 3) =>
     .filter(Boolean)
     .slice(0, limit);
 
-const shortShareUrl = (value: string) => {
+const shortShareUrl = (value: string, maxLength = 42) => {
   try {
     const url = new URL(value);
     const path = `${url.hostname.replace(/^www\./, "")}${url.pathname}`;
-    return path.length > 34 ? `${path.slice(0, 31)}...` : path;
+    return path.length > maxLength
+      ? `${path.slice(0, Math.max(10, maxLength - 3))}...`
+      : path;
   } catch {
     const raw = String(value || "").replace(/^https?:\/\//, "");
-    return raw.length > 34 ? `${raw.slice(0, 31)}...` : raw;
+    return raw.length > maxLength
+      ? `${raw.slice(0, Math.max(10, maxLength - 3))}...`
+      : raw;
   }
+};
+
+const announcementFor = (signup: RecentSignup) => {
+  const labels: Record<RecentSignupKind, string> = {
+    customer: "New MealScout member",
+    food_truck: "New truck in town",
+    restaurant: "New local spot",
+    caterer: "New caterer in town",
+    private_chef: "New private chef",
+    host: "New host location",
+    supplier: "New supplier partner",
+    team: "New MealScout teammate",
+  };
+  return labels[signup.kind] || "New on MealScout";
+};
+
+const graphicActionFor = (signup: RecentSignup) => {
+  if (signup.kind === "food_truck") return "Follow menus, stops, and updates";
+  if (signup.kind === "caterer") return "Book catering and see menus";
+  if (signup.kind === "private_chef") return "Book a private chef";
+  if (signup.kind === "host") return "See parking and host details";
+  if (signup.kind === "supplier") return "Find supplies and services";
+  if (signup.kind === "restaurant") return "Follow menus and local updates";
+  return "Find local food activity";
 };
 
 const completionLabel = (signup: RecentSignup) => {
@@ -255,6 +286,7 @@ export default function RecentSignupShare() {
   const { toast } = useToast();
   const graphicRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [isBackfillingGoogle, setIsBackfillingGoogle] = useState(false);
 
   const { data, isLoading, isFetching, refetch } =
     useQuery<RecentSignupsResponse>({
@@ -386,6 +418,31 @@ export default function RecentSignupShare() {
     }
   };
 
+  const handleGoogleBackfill = async () => {
+    try {
+      setIsBackfillingGoogle(true);
+      const res = await apiRequest(
+        "POST",
+        "/api/admin/recent-signups/backfill-google",
+        { all: true, limit: 80 },
+      );
+      const result = await res.json();
+      await refetch();
+      toast({
+        title: "Google listing check complete",
+        description: `Linked ${Number(result?.linked?.restaurants || 0) + Number(result?.linked?.hosts || 0)} profile${Number(result?.linked?.restaurants || 0) + Number(result?.linked?.hosts || 0) === 1 ? "" : "s"}.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Could not backfill Google listings",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBackfillingGoogle(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <Card>
@@ -400,19 +457,34 @@ export default function RecentSignupShare() {
               profile details added when available.
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            {isFetching ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGoogleBackfill}
+              disabled={isBackfillingGoogle || isFetching}
+            >
+              {isBackfillingGoogle ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              Sync Google
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              {isFetching ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -487,6 +559,12 @@ export default function RecentSignupShare() {
               Direct posting opens from here once the MealScout Facebook Page is
               connected.
             </span>
+            {data?.filteredOut ? (
+              <span>
+                {data.filteredOut} deleted, demo, or blocked signup
+                {data.filteredOut === 1 ? "" : "s"} hidden.
+              </span>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -526,7 +604,7 @@ export default function RecentSignupShare() {
               ? "Public profile"
               : "Visitor fallback";
             const cleanShareUrl = signup.shareUrl || signup.profileUrl;
-            const graphicUrlLabel = shortShareUrl(cleanShareUrl);
+            const graphicUrlLabel = shortShareUrl(cleanShareUrl, 48);
             const detailParts = [
               signup.category || signup.typeLabel,
               signup.locationLabel,
@@ -536,17 +614,22 @@ export default function RecentSignupShare() {
               : "Profile finishing";
             const nameLength = signup.displayName.length;
             const graphicNameClass =
-              nameLength > 32
-                ? "text-[3rem]"
-                : nameLength > 22
-                  ? "text-[3.55rem]"
-                  : "text-[4.35rem]";
+              nameLength > 46
+                ? "text-[3.3rem]"
+                : nameLength > 32
+                  ? "text-[4rem]"
+                  : nameLength > 22
+                    ? "text-[4.8rem]"
+                    : "text-[5.6rem]";
             const graphicSubline =
               menuHighlights.length > 0
                 ? menuHighlights.slice(0, 3).join(" / ")
                 : detailParts.join(" / ") ||
                   description ||
                   `${signup.typeLabel} on MealScout`;
+            const announcement = announcementFor(signup);
+            const graphicAction = graphicActionFor(signup);
+            const imageAlt = `${signup.displayName} profile image`;
 
             return (
               <Card key={signup.key} className="overflow-hidden">
@@ -608,101 +691,104 @@ export default function RecentSignupShare() {
                     ref={(node) => {
                       graphicRefs.current[signup.key] = node;
                     }}
-                    className="relative aspect-[1200/630] overflow-hidden rounded-[1.75rem] border bg-neutral-950 text-white shadow-sm"
-                    style={{ backgroundColor: "#050505" }}
+                    className="relative aspect-[1200/630] overflow-hidden rounded-[1.5rem] border bg-neutral-950 text-white shadow-sm"
+                    style={{
+                      background: hasBusinessImage ? "#050505" : tone.gradient,
+                    }}
                   >
+                    {hasBusinessImage ? (
+                      <img
+                        src={graphicImageUrl || ""}
+                        alt={imageAlt}
+                        crossOrigin="anonymous"
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : null}
+                    <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/35" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/35" />
                     <div
-                      className="absolute inset-0 opacity-[0.16]"
+                      className="absolute inset-0 opacity-[0.14]"
                       style={{
                         backgroundImage:
-                          "linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.07) 1px, transparent 1px)",
-                        backgroundSize: "64px 64px",
+                          "linear-gradient(90deg, rgba(255,255,255,.14) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.12) 1px, transparent 1px)",
+                        backgroundSize: "70px 70px",
                       }}
                     />
-                    <div className="absolute inset-y-0 right-0 w-[40%]" style={{ backgroundColor: tone.accent }} />
-                    <div className="absolute inset-y-0 right-[34%] w-[10%] skew-x-[-12deg] bg-black" />
+                    <div
+                      className="absolute -right-[7%] top-0 h-full w-[42%] opacity-90"
+                      style={{
+                        backgroundColor: tone.accent,
+                        clipPath: "polygon(28% 0, 100% 0, 100% 100%, 0 100%)",
+                      }}
+                    />
+                    {!hasBusinessImage ? (
+                      <div className="absolute right-[7%] top-1/2 flex h-[19rem] w-[19rem] -translate-y-1/2 items-center justify-center rounded-[2.25rem] bg-white/15 text-[7rem] font-black text-black/90">
+                        <span className="rounded-[2rem] bg-white px-10 py-8">
+                          {initialsFor(signup.displayName)}
+                        </span>
+                      </div>
+                    ) : null}
 
-                    <div className="relative grid h-full grid-cols-[1.35fr_0.95fr]">
-                      <div className="flex h-full flex-col justify-between p-10 pr-4">
-                        <div className="inline-flex w-fit items-center gap-3 text-sm font-black uppercase tracking-[0.22em] text-white">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs tracking-normal text-black">
+                    <div className="relative flex h-full flex-col justify-between p-10">
+                      <div className="flex items-start justify-between gap-6">
+                        <div className="inline-flex items-center gap-3 text-sm font-black uppercase text-white">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs text-black">
                             MS
                           </span>
-                          MealScout
+                          <span>MealScout</span>
                         </div>
-
-                        <div className="max-w-[92%] space-y-4">
-                          <div
-                            className="inline-flex rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-black"
-                            style={{ backgroundColor: tone.accent }}
-                          >
-                            New {signup.nounLabel || tone.noun} on MealScout
-                          </div>
-                          <div>
-                            <p className="text-sm font-black uppercase tracking-[0.24em] text-white/70">
-                              Just joined MealScout
-                            </p>
-                            <h3
-                              className={`mt-3 max-w-[11ch] text-balance ${graphicNameClass} font-black leading-[0.9]`}
-                            >
-                              {signup.displayName}
-                            </h3>
-                          </div>
-                          {graphicSubline ? (
-                            <p className="line-clamp-2 max-w-[34rem] text-2xl font-black leading-tight text-white/90">
-                              {graphicSubline}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm font-semibold text-white/75">
-                          <MapPin className="h-4 w-4" />
-                          {graphicUrlLabel}
-                        </div>
-                      </div>
-
-                      <div className="relative flex h-full flex-col justify-between p-10 pl-8">
-                        <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
+                        <div className="flex max-w-[34rem] flex-wrap justify-end gap-2">
                           <span
-                            className="rounded-full px-4 py-2 text-sm font-black text-black"
+                            className="rounded-full px-5 py-2 text-sm font-black text-black"
                             style={{ backgroundColor: tone.accent }}
                           >
                             {tone.label}
                           </span>
-                          <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-black">
+                          <span className="rounded-full bg-white px-5 py-2 text-sm font-black text-black">
                             {statusText}
                           </span>
                         </div>
+                      </div>
 
-                        <div className="flex flex-1 items-center justify-center">
-                          {hasBusinessImage ? (
-                            <div className="h-[21.5rem] w-[21.5rem] overflow-hidden rounded-[2rem] border border-black/20 bg-black/20 shadow-2xl">
-                              <img
-                                src={graphicImageUrl || ""}
-                                alt={`${signup.displayName} profile image`}
-                                crossOrigin="anonymous"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex h-[17.5rem] w-[17.5rem] items-center justify-center rounded-[2rem] border border-black/10 bg-black/10 shadow-2xl">
-                              <div className="flex h-48 w-48 items-center justify-center rounded-[1.75rem] bg-white text-[5rem] font-black text-black shadow-xl">
-                                {initialsFor(signup.displayName)}
-                              </div>
-                            </div>
-                          )}
+                      <div className="max-w-[47rem]">
+                        <div
+                          className="mb-5 inline-flex rounded-full px-5 py-2 text-sm font-black uppercase text-black"
+                          style={{ backgroundColor: tone.accent }}
+                        >
+                          {announcement}
                         </div>
+                        <p className="text-sm font-black uppercase text-white/70">
+                          Just joined MealScout
+                        </p>
+                        <h3
+                          className={`mt-3 max-w-[12ch] break-words ${graphicNameClass} font-black leading-[0.9]`}
+                        >
+                          {signup.displayName}
+                        </h3>
+                        {graphicSubline ? (
+                          <p className="mt-5 line-clamp-2 max-w-[44rem] text-2xl font-black leading-tight text-white/90">
+                            {graphicSubline}
+                          </p>
+                        ) : null}
+                      </div>
 
-                        <div className="ml-auto max-w-[22rem] rounded-[1.25rem] bg-black/35 px-5 py-4 text-right">
-                          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/70">
-                            Find them here
+                      <div className="flex items-end justify-between gap-6">
+                        <div className="min-w-0">
+                          <p className="mb-2 text-xs font-black uppercase text-white/55">
+                            Find them on MealScout
                           </p>
-                          <p className="mt-1 line-clamp-1 text-xl font-black text-white">
-                            {graphicUrlLabel}
-                          </p>
-                          <div className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-black">
-                            View profile
+                          <div className="flex min-w-0 items-center gap-2 text-lg font-black text-white">
+                            <MapPin className="h-5 w-5 shrink-0" />
+                            <span className="truncate">{graphicUrlLabel}</span>
                           </div>
+                        </div>
+                        <div className="max-w-[23rem] text-right">
+                          <p className="mb-3 line-clamp-2 text-2xl font-black leading-tight text-white">
+                            {graphicAction}
+                          </p>
+                          <span className="inline-flex rounded-full bg-white px-6 py-3 text-sm font-black text-black">
+                            View profile
+                          </span>
                         </div>
                       </div>
                     </div>
