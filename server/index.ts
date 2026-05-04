@@ -11,6 +11,7 @@ import {
   registerOperationalEndpoints,
   registerRecurringJobs,
   ensureMenuSchema,
+  ensureMessagingSchema,
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
@@ -87,6 +88,7 @@ const privateNoIndexPrefixes = [
   "/profile",
   "/settings",
   "/orders",
+  "/messages",
   "/favorites",
   "/user-dashboard",
   "/restaurant-owner-dashboard",
@@ -1147,6 +1149,7 @@ app.use((req, res, next) => {
   });
 
   await ensureLaunchSchemaCompatibility();
+  await ensureMessagingSchema();
 
   const server = await registerRoutes(app);
 
@@ -1336,6 +1339,7 @@ app.use((req, res, next) => {
       setImmediate(async () => {
         try {
           await ensureMenuSchema();
+          await ensureMessagingSchema();
           await storage.ensureAdminExists();
 
           // Never seed fake content unless explicitly enabled for local development.

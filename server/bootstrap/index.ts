@@ -8,3 +8,4 @@ export { registerStaticPages } from "./registerStaticPages";
 export { registerOperationalEndpoints } from "./registerOperationalEndpoints";
 export { registerRecurringJobs } from "./registerRecurringJobs";
 export { ensureMenuSchema } from "./ensureMenuSchema";
+export { ensureMessagingSchema } from "./ensureMessagingSchema";

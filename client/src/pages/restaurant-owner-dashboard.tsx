@@ -57,6 +57,7 @@ import {
   Activity,
   AlertCircle,
   CheckCircle,
+  MessageCircle,
   Play,
   Square,
   Loader2,
@@ -1683,7 +1684,7 @@ export default function RestaurantOwnerDashboard() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
               <Button
                 size="lg"
                 className="h-auto justify-start gap-2 py-4 lg:col-span-2"
@@ -1726,6 +1727,18 @@ export default function RestaurantOwnerDashboard() {
                 >
                   <Plus className="h-4 w-4" />
                   Post Special
+                </Button>
+              </Link>
+
+              <Link href="/messages">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-auto w-full justify-start gap-2 py-4"
+                  data-testid="button-owner-messages"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Messages
                 </Button>
               </Link>
 

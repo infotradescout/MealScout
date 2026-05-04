@@ -33,6 +33,7 @@ import {
   Bell,
   CreditCard,
   MapPinned,
+  MessageCircle,
   Menu,
   TrendingUp,
 } from "lucide-react";
@@ -601,6 +602,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           path: "/orders",
           icon: Receipt,
           fallbackLabel: "Orders",
+          group: "My Stuff",
+        },
+        {
+          path: "/messages",
+          icon: MessageCircle,
+          fallbackLabel: "Messages",
           group: "My Stuff",
         },
       );

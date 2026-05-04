@@ -86,6 +86,7 @@ const RestaurantDetail = lazy(() => import("@/pages/restaurant-detail"));
 const LocationDetailPage = lazy(() => import("@/pages/location-detail"));
 const LocationDiscoveryPage = lazy(() => import("@/pages/location-discovery"));
 const NotificationsPage = lazy(() => import("@/pages/profile/notifications"));
+const MessagesPage = lazy(() => import("@/pages/messages"));
 const SettingsPage = lazy(() => import("@/pages/profile/settings"));
 const AddressesPage = lazy(() => import("@/pages/profile/addresses"));
 const PaymentMethodsPage = lazy(() => import("@/pages/profile/payment"));
@@ -264,6 +265,14 @@ function TruckOnboardingRedirect() {
   return <Redirect to={getTruckOnboardingRedirectPath()} />;
 }
 
+function MessagesLoginRedirect() {
+  const path =
+    typeof window === "undefined"
+      ? "/messages"
+      : `${window.location.pathname}${window.location.search || ""}`;
+  return <Redirect to={`/login?redirect=${encodeURIComponent(path)}`} />;
+}
+
 function GuestCustomerSignupRoute() {
   const params = new URLSearchParams(window.location.search);
   if (
@@ -383,6 +392,7 @@ function Router() {
               {() => <Redirect to="/request-truck" />}
             </Route>
             <Route path="/login" component={Login} />
+            <Route path="/messages" component={MessagesLoginRedirect} />
             <Route
               path="/customer-signup"
               component={GuestCustomerSignupRoute}
@@ -661,6 +671,7 @@ function Router() {
             <Route path="/video" component={VideoPage} />
             <Route path="/favorites" component={Favorites} />
             <Route path="/orders" component={Orders} />
+            <Route path="/messages" component={MessagesPage} />
             <Route path="/profile" component={Profile} />
             <Route
               path="/supplier/dashboard"

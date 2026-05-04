@@ -12,3 +12,4 @@ export * from "./schema/growth";
 export * from "./schema/misc";
 export * from "./schema/moderation";
 export * from "./schema/media";
+export * from "./schema/messaging";

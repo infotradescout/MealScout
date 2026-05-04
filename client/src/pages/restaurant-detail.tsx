@@ -36,6 +36,7 @@ import {
   Star,
   Globe,
   ExternalLink,
+  MessageCircle,
   Video,
 } from "lucide-react";
 import { SEOHead } from "@/components/seo-head";
@@ -558,6 +559,15 @@ export default function RestaurantDetailPage() {
   const restaurantName = (restaurant as any)?.name || "Restaurant";
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
   const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
+  const isOwnBusinessProfile =
+    Boolean(user?.id) && String((restaurant as any)?.ownerId || "") === user?.id;
+  const messagePath = isOwnBusinessProfile
+    ? "/messages"
+    : `/messages?businessId=${encodeURIComponent(String(restaurantId || ""))}&subject=${encodeURIComponent(restaurantName)}`;
+  const messageHref = user
+    ? messagePath
+    : `/login?redirect=${encodeURIComponent(messagePath)}`;
+  const messageButtonLabel = isOwnBusinessProfile ? "Messages" : "Message";
   const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
     isFoodTruck ? "food_truck" : "restaurant",
   )}&claim=1&claimRestaurantId=${encodeURIComponent(String(restaurantId || ""))}&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(
@@ -909,7 +919,7 @@ export default function RestaurantDetailPage() {
       </section>
 
       <div className="relative z-10 -mt-2 space-y-4 px-4 pb-8 sm:px-5">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Button
             asChild={Boolean(directionsUrl)}
             variant="outline"
@@ -958,6 +968,16 @@ export default function RestaurantDetailPage() {
               Menu
             </Button>
           )}
+          <Link href={messageHref}>
+            <Button
+              variant="outline"
+              className="h-12 w-full rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"
+              data-testid="button-message-business"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              {messageButtonLabel}
+            </Button>
+          </Link>
           <ShareButton
             url={profilePath}
             title={`Check out ${restaurantName} on MealScout`}
