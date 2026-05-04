@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Calendar,
@@ -54,9 +54,13 @@ type EventIntakeResponse = {
 
 export default function EventsPage() {
   const { user, isAuthenticated } = useAuth();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const routeParams = useMemo(() => {
+    const query = location.includes("?") ? location.split("?")[1] : "";
+    return new URLSearchParams(query);
+  }, [location]);
   const isEventCoordinator = Boolean(
     isAuthenticated &&
     ["event_coordinator", "admin", "super_admin", "staff"].includes(
@@ -193,6 +197,23 @@ export default function EventsPage() {
     : null;
   const hasOperationsTools = isStaffOrAdmin || isEventCoordinator;
   const isManageView = activeView === "manage";
+
+  useEffect(() => {
+    if (routeParams.get("mode") === "manage" && hasOperationsTools) {
+      setActiveView("manage");
+    }
+  }, [hasOperationsTools, routeParams]);
+
+  useEffect(() => {
+    if (
+      routeParams.get("create") === "1" &&
+      routeParams.get("mode") === "manage" &&
+      isEventCoordinator
+    ) {
+      setActiveView("manage");
+      setShowCreateForm(true);
+    }
+  }, [isEventCoordinator, routeParams]);
   const pageTitle = isManageView
     ? isStaffOrAdmin
       ? "Admin Queue"

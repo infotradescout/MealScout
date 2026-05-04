@@ -1743,12 +1743,15 @@ export function registerEventRoutes(
         expectedCrowd: z.string().min(1),
         requestedTruckCount: z.coerce.number().int().min(1).max(25).default(1),
         eventVisibility: z.enum(["private", "public"]).default("public"),
+        eventCadence: z.enum(["one_time", "recurring"]).default("one_time"),
         contactEmail: z.string().email(),
         contactPhone: z.string().optional(),
         notes: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
+      const eventCadence =
+        parsed.eventVisibility === "private" ? "one_time" : parsed.eventCadence;
       let updatedUserType = req.user?.userType;
       if (req.user?.userType === "customer") {
         const updatedUser = await storage.updateUserType(
@@ -1770,6 +1773,7 @@ export function registerEventRoutes(
         <p><strong>Expected Crowd:</strong> ${parsed.expectedCrowd}</p>
         <p><strong>Requested Trucks:</strong> ${parsed.requestedTruckCount}</p>
         <p><strong>Visibility:</strong> ${parsed.eventVisibility}</p>
+        <p><strong>Event Type:</strong> ${eventCadence}</p>
         <p><strong>Contact Email:</strong> ${parsed.contactEmail}</p>
         ${parsed.contactPhone ? `<p><strong>Phone:</strong> ${parsed.contactPhone}</p>` : ""}
         ${parsed.notes ? `<p><strong>Notes:</strong> ${parsed.notes}</p>` : ""}
@@ -1786,6 +1790,7 @@ export function registerEventRoutes(
           expectedCrowd: parsed.expectedCrowd,
           requestedTruckCount: parsed.requestedTruckCount,
           eventVisibility: parsed.eventVisibility,
+          eventCadence,
         },
       });
 
@@ -1800,6 +1805,7 @@ export function registerEventRoutes(
           expectedCrowd: parsed.expectedCrowd,
           requestedTruckCount: parsed.requestedTruckCount,
           eventVisibility: parsed.eventVisibility,
+          eventCadence,
           contactEmail: parsed.contactEmail,
           contactPhone: parsed.contactPhone ?? null,
           notes: parsed.notes ?? null,
@@ -1834,15 +1840,18 @@ export function registerEventRoutes(
         guestCount: z.string().min(1),
         requestedTruckCount: z.coerce.number().int().min(1).max(25).default(1),
         eventVisibility: z.enum(["private", "public"]).default("private"),
+        eventCadence: z.enum(["one_time", "recurring"]).default("one_time"),
         details: z.string().optional(),
       });
 
       const parsed = schema.parse(req.body);
+      const eventCadence =
+        parsed.eventVisibility === "private" ? "one_time" : parsed.eventCadence;
       const adminEmail =
         process.env.ADMIN_ALERT_EMAIL || "info.mealscout@gmail.com";
-      const subject = `New private truck request: ${parsed.occasion} (${parsed.city})`;
+      const subject = `New event truck request: ${parsed.occasion} (${parsed.city})`;
       const html = `
-        <h2>New private truck request</h2>
+        <h2>New event truck request</h2>
         <p><strong>Name:</strong> ${parsed.requesterName}</p>
         <p><strong>Email:</strong> ${parsed.contactEmail}</p>
         ${parsed.contactPhone ? `<p><strong>Phone:</strong> ${parsed.contactPhone}</p>` : ""}
@@ -1852,6 +1861,7 @@ export function registerEventRoutes(
         <p><strong>Guest Count:</strong> ${parsed.guestCount}</p>
         <p><strong>Requested Trucks:</strong> ${parsed.requestedTruckCount}</p>
         <p><strong>Visibility:</strong> ${parsed.eventVisibility}</p>
+        <p><strong>Event Type:</strong> ${eventCadence}</p>
         ${parsed.details ? `<p><strong>Details:</strong> ${parsed.details}</p>` : ""}
       `;
 
@@ -1866,6 +1876,7 @@ export function registerEventRoutes(
           guestCount: parsed.guestCount,
           requestedTruckCount: parsed.requestedTruckCount,
           eventVisibility: parsed.eventVisibility,
+          eventCadence,
         },
       });
 
@@ -1884,6 +1895,7 @@ export function registerEventRoutes(
             guestCount: parsed.guestCount,
             requestedTruckCount: parsed.requestedTruckCount,
             eventVisibility: parsed.eventVisibility,
+            eventCadence,
             details: parsed.details ?? null,
           },
           metadata: {

@@ -22,6 +22,7 @@ export default function RequestTruckPage() {
     guestCount: "",
     requestedTruckCount: "1",
     eventVisibility: "private",
+    eventCadence: "one_time",
     details: "",
   });
 
@@ -30,7 +31,14 @@ export default function RequestTruckPage() {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "eventVisibility" && value === "private"
+        ? { eventCadence: "one_time" }
+        : {}),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,8 +93,8 @@ export default function RequestTruckPage() {
             </h1>
             <p className="mt-2 text-sm text-[color:var(--text-secondary)]">
               Birthdays, private parties, school events, and neighborhood
-              gatherings. Tell us whether this should be private or public so we
-              can match the right workflow for your event.
+              gatherings. Choose public or private first, then one-time or
+              recurring so we can match the right workflow for your event.
             </p>
           </div>
 
@@ -173,7 +181,7 @@ export default function RequestTruckPage() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-3 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="requestedTruckCount">
                   How many food trucks do you need? *
@@ -190,7 +198,7 @@ export default function RequestTruckPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="eventVisibility">Event visibility *</Label>
+                <Label htmlFor="eventVisibility">Public or private? *</Label>
                 <select
                   id="eventVisibility"
                   name="eventVisibility"
@@ -200,10 +208,27 @@ export default function RequestTruckPage() {
                   required
                 >
                   <option value="private">
-                    Private event (not discoverable in public event feeds)
+                    Private event (direct request only)
                   </option>
                   <option value="public">
-                    Public event (discoverable by all users)
+                    Public event (shown in event discovery)
+                  </option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="eventCadence">One-time or recurring? *</Label>
+                <select
+                  id="eventCadence"
+                  name="eventCadence"
+                  value={formData.eventCadence}
+                  onChange={handleChange}
+                  disabled={formData.eventVisibility === "private"}
+                  className="h-10 rounded-md border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm disabled:opacity-60"
+                  required
+                >
+                  <option value="one_time">One-time event</option>
+                  <option value="recurring">
+                    Recurring public event
                   </option>
                 </select>
               </div>
@@ -211,9 +236,9 @@ export default function RequestTruckPage() {
 
             <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
               <p className="text-xs text-[color:var(--text-secondary)]">
-                Public events can be surfaced across event discovery pages.
-                Private events are handled as direct requests and are not shown
-                in public browsing feeds.
+                Private events stay one-time and direct. Public events can be
+                one-time or recurring and may be surfaced across event
+                discovery pages.
               </p>
             </div>
 

@@ -119,13 +119,14 @@ const SHARE_ITEMS: ShareHubItem[] = [
   },
   {
     key: "request-truck",
-    title: "Book a Truck",
-    description: "Use for catering, offices, apartments, and pop-ups.",
-    href: "/request-truck",
+    title: "Create an Event",
+    description: "Public or private first, then one-time or recurring.",
+    href: "/event-signup",
     audience: "events",
     audienceLabel: "Events",
     icon: CalendarDays,
-    message: "Need a food truck for an event or location? Start here:",
+    message:
+      "Create an event on MealScout. Pick public or private, then one-time or recurring so the flow matches:",
   },
   {
     key: "for-hosts",

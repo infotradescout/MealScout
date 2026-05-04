@@ -29,6 +29,7 @@ export default function EventSignup() {
     expectedCrowd: "",
     requestedTruckCount: "1",
     eventVisibility: "public",
+    eventCadence: "one_time",
     contactEmail: user?.email || "",
     contactPhone: "",
     notes: "",
@@ -39,10 +40,14 @@ export default function EventSignup() {
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "eventVisibility" && value === "private"
+        ? { eventCadence: "one_time" }
+        : {}),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,7 +77,7 @@ export default function EventSignup() {
           title: "Request submitted",
           description: "You can now post events from the Events portal.",
         });
-        setLocation("/events");
+        setLocation("/events?mode=manage&create=1");
         return;
       }
 
@@ -130,7 +135,7 @@ export default function EventSignup() {
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
-              onClick={() => setLocation("/login?redirect=/events")}
+              onClick={() => setLocation("/login?redirect=/event-signup")}
             >
               Log in to continue
             </Button>
@@ -148,7 +153,7 @@ export default function EventSignup() {
             </p>
             <Button
               className="w-full h-11 rounded-xl action-primary hover:bg-[color:var(--action-hover)]"
-              onClick={() => setLocation("/events")}
+              onClick={() => setLocation("/events?mode=manage&create=1")}
             >
               Open events portal
             </Button>
@@ -163,8 +168,8 @@ export default function EventSignup() {
                 Request Event Organizer Access
               </h1>
               <p className="text-sm leading-relaxed text-[color:var(--text-secondary)] mb-5">
-                Share your event details and operations context so we can enable
-                posting access on your account.
+                Start with the event, choose public or private, then choose
+                one-time or recurring so the next steps match.
               </p>
               <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3">
                 <p className="text-xs font-medium text-[color:var(--text-secondary)]">
@@ -287,28 +292,50 @@ export default function EventSignup() {
                   </div>
                 </div>
 
-                <div className="grid gap-2">
-                  <Label
-                    htmlFor="eventVisibility"
-                    className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
-                  >
-                    Event Visibility *
-                  </Label>
-                  <select
-                    id="eventVisibility"
-                    name="eventVisibility"
-                    value={formData.eventVisibility}
-                    onChange={handleChange}
-                    className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
-                    required
-                  >
-                    <option value="public">
-                      Public event (discoverable by all users)
-                    </option>
-                    <option value="private">
-                      Private event (not discoverable in public event feeds)
-                    </option>
-                  </select>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="eventVisibility"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      Public or Private? *
+                    </Label>
+                    <select
+                      id="eventVisibility"
+                      name="eventVisibility"
+                      value={formData.eventVisibility}
+                      onChange={handleChange}
+                      className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm"
+                      required
+                    >
+                      <option value="public">
+                        Public event (shown in event discovery)
+                      </option>
+                      <option value="private">
+                        Private event (direct request only)
+                      </option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label
+                      htmlFor="eventCadence"
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--text-secondary)]"
+                    >
+                      One-time or Recurring? *
+                    </Label>
+                    <select
+                      id="eventCadence"
+                      name="eventCadence"
+                      value={formData.eventCadence}
+                      onChange={handleChange}
+                      disabled={formData.eventVisibility === "private"}
+                      className="h-11 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 text-sm disabled:opacity-60"
+                      required
+                    >
+                      <option value="one_time">One-time event</option>
+                      <option value="recurring">Recurring public event</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="grid gap-2">
@@ -355,7 +382,8 @@ export default function EventSignup() {
                     - No hidden fees, now or later
                     <br />
                     - Booking fees apply only to trucks
-                    <br />- Only public events are discoverable by all users
+                    <br />- Private events stay one-time and direct
+                    <br />- Public events can be one-time or recurring
                   </p>
                 </div>
 
