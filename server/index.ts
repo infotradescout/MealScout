@@ -10,6 +10,7 @@ import {
   registerStaticPages,
   registerOperationalEndpoints,
   registerRecurringJobs,
+  ensureMenuSchema,
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
@@ -1334,6 +1335,7 @@ app.use((req, res, next) => {
       // Initialize database data after server startup - truly non-blocking
       setImmediate(async () => {
         try {
+          await ensureMenuSchema();
           await storage.ensureAdminExists();
 
           // Never seed fake content unless explicitly enabled for local development.
