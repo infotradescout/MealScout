@@ -1,5 +1,6 @@
 import {
   restaurants,
+  users,
   foodTruckSessions,
   foodTruckLocations,
   truckManualSchedules,
@@ -329,6 +330,12 @@ export function createTruckLiveOpsRepository() {
           currentLongitude: restaurants.currentLongitude,
           lastBroadcastAt: restaurants.lastBroadcastAt,
           operatingHours: restaurants.operatingHours,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           isActive: restaurants.isActive,
           isVerified: restaurants.isVerified,
           createdAt: restaurants.createdAt,
@@ -343,6 +350,7 @@ export function createTruckLiveOpsRepository() {
             eq(foodTruckSessions.isActive, true),
           ),
         )
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isFoodTruck, true),

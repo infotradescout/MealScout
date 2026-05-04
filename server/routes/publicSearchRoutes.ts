@@ -17,6 +17,7 @@ import {
   hosts,
   restaurants,
   truckImportListings,
+  users,
   videoStories,
 } from "@shared/schema";
 
@@ -390,9 +391,12 @@ export function registerPublicSearchRoutes(app: Express) {
           logoUrl: restaurants.logoUrl,
           coverImageUrl: restaurants.coverImageUrl,
           isVerified: restaurants.isVerified,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
           profileSource: restaurants.profileSource,
+          ownerEmail: users.email,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isActive, true),
@@ -419,7 +423,9 @@ export function registerPublicSearchRoutes(app: Express) {
             description: row.description,
             logoUrl: row.logoUrl,
             coverImageUrl: row.coverImageUrl,
+            googleBusinessStatus: row.googleBusinessStatus,
             profileSource: row.profileSource,
+            ownerEmail: row.ownerEmail,
           }),
         )
         .sort(
@@ -470,10 +476,13 @@ export function registerPublicSearchRoutes(app: Express) {
           restaurantDescription: restaurants.description,
           restaurantLogoUrl: restaurants.logoUrl,
           restaurantCoverImageUrl: restaurants.coverImageUrl,
+          restaurantGoogleBusinessStatus: restaurants.googleBusinessStatus,
           restaurantProfileSource: restaurants.profileSource,
+          restaurantOwnerEmail: users.email,
         })
         .from(deals)
         .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(deals.isActive, true),
@@ -497,7 +506,9 @@ export function registerPublicSearchRoutes(app: Express) {
             description: row.restaurantDescription,
             logoUrl: row.restaurantLogoUrl,
             coverImageUrl: row.restaurantCoverImageUrl,
+            googleBusinessStatus: row.restaurantGoogleBusinessStatus,
             profileSource: row.restaurantProfileSource,
+            ownerEmail: row.restaurantOwnerEmail,
           })
         ) {
           continue;
@@ -744,9 +755,12 @@ export function registerPublicSearchRoutes(app: Express) {
           operatingHours: restaurants.operatingHours,
           googleRating: restaurants.googleRating,
           googleReviewCount: restaurants.googleReviewCount,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
           profileSource: restaurants.profileSource,
+          ownerEmail: users.email,
         })
-        .from(restaurants);
+        .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id));
       const restaurantsBase = restaurantMatches
         .map((restaurant: any) => {
           if (!restaurant?.isActive) return false;
@@ -990,12 +1004,16 @@ export function registerPublicSearchRoutes(app: Express) {
           restaurantGooglePhotos: restaurants.googlePhotos,
           restaurantFacebookCoverUrl: restaurants.facebookCoverUrl,
           restaurantFacebookPhotos: restaurants.facebookPhotos,
+          restaurantProfileSource: restaurants.profileSource,
+          restaurantGoogleBusinessStatus: restaurants.googleBusinessStatus,
+          restaurantOwnerEmail: users.email,
           restaurantLatitude: restaurants.latitude,
           restaurantLongitude: restaurants.longitude,
           createdAt: videoStories.createdAt,
         })
         .from(videoStories)
         .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(videoStories.status, "ready"),
@@ -1013,12 +1031,30 @@ export function registerPublicSearchRoutes(app: Express) {
         )
         .orderBy(desc(videoStories.createdAt))
         .limit(12);
-      const videosOut = videoRows.filter((row: any) =>
-        isInsideRequestedLocalRadius(
+      const videosOut = videoRows.filter((row: any) => {
+        if (
+          row.restaurantId &&
+          !isPublicBusinessVisible({
+            name: row.restaurantName,
+            address: row.restaurantAddress,
+            city: row.restaurantCity,
+            state: row.restaurantState,
+            cuisineType: row.restaurantCuisineType,
+            businessType: row.restaurantBusinessType,
+            logoUrl: row.restaurantLogoUrl,
+            coverImageUrl: row.restaurantCoverImageUrl,
+            googleBusinessStatus: row.restaurantGoogleBusinessStatus,
+            profileSource: row.restaurantProfileSource,
+            ownerEmail: row.restaurantOwnerEmail,
+          })
+        ) {
+          return false;
+        }
+        return isInsideRequestedLocalRadius(
           row.restaurantLatitude,
           row.restaurantLongitude,
-        ),
-      );
+        );
+      });
 
       const eventsRows = await db
         .select({

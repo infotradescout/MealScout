@@ -67,6 +67,38 @@ const run = async () => {
   assert.equal(testDataChecks.blockers.includes("flagged_test_data"), true);
   assert.equal(isPublicBusinessVisible(testDataProfile), false);
 
+  const legacySeedOwnerProfile = {
+    ...completeProfile,
+    ownerEmail: "owner6@example.com",
+  };
+  const legacySeedOwnerChecks =
+    getPublicBusinessVisibilityChecks(legacySeedOwnerProfile);
+  assert.equal(
+    legacySeedOwnerChecks.blockers.includes("non_public_owner_email"),
+    true,
+  );
+  assert.equal(isPublicBusinessVisible(legacySeedOwnerProfile), false);
+
+  const querySeedProfile = {
+    ...completeProfile,
+    profileSource: "search_query_seed",
+  };
+  const querySeedChecks = getPublicBusinessVisibilityChecks(querySeedProfile);
+  assert.equal(
+    querySeedChecks.blockers.includes("non_public_profile_source"),
+    true,
+  );
+  assert.equal(isPublicBusinessVisible(querySeedProfile), false);
+
+  const closedGoogleProfile = {
+    ...completeProfile,
+    googleBusinessStatus: "CLOSED_PERMANENTLY",
+  };
+  const closedGoogleChecks =
+    getPublicBusinessVisibilityChecks(closedGoogleProfile);
+  assert.equal(closedGoogleChecks.blockers.includes("closed_permanently"), true);
+  assert.equal(isPublicBusinessVisible(closedGoogleProfile), false);
+
   console.log("public profile visibility rules test passed");
 };
 

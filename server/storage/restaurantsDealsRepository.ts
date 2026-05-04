@@ -17,6 +17,7 @@ import {
   and,
   isNotNull,
   desc,
+  getTableColumns,
   sql,
 } from "drizzle-orm";
 import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
@@ -207,8 +208,12 @@ export function createRestaurantsDealsRepository(
 
     async getRestaurant(id: string): Promise<Restaurant | undefined> {
       const [restaurant] = await db
-        .select()
+        .select({
+          ...getTableColumns(restaurants),
+          ownerEmail: users.email,
+        })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.id, id));
       return restaurant;
     },
@@ -236,7 +241,13 @@ export function createRestaurantsDealsRepository(
     },
 
     async getAllRestaurants(): Promise<Restaurant[]> {
-      return await db.select().from(restaurants);
+      return await db
+        .select({
+          ...getTableColumns(restaurants),
+          ownerEmail: users.email,
+        })
+        .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id));
     },
 
     async getNearbyRestaurants(

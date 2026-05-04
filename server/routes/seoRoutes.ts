@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "../db";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   cities,
   deals,
@@ -22,6 +23,7 @@ import {
   restaurants,
   suppliers,
   truckManualSchedules,
+  users,
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
@@ -196,12 +198,22 @@ export function registerSeoRoutes(app: Express) {
         .select({
           id: restaurants.id,
           name: restaurants.name,
+          address: restaurants.address,
           city: restaurants.city,
+          state: restaurants.state,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           isFoodTruck: restaurants.isFoodTruck,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt));
       const hostRows = await db
@@ -269,7 +281,6 @@ export function registerSeoRoutes(app: Express) {
         "/install",
         "/terms-of-service",
         "/privacy-policy",
-        "/sitemap",
         "/status",
       ].forEach((path) => mergeUrl(`${baseUrl}${path}`));
       [
@@ -322,7 +333,11 @@ export function registerSeoRoutes(app: Express) {
         );
       });
 
-      restaurantRows.forEach((row: any) => {
+      const publicRestaurantRows = restaurantRows.filter((row: any) =>
+        isPublicBusinessVisible(row),
+      );
+
+      publicRestaurantRows.forEach((row: any) => {
         mergeUrl(
           `${baseUrl}/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(
             toSlug(row.name) || row.id,
@@ -356,7 +371,7 @@ export function registerSeoRoutes(app: Express) {
       });
 
       const cuisineLastmodByCity = new Map<string, string | null>();
-      for (const row of restaurantRows as any[]) {
+      for (const row of publicRestaurantRows as any[]) {
         const cityName = String(row.city || "")
           .trim()
           .toLowerCase();
@@ -392,9 +407,21 @@ export function registerSeoRoutes(app: Express) {
           .select({
             cityName: restaurants.city,
             updatedAt: deals.updatedAt,
+            restaurantName: restaurants.name,
+            restaurantAddress: restaurants.address,
+            restaurantState: restaurants.state,
+            restaurantCuisineType: restaurants.cuisineType,
+            restaurantBusinessType: restaurants.businessType,
+            restaurantDescription: restaurants.description,
+            restaurantLogoUrl: restaurants.logoUrl,
+            restaurantCoverImageUrl: restaurants.coverImageUrl,
+            restaurantProfileSource: restaurants.profileSource,
+            restaurantGoogleBusinessStatus: restaurants.googleBusinessStatus,
+            restaurantOwnerEmail: users.email,
           })
           .from(deals)
           .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
           .where(
             and(
               eq(deals.isActive, true),
@@ -405,6 +432,24 @@ export function registerSeoRoutes(app: Express) {
 
         const dealCityLastmod = new Map<string, string | null>();
         for (const row of activeDealRows) {
+          if (
+            !isPublicBusinessVisible({
+              name: row.restaurantName,
+              address: row.restaurantAddress,
+              city: row.cityName,
+              state: row.restaurantState,
+              cuisineType: row.restaurantCuisineType,
+              businessType: row.restaurantBusinessType,
+              description: row.restaurantDescription,
+              logoUrl: row.restaurantLogoUrl,
+              coverImageUrl: row.restaurantCoverImageUrl,
+              profileSource: row.restaurantProfileSource,
+              googleBusinessStatus: row.restaurantGoogleBusinessStatus,
+              ownerEmail: row.restaurantOwnerEmail,
+            })
+          ) {
+            continue;
+          }
           const cityName = String(row.cityName || "")
             .trim()
             .toLowerCase();
@@ -449,11 +494,22 @@ export function registerSeoRoutes(app: Express) {
         .select({
           id: restaurants.id,
           name: restaurants.name,
+          address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          cuisineType: restaurants.cuisineType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           updatedAt: restaurants.updatedAt,
           isFoodTruck: restaurants.isFoodTruck,
           businessType: restaurants.businessType,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt))
         .limit(50000);
@@ -461,7 +517,8 @@ export function registerSeoRoutes(app: Express) {
       const entries = rows
         .filter(
           (row: any) =>
-            Boolean(row.isFoodTruck) || row.businessType === "food_truck",
+            (Boolean(row.isFoodTruck) || row.businessType === "food_truck") &&
+            isPublicBusinessVisible(row),
         )
         .map((row: any) => ({
           loc: `${baseUrl}/truck/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
@@ -482,16 +539,30 @@ export function registerSeoRoutes(app: Express) {
         .select({
           id: restaurants.id,
           name: restaurants.name,
+          address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
+          cuisineType: restaurants.cuisineType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           updatedAt: restaurants.updatedAt,
           businessType: restaurants.businessType,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt))
         .limit(50000);
 
       const entries = rows
-        .filter((row: any) => row.businessType === "bar")
+        .filter(
+          (row: any) =>
+            row.businessType === "bar" && isPublicBusinessVisible(row),
+        )
         .map((row: any) => ({
           loc: `${baseUrl}/bar/${encodeURIComponent(`${toSlug(row.name) || row.id}--${row.id}`)}`,
           lastmod: row.updatedAt,
@@ -598,8 +669,23 @@ export function registerSeoRoutes(app: Express) {
         const cityLike = `%${cityName}%`;
 
         const hasTruck = await db
-          .select({ id: restaurants.id })
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            address: restaurants.address,
+            city: restaurants.city,
+            state: restaurants.state,
+            cuisineType: restaurants.cuisineType,
+            businessType: restaurants.businessType,
+            description: restaurants.description,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            profileSource: restaurants.profileSource,
+            googleBusinessStatus: restaurants.googleBusinessStatus,
+            ownerEmail: users.email,
+          })
           .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
           .where(
             and(
               eq(restaurants.isActive, true),
@@ -613,7 +699,7 @@ export function registerSeoRoutes(app: Express) {
               ),
             ),
           )
-          .limit(1);
+          .limit(25);
 
         const hasEvent = await db
           .select({ id: events.id })
@@ -649,7 +735,7 @@ export function registerSeoRoutes(app: Express) {
           .limit(1);
 
         if (
-          hasTruck.length === 0 &&
+          !hasTruck.some((truck: any) => isPublicBusinessVisible(truck)) &&
           hasEvent.length === 0 &&
           hasManual.length === 0
         ) {
@@ -674,16 +760,29 @@ export function registerSeoRoutes(app: Express) {
       const baseUrl = resolveSitemapSiteUrl();
       const rows = await db
         .select({
+          name: restaurants.name,
+          address: restaurants.address,
+          city: restaurants.city,
+          state: restaurants.state,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(eq(restaurants.isActive, true))
         .orderBy(desc(restaurants.updatedAt))
         .limit(50000);
 
       const lastmodByCuisine = new Map<string, string | null>();
       for (const row of rows as any[]) {
+        if (!isPublicBusinessVisible(row)) continue;
         const slug = toSlug(row.cuisineType || "");
         if (!slug) continue;
         const next = toIsoDateOrNull(row.updatedAt);
@@ -865,11 +964,26 @@ export function registerSeoRoutes(app: Express) {
           id: deals.id,
           title: deals.title,
           updatedAt: deals.updatedAt,
+          restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantBusinessType: restaurants.businessType,
+          restaurantDescription: restaurants.description,
+          restaurantLogoUrl: restaurants.logoUrl,
+          restaurantCoverImageUrl: restaurants.coverImageUrl,
+          restaurantProfileSource: restaurants.profileSource,
+          restaurantGoogleBusinessStatus: restaurants.googleBusinessStatus,
+          restaurantOwnerEmail: users.email,
         })
         .from(deals)
+        .innerJoin(restaurants, eq(deals.restaurantId, restaurants.id))
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(deals.isActive, true),
+            eq(restaurants.isActive, true),
             lte(deals.startDate, now),
             or(isNull(deals.endDate), gte(deals.endDate, now)),
           ),
@@ -878,10 +992,27 @@ export function registerSeoRoutes(app: Express) {
         .limit(50000);
 
       sendUrlsetXml(res, {
-        entries: rows.map((row: any) => ({
-          loc: `${baseUrl}/deal/${encodeURIComponent(`${toSlug(row.title) || row.id}--${row.id}`)}`,
-          lastmod: row.updatedAt,
-        })),
+        entries: rows
+          .filter((row: any) =>
+            isPublicBusinessVisible({
+              name: row.restaurantName,
+              address: row.restaurantAddress,
+              city: row.restaurantCity,
+              state: row.restaurantState,
+              cuisineType: row.restaurantCuisineType,
+              businessType: row.restaurantBusinessType,
+              description: row.restaurantDescription,
+              logoUrl: row.restaurantLogoUrl,
+              coverImageUrl: row.restaurantCoverImageUrl,
+              profileSource: row.restaurantProfileSource,
+              googleBusinessStatus: row.restaurantGoogleBusinessStatus,
+              ownerEmail: row.restaurantOwnerEmail,
+            }),
+          )
+          .map((row: any) => ({
+            loc: `${baseUrl}/deal/${encodeURIComponent(`${toSlug(row.title) || row.id}--${row.id}`)}`,
+            lastmod: row.updatedAt,
+          })),
       });
     } catch (e) {
       console.error("sitemap-deals failed", e);
@@ -924,8 +1055,23 @@ export function registerSeoRoutes(app: Express) {
           id: videoStories.id,
           title: videoStories.title,
           createdAt: videoStories.createdAt,
+          restaurantId: videoStories.restaurantId,
+          restaurantName: restaurants.name,
+          restaurantAddress: restaurants.address,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          restaurantCuisineType: restaurants.cuisineType,
+          restaurantBusinessType: restaurants.businessType,
+          restaurantDescription: restaurants.description,
+          restaurantLogoUrl: restaurants.logoUrl,
+          restaurantCoverImageUrl: restaurants.coverImageUrl,
+          restaurantProfileSource: restaurants.profileSource,
+          restaurantGoogleBusinessStatus: restaurants.googleBusinessStatus,
+          restaurantOwnerEmail: users.email,
         })
         .from(videoStories)
+        .leftJoin(restaurants, eq(videoStories.restaurantId, restaurants.id))
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(videoStories.status, "ready"),
@@ -942,10 +1088,28 @@ export function registerSeoRoutes(app: Express) {
         .limit(50000);
 
       sendUrlsetXml(res, {
-        entries: rows.map((row: any) => ({
-          loc: `${baseUrl}/video/${encodeURIComponent(`${toSlug(row.title) || row.id}--${row.id}`)}`,
-          lastmod: row.createdAt,
-        })),
+        entries: rows
+          .filter((row: any) => {
+            if (!row.restaurantId) return true;
+            return isPublicBusinessVisible({
+              name: row.restaurantName,
+              address: row.restaurantAddress,
+              city: row.restaurantCity,
+              state: row.restaurantState,
+              cuisineType: row.restaurantCuisineType,
+              businessType: row.restaurantBusinessType,
+              description: row.restaurantDescription,
+              logoUrl: row.restaurantLogoUrl,
+              coverImageUrl: row.restaurantCoverImageUrl,
+              profileSource: row.restaurantProfileSource,
+              googleBusinessStatus: row.restaurantGoogleBusinessStatus,
+              ownerEmail: row.restaurantOwnerEmail,
+            });
+          })
+          .map((row: any) => ({
+            loc: `${baseUrl}/video/${encodeURIComponent(`${toSlug(row.title) || row.id}--${row.id}`)}`,
+            lastmod: row.createdAt,
+          })),
       });
     } catch (e) {
       console.error("sitemap-videos failed", e);
@@ -990,7 +1154,6 @@ export function registerSeoRoutes(app: Express) {
         `${baseUrl}/about`,
         `${baseUrl}/faq`,
         `${baseUrl}/how-it-works`,
-        `${baseUrl}/sitemap`,
         `${baseUrl}/sitemap.xml`,
         "",
         "## City & Cuisine Discovery Pages",

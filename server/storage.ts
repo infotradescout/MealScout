@@ -2885,7 +2885,9 @@ export class DatabaseStorage implements IStorage {
           googlePhotos: restaurants.googlePhotos,
           facebookCoverUrl: restaurants.facebookCoverUrl,
           facebookPhotos: restaurants.facebookPhotos,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
           profileSource: restaurants.profileSource,
+          ownerEmail: users.email,
           isActive: restaurants.isActive,
           isVerified: restaurants.isVerified,
           isFoodTruck: restaurants.isFoodTruck,
@@ -2895,6 +2897,7 @@ export class DatabaseStorage implements IStorage {
           lastBroadcastAt: restaurants.lastBroadcastAt,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(inArray(restaurants.id, restaurantIds));
 
       // Create restaurant lookup map
@@ -4371,6 +4374,8 @@ export class DatabaseStorage implements IStorage {
         facebookCoverUrl: restaurants.facebookCoverUrl,
         facebookPhotos: restaurants.facebookPhotos,
         profileSource: restaurants.profileSource,
+        googleBusinessStatus: restaurants.googleBusinessStatus,
+        ownerEmail: users.email,
         isActive: restaurants.isActive,
         isVerified: restaurants.isVerified,
         isFoodTruck: restaurants.isFoodTruck,
@@ -4381,6 +4386,7 @@ export class DatabaseStorage implements IStorage {
         operatingHours: restaurants.operatingHours,
       })
       .from(restaurants)
+      .leftJoin(users, eq(restaurants.ownerId, users.id))
       .where(inArray(restaurants.id, restaurantIds));
 
     // Create a map for quick lookup

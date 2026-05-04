@@ -458,33 +458,6 @@ export default function CategoryPage() {
           </div>
         )}
 
-        <section className="mt-8 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
-          <h2 className="text-base font-semibold text-foreground">
-            Explore More MealScout Pages
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/search">
-              <Button variant="outline" size="sm">
-                Search all food
-              </Button>
-            </Link>
-            <Link href="/deals/featured">
-              <Button variant="outline" size="sm">
-                Featured food
-              </Button>
-            </Link>
-            <Link href="/map">
-              <Button variant="outline" size="sm">
-                Open map
-              </Button>
-            </Link>
-            <Link href="/food-trucks/new-york">
-              <Button variant="outline" size="sm">
-                City pages
-              </Button>
-            </Link>
-          </div>
-        </section>
       </div>
 
       <Navigation />

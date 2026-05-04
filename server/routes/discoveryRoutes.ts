@@ -1,11 +1,19 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { cities, events, hosts, restaurants, truckManualSchedules } from "@shared/schema";
+import {
+  cities,
+  events,
+  hosts,
+  restaurants,
+  truckManualSchedules,
+  users,
+} from "@shared/schema";
 import { and, eq, gte, ilike, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { buildSlotDateTimes, intervalOverlaps, resolveTimeIntent, type TimeIntent } from "../services/timeIntent";
 import { getPublicSlotGateConfigFromEnv, isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { resolveCityTimeZone, usStateToTimeZone } from "../services/cityTimeZone";
 import { dateKeyInZone } from "../services/dateKeys";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 
 type TimeKey = "now" | "breakfast" | "lunch" | "dinner" | "tonight" | "this-weekend";
 
@@ -514,11 +522,20 @@ export function registerDiscoveryRoutes(app: Express) {
           id: restaurants.id,
           name: restaurants.name,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          address: restaurants.address,
           city: restaurants.city,
           state: restaurants.state,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
+          ownerEmail: users.email,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
         .where(
           and(
             eq(restaurants.isActive, true),
@@ -530,6 +547,7 @@ export function registerDiscoveryRoutes(app: Express) {
         .limit(2000);
 
       const trucks = rows
+        .filter((row: any) => isPublicBusinessVisible(row))
         .map((row: any) => ({
           id: row.id,
           name: row.name,

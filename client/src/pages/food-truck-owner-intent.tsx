@@ -1144,8 +1144,8 @@ export default function FoodTruckOwnerIntentPage() {
             </p>
             <h2 className="mt-2 text-2xl font-black">More ways truck owners find MealScout</h2>
           </div>
-          <Link href="/sitemap" className="text-sm font-semibold text-[color:var(--accent-text)]">
-            View sitemap
+          <Link href="/truck-onboarding" className="text-sm font-semibold text-[color:var(--accent-text)]">
+            Start onboarding
           </Link>
         </div>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">

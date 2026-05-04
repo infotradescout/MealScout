@@ -1,8 +1,9 @@
 import type { Express } from "express";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
+import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   affiliateShareEvents,
   cities,
@@ -15,6 +16,7 @@ import {
   socialPostQueue,
   supplierProducts,
   suppliers,
+  users,
   videoStories,
 } from "@shared/schema";
 import {
@@ -82,6 +84,35 @@ const googlePhotoUrls = (value: unknown, maxWidth = 900) =>
       return name ? getGooglePhotoUrl(name, maxWidth) : null;
     })
     .filter((url): url is string => Boolean(url));
+
+const withOwnerEmailVisibilityContext = async <T extends Record<string, any>>(
+  rows: T[],
+): Promise<Array<T & { ownerEmail?: string | null }>> => {
+  const ownerIds = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row?.ownerId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  if (ownerIds.length === 0) return rows;
+
+  const ownerRows = await db
+    .select({ id: users.id, email: users.email })
+    .from(users)
+    .where(inArray(users.id, ownerIds));
+  const emailByOwnerId = new Map<string, string | null>(
+    ownerRows.map((row: any) => [
+      String(row.id),
+      String(row.email || "").trim() || null,
+    ]),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    ownerEmail: emailByOwnerId.get(String(row?.ownerId || "")) ?? null,
+  }));
+};
 
 const hasGallery = (settings: any) =>
   Array.isArray(settings?.galleryUrls) && settings.galleryUrls.length > 0;
@@ -1267,15 +1298,28 @@ export function registerPublicDiscoveryRoutes(app: Express) {
 
       const restaurantRows = await db
         .select({
+          ownerId: restaurants.ownerId,
+          name: restaurants.name,
+          address: restaurants.address,
           city: restaurants.city,
+          state: restaurants.state,
           cuisineType: restaurants.cuisineType,
+          businessType: restaurants.businessType,
+          description: restaurants.description,
+          logoUrl: restaurants.logoUrl,
+          coverImageUrl: restaurants.coverImageUrl,
+          profileSource: restaurants.profileSource,
+          googleBusinessStatus: restaurants.googleBusinessStatus,
           updatedAt: restaurants.updatedAt,
         })
         .from(restaurants)
         .where(eq(restaurants.isActive, true));
 
       const cuisineByCity = new Map<string, Map<string, number>>();
-      for (const row of restaurantRows as any[]) {
+      const publicRestaurantRows =
+        await withOwnerEmailVisibilityContext(restaurantRows as any[]);
+      for (const row of publicRestaurantRows as any[]) {
+        if (!isPublicBusinessVisible(row)) continue;
         const cityName = String(row.city || "")
           .trim()
           .toLowerCase();
@@ -1327,10 +1371,15 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.status(404).json({ message: "City not found" });
       }
 
-      const cityRestaurants = await db
+      const rawCityRestaurants = await db
         .select()
         .from(restaurants)
-        .where(eq(restaurants.city, city.name));
+        .where(
+          and(eq(restaurants.city, city.name), eq(restaurants.isActive, true)),
+        );
+      const cityRestaurants = (
+        await withOwnerEmailVisibilityContext(rawCityRestaurants as any[])
+      ).filter((row: any) => isPublicBusinessVisible(row));
       const trucks = cityRestaurants.filter((row: any) => row.isFoodTruck);
       const restaurantsOnly = cityRestaurants.filter(
         (row: any) => !row.isFoodTruck,

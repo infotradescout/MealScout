@@ -10,6 +10,8 @@ type BusinessListingLike = {
   city?: string | null;
   state?: string | null;
   profileSource?: string | null;
+  googleBusinessStatus?: string | null;
+  ownerEmail?: string | null;
 };
 
 const HARD_TEST_TOKEN_PATTERN =
@@ -17,6 +19,16 @@ const HARD_TEST_TOKEN_PATTERN =
 const SOFT_TEST_TOKEN_PATTERN = /\b(sample|temp|demo)\b/i;
 const PLACEHOLDER_NAME_PATTERN =
   /\b(restaurant|food\s*truck|truck|business|vendor)\s*#?\s*\d{1,4}\b/i;
+const NON_PUBLIC_PROFILE_SOURCES = new Set([
+  "search_query_seed",
+  "demo_seed",
+  "sample_seed",
+  "development_seed",
+  "fixture",
+  "test_fixture",
+]);
+const NON_PUBLIC_OWNER_EMAIL_PATTERN =
+  /(?:^owner\d+@example\.com$|@example\.(?:com|net|org)$|@example\.test$|@test\.com$)/i;
 
 const normalize = (value: unknown): string => String(value ?? "").trim();
 
@@ -57,13 +69,23 @@ export function getPublicBusinessVisibilityChecks(listing: BusinessListingLike):
   const name = normalize(listing.name);
   const likelyTestData = isLikelyTestBusiness(listing);
   const profileSource = normalize(listing.profileSource).toLowerCase();
+  const ownerEmail = normalize(listing.ownerEmail).toLowerCase();
+  const googleBusinessStatus = normalize(
+    listing.googleBusinessStatus,
+  ).toUpperCase();
 
   if (!name || name.length < 2) blockers.push("missing_name");
   if (!hasLocationContext(listing)) blockers.push("missing_location");
   if (!hasCategoryContext(listing)) blockers.push("missing_category");
   if (likelyTestData) blockers.push("flagged_test_data");
-  if (profileSource === "search_query_seed") {
-    blockers.push("query_seed_profile");
+  if (NON_PUBLIC_PROFILE_SOURCES.has(profileSource)) {
+    blockers.push("non_public_profile_source");
+  }
+  if (ownerEmail && NON_PUBLIC_OWNER_EMAIL_PATTERN.test(ownerEmail)) {
+    blockers.push("non_public_owner_email");
+  }
+  if (googleBusinessStatus === "CLOSED_PERMANENTLY") {
+    blockers.push("closed_permanently");
   }
 
   if (!hasDescriptionOrPhoto(listing)) {
