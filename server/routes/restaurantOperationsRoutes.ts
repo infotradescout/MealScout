@@ -307,6 +307,11 @@ export function registerRestaurantOperationsRoutes(
           overallTotal > 0
             ? Math.round((overallDone / overallTotal) * 100)
             : 100;
+        const isFoodTruckBusiness = Boolean(
+          (restaurant as any).isFoodTruck ||
+            String((restaurant as any).businessType || "").toLowerCase() ===
+              "food_truck",
+        );
 
         let verificationStatus: "verified" | "pending" | "not_submitted" =
           "not_submitted";
@@ -318,7 +323,7 @@ export function registerRestaurantOperationsRoutes(
           verificationStatus = pending ? "pending" : "not_submitted";
         }
         const verificationSnooze =
-          verificationStatus === "not_submitted"
+          !isFoodTruckBusiness && verificationStatus === "not_submitted"
             ? await getVerificationSnooze(restaurantId)
             : { snoozed: false, snoozedAt: null, snoozedUntil: null };
 
@@ -338,7 +343,8 @@ export function registerRestaurantOperationsRoutes(
           verification: {
             status: verificationStatus,
             isVerified: Boolean((restaurant as any).isVerified),
-            needsSubmission: verificationStatus === "not_submitted",
+            needsSubmission:
+              !isFoodTruckBusiness && verificationStatus === "not_submitted",
             snoozed: verificationSnooze.snoozed,
             snoozedAt: verificationSnooze.snoozedAt,
             snoozedUntil: verificationSnooze.snoozedUntil,

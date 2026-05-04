@@ -422,7 +422,7 @@ export default function AdminTelemetry() {
         <CardHeader>
           <CardTitle>Truck Owner Funnel (30d)</CardTitle>
           <CardDescription>
-            Food-truck onboarding from first page view through verified account and profile setup.
+            Food-truck onboarding from first page view through owner account, profile setup, and publish readiness.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

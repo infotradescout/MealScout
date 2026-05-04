@@ -36,6 +36,12 @@ const getAttribution = () => {
     path: window.location.pathname,
     referrer:
       typeof document !== "undefined" ? document.referrer || null : null,
+    source: get("source") || null,
+    ref: get("ref") || null,
+    audience: get("audience") || null,
+    flow: get("flow") || null,
+    intent: get("intent") || null,
+    hasFbclid: Boolean(get("fbclid")),
     utmSource: get("utm_source") || null,
     utmMedium: get("utm_medium") || null,
     utmCampaign: get("utm_campaign") || null,

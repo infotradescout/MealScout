@@ -646,10 +646,14 @@ export default function RestaurantOwnerDashboard() {
     !isStaff &&
     onboardingCompletion &&
     (onboardingCompletion.overallPct < 100 ||
-      onboardingCompletion.verification.status !== "verified"),
+      (!selectedRestaurantIsFoodTruck &&
+        onboardingCompletion.verification.status !== "verified")),
   );
   const verificationStatus = onboardingCompletion?.verification.status || null;
-  const needsVerificationSubmission = verificationStatus === "not_submitted";
+  const needsVerificationSubmission = Boolean(
+    !selectedRestaurantIsFoodTruck &&
+      onboardingCompletion?.verification.needsSubmission,
+  );
   const verificationSnoozed = Boolean(onboardingCompletion?.verification.snoozed);
   const isClaimedImport = Boolean((currentRestaurant as any)?.claimedFromImportId);
   const visibleTruckBookings = truckBookings.filter(
@@ -1825,19 +1829,21 @@ export default function RestaurantOwnerDashboard() {
                       Recommended {onboardingCompletion.recommended.done}/
                       {onboardingCompletion.recommended.total}
                     </Badge>
-                    <Badge
-                      variant={
-                        onboardingCompletion.verification.status === "verified"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      Verification:{" "}
-                      {onboardingCompletion.verification.status.replace(
-                        "_",
-                        " ",
-                      )}
-                    </Badge>
+                    {!selectedRestaurantIsFoodTruck ? (
+                      <Badge
+                        variant={
+                          onboardingCompletion.verification.status === "verified"
+                            ? "default"
+                            : "outline"
+                        }
+                      >
+                        Verification:{" "}
+                        {onboardingCompletion.verification.status.replace(
+                          "_",
+                          " ",
+                        )}
+                      </Badge>
+                    ) : null}
                   </div>
 
                   {onboardingCompletion.required.missing.length > 0 && (
@@ -1883,8 +1889,7 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   )}
 
-                  {onboardingCompletion.verification.status ===
-                    "not_submitted" && (
+                  {needsVerificationSubmission && (
                     <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex gap-3">
@@ -2009,7 +2014,8 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   )}
 
-                  {onboardingCompletion.verification.status === "pending" && (
+                  {!selectedRestaurantIsFoodTruck &&
+                    onboardingCompletion.verification.status === "pending" && (
                     <p className="text-sm text-[color:var(--text-secondary)]">
                       Verification is pending review. No action needed right
                       now.

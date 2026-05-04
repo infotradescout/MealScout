@@ -81,6 +81,70 @@ const classifyTelemetryDevice = (userAgent: string) => {
   return "desktop_web";
 };
 
+const shouldLogTelemetryEvent = (eventName: string) =>
+  eventName.startsWith("funnel_") ||
+  eventName.startsWith("search_") ||
+  eventName.startsWith("map_") ||
+  eventName.startsWith("deal_");
+
+const safeTelemetryLogValue = (value: unknown) => {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) return "[redacted-email]";
+  return raw.replace(/\s+/g, "_").slice(0, 120);
+};
+
+const logTelemetryEvent = (
+  eventName: string,
+  properties: Record<string, unknown>,
+  context: {
+    clientPath: string | null;
+    browserContext: string;
+    userType: string;
+    hasUser: boolean;
+  },
+) => {
+  if (!shouldLogTelemetryEvent(eventName)) return;
+
+  const usefulKeys = [
+    "page",
+    "sourcePage",
+    "source",
+    "audience",
+    "flow",
+    "intent",
+    "stage",
+    "authMode",
+    "truckMode",
+    "cta",
+    "reason",
+    "accountType",
+    "businessSubType",
+    "utmSource",
+    "utmCampaign",
+    "ref",
+    "hasFbclid",
+  ];
+
+  const pieces = [
+    `event=${safeTelemetryLogValue(eventName)}`,
+    `path=${safeTelemetryLogValue(context.clientPath) || "unknown"}`,
+    `device=${safeTelemetryLogValue(context.browserContext) || "unknown"}`,
+    `userType=${safeTelemetryLogValue(context.userType) || "guest"}`,
+    `actor=${context.hasUser ? "user" : "anon"}`,
+  ];
+
+  for (const key of usefulKeys) {
+    const value = safeTelemetryLogValue(properties[key]);
+    if (value) {
+      pieces.push(`${key}=${value}`);
+    }
+  }
+
+  console.log(`[telemetry] ${pieces.join(" ")}`);
+};
+
 const toDecimalString = (value: number, scale = 8) =>
   Number.isFinite(value) ? value.toFixed(scale) : null;
 
@@ -372,6 +436,7 @@ export function registerGeoAdRoutes(app: Express) {
       unknown
     >;
     const hasUser = Boolean(req.user?.id);
+    const userType = req.user?.userType || "guest";
     const userAgent = String(req.get("user-agent") || "").trim();
     const browserContext = classifyTelemetryDevice(userAgent);
     const inferredClientPath =
@@ -389,17 +454,26 @@ export function registerGeoAdRoutes(app: Express) {
             }
           })();
 
+    const telemetryProperties = {
+      ...incomingProperties,
+      clientPath: inferredClientPath,
+      requestPath: req.path,
+      anonSessionId: hasUser ? null : String(req.sessionID || ""),
+      userAgent,
+      browserContext,
+    };
+
     await db.insert(telemetryEvents).values({
       eventName,
       userId: req.user?.id || null,
-      properties: {
-        ...incomingProperties,
-        clientPath: inferredClientPath,
-        requestPath: req.path,
-        anonSessionId: hasUser ? null : String(req.sessionID || ""),
-        userAgent,
-        browserContext,
-      },
+      properties: telemetryProperties,
+    });
+
+    logTelemetryEvent(eventName, telemetryProperties, {
+      clientPath: inferredClientPath,
+      browserContext,
+      userType,
+      hasUser,
     });
 
     res.json({ ok: true });
