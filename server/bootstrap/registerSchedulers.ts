@@ -569,7 +569,20 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }
   });
 
+  const isSentimentSignalEventsAvailable = async () => {
+    const result = await db.execute(sql`
+      select to_regclass('public.sentiment_signal_events')::text as table_name
+    `);
+    const row = result.rows?.[0] as Record<string, unknown> | undefined;
+    return Boolean(row?.table_name);
+  };
+
   const writeSentimentSnapshot = async (reportType: string, windowDays: number) => {
+    if (!(await isSentimentSignalEventsAvailable())) {
+      console.warn(`[sentiment-snapshot] skipped ${reportType}: sentiment_signal_events table missing`);
+      return;
+    }
+
     const reportDate = new Date();
     const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
     const [overview] = await db

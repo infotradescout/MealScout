@@ -105,6 +105,22 @@ function normalizeEmail(value?: string | null): string | null {
   return normalized || null;
 }
 
+function emailMatchesNormalized(value: string) {
+  return sql`lower(btrim(${users.email})) = ${value}`;
+}
+
+async function findUserByNormalizedEmail(value?: string | null): Promise<User | undefined> {
+  const normalized = normalizeEmail(value);
+  if (!normalized) return undefined;
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(emailMatchesNormalized(normalized))
+    .limit(1);
+  return user;
+}
+
 // ── Repository factory ────────────────────────────────────────────────────────
 
 export function createUsersRepository() {
@@ -278,6 +294,7 @@ export function createUsersRepository() {
       try {
         if (authType === "tradescout") {
           const tsData = userData as TradeScoutUserData;
+          const tsEmail = normalizeEmail(tsData.email);
           let existingUser = await db.select().from(users).where(eq(users.tradescoutId, tsData.tradescoutId)).limit(1);
 
           if (existingUser.length > 0) {
@@ -286,8 +303,8 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: tsData.email ?? current.email,
-                ...(tsData.email ? { emailVerified: true } : {}),
+                email: tsEmail ?? current.email,
+                ...(tsEmail ? { emailVerified: true } : {}),
                 firstName: tsData.firstName ?? current.firstName,
                 lastName: tsData.lastName ?? current.lastName,
                 appContext: newAppContext,
@@ -299,10 +316,10 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (tsData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, tsData.email)).limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
+          if (tsEmail) {
+            const emailUser = await findUserByNormalizedEmail(tsEmail);
+            if (emailUser) {
+              const current = emailUser;
               const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
               const [user] = await db
                 .update(users)
@@ -326,8 +343,8 @@ export function createUsersRepository() {
             .values({
               userType,
               tradescoutId: tsData.tradescoutId,
-              email: tsData.email ?? undefined,
-              emailVerified: Boolean(tsData.email),
+              email: tsEmail ?? undefined,
+              emailVerified: Boolean(tsEmail),
               firstName: tsData.firstName ?? undefined,
               lastName: tsData.lastName ?? undefined,
               appContext,
@@ -337,6 +354,7 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "google") {
           const googleData = userData as GoogleUserData;
+          const googleEmail = normalizeEmail(googleData.email);
           let existingUser = await db.select().from(users).where(eq(users.googleId, googleData.googleId)).limit(1);
 
           if (existingUser.length > 0) {
@@ -345,7 +363,7 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: googleData.email,
+                email: googleEmail ?? current.email,
                 emailVerified: true,
                 firstName: googleData.firstName,
                 lastName: googleData.lastName,
@@ -360,24 +378,24 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (googleData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, googleData.email)).limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
+          if (googleEmail) {
+            const emailUser = await findUserByNormalizedEmail(googleEmail);
+            if (emailUser) {
+              const current = emailUser;
               const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
               const [user] = await db
                 .update(users)
                 .set({
                   googleId: googleData.googleId,
                   emailVerified: true,
-                  firstName: googleData.firstName || existingUser[0].firstName,
-                  lastName: googleData.lastName || existingUser[0].lastName,
-                  profileImageUrl: googleData.profileImageUrl || existingUser[0].profileImageUrl,
+                  firstName: googleData.firstName || current.firstName,
+                  lastName: googleData.lastName || current.lastName,
+                  profileImageUrl: googleData.profileImageUrl || current.profileImageUrl,
                   googleAccessToken: googleData.googleAccessToken,
                   appContext: newAppContext,
                   updatedAt: new Date(),
                 })
-                .where(eq(users.id, existingUser[0].id))
+                .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
               return user;
@@ -389,7 +407,7 @@ export function createUsersRepository() {
             .values({
               userType,
               googleId: googleData.googleId,
-              email: googleData.email,
+              email: googleEmail ?? undefined,
               emailVerified: true,
               firstName: googleData.firstName,
               lastName: googleData.lastName,
@@ -402,6 +420,7 @@ export function createUsersRepository() {
           return user;
         } else if (authType === "facebook") {
           const facebookData = userData as FacebookUserData;
+          const facebookEmail = normalizeEmail(facebookData.email);
           let existingUser = await db.select().from(users).where(eq(users.facebookId, facebookData.facebookId)).limit(1);
 
           if (existingUser.length > 0) {
@@ -410,7 +429,7 @@ export function createUsersRepository() {
             const [user] = await db
               .update(users)
               .set({
-                email: facebookData.email,
+                email: facebookEmail ?? current.email,
                 emailVerified: true,
                 firstName: facebookData.firstName,
                 lastName: facebookData.lastName,
@@ -425,24 +444,24 @@ export function createUsersRepository() {
             return user;
           }
 
-          if (facebookData.email) {
-            existingUser = await db.select().from(users).where(eq(users.email, facebookData.email)).limit(1);
-            if (existingUser.length > 0) {
-              const current = existingUser[0];
+          if (facebookEmail) {
+            const emailUser = await findUserByNormalizedEmail(facebookEmail);
+            if (emailUser) {
+              const current = emailUser;
               const newAppContext = current.appContext && current.appContext !== appContext ? "both" : appContext;
               const [user] = await db
                 .update(users)
                 .set({
                   facebookId: facebookData.facebookId,
                   emailVerified: true,
-                  firstName: facebookData.firstName || existingUser[0].firstName,
-                  lastName: facebookData.lastName || existingUser[0].lastName,
-                  profileImageUrl: facebookData.profileImageUrl || existingUser[0].profileImageUrl,
+                  firstName: facebookData.firstName || current.firstName,
+                  lastName: facebookData.lastName || current.lastName,
+                  profileImageUrl: facebookData.profileImageUrl || current.profileImageUrl,
                   facebookAccessToken: facebookData.facebookAccessToken,
                   appContext: newAppContext,
                   updatedAt: new Date(),
                 })
-                .where(eq(users.id, existingUser[0].id))
+                .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
               return user;
@@ -454,7 +473,7 @@ export function createUsersRepository() {
             .values({
               userType,
               facebookId: facebookData.facebookId,
-              email: facebookData.email,
+              email: facebookEmail ?? undefined,
               emailVerified: true,
               firstName: facebookData.firstName,
               lastName: facebookData.lastName,
@@ -487,12 +506,13 @@ export function createUsersRepository() {
         if (error.code === "23505") {
           if (authType === "tradescout") {
             const tsData = userData as TradeScoutUserData;
+            const tsEmail = normalizeEmail(tsData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                tsData.email
-                  ? or(eq(users.tradescoutId, tsData.tradescoutId), eq(users.email, tsData.email))
+                tsEmail
+                  ? or(eq(users.tradescoutId, tsData.tradescoutId), emailMatchesNormalized(tsEmail))
                   : eq(users.tradescoutId, tsData.tradescoutId),
               )
               .limit(1);
@@ -502,8 +522,8 @@ export function createUsersRepository() {
                 .update(users)
                 .set({
                   tradescoutId: tsData.tradescoutId,
-                  email: tsData.email ?? current.email,
-                  ...(tsData.email ? { emailVerified: true } : {}),
+                  email: tsEmail ?? current.email,
+                  ...(tsEmail ? { emailVerified: true } : {}),
                   firstName: tsData.firstName ?? current.firstName,
                   lastName: tsData.lastName ?? current.lastName,
                   updatedAt: new Date(),
@@ -515,56 +535,62 @@ export function createUsersRepository() {
             }
           } else if (authType === "google") {
             const googleData = userData as GoogleUserData;
+            const googleEmail = normalizeEmail(googleData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                googleData.email
-                  ? or(eq(users.googleId, googleData.googleId), eq(users.email, googleData.email))
+                googleEmail
+                  ? or(eq(users.googleId, googleData.googleId), emailMatchesNormalized(googleEmail))
                   : eq(users.googleId, googleData.googleId),
               )
               .limit(1);
             if (existingUser.length > 0) {
+              const current = existingUser[0];
               const [user] = await db
                 .update(users)
                 .set({
                   googleId: googleData.googleId,
-                  email: googleData.email,
-                  firstName: googleData.firstName,
-                  lastName: googleData.lastName,
-                  profileImageUrl: googleData.profileImageUrl,
+                  email: googleEmail ?? current.email,
+                  emailVerified: true,
+                  firstName: googleData.firstName || current.firstName,
+                  lastName: googleData.lastName || current.lastName,
+                  profileImageUrl: googleData.profileImageUrl || current.profileImageUrl,
                   googleAccessToken: googleData.googleAccessToken,
                   updatedAt: new Date(),
                 })
-                .where(eq(users.id, existingUser[0].id))
+                .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
               return user;
             }
           } else if (authType === "facebook") {
             const facebookData = userData as FacebookUserData;
+            const facebookEmail = normalizeEmail(facebookData.email);
             const existingUser = await db
               .select()
               .from(users)
               .where(
-                facebookData.email
-                  ? or(eq(users.facebookId, facebookData.facebookId), eq(users.email, facebookData.email))
+                facebookEmail
+                  ? or(eq(users.facebookId, facebookData.facebookId), emailMatchesNormalized(facebookEmail))
                   : eq(users.facebookId, facebookData.facebookId),
               )
               .limit(1);
             if (existingUser.length > 0) {
+              const current = existingUser[0];
               const [user] = await db
                 .update(users)
                 .set({
                   facebookId: facebookData.facebookId,
-                  email: facebookData.email,
-                  firstName: facebookData.firstName,
-                  lastName: facebookData.lastName,
-                  profileImageUrl: facebookData.profileImageUrl,
+                  email: facebookEmail ?? current.email,
+                  emailVerified: true,
+                  firstName: facebookData.firstName || current.firstName,
+                  lastName: facebookData.lastName || current.lastName,
+                  profileImageUrl: facebookData.profileImageUrl || current.profileImageUrl,
                   facebookAccessToken: facebookData.facebookAccessToken,
                   updatedAt: new Date(),
                 })
-                .where(eq(users.id, existingUser[0].id))
+                .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
               return user;

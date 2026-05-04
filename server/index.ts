@@ -12,6 +12,7 @@ import {
   registerRecurringJobs,
   ensureMenuSchema,
   ensureMessagingSchema,
+  ensureSentimentSchema,
 } from "./bootstrap";
 import actionRoutes from "./routes/actionRoutes";
 import {
@@ -1149,6 +1150,7 @@ app.use((req, res, next) => {
   });
 
   await ensureLaunchSchemaCompatibility();
+  await ensureSentimentSchema();
   await ensureMessagingSchema();
 
   const server = await registerRoutes(app);
@@ -1339,6 +1341,7 @@ app.use((req, res, next) => {
       setImmediate(async () => {
         try {
           await ensureMenuSchema();
+          await ensureSentimentSchema();
           await ensureMessagingSchema();
           await storage.ensureAdminExists();
 
