@@ -13,7 +13,9 @@ import {
   referralClicks,
   restaurants,
   affiliateCommissionLedger,
+  users,
 } from "@shared/schema";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { eq } from "drizzle-orm";
 import { resolveAffiliateUserId } from "./affiliateTagService";
 
@@ -235,8 +237,29 @@ export async function createCommissionForRestaurantPayment(
       return null;
     }
 
-    // Calculate 10% commission
-    const commissionAmount = (invoiceAmount / 100) * 0.1; // invoiceAmount is in cents, convert and take 10%
+    const [affiliate] = await db
+      .select({
+        affiliatePercent: users.affiliatePercent,
+        userType: users.userType,
+      })
+      .from(users)
+      .where(eq(users.id, referral.affiliateUserId))
+      .limit(1);
+    const commissionPercent = Math.max(
+      Number(
+        affiliate?.affiliatePercent ??
+          getDefaultAffiliatePercent(affiliate?.userType),
+      ),
+      0,
+    );
+    if (commissionPercent <= 0) {
+      console.log(
+        `[Phase 3] Affiliate ${referral.affiliateUserId} has 0% commission`,
+      );
+      return null;
+    }
+    const commissionAmount =
+      (invoiceAmount / 100) * (commissionPercent / 100);
 
     // Create commission ledger entry
     const commission = await db
@@ -246,6 +269,8 @@ export async function createCommissionForRestaurantPayment(
         referralId: referral.id,
         restaurantId,
         amount: commissionAmount.toString(),
+        commissionPercent,
+        sourceAmountCents: invoiceAmount,
         commissionSource: "subscription_payment",
         stripeInvoiceId: invoiceId,
       })

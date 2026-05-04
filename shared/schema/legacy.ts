@@ -15,6 +15,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { DEFAULT_AFFILIATE_PERCENT } from "../affiliatePolicy";
 export {
   cities,
   ORDER_STATUS,
@@ -53,7 +54,7 @@ export const users: any = pgTable(
     phone: varchar("phone"),
     profileImageUrl: varchar("profile_image_url"),
     affiliateTag: varchar("affiliate_tag"),
-    affiliatePercent: integer("affiliate_percent").default(5),
+    affiliatePercent: integer("affiliate_percent").default(DEFAULT_AFFILIATE_PERCENT),
     affiliateCloserUserId: varchar("affiliate_closer_user_id").references(
       () => users.id,
       { onDelete: "set null" },

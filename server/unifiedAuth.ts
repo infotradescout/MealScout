@@ -30,6 +30,7 @@ import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
 } from "./affiliateTagService";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { getOwnerProfileRecoveryPromptForUser } from "./services/ownerProfileRecovery";
 
 // Extend session to include app context for multi-app OAuth
@@ -2351,12 +2352,18 @@ async function applyAffiliateReferral(req: any, user: User) {
     if (!affiliateUserId || affiliateUserId === user.id) return;
 
     const [affiliate] = await db
-      .select({ affiliatePercent: users.affiliatePercent })
+      .select({
+        affiliatePercent: users.affiliatePercent,
+        userType: users.userType,
+      })
       .from(users)
       .where(eq(users.id, affiliateUserId))
       .limit(1);
     const percentSnapshot = Math.max(
-      Number(affiliate?.affiliatePercent ?? 5),
+      Number(
+        affiliate?.affiliatePercent ??
+          getDefaultAffiliatePercent(affiliate?.userType),
+      ),
       0,
     );
 

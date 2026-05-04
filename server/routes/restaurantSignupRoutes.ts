@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
@@ -396,12 +397,18 @@ export function registerRestaurantSignupRoutes(
 
             if (!existingUser?.affiliateCloserUserId) {
               const [affiliate] = await db
-                .select({ affiliatePercent: users.affiliatePercent })
+                .select({
+                  affiliatePercent: users.affiliatePercent,
+                  userType: users.userType,
+                })
                 .from(users)
                 .where(eq(users.id, affiliateUserId))
                 .limit(1);
               const percentSnapshot = Math.max(
-                Number(affiliate?.affiliatePercent ?? 5),
+                Number(
+                  affiliate?.affiliatePercent ??
+                    getDefaultAffiliatePercent(affiliate?.userType),
+                ),
                 0,
               );
 

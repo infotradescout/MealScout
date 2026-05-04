@@ -13,6 +13,7 @@ import {
   creditLedger,
 } from "@shared/schema";
 import { setAffiliateTag } from "../../affiliateTagService";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 
 type RequireAdminUser = (req: any, res: any) => boolean;
 
@@ -160,6 +161,8 @@ export function registerAffiliateAdminRoutes(
 
           return {
             ...user,
+            affiliatePercent:
+              user.affiliatePercent ?? getDefaultAffiliatePercent(user.userType),
             linksShared: shareCountMap.get(user.id) ?? 0,
             peopleReferred: referred?.size ?? 0,
             paidReferrals: paid?.size ?? 0,

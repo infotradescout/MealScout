@@ -109,6 +109,7 @@ import {
   truckClaimRequests,
   truckImportListings,
 } from "@shared/schema";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import { db, pool } from "./db";
 import {
@@ -5263,6 +5264,7 @@ export class DatabaseStorage implements IStorage {
         passwordHash: data.passwordHash,
         mustResetPassword: data.mustResetPassword,
         emailVerified: false,
+        affiliatePercent: getDefaultAffiliatePercent(data.userType),
       })
       .returning();
 

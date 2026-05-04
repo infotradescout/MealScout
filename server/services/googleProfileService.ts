@@ -10,6 +10,7 @@
 
 import { db } from "../db";
 import { restaurants, hosts, users } from "../../shared/schema/legacy";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { eq, sql } from "drizzle-orm";
 
 const PLACES_API_BASE = "https://places.googleapis.com/v1";
@@ -669,6 +670,7 @@ async function getOrCreateImportSystemUserId(): Promise<string> {
           lastName: "Import",
           userType: "admin",
           emailVerified: true,
+          affiliatePercent: getDefaultAffiliatePercent("admin"),
         })
         .onConflictDoNothing({ target: users.email });
       const [created] = await db

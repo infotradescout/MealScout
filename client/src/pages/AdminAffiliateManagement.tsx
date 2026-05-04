@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 
 type AffiliateUser = {
   id: string;
@@ -86,7 +87,9 @@ export default function AdminAffiliateManagement() {
 
   const startEdit = (user: AffiliateUser) => {
     setEditing(user);
-    setPercent(String(user.affiliatePercent ?? 5));
+    setPercent(
+      String(user.affiliatePercent ?? getDefaultAffiliatePercent(user.userType)),
+    );
     setAffiliateTag(user.affiliateTag || "");
     setCloserId(user.affiliateCloserUserId || "");
     setBookerId(user.affiliateBookerUserId || "");
@@ -364,7 +367,7 @@ export default function AdminAffiliateManagement() {
                       {user.affiliateTag || "userXXXX"}
                     </TableCell>
                     <TableCell className="text-xs font-medium">
-                      {user.affiliatePercent ?? 5}%
+                      {user.affiliatePercent ?? getDefaultAffiliatePercent(user.userType)}%
                     </TableCell>
                     <TableCell className="text-xs text-center">
                       {user.linksShared}

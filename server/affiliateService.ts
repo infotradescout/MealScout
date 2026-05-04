@@ -11,7 +11,9 @@ import {
   affiliateClicks,
   affiliateCommissions,
   affiliateWallet,
+  users,
 } from '@shared/schema';
+import { getDefaultAffiliatePercent } from '@shared/affiliatePolicy';
 import { eq, and, sql, asc } from 'drizzle-orm';
 
 const AFFILIATE_CODE_LENGTH = 8;
@@ -179,8 +181,9 @@ export async function attributeSignupToAffiliate(
 /**
  * Calculate and create commission when restaurant becomes a paid subscriber
  * Commission policy (updated):
- * - Signup bonus: 20% of the first paid subscription (one-time)
- * - Recurring: 5% per paid month thereafter
+ * - Affiliate default: 20%
+ * - Staff affiliate default: 25%
+ * - Admin/super admin: 0%
  * - Only monthly billing is supported; any non-month cycle is treated as monthly
  */
 export async function createCommission(
@@ -191,6 +194,22 @@ export async function createCommission(
   affiliateLinkId?: string,
 ) {
   const value = parseFloat(subscriptionValue);
+  const [affiliate] = await db
+    .select({
+      userType: users.userType,
+      affiliatePercent: users.affiliatePercent,
+    })
+    .from(users)
+    .where(eq(users.id, affiliateUserId))
+    .limit(1);
+  const percent = Math.max(
+    Number(
+      affiliate?.affiliatePercent ??
+        getDefaultAffiliatePercent(affiliate?.userType),
+    ),
+    0,
+  );
+  if (percent <= 0) return [];
 
   // Determine if this is the first commission for this affiliate-restaurant pair (signup bonus applies)
   const existing = await db
@@ -209,8 +228,6 @@ export async function createCommission(
   const forMonth = now.toISOString().slice(0, 7); // YYYY-MM
 
   if (isFirstCommission) {
-    // 20% signup bonus, one-time
-    const percent = 20;
     const amount = +(value * (percent / 100)).toFixed(2);
     const signupRow = await db.insert(affiliateCommissions).values({
       affiliateUserId,
@@ -227,8 +244,6 @@ export async function createCommission(
 
     await updateAffiliateWallet(affiliateUserId, { pendingCommissions: amount });
   } else {
-    // Recurring month: 10%
-    const percent = 10;
     const amount = +(value * (percent / 100)).toFixed(2);
     const monthRow = await db.insert(affiliateCommissions).values({
       affiliateUserId,

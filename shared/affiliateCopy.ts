@@ -53,13 +53,13 @@ export const COPY = {
     deal: {
       title: '💰 Share this deal',
       subtitle: 'Earn recurring commission every time someone signs up through your link',
-      info: 'First-click attribution: Earn 20% at signup, then 10% every month',
+      info: 'First-click attribution: earn 20% every paid month',
     },
 
     restaurant: {
       title: '🍽️ Recommend this restaurant',
       subtitle: 'Get paid when they become an MealScout partner',
-      info: 'Share your unique affiliate link: 20% at signup + 10% monthly',
+      info: 'Share your unique affiliate link: 20% every paid month',
     },
 
     page: {
@@ -71,7 +71,7 @@ export const COPY = {
     collection: {
       title: '⭐ Share this collection',
       subtitle: 'Earn affiliate commissions on all recommendations',
-      info: 'Get paid 20% at signup, then 10% monthly from restaurants in this collection',
+      info: 'Get paid 20% every paid month from restaurants in this collection',
     },
 
     search: {
@@ -131,7 +131,7 @@ export const COPY = {
       step3: {
         icon: '💵',
         title: 'Earn Recurring Commissions',
-        description: 'Get 20% at signup, then 10% every paid month they stay active',
+        description: 'Get 20% every paid month they stay active',
       },
     },
 
@@ -151,7 +151,7 @@ export const COPY = {
     },
 
     commissionTiers: {
-      monthly: '10% of each paid month (recurring) + 20% signup bonus',
+      monthly: '20% of each paid month',
     },
   },
 
@@ -245,11 +245,11 @@ ${url}`,
       title: 'Commission Structure',
       monthly: {
         label: 'Signup bonus',
-        commission: '20% of the first paid subscription',
+        commission: '20% of each paid subscription',
       },
       yearly: {
         label: 'Recurring monthly',
-        commission: '10% of each paid month thereafter',
+        commission: '20% of each paid month thereafter',
       },
     },
 
@@ -264,7 +264,7 @@ ${url}`,
     example: {
       title: 'Example',
       scenario:
-        'You recommend Joe\'s Pizza. They subscribe for $25 this month. You earn 20% ($5) for signup, then 10% ($2.50) for each month they stay subscribed.',
+        'You recommend Joe\'s Pizza. They subscribe for $25 this month. You earn 20% ($5) each paid month they stay subscribed.',
     },
   },
 
@@ -284,7 +284,7 @@ ${url}`,
       {
         icon: '💰',
         title: 'Earn commissions',
-        description: 'Earn 20% at signup + 10% every month from restaurant subscriptions',
+        description: 'Earn 20% every month from restaurant subscriptions',
       },
       {
         icon: '📈',
@@ -319,7 +319,7 @@ ${url}`,
     step3: {
       title: '💵 Earn when they sign up',
       description:
-        'If someone becomes a paid subscriber through your link, you earn 10% every month.',
+        'If someone becomes a paid subscriber through your link, you earn 20% every month.',
     },
     step4: {
       title: '💸 Withdraw or spend credits',

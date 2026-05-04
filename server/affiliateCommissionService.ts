@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { affiliateCommissionLedger, users } from "@shared/schema";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { and, eq, inArray } from "drizzle-orm";
 
 type CommissionSource =
@@ -77,7 +78,11 @@ async function getAffiliateRecipientsForUser(
     .map((row) => ({
       affiliateUserId: row.id,
       percent: Math.max(
-        Number(percentOverride.get(row.id) ?? row.affiliatePercent ?? 5),
+        Number(
+          percentOverride.get(row.id) ??
+            row.affiliatePercent ??
+            getDefaultAffiliatePercent(row.userType),
+        ),
         0,
       ),
     }))

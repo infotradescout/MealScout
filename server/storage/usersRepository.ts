@@ -7,6 +7,7 @@ import {
   type FacebookUserData,
   type TradeScoutUserData,
 } from "@shared/schema";
+import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { db, pool } from "../db";
 import { eq, and, or, isNull, desc, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -207,7 +208,10 @@ export function createUsersRepository() {
     async upsertUser(userData: UpsertUser): Promise<User> {
       const [user] = await db
         .insert(users)
-        .values(userData)
+        .values({
+          affiliatePercent: getDefaultAffiliatePercent(userData.userType),
+          ...userData,
+        })
         .onConflictDoUpdate({ target: users.facebookId, set: { ...userData, updatedAt: new Date() } })
         .returning();
       return user;
@@ -279,16 +283,13 @@ export function createUsersRepository() {
         throw new Error("Cannot modify super admin account");
       }
 
-      const affiliatePercent =
-        userType === "staff" ? 25
-        : userType === "admin" || userType === "super_admin" ? 0
-        : undefined;
+      const affiliatePercent = getDefaultAffiliatePercent(userType);
       const shouldAutoVerify = userType === "admin" || userType === "super_admin";
       const [updatedUser] = await db
         .update(users)
         .set({
           userType,
-          ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+          affiliatePercent,
           ...(shouldAutoVerify ? { emailVerified: true } : {}),
           updatedAt: new Date(),
         })
@@ -374,6 +375,7 @@ export function createUsersRepository() {
               emailVerified: Boolean(tsEmail),
               firstName: tsData.firstName ?? undefined,
               lastName: tsData.lastName ?? undefined,
+              affiliatePercent: getDefaultAffiliatePercent(userType),
               appContext,
             })
             .returning();
@@ -440,6 +442,7 @@ export function createUsersRepository() {
               lastName: googleData.lastName,
               profileImageUrl: googleData.profileImageUrl,
               googleAccessToken: googleData.googleAccessToken,
+              affiliatePercent: getDefaultAffiliatePercent(userType),
               appContext,
             })
             .returning();
@@ -506,6 +509,7 @@ export function createUsersRepository() {
               lastName: facebookData.lastName,
               profileImageUrl: facebookData.profileImageUrl,
               facebookAccessToken: facebookData.facebookAccessToken,
+              affiliatePercent: getDefaultAffiliatePercent(userType),
               appContext,
             })
             .returning();
@@ -547,6 +551,7 @@ export function createUsersRepository() {
               phone: phone ?? emailData.phone,
               passwordHash: emailData.passwordHash,
               emailVerified: false,
+              affiliatePercent: getDefaultAffiliatePercent(userType),
               appContext,
             })
             .returning();
@@ -696,10 +701,7 @@ export function createUsersRepository() {
       }
 
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
-      const affiliatePercent =
-        userData.userType === "staff" ? 25
-        : userData.userType === "admin" || userData.userType === "super_admin" ? 0
-        : undefined;
+      const affiliatePercent = getDefaultAffiliatePercent(userData.userType);
 
       const [user] = await db
         .insert(users)
@@ -712,7 +714,7 @@ export function createUsersRepository() {
           passwordHash: hashedPassword,
           mustResetPassword: true,
           emailVerified: true,
-          ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+          affiliatePercent,
         })
         .returning();
 
@@ -757,10 +759,7 @@ export function createUsersRepository() {
         throw err;
       }
 
-      const affiliatePercent =
-        data.userType === "staff" ? 25
-        : data.userType === "admin" || data.userType === "super_admin" ? 0
-        : undefined;
+      const affiliatePercent = getDefaultAffiliatePercent(data.userType);
       const shouldAutoVerify = data.userType === "admin" || data.userType === "super_admin";
 
       const [user] = await db
@@ -774,7 +773,7 @@ export function createUsersRepository() {
           passwordHash: null,
           mustResetPassword: false,
           emailVerified: shouldAutoVerify,
-          ...(affiliatePercent !== undefined ? { affiliatePercent } : {}),
+          affiliatePercent,
         })
         .returning();
 
