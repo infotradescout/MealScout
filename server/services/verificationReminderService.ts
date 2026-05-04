@@ -5,7 +5,7 @@
  * nudge until they submit a request or become verified.
  */
 
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { emailService } from "../emailService";
@@ -124,7 +124,9 @@ async function fetchCandidates(): Promise<ReminderCandidate[]> {
     .where(
       and(
         eq(restaurants.isVerified, false),
-        or(eq(users.userType, "restaurant_owner"), eq(users.userType, "food_truck")),
+        eq(users.userType, "restaurant_owner"),
+        sql`coalesce(${restaurants.isFoodTruck}, false) = false`,
+        sql`lower(coalesce(${restaurants.businessType}, '')) <> 'food_truck'`,
         eq(users.emailVerified, true),
         sql`coalesce(${users.isDisabled}, false) = false`,
         sql`${restaurants.createdAt} <= ${graceCutoff}`,

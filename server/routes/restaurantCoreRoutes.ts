@@ -609,6 +609,9 @@ export function registerRestaurantCoreRoutes(
             process.env.VAC_AUTO_VERIFY_ENABLED || "true",
           ).toLowerCase() !== "false";
         if (enabled) {
+          const isFoodTruckRestaurant =
+            String((restaurant as any)?.businessType || "") === "food_truck" ||
+            Boolean((restaurant as any)?.isFoodTruck);
           const vac = await vacEvaluateRestaurantSignup({
             user: req.user,
             restaurant,
@@ -635,7 +638,7 @@ export function registerRestaurantCoreRoutes(
                 error,
               );
             }
-          } else {
+          } else if (!isFoodTruckRestaurant) {
             console.log(
               "⚠️  Creating manual verification request for:",
               restaurant.id,
@@ -651,6 +654,11 @@ export function registerRestaurantCoreRoutes(
             } else {
               console.log("ℹ️  Pending verification request already exists");
             }
+          } else {
+            console.log(
+              "ℹ️  Food truck onboarding skipped manual verification request:",
+              restaurant.id,
+            );
           }
         }
       } catch (error) {
@@ -941,13 +949,13 @@ export function registerRestaurantCoreRoutes(
           !primaryProfileChecks.warnings.includes("missing_description_or_photo");
 
         // "Discoverable" = customers can actually find this business now.
-        // We require: at least one verified+active restaurant with a menu
-        // and at least one item. Stripe subscription is NOT required for
-        // discoverability; only for paid tools.
-        const firstDiscoverable =
-          primaryRestaurant?.isVerified && primaryRestaurant?.isActive
-            ? primaryRestaurant
-            : null;
+        // Restaurants still need verification; food trucks should not be held
+        // behind manual admin verification during owner onboarding.
+        // Stripe subscription is NOT required for discoverability; only for paid tools.
+        const primaryIsLiveEnough =
+          Boolean(primaryRestaurant?.isActive) &&
+          (isFoodTruckOwner || Boolean(primaryRestaurant?.isVerified));
+        const firstDiscoverable = primaryIsLiveEnough ? primaryRestaurant : null;
         const isDiscoverable = Boolean(
           firstDiscoverable &&
             hasMenu &&
@@ -977,19 +985,11 @@ export function registerRestaurantCoreRoutes(
               },
               {
                 id: "go-live",
-                label: "Go live / get verified",
+                label: "Go live",
                 done: isDiscoverable,
                 href: goLiveHref,
-                cta: isVerified
-                  ? "Go live"
-                  : hasPendingVerification
-                    ? "Check review"
-                    : verificationSnooze.snoozed
-                      ? "Submit anytime"
-                      : "Submit verification",
-                why: hasPendingVerification
-                  ? "Verification is pending. You can keep working while review finishes."
-                  : "Verification can be skipped briefly, but verified trucks are easier to trust and approve.",
+                cta: "Open dashboard",
+                why: "Turn on live map tools and publish when ready.",
               },
             ]
           : [
@@ -1068,7 +1068,7 @@ export function registerRestaurantCoreRoutes(
         if (!primaryRestaurant?.isActive) {
           visibilityBlockers.push("inactive");
         }
-        if (!primaryRestaurant?.isVerified) {
+        if (!isFoodTruckOwner && !primaryRestaurant?.isVerified) {
           visibilityBlockers.push("unverified");
         }
         if (previewRestaurant) {
@@ -1097,7 +1097,8 @@ export function registerRestaurantCoreRoutes(
           verification: {
             status: verificationStatus,
             isVerified,
-            needsSubmission: verificationStatus === "not_submitted",
+            needsSubmission:
+              !isFoodTruckOwner && verificationStatus === "not_submitted",
             snoozed: verificationSnooze.snoozed,
             snoozedAt: verificationSnooze.snoozedAt,
             snoozedUntil: verificationSnooze.snoozedUntil,

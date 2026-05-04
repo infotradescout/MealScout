@@ -205,6 +205,9 @@ export function registerRestaurantSignupRoutes(
             process.env.VAC_AUTO_VERIFY_ENABLED || "true",
           ).toLowerCase() !== "false";
         if (enabled) {
+          const isFoodTruckSignup =
+            String((restaurant as any)?.businessType || "") === "food_truck" ||
+            Boolean((restaurant as any)?.isFoodTruck);
           const vac = await vacEvaluateRestaurantSignup({
             user,
             restaurant,
@@ -228,7 +231,7 @@ export function registerRestaurantSignupRoutes(
             } catch (error) {
               console.warn("ensureTrialForUser failed after auto-verify:", error);
             }
-          } else {
+          } else if (!isFoodTruckSignup) {
             console.log(
               "⚠️  Creating manual verification request for:",
               restaurant.id,
@@ -244,6 +247,11 @@ export function registerRestaurantSignupRoutes(
             } else {
               console.log("ℹ️  Pending verification request already exists");
             }
+          } else {
+            console.log(
+              "ℹ️  Food truck onboarding skipped manual verification request:",
+              restaurant.id,
+            );
           }
         }
       } catch (error) {
