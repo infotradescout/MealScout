@@ -373,6 +373,8 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     ? `/truck/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
     : isBar
       ? `/bar/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
+      : isPrivateChef
+        ? `/chef/${encodeURIComponent(`${toSlug(name) || row.id}--${row.id}`)}`
       : `/restaurant/${encodeURIComponent(row.id)}/${encodeURIComponent(toSlug(name) || row.id)}`;
   const videos = await publicVideosFor(ownerType, row.id);
   const menuSnippet = await menuSnippetForRestaurant(row.id);
@@ -386,7 +388,9 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     `${name}${cityState ? ` in ${cityState}` : ""} on MealScout. View profile details, specials, videos, menu information, and location updates.${menuSentence}`,
   );
   const cateringSentence = offersCatering
-    ? ` Catering is available for local events and private bookings.`
+    ? isPrivateChef
+      ? ` Private chef bookings, menus, service area, and booking details are available from this profile.`
+      : ` Catering is available for local events and private bookings.`
     : "";
   const description = cleanText(
     `${baseDescription}${baseDescription.includes(menuHighlights[0] || "__none__") ? "" : menuSentence}${cateringSentence}`,
@@ -394,7 +398,13 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
 
   const localBusiness = {
     "@context": "https://schema.org",
-    "@type": isTruck ? "FoodTruck" : isBar ? "BarOrPub" : "Restaurant",
+    "@type": isTruck
+      ? "FoodTruck"
+      : isBar
+        ? "BarOrPub"
+        : isPrivateChef
+          ? "FoodEstablishment"
+          : "Restaurant",
     name,
     description,
     url: absoluteUrl(baseUrl, canonicalPath),
@@ -986,6 +996,10 @@ export function registerPublicProfilePrerenderRoutes(
   );
   app.get(
     "/bar/:slug",
+    gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.slug))),
+  );
+  app.get(
+    "/chef/:slug",
     gate((req) => restaurantPage(canonicalBaseUrl, extractId(req.params.slug))),
   );
   app.get(

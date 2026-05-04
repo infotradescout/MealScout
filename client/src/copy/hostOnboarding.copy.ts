@@ -90,6 +90,14 @@ export const HOST_ONBOARDING_COPY = {
         description:
           "Perfect for businesses that serve events, prep from a commissary, or travel to customers.",
       },
+      privateChef: {
+        label: "Private Chef",
+        title: "Build a bookable private chef profile",
+        subtitle:
+          "Showcase your menus, service area, availability, and proof of coverage so customers can book with confidence.",
+        description:
+          "Designed for chefs who serve private dinners, events, meal prep, tastings, and recurring in-home service.",
+      },
       bar: {
         label: "Bar",
         description:
@@ -219,6 +227,16 @@ export const HOST_ONBOARDING_COPY = {
     ],
     whyVerify:
       "Verified businesses get a visible trust badge, priority placement on the map, and the ability to book parking pass spots.",
+    privateChefTitle: "Verify your private chef business",
+    privateChefIntro:
+      "Your chef profile can be created now, but bookings and premium visibility unlock after business verification. Upload proof that you are legally operating and commercially insured for the area you serve.",
+    privateChefBullets: [
+      "Commercial general liability or chef/catering insurance",
+      "Business license, DBA, LLC/Corp filing, or local registration",
+      "Food handler, food manager, commissary, or health department documents when required locally",
+    ],
+    privateChefWhyVerify:
+      "Verified private chefs earn a visible trust badge, stronger placement in discovery, and cleaner booking confidence for hosts, customers, and event organizers.",
     backButton: "Back to Business Details",
     skipButton: "Skip — I'll verify later",
     submitIdle: "Submit for Review",
@@ -322,6 +340,8 @@ export const HOST_ONBOARDING_COPY = {
       businessTypePlaceholder: "Select your business type...",
       businessTypeHelp:
         "Choose the setup that matches how customers find you: mobile, fixed-location, or catering.",
+      privateChefBusinessTypeHelp:
+        "Choose Private Chef when customers book you personally for dinners, events, meal prep, tastings, or recurring in-home service.",
       stationaryConfirmLabel:
         "I confirm this is a fixed location (not a food truck).",
       stationaryWarning:
@@ -330,6 +350,9 @@ export const HOST_ONBOARDING_COPY = {
       addressPlaceholder: "123 Main Street, Chicago, IL",
       catererAddressLabel: "Commissary or Pickup Address",
       catererAddressPlaceholder: "Optional if you serve customers off-site",
+      privateChefAddressLabel: "Base Kitchen or Service Area",
+      privateChefAddressPlaceholder:
+        "Your licensed kitchen, commissary, or primary city served",
       cityLabel: "City",
       cityPlaceholder: "Chicago",
       stateLabel: "State",

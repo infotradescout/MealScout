@@ -194,6 +194,7 @@ const publicRoutePrefixes = [
   "/deals",
   "/orders",
   "/restaurant/",
+  "/chef/",
   "/terms-of-service",
   "/moderation-policy",
   "/privacy-policy",
@@ -478,6 +479,7 @@ function Router() {
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
+            <Route path="/chef/:slug" component={RestaurantDetail} />
             <Route path="/location/:slug" component={LocationDetailPage} />
             <Route
               path="/location/:slug/food-trucks"
@@ -791,6 +793,7 @@ function Router() {
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
+            <Route path="/chef/:slug" component={RestaurantDetail} />
             <Route path="/location/:slug" component={LocationDetailPage} />
             <Route
               path="/location/:slug/food-trucks"

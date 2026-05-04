@@ -256,6 +256,8 @@ export default function ShareHub({
       const profileSlug = `${slug}--${restaurant.id}`;
       const profileHref = isTruck
         ? `/truck/${profileSlug}`
+        : isPrivateChef
+          ? `/chef/${profileSlug}`
         : `/restaurant/${restaurant.id}/${slug}`;
 
       selfPromoItems.push({

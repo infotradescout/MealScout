@@ -147,6 +147,8 @@ export default function RestaurantDetailPage() {
     ? "truck"
     : location.startsWith("/bar/")
       ? "bar"
+      : location.startsWith("/chef/")
+        ? "chef"
       : "restaurant";
   const rawRestaurantParam = params.id || params.slug || "";
   const directRestaurantId =
@@ -311,6 +313,8 @@ export default function RestaurantDetailPage() {
   const isFoodTruck =
     (restaurant as any)?.isFoodTruck ||
     (restaurant as any)?.businessType === "food_truck";
+  const businessType = String((restaurant as any)?.businessType || "").toLowerCase();
+  const isPrivateChef = businessType === "private_chef";
   const isVerifiedMemberProfile =
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
@@ -326,19 +330,25 @@ export default function RestaurantDetailPage() {
   useEffect(() => {
     if (!restaurantId || !restaurant || !expectedRestaurantSlug) return;
 
-    const canonicalPath = `/restaurant/${restaurantId}/${expectedRestaurantSlug}`;
+    const canonicalPath = isPrivateChef
+      ? `/chef/${expectedRestaurantSlug}--${restaurantId}`
+      : `/restaurant/${restaurantId}/${expectedRestaurantSlug}`;
     const currentPath = window.location.pathname.replace(/\/+$/, "");
     const legacyPath = `/restaurant/${restaurantId}`;
     const normalizedCanonicalPath = canonicalPath.replace(/\/+$/, "");
 
     if (currentPath === normalizedCanonicalPath) return;
+    if (isPrivateChef && currentPath.startsWith("/chef/")) {
+      setLocation(`${canonicalPath}${window.location.search || ""}`);
+      return;
+    }
     if (
       currentPath === legacyPath ||
       currentPath.startsWith(`${legacyPath}/`)
     ) {
       setLocation(`${canonicalPath}${window.location.search || ""}`);
     }
-  }, [restaurantId, restaurant, expectedRestaurantSlug, setLocation]);
+  }, [restaurantId, restaurant, expectedRestaurantSlug, isPrivateChef, setLocation]);
 
   useEffect(() => {
     if (!user || !canClaimGeneratedProfile) return;
@@ -594,7 +604,9 @@ export default function RestaurantDetailPage() {
     Boolean(user?.id) &&
     String((restaurant as any)?.ownerId || "") === String(user?.id || "");
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
-  const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
+  const profilePath = isPrivateChef
+    ? `/chef/${profileSlug}--${restaurantId}`
+    : `/restaurant/${restaurantId}/${profileSlug}`;
   const isOwnBusinessProfile =
     Boolean(user?.id) && String((restaurant as any)?.ownerId || "") === user?.id;
   const messagePath = isOwnBusinessProfile
@@ -605,7 +617,7 @@ export default function RestaurantDetailPage() {
     : `/login?redirect=${encodeURIComponent(messagePath)}`;
   const messageButtonLabel = isOwnBusinessProfile ? "Messages" : "Message";
   const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
-    isFoodTruck ? "food_truck" : "restaurant",
+    isFoodTruck ? "food_truck" : isPrivateChef ? "private_chef" : "restaurant",
   )}&claim=1&claimRestaurantId=${encodeURIComponent(String(restaurantId || ""))}&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(
     profilePath,
   )}`;
@@ -654,8 +666,6 @@ export default function RestaurantDetailPage() {
     rawCateringDetails && typeof rawCateringDetails === "object"
       ? (rawCateringDetails as Record<string, any>)
       : {};
-  const businessType = String((restaurant as any)?.businessType || "").toLowerCase();
-  const isPrivateChef = businessType === "private_chef";
   const offersCatering = Boolean(
     (restaurant as any)?.offersCatering ||
       businessType === "caterer" ||
@@ -671,7 +681,9 @@ export default function RestaurantDetailPage() {
   const cateringDescription = String(
     cateringDetails.description ||
       cateringDetails.notes ||
-      `${restaurantName} can support local catering, events, offices, private parties, and pop-ups through MealScout.`,
+      (isPrivateChef
+        ? `${restaurantName} is available for private dinners, events, tastings, meal prep, and recurring chef service through MealScout.`
+        : `${restaurantName} can support local catering, events, offices, private parties, and pop-ups through MealScout.`),
   ).trim();
   const cateringServiceArea = String(
     cateringDetails.serviceArea ||
@@ -692,6 +704,8 @@ export default function RestaurantDetailPage() {
   const phoneHref = toPhoneHref(phoneNumber);
   const profileTypeLabel = isFoodTruck
     ? "Food Truck"
+    : isPrivateChef
+      ? "Private Chef"
     : String(cuisineType || "Restaurant");
   const normalizedAddress = String(address || "").toLowerCase();
   const addressAlreadyIncludesCity = city
@@ -754,7 +768,12 @@ export default function RestaurantDetailPage() {
     nextStop?.startTime && nextStop?.endTime
       ? `${nextStop.startTime} - ${nextStop.endTime}`
       : "";
-  const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering.${offersCatering ? ` Catering is available for local events and private bookings.` : ""} ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
+  const serviceSentence = isPrivateChef
+    ? " Private chef bookings, menus, service area, and booking details are available from this profile."
+    : offersCatering
+      ? " Catering is available for local events and private bookings."
+      : "";
+  const description = `${restaurantName}${locationLabel ? ` in ${locationLabel}` : ""} offers ${cuisineType} with live specials, current hours, and direct links for menu and ordering.${serviceSentence} ${restaurantDeals.length} active special${restaurantDeals.length === 1 ? "" : "s"} listed on MealScout.`;
 
   const getPopularItemAction = (itemName: string) => {
     const normalizedName = itemName.toLowerCase().trim();
@@ -788,7 +807,7 @@ export default function RestaurantDetailPage() {
 
   const localBusinessSchema = {
     "@context": "https://schema.org",
-    "@type": "Restaurant",
+    "@type": isFoodTruck ? "FoodTruck" : isPrivateChef ? "FoodEstablishment" : "Restaurant",
     name: restaurantName,
     description: description,
     address: {
@@ -1065,7 +1084,7 @@ export default function RestaurantDetailPage() {
               }
             >
               <UtensilsCrossed className="mr-2 h-4 w-4" />
-              Catering
+              {isPrivateChef ? "Chef Services" : "Catering"}
             </Button>
           ) : null}
           <Link href={messageHref}>
@@ -1267,7 +1286,7 @@ export default function RestaurantDetailPage() {
             <div className="mb-3 flex items-center gap-2 text-[color:var(--accent-text)]">
               <UtensilsCrossed className="h-5 w-5" />
               <h2 className="text-lg font-black uppercase tracking-normal">
-                Catering
+                {isPrivateChef ? "Private Chef" : "Catering"}
               </h2>
             </div>
             <div className="grid gap-4 lg:grid-cols-[1fr_16rem]">
@@ -1307,7 +1326,7 @@ export default function RestaurantDetailPage() {
                 <Link href={messageHref}>
                   <Button className="w-full rounded-full bg-[color:var(--accent-text)] font-black text-black hover:bg-[color:var(--accent-text)]/90">
                     <MessageCircle className="mr-2 h-4 w-4" />
-                    Ask about catering
+                    {isPrivateChef ? "Request chef booking" : "Ask about catering"}
                   </Button>
                 </Link>
                 {menuPrimaryUrl ? (

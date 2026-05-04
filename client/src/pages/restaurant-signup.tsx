@@ -338,15 +338,29 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
-  const isCaterer =
-    selectedBusinessType === "caterer" ||
-    selectedBusinessType === "private_chef";
+  const isPrivateChef = selectedBusinessType === "private_chef";
+  const isCaterer = selectedBusinessType === "caterer";
   const mainHero =
     selectedBusinessType === "food_truck"
       ? COPY.main.hero.foodTruck
-      : isCaterer
+      : isPrivateChef
+        ? COPY.main.hero.privateChef
+        : isCaterer
         ? COPY.main.hero.caterer
       : COPY.main.hero.restaurant;
+  const businessTypeHelp = isPrivateChef
+    ? COPY.forms.restaurant.privateChefBusinessTypeHelp
+    : COPY.forms.restaurant.businessTypeHelp;
+  const addressLabel = isPrivateChef
+    ? COPY.forms.restaurant.privateChefAddressLabel
+    : isCaterer
+      ? COPY.forms.restaurant.catererAddressLabel
+      : COPY.forms.restaurant.addressLabel;
+  const addressPlaceholder = isPrivateChef
+    ? COPY.forms.restaurant.privateChefAddressPlaceholder
+    : isCaterer
+      ? COPY.forms.restaurant.catererAddressPlaceholder
+      : COPY.forms.restaurant.addressPlaceholder;
 
   useEffect(() => {
     // Allow deep links like `/restaurant-signup?businessType=food_truck&claim=1`
@@ -1410,7 +1424,7 @@ export default function RestaurantSignup() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-[color:var(--text-secondary)]">
-                          {COPY.forms.restaurant.businessTypeHelp}
+                          {businessTypeHelp}
                         </p>
                         <FormMessage />
                       </FormItem>
@@ -1529,17 +1543,11 @@ export default function RestaurantSignup() {
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel data-testid="label-address">
-                          {isCaterer
-                            ? COPY.forms.restaurant.catererAddressLabel
-                            : COPY.forms.restaurant.addressLabel}
+                          {addressLabel}
                         </FormLabel>
                         <FormControl>
                           <Input
-                            placeholder={
-                              isCaterer
-                                ? COPY.forms.restaurant.catererAddressPlaceholder
-                                : COPY.forms.restaurant.addressPlaceholder
-                            }
+                            placeholder={addressPlaceholder}
                             data-testid="input-address"
                             {...field}
                           />

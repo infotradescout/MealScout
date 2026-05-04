@@ -172,6 +172,9 @@ const publicRestaurantPath = (row: any, isFoodTruck: boolean) => {
   if (businessType === "bar") {
     return `/bar/${encodeURIComponent(slug)}`;
   }
+  if (businessType === "private_chef") {
+    return `/chef/${encodeURIComponent(slug)}`;
+  }
   if (businessType === "caterer") {
     return `/restaurant/${encodeURIComponent(slug)}`;
   }
@@ -1676,6 +1679,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const isBar = String(row.businessType || "").toLowerCase() === "bar";
           const typeLabel = isFoodTruck
             ? "Food Truck"
+            : isPrivateChef
+              ? "Private Chef"
             : isCaterer
               ? "Caterer"
               : isBar
@@ -2346,7 +2351,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const enriched = {
             ...r,
             ...counts,
-            publicPreviewUrl: `/restaurant/${r.id}`,
+            publicPreviewUrl:
+              String(r.businessType || "").toLowerCase() === "private_chef"
+                ? `/chef/${encodeURIComponent(`${toShareSlug(r.name) || r.id}--${r.id}`)}`
+                : `/restaurant/${r.id}`,
             importAttempts: imports.attempts,
             failedImports: imports.failed,
             lastImportFailure: imports.lastFailure,

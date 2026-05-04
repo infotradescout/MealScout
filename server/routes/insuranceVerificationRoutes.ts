@@ -215,9 +215,16 @@ export function registerInsuranceVerificationRoutes(app: Express) {
             reviewerNotes: businessInsuranceVerifications.reviewerNotes,
             reviewedAt: businessInsuranceVerifications.reviewedAt,
             createdAt: businessInsuranceVerifications.createdAt,
+            restaurantName: restaurants.name,
+            restaurantBusinessType: restaurants.businessType,
+            restaurantIsFoodTruck: restaurants.isFoodTruck,
+            hostName: hosts.businessName,
+            hostLocationType: hosts.locationType,
           })
           .from(businessInsuranceVerifications)
           .leftJoin(users, eq(businessInsuranceVerifications.ownerId, users.id))
+          .leftJoin(restaurants, eq(businessInsuranceVerifications.entityId, restaurants.id))
+          .leftJoin(hosts, eq(businessInsuranceVerifications.entityId, hosts.id))
           .where(
             status && statuses.includes(status)
               ? eq(businessInsuranceVerifications.status, status)
@@ -226,7 +233,34 @@ export function registerInsuranceVerificationRoutes(app: Express) {
           .orderBy(desc(businessInsuranceVerifications.createdAt))
           .limit(200);
 
-        res.json(rows);
+        res.json(
+          rows.map((row: any) => {
+            const businessType = String(row.restaurantBusinessType || "").toLowerCase();
+            const isTruck =
+              row.entityType === "food_truck" ||
+              row.restaurantIsFoodTruck ||
+              businessType === "food_truck";
+            const entityLabel =
+              row.entityType === "host"
+                ? row.hostLocationType
+                  ? `Host - ${row.hostLocationType}`
+                  : "Host"
+                : isTruck
+                  ? "Food Truck"
+                  : businessType === "private_chef"
+                    ? "Private Chef"
+                    : businessType === "caterer"
+                      ? "Caterer"
+                      : businessType === "bar"
+                        ? "Restaurant or Bar"
+                        : "Restaurant";
+            return {
+              ...row,
+              entityName: row.hostName || row.restaurantName || null,
+              entityLabel,
+            };
+          }),
+        );
       } catch (error) {
         console.error("Error loading insurance verifications:", error);
         res.status(500).json({ message: "Failed to load insurance verifications" });

@@ -232,9 +232,12 @@ const decorateJob = (row: any) => {
     toSlug(`${businessName || "mealscout"} ${row.title || "job"}`) ||
     row.id;
   const businessSlug = toSlug(businessName) || businessId || "business";
+  const restaurantBusinessType = String(row.restaurantBusinessType || "").toLowerCase();
   const businessProfileUrl = isHostJob
     ? `/p/host/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`
-    : `/restaurant/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`;
+    : restaurantBusinessType === "private_chef"
+      ? `/chef/${encodeURIComponent(`${businessSlug}--${businessId}`)}`
+      : `/restaurant/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`;
   return {
     ...row,
     businessEntity: isHostJob ? "host" : "restaurant",

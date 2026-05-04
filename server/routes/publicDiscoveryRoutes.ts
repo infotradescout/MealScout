@@ -832,7 +832,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.status(400).json({ message: "Profile slug is required" });
       }
 
-      if (entity === "restaurant" || entity === "truck" || entity === "bar") {
+      if (entity === "restaurant" || entity === "truck" || entity === "bar" || entity === "chef") {
         const rows = await db
           .select({
             id: restaurants.id,
@@ -852,6 +852,8 @@ export function registerPublicDiscoveryRoutes(app: Express) {
                 ? eq(restaurants.isFoodTruck, true)
                 : entity === "bar"
                   ? eq(restaurants.businessType, "bar")
+                  : entity === "chef"
+                    ? eq(restaurants.businessType, "private_chef")
                   : sql`true`,
               sql`regexp_replace(regexp_replace(lower(coalesce(${restaurants.name}, '')), '[^a-z0-9]+', '-', 'g'), '(^-|-$)', '', 'g') = ${slug}`,
             ),
@@ -872,10 +874,18 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             ? `/truck/${resolvedSlug}`
             : row.businessType === "bar"
               ? `/bar/${resolvedSlug}`
+              : row.businessType === "private_chef"
+                ? `/chef/${resolvedSlug}`
               : `/restaurant/${resolvedSlug}`;
 
         return res.json({
-          entity: row.isFoodTruck ? "truck" : row.businessType === "bar" ? "bar" : "restaurant",
+          entity: row.isFoodTruck
+            ? "truck"
+            : row.businessType === "bar"
+              ? "bar"
+              : row.businessType === "private_chef"
+                ? "chef"
+                : "restaurant",
           id: row.id,
           profilePath,
         });
@@ -984,6 +994,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           `/restaurant/${row.id}`,
           `/truck/${slug}`,
           `/bar/${slug}`,
+          `/chef/${slug}`,
           `/p/restaurant/${row.id}`,
         ];
         const searchTokens = keywordTokens(

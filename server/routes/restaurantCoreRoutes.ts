@@ -1909,7 +1909,11 @@ export function registerRestaurantCoreRoutes(
           : null;
         const customDomainHost = getVerifiedCustomDomainHost(owner?.accountSettings);
         const restaurantSlug = toSeoSlug(restaurant.name) || restaurantId;
-        const canonicalPath = `/restaurant/${restaurantId}/${restaurantSlug}`;
+        const businessType = String(restaurant.businessType || "").toLowerCase();
+        const canonicalPath =
+          businessType === "private_chef"
+            ? `/chef/${restaurantSlug}--${restaurantId}`
+            : `/restaurant/${restaurantId}/${restaurantSlug}`;
         const canonicalUrl = customDomainHost
           ? `https://${customDomainHost}`
           : `https://www.mealscout.us${canonicalPath}`;

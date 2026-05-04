@@ -748,6 +748,7 @@ export default function RestaurantOwnerDashboard() {
   const currentBusinessType = String(
     (currentRestaurant as any)?.businessType || "",
   ).toLowerCase();
+  const isPrivateChefBusiness = currentBusinessType === "private_chef";
   const offersCatering = Boolean(
     (currentRestaurant as any)?.offersCatering ||
     currentBusinessType === "caterer" ||
@@ -757,8 +758,56 @@ export default function RestaurantOwnerDashboard() {
     ((currentRestaurant as any)?.cateringDetails as Record<string, any> | null) ||
     {};
   const cateringProfilePath = selectedRestaurant
-    ? `/restaurant/${selectedRestaurant}?service=catering`
+    ? isPrivateChefBusiness
+      ? `/chef/${selectedRestaurant}?service=private-chef`
+      : `/restaurant/${selectedRestaurant}?service=catering`
     : "/map";
+  const cateringUi = isPrivateChefBusiness
+    ? {
+        tab: "Chef Services",
+        title: "Private chef services",
+        description:
+          "Publish menus, service area, lead time, and booking preferences for private dinners, events, tastings, and recurring service.",
+        badgeOn: "Chef services on",
+        badgeOff: "Chef services off",
+        promote: `Promote private chef bookings for ${currentRestaurant?.name || "this profile"}`,
+        helper:
+          "Use this for private dinners, events, tastings, meal prep, recurring service, and chef-led experiences.",
+        headlinePlaceholder: "Private dinners, events, and recurring chef service",
+        detailsPlaceholder:
+          "Tell people what you cook, which events fit best, your service style, and how to start a booking.",
+        save: "Save chef services",
+        turnedOn: "Chef services turned on",
+        turnedOff: "Chef services turned off",
+        savedDescription:
+          "Your private chef service details are saved for this profile.",
+        offDescription:
+          "Private chef services are no longer promoted from this profile.",
+        errorTitle: "Unable to save chef services",
+        menu: "Chef menus",
+      }
+    : {
+        tab: "Catering",
+        title: "Catering",
+        description:
+          "Offer catering from this profile without changing the business type customers already recognize.",
+        badgeOn: "Catering on",
+        badgeOff: "Catering off",
+        promote: `Promote catering for ${currentRestaurant?.name || "this profile"}`,
+        helper:
+          "Use this for office meals, private events, parties, pop-ups, recurring service, and large orders.",
+        headlinePlaceholder: "Catering for offices, parties, and private events",
+        detailsPlaceholder:
+          "Tell people what you cater, what events fit best, and how to start.",
+        save: "Save catering",
+        turnedOn: "Catering turned on",
+        turnedOff: "Catering turned off",
+        savedDescription: "Your catering details are saved for this business.",
+        offDescription:
+          "The catering section is no longer promoted from this profile.",
+        errorTitle: "Unable to save catering",
+        menu: "Catering menu",
+      };
   const setSelectedBusiness = (restaurantId: string) => {
     setSelectedRestaurant(restaurantId);
     try {
@@ -1530,15 +1579,13 @@ export default function RestaurantOwnerDashboard() {
         queryKey: ["/api/restaurants/my-restaurants"],
       });
       toast({
-        title: offers ? "Catering turned on" : "Catering turned off",
-        description: offers
-          ? "Your catering details are saved for this business."
-          : "The catering section is no longer promoted from this profile.",
+        title: offers ? cateringUi.turnedOn : cateringUi.turnedOff,
+        description: offers ? cateringUi.savedDescription : cateringUi.offDescription,
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Unable to save catering",
+        title: cateringUi.errorTitle,
         description: error?.message || "Please try again.",
         variant: "destructive",
       });
@@ -2556,7 +2603,7 @@ export default function RestaurantOwnerDashboard() {
           {canManageProfile ? (
             <TabsTrigger value="catering" className="px-3 text-xs sm:text-sm">
               <UtensilsCrossed className="mr-1 hidden h-4 w-4 sm:block" />
-              Catering
+              {cateringUi.tab}
             </TabsTrigger>
           ) : null}
           {canViewAnalytics ? (
@@ -2816,15 +2863,14 @@ export default function RestaurantOwnerDashboard() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <UtensilsCrossed className="h-5 w-5" />
-                      Catering
+                      {cateringUi.title}
                     </CardTitle>
                     <CardDescription>
-                      Offer catering from this profile without changing the
-                      business type customers already recognize.
+                      {cateringUi.description}
                     </CardDescription>
                   </div>
                   <Badge variant={offersCatering ? "default" : "outline"}>
-                    {offersCatering ? "Catering on" : "Catering off"}
+                    {offersCatering ? cateringUi.badgeOn : cateringUi.badgeOff}
                   </Badge>
                 </div>
               </CardHeader>
@@ -2833,11 +2879,10 @@ export default function RestaurantOwnerDashboard() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="font-semibold">
-                        Promote catering for {currentRestaurant?.name}
+                        {cateringUi.promote}
                       </h3>
                       <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
-                        Use this for office meals, private events, parties,
-                        pop-ups, recurring service, and large orders.
+                        {cateringUi.helper}
                       </p>
                     </div>
                     <Button
@@ -2872,7 +2917,7 @@ export default function RestaurantOwnerDashboard() {
                           headline: event.target.value,
                         }))
                       }
-                      placeholder="Catering for offices, parties, and private events"
+                      placeholder={cateringUi.headlinePlaceholder}
                       data-testid="input-catering-headline"
                     />
                   </div>
@@ -2888,7 +2933,7 @@ export default function RestaurantOwnerDashboard() {
                       }
                       rows={4}
                       maxLength={800}
-                      placeholder="Tell people what you cater, what events fit best, and how to start."
+                      placeholder={cateringUi.detailsPlaceholder}
                       className="w-full rounded-md border border-[color:var(--border-strong)] bg-[color:var(--field-bg)] px-3 py-2 text-sm text-[color:var(--text-primary)]"
                       data-testid="textarea-catering-description"
                     />
@@ -2975,7 +3020,7 @@ export default function RestaurantOwnerDashboard() {
                     ) : (
                       <Save className="mr-2 h-4 w-4" />
                     )}
-                    Save catering
+                    {cateringUi.save}
                   </Button>
                   {offersCatering ? (
                     <>
@@ -2988,7 +3033,7 @@ export default function RestaurantOwnerDashboard() {
                       <Button variant="outline" asChild>
                         <Link href={`/menu-builder/${selectedRestaurant}`}>
                           <Store className="mr-2 h-4 w-4" />
-                          Catering menu
+                          {cateringUi.menu}
                         </Link>
                       </Button>
                       <Button variant="outline" asChild>
