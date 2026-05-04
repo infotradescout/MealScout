@@ -529,10 +529,19 @@ export default function RecentSignupShare() {
             const statusText = signup.isPublic
               ? "Live public profile"
               : "Profile finishing";
-            const featuredLine =
+            const nameLength = signup.displayName.length;
+            const graphicNameClass =
+              nameLength > 32
+                ? "text-[3rem]"
+                : nameLength > 22
+                  ? "text-[3.55rem]"
+                  : "text-[4.35rem]";
+            const graphicSubline =
               menuHighlights.length > 0
-                ? menuHighlights.join(" / ")
-                : description || `Find ${signup.displayName} on MealScout`;
+                ? menuHighlights.slice(0, 3).join(" / ")
+                : detailParts.join(" / ") ||
+                  description ||
+                  `${signup.typeLabel} on MealScout`;
 
             return (
               <Card key={signup.key} className="overflow-hidden">
@@ -587,77 +596,49 @@ export default function RecentSignupShare() {
                       graphicRefs.current[signup.key] = node;
                     }}
                     className="relative aspect-[1200/630] overflow-hidden rounded-[1.75rem] border bg-neutral-950 text-white shadow-sm"
-                    style={{ background: tone.gradient }}
+                    style={{ backgroundColor: "#050505" }}
                   >
-                    <div className="absolute inset-0 bg-black" />
                     <div
-                      className="absolute inset-0 opacity-20"
+                      className="absolute inset-0 opacity-[0.16]"
                       style={{
                         backgroundImage:
                           "linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.07) 1px, transparent 1px)",
                         backgroundSize: "64px 64px",
                       }}
                     />
-                    <div
-                      className="absolute bottom-0 right-0 top-0 w-[46%]"
-                      style={{ backgroundColor: tone.accent, opacity: 0.9 }}
-                    />
-                    {hasBusinessImage ? (
-                      <div className="absolute bottom-8 right-8 top-8 w-[42%] overflow-hidden rounded-[2rem] border border-white/15 shadow-2xl">
-                        <img
-                          src={graphicImageUrl || ""}
-                          alt={`${signup.displayName} profile image`}
-                          crossOrigin="anonymous"
-                          className="h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/10" />
-                      </div>
-                    ) : (
-                      <div className="absolute bottom-8 right-8 top-8 flex w-[42%] items-center justify-center rounded-[2rem] border border-white/15 bg-black/25 shadow-2xl">
-                        <div
-                          className="flex h-44 w-44 items-center justify-center rounded-[2.25rem] text-7xl font-black text-black shadow-2xl"
-                          style={{ backgroundColor: tone.accent }}
-                        >
-                          {initialsFor(signup.displayName)}
-                        </div>
-                      </div>
-                    )}
+                    <div className="absolute inset-y-0 right-0 w-[40%]" style={{ backgroundColor: tone.accent }} />
+                    <div className="absolute inset-y-0 right-[34%] w-[10%] skew-x-[-12deg] bg-black" />
 
-                    <div className="relative flex h-full">
-                      <div className="flex h-full w-[58%] flex-col justify-between p-10">
-                        <div className="inline-flex w-fit items-center gap-3 rounded-full bg-black/45 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-white shadow">
+                    <div className="relative grid h-full grid-cols-[1.35fr_0.95fr]">
+                      <div className="flex h-full flex-col justify-between p-10 pr-4">
+                        <div className="inline-flex w-fit items-center gap-3 text-sm font-black uppercase tracking-[0.22em] text-white">
                           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs tracking-normal text-black">
                             MS
                           </span>
                           MealScout
                         </div>
 
-                        <div className="max-w-[95%] space-y-4">
+                        <div className="max-w-[92%] space-y-4">
                           <div
-                            className="inline-flex rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-black shadow"
+                            className="inline-flex rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-black"
                             style={{ backgroundColor: tone.accent }}
                           >
-                            New {signup.nounLabel || tone.noun} in town
+                            New {signup.nounLabel || tone.noun} on MealScout
                           </div>
                           <div>
                             <p className="text-sm font-black uppercase tracking-[0.24em] text-white/70">
                               Just joined MealScout
                             </p>
-                            <h3 className="mt-2 text-balance text-[4.4rem] font-black leading-[0.9]">
+                            <h3
+                              className={`mt-3 max-w-[11ch] text-balance ${graphicNameClass} font-black leading-[0.9]`}
+                            >
                               {signup.displayName}
                             </h3>
                           </div>
-                          {detailParts.length ? (
-                            <div className="flex flex-wrap items-center gap-3 text-2xl font-bold text-white/90">
-                              {detailParts.map((part, index) => (
-                                <span key={`${part}-${index}`} className="flex items-center gap-3">
-                                  {index > 0 ? (
-                                    <span className="text-white/35">/</span>
-                                  ) : null}
-                                  {part}
-                                </span>
-                              ))}
-                            </div>
+                          {graphicSubline ? (
+                            <p className="line-clamp-2 max-w-[34rem] text-2xl font-black leading-tight text-white/90">
+                              {graphicSubline}
+                            </p>
                           ) : null}
                         </div>
 
@@ -667,50 +648,47 @@ export default function RecentSignupShare() {
                         </div>
                       </div>
 
-                      <div className="relative flex h-full flex-1 flex-col justify-between p-10 pl-4">
-                        <div className="ml-auto flex max-w-[92%] flex-wrap justify-end gap-2">
+                      <div className="relative flex h-full flex-col justify-between p-10 pl-8">
+                        <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
                           <span
-                            className="rounded-full px-4 py-2 text-sm font-black text-black shadow"
+                            className="rounded-full px-4 py-2 text-sm font-black text-black"
                             style={{ backgroundColor: tone.accent }}
                           >
                             {tone.label}
                           </span>
-                          <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-black shadow">
+                          <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-black">
                             {statusText}
                           </span>
                         </div>
 
-                        <div aria-hidden="true" className="min-h-40" />
-
-                        <div className="ml-auto max-w-[92%] space-y-4 rounded-[1.5rem] border border-white/15 bg-black/72 p-6 shadow-2xl backdrop-blur-sm">
-                          <p className="text-xs font-black uppercase tracking-[0.22em] text-white/55">
-                            Featured
-                          </p>
-                          <p className="line-clamp-3 text-[1.7rem] font-black leading-tight text-white">
-                            {featuredLine}
-                          </p>
-                          {menuHighlights.length ? (
-                            <div className="flex flex-wrap gap-2">
-                              {menuHighlights.map((item) => (
-                                <span
-                                  key={item}
-                                  className="rounded-full bg-white px-3 py-1 text-sm font-black text-black"
-                                >
-                                  {item}
-                                </span>
-                              ))}
+                        <div className="flex flex-1 items-center justify-center">
+                          {hasBusinessImage ? (
+                            <div className="h-[21.5rem] w-[21.5rem] overflow-hidden rounded-[2rem] border border-black/20 bg-black/20 shadow-2xl">
+                              <img
+                                src={graphicImageUrl || ""}
+                                alt={`${signup.displayName} profile image`}
+                                crossOrigin="anonymous"
+                                className="h-full w-full object-cover"
+                              />
                             </div>
-                          ) : null}
-                          <div className="flex items-center justify-between gap-4 border-t border-white/15 pt-4">
-                            <span className="text-sm font-bold text-white/70">
-                              Follow updates, menus, and stops
-                            </span>
-                            <span
-                              className="rounded-full px-4 py-2 text-sm font-black text-black"
-                              style={{ backgroundColor: tone.accent }}
-                            >
-                              View profile
-                            </span>
+                          ) : (
+                            <div className="flex h-[17.5rem] w-[17.5rem] items-center justify-center rounded-[2rem] border border-black/10 bg-black/10 shadow-2xl">
+                              <div className="flex h-48 w-48 items-center justify-center rounded-[1.75rem] bg-white text-[5rem] font-black text-black shadow-xl">
+                                {initialsFor(signup.displayName)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="ml-auto max-w-[22rem] rounded-[1.25rem] bg-black/35 px-5 py-4 text-right">
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-white/70">
+                            Find them here
+                          </p>
+                          <p className="mt-1 line-clamp-1 text-xl font-black text-white">
+                            {graphicUrlLabel}
+                          </p>
+                          <div className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-black">
+                            View profile
                           </div>
                         </div>
                       </div>
