@@ -24,6 +24,8 @@ import {
   normalizeImportedReviews,
 } from "../services/externalReviewScoring";
 import { queueSocialPost } from "./dealRouteDependencies";
+import { calculateRestaurantRankingScore } from "../awardCalculations";
+import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 import {
   ensureGoogleRestaurantProfile,
   getGooglePhotoUrl,
@@ -1350,6 +1352,7 @@ export function registerRestaurantCoreRoutes(
         videoRecommendationRows,
         recommendationReactionRows,
         recommendationShareRows,
+        recommendationCommentRows,
         videoEngagementRows,
       ] =
         restaurantIds.length > 0
@@ -1474,6 +1477,25 @@ export function registerRestaurantCoreRoutes(
                 { rows: [] } as any,
               ),
               safeQuery(
+                "recommendation-comments",
+                () =>
+                  db.execute(sql<{
+                    restaurant_id: string;
+                    count: number;
+                  }>`
+                    select
+                      rur.restaurant_id,
+                      cast(count(*) as integer) as count
+                    from recommendation_comments rc
+                    inner join restaurant_user_recommendations rur on rur.id = rc.recommendation_id
+                    where
+                      rur.restaurant_id = any(${restaurantIds}::text[])
+                      and rc.is_approved = true
+                    group by rur.restaurant_id
+                  `),
+                { rows: [] } as any,
+              ),
+              safeQuery(
                 "video-engagement",
                 () =>
                   db.execute(sql<{
@@ -1493,7 +1515,7 @@ export function registerRestaurantCoreRoutes(
                 { rows: [] } as any,
               ),
             ])
-          : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }];
+          : [[], [], [], [], [], { rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }];
 
       const favoritesByRestaurant = new Map(
         favoriteRows.map((row: any) => [
@@ -1533,6 +1555,12 @@ export function registerRestaurantCoreRoutes(
       );
       const sharesByRestaurant = new Map(
         ((recommendationShareRows as any)?.rows || []).map((row: any) => [
+          String(row.restaurant_id || ""),
+          Number(row.count) || 0,
+        ]),
+      );
+      const recommendationCommentsByRestaurant = new Map(
+        ((recommendationCommentRows as any)?.rows || []).map((row: any) => [
           String(row.restaurant_id || ""),
           Number(row.count) || 0,
         ]),
@@ -1604,6 +1632,7 @@ export function registerRestaurantCoreRoutes(
               communityActivityCount:
                 Number(reactionByRestaurant.get(restaurantId) || 0) +
                 Number(sharesByRestaurant.get(restaurantId) || 0) +
+                Number(recommendationCommentsByRestaurant.get(restaurantId) || 0) +
                 Number(videoEngagementByRestaurant.get(restaurantId) || 0),
               activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
             };
@@ -1626,6 +1655,7 @@ export function registerRestaurantCoreRoutes(
               communityActivityCount:
                 Number(reactionByRestaurant.get(restaurantId) || 0) +
                 Number(sharesByRestaurant.get(restaurantId) || 0) +
+                Number(recommendationCommentsByRestaurant.get(restaurantId) || 0) +
                 Number(videoEngagementByRestaurant.get(restaurantId) || 0),
               activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
             };
@@ -1658,6 +1688,7 @@ export function registerRestaurantCoreRoutes(
             communityActivityCount:
               Number(reactionByRestaurant.get(restaurantId) || 0) +
               Number(sharesByRestaurant.get(restaurantId) || 0) +
+              Number(recommendationCommentsByRestaurant.get(restaurantId) || 0) +
               Number(videoEngagementByRestaurant.get(restaurantId) || 0),
             activeDealCount: activeDealsByRestaurant.get(restaurantId) || 0,
           };
@@ -2766,7 +2797,10 @@ export function registerRestaurantCoreRoutes(
         }
 
         const recommendationExists = await db
-          .select({ id: restaurantUserRecommendations.id })
+          .select({
+            id: restaurantUserRecommendations.id,
+            restaurantId: restaurantUserRecommendations.restaurantId,
+          })
           .from(restaurantUserRecommendations)
           .where(eq(restaurantUserRecommendations.id, recommendationId))
           .limit(1);
@@ -2795,6 +2829,42 @@ export function registerRestaurantCoreRoutes(
         `);
 
         const comment = ((inserted as any).rows || [])[0];
+        const insertedCommentId = String(comment?.id || "");
+        const restaurantId = String(recommendationExists[0]?.restaurantId || "");
+        if (insertedCommentId) {
+          recordMealScoutCreditAction({
+            userId,
+            action: parentCommentId
+              ? "recommendation_reply_added"
+              : "recommendation_comment_added",
+            sourceId: insertedCommentId,
+            entityType: "recommendation",
+            entityId: recommendationId,
+            metadata: {
+              parentCommentId,
+              restaurantId: restaurantId || null,
+            },
+          }).catch((creditError) => {
+            console.error("Failed to record recommendation comment credits:", creditError);
+          });
+        }
+
+        if (restaurantId) {
+          calculateRestaurantRankingScore(restaurantId)
+            .then((rankingScore) =>
+              db
+                .update(restaurants)
+                .set({ rankingScore, updatedAt: new Date() })
+                .where(eq(restaurants.id, restaurantId)),
+            )
+            .catch((scoreError) => {
+              console.error(
+                "Failed to refresh recommendation comment ranking score:",
+                scoreError,
+              );
+            });
+        }
+
         res.status(201).json({
           message: "Comment added successfully",
           comment: {

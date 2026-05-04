@@ -246,7 +246,7 @@ export async function awardGoldenFork(userId: string): Promise<boolean> {
  * Calculate ranking score for a restaurant
  * Action hierarchy:
  * - Lowest: clicks/views, then claims
- * - Mid: likes, shares, follows, recommendations
+ * - Mid: likes, comments, shares, follows, recommendations
  * - Highest: favorites
  * Golden Fork actions receive a modest weighting boost.
  */
@@ -263,6 +263,8 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     directLikeRows,
     reactionRows,
     shareRows,
+    recommendationCommentRows,
+    videoCommentRows,
   ] = await Promise.all([
     db.execute(sql<{ count: number; golden_count: number }>`
       select
@@ -331,6 +333,28 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
       join users u on u.id = rs.user_id
       where rur.restaurant_id = ${restaurantId}
     `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        coalesce(count(*), 0)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from recommendation_comments rc
+      join restaurant_user_recommendations rur on rur.id = rc.recommendation_id
+      join users u on u.id = rc.user_id
+      where rur.restaurant_id = ${restaurantId}
+        and rc.is_approved = true
+    `),
+    db.execute(sql<{ count: number; golden_count: number }>`
+      select
+        coalesce(count(*), 0)::int as count,
+        coalesce(sum(case when u.has_golden_fork then 1 else 0 end), 0)::int as golden_count
+      from story_comments sc
+      join video_stories vs on vs.id = sc.story_id
+      join users u on u.id = sc.user_id
+      where vs.restaurant_id = ${restaurantId}
+        and vs.status = 'ready'
+        and vs.deleted_at is null
+        and sc.is_approved = true
+    `),
   ]);
 
   const recommendationRow = Array.isArray((recommendationRows as any).rows)
@@ -353,6 +377,12 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     : null;
   const shareRow = Array.isArray((shareRows as any).rows)
     ? (shareRows as any).rows[0]
+    : null;
+  const recommendationCommentRow = Array.isArray((recommendationCommentRows as any).rows)
+    ? (recommendationCommentRows as any).rows[0]
+    : null;
+  const videoCommentRow = Array.isArray((videoCommentRows as any).rows)
+    ? (videoCommentRows as any).rows[0]
     : null;
 
   const manualRecommendationCount = Number(recommendationRow?.count || 0);
@@ -389,6 +419,12 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
 
   const shareCount = Number(shareRow?.count || 0);
   const shareGoldenCount = Number(shareRow?.golden_count || 0);
+  const commentCount =
+    Number(recommendationCommentRow?.count || 0) +
+    Number(videoCommentRow?.count || 0);
+  const commentGoldenCount =
+    Number(recommendationCommentRow?.golden_count || 0) +
+    Number(videoCommentRow?.golden_count || 0);
 
   // Get average rating
   const reviews = await db.query.reviews.findMany({
@@ -417,6 +453,7 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
 
   const boostedLikes = applyGoldenForkBoost(likesCount, likesGoldenCount);
   const boostedShares = applyGoldenForkBoost(shareCount, shareGoldenCount);
+  const boostedComments = applyGoldenForkBoost(commentCount, commentGoldenCount);
   const boostedFollows = applyGoldenForkBoost(followCount, followGoldenCount);
   const boostedRecommendations = applyGoldenForkBoost(
     recommendationsCount,
@@ -471,6 +508,7 @@ export async function calculateRestaurantRankingScore(restaurantId: string): Pro
     totalDealViews * AWARD_RANKING_WEIGHTS.totalDealViews +
     totalDealClaims * AWARD_RANKING_WEIGHTS.totalDealClaims +
     boostedLikes * AWARD_RANKING_WEIGHTS.likes +
+    boostedComments * AWARD_RANKING_WEIGHTS.comments +
     boostedShares * AWARD_RANKING_WEIGHTS.shares +
     boostedFollows * AWARD_RANKING_WEIGHTS.follows +
     boostedRecommendations * AWARD_RANKING_WEIGHTS.recommendations +

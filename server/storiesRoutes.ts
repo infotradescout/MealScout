@@ -28,6 +28,8 @@ import { upload } from './imageUpload';
 import multer from 'multer';
 import { storage } from './storage';
 import { LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from '@shared/schema';
+import { calculateRestaurantRankingScore } from './awardCalculations';
+import { recordMealScoutCreditAction } from './mealScoutCreditsService';
 
 // Configure multer for video uploads
 const videoStorage = multer.memoryStorage();
@@ -1194,6 +1196,37 @@ export default function setupStoriesRoutes(app: Express) {
             commentCount: sql`${videoStories.commentCount} + 1`,
           })
           .where(eq(videoStories.id, storyId));
+
+        const insertedCommentId = String(comment[0]?.id || '');
+        if (insertedCommentId) {
+          recordMealScoutCreditAction({
+            userId,
+            action: parentCommentId ? 'video_reply_added' : 'video_comment_added',
+            sourceId: insertedCommentId,
+            entityType: 'video_story',
+            entityId: storyId,
+            metadata: {
+              parentCommentId: parentCommentId || null,
+              restaurantId: story[0].restaurantId || null,
+            },
+          }).catch((creditError) => {
+            console.error('Failed to record video comment credits:', creditError);
+          });
+        }
+
+        if (story[0].restaurantId) {
+          const restaurantId = String(story[0].restaurantId);
+          calculateRestaurantRankingScore(restaurantId)
+            .then((rankingScore) =>
+              db
+                .update(restaurants)
+                .set({ rankingScore, updatedAt: new Date() })
+                .where(eq(restaurants.id, restaurantId)),
+            )
+            .catch((scoreError) => {
+              console.error('Failed to refresh story comment ranking score:', scoreError);
+            });
+        }
 
         res.status(201).json({
           message: 'Comment added successfully',

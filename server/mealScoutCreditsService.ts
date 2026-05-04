@@ -156,6 +156,42 @@ const CREDIT_ACTION_RULES = {
     tierMultiplierEligible: true,
     enabled: true,
   }),
+  recommendation_comment_added: createCreditActionRule({
+    action: "recommendation_comment_added",
+    label: "Recommendation comment",
+    baseCreditAmountCents: 18,
+    category: "community",
+    description: "A user adds a useful comment to a recommendation.",
+    tierMultiplierEligible: true,
+    enabled: true,
+  }),
+  recommendation_reply_added: createCreditActionRule({
+    action: "recommendation_reply_added",
+    label: "Recommendation reply",
+    baseCreditAmountCents: 22,
+    category: "community",
+    description: "A user replies inside a recommendation discussion.",
+    tierMultiplierEligible: true,
+    enabled: true,
+  }),
+  video_comment_added: createCreditActionRule({
+    action: "video_comment_added",
+    label: "Video comment",
+    baseCreditAmountCents: 20,
+    category: "community",
+    description: "A user adds a useful comment to a video recommendation.",
+    tierMultiplierEligible: true,
+    enabled: true,
+  }),
+  video_reply_added: createCreditActionRule({
+    action: "video_reply_added",
+    label: "Video reply",
+    baseCreditAmountCents: 24,
+    category: "community",
+    description: "A user replies inside a video recommendation discussion.",
+    tierMultiplierEligible: true,
+    enabled: true,
+  }),
 } satisfies Record<string, CreditActionRule>;
 
 export type MealScoutCreditAction = keyof typeof CREDIT_ACTION_RULES;
