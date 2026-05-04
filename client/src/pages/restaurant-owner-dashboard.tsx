@@ -255,7 +255,9 @@ export default function RestaurantOwnerDashboard() {
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const isRestaurantOwner =
-    user?.userType === "restaurant_owner" || user?.userType === "caterer";
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "caterer" ||
+    user?.userType === "private_chef";
   const isFoodTruck = user?.userType === "food_truck";
   const isHost = user?.userType === "host";
   const isAdmin =
@@ -747,7 +749,9 @@ export default function RestaurantOwnerDashboard() {
     (currentRestaurant as any)?.businessType || "",
   ).toLowerCase();
   const offersCatering = Boolean(
-    (currentRestaurant as any)?.offersCatering || currentBusinessType === "caterer",
+    (currentRestaurant as any)?.offersCatering ||
+    currentBusinessType === "caterer" ||
+    currentBusinessType === "private_chef",
   );
   const cateringDetails =
     ((currentRestaurant as any)?.cateringDetails as Record<string, any> | null) ||

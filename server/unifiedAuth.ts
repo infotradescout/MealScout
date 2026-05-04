@@ -321,6 +321,9 @@ export async function setupUnifiedAuth(app: Express) {
       const supportsWelcome =
         user.userType === "customer" ||
         user.userType === "restaurant_owner" ||
+        user.userType === "caterer" ||
+        user.userType === "private_chef" ||
+        user.userType === "food_truck" ||
         user.userType === "admin";
 
       if (supportsWelcome) {
@@ -347,6 +350,8 @@ export async function setupUnifiedAuth(app: Express) {
   const oauthUserTypeAllowList = new Set<User["userType"]>([
     "customer",
     "restaurant_owner",
+    "caterer",
+    "private_chef",
     "food_truck",
     "host",
     "event_coordinator",
@@ -1479,6 +1484,7 @@ export async function setupUnifiedAuth(app: Express) {
         "bar",
         "food_truck",
         "caterer",
+        "private_chef",
       ].includes(String(businessType || ""))
         ? String(businessType)
         : "restaurant";
@@ -1487,7 +1493,9 @@ export async function setupUnifiedAuth(app: Express) {
           ? "food_truck"
           : normalizedBusinessType === "caterer"
             ? "caterer"
-          : "restaurant_owner";
+            : normalizedBusinessType === "private_chef"
+              ? "private_chef"
+              : "restaurant_owner";
 
       const user = await storage.upsertUserByAuth(
         "email",
@@ -1509,6 +1517,8 @@ export async function setupUnifiedAuth(app: Express) {
         req,
         normalizedBusinessType === "food_truck"
           ? "food truck owner"
+          : normalizedBusinessType === "private_chef"
+            ? "private chef"
           : normalizedBusinessType === "bar"
             ? "bar owner"
             : "restaurant owner",
@@ -1645,7 +1655,7 @@ export async function setupUnifiedAuth(app: Express) {
       const user = await storage.getUserByEmail(email);
       if (
         !user ||
-        !["restaurant_owner", "caterer", "food_truck"].includes(
+        !["restaurant_owner", "caterer", "private_chef", "food_truck"].includes(
           String(user.userType || ""),
         )
       ) {
@@ -2354,9 +2364,14 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "caterer", "food_truck", "admin", "super_admin"].includes(
-      req.user.userType,
-    )
+    ![
+      "restaurant_owner",
+      "caterer",
+      "private_chef",
+      "food_truck",
+      "admin",
+      "super_admin",
+    ].includes(req.user.userType)
   ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }
@@ -2369,6 +2384,7 @@ type UserRole =
   | "customer"
   | "restaurant_owner"
   | "caterer"
+  | "private_chef"
   | "food_truck"
   | "supplier"
   | "staff"
@@ -2424,6 +2440,7 @@ export const isStaffOrAdmin = requireRole(["staff", "admin", "super_admin"]);
 export const isRestaurantOwnerOrAdmin = requireRole([
   "restaurant_owner",
   "caterer",
+  "private_chef",
   "food_truck",
   "admin",
   "super_admin",

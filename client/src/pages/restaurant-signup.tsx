@@ -45,7 +45,13 @@ import { authUrl } from "@/lib/api";
  * No inline labels, helper text, or validation messages.
  */
 
-const BUSINESS_TYPES = ["restaurant", "bar", "food_truck", "caterer"] as const;
+const BUSINESS_TYPES = [
+  "restaurant",
+  "bar",
+  "food_truck",
+  "caterer",
+  "private_chef",
+] as const;
 
 const restaurantSchema = z
   .object({
@@ -332,7 +338,9 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
-  const isCaterer = selectedBusinessType === "caterer";
+  const isCaterer =
+    selectedBusinessType === "caterer" ||
+    selectedBusinessType === "private_chef";
   const mainHero =
     selectedBusinessType === "food_truck"
       ? COPY.main.hero.foodTruck
@@ -372,7 +380,8 @@ export default function RestaurantSignup() {
         businessType === "food_truck" ||
         businessType === "restaurant" ||
         businessType === "bar" ||
-        businessType === "caterer"
+        businessType === "caterer" ||
+        businessType === "private_chef"
       ) {
         form.setValue("businessType", businessType as any);
       }
@@ -564,6 +573,7 @@ export default function RestaurantSignup() {
       if (
         data.businessType !== "food_truck" &&
         data.businessType !== "caterer" &&
+        data.businessType !== "private_chef" &&
         (data.hasParking || data.hasWifi || data.hasOutdoorSeating)
       ) {
         restaurantDataPayload.amenities = {
@@ -1394,6 +1404,9 @@ export default function RestaurantSignup() {
                             </SelectItem>
                             <SelectItem value="bar">Bar</SelectItem>
                             <SelectItem value="caterer">Caterer</SelectItem>
+                            <SelectItem value="private_chef">
+                              Private Chef
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-[color:var(--text-secondary)]">
@@ -1743,61 +1756,62 @@ export default function RestaurantSignup() {
                         />
                       </div>
                       {selectedBusinessType !== "food_truck" &&
-                        selectedBusinessType !== "caterer" && (
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          <FormField
-                            control={form.control}
-                            name="hasParking"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                                <FormLabel className="m-0">
-                                  Parking Available
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="hasWifi"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                                <FormLabel className="m-0">
-                                  Free Wi-Fi
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="hasOutdoorSeating"
-                            render={({ field }) => (
-                              <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                                <FormLabel className="m-0">
-                                  Outdoor Seating
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      )}
+                        selectedBusinessType !== "caterer" &&
+                        selectedBusinessType !== "private_chef" && (
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <FormField
+                              control={form.control}
+                              name="hasParking"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="m-0">
+                                    Parking Available
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="hasWifi"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="m-0">
+                                    Free Wi-Fi
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="hasOutdoorSeating"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="m-0">
+                                    Outdoor Seating
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        )}
                     </div>
                   )}
                 </div>

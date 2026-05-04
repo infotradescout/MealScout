@@ -774,7 +774,9 @@ export function registerRestaurantCoreRoutes(
               ? "food_truck"
               : businessType === "caterer"
                 ? "caterer"
-              : "restaurant_owner";
+                : businessType === "private_chef"
+                  ? "private_chef"
+                  : "restaurant_owner";
           await storage.updateUserType(userId, nextType);
         }
 

@@ -243,8 +243,13 @@ export default function ShareHub({
         String(restaurant.businessType || "").toLowerCase() === "food_truck";
       const isCaterer =
         String(restaurant.businessType || "").toLowerCase() === "caterer";
+      const isPrivateChef =
+        String(restaurant.businessType || "").toLowerCase() ===
+        "private_chef";
       const businessLabel = isTruck
         ? "Food Truck"
+        : isPrivateChef
+          ? "Private Chef"
         : isCaterer
           ? "Caterer"
           : "Public Profile";

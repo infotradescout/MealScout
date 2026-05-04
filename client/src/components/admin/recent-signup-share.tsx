@@ -33,6 +33,7 @@ type RecentSignupKind =
   | "food_truck"
   | "restaurant"
   | "caterer"
+  | "private_chef"
   | "host"
   | "supplier"
   | "team";
@@ -83,6 +84,7 @@ type RecentSignupsResponse = {
     customers: number;
     foodTrucks: number;
     restaurants: number;
+    privateChefs?: number;
     hosts: number;
     suppliers: number;
     team: number;
@@ -142,6 +144,14 @@ const toneByKind: Record<
     accent: "#f59e0b",
     badge: "bg-amber-400 text-black",
     noun: "caterer",
+  },
+  private_chef: {
+    label: "Private Chef",
+    gradient:
+      "linear-gradient(135deg, #111111 0%, #2d1f16 38%, #24183a 100%)",
+    accent: "#fb7185",
+    badge: "bg-rose-300 text-black",
+    noun: "private chef",
   },
   host: {
     label: "Host",

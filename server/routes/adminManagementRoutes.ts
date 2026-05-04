@@ -1178,6 +1178,8 @@ export function registerAdminManagementRoutes(app: Express) {
         const validUserTypes = [
           "customer",
           "restaurant_owner",
+          "caterer",
+          "private_chef",
           "food_truck",
           "supplier",
           "host",
@@ -1198,9 +1200,14 @@ export function registerAdminManagementRoutes(app: Express) {
         }
 
         const isRestaurantProvisionType =
-          userType === "restaurant_owner" || userType === "food_truck";
+          userType === "restaurant_owner" ||
+          userType === "caterer" ||
+          userType === "private_chef" ||
+          userType === "food_truck";
         const isAddressRequiredForProvision =
-          userType === "restaurant_owner";
+          userType === "restaurant_owner" ||
+          userType === "caterer" ||
+          userType === "private_chef";
         const isHostProvisionType =
           userType === "host" || userType === "event_coordinator";
         const isSupplierProvisionType = userType === "supplier";
@@ -1299,7 +1306,10 @@ export function registerAdminManagementRoutes(app: Express) {
         }
 
         const shouldDeriveCoordinates =
-          ((isHostProvisionType || userType === "restaurant_owner") ||
+          ((isHostProvisionType ||
+            userType === "restaurant_owner" ||
+            userType === "caterer" ||
+            userType === "private_chef") ||
             (userType === "food_truck" && Boolean(normalizedAddress))) &&
           parsedLatitude === null &&
           parsedLongitude === null;
@@ -1382,6 +1392,17 @@ export function registerAdminManagementRoutes(app: Express) {
                 address: normalizedAddress,
                 city: normalizedCity,
                 state: normalizedState,
+                businessType:
+                  userType === "food_truck"
+                    ? "food_truck"
+                    : userType === "caterer"
+                      ? "caterer"
+                      : userType === "private_chef"
+                        ? "private_chef"
+                        : "restaurant",
+                isFoodTruck: userType === "food_truck",
+                offersCatering:
+                  userType === "caterer" || userType === "private_chef",
                 cuisineType: cuisineType || "Various",
                 isActive: true,
                 isVerified: true,

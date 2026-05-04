@@ -31,7 +31,7 @@ export const users: any = pgTable(
     id: varchar("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'caterer' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
+    userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'caterer' | 'private_chef' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
     // TradeScout SSO linkage (for unified accounts between TradeScout and MealScout)
     tradescoutId: varchar("tradescout_id").unique(),
     // Facebook authentication (for regular users)
@@ -192,7 +192,7 @@ export const restaurants = pgTable("restaurants", {
   name: varchar("name").notNull(),
   address: text("address").notNull(),
   phone: varchar("phone"),
-  businessType: varchar("business_type").notNull().default("restaurant"), // 'restaurant' | 'bar' | 'food_truck' | 'caterer'
+  businessType: varchar("business_type").notNull().default("restaurant"), // 'restaurant' | 'bar' | 'food_truck' | 'caterer' | 'private_chef'
   cuisineType: varchar("cuisine_type"),
   promoCode: varchar("promo_code"), // For tracking beta access and special offers
   claimedFromImportId: varchar("claimed_from_import_id"),

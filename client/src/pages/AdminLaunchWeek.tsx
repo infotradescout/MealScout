@@ -104,7 +104,12 @@ interface LaunchWeekResponse {
     failedImports: number;
     stuck: number;
     subscribed: number;
-    byType: { restaurant_owner: number; food_truck: number };
+    byType: {
+      restaurant_owner: number;
+      caterer?: number;
+      private_chef?: number;
+      food_truck: number;
+    };
   };
   owners: OwnerRow[];
 }

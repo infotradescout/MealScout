@@ -40,7 +40,10 @@ function blurClass(locked: boolean) {
 export default function PensacolaSpots() {
   const { isAuthenticated, user } = useAuth();
   const isTruckOperator =
-    user?.userType === "food_truck" || user?.userType === "restaurant_owner";
+    user?.userType === "food_truck" ||
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "caterer" ||
+    user?.userType === "private_chef";
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["/api/public/pensacola/parking-pass-leads", isAuthenticated],

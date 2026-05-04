@@ -141,7 +141,7 @@ async function gatherCandidates(): Promise<OwnerAlertRow[]> {
       and(
         gte(users.createdAt, lookbackCutoff),
         lt(users.createdAt, thresholdCutoff),
-        sql`${users.userType} IN ('restaurant_owner','food_truck')`,
+        sql`${users.userType} IN ('restaurant_owner','caterer','private_chef','food_truck')`,
       ),
     );
 

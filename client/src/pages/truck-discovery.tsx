@@ -612,7 +612,12 @@ function TruckDiscovery() {
     if (Array.isArray((user as any).roles)) {
       (user as any).roles.forEach((r: string | null) => r && roles.add(r));
     }
-    return roles.has("food_truck") || roles.has("restaurant_owner");
+    return (
+      roles.has("food_truck") ||
+      roles.has("restaurant_owner") ||
+      roles.has("caterer") ||
+      roles.has("private_chef")
+    );
   }, [user]);
 
   const { data: subscription } = useQuery<{

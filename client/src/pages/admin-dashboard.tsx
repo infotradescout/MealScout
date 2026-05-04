@@ -1750,6 +1750,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       | "food_truck"
       | "restaurant_owner"
       | "caterer"
+      | "private_chef"
       | "supplier"
       | "staff"
       | "event_coordinator"
@@ -1814,6 +1815,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     const needsBusinessProfile =
       formData.userType === "restaurant_owner" ||
       formData.userType === "caterer" ||
+      formData.userType === "private_chef" ||
       formData.userType === "food_truck" ||
       formData.userType === "supplier" ||
       formData.userType === "host" ||
@@ -1822,6 +1824,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
     const addressRequiredForType =
       formData.userType === "restaurant_owner" ||
       formData.userType === "caterer" ||
+      formData.userType === "private_chef" ||
       formData.userType === "supplier" ||
       formData.userType === "host" ||
       formData.userType === "event_coordinator";
@@ -2058,6 +2061,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
             <option value="food_truck">Food Truck</option>
             <option value="restaurant_owner">Restaurant Owner</option>
             <option value="caterer">Caterer</option>
+            <option value="private_chef">Private Chef</option>
             <option value="customer">Customer</option>
             <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
@@ -2080,6 +2084,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               "Business owner - manage restaurant and create deals"}
             {formData.userType === "caterer" &&
               "Caterer - manage catering profile, menus, requests, and leads"}
+            {formData.userType === "private_chef" &&
+              "Private chef - publish bookable chef services, menus, requests, and leads"}
             {formData.userType === "staff" &&
               "Staff member - help manage restaurant operations"}
             {formData.userType === "event_coordinator" &&
@@ -2148,6 +2154,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
         {/* Restaurant Owner & Food Truck Specific Fields */}
         {(formData.userType === "restaurant_owner" ||
           formData.userType === "caterer" ||
+          formData.userType === "private_chef" ||
           formData.userType === "food_truck" ||
           formData.userType === "supplier") && (
           <>
@@ -4155,6 +4162,7 @@ export default function AdminDashboard() {
       "staff",
       "restaurant_owner",
       "caterer",
+      "private_chef",
       "food_truck",
       "host",
       "event_coordinator",
@@ -4195,6 +4203,7 @@ export default function AdminDashboard() {
       { value: "food_truck", label: "Food Trucks" },
       { value: "restaurant_owner", label: "Restaurants" },
       { value: "caterer", label: "Caterers" },
+      { value: "private_chef", label: "Private Chefs" },
       { value: "host", label: "Hosts" },
       { value: "event_coordinator", label: "Events" },
       { value: "staff", label: "Staff" },
@@ -4259,6 +4268,7 @@ export default function AdminDashboard() {
       if (value === "staff") return 80;
       if (value === "restaurant_owner") return 70;
       if (value === "caterer") return 65;
+      if (value === "private_chef") return 64;
       if (value === "food_truck") return 60;
       if (value === "host") return 50;
       if (value === "event_coordinator") return 40;
@@ -9513,6 +9523,7 @@ export default function AdminDashboard() {
                     const isBusinessUser = [
                       "restaurant_owner",
                       "caterer",
+                      "private_chef",
                       "food_truck",
                       "host",
                     ].includes(String(user.userType || ""));
@@ -9564,6 +9575,7 @@ export default function AdminDashboard() {
                               Restaurant Owner
                             </option>
                             <option value="caterer">Caterer</option>
+                            <option value="private_chef">Private Chef</option>
                             <option value="supplier">Supplier</option>
                             <option value="host">Host</option>
                             <option value="event_coordinator">
@@ -9646,6 +9658,7 @@ export default function AdminDashboard() {
                               ![
                                 "restaurant_owner",
                                 "caterer",
+                                "private_chef",
                                 "food_truck",
                               ].includes(
                                 user.userType,
@@ -10482,6 +10495,7 @@ export default function AdminDashboard() {
                           Restaurant Owner
                         </option>
                         <option value="caterer">Caterer</option>
+                        <option value="private_chef">Private Chef</option>
                         <option value="supplier">Supplier</option>
                         <option value="host">Host</option>
                         <option value="event_coordinator">
@@ -11344,6 +11358,7 @@ export default function AdminDashboard() {
                             <option value="bar">Bar</option>
                             <option value="food_truck">Food Truck</option>
                             <option value="caterer">Caterer</option>
+                            <option value="private_chef">Private Chef</option>
                           </select>
                           <input
                             className="w-full px-2 py-1 border rounded-md text-sm"
@@ -11586,6 +11601,7 @@ export default function AdminDashboard() {
                         <option value="bar">Bar</option>
                         <option value="food_truck">Food Truck</option>
                         <option value="caterer">Caterer</option>
+                        <option value="private_chef">Private Chef</option>
                       </select>
                       <input
                         className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"

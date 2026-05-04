@@ -235,5 +235,9 @@ export const getCategoryLine = (input?: ListingImageInput | null) => {
   if (input?.businessType === "event") return "Public Event";
   if (input?.restaurant?.businessType === "food_truck") return "Food Truck";
   if (input?.businessType === "food_truck") return "Food Truck";
+  if (input?.restaurant?.businessType === "private_chef") return "Private Chef";
+  if (input?.businessType === "private_chef") return "Private Chef";
+  if (input?.restaurant?.businessType === "caterer") return "Caterer";
+  if (input?.businessType === "caterer") return "Caterer";
   return "Local Food";
 };

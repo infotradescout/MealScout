@@ -216,7 +216,10 @@ export default function SuppliersPage() {
   const userType = String((user as any)?.userType || "").trim();
   const isSupplierUser = userType === "supplier";
   const isBuyerBusiness =
-    userType === "restaurant_owner" || userType === "food_truck";
+    userType === "restaurant_owner" ||
+    userType === "caterer" ||
+    userType === "private_chef" ||
+    userType === "food_truck";
   const canUseBuyerTools = isAuthenticated && !isSupplierUser;
 
   const { data: supplierProfile } = useQuery<Supplier | null>({

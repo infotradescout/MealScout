@@ -809,15 +809,22 @@ export default function DealCreation() {
   const canManageDeals =
     Boolean(isAdminOrStaff) ||
     user?.userType === "restaurant_owner" ||
+    user?.userType === "caterer" ||
+    user?.userType === "private_chef" ||
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageDeals === true;
   const canManageBusinessProfile =
     Boolean(isAdminOrStaff) ||
     user?.userType === "restaurant_owner" ||
+    user?.userType === "caterer" ||
+    user?.userType === "private_chef" ||
     user?.userType === "food_truck" ||
     businessAccess?.permissions?.manageProfile === true;
   const isOwnerOrFoodTruck =
-    user?.userType === "restaurant_owner" || user?.userType === "food_truck";
+    user?.userType === "restaurant_owner" ||
+    user?.userType === "caterer" ||
+    user?.userType === "private_chef" ||
+    user?.userType === "food_truck";
   const subscriptionHasAccess = Boolean(
     subscription &&
       ((subscription as any).status === "active" ||

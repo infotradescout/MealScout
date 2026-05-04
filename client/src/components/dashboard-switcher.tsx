@@ -45,7 +45,11 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
 
   // If not admin, redirect to appropriate dashboard
   if (adminError || !adminUser) {
-    if (user?.userType === 'restaurant_owner' || user?.userType === 'caterer') {
+    if (
+      user?.userType === 'restaurant_owner' ||
+      user?.userType === 'caterer' ||
+      user?.userType === 'private_chef'
+    ) {
       return <RestaurantOwnerDashboard />;
     } else {
       return <UserDashboard />;

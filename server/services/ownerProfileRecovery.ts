@@ -189,7 +189,7 @@ export async function findOwnerProfileRecoveryCandidates({
       u.email_verified as "emailVerified",
       u.created_at as "createdAt"
     from users u
-    where u.user_type in ('food_truck', 'restaurant_owner')
+    where u.user_type in ('food_truck', 'restaurant_owner', 'caterer', 'private_chef')
       and coalesce(u.is_disabled, false) = false
       and u.created_at >= now() - (${lookbackDays}::int * interval '1 day')
       and u.created_at <= now() - (${thresholdMinutes}::int * interval '1 minute')
@@ -243,7 +243,11 @@ export async function getOwnerProfileRecoveryState(
   missingLabels: string[];
   href: string;
 } | null> {
-  if (!["food_truck", "restaurant_owner"].includes(String(user.userType || ""))) {
+  if (
+    !["food_truck", "restaurant_owner", "caterer", "private_chef"].includes(
+      String(user.userType || ""),
+    )
+  ) {
     return null;
   }
 
@@ -398,7 +402,11 @@ export async function sendOwnerProfileRecoveryEmail({
   if (email.toLowerCase().endsWith("@mealscout.invalid")) {
     return { ok: false, skipped: "test_email" as const };
   }
-  if (!["food_truck", "restaurant_owner"].includes(String(user.userType || ""))) {
+  if (
+    !["food_truck", "restaurant_owner", "caterer", "private_chef"].includes(
+      String(user.userType || ""),
+    )
+  ) {
     return { ok: false, skipped: "not_owner" as const };
   }
   if (!force && (await hasOwnerProfileRecoveryBeenSentRecently(user.id))) {

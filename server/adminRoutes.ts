@@ -1249,6 +1249,8 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
     const validUserTypes = [
       "customer",
       "restaurant_owner",
+      "caterer",
+      "private_chef",
       "food_truck",
       "supplier",
       "host",
@@ -1292,7 +1294,10 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
 
     // Optional profile creation for business users.
     if (
-      (userType === "restaurant_owner" || userType === "food_truck") &&
+      (userType === "restaurant_owner" ||
+        userType === "caterer" ||
+        userType === "private_chef" ||
+        userType === "food_truck") &&
       businessName &&
       address
     ) {
@@ -1300,6 +1305,16 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
         userId: user.id,
         name: businessName,
         address,
+        businessType:
+          userType === "food_truck"
+            ? "food_truck"
+            : userType === "caterer"
+              ? "caterer"
+              : userType === "private_chef"
+                ? "private_chef"
+                : "restaurant",
+        isFoodTruck: userType === "food_truck",
+        offersCatering: userType === "caterer" || userType === "private_chef",
         cuisineType: cuisineType || "Various",
       });
     }

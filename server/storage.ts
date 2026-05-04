@@ -391,6 +391,7 @@ export interface IStorage {
       | "customer"
       | "restaurant_owner"
       | "caterer"
+      | "private_chef"
       | "food_truck"
       | "supplier"
       | "host"
@@ -738,6 +739,7 @@ export interface IStorage {
       | "customer"
       | "restaurant_owner"
       | "caterer"
+      | "private_chef"
       | "food_truck"
       | "supplier"
       | "host"
@@ -760,6 +762,9 @@ export interface IStorage {
     name: string;
     address: string;
     cuisineType: string;
+    businessType?: string;
+    isFoodTruck?: boolean;
+    offersCatering?: boolean;
   }): Promise<Restaurant>;
 
   // Host operations
@@ -1819,6 +1824,7 @@ export class DatabaseStorage implements IStorage {
       | "customer"
       | "restaurant_owner"
       | "caterer"
+      | "private_chef"
       | "food_truck"
       | "supplier"
       | "host"
@@ -2632,6 +2638,8 @@ export class DatabaseStorage implements IStorage {
     userType:
       | "customer"
       | "restaurant_owner"
+      | "caterer"
+      | "private_chef"
       | "food_truck"
       | "host"
       | "event_coordinator"
@@ -2647,6 +2655,9 @@ export class DatabaseStorage implements IStorage {
     name: string;
     address: string;
     cuisineType: string;
+    businessType?: string;
+    isFoodTruck?: boolean;
+    offersCatering?: boolean;
   }): Promise<Restaurant> {
     const [restaurant] = await db
       .insert(restaurants)
@@ -2655,6 +2666,9 @@ export class DatabaseStorage implements IStorage {
         name: restaurantData.name,
         address: restaurantData.address,
         cuisineType: restaurantData.cuisineType,
+        businessType: restaurantData.businessType || "restaurant",
+        isFoodTruck: restaurantData.isFoodTruck || false,
+        offersCatering: restaurantData.offersCatering || false,
         isActive: true,
         isVerified: true, // Admin-created restaurants are pre-verified
       })
@@ -5207,7 +5221,7 @@ export class DatabaseStorage implements IStorage {
     firstName: string | null;
     lastName: string | null;
     phone: string | null;
-    userType: "customer" | "restaurant_owner";
+    userType: "customer" | "restaurant_owner" | "caterer" | "private_chef";
     passwordHash: string;
     mustResetPassword: boolean;
   }): Promise<{ userId: string }> {

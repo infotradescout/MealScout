@@ -128,7 +128,9 @@ export default function ProfilePage() {
       href: "/profile/addresses",
     },
     // Only show Payment Methods for restaurant owners who need subscription billing
-    ...(user?.userType === "restaurant_owner" || user?.userType === "caterer"
+    ...(user?.userType === "restaurant_owner" ||
+      user?.userType === "caterer" ||
+      user?.userType === "private_chef"
       ? [
           {
             icon: CreditCard,
@@ -265,21 +267,23 @@ export default function ProfilePage() {
                       ? "Restaurant Owner"
                       : user?.userType === "caterer"
                         ? "Caterer"
-                      : user?.userType === "food_truck"
-                        ? "Food Truck"
-                        : user?.userType === "supplier"
-                          ? "Supplier"
-                          : user?.userType === "host"
-                            ? "Host"
-                            : user?.userType === "event_coordinator"
-                              ? "Event Coordinator"
-                              : user?.userType === "staff"
-                                ? "Staff"
-                                : user?.userType === "admin"
-                                  ? "Admin"
-                                  : user?.userType === "super_admin"
-                                    ? "Super Admin"
-                                    : "Food Explorer"}
+                        : user?.userType === "private_chef"
+                          ? "Private Chef"
+                          : user?.userType === "food_truck"
+                            ? "Food Truck"
+                            : user?.userType === "supplier"
+                              ? "Supplier"
+                              : user?.userType === "host"
+                                ? "Host"
+                                : user?.userType === "event_coordinator"
+                                  ? "Event Coordinator"
+                                  : user?.userType === "staff"
+                                    ? "Staff"
+                                    : user?.userType === "admin"
+                                      ? "Admin"
+                                      : user?.userType === "super_admin"
+                                        ? "Super Admin"
+                                        : "Food Explorer"}
                   </span>
                 </div>
               </div>

@@ -52,7 +52,11 @@ export default function Login() {
     if (["admin", "super_admin", "staff"].includes(userType)) {
       return "/admin/dashboard";
     }
-    if (["restaurant_owner", "caterer", "food_truck"].includes(userType)) {
+    if (
+      ["restaurant_owner", "caterer", "private_chef", "food_truck"].includes(
+        userType,
+      )
+    ) {
       return "/restaurant-owner-dashboard";
     }
     if (userType === "host") return "/host-dashboard";

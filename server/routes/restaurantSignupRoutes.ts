@@ -151,10 +151,16 @@ export function registerRestaurantSignupRoutes(
       if (instagramUrl) minimalRestaurantPayload.instagramUrl = instagramUrl;
       if (facebookPageUrl)
         minimalRestaurantPayload.facebookPageUrl = facebookPageUrl;
-      if (minimalRestaurantPayload.businessType === "caterer") {
+      if (
+        minimalRestaurantPayload.businessType === "caterer" ||
+        minimalRestaurantPayload.businessType === "private_chef"
+      ) {
         minimalRestaurantPayload.offersCatering = true;
         minimalRestaurantPayload.cateringDetails = {
-          headline: "Catering available",
+          headline:
+            minimalRestaurantPayload.businessType === "private_chef"
+              ? "Private chef bookings available"
+              : "Catering available",
           description: description || "",
           serviceArea: [minimalRestaurantPayload.city, minimalRestaurantPayload.state]
             .filter(Boolean)
@@ -168,7 +174,9 @@ export function registerRestaurantSignupRoutes(
         (amenities.parking || amenities.wifi || amenities.outdoor_seating);
       if (
         hasAmenities &&
-        !["food_truck", "caterer"].includes(minimalRestaurantPayload.businessType)
+        !["food_truck", "caterer", "private_chef"].includes(
+          minimalRestaurantPayload.businessType,
+        )
       ) {
         minimalRestaurantPayload.amenities = amenities;
       }
@@ -190,17 +198,36 @@ export function registerRestaurantSignupRoutes(
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
         const currentType = String((user as any)?.userType || "");
-        const allowedToPromote = ["customer", "restaurant_owner", "caterer"].includes(
-          currentType,
-        );
+        const allowedToPromote = [
+          "customer",
+          "restaurant_owner",
+          "caterer",
+          "private_chef",
+        ].includes(currentType);
         if (allowedToPromote && currentType !== "food_truck") {
           await storage.updateUserType(user.id, "food_truck");
           user = (await storage.getUserById(user.id)) || user;
         }
       } else if (String((restaurant as any)?.businessType || "") === "caterer") {
         const currentType = String((user as any)?.userType || "");
-        if (["customer", "restaurant_owner", "food_truck"].includes(currentType)) {
+        if (
+          ["customer", "restaurant_owner", "food_truck", "private_chef"].includes(
+            currentType,
+          )
+        ) {
           await storage.updateUserType(user.id, "caterer");
+          user = (await storage.getUserById(user.id)) || user;
+        }
+      } else if (
+        String((restaurant as any)?.businessType || "") === "private_chef"
+      ) {
+        const currentType = String((user as any)?.userType || "");
+        if (
+          ["customer", "restaurant_owner", "food_truck", "caterer"].includes(
+            currentType,
+          )
+        ) {
+          await storage.updateUserType(user.id, "private_chef");
           user = (await storage.getUserById(user.id)) || user;
         }
       }

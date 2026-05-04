@@ -157,7 +157,9 @@ export default function EventDetailPage() {
     }
     if (
       user?.userType !== "food_truck" &&
-      user?.userType !== "restaurant_owner"
+      user?.userType !== "restaurant_owner" &&
+      user?.userType !== "caterer" &&
+      user?.userType !== "private_chef"
     ) {
       return;
     }

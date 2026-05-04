@@ -1022,7 +1022,7 @@ router.get("/heartbeat", isAdmin, async (req, res) => {
               )
             )::int as new_activated_users_30d,
             count(*) filter (
-              where user_type in ('restaurant_owner', 'food_truck', 'host', 'event_coordinator', 'supplier')
+              where user_type in ('restaurant_owner', 'caterer', 'private_chef', 'food_truck', 'host', 'event_coordinator', 'supplier')
             )::int as total_supply_side_users
           from users
         `),

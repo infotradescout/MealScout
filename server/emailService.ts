@@ -218,6 +218,7 @@ class EmailTemplates {
       customer: "Customer",
       restaurant_owner: "Restaurant Owner",
       caterer: "Caterer",
+      private_chef: "Private Chef",
       food_truck: "Food Truck Owner",
       supplier: "Supplier",
       host: "Host / Venue",
@@ -822,9 +823,12 @@ This notification was generated automatically by the MealScout system.
     context?: AdminSignupNotificationContext,
   ): { html: string; text: string } {
     const userTypeDisplay = this.getUserTypeDisplay(user.userType);
-    const isBusinessReviewRole = ["restaurant_owner", "caterer", "food_truck"].includes(
-      String(user.userType || ""),
-    );
+    const isBusinessReviewRole = [
+      "restaurant_owner",
+      "caterer",
+      "private_chef",
+      "food_truck",
+    ].includes(String(user.userType || ""));
     const signupMethod = context?.signupMethod || "Email";
     const acquisitionRows = [
       ["Account Type", context?.accountType],
@@ -1624,11 +1628,12 @@ export class EmailService {
         break;
       case "restaurant_owner":
       case "caterer":
+      case "private_chef":
         template = EmailTemplates.getRestaurantOwnerWelcomeTemplate(
           user,
           verifyUrl,
         );
-        subject = "Welcome to MealScout Business - Grow Your Restaurant! 🚀";
+        subject = "Welcome to MealScout Business - Grow Your Business! 🚀";
         break;
       case "admin":
         template = EmailTemplates.getAdminWelcomeTemplate(user, verifyUrl);

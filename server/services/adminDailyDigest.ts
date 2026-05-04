@@ -51,7 +51,7 @@ export async function buildAdminDigestSnapshot(
     .where(
       and(
         gte(users.createdAt, cutoff),
-        sql`${users.userType} IN ('restaurant_owner','food_truck')`,
+        sql`${users.userType} IN ('restaurant_owner','caterer','private_chef','food_truck')`,
       ),
     );
   const newOwners = newOwnerRows.length;
@@ -111,7 +111,7 @@ export async function buildAdminDigestSnapshot(
     .leftJoin(restaurants, eq(restaurants.ownerId, users.id))
     .where(
       and(
-        sql`${users.userType} IN ('restaurant_owner','food_truck')`,
+        sql`${users.userType} IN ('restaurant_owner','caterer','private_chef','food_truck')`,
         gte(users.createdAt, cutoff),
         sql`${users.createdAt} < ${stuckCutoff}`,
         isNull(restaurants.id),

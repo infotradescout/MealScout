@@ -35,6 +35,9 @@ export default function WelcomeLocationModal({
   const isTruckSideUser =
     user &&
     (user.userType === "restaurant_owner" ||
+      user.userType === "caterer" ||
+      user.userType === "private_chef" ||
+      user.userType === "food_truck" ||
       user.userType === "staff" ||
       user.userType === "admin");
 

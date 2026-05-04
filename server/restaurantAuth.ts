@@ -162,9 +162,14 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "caterer", "food_truck", "admin", "super_admin"].includes(
-      req.user.userType,
-    )
+    ![
+      "restaurant_owner",
+      "caterer",
+      "private_chef",
+      "food_truck",
+      "admin",
+      "super_admin",
+    ].includes(req.user.userType)
   ) {
     return res.status(403).json({ error: "Restaurant owner access required" });
   }

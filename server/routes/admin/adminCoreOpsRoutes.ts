@@ -253,6 +253,10 @@ const buildSignupCaption = (signup: {
     return `New on MealScout: ${signup.displayName}, a ${category}caterer${location}.${menu}${videos}${nextBestLink} See their catering-ready profile here: ${publicUrl}`;
   }
 
+  if (signup.kind === "private_chef") {
+    return `New on MealScout: ${signup.displayName}, a ${category}private chef${location}.${menu}${videos}${nextBestLink} See their bookable chef profile here: ${publicUrl}`;
+  }
+
   if (signup.kind === "host") {
     return `New MealScout host: ${signup.displayName}${location}. Hosts publish truck opportunities and parking availability directly through MealScout. See the public profile: ${publicUrl}`;
   }
@@ -266,6 +270,7 @@ const signupUserTypeLabel = (userType: unknown) => {
     customer: "Customer",
     restaurant_owner: "Restaurant Owner",
     caterer: "Caterer",
+    private_chef: "Private Chef",
     food_truck: "Food Truck Owner",
     supplier: "Supplier",
     host: "Host",
@@ -281,6 +286,7 @@ const signupKindForUserType = (userType: unknown) => {
   const normalized = String(userType || "customer").trim().toLowerCase();
   if (normalized === "food_truck") return "food_truck";
   if (normalized === "caterer") return "caterer";
+  if (normalized === "private_chef") return "private_chef";
   if (normalized === "restaurant_owner") return "restaurant";
   if (normalized === "host" || normalized === "event_coordinator") {
     return "host";
@@ -298,6 +304,7 @@ const signupCategoryForUserType = (userType: unknown) => {
     customer: "Local food fan",
     restaurant_owner: "Business owner",
     caterer: "Catering business",
+    private_chef: "Private chef",
     food_truck: "Mobile food owner",
     supplier: "Food business supplier",
     host: "Truck-friendly host",
@@ -1658,7 +1665,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             String(row.businessType || "").toLowerCase() === "food_truck";
           const businessType = String(row.businessType || "").toLowerCase();
           const isCaterer = businessType === "caterer";
-          const kind = isFoodTruck ? "food_truck" : isCaterer ? "caterer" : "restaurant";
+          const isPrivateChef = businessType === "private_chef";
+          const kind = isFoodTruck
+            ? "food_truck"
+            : isPrivateChef
+              ? "private_chef"
+              : isCaterer
+                ? "caterer"
+                : "restaurant";
           const isBar = String(row.businessType || "").toLowerCase() === "bar";
           const typeLabel = isFoodTruck
             ? "Food Truck"
@@ -2062,6 +2076,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             customers: signups.filter((item) => item.kind === "customer").length,
             foodTrucks: signups.filter((item) => item.kind === "food_truck")
               .length,
+            privateChefs: signups.filter(
+              (item) => item.kind === "private_chef",
+            ).length,
             restaurants: signups.filter((item) => item.kind === "restaurant")
               .length,
             hosts: signups.filter((item) => item.kind === "host").length,
@@ -2202,7 +2219,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               gte(users.createdAt, cutoff),
-              sql`${users.userType} IN ('restaurant_owner','food_truck')`,
+              sql`${users.userType} IN ('restaurant_owner','caterer','private_chef','food_truck')`,
             ),
           )
           .orderBy(sql`${users.createdAt} DESC`)
@@ -2397,6 +2414,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           byType: {
             restaurant_owner: rows.filter(
               (r: any) => r.userType === "restaurant_owner",
+            ).length,
+            caterer: rows.filter((r: any) => r.userType === "caterer").length,
+            private_chef: rows.filter(
+              (r: any) => r.userType === "private_chef",
             ).length,
             food_truck: rows.filter((r: any) => r.userType === "food_truck")
               .length,

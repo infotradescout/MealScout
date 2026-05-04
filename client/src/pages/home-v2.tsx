@@ -209,6 +209,8 @@ function formatBusinessTypeLabel(business: {
     .toLowerCase()
     .trim();
   if (normalizedType.includes("bar")) return "Bar";
+  if (normalizedType.includes("private_chef")) return "Private Chef";
+  if (normalizedType.includes("caterer")) return "Caterer";
   return "Restaurant";
 }
 

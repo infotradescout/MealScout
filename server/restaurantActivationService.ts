@@ -97,6 +97,8 @@ export class RestaurantActivationService {
         and(
           or(
             eq(users.userType, "restaurant_owner"),
+            eq(users.userType, "caterer"),
+            eq(users.userType, "private_chef"),
             eq(users.userType, "food_truck"),
           ),
           gte(users.createdAt, day14Start),

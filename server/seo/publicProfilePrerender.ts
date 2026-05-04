@@ -346,17 +346,20 @@ async function restaurantPage(baseUrl: string, restaurantId: string) {
     .join(", ");
   const isTruck = Boolean(row.isFoodTruck) || row.businessType === "food_truck";
   const isBar = row.businessType === "bar";
+  const isPrivateChef = row.businessType === "private_chef";
   const ownerType = isTruck ? "food_truck" : "restaurant";
   const rawCateringDetails =
     row.cateringDetails && typeof row.cateringDetails === "object"
       ? (row.cateringDetails as Record<string, any>)
       : {};
   const offersCatering = Boolean(
-    row.offersCatering || row.businessType === "caterer",
+    row.offersCatering || row.businessType === "caterer" || isPrivateChef,
   );
   const cateringHeadline = cleanText(
     rawCateringDetails.headline || rawCateringDetails.title,
-    `${name} catering${isTruck ? " and events" : ""}`,
+    isPrivateChef
+      ? `${name} private chef bookings`
+      : `${name} catering${isTruck ? " and events" : ""}`,
   );
   const cateringDescription = cleanText(
     rawCateringDetails.description || rawCateringDetails.notes,

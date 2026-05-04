@@ -161,7 +161,11 @@ export default function SupplierDetailPage() {
   );
 
   const userType = String((user as any)?.userType || "").trim();
-  const isBuyerBusiness = userType === "restaurant_owner" || userType === "food_truck";
+  const isBuyerBusiness =
+    userType === "restaurant_owner" ||
+    userType === "caterer" ||
+    userType === "private_chef" ||
+    userType === "food_truck";
   const canOrder = isAuthenticated;
 
   useEffect(() => {

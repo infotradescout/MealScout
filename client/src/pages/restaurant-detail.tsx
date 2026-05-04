@@ -655,13 +655,18 @@ export default function RestaurantDetailPage() {
       ? (rawCateringDetails as Record<string, any>)
       : {};
   const businessType = String((restaurant as any)?.businessType || "").toLowerCase();
+  const isPrivateChef = businessType === "private_chef";
   const offersCatering = Boolean(
-    (restaurant as any)?.offersCatering || businessType === "caterer",
+    (restaurant as any)?.offersCatering ||
+      businessType === "caterer" ||
+      isPrivateChef,
   );
   const cateringHeadline = String(
     cateringDetails.headline ||
       cateringDetails.title ||
-      `${restaurantName} catering${isFoodTruck ? " and events" : ""}`,
+      (isPrivateChef
+        ? `${restaurantName} private chef bookings`
+        : `${restaurantName} catering${isFoodTruck ? " and events" : ""}`),
   ).trim();
   const cateringDescription = String(
     cateringDetails.description ||

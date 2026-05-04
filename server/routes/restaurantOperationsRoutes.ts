@@ -50,7 +50,7 @@ export function registerRestaurantOperationsRoutes(
       state: z.string().trim().min(2).max(32).optional(),
       phone: z.string().trim().max(40).optional().nullable(),
       businessType: z
-        .enum(["restaurant", "bar", "food_truck", "caterer"])
+        .enum(["restaurant", "bar", "food_truck", "caterer", "private_chef"])
         .optional(),
       cuisineType: z.string().trim().max(80).optional().nullable(),
       description: z.string().trim().max(1200).optional().nullable(),

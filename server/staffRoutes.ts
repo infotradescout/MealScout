@@ -211,6 +211,8 @@ export function registerStaffRoutes(app: Express) {
         const validUserTypes = [
           "customer",
           "restaurant_owner",
+          "caterer",
+          "private_chef",
           "food_truck",
           "host",
           "event_coordinator",
@@ -258,6 +260,8 @@ export function registerStaffRoutes(app: Express) {
         // Optionally create restaurant or host profiles
         if (
           (targetUserType === "restaurant_owner" ||
+            targetUserType === "caterer" ||
+            targetUserType === "private_chef" ||
             targetUserType === "food_truck") &&
           businessName &&
           address
@@ -266,6 +270,18 @@ export function registerStaffRoutes(app: Express) {
             userId: user.id,
             name: businessName,
             address,
+            businessType:
+              targetUserType === "food_truck"
+                ? "food_truck"
+                : targetUserType === "caterer"
+                  ? "caterer"
+                  : targetUserType === "private_chef"
+                    ? "private_chef"
+                    : "restaurant",
+            isFoodTruck: targetUserType === "food_truck",
+            offersCatering:
+              targetUserType === "caterer" ||
+              targetUserType === "private_chef",
             cuisineType: cuisineType || "Various",
           });
         }

@@ -819,6 +819,7 @@ export function registerUserAdminRoutes(
             "customer",
             "restaurant_owner",
             "caterer",
+            "private_chef",
             "food_truck",
             "supplier",
             "host",
@@ -1424,6 +1425,7 @@ export function registerUserAdminRoutes(
           "customer",
           "restaurant_owner",
           "caterer",
+          "private_chef",
           "food_truck",
           "supplier",
           "host",
@@ -1853,7 +1855,15 @@ export function registerUserAdminRoutes(
         const businessType = String(
           req.body?.businessType || "restaurant",
         ).toLowerCase();
-        if (!["restaurant", "bar", "food_truck", "caterer"].includes(businessType)) {
+        if (
+          ![
+            "restaurant",
+            "bar",
+            "food_truck",
+            "caterer",
+            "private_chef",
+          ].includes(businessType)
+        ) {
           return res.status(400).json({
             message: "Invalid businessType",
           });
@@ -1871,7 +1881,8 @@ export function registerUserAdminRoutes(
           ),
           businessType,
           isFoodTruck: businessType === "food_truck",
-          offersCatering: businessType === "caterer",
+          offersCatering:
+            businessType === "caterer" || businessType === "private_chef",
           isActive: req.body?.isActive ?? true,
           isVerified: req.body?.isVerified ?? true,
           description: req.body?.description || null,
@@ -1894,6 +1905,8 @@ export function registerUserAdminRoutes(
               ? "food_truck"
               : businessType === "caterer"
                 ? "caterer"
+                : businessType === "private_chef"
+                  ? "private_chef"
                 : "restaurant_owner";
           await storage.updateUserType(ownerId, nextType as any);
         }
