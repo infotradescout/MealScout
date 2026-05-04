@@ -67,6 +67,11 @@ type RecentSignup = {
   isPublic: boolean;
   linkLabel?: string | null;
   isVerified: boolean;
+  googlePlaceId?: string | null;
+  googleRating?: string | number | null;
+  googleReviewCount?: number | null;
+  googleProfileLinked?: boolean;
+  profileSource?: string | null;
   createdAt: string;
   ownerName?: string | null;
   ownerEmail?: string | null;
@@ -579,6 +584,14 @@ export default function RecentSignupShare() {
                         <Badge variant="outline">
                           {signup.videoCount} video
                           {Number(signup.videoCount) === 1 ? "" : "s"}
+                        </Badge>
+                      ) : null}
+                      {signup.googleProfileLinked || signup.googlePlaceId ? (
+                        <Badge variant="outline">
+                          Google listing
+                          {signup.googleRating
+                            ? ` ${Number(signup.googleRating).toFixed(1)}`
+                            : ""}
                         </Badge>
                       ) : null}
                       {signup.spotCount ? (

@@ -112,6 +112,7 @@ import {
 import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import { db, pool } from "./db";
+import { queueGoogleHostAutoLink } from "./services/googleBusinessAutoLink";
 import {
   eq,
   and,
@@ -1280,6 +1281,7 @@ export class DatabaseStorage implements IStorage {
     } catch (e) {
       console.warn("ensureDraftParkingPassForHost failed for host", e);
     }
+    queueGoogleHostAutoLink(newHost as any, "storage.createHost");
     return newHost;
   }
 

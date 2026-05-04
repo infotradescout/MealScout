@@ -12,6 +12,14 @@ import { sendAdminDailyDigest } from "../../services/adminDailyDigest";
 import { sendOwnerDiscoverabilityAlerts } from "../../services/ownerDiscoverabilityAlerts";
 import { sendOwnerProfileRecoveryEmail } from "../../services/ownerProfileRecovery";
 import {
+  shouldAttemptGoogleHostAutoLink,
+  shouldAttemptGoogleRestaurantAutoLink,
+} from "../../services/googleBusinessAutoLink";
+import {
+  populateHostProfile,
+  populateRestaurantProfile,
+} from "../../services/googleProfileService";
+import {
   getPublicBusinessVisibilityChecks,
   isPublicBusinessVisible,
 } from "../../utils/publicBusinessVisibility";
@@ -366,6 +374,119 @@ const fetchAdminImageResponse = async (url: string) => {
     contentType,
     buffer: Buffer.from(arrayBuffer),
   };
+};
+
+const refreshRecentRestaurantGoogleFields = async (rows: any[]) => {
+  const ids = Array.from(
+    new Set(rows.map((row) => String(row.id || "").trim()).filter(Boolean)),
+  );
+  if (!ids.length) return;
+
+  const freshRows = await db
+    .select({
+      id: restaurants.id,
+      phone: restaurants.phone,
+      cuisineType: restaurants.cuisineType,
+      logoUrl: restaurants.logoUrl,
+      coverImageUrl: restaurants.coverImageUrl,
+      description: restaurants.description,
+      websiteUrl: restaurants.websiteUrl,
+      menuUrl: restaurants.menuUrl,
+      orderUrl: restaurants.orderUrl,
+      googlePlaceId: restaurants.googlePlaceId,
+      googleRating: restaurants.googleRating,
+      googleReviewCount: restaurants.googleReviewCount,
+      googlePriceLevel: restaurants.googlePriceLevel,
+      googleBusinessStatus: restaurants.googleBusinessStatus,
+      googlePhotos: restaurants.googlePhotos,
+      googleCategories: restaurants.googleCategories,
+      googleFormattedPhone: restaurants.googleFormattedPhone,
+      profileSource: restaurants.profileSource,
+      profileLastSynced: restaurants.profileLastSynced,
+    })
+    .from(restaurants)
+    .where(inArray(restaurants.id, ids));
+
+  const byId = new Map(
+    (freshRows as any[]).map((row) => [String(row.id), row]),
+  );
+  for (const row of rows) {
+    const fresh = byId.get(String(row.id));
+    if (fresh) Object.assign(row, fresh);
+  }
+};
+
+const refreshRecentHostGoogleFields = async (rows: any[]) => {
+  const ids = Array.from(
+    new Set(rows.map((row) => String(row.id || "").trim()).filter(Boolean)),
+  );
+  if (!ids.length) return;
+
+  const freshRows = await db
+    .select({
+      id: hosts.id,
+      contactPhone: hosts.contactPhone,
+      spotImageUrl: hosts.spotImageUrl,
+      description: hosts.description,
+      businessWebsite: hosts.businessWebsite,
+      googlePlaceId: hosts.googlePlaceId,
+      googleRating: hosts.googleRating,
+      googleReviewCount: hosts.googleReviewCount,
+      googlePriceLevel: hosts.googlePriceLevel,
+      googleBusinessStatus: hosts.googleBusinessStatus,
+      googlePhotos: hosts.googlePhotos,
+      googleCategories: hosts.googleCategories,
+      googleFormattedPhone: hosts.googleFormattedPhone,
+      profileSource: hosts.profileSource,
+      profileLastSynced: hosts.profileLastSynced,
+    })
+    .from(hosts)
+    .where(inArray(hosts.id, ids));
+
+  const byId = new Map(
+    (freshRows as any[]).map((row) => [String(row.id), row]),
+  );
+  for (const row of rows) {
+    const fresh = byId.get(String(row.id));
+    if (fresh) Object.assign(row, fresh);
+  }
+};
+
+const enrichRecentSignupGoogleRows = async (
+  restaurantRows: any[],
+  hostRows: any[],
+) => {
+  const restaurantTargets = restaurantRows
+    .filter(shouldAttemptGoogleRestaurantAutoLink)
+    .slice(0, 12);
+  const hostTargets = hostRows.filter(shouldAttemptGoogleHostAutoLink).slice(0, 8);
+
+  if (!restaurantTargets.length && !hostTargets.length) return;
+
+  const [restaurantResults, hostResults] = await Promise.all([
+    Promise.allSettled(
+      restaurantTargets.map((row) => populateRestaurantProfile(String(row.id))),
+    ),
+    Promise.allSettled(
+      hostTargets.map((row) => populateHostProfile(String(row.id))),
+    ),
+  ]);
+
+  const hasRestaurantUpdates = restaurantResults.some(
+    (result) =>
+      result.status === "fulfilled" && Boolean(result.value?.success),
+  );
+  const hasHostUpdates = hostResults.some(
+    (result) =>
+      result.status === "fulfilled" && Boolean(result.value?.success),
+  );
+
+  if (hasRestaurantUpdates) {
+    await refreshRecentRestaurantGoogleFields(restaurantTargets);
+  }
+  if (hasHostUpdates) {
+    await refreshRecentHostGoogleFields(hostTargets);
+  }
 };
 
 let adminMenuSchemaAvailableCache: boolean | null = null;
@@ -1308,6 +1429,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             websiteUrl: restaurants.websiteUrl,
             menuUrl: restaurants.menuUrl,
             orderUrl: restaurants.orderUrl,
+            googlePlaceId: restaurants.googlePlaceId,
+            googleRating: restaurants.googleRating,
+            googleReviewCount: restaurants.googleReviewCount,
+            googlePriceLevel: restaurants.googlePriceLevel,
+            googleBusinessStatus: restaurants.googleBusinessStatus,
+            googleCategories: restaurants.googleCategories,
+            googleFormattedPhone: restaurants.googleFormattedPhone,
+            profileSource: restaurants.profileSource,
+            profileLastSynced: restaurants.profileLastSynced,
             instagramUrl: restaurants.instagramUrl,
             facebookPageId: restaurants.facebookPageId,
             facebookPageUrl: restaurants.facebookPageUrl,
@@ -1352,6 +1482,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             facebookCoverUrl: hosts.facebookCoverUrl,
             facebookPhotos: hosts.facebookPhotos,
             googlePhotos: hosts.googlePhotos,
+            googlePlaceId: hosts.googlePlaceId,
+            googleRating: hosts.googleRating,
+            googleReviewCount: hosts.googleReviewCount,
+            googlePriceLevel: hosts.googlePriceLevel,
+            googleBusinessStatus: hosts.googleBusinessStatus,
+            googleCategories: hosts.googleCategories,
+            googleFormattedPhone: hosts.googleFormattedPhone,
+            profileSource: hosts.profileSource,
+            profileLastSynced: hosts.profileLastSynced,
             createdAt: hosts.createdAt,
             ownerEmail: users.email,
             ownerFirstName: users.firstName,
@@ -1409,6 +1548,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const restaurantRowsAny = restaurantRows as any[];
         const hostRowsAny = hostRows as any[];
         const supplierRowsAny = supplierRows as any[];
+
+        await enrichRecentSignupGoogleRows(restaurantRowsAny, hostRowsAny);
+
         const restaurantsByOwner = new Map<string, any[]>();
         const hostsByOwner = new Map<string, any[]>();
         const suppliersByOwner = new Map<string, any[]>();
@@ -1699,8 +1841,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               row.coverImageUrl,
               row.facebookCoverUrl,
               row.facebookPhotos,
-              row.logoUrl,
               row.googlePhotos,
+              row.logoUrl,
               videoThumbByEntity.get(`restaurant:${row.id}`),
               row.ownerProfileImageUrl,
             ),
@@ -1745,6 +1887,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
+            googlePlaceId: row.googlePlaceId || null,
+            googleRating: row.googleRating || null,
+            googleReviewCount: row.googleReviewCount || null,
+            googleProfileLinked: Boolean(row.googlePlaceId),
+            profileSource: row.profileSource || null,
             profileCompleteness: {
               hasImage: Boolean(
                 imageUrl,
@@ -1824,6 +1971,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             shareUrl,
             isPublic,
             isVerified: Boolean(row.isVerified),
+            googlePlaceId: row.googlePlaceId || null,
+            googleRating: row.googleRating || null,
+            googleReviewCount: row.googleReviewCount || null,
+            googleProfileLinked: Boolean(row.googlePlaceId),
+            profileSource: row.profileSource || null,
             profileCompleteness: {
               hasImage: Boolean(hostImageUrl),
               hasDescription: Boolean(

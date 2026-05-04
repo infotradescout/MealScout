@@ -12,6 +12,7 @@ import {
   type InsertDeal,
 } from "@shared/schema";
 import { db } from "../db";
+import { queueGoogleRestaurantAutoLink } from "../services/googleBusinessAutoLink";
 import {
   eq,
   and,
@@ -203,6 +204,10 @@ export function createRestaurantsDealsRepository(
       } catch (e) {
         console.warn("ensureCityExists failed for restaurant", e);
       }
+      queueGoogleRestaurantAutoLink(
+        newRestaurant as any,
+        "storage.createRestaurant",
+      );
       return newRestaurant;
     },
 

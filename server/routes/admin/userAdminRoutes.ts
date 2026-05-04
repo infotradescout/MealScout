@@ -10,10 +10,7 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
-import {
-  populateHostProfile,
-  populateRestaurantProfile,
-} from "../../services/googleProfileService";
+import { populateHostProfile } from "../../services/googleProfileService";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -1794,11 +1791,6 @@ export function registerUserAdminRoutes(
         // Ensure the new host has draft Parking Pass events so pricing can be edited immediately.
         await storage.ensureDraftParkingPassForHost(host.id);
 
-        // Fire-and-forget: auto-populate Google profile data
-        populateHostProfile(host.id).catch((err) => {
-          console.warn("[AdminCreateHost] Google auto-populate failed for host", host.id, err);
-        });
-
         res.status(201).json(host);
       } catch (error: any) {
         console.error("Error creating host location:", error);
@@ -1892,13 +1884,6 @@ export function registerUserAdminRoutes(
         });
 
         const created = await storage.createRestaurant(payload as any);
-        populateRestaurantProfile(created.id).catch((err) => {
-          console.warn(
-            "[admin.users] Google restaurant enrichment failed after manual create",
-            err,
-          );
-        });
-
         if (owner.userType === "customer") {
           const nextType =
             businessType === "food_truck"
