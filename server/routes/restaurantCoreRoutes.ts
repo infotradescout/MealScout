@@ -767,10 +767,13 @@ export function registerRestaurantCoreRoutes(
 
         const userType = String(req.user?.userType || "");
         if (userType === "customer") {
+          const businessType = String((restaurant as any).businessType || "");
           const nextType =
-            String((restaurant as any).businessType || "") === "food_truck" ||
+            businessType === "food_truck" ||
             Boolean((restaurant as any).isFoodTruck)
               ? "food_truck"
+              : businessType === "caterer"
+                ? "caterer"
               : "restaurant_owner";
           await storage.updateUserType(userId, nextType);
         }

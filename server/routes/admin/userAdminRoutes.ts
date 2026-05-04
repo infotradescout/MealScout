@@ -818,7 +818,9 @@ export function registerUserAdminRoutes(
           const allowedTypes = [
             "customer",
             "restaurant_owner",
+            "caterer",
             "food_truck",
+            "supplier",
             "host",
             "event_coordinator",
             "staff",
@@ -1421,7 +1423,9 @@ export function registerUserAdminRoutes(
         const allowedTypes = [
           "customer",
           "restaurant_owner",
+          "caterer",
           "food_truck",
+          "supplier",
           "host",
           "event_coordinator",
           "staff",
@@ -1886,7 +1890,11 @@ export function registerUserAdminRoutes(
 
         if (owner.userType === "customer") {
           const nextType =
-            businessType === "food_truck" ? "food_truck" : "restaurant_owner";
+            businessType === "food_truck"
+              ? "food_truck"
+              : businessType === "caterer"
+                ? "caterer"
+                : "restaurant_owner";
           await storage.updateUserType(ownerId, nextType as any);
         }
 

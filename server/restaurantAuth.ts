@@ -162,7 +162,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "food_truck", "admin", "super_admin"].includes(
+    !["restaurant_owner", "caterer", "food_truck", "admin", "super_admin"].includes(
       req.user.userType,
     )
   ) {

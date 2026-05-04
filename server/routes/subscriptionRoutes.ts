@@ -112,7 +112,7 @@ export function registerSubscriptionRoutes(
       console.log("Promo Code:", promoCode);
       console.log("Billing Interval:", billingInterval);
 
-      if (["restaurant_owner", "food_truck"].includes(user?.userType)) {
+      if (["restaurant_owner", "caterer", "food_truck"].includes(user?.userType)) {
         const hasVerified = await userHasVerifiedBusiness(user.id);
         if (!hasVerified) {
           return res.status(403).json({
@@ -227,7 +227,7 @@ export function registerSubscriptionRoutes(
       });
     }
 
-    if (["restaurant_owner", "food_truck"].includes(user?.userType)) {
+    if (["restaurant_owner", "caterer", "food_truck"].includes(user?.userType)) {
       const hasVerified = await userHasVerifiedBusiness(user.id);
       if (!hasVerified) {
         return res.status(403).json({

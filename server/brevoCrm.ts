@@ -6,6 +6,7 @@ const contactsApi = new ContactsApi();
 const listEnvMap: Record<string, string> = {
   customer: "BREVO_LIST_CUSTOMER_ID",
   restaurant_owner: "BREVO_LIST_RESTAURANT_OWNER_ID",
+  caterer: "BREVO_LIST_RESTAURANT_OWNER_ID",
   food_truck: "BREVO_LIST_FOOD_TRUCK_ID",
   host: "BREVO_LIST_HOST_ID",
   event_coordinator: "BREVO_LIST_EVENT_COORDINATOR_ID",

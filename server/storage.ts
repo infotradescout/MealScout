@@ -390,7 +390,9 @@ export interface IStorage {
     userType:
       | "customer"
       | "restaurant_owner"
+      | "caterer"
       | "food_truck"
+      | "supplier"
       | "host"
       | "event_coordinator"
       | "staff"
@@ -735,7 +737,9 @@ export interface IStorage {
     userType:
       | "customer"
       | "restaurant_owner"
+      | "caterer"
       | "food_truck"
+      | "supplier"
       | "host"
       | "event_coordinator"
       | "staff"
@@ -1814,7 +1818,9 @@ export class DatabaseStorage implements IStorage {
     userType:
       | "customer"
       | "restaurant_owner"
+      | "caterer"
       | "food_truck"
+      | "supplier"
       | "host"
       | "event_coordinator"
       | "staff"
@@ -2280,6 +2286,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPendingRestaurants(): Promise<any[]> {
+    const isOptionalReviewQueueError = (error: any) =>
+      ["42P01", "42703", "42883"].includes(String(error?.code || ""));
+
     const userIsUsable = and(
       sql`coalesce(${users.isDisabled}, false) = false`,
       sql`lower(coalesce(${users.email}, '')) not like 'deleted+%@mealscout.invalid'`,
@@ -2315,29 +2324,38 @@ export class DatabaseStorage implements IStorage {
       ownerUserType: users.userType,
     } as const;
 
-    const explicitReviewRows = await db
-      .select({
-        ...baseSelect,
-        reviewSource: sql<string>`'verification_request'`,
-        reviewLabel: sql<string>`case when ${restaurants.claimedFromImportId} is null then 'Verification request' else 'Imported truck claim' end`,
-        submittedAt: verificationRequests.submittedAt,
-        verificationRequestId: verificationRequests.id,
-        claimRequestId: sql<string | null>`null`,
-        documentsCount: sql<number>`coalesce(array_length(${verificationRequests.documents}, 1), 0)`,
-        licenseNumber: verificationRequests.licenseNumber,
-        rejectionReason: verificationRequests.rejectionReason,
-      })
-      .from(verificationRequests)
-      .innerJoin(restaurants, eq(verificationRequests.restaurantId, restaurants.id))
-      .leftJoin(users, eq(restaurants.ownerId, users.id))
-      .where(
-        and(
-          eq(verificationRequests.status, "pending"),
-          userIsUsable,
-        ),
-      )
-      .orderBy(desc(verificationRequests.submittedAt))
-      .limit(100);
+    let explicitReviewRows: any[] = [];
+    try {
+      explicitReviewRows = await db
+        .select({
+          ...baseSelect,
+          reviewSource: sql<string>`'verification_request'`,
+          reviewLabel: sql<string>`case when ${restaurants.claimedFromImportId} is null then 'Verification request' else 'Imported truck claim' end`,
+          submittedAt: verificationRequests.submittedAt,
+          verificationRequestId: verificationRequests.id,
+          claimRequestId: sql<string | null>`null`,
+          documentsCount: sql<number>`coalesce(array_length(${verificationRequests.documents}, 1), 0)`,
+          licenseNumber: verificationRequests.licenseNumber,
+          rejectionReason: verificationRequests.rejectionReason,
+        })
+        .from(verificationRequests)
+        .innerJoin(restaurants, eq(verificationRequests.restaurantId, restaurants.id))
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
+        .where(
+          and(
+            eq(verificationRequests.status, "pending"),
+            userIsUsable,
+          ),
+        )
+        .orderBy(desc(verificationRequests.submittedAt))
+        .limit(100);
+    } catch (error: any) {
+      if (!isOptionalReviewQueueError(error)) throw error;
+      console.warn(
+        "[admin] verification review queue skipped because schema is unavailable",
+        { code: error?.code },
+      );
+    }
 
     let claimRows: any[] = [];
     try {
@@ -2375,44 +2393,54 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(truckClaimRequests.submittedAt))
         .limit(100);
     } catch (error: any) {
-      if (String(error?.code || "") !== "42P01") {
+      if (!isOptionalReviewQueueError(error)) {
         throw error;
       }
       console.warn(
-        "[admin] truck claim queue skipped because import tables are missing",
+        "[admin] truck claim queue skipped because import schema is unavailable",
+        { code: error?.code },
       );
     }
 
-    const fallbackInactiveRows = await db
-      .select({
-        ...baseSelect,
-        reviewSource: sql<string>`'inactive_profile'`,
-        reviewLabel: sql<string>`'Inactive owner profile'`,
-        submittedAt: restaurants.createdAt,
-        verificationRequestId: sql<string | null>`null`,
-        claimRequestId: sql<string | null>`null`,
-        documentsCount: sql<number>`0`,
-        licenseNumber: sql<string | null>`null`,
-        rejectionReason: sql<string | null>`null`,
-      })
-      .from(restaurants)
-      .leftJoin(users, eq(restaurants.ownerId, users.id))
-      .where(
-        and(
-          eq(restaurants.isActive, false),
-          isNull(restaurants.claimedFromImportId),
-          userIsUsable,
-          sql`lower(coalesce(${restaurants.profileSource}, 'manual')) not in ('google', 'facebook', 'search_query_seed')`,
-          sql`not exists (
-            select 1
-            from ${verificationRequests}
-            where ${verificationRequests.restaurantId} = ${restaurants.id}
-              and ${verificationRequests.status} in ('pending', 'rejected')
-          )`,
-        ),
-      )
-      .orderBy(desc(restaurants.createdAt))
-      .limit(50);
+    let fallbackInactiveRows: any[] = [];
+    try {
+      fallbackInactiveRows = await db
+        .select({
+          ...baseSelect,
+          reviewSource: sql<string>`'inactive_profile'`,
+          reviewLabel: sql<string>`'Inactive owner profile'`,
+          submittedAt: restaurants.createdAt,
+          verificationRequestId: sql<string | null>`null`,
+          claimRequestId: sql<string | null>`null`,
+          documentsCount: sql<number>`0`,
+          licenseNumber: sql<string | null>`null`,
+          rejectionReason: sql<string | null>`null`,
+        })
+        .from(restaurants)
+        .leftJoin(users, eq(restaurants.ownerId, users.id))
+        .where(
+          and(
+            eq(restaurants.isActive, false),
+            isNull(restaurants.claimedFromImportId),
+            userIsUsable,
+            sql`lower(coalesce(${restaurants.profileSource}, 'manual')) not in ('google', 'facebook', 'search_query_seed')`,
+            sql`not exists (
+              select 1
+              from ${verificationRequests}
+              where ${verificationRequests.restaurantId} = ${restaurants.id}
+                and ${verificationRequests.status} in ('pending', 'rejected')
+            )`,
+          ),
+        )
+        .orderBy(desc(restaurants.createdAt))
+        .limit(50);
+    } catch (error: any) {
+      if (!isOptionalReviewQueueError(error)) throw error;
+      console.warn(
+        "[admin] inactive profile review queue skipped because schema is unavailable",
+        { code: error?.code },
+      );
+    }
 
     const rows = [
       ...explicitReviewRows,

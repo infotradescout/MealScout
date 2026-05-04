@@ -217,6 +217,7 @@ class EmailTemplates {
     const labels: Record<string, string> = {
       customer: "Customer",
       restaurant_owner: "Restaurant Owner",
+      caterer: "Caterer",
       food_truck: "Food Truck Owner",
       supplier: "Supplier",
       host: "Host / Venue",
@@ -821,7 +822,7 @@ This notification was generated automatically by the MealScout system.
     context?: AdminSignupNotificationContext,
   ): { html: string; text: string } {
     const userTypeDisplay = this.getUserTypeDisplay(user.userType);
-    const isBusinessReviewRole = ["restaurant_owner", "food_truck"].includes(
+    const isBusinessReviewRole = ["restaurant_owner", "caterer", "food_truck"].includes(
       String(user.userType || ""),
     );
     const signupMethod = context?.signupMethod || "Email";
@@ -1622,6 +1623,7 @@ export class EmailService {
           "Welcome to MealScout - Start Discovering Amazing Food Deals! 🍽️";
         break;
       case "restaurant_owner":
+      case "caterer":
         template = EmailTemplates.getRestaurantOwnerWelcomeTemplate(
           user,
           verifyUrl,

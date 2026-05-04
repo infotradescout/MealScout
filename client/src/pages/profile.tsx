@@ -128,7 +128,7 @@ export default function ProfilePage() {
       href: "/profile/addresses",
     },
     // Only show Payment Methods for restaurant owners who need subscription billing
-    ...(user?.userType === "restaurant_owner"
+    ...(user?.userType === "restaurant_owner" || user?.userType === "caterer"
       ? [
           {
             icon: CreditCard,
@@ -263,6 +263,8 @@ export default function ProfilePage() {
                   >
                     {user?.userType === "restaurant_owner"
                       ? "Restaurant Owner"
+                      : user?.userType === "caterer"
+                        ? "Caterer"
                       : user?.userType === "food_truck"
                         ? "Food Truck"
                         : user?.userType === "supplier"

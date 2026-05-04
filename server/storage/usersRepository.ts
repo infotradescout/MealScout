@@ -239,7 +239,9 @@ export function createUsersRepository() {
       userType:
         | "customer"
         | "restaurant_owner"
+        | "caterer"
         | "food_truck"
+        | "supplier"
         | "host"
         | "event_coordinator"
         | "staff"
@@ -683,7 +685,9 @@ export function createUsersRepository() {
       userType:
         | "customer"
         | "restaurant_owner"
+        | "caterer"
         | "food_truck"
+        | "supplier"
         | "host"
         | "event_coordinator"
         | "staff"

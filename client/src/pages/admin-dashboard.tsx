@@ -1749,6 +1749,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
       | "customer"
       | "food_truck"
       | "restaurant_owner"
+      | "caterer"
       | "supplier"
       | "staff"
       | "event_coordinator"
@@ -1812,6 +1813,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
     const needsBusinessProfile =
       formData.userType === "restaurant_owner" ||
+      formData.userType === "caterer" ||
       formData.userType === "food_truck" ||
       formData.userType === "supplier" ||
       formData.userType === "host" ||
@@ -1819,6 +1821,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
     const addressRequiredForType =
       formData.userType === "restaurant_owner" ||
+      formData.userType === "caterer" ||
       formData.userType === "supplier" ||
       formData.userType === "host" ||
       formData.userType === "event_coordinator";
@@ -2054,6 +2057,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
           >
             <option value="food_truck">Food Truck</option>
             <option value="restaurant_owner">Restaurant Owner</option>
+            <option value="caterer">Caterer</option>
             <option value="customer">Customer</option>
             <option value="host">Host (Parking/Events)</option>
             <option value="event_coordinator">Event Coordinator</option>
@@ -2074,6 +2078,8 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
               "Regular customer - can claim deals and browse restaurants"}
             {formData.userType === "restaurant_owner" &&
               "Business owner - manage restaurant and create deals"}
+            {formData.userType === "caterer" &&
+              "Caterer - manage catering profile, menus, requests, and leads"}
             {formData.userType === "staff" &&
               "Staff member - help manage restaurant operations"}
             {formData.userType === "event_coordinator" &&
@@ -2141,6 +2147,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
 
         {/* Restaurant Owner & Food Truck Specific Fields */}
         {(formData.userType === "restaurant_owner" ||
+          formData.userType === "caterer" ||
           formData.userType === "food_truck" ||
           formData.userType === "supplier") && (
           <>
@@ -4120,6 +4127,7 @@ export default function AdminDashboard() {
       "admin",
       "staff",
       "restaurant_owner",
+      "caterer",
       "food_truck",
       "host",
       "event_coordinator",
@@ -4159,6 +4167,7 @@ export default function AdminDashboard() {
       { value: "customer", label: "Customers" },
       { value: "food_truck", label: "Food Trucks" },
       { value: "restaurant_owner", label: "Restaurants" },
+      { value: "caterer", label: "Caterers" },
       { value: "host", label: "Hosts" },
       { value: "event_coordinator", label: "Events" },
       { value: "staff", label: "Staff" },
@@ -4222,6 +4231,7 @@ export default function AdminDashboard() {
       if (value === "admin") return 90;
       if (value === "staff") return 80;
       if (value === "restaurant_owner") return 70;
+      if (value === "caterer") return 65;
       if (value === "food_truck") return 60;
       if (value === "host") return 50;
       if (value === "event_coordinator") return 40;
@@ -9480,6 +9490,8 @@ export default function AdminDashboard() {
                             <option value="restaurant_owner">
                               Restaurant Owner
                             </option>
+                            <option value="caterer">Caterer</option>
+                            <option value="supplier">Supplier</option>
                             <option value="host">Host</option>
                             <option value="event_coordinator">
                               Event Coordinator
@@ -9530,7 +9542,11 @@ export default function AdminDashboard() {
                               sendSubscriptionLink.isPending ||
                               isStaff ||
                               !user.email ||
-                              !["restaurant_owner", "food_truck"].includes(
+                              ![
+                                "restaurant_owner",
+                                "caterer",
+                                "food_truck",
+                              ].includes(
                                 user.userType,
                               )
                             }
@@ -10363,6 +10379,8 @@ export default function AdminDashboard() {
                         <option value="restaurant_owner">
                           Restaurant Owner
                         </option>
+                        <option value="caterer">Caterer</option>
+                        <option value="supplier">Supplier</option>
                         <option value="host">Host</option>
                         <option value="event_coordinator">
                           Event Coordinator
@@ -11223,6 +11241,7 @@ export default function AdminDashboard() {
                             <option value="restaurant">Restaurant</option>
                             <option value="bar">Bar</option>
                             <option value="food_truck">Food Truck</option>
+                            <option value="caterer">Caterer</option>
                           </select>
                           <input
                             className="w-full px-2 py-1 border rounded-md text-sm"
@@ -11464,6 +11483,7 @@ export default function AdminDashboard() {
                         <option value="restaurant">Restaurant</option>
                         <option value="bar">Bar</option>
                         <option value="food_truck">Food Truck</option>
+                        <option value="caterer">Caterer</option>
                       </select>
                       <input
                         className="w-full px-2 py-1 border rounded-md text-sm sm:col-span-2"

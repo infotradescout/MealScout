@@ -265,6 +265,7 @@ const signupUserTypeLabel = (userType: unknown) => {
   const labels: Record<string, string> = {
     customer: "Customer",
     restaurant_owner: "Restaurant Owner",
+    caterer: "Caterer",
     food_truck: "Food Truck Owner",
     supplier: "Supplier",
     host: "Host",
@@ -279,6 +280,7 @@ const signupUserTypeLabel = (userType: unknown) => {
 const signupKindForUserType = (userType: unknown) => {
   const normalized = String(userType || "customer").trim().toLowerCase();
   if (normalized === "food_truck") return "food_truck";
+  if (normalized === "caterer") return "caterer";
   if (normalized === "restaurant_owner") return "restaurant";
   if (normalized === "host" || normalized === "event_coordinator") {
     return "host";
@@ -295,6 +297,7 @@ const signupCategoryForUserType = (userType: unknown) => {
   const labels: Record<string, string> = {
     customer: "Local food fan",
     restaurant_owner: "Business owner",
+    caterer: "Catering business",
     food_truck: "Mobile food owner",
     supplier: "Food business supplier",
     host: "Truck-friendly host",
@@ -1087,9 +1090,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         res.json(restaurants);
       } catch (error) {
         console.error("Error fetching pending restaurants:", error);
-        res
-          .status(500)
-          .json({ message: "Failed to fetch pending restaurants" });
+        res.setHeader("X-MealScout-Degraded", "pending-restaurants");
+        res.json([]);
       }
     },
   );

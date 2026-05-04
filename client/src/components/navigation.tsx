@@ -167,7 +167,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   };
 
   // Check user role
-  const isRestaurantOwner = user && user.userType === "restaurant_owner";
+  const isRestaurantOwner =
+    user && (user.userType === "restaurant_owner" || user.userType === "caterer");
   const isFoodTruck = user && user.userType === "food_truck";
   const isSupplier = user && user.userType === "supplier";
   const isHostUser = user && user.userType === "host";

@@ -18,7 +18,7 @@ export async function ensurePremiumTrialForUser(user: User): Promise<User> {
   }
 
   const restaurantsForUser = await storage.getRestaurantsByOwner(user.id);
-  const eligibleUserTypes = new Set(["restaurant_owner", "food_truck"]);
+  const eligibleUserTypes = new Set(["restaurant_owner", "caterer", "food_truck"]);
   if (!eligibleUserTypes.has(String(user.userType || ""))) {
     return user;
   }

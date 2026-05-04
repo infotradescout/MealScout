@@ -58,7 +58,7 @@ function isLikely3DEatsPartner(
 async function ensureFirstPartnerLifetimeAccess(user: any) {
   if (!user?.id) return user;
   if (
-    !["restaurant_owner", "food_truck"].includes(String(user.userType || ""))
+    !["restaurant_owner", "caterer", "food_truck"].includes(String(user.userType || ""))
   ) {
     return user;
   }

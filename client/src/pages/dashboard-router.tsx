@@ -10,6 +10,7 @@ const ROLE_DASHBOARD_PATHS: Record<string, string> = {
   host: "/host/dashboard",
   food_truck: "/restaurant-owner-dashboard?mode=food_truck&src=dashboard-router",
   restaurant_owner: "/restaurant-owner-dashboard?mode=restaurant&src=dashboard-router",
+  caterer: "/restaurant-owner-dashboard?mode=caterer&src=dashboard-router",
   supplier: "/supplier/dashboard",
   customer: "/user-dashboard",
 };
@@ -22,6 +23,7 @@ const ROLE_PRIORITY = [
   "host",
   "food_truck",
   "restaurant_owner",
+  "caterer",
   "supplier",
   "customer",
 ];

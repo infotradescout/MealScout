@@ -190,11 +190,17 @@ export function registerRestaurantSignupRoutes(
 
       if (String((restaurant as any)?.businessType || "") === "food_truck") {
         const currentType = String((user as any)?.userType || "");
-        const allowedToPromote = ["customer", "restaurant_owner"].includes(
+        const allowedToPromote = ["customer", "restaurant_owner", "caterer"].includes(
           currentType,
         );
         if (allowedToPromote && currentType !== "food_truck") {
           await storage.updateUserType(user.id, "food_truck");
+          user = (await storage.getUserById(user.id)) || user;
+        }
+      } else if (String((restaurant as any)?.businessType || "") === "caterer") {
+        const currentType = String((user as any)?.userType || "");
+        if (["customer", "restaurant_owner", "food_truck"].includes(currentType)) {
+          await storage.updateUserType(user.id, "caterer");
           user = (await storage.getUserById(user.id)) || user;
         }
       }

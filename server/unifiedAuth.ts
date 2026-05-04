@@ -1478,12 +1478,15 @@ export async function setupUnifiedAuth(app: Express) {
         "restaurant",
         "bar",
         "food_truck",
+        "caterer",
       ].includes(String(businessType || ""))
         ? String(businessType)
         : "restaurant";
       const businessUserType =
         normalizedBusinessType === "food_truck"
           ? "food_truck"
+          : normalizedBusinessType === "caterer"
+            ? "caterer"
           : "restaurant_owner";
 
       const user = await storage.upsertUserByAuth(
@@ -1642,7 +1645,7 @@ export async function setupUnifiedAuth(app: Express) {
       const user = await storage.getUserByEmail(email);
       if (
         !user ||
-        !["restaurant_owner", "food_truck"].includes(
+        !["restaurant_owner", "caterer", "food_truck"].includes(
           String(user.userType || ""),
         )
       ) {
@@ -2351,7 +2354,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
   }
 
   if (
-    !["restaurant_owner", "food_truck", "admin", "super_admin"].includes(
+    !["restaurant_owner", "caterer", "food_truck", "admin", "super_admin"].includes(
       req.user.userType,
     )
   ) {
@@ -2365,6 +2368,7 @@ export const isRestaurantOwner = (req: any, res: any, next: any) => {
 type UserRole =
   | "customer"
   | "restaurant_owner"
+  | "caterer"
   | "food_truck"
   | "supplier"
   | "staff"
@@ -2419,6 +2423,7 @@ export const isStaffOrAdmin = requireRole(["staff", "admin", "super_admin"]);
 // Convenience middleware for restaurant owner or admin
 export const isRestaurantOwnerOrAdmin = requireRole([
   "restaurant_owner",
+  "caterer",
   "food_truck",
   "admin",
   "super_admin",

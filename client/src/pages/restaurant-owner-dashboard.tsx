@@ -254,7 +254,8 @@ export default function RestaurantOwnerDashboard() {
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  const isRestaurantOwner = user?.userType === "restaurant_owner";
+  const isRestaurantOwner =
+    user?.userType === "restaurant_owner" || user?.userType === "caterer";
   const isFoodTruck = user?.userType === "food_truck";
   const isHost = user?.userType === "host";
   const isAdmin =

@@ -31,7 +31,7 @@ export const users: any = pgTable(
     id: varchar("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
+    userType: varchar("user_type").notNull().default("customer"), // 'customer' | 'restaurant_owner' | 'caterer' | 'food_truck' | 'supplier' | 'host' | 'event_coordinator' | 'staff' | 'admin' | 'super_admin'
     // TradeScout SSO linkage (for unified accounts between TradeScout and MealScout)
     tradescoutId: varchar("tradescout_id").unique(),
     // Facebook authentication (for regular users)
