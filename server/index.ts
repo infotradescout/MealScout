@@ -38,6 +38,7 @@ import { hosts, videoStories, restaurants, requestLogs, users } from "@shared/sc
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
+import { registerAiFactRoutes } from "./routes/seoRoutes";
 
 validateEnv();
 
@@ -1049,6 +1050,7 @@ app.use((req, res, next) => {
 
   // Crawler-friendly static HTML routes for Facebook/Google compliance
   // MUST be registered before any SPA routing or Vite middleware
+  registerAiFactRoutes(app);
   registerAcquisitionPrerenderRoutes(app, canonicalBaseUrl);
   registerPublicProfilePrerenderRoutes(app, canonicalBaseUrl);
 

@@ -27,6 +27,7 @@ import { apiUrl } from "@/lib/api";
 
 type Job = {
   id: string;
+  restaurantId?: string | null;
   title: string;
   roleType?: string | null;
   employmentType?: string | null;
@@ -34,12 +35,22 @@ type Job = {
   requirements?: string | null;
   scheduleDescription?: string | null;
   compensationLabel?: string | null;
+  payMinCents?: number | null;
+  payMaxCents?: number | null;
   locationLabel?: string | null;
   city?: string | null;
   state?: string | null;
+  positionsAvailable?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  expiresAt?: string | null;
   restaurantName: string;
   restaurantBusinessType?: string | null;
+  restaurantLogoUrl?: string | null;
+  restaurantCoverImageUrl?: string | null;
+  restaurantAddress?: string | null;
   restaurantProfileUrl: string;
+  restaurantWebsiteUrl?: string | null;
   publicUrl: string;
 };
 
@@ -49,6 +60,104 @@ const labelize = (value?: string | null) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const employmentTypeForSchema = (value?: string | null) => {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "full_time") return "FULL_TIME";
+  if (normalized === "part_time") return "PART_TIME";
+  if (normalized === "contract" || normalized === "gig") return "CONTRACTOR";
+  if (normalized === "seasonal") return "TEMPORARY";
+  return "OTHER";
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const paragraph = (value?: string | null) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return `<p>${escapeHtml(text).replace(/\n+/g, "<br>")}</p>`;
+};
+
+const absoluteUrl = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://www.mealscout.us${raw.startsWith("/") ? "" : "/"}${raw}`;
+};
+
+const externalUrl = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, "")}`;
+};
+
+const moneyFromCents = (value?: number | null) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.round(value) / 100
+    : undefined;
+
+const payRangeLabel = (job?: Job | null) => {
+  const min = moneyFromCents(job?.payMinCents);
+  const max = moneyFromCents(job?.payMaxCents);
+  if (min && max && min !== max) return `$${min}-$${max}/hr`;
+  if (min) return `$${min}/hr`;
+  if (max) return `Up to $${max}/hr`;
+  return "";
+};
+
+const isoOrUndefined = (value?: string | null) => {
+  const parsed = value ? new Date(value) : null;
+  return parsed && Number.isFinite(parsed.getTime())
+    ? parsed.toISOString()
+    : undefined;
+};
+
+const buildJobDescriptionHtml = (job: Job, fallback: string) =>
+  [
+    paragraph(job.description || fallback),
+    paragraph(job.requirements ? `Helpful experience: ${job.requirements}` : ""),
+    paragraph(
+      job.scheduleDescription
+        ? `Schedule: ${job.scheduleDescription}`
+        : "",
+    ),
+    paragraph(
+      job.compensationLabel || payRangeLabel(job)
+        ? `Pay: ${job.compensationLabel || payRangeLabel(job)}`
+        : "",
+    ),
+    paragraph(
+      job.positionsAvailable && job.positionsAvailable > 1
+        ? `Openings: ${job.positionsAvailable}`
+        : "",
+    ),
+    "<p>Apply directly on this MealScout job page.</p>",
+  ]
+    .filter(Boolean)
+    .join("");
+
+const buildBaseSalary = (job: Job) => {
+  const minValue = moneyFromCents(job.payMinCents);
+  const maxValue = moneyFromCents(job.payMaxCents);
+  if (!minValue && !maxValue) return undefined;
+  return {
+    "@type": "MonetaryAmount",
+    currency: "USD",
+    value: {
+      "@type": "QuantitativeValue",
+      ...(minValue ? { minValue } : {}),
+      ...(maxValue ? { maxValue } : {}),
+      ...(!maxValue && minValue ? { value: minValue } : {}),
+      unitText: "HOUR",
+    },
+  };
+};
 
 export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -83,31 +192,51 @@ export default function JobDetailPage() {
     ? `${job.title} at ${job.restaurantName} | MealScout Jobs`
     : "MealScout Jobs";
   const description = job
-    ? `Apply for ${job.title} at ${job.restaurantName}. ${job.compensationLabel || "Local food and hospitality role."}`
+    ? `Apply for ${job.title} at ${job.restaurantName}${job.city ? ` in ${job.city}${job.state ? `, ${job.state}` : ""}` : ""}. ${job.compensationLabel || payRangeLabel(job) || "Local food and hospitality role."}`
     : "Apply for local food truck, restaurant, bar, and event jobs on MealScout.";
 
   const structuredData = useMemo(() => {
     if (!job) return undefined;
+    const canonicalUrl = `https://www.mealscout.us${job.publicUrl}`;
+    const city = job.city || undefined;
+    const state = job.state || undefined;
     return {
       "@context": "https://schema.org",
       "@type": "JobPosting",
       title: job.title,
-      description: job.description || description,
+      description: buildJobDescriptionHtml(job, description),
+      identifier: {
+        "@type": "PropertyValue",
+        name: "MealScout",
+        value: job.id,
+      },
+      datePosted: isoOrUndefined(job.createdAt || job.updatedAt),
+      validThrough: isoOrUndefined(job.expiresAt),
+      directApply: true,
       hiringOrganization: {
         "@type": "Organization",
         name: job.restaurantName,
-        sameAs: `https://www.mealscout.us${job.restaurantProfileUrl}`,
+        sameAs:
+          externalUrl(job.restaurantWebsiteUrl) ||
+          `https://www.mealscout.us${job.restaurantProfileUrl}`,
+        logo: absoluteUrl(job.restaurantLogoUrl),
       },
-      employmentType: labelize(job.employmentType) || undefined,
+      employmentType: employmentTypeForSchema(job.employmentType),
+      occupationalCategory: labelize(job.roleType) || "Food service",
+      industry: "Food service",
       jobLocation: {
         "@type": "Place",
+        name: job.locationLabel || job.restaurantName,
         address: {
           "@type": "PostalAddress",
-          addressLocality: job.city || undefined,
-          addressRegion: job.state || undefined,
+          streetAddress: job.restaurantAddress || undefined,
+          addressLocality: city,
+          addressRegion: state,
+          addressCountry: "US",
         },
       },
-      url: `https://www.mealscout.us${job.publicUrl}`,
+      baseSalary: buildBaseSalary(job),
+      url: canonicalUrl,
     };
   }, [description, job]);
 
@@ -153,6 +282,15 @@ export default function JobDetailPage() {
     event.preventDefault();
     applyMutation.mutate();
   };
+
+  const visiblePay = job?.compensationLabel || payRangeLabel(job) || "";
+  const postedLabel = job?.createdAt
+    ? new Date(job.createdAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
 
   if (isLoading) {
     return (
@@ -221,7 +359,7 @@ export default function JobDetailPage() {
                 </a>
               </Link>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                   <MapPin className="h-5 w-5 text-amber-500" />
                   <div className="mt-2 text-sm font-semibold text-[color:var(--text-secondary)]">
@@ -239,7 +377,7 @@ export default function JobDetailPage() {
                     Pay
                   </div>
                   <div className="font-black">
-                    {job.compensationLabel || "Shared by business"}
+                    {visiblePay || "Shared by business"}
                   </div>
                 </div>
                 <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
@@ -249,6 +387,15 @@ export default function JobDetailPage() {
                   </div>
                   <div className="font-black">
                     {job.scheduleDescription || labelize(job.employmentType) || "Open"}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                  <BriefcaseBusiness className="h-5 w-5 text-amber-500" />
+                  <div className="mt-2 text-sm font-semibold text-[color:var(--text-secondary)]">
+                    Posted
+                  </div>
+                  <div className="font-black">
+                    {postedLabel || "Recently"}
                   </div>
                 </div>
               </div>
@@ -273,6 +420,11 @@ export default function JobDetailPage() {
                     {job.requirements}
                   </p>
                 </div>
+              ) : null}
+              {job.positionsAvailable && job.positionsAvailable > 1 ? (
+                <p className="font-semibold">
+                  {job.positionsAvailable} openings are available for this role.
+                </p>
               ) : null}
             </CardContent>
           </Card>

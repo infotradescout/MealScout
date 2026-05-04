@@ -95,6 +95,7 @@ const aiFactRoutePaths = [
   "/meal-scout.json",
   "/meta.json",
 ];
+const aiFactRoutesRegisteredKey = "__mealScoutAiFactRoutesRegistered";
 
 const publicCrawlerAllowPaths = [
   "/",
@@ -486,6 +487,54 @@ const sendUrlsetXml = (
   res.send(xml);
 };
 
+export function registerAiFactRoutes(app: Express) {
+  const appLocals = app.locals as Record<string, unknown>;
+  if (appLocals[aiFactRoutesRegisteredKey]) return;
+  appLocals[aiFactRoutesRegisteredKey] = true;
+
+  const aiFactHandler = async (_req: any, res: any) => {
+    try {
+      sendAiFactsJson(res, resolveSitemapSiteUrl());
+    } catch (e) {
+      console.error("ai-summary failed", e);
+      res.status(500).json({ name: "MealScout" });
+    }
+  };
+
+  aiFactRoutePaths.forEach((routePath) => {
+    app.get(routePath, aiFactHandler);
+  });
+
+  const mealScoutAnswerHtmlHandler = async (_req: any, res: any) => {
+    try {
+      sendMealScoutAnswerHtml(res, resolveSitemapSiteUrl());
+    } catch (e) {
+      console.error("answers/mealscout failed", e);
+      res.status(500).send("MealScout");
+    }
+  };
+
+  app.get("/answers/mealscout", mealScoutAnswerHtmlHandler);
+
+  const mealScoutAnswerTextHandler = async (_req: any, res: any) => {
+    try {
+      const baseUrl = resolveSitemapSiteUrl();
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+      res.setHeader(
+        "X-Robots-Tag",
+        "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1",
+      );
+      res.send(buildMealScoutAnswerText(baseUrl));
+    } catch (e) {
+      console.error("answers/mealscout.txt failed", e);
+      res.status(500).send("MealScout");
+    }
+  };
+
+  app.get("/answers/mealscout.txt", mealScoutAnswerTextHandler);
+}
+
 export function registerSeoRoutes(app: Express) {
   const indexNowConfig = getIndexNowConfig();
   if (indexNowConfig.enabled && indexNowConfig.key) {
@@ -528,39 +577,7 @@ export function registerSeoRoutes(app: Express) {
     },
   );
 
-  app.get(aiFactRoutePaths, async (_req, res) => {
-    try {
-      sendAiFactsJson(res, resolveSitemapSiteUrl());
-    } catch (e) {
-      console.error("ai-summary failed", e);
-      res.status(500).json({ name: "MealScout" });
-    }
-  });
-
-  app.get("/answers/mealscout", async (_req, res) => {
-    try {
-      sendMealScoutAnswerHtml(res, resolveSitemapSiteUrl());
-    } catch (e) {
-      console.error("answers/mealscout failed", e);
-      res.status(500).send("MealScout");
-    }
-  });
-
-  app.get("/answers/mealscout.txt", async (_req, res) => {
-    try {
-      const baseUrl = resolveSitemapSiteUrl();
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
-      res.setHeader(
-        "X-Robots-Tag",
-        "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1",
-      );
-      res.send(buildMealScoutAnswerText(baseUrl));
-    } catch (e) {
-      console.error("answers/mealscout.txt failed", e);
-      res.status(500).send("MealScout");
-    }
-  });
+  registerAiFactRoutes(app);
 
   app.get("/sitemap.xml", async (_req, res) => {
     try {

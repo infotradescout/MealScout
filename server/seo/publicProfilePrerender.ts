@@ -1,11 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 
 import { db } from "../db";
 import {
   deals,
   events,
   hosts,
+  jobPostings,
   mediaAssets,
   restaurants,
   suppliers,
@@ -67,11 +68,91 @@ const cleanText = (value: unknown, fallback = "") =>
     .replace(/\s+/g, " ")
     .trim();
 
+const cleanMultilineText = (value: unknown, fallback = "") =>
+  String(value || fallback)
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
 const absoluteUrl = (baseUrl: string, pathOrUrl: string | null | undefined) => {
   const value = String(pathOrUrl || "").trim();
   if (!value) return "";
   if (/^https?:\/\//i.test(value)) return value;
   return `${baseUrl}${value.startsWith("/") ? "" : "/"}${value}`;
+};
+
+const externalUrl = (value: string | null | undefined) => {
+  const raw = String(value || "").trim();
+  if (!raw) return undefined;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, "")}`;
+};
+
+const isoDate = (value: unknown) => {
+  if (!value) return undefined;
+  const parsed = new Date(value as any);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : undefined;
+};
+
+const paragraph = (value: string | null | undefined) => {
+  const text = cleanMultilineText(value);
+  if (!text) return "";
+  return `<p>${escapeHtml(text).replace(/\n+/g, "<br>")}</p>`;
+};
+
+const employmentTypeForSchema = (value: string | null | undefined) => {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "full_time") return "FULL_TIME";
+  if (normalized === "part_time") return "PART_TIME";
+  if (normalized === "contract" || normalized === "gig") return "CONTRACTOR";
+  if (normalized === "seasonal") return "TEMPORARY";
+  return "OTHER";
+};
+
+const labelize = (value: string | null | undefined) =>
+  String(value || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const moneyFromCents = (value: unknown) => {
+  const cents = Number(value);
+  return Number.isFinite(cents) && cents > 0 ? Math.round(cents) / 100 : null;
+};
+
+const payRangeLabel = (row: {
+  compensationLabel?: string | null;
+  payMinCents?: number | null;
+  payMaxCents?: number | null;
+}) => {
+  if (row.compensationLabel) return cleanText(row.compensationLabel);
+  const min = moneyFromCents(row.payMinCents);
+  const max = moneyFromCents(row.payMaxCents);
+  if (min && max && min !== max) return `$${min}-$${max}/hr`;
+  if (min) return `$${min}/hr`;
+  if (max) return `Up to $${max}/hr`;
+  return "";
+};
+
+const baseSalarySchema = (row: {
+  payMinCents?: number | null;
+  payMaxCents?: number | null;
+}) => {
+  const minValue = moneyFromCents(row.payMinCents);
+  const maxValue = moneyFromCents(row.payMaxCents);
+  if (!minValue && !maxValue) return undefined;
+  return {
+    "@type": "MonetaryAmount",
+    currency: "USD",
+    value: {
+      "@type": "QuantitativeValue",
+      ...(minValue ? { minValue } : {}),
+      ...(maxValue ? { maxValue } : {}),
+      ...(!maxValue && minValue ? { value: minValue } : {}),
+      unitText: "HOUR",
+    },
+  };
 };
 
 const firstPhotoUrl = (value: unknown) => {
@@ -533,6 +614,158 @@ async function dealPage(baseUrl: string, dealId: string) {
   } satisfies PrerenderPage;
 }
 
+async function jobPage(baseUrl: string, jobId: string) {
+  const [row] = await db
+    .select({
+      id: jobPostings.id,
+      restaurantId: jobPostings.restaurantId,
+      title: jobPostings.title,
+      roleType: jobPostings.roleType,
+      employmentType: jobPostings.employmentType,
+      description: jobPostings.description,
+      requirements: jobPostings.requirements,
+      scheduleDescription: jobPostings.scheduleDescription,
+      compensationLabel: jobPostings.compensationLabel,
+      payMinCents: jobPostings.payMinCents,
+      payMaxCents: jobPostings.payMaxCents,
+      locationLabel: jobPostings.locationLabel,
+      city: jobPostings.city,
+      state: jobPostings.state,
+      positionsAvailable: jobPostings.positionsAvailable,
+      createdAt: jobPostings.createdAt,
+      updatedAt: jobPostings.updatedAt,
+      expiresAt: jobPostings.expiresAt,
+      restaurantName: restaurants.name,
+      restaurantBusinessType: restaurants.businessType,
+      restaurantAddress: restaurants.address,
+      restaurantCity: restaurants.city,
+      restaurantState: restaurants.state,
+      restaurantWebsiteUrl: restaurants.websiteUrl,
+      restaurantLogoUrl: restaurants.logoUrl,
+    })
+    .from(jobPostings)
+    .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+    .where(
+      and(
+        eq(jobPostings.id, jobId),
+        eq(jobPostings.status, "open"),
+        or(isNull(jobPostings.expiresAt), gt(jobPostings.expiresAt, new Date())),
+        eq(restaurants.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  const title = cleanText(row.title, "MealScout job");
+  const restaurantName = cleanText(row.restaurantName, "MealScout business");
+  const city = cleanText(row.city || row.restaurantCity);
+  const state = cleanText(row.state || row.restaurantState);
+  const cityState = [city, state].filter(Boolean).join(", ");
+  const pay = payRangeLabel(row);
+  const canonicalPath = `/jobs/${encodeURIComponent(row.id)}/${encodeURIComponent(
+    toSlug(`${restaurantName} ${title}`) || row.id,
+  )}`;
+  const description = cleanText(
+    row.description,
+    `Apply for ${title} at ${restaurantName}${cityState ? ` in ${cityState}` : ""}.`,
+  );
+  const descriptionHtml = [
+    paragraph(description),
+    paragraph(
+      row.requirements ? `Helpful experience: ${row.requirements}` : null,
+    ),
+    paragraph(
+      row.scheduleDescription ? `Schedule: ${row.scheduleDescription}` : null,
+    ),
+    paragraph(pay ? `Pay: ${pay}` : null),
+    paragraph(
+      row.positionsAvailable && row.positionsAvailable > 1
+        ? `Openings: ${row.positionsAvailable}`
+        : null,
+    ),
+    "<p>Apply directly on this MealScout job page.</p>",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  return {
+    title: `${title} at ${restaurantName}${cityState ? ` in ${cityState}` : ""} | MealScout Jobs`,
+    description: `${description}${pay ? ` ${pay}.` : ""}`,
+    canonicalPath,
+    imageUrl: row.restaurantLogoUrl || "/og-default.jpg",
+    schema: {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      title,
+      description: descriptionHtml,
+      identifier: {
+        "@type": "PropertyValue",
+        name: "MealScout",
+        value: row.id,
+      },
+      datePosted: isoDate(row.createdAt || row.updatedAt),
+      validThrough: isoDate(row.expiresAt),
+      directApply: true,
+      employmentType: employmentTypeForSchema(row.employmentType),
+      occupationalCategory: labelize(row.roleType) || "Food service",
+      industry: "Food service",
+      hiringOrganization: {
+        "@type": "Organization",
+        name: restaurantName,
+        sameAs:
+          externalUrl(row.restaurantWebsiteUrl) ||
+          absoluteUrl(
+            baseUrl,
+            `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(
+              toSlug(restaurantName) || row.restaurantId,
+            )}`,
+          ),
+        logo: row.restaurantLogoUrl
+          ? absoluteUrl(baseUrl, row.restaurantLogoUrl)
+          : undefined,
+      },
+      jobLocation: {
+        "@type": "Place",
+        name: row.locationLabel || restaurantName,
+        address: {
+          "@type": "PostalAddress",
+          streetAddress: row.restaurantAddress || undefined,
+          addressLocality: city || undefined,
+          addressRegion: state || undefined,
+          addressCountry: "US",
+        },
+      },
+      baseSalary: baseSalarySchema(row),
+      url: absoluteUrl(baseUrl, canonicalPath),
+    },
+    links: [
+      { label: "Apply for this job", href: canonicalPath },
+      { label: "Browse MealScout jobs", href: "/jobs" },
+      {
+        label: `Open ${restaurantName}`,
+        href: `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(
+          toSlug(restaurantName) || row.restaurantId,
+        )}`,
+      },
+    ],
+    body: [
+      `Business: ${restaurantName}`,
+      cityState ? `Location: ${cityState}` : row.locationLabel || "",
+      labelize(row.employmentType)
+        ? `Employment type: ${labelize(row.employmentType)}`
+        : "",
+      pay ? `Pay: ${pay}` : "",
+      row.scheduleDescription ? `Schedule: ${row.scheduleDescription}` : "",
+      row.requirements ? `Helpful experience: ${row.requirements}` : "",
+      row.positionsAvailable && row.positionsAvailable > 1
+        ? `Openings: ${row.positionsAvailable}`
+        : "",
+      "Applications are accepted directly on MealScout.",
+    ].filter(Boolean),
+  } satisfies PrerenderPage;
+}
+
 async function supplierPage(baseUrl: string, supplierId: string) {
   const [row] = await db
     .select()
@@ -639,6 +872,10 @@ export function registerPublicProfilePrerenderRoutes(
   app.get(
     "/deal/:slug",
     gate((req) => dealPage(canonicalBaseUrl, extractId(req.params.slug))),
+  );
+  app.get(
+    ["/jobs/:jobId", "/jobs/:jobId/:jobSlug"],
+    gate((req) => jobPage(canonicalBaseUrl, extractId(req.params.jobId))),
   );
   app.get(
     ["/supplier/:slug", "/suppliers/:supplierId"],

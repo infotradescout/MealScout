@@ -22,6 +22,7 @@ import {
   getBusinessAccessContext,
   hasBusinessPermissionForRestaurant,
 } from "../services/businessTeamAccess";
+import { submitIndexNowUrls } from "../services/indexNow";
 import { isAuthenticated } from "../unifiedAuth";
 import {
   jobApplications,
@@ -199,8 +200,10 @@ const publicJobSelect = {
   restaurantBusinessType: restaurants.businessType,
   restaurantLogoUrl: restaurants.logoUrl,
   restaurantCoverImageUrl: restaurants.coverImageUrl,
+  restaurantAddress: restaurants.address,
   restaurantCity: restaurants.city,
   restaurantState: restaurants.state,
+  restaurantWebsiteUrl: restaurants.websiteUrl,
 };
 
 type PublicJobRow = typeof publicJobSelect & {
@@ -219,6 +222,34 @@ const decorateJob = (row: any) => {
     publicUrl: `/jobs/${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`,
     restaurantProfileUrl: `/restaurant/${encodeURIComponent(row.restaurantId)}/${encodeURIComponent(toSlug(row.restaurantName) || row.restaurantId)}`,
   };
+};
+
+const absoluteJobUrl = (job: any, restaurantName?: string | null) => {
+  const decorated = decorateJob({
+    ...job,
+    restaurantName: restaurantName || job?.restaurantName || "",
+  });
+  return `${resolveBaseUrl()}${decorated.publicUrl}`;
+};
+
+const submitJobToIndexNow = (
+  job: any,
+  restaurantName?: string | null,
+  reason = "job-updated",
+) => {
+  const url = absoluteJobUrl(job, restaurantName);
+  submitIndexNowUrls([url])
+    .then((result) => {
+      if (result.ok) {
+        console.log(`[indexnow] ${reason}: submitted ${url}`);
+      }
+    })
+    .catch((error) => {
+      console.warn(
+        `[indexnow] ${reason} failed:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    });
 };
 
 const normalizeJobPayload = (raw: z.infer<typeof jobPayloadSchema>) => {
@@ -678,6 +709,7 @@ export function registerJobBoardRoutes(app: Express) {
         })
         .returning();
 
+      submitJobToIndexNow(job, restaurant?.name, "job-created");
       res.status(201).json({ job });
     } catch (error) {
       console.error("[jobs] failed to create job:", error);
@@ -745,6 +777,7 @@ export function registerJobBoardRoutes(app: Express) {
             })
             .where(eq(jobPostings.id, existing.id))
             .returning();
+          submitJobToIndexNow(job, restaurant?.name, "help-wanted-updated");
           return res.json({ job, mode: "updated" });
         }
 
@@ -765,6 +798,7 @@ export function registerJobBoardRoutes(app: Express) {
           })
           .returning();
 
+        submitJobToIndexNow(job, restaurant?.name, "help-wanted-created");
         res.status(201).json({ job, mode: "created" });
       } catch (error) {
         console.error("[jobs] failed to toggle help wanted:", error);
@@ -784,6 +818,21 @@ export function registerJobBoardRoutes(app: Express) {
         }
         if (!(await requireRestaurantAccess(req, res, restaurantId))) return;
 
+        const jobsToClose = await db
+          .select({
+            id: jobPostings.id,
+            title: jobPostings.title,
+            restaurantName: restaurants.name,
+          })
+          .from(jobPostings)
+          .innerJoin(restaurants, eq(restaurants.id, jobPostings.restaurantId))
+          .where(
+            and(
+              eq(jobPostings.restaurantId, restaurantId),
+              eq(jobPostings.status, "open"),
+            ),
+          );
+
         const closedJobs = await db
           .update(jobPostings)
           .set({ status: "closed", updatedAt: new Date() })
@@ -795,6 +844,9 @@ export function registerJobBoardRoutes(app: Express) {
           )
           .returning({ id: jobPostings.id });
 
+        jobsToClose.forEach((job: { id: string; title: string; restaurantName: string }) =>
+          submitJobToIndexNow(job, job.restaurantName, "help-wanted-closed"),
+        );
         res.json({ closed: closedJobs.length });
       } catch (error) {
         console.error("[jobs] failed to close help wanted:", error);
@@ -817,6 +869,12 @@ export function registerJobBoardRoutes(app: Express) {
       if (!(await requireRestaurantAccess(req, res, existing.restaurantId))) {
         return;
       }
+
+      const [restaurant] = await db
+        .select({ name: restaurants.name })
+        .from(restaurants)
+        .where(eq(restaurants.id, existing.restaurantId))
+        .limit(1);
 
       const parsed = jobPayloadSchema.safeParse({
         ...existing,
@@ -855,6 +913,7 @@ export function registerJobBoardRoutes(app: Express) {
         .where(eq(jobPostings.id, jobId))
         .returning();
 
+      submitJobToIndexNow(job, restaurant?.name, "job-updated");
       res.json({ job });
     } catch (error) {
       console.error("[jobs] failed to update job:", error);
