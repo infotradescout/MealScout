@@ -557,6 +557,9 @@ export default function RestaurantDetailPage() {
   );
 
   const restaurantName = (restaurant as any)?.name || "Restaurant";
+  const viewerOwnsProfile =
+    Boolean(user?.id) &&
+    String((restaurant as any)?.ownerId || "") === String(user?.id || "");
   const profileSlug = toSlug(restaurantName) || String(restaurantId || "");
   const profilePath = `/restaurant/${restaurantId}/${profileSlug}`;
   const isOwnBusinessProfile =
@@ -985,6 +988,7 @@ export default function RestaurantDetailPage() {
               (restaurant as any)?.description ||
               "Discover this location on MealScout."
             }
+            cleanUrl={viewerOwnsProfile}
             size="default"
             variant="outline"
             className="h-12 rounded-full border-white/15 bg-black/35 text-white hover:bg-white/10"

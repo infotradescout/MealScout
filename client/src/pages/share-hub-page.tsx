@@ -16,8 +16,8 @@ export default function ShareHubPage() {
 
   const description =
     mode === "user"
-      ? "Copy a link, send a text, or share MealScout in one tap."
-      : "Fast links and messages for outreach, referrals, and launch ops.";
+      ? "Post your public profile, menu, map, and invite links. Your own profile shares stay clean while referral credit stays attached."
+      : "Profile-aware links for owners, customers, hosts, and launch outreach.";
   const schemaData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -54,7 +54,7 @@ export default function ShareHubPage() {
       <main className="mx-auto w-full max-w-5xl px-4 py-5">
         <ShareHub
           mode={mode}
-          title="Share MealScout"
+          title="Share links that pay you back"
           description={description}
           enableAffiliateLookup={isAuthenticated}
         />

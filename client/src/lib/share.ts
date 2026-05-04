@@ -13,7 +13,38 @@ export function setAffiliateRef(ref: string | null) {
 
 function getStoredAffiliateRef(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(AFFILIATE_REF_STORAGE_KEY);
+  const stored = window.localStorage.getItem(AFFILIATE_REF_STORAGE_KEY);
+  if (stored) return stored;
+
+  const cookies = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, part) => {
+      const [rawKey, ...rest] = part.split("=");
+      const key = decodeURIComponent(rawKey || "").trim();
+      if (!key) return acc;
+      acc[key] = decodeURIComponent(rest.join("=") || "");
+      return acc;
+    }, {});
+
+  const referralTag = String(cookies.referralTag || "").trim();
+  if (referralTag) return referralTag;
+
+  const referralId = String(cookies.referralId || "").trim();
+  // `referralId` can sometimes be an internal referral UUID. Do not append
+  // that to public share links; only use compact tags/codes from cookies.
+  if (
+    referralId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      referralId,
+    ) &&
+    /^[a-z0-9-]{3,32}$/i.test(referralId)
+  ) {
+    return referralId;
+  }
+
+  return null;
 }
 
 function appendRefParam(url: string, ref: string): string {

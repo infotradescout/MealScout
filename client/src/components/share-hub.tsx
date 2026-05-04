@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { getAffiliateShareUrl } from "@/lib/share";
 
 type ShareHubMode = "admin" | "staff" | "user";
 type ShareAudience = "owners" | "hosts" | "customers" | "events" | "general";
@@ -41,13 +42,29 @@ interface ShareHubItem {
   message: string;
   icon: ComponentType<{ className?: string }>;
   priority?: number;
+  cleanOwnerLink?: boolean;
+  shareHint?: string;
 }
+
+type OwnedRestaurant = {
+  id: string;
+  name?: string | null;
+  businessType?: string | null;
+  isFoodTruck?: boolean | null;
+  isActive?: boolean | null;
+};
+
+type OwnedHost = {
+  id: string;
+  businessName?: string | null;
+  locationType?: string | null;
+};
 
 const SHARE_ITEMS: ShareHubItem[] = [
   {
     key: "map",
     title: "Food Map",
-    description: "Send customers to the live map.",
+    description: "Send people straight to nearby food.",
     href: "/map",
     audience: "customers",
     audienceLabel: "Customers",
@@ -57,7 +74,7 @@ const SHARE_ITEMS: ShareHubItem[] = [
   {
     key: "video",
     title: "Video Feed",
-    description: "Share local food videos and recommendations.",
+    description: "Give customers a quick taste of the local feed.",
     href: "/video",
     audience: "customers",
     audienceLabel: "Customers",
@@ -67,7 +84,7 @@ const SHARE_ITEMS: ShareHubItem[] = [
   {
     key: "truck-owner",
     title: "Add a Food Truck",
-    description: "Invite a truck owner to claim or create a profile.",
+    description: "Invite a truck owner to get found.",
     href: "/truck-onboarding",
     audience: "owners",
     audienceLabel: "Truck Owners",
@@ -91,7 +108,7 @@ const SHARE_ITEMS: ShareHubItem[] = [
   {
     key: "host",
     title: "Host a Truck",
-    description: "Send this to locations with usable parking space.",
+    description: "Send this to lots, breweries, offices, and venues.",
     href: "/host-location-partner",
     audience: "hosts",
     audienceLabel: "Hosts",
@@ -113,7 +130,7 @@ const SHARE_ITEMS: ShareHubItem[] = [
   {
     key: "for-hosts",
     title: "Host Program",
-    description: "Overview page for property owners and locations.",
+    description: "A simple overview for property owners and locations.",
     href: "/for-hosts",
     audience: "hosts",
     audienceLabel: "Hosts",
@@ -132,6 +149,32 @@ const FILTERS: Array<{ key: "all" | ShareAudience; label: string }> = [
 
 const INTERNAL_SHARE_PATH = /^(?:\/admin(?:\/|$)|\/staff(?:\/|$))/i;
 
+const toSlug = (value: string | null | undefined) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const absoluteUrl = (href: string) => {
+  if (href.startsWith("http://") || href.startsWith("https://")) return href;
+  if (typeof window === "undefined") return href;
+  return `${window.location.origin}${href}`;
+};
+
+const appendRefParam = (url: string, ref: string) => {
+  try {
+    const next = new URL(url, window.location.origin);
+    if (!next.searchParams.has("ref")) {
+      next.searchParams.set("ref", ref);
+    }
+    return next.toString();
+  } catch {
+    return url;
+  }
+};
+
 export default function ShareHub({
   mode,
   title,
@@ -145,6 +188,13 @@ export default function ShareHub({
 }) {
   const { toast } = useToast();
   const [affiliateTag, setAffiliateTag] = useState("");
+  const [ownedRestaurants, setOwnedRestaurants] = useState<OwnedRestaurant[]>(
+    [],
+  );
+  const [ownedHosts, setOwnedHosts] = useState<OwnedHost[]>([]);
+  const [shareUrlCache, setShareUrlCache] = useState<Record<string, string>>(
+    {},
+  );
   const [activeFilter, setActiveFilter] = useState<"all" | ShareAudience>(
     "all",
   );
@@ -165,24 +215,121 @@ export default function ShareHub({
     };
   }, [enableAffiliateLookup]);
 
+  useEffect(() => {
+    if (!enableAffiliateLookup) return;
+    let cancelled = false;
+
+    fetch("/api/restaurants/my-restaurants", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (cancelled) return;
+        setOwnedRestaurants(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
+
+    fetch("/api/hosts", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (cancelled) return;
+        setOwnedHosts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enableAffiliateLookup]);
+
   const items = useMemo(() => {
+    const selfPromoItems: ShareHubItem[] = [];
+    const activeRestaurants = ownedRestaurants
+      .filter((restaurant) => restaurant?.id && restaurant.isActive !== false)
+      .slice(0, 4);
+
+    activeRestaurants.forEach((restaurant, index) => {
+      const name = String(restaurant.name || "My business").trim();
+      const slug = toSlug(name) || restaurant.id;
+      const isTruck =
+        Boolean(restaurant.isFoodTruck) ||
+        String(restaurant.businessType || "").toLowerCase() === "food_truck";
+      const businessLabel = isTruck ? "Food Truck" : "Public Profile";
+      const profileHref = `/restaurant/${restaurant.id}/${slug}`;
+
+      selfPromoItems.push({
+        key: `restaurant-profile:${restaurant.id}`,
+        title: index === 0 ? "My Public Profile" : `${name} Profile`,
+        description: "Post this in bios, stories, flyers, and DMs.",
+        href: profileHref,
+        audience: "customers",
+        audienceLabel: businessLabel,
+        icon: isTruck ? Truck : Store,
+        priority: 0,
+        cleanOwnerLink: true,
+        shareHint: "Clean link. Owner credit stays on.",
+        message: `Follow, order, and book ${name} on MealScout:`,
+      });
+
+      if (index === 0) {
+        selfPromoItems.push({
+          key: `restaurant-menu:${restaurant.id}`,
+          title: isTruck ? "Truck Menu Link" : "Menu Link",
+          description: "Send customers straight to what they can buy.",
+          href: `/menu/${restaurant.id}`,
+          audience: "customers",
+          audienceLabel: "Menu",
+          icon: Link2,
+          cleanOwnerLink: true,
+          shareHint: "Clean link. Owner credit stays on.",
+          message: `See the menu for ${name} on MealScout:`,
+        });
+      }
+    });
+
+    ownedHosts
+      .filter((host) => host?.id)
+      .slice(0, 2)
+      .forEach((host, index) => {
+        const name = String(host.businessName || "My host location").trim();
+        const slug = toSlug(name) || host.id;
+        selfPromoItems.push({
+          key: `host-profile:${host.id}`,
+          title: index === 0 ? "My Host Profile" : `${name} Host Link`,
+          description: "Share your truck-friendly location page.",
+          href: `/location/${slug}--${host.id}`,
+          audience: "hosts",
+          audienceLabel: "Host Profile",
+          icon: Building2,
+          cleanOwnerLink: true,
+          shareHint: "Clean link. Owner credit stays on.",
+          message: `Book or request food truck parking at ${name} on MealScout:`,
+        });
+      });
+
     const base = SHARE_ITEMS.filter(
       (item) => !INTERNAL_SHARE_PATH.test(item.href),
     );
-    if (!affiliateTag) return base;
-    const referralItem: ShareHubItem = {
-      key: "referral",
-      title: "My Referral Link",
-      description: "Best all-purpose link. Referrals are credited to you.",
-      href: `/ref/${affiliateTag}`,
-      audience: "general",
-      audienceLabel: "Referral",
-      icon: Send,
-      priority: 0,
-      message: "Check out MealScout here:",
-    };
-    return [referralItem, ...base];
-  }, [affiliateTag]);
+
+    const referralItem: ShareHubItem | null = affiliateTag
+      ? {
+          key: "referral",
+          title: "My Referral Link",
+          description: "Best all-purpose link when you are not sharing a profile.",
+          href: `/ref/${affiliateTag}`,
+          audience: "general",
+          audienceLabel: "Referral",
+          icon: Send,
+          priority: 0,
+          shareHint: "Tracks to you.",
+          message: "Check out MealScout here:",
+        }
+      : null;
+
+    return [
+      ...selfPromoItems,
+      ...(referralItem ? [referralItem] : []),
+      ...base,
+    ];
+  }, [affiliateTag, ownedHosts, ownedRestaurants]);
 
   const filteredItems = useMemo(() => {
     if (activeFilter === "all") return items;
@@ -191,14 +338,29 @@ export default function ShareHub({
 
   const primaryItem = items[0];
 
-  const absoluteUrl = (href: string) => {
-    if (href.startsWith("http://") || href.startsWith("https://")) return href;
-    if (typeof window === "undefined") return href;
-    return `${window.location.origin}${href}`;
+  const displayUrl = (item: ShareHubItem) => {
+    const cached = shareUrlCache[item.key];
+    if (cached) return cached;
+    const cleanUrl = absoluteUrl(item.href);
+    if (item.cleanOwnerLink || item.href.startsWith("/ref/")) return cleanUrl;
+    return affiliateTag ? appendRefParam(cleanUrl, affiliateTag) : cleanUrl;
   };
 
-  const shareText = (item: ShareHubItem) =>
-    `${item.message} ${absoluteUrl(item.href)}`;
+  const getItemShareUrl = async (item: ShareHubItem) => {
+    const cached = shareUrlCache[item.key];
+    if (cached) return cached;
+
+    const shareUrl =
+      item.cleanOwnerLink || item.href.startsWith("/ref/")
+        ? absoluteUrl(item.href)
+        : await getAffiliateShareUrl(item.href);
+
+    setShareUrlCache((current) => ({ ...current, [item.key]: shareUrl }));
+    return shareUrl;
+  };
+
+  const shareText = async (item: ShareHubItem) =>
+    `${item.message} ${await getItemShareUrl(item)}`;
 
   const trackShareHubEvent = async (
     action: ShareAction,
@@ -217,6 +379,7 @@ export default function ShareHub({
             itemKey: item.key,
             href: item.href,
             audience: item.audience,
+            cleanOwnerLink: Boolean(item.cleanOwnerLink),
           },
         }),
       });
@@ -247,7 +410,12 @@ export default function ShareHub({
       setCopiedKey(`${action}:${item.key}`);
       window.setTimeout(() => setCopiedKey(""), 1600);
       void trackShareHubEvent(action, item);
-      toast({ title: "Copied", description: item.title });
+      toast({
+        title: "Copied",
+        description: item.cleanOwnerLink
+          ? "Clean link copied. Referral credit still routes back to you."
+          : item.title,
+      });
     } catch {
       toast({
         title: "Copy failed",
@@ -258,9 +426,9 @@ export default function ShareHub({
   };
 
   const nativeShare = async (item: ShareHubItem) => {
-    const url = absoluteUrl(item.href);
+    const url = await getItemShareUrl(item);
     if (!navigator.share) {
-      await copyToClipboard(shareText(item), item, "copy_message");
+      await copyToClipboard(await shareText(item), item, "copy_message");
       return;
     }
     try {
@@ -275,9 +443,9 @@ export default function ShareHub({
     }
   };
 
-  const openChannel = (item: ShareHubItem, channel: ShareAction) => {
-    const text = shareText(item);
-    const url = absoluteUrl(item.href);
+  const openChannel = async (item: ShareHubItem, channel: ShareAction) => {
+    const text = await shareText(item);
+    const url = await getItemShareUrl(item);
     let target = "";
     if (channel === "sms") target = `sms:?&body=${encodeURIComponent(text)}`;
     if (channel === "email") {
@@ -304,42 +472,47 @@ export default function ShareHub({
   ) => copiedKey === `${action}:${item.key}`;
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-4">
+      <section className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[color:var(--border-subtle)] px-3 py-1 text-xs font-semibold text-[color:var(--accent-text)]">
               <Send className="h-3.5 w-3.5" />
-              Share
+              Share links
             </div>
-            <h2 className="font-display text-3xl leading-none text-[color:var(--text-primary)] sm:text-4xl">
+            <h2 className="font-display text-2xl leading-tight text-[color:var(--text-primary)] sm:text-3xl">
               {title}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--text-secondary)]">
+            <p className="mt-1 max-w-2xl text-sm leading-5 text-[color:var(--text-secondary)]">
               {description}
             </p>
           </div>
 
           {primaryItem ? (
-            <div className="min-w-0 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 lg:w-[24rem]">
+            <div className="min-w-0 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 lg:w-[25rem]">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-[color:var(--text-muted)]">
-                  Best link
+                  Start here
                 </span>
                 <Badge variant="secondary">{primaryItem.audienceLabel}</Badge>
               </div>
               <div className="flex min-w-0 items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--field-bg)] px-3 py-2">
                 <Link2 className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
                 <span className="min-w-0 truncate text-sm font-medium text-[color:var(--text-primary)]">
-                  {absoluteUrl(primaryItem.href)}
+                  {displayUrl(primaryItem)}
                 </span>
               </div>
+              {primaryItem.shareHint ? (
+                <p className="mt-2 text-xs font-medium text-[color:var(--accent-text)]">
+                  {primaryItem.shareHint}
+                </p>
+              ) : null}
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <Button
                   size="sm"
-                  onClick={() =>
+                  onClick={async () =>
                     copyToClipboard(
-                      absoluteUrl(primaryItem.href),
+                      await getItemShareUrl(primaryItem),
                       primaryItem,
                       "copy_link",
                     )
@@ -355,7 +528,7 @@ export default function ShareHub({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => nativeShare(primaryItem)}
+                  onClick={() => void nativeShare(primaryItem)}
                 >
                   <Send className="mr-2 h-4 w-4" />
                   Share
@@ -372,7 +545,7 @@ export default function ShareHub({
             key={filter.key}
             type="button"
             onClick={() => setActiveFilter(filter.key)}
-            className={`h-9 shrink-0 rounded-full border px-4 text-sm font-semibold transition-colors ${
+            className={`h-8 shrink-0 rounded-full border px-3 text-sm font-semibold transition-colors ${
               activeFilter === filter.key
                 ? "border-[color:var(--accent-text)] bg-[color:var(--accent-text)] text-black"
                 : "border-[color:var(--border-subtle)] bg-[var(--bg-card)] text-[color:var(--text-primary)]"
@@ -389,41 +562,54 @@ export default function ShareHub({
           return (
             <article
               key={item.key}
-              className="flex min-h-[19rem] flex-col rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean"
+              className="flex min-h-[14.5rem] flex-col rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean"
             >
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-bold text-[color:var(--text-primary)]">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <h3 className="line-clamp-1 text-base font-bold text-[color:var(--text-primary)]">
                       {item.title}
                     </h3>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {mode !== "user" && typeof item.priority === "number" ? (
-                        <Badge>{`P${item.priority}`}</Badge>
-                      ) : null}
-                      <Badge variant="secondary">{item.audienceLabel}</Badge>
-                    </div>
+                    {mode !== "user" && typeof item.priority === "number" ? (
+                      <Badge>{`P${item.priority}`}</Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    <Badge variant="secondary">{item.audienceLabel}</Badge>
+                    {item.shareHint ? (
+                      <Badge variant="outline">{item.shareHint}</Badge>
+                    ) : null}
                   </div>
                 </div>
               </div>
 
-              <p className="text-sm leading-6 text-[color:var(--text-secondary)]">
+              <p className="mt-3 line-clamp-2 text-sm leading-5 text-[color:var(--text-secondary)]">
                 {item.description}
               </p>
 
-              <div className="mt-3 rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3 text-sm leading-6 text-[color:var(--text-primary)]">
-                {item.message}
+              <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2">
+                <Link2 className="h-4 w-4 shrink-0 text-[color:var(--accent-text)]" />
+                <span className="min-w-0 truncate text-sm font-semibold text-[color:var(--text-primary)]">
+                  {displayUrl(item)}
+                </span>
               </div>
+              <p className="mt-2 line-clamp-1 text-xs text-[color:var(--text-muted)]">
+                {item.message}
+              </p>
 
-              <div className="mt-auto pt-4">
+              <div className="mt-auto pt-3">
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     size="sm"
-                    onClick={() =>
-                      copyToClipboard(absoluteUrl(item.href), item, "copy_link")
+                    onClick={async () =>
+                      copyToClipboard(
+                        await getItemShareUrl(item),
+                        item,
+                        "copy_link",
+                      )
                     }
                   >
                     {copiedLabel(item, "copy_link") ? (
@@ -436,8 +622,12 @@ export default function ShareHub({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() =>
-                      copyToClipboard(shareText(item), item, "copy_message")
+                    onClick={async () =>
+                      copyToClipboard(
+                        await shareText(item),
+                        item,
+                        "copy_message",
+                      )
                     }
                   >
                     {copiedLabel(item, "copy_message") ? (
@@ -449,12 +639,12 @@ export default function ShareHub({
                   </Button>
                 </div>
 
-                <div className="mt-2 grid grid-cols-5 gap-2">
+                <div className="mt-2 grid grid-cols-5 gap-1">
                   <Button
                     size="icon"
                     variant="ghost"
                     aria-label={`Share ${item.title}`}
-                    onClick={() => nativeShare(item)}
+                    onClick={() => void nativeShare(item)}
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -462,7 +652,7 @@ export default function ShareHub({
                     size="icon"
                     variant="ghost"
                     aria-label={`Text ${item.title}`}
-                    onClick={() => openChannel(item, "sms")}
+                    onClick={() => void openChannel(item, "sms")}
                   >
                     <MessageCircle className="h-4 w-4" />
                   </Button>
@@ -470,7 +660,7 @@ export default function ShareHub({
                     size="icon"
                     variant="ghost"
                     aria-label={`Email ${item.title}`}
-                    onClick={() => openChannel(item, "email")}
+                    onClick={() => void openChannel(item, "email")}
                   >
                     <Mail className="h-4 w-4" />
                   </Button>
@@ -478,7 +668,7 @@ export default function ShareHub({
                     size="icon"
                     variant="ghost"
                     aria-label={`Share ${item.title} on Facebook`}
-                    onClick={() => openChannel(item, "facebook")}
+                    onClick={() => void openChannel(item, "facebook")}
                   >
                     <Users className="h-4 w-4" />
                   </Button>

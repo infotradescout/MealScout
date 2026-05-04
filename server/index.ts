@@ -33,7 +33,7 @@ import { validateEnv } from "./utils/env";
 import { healthRouter } from "./routes/health";
 import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
 import { publicResponseCache } from "./utils/responseCache";
-import { videoStories, restaurants, requestLogs, users } from "@shared/schema";
+import { hosts, videoStories, restaurants, requestLogs, users } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
@@ -582,6 +582,96 @@ const extractRestaurantEntity = (pathValue: string) => {
   const match = String(pathValue || "").match(/^\/restaurant\/([^/?#]+)/i);
   if (!match?.[1]) return { entityId: null, entityType: null };
   return { entityId: String(match[1]), entityType: "restaurant" };
+};
+
+const parseCookieHeader = (header: unknown) =>
+  String(header || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, part) => {
+      const [rawKey, ...rest] = part.split("=");
+      const key = decodeURIComponent(rawKey || "").trim();
+      if (!key) return acc;
+      acc[key] = decodeURIComponent(rest.join("=") || "");
+      return acc;
+    }, {});
+
+const hasReferralCookie = (req: Request) => {
+  const cookies = parseCookieHeader(req.headers.cookie);
+  return Boolean(
+    cookies.referralTag || cookies.referralId || cookies.referralRecordId,
+  );
+};
+
+const extractPublicProfileId = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const marker = raw.lastIndexOf("--");
+  if (marker >= 0) return raw.slice(marker + 2);
+  const uuid = raw.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+  );
+  return uuid?.[0] || raw;
+};
+
+const resolveCleanProfileAttributionTarget = async (pathValue: string) => {
+  const segments = String(pathValue || "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const [surface, second, third] = segments;
+  const surfaceKey = String(surface || "").toLowerCase();
+  const profileType = String(second || "").toLowerCase();
+
+  const restaurantProfileTypes = new Set([
+    "restaurant",
+    "food_truck",
+    "truck",
+    "bar",
+  ]);
+  const hostProfileTypes = new Set(["host", "location"]);
+
+  const restaurantId =
+    surfaceKey === "restaurant" ||
+    surfaceKey === "truck" ||
+    surfaceKey === "bar" ||
+    surfaceKey === "menu"
+      ? extractPublicProfileId(second)
+      : surfaceKey === "p" && restaurantProfileTypes.has(profileType)
+        ? extractPublicProfileId(third)
+        : "";
+
+  if (restaurantId) {
+    const [row] = await db
+      .select({ ownerId: restaurants.ownerId })
+      .from(restaurants)
+      .where(and(eq(restaurants.id, restaurantId), eq(restaurants.isActive, true)))
+      .limit(1);
+    const ownerId = String(row?.ownerId || "").trim();
+    return ownerId ? { ownerId, sourcePath: pathValue } : null;
+  }
+
+  const hostId =
+    surfaceKey === "location"
+      ? extractPublicProfileId(second)
+      : surfaceKey === "p" && hostProfileTypes.has(profileType)
+        ? extractPublicProfileId(third)
+        : "";
+
+  if (hostId) {
+    const [row] = await db
+      .select({ ownerId: hosts.userId })
+      .from(hosts)
+      .where(eq(hosts.id, hostId))
+      .limit(1);
+    const ownerId = String(row?.ownerId || "").trim();
+    return ownerId ? { ownerId, sourcePath: pathValue } : null;
+  }
+
+  return null;
 };
 
 // Request logging for admin reporting (skip static assets)
@@ -1144,6 +1234,65 @@ app.use((req, res, next) => {
         httpOnly: true,
         sameSite: "lax",
       });
+    }
+
+    return next();
+  });
+
+  // Clean self-promo profile links should still credit the profile owner.
+  // Explicit ?ref= links and existing referral cookies always win.
+  app.use(async (req: any, res: any, next: any) => {
+    try {
+      if (!["GET", "HEAD"].includes(req.method)) return next();
+      if (req.query?.ref) return next();
+      if (hasReferralCookie(req)) return next();
+
+      const pathValue = String(req.path || "");
+      if (
+        pathValue.startsWith("/api/") ||
+        pathValue.startsWith("/assets") ||
+        pathValue.startsWith("/favicon") ||
+        pathValue.startsWith("/static") ||
+        pathValue.match(
+          /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|map)$/i,
+        )
+      ) {
+        return next();
+      }
+
+      const target = await resolveCleanProfileAttributionTarget(pathValue);
+      if (!target?.ownerId) return next();
+      if (String(req.user?.id || "") === String(target.ownerId)) return next();
+
+      const { ensureAffiliateTag } = await import("./affiliateTagService");
+      const { recordReferralClick } = await import("./referralService");
+      const tag = await ensureAffiliateTag(target.ownerId);
+      const result = await recordReferralClick(
+        target.ownerId,
+        target.sourcePath || req.originalUrl || "/",
+        req.get("user-agent") || undefined,
+        req.ip || undefined,
+      );
+
+      res.cookie("referralId", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      res.cookie("referralTag", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      if (result?.referralId) {
+        res.cookie("referralRecordId", result.referralId, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    } catch (error) {
+      console.error("[affiliate] Clean profile attribution failed:", error);
     }
 
     return next();

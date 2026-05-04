@@ -22,6 +22,7 @@ import PublicVideoGallery from "@/components/PublicVideoGallery";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { resolveBusinessImageUrl } from "@/lib/business-images";
+import { getAffiliateShareUrl } from "@/lib/share";
 
 type PublicProfile = {
   entity: "restaurant" | "host" | "supplier";
@@ -42,6 +43,7 @@ type PublicProfile = {
   businessHours?: Record<string, { open?: string; close?: string }> | null;
   canonicalUrl: string;
   profilePath: string;
+  viewerIsOwner?: boolean;
   profileSettings?: {
     templatePreset?: "classic" | "story" | "bold" | "minimal";
     theme?: "sunset" | "slate" | "forest" | "amber";
@@ -666,18 +668,23 @@ export default function PublicProfilePage() {
 
   const handleShareProfile = async () => {
     try {
+      const shareUrl = data.viewerIsOwner
+        ? data.canonicalUrl
+        : await getAffiliateShareUrl(data.profilePath || data.canonicalUrl);
       if (navigator.share) {
         await navigator.share({
           title: data.title,
           text: `Check out ${data.title} on MealScout`,
-          url: data.canonicalUrl,
+          url: shareUrl,
         });
         return;
       }
-      await navigator.clipboard.writeText(data.canonicalUrl);
+      await navigator.clipboard.writeText(shareUrl);
       toast({
         title: "Profile link copied",
-        description: "Share this page anywhere.",
+        description: data.viewerIsOwner
+          ? "Clean link copied. Referral credit still routes back to you."
+          : "Share this page anywhere.",
       });
     } catch {
       // Ignore canceled share flow.

@@ -626,6 +626,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.json({
           entity: "restaurant",
           id: row.id,
+          viewerIsOwner: String((req as any).user?.id || "") === String(row.ownerId),
           isVerified: Boolean(row.isVerified),
           title: row.name,
           subtitle:
@@ -699,6 +700,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.json({
           entity: "host",
           id: row.id,
+          viewerIsOwner: String((req as any).user?.id || "") === String(row.userId),
           title: row.businessName,
           subtitle:
             row.locationType === "event_coordinator"
@@ -758,6 +760,7 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         return res.json({
           entity: "supplier",
           id: row.id,
+          viewerIsOwner: String((req as any).user?.id || "") === String(row.userId),
           title: row.businessName,
           subtitle: "Supplier",
           description:

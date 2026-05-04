@@ -16,6 +16,7 @@ interface ShareButtonProps {
   variant?: 'default' | 'ghost' | 'outline';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
+  cleanUrl?: boolean;
   onShareAction?: () => void | Promise<void>;
 }
 
@@ -26,10 +27,17 @@ export default function ShareButton({
   variant = 'ghost',
   size = 'sm',
   className = '',
+  cleanUrl = false,
   onShareAction,
 }: ShareButtonProps) {
   const { toast } = useToast();
-  const getShareUrl = async () => getAffiliateShareUrl(url);
+  const getCleanUrl = () => {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    if (typeof window === "undefined") return url;
+    return `${window.location.origin}${url}`;
+  };
+  const getShareUrl = async () =>
+    cleanUrl ? getCleanUrl() : getAffiliateShareUrl(url);
   const trackShare = () => {
     if (!onShareAction) return;
     Promise.resolve(onShareAction()).catch(() => {});
@@ -41,7 +49,9 @@ export default function ShareButton({
       await navigator.clipboard.writeText(shareUrl);
       toast({
         title: 'Link copied!',
-        description: 'Share link copied to clipboard',
+        description: cleanUrl
+          ? 'Clean link copied. Referral credit still routes back to you.'
+          : 'Share link copied to clipboard',
       });
       trackShare();
     } catch (error) {
