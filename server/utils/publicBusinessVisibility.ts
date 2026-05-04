@@ -7,6 +7,9 @@ type BusinessListingLike = {
   imageUrl?: string | null;
   logoUrl?: string | null;
   coverImageUrl?: string | null;
+  facebookCoverUrl?: string | null;
+  googlePhotos?: unknown;
+  facebookPhotos?: unknown;
   city?: string | null;
   state?: string | null;
   profileSource?: string | null;
@@ -26,6 +29,7 @@ const NON_PUBLIC_PROFILE_SOURCES = new Set([
   "development_seed",
   "fixture",
   "test_fixture",
+  "admin_quarantine",
 ]);
 const NON_PUBLIC_OWNER_EMAIL_PATTERN =
   /(?:^owner\d+@example\.com$|@example\.(?:com|net|org)$|@example\.test$|@test\.com$)/i;
@@ -46,16 +50,45 @@ const hasCategoryContext = (listing: BusinessListingLike): boolean => {
   return cuisineType.length >= 2 || businessType.length >= 2;
 };
 
+const parsePhotoCollection = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const hasPhotoCollection = (value: unknown): boolean =>
+  parsePhotoCollection(value).some((photo) => {
+    if (typeof photo === "string") return normalize(photo).length >= 8;
+    return (
+      normalize(photo?.url).length >= 8 ||
+      normalize(photo?.imageUrl).length >= 8 ||
+      normalize(photo?.photoUrl).length >= 8 ||
+      normalize(photo?.src).length >= 8 ||
+      normalize(photo?.name).length >= 8 ||
+      normalize(photo?.photoName).length >= 8 ||
+      normalize(photo?.photoReference).length >= 8
+    );
+  });
+
 const hasDescriptionOrPhoto = (listing: BusinessListingLike): boolean => {
   const description = normalize(listing.description);
   const imageUrl = normalize(listing.imageUrl);
   const logoUrl = normalize(listing.logoUrl);
   const coverImageUrl = normalize(listing.coverImageUrl);
+  const facebookCoverUrl = normalize(listing.facebookCoverUrl);
   return (
     description.length >= 20 ||
     imageUrl.length >= 8 ||
     logoUrl.length >= 8 ||
-    coverImageUrl.length >= 8
+    coverImageUrl.length >= 8 ||
+    facebookCoverUrl.length >= 8 ||
+    hasPhotoCollection(listing.googlePhotos) ||
+    hasPhotoCollection(listing.facebookPhotos)
   );
 };
 

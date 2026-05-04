@@ -110,6 +110,12 @@ const ADMIN_TAB_ITEMS = [
     icon: Utensils,
   },
   {
+    value: "quality",
+    label: "Data Quality",
+    description: "Public readiness",
+    icon: AlertCircle,
+  },
+  {
     value: "lisa",
     label: "LISA",
     description: "Signals and intelligence",
@@ -267,6 +273,45 @@ interface AdminRestaurantSearchResult {
   createdAt?: string | null;
 }
 
+interface PublicDataAuditRow extends AdminRestaurantSearchResult {
+  description?: string | null;
+  websiteUrl?: string | null;
+  googleBusinessStatus?: string | null;
+  ownerUserType?: string | null;
+  ownerDisabled?: boolean | null;
+  updatedAt?: string | null;
+  publicVisible: boolean;
+  hasPhoto: boolean;
+  blockers: string[];
+  warnings: string[];
+  issueLabels: string[];
+  issueCount: number;
+  isQuarantined: boolean;
+  recommendedAction:
+    | "quarantine_or_fix"
+    | "fix_profile"
+    | "review_restore"
+    | "monitor"
+    | string;
+}
+
+interface PublicDataAuditResponse {
+  summary: {
+    total: number;
+    active: number;
+    publicVisible: number;
+    blockedActive: number;
+    needsPhoto: number;
+    missingOwner: number;
+    missingLocation: number;
+    missingCategory: number;
+    quarantined: number;
+    closedPermanently: number;
+    generatedAt: string;
+  };
+  rows: PublicDataAuditRow[];
+}
+
 interface MapPinAudit {
   sampleMissing?: Array<{
     id: string;
@@ -391,13 +436,51 @@ const formatAdminDealTime = (deal: any) => {
 };
 
 const firstUsablePhotoUrl = (value: unknown) => {
-  if (!Array.isArray(value)) return "";
-  for (const photo of value) {
+  let photos = value;
+  if (typeof photos === "string") {
+    try {
+      photos = JSON.parse(photos);
+    } catch {
+      photos = [];
+    }
+  }
+  if (!Array.isArray(photos)) return "";
+
+  for (const photo of photos) {
     const url =
       typeof photo === "string"
         ? photo
-        : String((photo as any)?.url || (photo as any)?.imageUrl || "");
-    if (url.trim()) return url.trim();
+        : String(
+            (photo as any)?.url ||
+              (photo as any)?.imageUrl ||
+              (photo as any)?.photoUrl ||
+              (photo as any)?.src ||
+              "",
+          );
+    const trimmedUrl = url.trim();
+    if (trimmedUrl) {
+      if (trimmedUrl.startsWith("places/")) {
+        return `/api/google/photo?name=${encodeURIComponent(
+          trimmedUrl,
+        )}&maxWidth=512`;
+      }
+      return trimmedUrl;
+    }
+
+    const googlePhotoName =
+      typeof photo === "object" && photo
+        ? String(
+            (photo as any)?.name ||
+              (photo as any)?.photoName ||
+              (photo as any)?.photoReference ||
+              "",
+          ).trim()
+        : "";
+    if (googlePhotoName) {
+      return `/api/google/photo?name=${encodeURIComponent(
+        googlePhotoName,
+      )}&maxWidth=512`;
+    }
   }
   return "";
 };
@@ -2938,6 +3021,15 @@ export default function AdminDashboard() {
       !!adminUser &&
       selectedTab === "restaurants" &&
       restaurantSearchQuery.length >= 2,
+  });
+
+  const {
+    data: publicDataAudit,
+    isLoading: publicDataAuditLoading,
+  } = useQuery<PublicDataAuditResponse>({
+    queryKey: ["/api/admin/public-data-audit"],
+    enabled: !!adminUser && selectedTab === "quality",
+    staleTime: 30_000,
   });
 
   // Fetch all users
@@ -5517,6 +5609,71 @@ export default function AdminDashboard() {
     },
   });
 
+  const quarantineRestaurant = useMutation({
+    mutationFn: async (payload: { restaurantId: string; reason?: string }) => {
+      return await apiRequest(
+        "POST",
+        `/api/admin/restaurants/${payload.restaurantId}/quarantine`,
+        {
+          reason:
+            payload.reason ||
+            "Public data audit quarantine from admin dashboard.",
+        },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/public-data-audit"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/search"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/pending"],
+      });
+      toast({
+        title: "Business quarantined",
+        description: "The profile is no longer eligible for public discovery.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Quarantine failed",
+        description: error?.message || "Unable to quarantine this profile.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const restorePublicRestaurant = useMutation({
+    mutationFn: async (restaurantId: string) => {
+      return await apiRequest(
+        "POST",
+        `/api/admin/restaurants/${restaurantId}/restore-public`,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/public-data-audit"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/restaurants/search"],
+      });
+      toast({
+        title: "Business restored",
+        description:
+          "The profile is active again and will still be checked by public readiness rules.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Restore failed",
+        description: error?.message || "Unable to restore this profile.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Toggle deal featured status
   const toggleDealFeatured = useMutation({
     mutationFn: async ({
@@ -6329,6 +6486,22 @@ export default function AdminDashboard() {
 
   const dashboardStats = dashboardTotals?.totals || defaultStats;
   const operations = dashboardTotals?.operations || null;
+  const publicDataAuditRows = Array.isArray(publicDataAudit?.rows)
+    ? publicDataAudit.rows
+    : [];
+  const publicDataAuditSummary = publicDataAudit?.summary || {
+    total: 0,
+    active: 0,
+    publicVisible: 0,
+    blockedActive: 0,
+    needsPhoto: 0,
+    missingOwner: 0,
+    missingLocation: 0,
+    missingCategory: 0,
+    quarantined: 0,
+    closedPermanently: 0,
+    generatedAt: "",
+  };
   const toDollars = (value: number | string | null | undefined) => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return 0;
@@ -8875,6 +9048,220 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Data Quality Tab */}
+          <TabsContent value="quality" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <CardTitle>Public Data Readiness</CardTitle>
+                    <CardDescription>
+                      Audit the businesses that can affect public trust. Bad
+                      profiles can be quarantined without deleting owner data.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">
+                    {publicDataAuditSummary.total} profiles scanned
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {[
+                    ["Public", publicDataAuditSummary.publicVisible],
+                    ["Blocked", publicDataAuditSummary.blockedActive],
+                    ["No photo", publicDataAuditSummary.needsPhoto],
+                    ["No owner", publicDataAuditSummary.missingOwner],
+                    ["Quarantined", publicDataAuditSummary.quarantined],
+                  ].map(([label, value]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] p-3"
+                    >
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-2xl font-semibold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {publicDataAuditLoading ? (
+                  <div className="rounded-md border border-dashed border-[color:var(--border-subtle)] p-8 text-center text-sm text-muted-foreground">
+                    Auditing public business data...
+                  </div>
+                ) : publicDataAuditRows.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-[color:var(--border-subtle)] p-8 text-center text-sm text-muted-foreground">
+                    <CheckCircle className="mx-auto mb-3 h-8 w-8 opacity-60" />
+                    No data quality issues are currently in the audit sample.
+                  </div>
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    {publicDataAuditRows.map((restaurant) => {
+                      const imageUrl = getAdminRestaurantImageUrl(restaurant);
+                      const location = formatAdminBusinessLocation(restaurant);
+                      const typeLabel = formatAdminBusinessType(restaurant);
+                      const ownerEmail = String(
+                        restaurant.ownerEmail || "",
+                      ).trim();
+                      const issues = Array.isArray(restaurant.issueLabels)
+                        ? restaurant.issueLabels.slice(0, 7)
+                        : [];
+                      const statusLabel = restaurant.isQuarantined
+                        ? "Quarantined"
+                        : restaurant.publicVisible
+                          ? "Public"
+                          : restaurant.isActive
+                            ? "Blocked"
+                            : "Inactive";
+
+                      return (
+                        <article
+                          key={restaurant.id}
+                          className="overflow-hidden rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] shadow-sm"
+                        >
+                          <div className="relative aspect-[16/9] bg-muted">
+                            <img
+                              src={imageUrl}
+                              alt={`${restaurant.name} profile image`}
+                              className="absolute inset-0 h-full w-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                              onError={(event) => {
+                                const img = event.currentTarget;
+                                if (
+                                  img.src.endsWith(
+                                    ADMIN_RESTAURANT_FALLBACK_IMAGE_URL,
+                                  )
+                                ) {
+                                  return;
+                                }
+                                img.src = ADMIN_RESTAURANT_FALLBACK_IMAGE_URL;
+                              }}
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 text-white">
+                              <div className="flex flex-wrap gap-2">
+                                <Badge>{typeLabel}</Badge>
+                                <Badge variant="secondary">
+                                  {statusLabel}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4 p-4">
+                            <div>
+                              <h3 className="line-clamp-2 text-lg font-semibold leading-tight">
+                                {restaurant.name || "Unnamed business"}
+                              </h3>
+                              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                                {[restaurant.cuisineType, location]
+                                  .map((value) => String(value || "").trim())
+                                  .filter(Boolean)
+                                  .join(" - ")}
+                              </p>
+                            </div>
+
+                            <div className="grid gap-2 text-sm">
+                              <div className="flex min-w-0 items-start gap-2">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                <span className="line-clamp-2">{location}</span>
+                              </div>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Mail className="h-4 w-4 shrink-0 text-primary" />
+                                <span className="truncate">
+                                  {ownerEmail || "Owner email missing"}
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Database className="h-4 w-4 shrink-0 text-primary" />
+                                <span className="truncate">
+                                  {restaurant.profileSource || "manual/none"}
+                                  {restaurant.googleBusinessStatus
+                                    ? ` - ${restaurant.googleBusinessStatus}`
+                                    : ""}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              {issues.length ? (
+                                issues.map((issue) => (
+                                  <Badge key={issue} variant="secondary">
+                                    {issue}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <Badge variant="outline">No issues</Badge>
+                              )}
+                            </div>
+
+                            <div className="grid gap-2 sm:grid-cols-3">
+                              <Button asChild size="sm" variant="outline">
+                                <Link
+                                  href={`/restaurant/${restaurant.id}`}
+                                  className="gap-2"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  Public
+                                </Link>
+                              </Button>
+                              <Button asChild size="sm" variant="outline">
+                                <Link
+                                  href={`/edit-restaurant/${restaurant.id}`}
+                                  className="gap-2"
+                                >
+                                  <Settings className="h-4 w-4" />
+                                  Edit
+                                </Link>
+                              </Button>
+                              {restaurant.isQuarantined ? (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="gap-2"
+                                  onClick={() =>
+                                    restorePublicRestaurant.mutate(
+                                      restaurant.id,
+                                    )
+                                  }
+                                  disabled={restorePublicRestaurant.isPending}
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                  Restore
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  className="gap-2"
+                                  onClick={() =>
+                                    quarantineRestaurant.mutate({
+                                      restaurantId: restaurant.id,
+                                      reason: issues.length
+                                        ? `Audit issues: ${issues.join(", ")}`
+                                        : "Manual public data quarantine.",
+                                    })
+                                  }
+                                  disabled={
+                                    quarantineRestaurant.isPending ||
+                                    !restaurant.isActive
+                                  }
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Quarantine
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Users Tab */}

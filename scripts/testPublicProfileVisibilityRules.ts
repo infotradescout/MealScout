@@ -56,6 +56,18 @@ const run = async () => {
   );
   assert.equal(isPublicBusinessVisible(warningOnlyProfile), true);
 
+  const photoOnlyProfile = {
+    ...warningOnlyProfile,
+    googlePhotos: JSON.stringify([{ name: "places/test/photos/abc123" }]),
+  };
+  const photoOnlyChecks = getPublicBusinessVisibilityChecks(photoOnlyProfile);
+  assert.deepEqual(photoOnlyChecks.blockers, []);
+  assert.equal(
+    photoOnlyChecks.warnings.includes("missing_description_or_photo"),
+    false,
+  );
+  assert.equal(isPublicBusinessVisible(photoOnlyProfile), true);
+
   const testDataProfile = {
     name: "Demo Restaurant 123",
     address: "999 Test Street",
@@ -89,6 +101,18 @@ const run = async () => {
     true,
   );
   assert.equal(isPublicBusinessVisible(querySeedProfile), false);
+
+  const quarantinedProfile = {
+    ...completeProfile,
+    profileSource: "admin_quarantine",
+  };
+  const quarantinedChecks =
+    getPublicBusinessVisibilityChecks(quarantinedProfile);
+  assert.equal(
+    quarantinedChecks.blockers.includes("non_public_profile_source"),
+    true,
+  );
+  assert.equal(isPublicBusinessVisible(quarantinedProfile), false);
 
   const closedGoogleProfile = {
     ...completeProfile,

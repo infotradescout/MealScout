@@ -11,6 +11,10 @@ import { emailService, isEmailConfigured } from "../../emailService";
 import { sendAdminDailyDigest } from "../../services/adminDailyDigest";
 import { sendOwnerDiscoverabilityAlerts } from "../../services/ownerDiscoverabilityAlerts";
 import {
+  getPublicBusinessVisibilityChecks,
+  isPublicBusinessVisible,
+} from "../../utils/publicBusinessVisibility";
+import {
   eventBookings,
   events,
   eventSeries,
@@ -26,6 +30,55 @@ import {
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+
+const parseAdminAuditPhotos = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const hasAdminAuditPhoto = (restaurant: any): boolean => {
+  const direct = [
+    restaurant?.logoUrl,
+    restaurant?.coverImageUrl,
+    restaurant?.facebookCoverUrl,
+  ].some((value) => String(value || "").trim().length >= 8);
+  if (direct) return true;
+
+  return [restaurant?.googlePhotos, restaurant?.facebookPhotos].some((value) =>
+    parseAdminAuditPhotos(value).some((photo) =>
+      String(
+        photo?.url ||
+          photo?.imageUrl ||
+          photo?.photoUrl ||
+          photo?.src ||
+          photo?.name ||
+          photo?.photoName ||
+          photo?.photoReference ||
+          "",
+      ).trim(),
+    ),
+  );
+};
+
+const labelPublicDataIssue = (issue: string) => {
+  const labels: Record<string, string> = {
+    missing_name: "Missing name",
+    missing_location: "Missing location",
+    missing_category: "Missing category",
+    flagged_test_data: "Looks like test data",
+    non_public_profile_source: "Non-public source",
+    non_public_owner_email: "Demo owner email",
+    closed_permanently: "Closed permanently",
+    missing_description_or_photo: "Missing description/photo",
+  };
+  return labels[issue] || issue.replace(/_/g, " ");
+};
 
 export function registerAdminCoreOpsRoutes(app: Express) {
   app.get(
@@ -292,6 +345,252 @@ export function registerAdminCoreOpsRoutes(app: Express) {
       } catch (error) {
         console.error("Error fetching payment health:", error);
         res.status(500).json({ message: "Failed to fetch payment health" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/public-data-audit",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const limit = Math.max(
+          25,
+          Math.min(
+            500,
+            Number.parseInt(String(req.query.limit || "150"), 10) || 150,
+          ),
+        );
+        const rows = await db
+          .select({
+            id: restaurants.id,
+            ownerId: restaurants.ownerId,
+            name: restaurants.name,
+            cuisineType: restaurants.cuisineType,
+            address: restaurants.address,
+            city: restaurants.city,
+            state: restaurants.state,
+            phone: restaurants.phone,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
+            isActive: restaurants.isActive,
+            isVerified: restaurants.isVerified,
+            description: restaurants.description,
+            websiteUrl: restaurants.websiteUrl,
+            logoUrl: restaurants.logoUrl,
+            coverImageUrl: restaurants.coverImageUrl,
+            facebookCoverUrl: restaurants.facebookCoverUrl,
+            googlePhotos: restaurants.googlePhotos,
+            facebookPhotos: restaurants.facebookPhotos,
+            googleBusinessStatus: restaurants.googleBusinessStatus,
+            profileSource: restaurants.profileSource,
+            createdAt: restaurants.createdAt,
+            updatedAt: restaurants.updatedAt,
+            ownerEmail: users.email,
+            ownerUserType: users.userType,
+            ownerDisabled: users.isDisabled,
+          })
+          .from(restaurants)
+          .leftJoin(users, eq(restaurants.ownerId, users.id))
+          .orderBy(desc(restaurants.updatedAt))
+          .limit(5000);
+
+        const audited = rows.map((restaurant: any) => {
+          const checks = getPublicBusinessVisibilityChecks(restaurant);
+          const hasPhoto = hasAdminAuditPhoto(restaurant);
+          const publicVisible =
+            Boolean(restaurant.isActive) && isPublicBusinessVisible(restaurant);
+          const profileSource = String(restaurant.profileSource || "").trim();
+          const isQuarantined = profileSource === "admin_quarantine";
+          const ownerEmail = String(restaurant.ownerEmail || "").trim();
+          const issueLabels = [
+            ...checks.blockers.map(labelPublicDataIssue),
+            ...checks.warnings.map(labelPublicDataIssue),
+          ];
+
+          if (!restaurant.isActive) issueLabels.push("Inactive");
+          if (!restaurant.isVerified) issueLabels.push("Unverified");
+          if (!hasPhoto) issueLabels.push("Missing photo");
+          if (!ownerEmail) issueLabels.push("Missing owner email");
+          if (restaurant.ownerDisabled) issueLabels.push("Owner disabled");
+          if (isQuarantined) issueLabels.push("Quarantined");
+
+          const uniqueIssues = Array.from(new Set(issueLabels));
+          const priority =
+            isQuarantined
+              ? 5
+              : restaurant.isActive && checks.blockers.length > 0
+                ? 1
+                : restaurant.isActive && (!hasPhoto || !ownerEmail)
+                  ? 2
+                  : restaurant.isActive && !restaurant.isVerified
+                    ? 3
+                    : restaurant.isActive
+                      ? 6
+                      : 8;
+
+          return {
+            ...restaurant,
+            publicVisible,
+            hasPhoto,
+            blockers: checks.blockers,
+            warnings: checks.warnings,
+            issueLabels: uniqueIssues,
+            issueCount: uniqueIssues.length,
+            isQuarantined,
+            priority,
+            recommendedAction:
+              restaurant.isActive && checks.blockers.length > 0
+                ? "quarantine_or_fix"
+                : restaurant.isActive && (!hasPhoto || !ownerEmail)
+                  ? "fix_profile"
+                  : isQuarantined
+                    ? "review_restore"
+                    : "monitor",
+          };
+        });
+
+        const summary = {
+          total: audited.length,
+          active: audited.filter((row: any) => row.isActive).length,
+          publicVisible: audited.filter((row: any) => row.publicVisible).length,
+          blockedActive: audited.filter(
+            (row: any) => row.isActive && row.blockers.length > 0,
+          ).length,
+          needsPhoto: audited.filter(
+            (row: any) => row.isActive && !row.hasPhoto,
+          ).length,
+          missingOwner: audited.filter(
+            (row: any) =>
+              row.isActive && !String(row.ownerEmail || "").trim(),
+          ).length,
+          missingLocation: audited.filter((row: any) =>
+            row.blockers.includes("missing_location"),
+          ).length,
+          missingCategory: audited.filter((row: any) =>
+            row.blockers.includes("missing_category"),
+          ).length,
+          quarantined: audited.filter((row: any) => row.isQuarantined).length,
+          closedPermanently: audited.filter((row: any) =>
+            row.blockers.includes("closed_permanently"),
+          ).length,
+          generatedAt: new Date().toISOString(),
+        };
+
+        audited.sort((a: any, b: any) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          if (b.issueCount !== a.issueCount) return b.issueCount - a.issueCount;
+          return (
+            new Date(b.updatedAt || b.createdAt || 0).getTime() -
+            new Date(a.updatedAt || a.createdAt || 0).getTime()
+          );
+        });
+
+        res.json({
+          summary,
+          rows: audited.slice(0, limit),
+        });
+      } catch (error) {
+        console.error("Error fetching public data audit:", error);
+        res.status(500).json({ message: "Failed to fetch public data audit" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/restaurants/:id/quarantine",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const reason =
+          String(req.body?.reason || "").trim() ||
+          "Quarantined from public discovery by admin data-quality review.";
+        const [existing] = await db
+          .select({ id: restaurants.id, name: restaurants.name })
+          .from(restaurants)
+          .where(eq(restaurants.id, req.params.id))
+          .limit(1);
+
+        if (!existing) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const [updated] = await db
+          .update(restaurants)
+          .set({
+            isActive: false,
+            profileSource: "admin_quarantine",
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, req.params.id))
+          .returning();
+
+        console.warn("[admin/public-data] quarantined restaurant", {
+          adminId: req.user?.id || null,
+          restaurantId: req.params.id,
+          name: existing.name,
+          reason,
+        });
+
+        res.json({
+          message: "Restaurant quarantined from public discovery",
+          restaurant: updated,
+        });
+      } catch (error) {
+        console.error("Error quarantining restaurant:", error);
+        res.status(500).json({ message: "Failed to quarantine restaurant" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/restaurants/:id/restore-public",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const [existing] = await db
+          .select({
+            id: restaurants.id,
+            name: restaurants.name,
+            profileSource: restaurants.profileSource,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.id, req.params.id))
+          .limit(1);
+
+        if (!existing) {
+          return res.status(404).json({ message: "Restaurant not found" });
+        }
+
+        const [updated] = await db
+          .update(restaurants)
+          .set({
+            isActive: true,
+            profileSource:
+              existing.profileSource === "admin_quarantine"
+                ? "manual"
+                : existing.profileSource,
+            updatedAt: new Date(),
+          })
+          .where(eq(restaurants.id, req.params.id))
+          .returning();
+
+        console.info("[admin/public-data] restored restaurant", {
+          adminId: req.user?.id || null,
+          restaurantId: req.params.id,
+          name: existing.name,
+        });
+
+        res.json({
+          message: "Restaurant restored for public eligibility review",
+          restaurant: updated,
+        });
+      } catch (error) {
+        console.error("Error restoring restaurant:", error);
+        res.status(500).json({ message: "Failed to restore restaurant" });
       }
     },
   );
