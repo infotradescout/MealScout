@@ -182,10 +182,10 @@ const cuisineOptions = [
 ];
 
 const stageOrder: Array<{ id: Stage; label: string }> = [
-  { id: "account", label: "Owner" },
+  { id: "account", label: "Account" },
   { id: "truck", label: "Truck" },
-  { id: "basics", label: "Basics" },
-  { id: "finish", label: "Done" },
+  { id: "basics", label: "Details" },
+  { id: "finish", label: "Finish" },
 ];
 
 const isTruckRestaurant = (restaurant: OwnedRestaurant) =>
@@ -926,82 +926,20 @@ export default function TruckOnboardingPage() {
     }
   };
 
-  const renderStepMarker = (item: { id: Stage; label: string }, index: number) => {
-    const isComplete = index < currentStepIndex;
-    const isActive = item.id === stage;
-    return (
-      <div
-        key={item.id}
-        className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold ${
-          isActive
-            ? "bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]"
-            : isComplete
-              ? "text-[color:var(--status-success)]"
-              : "text-[color:var(--text-muted)]"
-        }`}
-      >
-        {isComplete ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-        ) : (
-          <Circle className="h-4 w-4 shrink-0" />
-        )}
-        <span className="truncate">{item.label}</span>
-      </div>
-    );
-  };
-
   const renderAccountStage = () => (
-    <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
-      <section className="rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 shadow-clean">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
-            <Truck className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-[color:var(--accent-text)]">
-              Food truck owner setup
-            </p>
-            <h2 className="mt-1 text-xl font-black">
-              Create the owner account first.
-            </h2>
-          </div>
-        </div>
-
-        <p className="mt-4 text-sm font-semibold leading-relaxed text-[color:var(--text-secondary)]">
-          This path is for owners claiming or creating a food truck profile.
-          After access is confirmed, you can add the truck, menu, schedule,
-          booking, and live-location tools.
-        </p>
-
-        <div className="mt-5 grid gap-3">
-          {[
-            ["No customer account detour", "The next step is truck setup."],
-            ["No credit card to start", "Create the profile before any paid tools."],
-            ["Built for owner trust", "Phone and email protect the truck claim."],
-          ].map(([title, body]) => (
-            <div
-              key={title}
-              className="flex gap-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-3"
-            >
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--status-success)]" />
-              <div>
-                <div className="text-sm font-black">{title}</div>
-                <div className="text-xs font-semibold leading-relaxed text-[color:var(--text-secondary)]">
-                  {body}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
+    <div className="mx-auto w-full max-w-[36rem]">
       <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
-        <CardContent className="p-5">
-          <div className="mb-4">
-            <h2 className="text-xl font-black">Owner access</h2>
-            <p className="mt-1 text-sm font-semibold text-[color:var(--text-secondary)]">
-              Sign in or create the owner account attached to the truck.
-            </p>
+        <CardContent className="p-4 sm:p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
+              <Truck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-black">Owner access</h2>
+              <p className="text-sm font-semibold text-[color:var(--text-secondary)]">
+                Create an account or sign in.
+              </p>
+            </div>
           </div>
 
           <div className="mb-4 grid grid-cols-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-1">
@@ -1150,19 +1088,36 @@ export default function TruckOnboardingPage() {
   );
 
   const renderTruckStage = () => (
-    <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean">
-        <CardContent className="p-5">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-md bg-[color:var(--accent-text)]/12 text-[color:var(--accent-text)]">
-              <Truck className="h-5 w-5" />
-            </span>
+    <div className="mx-auto w-full max-w-[42rem]">
+      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
+        <CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-lg font-black">Find or create the truck</h2>
+              <h2 className="text-lg font-black">Find your truck</h2>
               <p className="text-sm text-[color:var(--text-secondary)]">
-                Claim an imported listing when it exists, or create a fresh one.
+                Search first. If it is not listed, create a new profile.
               </p>
             </div>
+            {existingTruck && !addingAnother ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAddingAnother(true)}
+              >
+                Add another
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={startManualCreate}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New truck
+              </Button>
+            )}
           </div>
 
           {existingTruck && !addingAnother ? (
@@ -1171,27 +1126,9 @@ export default function TruckOnboardingPage() {
               <div className="text-[color:var(--text-secondary)]">
                 Existing truck profile found on this account.
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => setAddingAnother(true)}
-              >
-                Add another truck
-              </Button>
             </div>
-          ) : (
-            <Button type="button" variant="outline" onClick={startManualCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create a new truck instead
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+          ) : null}
 
-      <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-card)] shadow-clean-lg">
-        <CardContent className="space-y-4 p-5">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
@@ -1201,7 +1138,7 @@ export default function TruckOnboardingPage() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter") void searchClaims();
                 }}
-                placeholder="Truck name, license ID, city, or state"
+                placeholder="Truck name, city, state, or license ID"
                 className="pl-10"
               />
             </div>
@@ -1457,7 +1394,7 @@ export default function TruckOnboardingPage() {
         done: true,
         href: "/truck-onboarding",
         cta: "Create profile",
-        why: "Attach the truck to this owner account.",
+        why: "Truck is attached to this owner account.",
       },
       {
         id: "add-menu",
@@ -1465,7 +1402,7 @@ export default function TruckOnboardingPage() {
         done: false,
         href: menuHref,
         cta: "Add item",
-        why: "Customers need at least one menu item before the profile is useful.",
+        why: "Add one item so customers can see what you serve.",
       },
       {
         id: "go-live",
@@ -1473,7 +1410,7 @@ export default function TruckOnboardingPage() {
         done: false,
         href: dashboardHref,
         cta: "Check status",
-        why: "Verified, active trucks with a menu can show up for customers.",
+        why: "Turn on visibility when you are ready.",
       },
     ];
     const nextStep = onboardingStatus?.nextStep;
@@ -1796,23 +1733,21 @@ export default function TruckOnboardingPage() {
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
-        <div className="mb-4 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-black leading-tight sm:text-3xl">
+      <div className="mx-auto w-full max-w-6xl px-4 py-3 sm:px-6">
+        <div className="mb-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 shadow-clean">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-black leading-tight sm:text-xl">
                 List your food truck
               </h1>
-            </div>
-            <div className="min-w-[220px]">
-              <Progress value={progress} className="h-2" />
-              <div className="mt-2 text-right text-xs font-semibold text-[color:var(--text-secondary)]">
-                Step {currentStepIndex + 1} of {stageOrder.length}
+              <div className="text-xs font-semibold text-[color:var(--text-secondary)]">
+                {stageOrder[currentStepIndex]?.label || "Setup"} - Step{" "}
+                {currentStepIndex + 1} of {stageOrder.length}
               </div>
             </div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {stageOrder.map(renderStepMarker)}
+            <div className="w-24 shrink-0 sm:w-40">
+              <Progress value={progress} className="h-1.5" />
+            </div>
           </div>
         </div>
 
