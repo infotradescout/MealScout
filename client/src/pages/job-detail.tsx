@@ -198,6 +198,7 @@ export default function JobDetailPage() {
     job?.businessProfileUrl || job?.restaurantProfileUrl || "/jobs";
   const heroImageUrl =
     job?.restaurantCoverImageUrl || job?.restaurantLogoUrl || "";
+  const logoImageUrl = job?.restaurantLogoUrl || "";
   const businessTypeLabel =
     labelize(job?.restaurantBusinessType || job?.businessEntity) ||
     "Local business";
@@ -226,6 +227,7 @@ export default function JobDetailPage() {
       datePosted: isoOrUndefined(job.createdAt || job.updatedAt),
       validThrough: isoOrUndefined(job.expiresAt),
       directApply: true,
+      image: absoluteUrl(heroImageUrl || logoImageUrl),
       hiringOrganization: {
         "@type": "Organization",
         name: displayBusinessName,
@@ -251,7 +253,14 @@ export default function JobDetailPage() {
       baseSalary: buildBaseSalary(job),
       url: canonicalUrl,
     };
-  }, [description, displayBusinessName, displayBusinessProfileUrl, job]);
+  }, [
+    description,
+    displayBusinessName,
+    displayBusinessProfileUrl,
+    heroImageUrl,
+    job,
+    logoImageUrl,
+  ]);
 
   const applyMutation = useMutation({
     mutationFn: async () => {
@@ -361,16 +370,75 @@ export default function JobDetailPage() {
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/20 to-transparent" />
-                <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-amber-500 text-black hover:bg-amber-500">
+                        Now hiring
+                      </Badge>
+                      <Badge className="bg-white text-black hover:bg-white">
+                        {businessTypeLabel}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex min-w-0 items-center gap-3">
+                      {logoImageUrl ? (
+                        <img
+                          src={logoImageUrl}
+                          alt={`${displayBusinessName} logo`}
+                          className="h-14 w-14 shrink-0 rounded-xl border border-white/30 bg-white object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-xl font-black text-black">
+                          {displayBusinessName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate text-xl font-black text-white">
+                          {displayBusinessName}
+                        </div>
+                        <div className="truncate text-sm font-semibold text-white/80">
+                          {[job.city, job.state].filter(Boolean).join(", ") ||
+                            job.locationLabel ||
+                            "Local business"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="relative overflow-hidden bg-[radial-gradient(circle_at_15%_20%,rgba(245,158,11,0.3),transparent_32%),linear-gradient(135deg,rgba(245,158,11,0.16),rgba(15,23,42,0.22))] p-5 sm:p-7">
+                <div className="flex flex-wrap gap-2">
                   <Badge className="bg-amber-500 text-black hover:bg-amber-500">
                     Now hiring
                   </Badge>
-                  <Badge className="bg-white text-black hover:bg-white">
-                    {businessTypeLabel}
-                  </Badge>
+                  <Badge variant="secondary">{businessTypeLabel}</Badge>
+                </div>
+                <div className="mt-8 flex min-w-0 items-center gap-4">
+                  {logoImageUrl ? (
+                    <img
+                      src={logoImageUrl}
+                      alt={`${displayBusinessName} logo`}
+                      className="h-20 w-20 shrink-0 rounded-2xl border border-[color:var(--border-subtle)] bg-white object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-amber-500 text-2xl font-black text-black">
+                      {displayBusinessName.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-2xl font-black">
+                      {displayBusinessName}
+                    </div>
+                    <div className="mt-1 truncate text-sm font-semibold text-[color:var(--text-secondary)]">
+                      {[job.city, job.state].filter(Boolean).join(", ") ||
+                        job.locationLabel ||
+                        "Local business"}
+                    </div>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            )}
             <CardContent className="p-5 sm:p-7">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-amber-500 text-black hover:bg-amber-500">

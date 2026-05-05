@@ -203,6 +203,7 @@ const publicJobSelect = {
   updatedAt: jobPostings.updatedAt,
   restaurantName: restaurants.name,
   restaurantBusinessType: restaurants.businessType,
+  restaurantIsFoodTruck: restaurants.isFoodTruck,
   restaurantLogoUrl: restaurants.logoUrl,
   restaurantCoverImageUrl: restaurants.coverImageUrl,
   restaurantAddress: restaurants.address,
@@ -233,17 +234,35 @@ const decorateJob = (row: any) => {
     row.id;
   const businessSlug = toSlug(businessName) || businessId || "business";
   const restaurantBusinessType = String(row.restaurantBusinessType || "").toLowerCase();
+  const businessEntity = isHostJob
+    ? "host"
+    : restaurantBusinessType === "private_chef"
+      ? "private_chef"
+      : restaurantBusinessType === "caterer"
+        ? "caterer"
+        : restaurantBusinessType === "food_truck" || row.restaurantIsFoodTruck
+          ? "food_truck"
+          : restaurantBusinessType || "restaurant";
   const businessProfileUrl = isHostJob
     ? `/p/host/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`
     : restaurantBusinessType === "private_chef"
       ? `/chef/${encodeURIComponent(`${businessSlug}--${businessId}`)}`
-      : `/restaurant/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`;
+      : businessEntity === "food_truck"
+        ? `/truck/${encodeURIComponent(`${businessSlug}--${businessId}`)}`
+        : `/restaurant/${encodeURIComponent(businessId)}/${encodeURIComponent(businessSlug)}`;
+  const city = row.city || row.restaurantCity || row.hostCity || null;
+  const state = row.state || row.restaurantState || row.hostState || null;
+  const locationLabel =
+    row.locationLabel || [city, state].filter(Boolean).join(", ") || null;
   return {
     ...row,
-    businessEntity: isHostJob ? "host" : "restaurant",
+    businessEntity,
     businessId,
     businessName,
     businessProfileUrl,
+    city,
+    state,
+    locationLabel,
     restaurantName: row.restaurantName || businessName,
     restaurantProfileUrl: businessProfileUrl,
     hostProfileUrl: isHostJob ? businessProfileUrl : null,
