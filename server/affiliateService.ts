@@ -17,6 +17,11 @@ import { getDefaultAffiliatePercent } from '@shared/affiliatePolicy';
 import { eq, and, sql, asc } from 'drizzle-orm';
 
 const AFFILIATE_CODE_LENGTH = 8;
+const PUBLIC_BASE_URL =
+  (process.env.PUBLIC_BASE_URL || process.env.APP_URL || "https://mealscout.us").replace(
+    /\/+$/,
+    "",
+  );
 
 /**
  * Generate random 8-character affiliate code
@@ -29,6 +34,19 @@ function generateAffiliateCode(): string {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+function buildCleanAffiliateUrl(sourceUrl: string, code: string): string {
+  const safeCode = encodeURIComponent(code);
+  try {
+    const parsed = new URL(sourceUrl, PUBLIC_BASE_URL);
+    parsed.searchParams.delete("ref");
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return `${parsed.origin}/ref/${safeCode}${path === "/" ? "" : path}`;
+  } catch {
+    const path = sourceUrl.startsWith("/") ? sourceUrl : `/${sourceUrl}`;
+    return `${PUBLIC_BASE_URL}/ref/${safeCode}${path === "/" ? "" : path}`;
+  }
 }
 
 /**
@@ -59,9 +77,7 @@ export async function createAffiliateLink(
     throw new Error('Failed to generate unique affiliate code');
   }
 
-  // Build full URL with ref parameter
-  const separator = sourceUrl.includes('?') ? '&' : '?';
-  const fullUrl = `${sourceUrl}${separator}ref=${code}`;
+  const fullUrl = buildCleanAffiliateUrl(sourceUrl, code);
 
   const link = await db
     .insert(affiliateLinks)

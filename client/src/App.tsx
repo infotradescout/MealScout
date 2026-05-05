@@ -5,10 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { ToastAction } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import AdminQuickHeader from "@/components/admin-quick-header";
 import Navigation from "@/components/navigation";
-import { apiUrl } from "@/lib/api";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
 import { useToast } from "@/hooks/use-toast";
 import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
@@ -323,7 +322,6 @@ function Router() {
   const shownAnnouncementRef = useRef<string>("");
   const shownOwnerProfilePromptRef = useRef<string>("");
   const [location, setLocation] = useLocation();
-  const [affiliateTag, setAffiliateTag] = useState<string>("");
   const isLikelyPublicRoute = isPublicPath(location);
   const shouldUseGuestRoutes =
     !isAuthenticated || (authState === "loading" && isLikelyPublicRoute);
@@ -331,37 +329,6 @@ function Router() {
   useEffect(() => {
     trackMetaPageView();
   }, [location]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setAffiliateTag("");
-      return;
-    }
-    let cancelled = false;
-    fetch(apiUrl("/api/affiliate/tag"), { credentials: "include" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        if (data?.tag) setAffiliateTag(data.tag);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!affiliateTag) return;
-    if (typeof window === "undefined") return;
-
-    const url = new URL(window.location.href);
-    if (url.pathname.startsWith("/ref/")) return;
-    if (url.searchParams.has("ref")) return;
-
-    url.searchParams.set("ref", affiliateTag);
-    window.history.replaceState({}, "", url.toString());
-  }, [affiliateTag, location]);
 
   useEffect(() => {
     const message = String((user as any)?.loginAnnouncement || "").trim();

@@ -14,6 +14,7 @@ import { db } from "./db";
 import { users, telemetryEvents, userAddresses } from "@shared/schema";
 import { and, eq, gte, lte, sql, isNotNull } from "drizzle-orm";
 import { emailService } from "./emailService";
+import { appendReferralParam } from "./referralService";
 
 type NotifPrefs = {
   notifications?: {
@@ -145,8 +146,9 @@ export class OnboardingDripService {
     affiliateTag: string | null,
   ): Promise<boolean> {
     const name = firstName || "Food Explorer";
-    const refParam = affiliateTag ? `?ref=${affiliateTag}` : "";
-    const shareUrl = `https://www.mealscout.us${refParam}`;
+    const shareUrl = affiliateTag
+      ? appendReferralParam("https://www.mealscout.us/", affiliateTag)
+      : "https://www.mealscout.us";
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Share MealScout</title></head>

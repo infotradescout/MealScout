@@ -23,7 +23,7 @@ import { resolveAffiliateUserId } from "./affiliateTagService";
  * PHASE 1: Record a click on an affiliate link
  *
  * Called when:
- * - User clicks shared link with ?ref=<affiliateTag>
+ * - User clicks a shared /ref/<affiliateTag> link
  * - Link leads to restaurant signup page
  *
  * Returns referral ID (stored in cookie or session)
@@ -145,11 +145,13 @@ export async function attachReferralToSignup(
 /**
  * PHASE 1: Parse referral ID from URL
  *
- * Extracts ?ref=<affiliateTag> from any shared URL
+ * Extracts a referral tag from clean /ref/<tag> links, with legacy query support.
  */
 export function extractReferralIdFromUrl(url: string): string | null {
   try {
     const urlObj = new URL(url, "http://localhost"); // Use base URL if relative
+    const pathMatch = /^\/ref\/([^/?#]+)/.exec(urlObj.pathname);
+    if (pathMatch?.[1]) return decodeURIComponent(pathMatch[1]);
     return urlObj.searchParams.get("ref");
   } catch {
     return null;
@@ -157,7 +159,7 @@ export function extractReferralIdFromUrl(url: string): string | null {
 }
 
 /**
- * PHASE 1: Append referral parameter to any URL
+ * PHASE 1: Build a clean referral URL for any internal URL
  *
  * Used by share middleware (Phase 7)
  */
@@ -165,10 +167,16 @@ export function appendReferralParam(url: string, affiliateTag: string): string {
   if (!affiliateTag) return url;
 
   try {
-    const separator = url.includes("?") ? "&" : "?";
-    return `${url}${separator}ref=${affiliateTag}`;
+    const parsed = new URL(url, "https://mealscout.us");
+    parsed.searchParams.delete("ref");
+    const targetPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    const cleanTarget = targetPath === "/" ? "" : targetPath;
+    const prefix = url.startsWith("http")
+      ? parsed.origin
+      : "";
+    return `${prefix}/ref/${encodeURIComponent(affiliateTag)}${cleanTarget}`;
   } catch (error) {
-    console.error("[referralService] Error appending referral param:", error);
+    console.error("[referralService] Error building clean referral URL:", error);
     return url;
   }
 }

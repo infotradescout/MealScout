@@ -666,7 +666,8 @@ export default function CityLanding() {
                 size="sm"
                 className="food-gradient-primary border-0"
                 onClick={() => {
-                  const url = `${window.location.origin}/food-trucks/${data.city.slug}?ref=${affiliateTagData.tag}`;
+                  const targetPath = `/food-trucks/${encodeURIComponent(data.city.slug)}`;
+                  const url = `${window.location.origin}/ref/${encodeURIComponent(affiliateTagData.tag)}${targetPath}`;
                   if (navigator.share) {
                     navigator.share({
                       title: `Food Trucks in ${cityLabel}`,

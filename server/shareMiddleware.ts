@@ -1,7 +1,7 @@
 /**
  * PHASE 7: Share Anything = Affiliate Link Middleware
  * 
- * Global middleware that appends ?ref=<userId> to any shared URL
+ * Global middleware that builds clean /ref/<tag> shared URLs
  * 
  * Catches:
  * - Share links

@@ -629,10 +629,10 @@ export default function DealDetail() {
                     const dealSlug = encodeURIComponent(
                       `${(deal as Deal)?.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || (deal as Deal)?.id}--${(deal as Deal)?.id}`,
                     );
-                    const ref = affiliateTagData?.tag
-                      ? `?ref=${affiliateTagData.tag}`
-                      : "";
-                    const url = `${window.location.origin}/deal/${dealSlug}${ref}`;
+                    const targetPath = `/deal/${dealSlug}`;
+                    const url = affiliateTagData?.tag
+                      ? `${window.location.origin}/ref/${encodeURIComponent(affiliateTagData.tag)}${targetPath}`
+                      : `${window.location.origin}${targetPath}`;
                     if (navigator.share) {
                       navigator.share({ title: (deal as Deal)?.title, url });
                     } else {

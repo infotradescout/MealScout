@@ -1249,7 +1249,7 @@ app.use((req, res, next) => {
     actionRoutes
   );
 
-  // Capture affiliate `?ref=` on *all* requests before the SPA/static handlers run.
+  // Capture legacy affiliate query links before the SPA/static handlers run.
   // This is required so referral attribution works even when the first page hit is the frontend.
   app.use(async (req: any, res: any, next: any) => {
     const ref = typeof req.query?.ref === "string" ? req.query.ref.trim() : "";
@@ -1302,7 +1302,7 @@ app.use((req, res, next) => {
   });
 
   // Clean self-promo profile links should still credit the profile owner.
-  // Explicit ?ref= links and existing referral cookies always win.
+  // Explicit legacy query links and existing referral cookies always win.
   app.use(async (req: any, res: any, next: any) => {
     try {
       if (!["GET", "HEAD"].includes(req.method)) return next();

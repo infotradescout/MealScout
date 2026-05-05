@@ -324,7 +324,8 @@ export default function DealsCityPage() {
                 size="sm"
                 className="food-gradient-primary border-0"
                 onClick={() => {
-                  const url = `${window.location.origin}/deals/${citySlug}?ref=${affiliateTagData.tag}`;
+                  const targetPath = `/deals/${encodeURIComponent(citySlug)}`;
+                  const url = `${window.location.origin}/ref/${encodeURIComponent(affiliateTagData.tag)}${targetPath}`;
                   if (navigator.share) {
                     navigator.share({
                       title: `Food Deals in ${cityLabel} | MealScout`,
