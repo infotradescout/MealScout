@@ -303,6 +303,35 @@ export function registerInsuranceVerificationRoutes(app: Express) {
     async (req: any, res) => {
       try {
         const parsed = reviewSchema.parse(req.body || {});
+        const [existing] = await db
+          .select()
+          .from(businessInsuranceVerifications)
+          .where(eq(businessInsuranceVerifications.id, req.params.id))
+          .limit(1);
+        if (!existing) {
+          return res.status(404).json({ message: "Insurance verification not found" });
+        }
+        if (!Array.isArray(existing.documents) || existing.documents.length === 0) {
+          return res.status(400).json({
+            message: "Uploaded proof is required before business verification can be approved",
+          });
+        }
+        const expiresAt = existing.expiresAt ? new Date(existing.expiresAt) : null;
+        if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+          return res.status(400).json({
+            message: "A future insurance expiration date is required before approval",
+          });
+        }
+        if (
+          !existing.attestedCommercialCoverage ||
+          !existing.attestedJurisdictionCompliance
+        ) {
+          return res.status(400).json({
+            message:
+              "Commercial coverage and jurisdiction compliance attestations are required before approval",
+          });
+        }
+
         const [record] = await db
           .update(businessInsuranceVerifications)
           .set({
@@ -314,7 +343,36 @@ export function registerInsuranceVerificationRoutes(app: Express) {
           })
           .where(eq(businessInsuranceVerifications.id, req.params.id))
           .returning();
-        if (!record) return res.status(404).json({ message: "Insurance verification not found" });
+        if (!record) {
+          return res.status(404).json({ message: "Insurance verification not found" });
+        }
+
+        if (record.entityType === "host") {
+          await db
+            .update(hosts)
+            .set({ isVerified: true, updatedAt: new Date() })
+            .where(eq(hosts.id, record.entityId));
+        } else {
+          await db
+            .update(restaurants)
+            .set({ isVerified: true, isActive: true, updatedAt: new Date() })
+            .where(eq(restaurants.id, record.entityId));
+        }
+
+        recordMealScoutCreditAction({
+          userId: record.ownerId,
+          action: "insurance_approved",
+          sourceId: record.id,
+          entityType: record.entityType,
+          entityId: record.entityId,
+          metadata: {
+            reviewedBy: req.user.id,
+            expiresAt: record.expiresAt,
+          },
+        }).catch((creditError) => {
+          console.error("[credits] failed to record insurance_approved:", creditError);
+        });
+
         res.json(record);
       } catch (error: any) {
         res.status(400).json({ message: error?.message || "Failed to approve insurance verification" });

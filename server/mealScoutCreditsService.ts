@@ -82,6 +82,15 @@ const CREDIT_ACTION_RULES = {
     tierMultiplierEligible: false,
     enabled: true,
   }),
+  insurance_approved: createCreditActionRule({
+    action: "insurance_approved",
+    label: "Insurance approved",
+    baseCreditAmountCents: 200,
+    category: "business",
+    description: "A business has commercial insurance approved by MealScout review.",
+    tierMultiplierEligible: false,
+    enabled: true,
+  }),
   job_post_created: createCreditActionRule({
     action: "job_post_created",
     label: "Hiring post created",

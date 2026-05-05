@@ -443,7 +443,6 @@ function useOwnerAction() {
         "resend-verification": "Verification email sent",
         "send-menu-nudge": "Menu nudge sent",
         "send-help-offer": "Help offer sent",
-        "verify-restaurants": `Made ${data?.verified ?? 0} restaurant(s) public`,
       };
       toast({
         title: labels[vars.action] || "Done",
@@ -644,10 +643,11 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
               <Button
                 size="sm"
                 variant="outline"
-                disabled={busy}
-                onClick={() => run("verify-restaurants")}
+                disabled
+                title="Business verification now requires uploaded commercial insurance or acceptable proof."
               >
-                Make public
+                <FileWarning className="w-3 h-3 mr-1" />
+                Needs insurance proof
               </Button>
             )}
           {owner.email && (

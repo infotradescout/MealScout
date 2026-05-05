@@ -3050,7 +3050,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
   );
 
   // POST /api/admin/launch-week/owners/:userId/action
-  // Body: { action: "resend-verification" | "send-profile-recovery" | "send-menu-nudge" | "send-help-offer" | "verify-restaurants" }
+  // Body: { action: "resend-verification" | "send-profile-recovery" | "send-menu-nudge" | "send-help-offer" }
   // One-click triage actions for owners flagged on the Launch Week dashboard.
   app.post(
     "/api/admin/launch-week/owners/:userId/action",
@@ -3065,7 +3065,6 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           "send-profile-recovery",
           "send-menu-nudge",
           "send-help-offer",
-          "verify-restaurants",
         ]);
         if (!validActions.has(action)) {
           return res.status(400).json({ message: "Invalid action" });
@@ -3206,18 +3205,6 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             `[admin/launch-week] help-offer by=${adminId} to=${user.email} ok=${ok}`,
           );
           return res.json({ ok });
-        }
-
-        if (action === "verify-restaurants") {
-          const result = await db
-            .update(restaurants)
-            .set({ isVerified: true, isActive: true })
-            .where(eq(restaurants.ownerId, user.id))
-            .returning({ id: restaurants.id });
-          console.log(
-            `[admin/launch-week] verify-restaurants by=${adminId} owner=${user.id} count=${result.length}`,
-          );
-          return res.json({ ok: true, verified: result.length });
         }
 
         return res.status(400).json({ message: "Unhandled action" });
