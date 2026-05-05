@@ -106,6 +106,7 @@ type RecentSignupsResponse = {
     customers: number;
     foodTrucks: number;
     restaurants: number;
+    caterers?: number;
     privateChefs?: number;
     hosts: number;
     suppliers: number;
@@ -575,6 +576,22 @@ export default function RecentSignupShare() {
                 {data?.summary.restaurants ?? 0}
               </p>
             </div>
+            {(data?.summary.caterers ?? 0) > 0 ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Caterers</p>
+                <p className="text-2xl font-semibold">
+                  {data?.summary.caterers ?? 0}
+                </p>
+              </div>
+            ) : null}
+            {(data?.summary.privateChefs ?? 0) > 0 ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Private Chefs</p>
+                <p className="text-2xl font-semibold">
+                  {data?.summary.privateChefs ?? 0}
+                </p>
+              </div>
+            ) : null}
             <div className="rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">Hosts</p>
               <p className="text-2xl font-semibold">

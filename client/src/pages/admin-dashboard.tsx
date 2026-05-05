@@ -6056,7 +6056,7 @@ export default function AdminDashboard() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to verify user.",
+        description: error.message || "Failed to mark email verified.",
         variant: "destructive",
       });
     },
@@ -9947,7 +9947,7 @@ export default function AdminDashboard() {
                             data-testid={`button-resend-verify-${user.id}`}
                           >
                             <Mail className="w-3 h-3 mr-1" />
-                            {user.emailVerified ? "Verified" : "Resend Verify"}
+                            {user.emailVerified ? "Email Verified" : "Resend Email"}
                           </Button>
                           {isAdminOrSuper && !user.emailVerified && (
                             <Button

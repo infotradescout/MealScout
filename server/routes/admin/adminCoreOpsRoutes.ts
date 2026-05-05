@@ -2713,10 +2713,11 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           generatedAt: new Date().toISOString(),
           summary: {
             total: signups.length,
-            users: recentUserRows.length,
+            users: signups.filter((item) => item.entity === "user").length,
             customers: signups.filter((item) => item.kind === "customer").length,
             foodTrucks: signups.filter((item) => item.kind === "food_truck")
               .length,
+            caterers: signups.filter((item) => item.kind === "caterer").length,
             privateChefs: signups.filter(
               (item) => item.kind === "private_chef",
             ).length,
