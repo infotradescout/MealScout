@@ -66,6 +66,43 @@ import {
 const groupedLocationTypes = getGroupedLocationTypes();
 const EMPTY_ARRAY: never[] = [];
 
+const BUSINESS_PROOF_EMPTY_FORM = {
+  entityKey: "",
+  carrierName: "",
+  policyNumber: "",
+  coverageType: "commercial_general_liability",
+  coverageAmountDollars: "",
+  effectiveDate: "",
+  expiresAt: "",
+  notes: "",
+};
+
+const getInsuranceEntityTypeFromRestaurant = (restaurant: any) => {
+  const businessType = String(restaurant?.businessType || "").toLowerCase();
+  if (restaurant?.isFoodTruck || businessType === "food_truck") {
+    return "food_truck";
+  }
+  if (businessType === "caterer") return "caterer";
+  if (businessType === "private_chef") return "private_chef";
+  return "restaurant";
+};
+
+const getInsuranceEntityLabelFromRestaurant = (restaurant: any) => {
+  const entityType = getInsuranceEntityTypeFromRestaurant(restaurant);
+  if (entityType === "food_truck") return "Food Truck";
+  if (entityType === "caterer") return "Caterer";
+  if (entityType === "private_chef") return "Private Chef";
+  return "Restaurant";
+};
+
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+
 const FOOD_TYPE_OPTIONS = [
   "American",
   "Asian",
@@ -2804,6 +2841,12 @@ export default function AdminDashboard() {
   });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userDetailsOpen, setUserDetailsOpen] = useState(false);
+  const [businessProofDialogOpen, setBusinessProofDialogOpen] =
+    useState(false);
+  const [businessProofForm, setBusinessProofForm] = useState<any>({
+    ...BUSINESS_PROOF_EMPTY_FORM,
+  });
+  const [businessProofFiles, setBusinessProofFiles] = useState<File[]>([]);
   const [userSortKey, setUserSortKey] = useState<"name" | "type" | "created">(
     "type",
   );
@@ -4114,21 +4157,27 @@ export default function AdminDashboard() {
   });
 
   const userContextEnabled =
-    !!adminUser && !!selectedUser?.id && userDetailsOpen;
+    !!adminUser &&
+    !!selectedUser?.id &&
+    (userDetailsOpen || businessProofDialogOpen);
 
   const { data: parkingPasses = EMPTY_ARRAY } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "parking-pass"],
     enabled: userContextEnabled,
   });
 
-  const { data: userHosts = EMPTY_ARRAY } = useQuery<any[]>({
+  const { data: userHosts = EMPTY_ARRAY, isLoading: userHostsLoading } =
+    useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "hosts"],
     enabled: userContextEnabled,
   });
 
-  const { data: userRestaurants = EMPTY_ARRAY } = useQuery<any[]>({
+  const {
+    data: userRestaurants = EMPTY_ARRAY,
+    isLoading: userRestaurantsLoading,
+  } = useQuery<any[]>({
     queryKey: ["/api/admin/users", selectedUser?.id, "restaurants"],
-    enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
+    enabled: userContextEnabled,
   });
 
   const { data: userDeals = EMPTY_ARRAY } = useQuery<any[]>({
@@ -4154,6 +4203,58 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", selectedUser?.id, "addresses"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
+
+  const businessProofEntityOptions = useMemo(() => {
+    const restaurantOptions = Array.isArray(userRestaurants)
+      ? userRestaurants.map((restaurant: any) => {
+          const entityType = getInsuranceEntityTypeFromRestaurant(restaurant);
+          const label = getInsuranceEntityLabelFromRestaurant(restaurant);
+          return {
+            key: `${entityType}:${restaurant.id}`,
+            entityType,
+            entityId: String(restaurant.id || ""),
+            label: `${label}: ${restaurant.name || "Unnamed business"}`,
+            city: restaurant.city || "",
+            state: restaurant.state || "",
+          };
+        })
+      : [];
+    const hostOptions = Array.isArray(userHosts)
+      ? userHosts.map((host: any) => ({
+          key: `host:${host.id}`,
+          entityType: "host",
+          entityId: String(host.id || ""),
+          label: `Host: ${host.businessName || host.name || "Unnamed host"}`,
+          city: host.city || "",
+          state: host.state || "",
+        }))
+      : [];
+    return [...restaurantOptions, ...hostOptions].filter(
+      (option) => option.entityId,
+    );
+  }, [userRestaurants, userHosts]);
+
+  useEffect(() => {
+    if (!businessProofDialogOpen) return;
+    if (businessProofForm.entityKey || businessProofEntityOptions.length === 0) {
+      return;
+    }
+    setBusinessProofForm((prev: any) => ({
+      ...prev,
+      entityKey: businessProofEntityOptions[0]?.key || "",
+    }));
+  }, [
+    businessProofDialogOpen,
+    businessProofEntityOptions,
+    businessProofForm.entityKey,
+  ]);
+
+  const openBusinessProofDialog = (user: any) => {
+    setSelectedUser(user);
+    setBusinessProofForm({ ...BUSINESS_PROOF_EMPTY_FORM });
+    setBusinessProofFiles([]);
+    setBusinessProofDialogOpen(true);
+  };
 
   const sortedUsers = useMemo(() => {
     const typeOrder = [
@@ -5991,6 +6092,96 @@ export default function AdminDashboard() {
         description:
           error.message ||
           "The business must upload insurance or acceptable proof before approval.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const submitBusinessProof = useMutation({
+    mutationFn: async () => {
+      const selectedEntity = businessProofEntityOptions.find(
+        (option) => option.key === businessProofForm.entityKey,
+      );
+      if (!selectedUser?.id) {
+        throw new Error("Select a user before storing business proof.");
+      }
+      if (!selectedEntity) {
+        throw new Error("Select the business this proof belongs to.");
+      }
+      if (!businessProofForm.expiresAt) {
+        throw new Error("A future insurance expiration date is required.");
+      }
+      if (businessProofFiles.length === 0) {
+        throw new Error("Upload at least one proof document.");
+      }
+      const coverageAmountText = String(
+        businessProofForm.coverageAmountDollars || "",
+      ).trim();
+      let coverageAmountCents: number | null = null;
+      if (coverageAmountText) {
+        const coverageAmountDollars = Number(coverageAmountText);
+        if (!Number.isFinite(coverageAmountDollars) || coverageAmountDollars < 0) {
+          throw new Error("Coverage amount must be a valid dollar amount.");
+        }
+        coverageAmountCents = Math.round(coverageAmountDollars * 100);
+      }
+
+      const documents = await Promise.all(
+        businessProofFiles.slice(0, 5).map((file) => fileToDataUrl(file)),
+      );
+      const res = await apiRequest("POST", "/api/admin/insurance-verifications", {
+        entityType: selectedEntity.entityType,
+        entityId: selectedEntity.entityId,
+        ownerId: selectedUser.id,
+        jurisdictionCity: selectedEntity.city || null,
+        jurisdictionState: selectedEntity.state || null,
+        carrierName: businessProofForm.carrierName || null,
+        policyNumber: businessProofForm.policyNumber || null,
+        coverageType:
+          businessProofForm.coverageType || "commercial_general_liability",
+        coverageAmountCents,
+        effectiveDate: businessProofForm.effectiveDate || null,
+        expiresAt: businessProofForm.expiresAt,
+        documents,
+        attestedCommercialCoverage: true,
+        attestedJurisdictionCompliance: true,
+        notes:
+          businessProofForm.notes ||
+          "Stored by MealScout staff from admin user management.",
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications", "pending"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      if (selectedUser?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/admin/users", selectedUser.id, "restaurants"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["/api/admin/users", selectedUser.id, "hosts"],
+        });
+      }
+      setBusinessProofDialogOpen(false);
+      setBusinessProofFiles([]);
+      setBusinessProofForm({ ...BUSINESS_PROOF_EMPTY_FORM });
+      toast({
+        title: "Business Proof Stored",
+        description:
+          "Proof is now in the manual verification queue for approval.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Could not store proof",
+        description:
+          error?.message ||
+          "Upload valid commercial insurance proof before approving the business.",
         variant: "destructive",
       });
     },
@@ -9774,12 +9965,7 @@ export default function AdminDashboard() {
                               variant={pendingInsurance ? "default" : "outline"}
                               onClick={() => {
                                 if (!pendingInsurance?.id) {
-                                  toast({
-                                    title: "Proof upload required",
-                                    description:
-                                      "Business verification requires uploaded insurance or acceptable business proof first.",
-                                    variant: "destructive",
-                                  });
+                                  openBusinessProofDialog(user);
                                   return;
                                 }
                                 approveBusinessInsurance.mutate(
@@ -9788,14 +9974,14 @@ export default function AdminDashboard() {
                               }}
                               disabled={
                                 approveBusinessInsurance.isPending ||
-                                !pendingInsurance?.id
+                                submitBusinessProof.isPending
                               }
                               data-testid={`button-verify-business-${user.id}`}
                             >
                               <Shield className="w-3 h-3 mr-1" />
                               {pendingInsurance
                                 ? "Approve Business Proof"
-                                : "Needs Proof"}
+                                : "Upload Business Proof"}
                             </Button>
                           )}
                           <Button
@@ -10591,6 +10777,239 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Business Proof Upload Dialog */}
+      <Dialog
+        open={businessProofDialogOpen}
+        onOpenChange={(open) => {
+          setBusinessProofDialogOpen(open);
+          if (!open) {
+            setBusinessProofFiles([]);
+            setBusinessProofForm({ ...BUSINESS_PROOF_EMPTY_FORM });
+          }
+        }}
+      >
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Shield className="w-5 h-5" />
+              <span>Business Proof</span>
+            </DialogTitle>
+            <DialogDescription>
+              Store commercial insurance proof before approving business
+              verification.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUser && (
+            <div className="space-y-4 mt-4">
+              <div className="rounded-lg border p-3 text-sm">
+                <div className="font-semibold">
+                  {selectedUser.firstName} {selectedUser.lastName}
+                </div>
+                <div className="text-muted-foreground">{selectedUser.email}</div>
+              </div>
+
+              {userHostsLoading || userRestaurantsLoading ? (
+                <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+                  Loading this user's business profiles...
+                </div>
+              ) : businessProofEntityOptions.length === 0 ? (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                  Create or attach a business profile first. Insurance proof has
+                  to belong to a specific truck, restaurant, caterer, private
+                  chef, or host location.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Business
+                    </p>
+                    <select
+                      className="w-full px-3 py-2 border rounded-md text-sm bg-background"
+                      value={businessProofForm.entityKey}
+                      onChange={(e) =>
+                        setBusinessProofForm({
+                          ...businessProofForm,
+                          entityKey: e.target.value,
+                        })
+                      }
+                    >
+                      {businessProofEntityOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Carrier
+                      </p>
+                      <input
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        placeholder="Insurance carrier"
+                        value={businessProofForm.carrierName}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            carrierName: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Policy Number
+                      </p>
+                      <input
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        placeholder="Policy number"
+                        value={businessProofForm.policyNumber}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            policyNumber: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Effective Date
+                      </p>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        value={businessProofForm.effectiveDate}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            effectiveDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Expiration Date
+                      </p>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        value={businessProofForm.expiresAt}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            expiresAt: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Coverage Type
+                      </p>
+                      <input
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        value={businessProofForm.coverageType}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            coverageType: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Coverage Amount
+                      </p>
+                      <input
+                        inputMode="decimal"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        placeholder="1000000"
+                        value={businessProofForm.coverageAmountDollars}
+                        onChange={(e) =>
+                          setBusinessProofForm({
+                            ...businessProofForm,
+                            coverageAmountDollars: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Proof Documents
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/png,image/jpeg,application/pdf"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      onChange={(e) =>
+                        setBusinessProofFiles(
+                          Array.from(e.target.files || []).slice(0, 5),
+                        )
+                      }
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      PDF, PNG, or JPG. Up to 5 files, 10MB each.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      Staff Notes
+                    </p>
+                    <textarea
+                      className="w-full px-3 py-2 border rounded-md text-sm min-h-[84px]"
+                      placeholder="Where this proof came from, what was checked, or anything the reviewer should know."
+                      value={businessProofForm.notes}
+                      onChange={(e) =>
+                        setBusinessProofForm({
+                          ...businessProofForm,
+                          notes: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBusinessProofDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => submitBusinessProof.mutate()}
+                  disabled={
+                    submitBusinessProof.isPending ||
+                    userHostsLoading ||
+                    userRestaurantsLoading ||
+                    businessProofEntityOptions.length === 0
+                  }
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {submitBusinessProof.isPending
+                    ? "Storing..."
+                    : "Store Proof"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

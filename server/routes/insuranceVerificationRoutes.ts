@@ -29,6 +29,50 @@ const reviewSchema = z.object({
   reviewerNotes: z.string().trim().max(2000).optional().nullable(),
 });
 
+const adminInsuranceSubmitSchema = z.object({
+  entityType: z.enum([
+    "restaurant",
+    "food_truck",
+    "caterer",
+    "private_chef",
+    "host",
+  ]),
+  entityId: z.string().trim().min(1),
+  ownerId: z.string().trim().min(1).optional().nullable(),
+  jurisdictionCity: z.string().trim().max(120).optional().nullable(),
+  jurisdictionState: z.string().trim().max(80).optional().nullable(),
+  jurisdictionCountry: z.string().trim().max(80).optional().default("US"),
+  carrierName: z.string().trim().max(180).optional().nullable(),
+  policyNumber: z.string().trim().max(120).optional().nullable(),
+  coverageType: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .default("commercial_general_liability"),
+  coverageAmountCents: z.coerce.number().int().nonnegative().optional().nullable(),
+  effectiveDate: z.coerce.date().optional().nullable(),
+  expiresAt: z.coerce.date(),
+  documents: z.array(z.string()).min(1).max(5),
+  attestedCommercialCoverage: z.literal(true),
+  attestedJurisdictionCompliance: z.literal(true),
+  notes: z.string().trim().max(2000).optional().nullable(),
+  metadata: z.record(z.any()).optional().default({}),
+});
+
+function getRestaurantInsuranceEntityType(restaurant: {
+  isFoodTruck?: boolean | null;
+  businessType?: string | null;
+}) {
+  const businessType = String(restaurant.businessType || "").toLowerCase();
+  const isFoodTruck =
+    Boolean(restaurant.isFoodTruck) || businessType === "food_truck";
+  if (isFoodTruck) return "food_truck" as const;
+  if (businessType === "caterer") return "caterer" as const;
+  if (businessType === "private_chef") return "private_chef" as const;
+  return "restaurant" as const;
+}
+
 async function requireOwnedInsuranceEntity(req: any, res: any) {
   const parsed = entityInputSchema.safeParse({
     entityType: req.body?.entityType || req.query?.entityType,
@@ -107,6 +151,82 @@ async function requireOwnedInsuranceEntity(req: any, res: any) {
     entityType: actualEntityType,
     entityId,
     ownerId: userId,
+    city: restaurant.city,
+    state: restaurant.state,
+  };
+}
+
+async function resolveAdminInsuranceEntity(
+  input: z.infer<typeof adminInsuranceSubmitSchema>,
+  res: any,
+) {
+  if (input.entityType === "host") {
+    const [host] = await db
+      .select({
+        id: hosts.id,
+        ownerId: hosts.userId,
+        city: hosts.city,
+        state: hosts.state,
+      })
+      .from(hosts)
+      .where(eq(hosts.id, input.entityId))
+      .limit(1);
+
+    if (!host) {
+      res.status(404).json({ message: "Host location not found" });
+      return null;
+    }
+    if (input.ownerId && String(host.ownerId) !== String(input.ownerId)) {
+      res.status(400).json({
+        message: "Selected host does not belong to the selected owner",
+      });
+      return null;
+    }
+    return {
+      entityType: "host" as const,
+      entityId: String(host.id),
+      ownerId: String(host.ownerId),
+      city: host.city,
+      state: host.state,
+    };
+  }
+
+  const [restaurant] = await db
+    .select({
+      id: restaurants.id,
+      ownerId: restaurants.ownerId,
+      city: restaurants.city,
+      state: restaurants.state,
+      isFoodTruck: restaurants.isFoodTruck,
+      businessType: restaurants.businessType,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.id, input.entityId))
+    .limit(1);
+
+  if (!restaurant) {
+    res.status(404).json({ message: "Business profile not found" });
+    return null;
+  }
+  if (input.ownerId && String(restaurant.ownerId) !== String(input.ownerId)) {
+    res.status(400).json({
+      message: "Selected business does not belong to the selected owner",
+    });
+    return null;
+  }
+
+  const actualEntityType = getRestaurantInsuranceEntityType(restaurant);
+  if (input.entityType !== actualEntityType) {
+    res.status(400).json({
+      message: `Selected business is a ${actualEntityType}, not a ${input.entityType}`,
+    });
+    return null;
+  }
+
+  return {
+    entityType: actualEntityType,
+    entityId: String(restaurant.id),
+    ownerId: String(restaurant.ownerId),
     city: restaurant.city,
     state: restaurant.state,
   };
@@ -292,6 +412,93 @@ export function registerInsuranceVerificationRoutes(app: Express) {
       } catch (error) {
         console.error("Error loading insurance verifications:", error);
         res.status(500).json({ message: "Failed to load insurance verifications" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/insurance-verifications",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const parsed = adminInsuranceSubmitSchema.parse(req.body || {});
+        const entity = await resolveAdminInsuranceEntity(parsed, res);
+        if (!entity) return;
+
+        const documentValidation = validateDocuments(parsed.documents);
+        if (!documentValidation.valid) {
+          return res.status(400).json({
+            message: "Document validation failed",
+            errors: documentValidation.errors,
+          });
+        }
+
+        if (parsed.expiresAt.getTime() <= Date.now()) {
+          return res.status(400).json({
+            message: "Insurance expiration date must be in the future",
+          });
+        }
+
+        const [record] = await db
+          .insert(businessInsuranceVerifications)
+          .values({
+            entityType: entity.entityType,
+            entityId: entity.entityId,
+            ownerId: entity.ownerId,
+            jurisdictionCity:
+              parsed.jurisdictionCity || entity.city || null,
+            jurisdictionState:
+              parsed.jurisdictionState || entity.state || null,
+            jurisdictionCountry: parsed.jurisdictionCountry || "US",
+            carrierName: parsed.carrierName || null,
+            policyNumber: parsed.policyNumber || null,
+            coverageType:
+              parsed.coverageType || "commercial_general_liability",
+            coverageAmountCents: parsed.coverageAmountCents ?? null,
+            effectiveDate: parsed.effectiveDate || null,
+            expiresAt: parsed.expiresAt,
+            documents: parsed.documents,
+            attestedCommercialCoverage: parsed.attestedCommercialCoverage,
+            attestedJurisdictionCompliance:
+              parsed.attestedJurisdictionCompliance,
+            notes: parsed.notes || null,
+            metadata: {
+              ...(parsed.metadata || {}),
+              submittedByAdmin: true,
+              submittedByUserId: req.user?.id || null,
+            },
+            updatedAt: new Date(),
+          })
+          .returning();
+
+        recordMealScoutCreditAction({
+          userId: entity.ownerId,
+          action: "insurance_submitted",
+          sourceId: record.id,
+          entityType: entity.entityType,
+          entityId: entity.entityId,
+          metadata: {
+            submittedByAdmin: true,
+            submittedByUserId: req.user?.id || null,
+            jurisdictionCity: record.jurisdictionCity,
+            jurisdictionState: record.jurisdictionState,
+            coverageType: record.coverageType,
+            expiresAt: record.expiresAt,
+          },
+        }).catch((creditError) => {
+          console.error(
+            "[credits] failed to record admin insurance_submitted:",
+            creditError,
+          );
+        });
+
+        res.status(201).json(record);
+      } catch (error: any) {
+        console.error("Error storing admin insurance proof:", error);
+        res.status(400).json({
+          message: error?.message || "Failed to store business proof",
+        });
       }
     },
   );
