@@ -1592,3 +1592,92 @@
     }
   }
 }
+
+/* ============================================================
+ * Atmospheric UI utilities (additive, scoped to opt-in usage)
+ * Used by /home-scene and future migrated pages. Existing pages
+ * are unaffected.
+ * ============================================================ */
+@layer utilities {
+  .atmo-glass {
+    background-color: rgba(17, 14, 12, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  }
+
+  .atmo-glass-strong {
+    background-color: rgba(12, 10, 9, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    backdrop-filter: blur(22px) saturate(150%);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  }
+
+  .atmo-glass-soft {
+    background-color: rgba(17, 14, 12, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(130%);
+  }
+
+  .atmo-shadow-glass {
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .atmo-glow-amber {
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.55),
+      0 0 18px 2px rgba(245, 158, 11, 0.45),
+      0 0 38px 6px rgba(245, 158, 11, 0.18);
+  }
+
+  .atmo-glow-amber-soft {
+    box-shadow:
+      0 0 0 1px rgba(245, 158, 11, 0.35),
+      0 0 12px 1px rgba(245, 158, 11, 0.25);
+  }
+
+  .atmo-ring-glow {
+    border: 2px solid rgba(245, 158, 11, 0.85);
+    box-shadow:
+      0 0 14px 2px rgba(245, 158, 11, 0.45),
+      inset 0 0 8px rgba(245, 158, 11, 0.18);
+  }
+
+  .atmo-text-display {
+    font-family: var(--font-display, "Bebas Neue"), ui-sans-serif, system-ui,
+      sans-serif;
+    letter-spacing: 0.01em;
+  }
+
+  .atmo-hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .atmo-hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  @keyframes atmo-pulse-amber {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 0 rgba(245, 158, 11, 0.55),
+        0 0 12px 1px rgba(245, 158, 11, 0.25);
+    }
+    50% {
+      box-shadow:
+        0 0 0 6px rgba(245, 158, 11, 0),
+        0 0 18px 3px rgba(245, 158, 11, 0.4);
+    }
+  }
+
+  .atmo-pulse-amber {
+    animation: atmo-pulse-amber 1.8s ease-in-out infinite;
+  }
+}
