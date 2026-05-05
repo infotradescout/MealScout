@@ -382,6 +382,58 @@ const ENABLE_SOCKETS = import.meta.env.VITE_ENABLE_SOCKETS !== "false";
 const LISA_FEED_LIMIT = 40;
 
 const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
+const asRecord = <T,>(value: unknown): Record<string, T> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, T>)
+    : {};
+
+const emptyBotTrafficSummary: BotTrafficResponse["summary"] = {
+  requests: 0,
+  botRequests: 0,
+  llmRequests: 0,
+  searchCrawlerRequests: 0,
+  humanBrowserRequests: 0,
+  automationRequests: 0,
+  uniqueAgents: 0,
+  uniqueIps: 0,
+  humanShare: 0,
+  llmShare: 0,
+  botShare: 0,
+};
+
+const emptyMarketBrief: MarketIntelResponse["brief"] = {
+  headline: "No operating brief is available yet.",
+  audienceAngle: "MealScout is still collecting enough first-party signal.",
+  inventoryAngle: "",
+  acquisitionAngle: "",
+  recommendedPackage: [],
+};
+
+const emptyMarketChange: MarketIntelResponse["changeSinceYesterday"] = {
+  summary: "No safe day-over-day comparison is available yet.",
+  items: [],
+};
+
+const emptyPriceScout: MarketIntelResponse["priceScout"] = {
+  summary: "No price or supply signals are available yet.",
+  bestDeals: [],
+  cuisineValue: [],
+};
+
+const emptyAdvertiserSignals: MarketIntelResponse["advertiserSignals"] = {
+  topQueries: [],
+  cityDemand: [],
+  cuisineDemand: [],
+  geoAds: {
+    impressions: 0,
+    clicks: 0,
+    ctr: 0,
+  },
+  footTraffic: {
+    totalPings: 0,
+    uniqueVisitors: 0,
+  },
+};
 
 function formatSignalTime(value: string) {
   const date = new Date(value);
@@ -1035,7 +1087,7 @@ export default function AdminControlCenter() {
 
   const canonicalEntityMap = useMemo(() => {
     const map = new Map<string, CanonicalEntityItem>();
-    for (const entity of canonicalEntities?.items ?? []) {
+    for (const entity of asArray<CanonicalEntityItem>(canonicalEntities?.items)) {
       map.set(`${entity.entityType}:${entity.entityId}`, entity);
     }
     return map;
@@ -1290,6 +1342,21 @@ export default function AdminControlCenter() {
       );
     });
 
+  const botTrafficSummary = botTraffic?.summary ?? emptyBotTrafficSummary;
+  const botTrafficCategories = asRecord<number>(botTraffic?.categories);
+  const marketBrief = marketIntel?.brief ?? emptyMarketBrief;
+  const marketChange = marketIntel?.changeSinceYesterday ?? emptyMarketChange;
+  const priceScout = marketIntel?.priceScout ?? emptyPriceScout;
+  const supplyLaneSummary = priceScout.supplyLaneSummary;
+  const advertiserSignals =
+    marketIntel?.advertiserSignals ?? emptyAdvertiserSignals;
+  const advertiserTopQueries = asArray<
+    MarketIntelResponse["advertiserSignals"]["topQueries"][number]
+  >(advertiserSignals.topQueries);
+  const acquisitionTargets = asArray<
+    MarketIntelResponse["acquisitionTargets"][number]
+  >(marketIntel?.acquisitionTargets);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1418,7 +1485,7 @@ export default function AdminControlCenter() {
               <CardContent>
                 <div className="space-y-2">
                   <div className="text-2xl font-bold">
-                    {botTraffic?.summary?.llmRequests ?? 0}
+                    {botTrafficSummary.llmRequests}
                   </div>
                   <div className="text-xs text-[color:var(--text-muted)]">
                     LLM crawler hits in the last {botTraffic?.windowHours ?? 48}h
@@ -1998,19 +2065,19 @@ export default function AdminControlCenter() {
                         </div>
                       </div>
                       <div className="mt-3 space-y-2 text-sm">
-                        <p>{marketIntel.brief.headline}</p>
+                        <p>{marketBrief.headline}</p>
                         <p className="text-[color:var(--text-muted)]">
-                          {marketIntel.brief.audienceAngle}
+                          {marketBrief.audienceAngle}
                         </p>
                         <p className="text-[color:var(--text-muted)]">
-                          {marketIntel.brief.inventoryAngle}
+                          {marketBrief.inventoryAngle}
                         </p>
                         <p className="text-[color:var(--text-muted)]">
-                          {marketIntel.brief.acquisitionAngle}
+                          {marketBrief.acquisitionAngle}
                         </p>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {asArray<string>(marketIntel.brief?.recommendedPackage).map((item) => (
+                        {asArray<string>(marketBrief.recommendedPackage).map((item) => (
                           <Badge key={item} variant="outline">
                             {item}
                           </Badge>
@@ -2022,10 +2089,10 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4 xl:col-span-2">
                         <div className="text-sm font-medium">What changed since yesterday</div>
                         <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                          {marketIntel.changeSinceYesterday.summary}
+                          {marketChange.summary}
                         </div>
                         <div className="mt-3 space-y-3">
-                          {asArray<MarketIntelResponse["changeSinceYesterday"]["items"][number]>(marketIntel.changeSinceYesterday?.items).slice(0, 4).map((item) => (
+                          {asArray<MarketIntelResponse["changeSinceYesterday"]["items"][number]>(marketChange.items).slice(0, 4).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2071,26 +2138,26 @@ export default function AdminControlCenter() {
                           </div>
                         </div>
                         <div className="mt-2 text-sm text-[color:var(--text-muted)]">
-                          {marketIntel.priceScout.summary}
+                          {priceScout.summary}
                         </div>
-                        {marketIntel.priceScout.supplyLaneSummary ? (
+                        {supplyLaneSummary ? (
                           <div className="mt-3 flex flex-wrap gap-2 text-xs">
                             <Badge variant="outline">
-                              {marketIntel.priceScout.supplyLaneSummary.totalRecentRecords} supply records
+                              {supplyLaneSummary.totalRecentRecords} supply records
                             </Badge>
                             <Badge variant="outline">
-                              {marketIntel.priceScout.supplyLaneSummary.snapshotCount} snapshots
+                              {supplyLaneSummary.snapshotCount} snapshots
                             </Badge>
                             <Badge variant="outline">
-                              {marketIntel.priceScout.supplyLaneSummary.alertCount} alerts
+                              {supplyLaneSummary.alertCount} alerts
                             </Badge>
                             <Badge variant="outline">
-                              {marketIntel.priceScout.supplyLaneSummary.watchCount} active watches
+                              {supplyLaneSummary.watchCount} active watches
                             </Badge>
                           </div>
                         ) : null}
                         <div className="mt-3 space-y-3">
-                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(marketIntel.priceScout?.bestDeals).slice(0, 3).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(priceScout.bestDeals).slice(0, 3).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2109,13 +2176,13 @@ export default function AdminControlCenter() {
                             </div>
                           ))}
                         </div>
-                        {marketIntel.priceScout.supplyLaneSummary?.spotlight?.length ? (
+                        {supplyLaneSummary?.spotlight?.length ? (
                           <div className="mt-3 space-y-2">
                             <div className="text-xs font-medium text-[color:var(--text-muted)]">
                               Supply lane spotlight
                             </div>
                             {asArray<NonNullable<MarketIntelResponse["priceScout"]["supplyLaneSummary"]>["spotlight"][number]>(
-                              marketIntel.priceScout.supplyLaneSummary.spotlight,
+                              supplyLaneSummary.spotlight,
                             )
                               .slice(0, 3)
                               .map((signal) => (
@@ -2152,10 +2219,10 @@ export default function AdminControlCenter() {
                           Geo ad impressions
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {marketIntel.advertiserSignals.geoAds.impressions}
+                          {advertiserSignals.geoAds.impressions}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
-                          CTR {(marketIntel.advertiserSignals.geoAds.ctr * 100).toFixed(1)}%
+                          CTR {(advertiserSignals.geoAds.ctr * 100).toFixed(1)}%
                         </div>
                       </div>
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
@@ -2163,10 +2230,10 @@ export default function AdminControlCenter() {
                           Foot traffic pings
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {marketIntel.advertiserSignals.footTraffic.totalPings}
+                          {advertiserSignals.footTraffic.totalPings}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
-                          {marketIntel.advertiserSignals.footTraffic.uniqueVisitors} unique visitors
+                          {advertiserSignals.footTraffic.uniqueVisitors} unique visitors
                         </div>
                       </div>
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
@@ -2174,7 +2241,7 @@ export default function AdminControlCenter() {
                           Search demand themes
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {marketIntel.advertiserSignals.topQueries.length}
+                          {advertiserTopQueries.length}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
                           Top advertiser keyword inputs
@@ -2185,7 +2252,7 @@ export default function AdminControlCenter() {
                           Acquisition targets
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {marketIntel.acquisitionTargets.length}
+                          {acquisitionTargets.length}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
                           High-leverage weak assets
@@ -2226,7 +2293,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Top search demand</div>
                         <div className="mt-3 space-y-2">
-                          {asArray<MarketIntelResponse["advertiserSignals"]["topQueries"][number]>(marketIntel.advertiserSignals?.topQueries).slice(0, 6).map((item) => (
+                          {advertiserTopQueries.slice(0, 6).map((item) => (
                             <div
                               key={item.query}
                               className="flex items-center justify-between text-sm"
@@ -2241,7 +2308,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Location demand</div>
                         <div className="mt-3 space-y-2">
-                          {asArray<MarketIntelResponse["advertiserSignals"]["cityDemand"][number]>(marketIntel.advertiserSignals?.cityDemand).slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["advertiserSignals"]["cityDemand"][number]>(advertiserSignals.cityDemand).slice(0, 6).map((item) => (
                             <div
                               key={`${item.businessName}-${item.address}`}
                               className="flex items-center justify-between text-sm"
@@ -2261,7 +2328,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Cuisine clusters</div>
                         <div className="mt-3 space-y-2">
-                          {asArray<MarketIntelResponse["advertiserSignals"]["cuisineDemand"][number]>(marketIntel.advertiserSignals?.cuisineDemand).slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["advertiserSignals"]["cuisineDemand"][number]>(advertiserSignals.cuisineDemand).slice(0, 6).map((item) => (
                             <div
                               key={item.cuisineType || "unknown"}
                               className="flex items-center justify-between text-sm"
@@ -2301,7 +2368,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Strategic acquisition targets</div>
                         <div className="mt-3 space-y-3">
-                          {asArray<MarketIntelResponse["acquisitionTargets"][number]>(marketIntel.acquisitionTargets).slice(0, 5).map((item) => (
+                          {acquisitionTargets.slice(0, 5).map((item) => (
                             <button
                               key={item.id}
                               type="button"
@@ -2350,7 +2417,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Best live value deals</div>
                         <div className="mt-3 space-y-3">
-                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(marketIntel.priceScout?.bestDeals).slice(0, 5).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["bestDeals"][number]>(priceScout.bestDeals).slice(0, 5).map((item) => (
                             <div
                               key={item.id}
                               className="rounded-lg border border-[var(--border-subtle)] p-3"
@@ -2381,7 +2448,7 @@ export default function AdminControlCenter() {
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                         <div className="text-sm font-medium">Best value cuisines</div>
                         <div className="mt-3 space-y-2">
-                          {asArray<MarketIntelResponse["priceScout"]["cuisineValue"][number]>(marketIntel.priceScout?.cuisineValue).slice(0, 6).map((item) => (
+                          {asArray<MarketIntelResponse["priceScout"]["cuisineValue"][number]>(priceScout.cuisineValue).slice(0, 6).map((item) => (
                             <div
                               key={item.cuisineType}
                               className="flex items-center justify-between gap-2 text-sm"
@@ -2544,7 +2611,7 @@ export default function AdminControlCenter() {
                           Total requests
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {botTraffic.summary.requests}
+                          {botTrafficSummary.requests}
                         </div>
                       </div>
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
@@ -2552,10 +2619,10 @@ export default function AdminControlCenter() {
                           LLM crawler hits
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {botTraffic.summary.llmRequests}
+                          {botTrafficSummary.llmRequests}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
-                          {(botTraffic.summary.llmShare * 100).toFixed(1)}% share
+                          {(botTrafficSummary.llmShare * 100).toFixed(1)}% share
                         </div>
                       </div>
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
@@ -2563,7 +2630,7 @@ export default function AdminControlCenter() {
                           Search crawler hits
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {botTraffic.summary.searchCrawlerRequests}
+                          {botTrafficSummary.searchCrawlerRequests}
                         </div>
                       </div>
                       <div className="rounded-lg border border-[var(--border-subtle)] p-4">
@@ -2571,11 +2638,11 @@ export default function AdminControlCenter() {
                           Human browser hits
                         </div>
                         <div className="mt-2 text-2xl font-bold">
-                          {botTraffic.summary.humanBrowserRequests}
+                          {botTrafficSummary.humanBrowserRequests}
                         </div>
                         <div className="text-xs text-[color:var(--text-muted)]">
-                          {botTraffic.summary.uniqueAgents} agents,{" "}
-                          {botTraffic.summary.uniqueIps} IPs
+                          {botTrafficSummary.uniqueAgents} agents,{" "}
+                          {botTrafficSummary.uniqueIps} IPs
                         </div>
                       </div>
                     </div>
@@ -2585,7 +2652,7 @@ export default function AdminControlCenter() {
                         <div className="rounded-lg border border-[var(--border-subtle)] p-4">
                           <div className="text-sm font-medium">Traffic mix</div>
                           <div className="mt-3 space-y-2">
-                            {Object.entries(botTraffic.categories || {})
+                            {Object.entries(botTrafficCategories)
                               .sort((a, b) => b[1] - a[1])
                               .map(([category, count]) => (
                                 <div
