@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../db";
@@ -29,6 +29,11 @@ export function registerRestaurantSignupRoutes(
   { ensureTrialForUser, queueSocialPost }: RestaurantSignupRouteDependencies,
 ) {
   const normalizePhone = (value: unknown) => String(value || "").replace(/\D/g, "");
+  const normalizeIdentityName = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
   const duplicateSignupResponse = (error: any) => {
     const code = String(error?.code || "");
     const message = String(error?.message || "");
@@ -52,6 +57,44 @@ export function registerRestaurantSignupRoutes(
             : "account_exists_email",
       },
     };
+  };
+  const findRecentPossibleDuplicateByName = async ({
+    firstName,
+    lastName,
+    email,
+  }: {
+    firstName: unknown;
+    lastName: unknown;
+    email: unknown;
+  }) => {
+    const first = normalizeIdentityName(firstName);
+    const last = normalizeIdentityName(lastName);
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    if (first.length < 2 || last.length < 2) return null;
+
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const [match] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        userType: users.userType,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(
+        and(
+          sql`lower(btrim(coalesce(${users.firstName}, ''))) = ${first}`,
+          sql`lower(btrim(coalesce(${users.lastName}, ''))) = ${last}`,
+          normalizedEmail
+            ? sql`lower(btrim(coalesce(${users.email}, ''))) <> ${normalizedEmail}`
+            : sql`true`,
+          gte(users.createdAt, since),
+          or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+        ),
+      )
+      .limit(1);
+
+    return match || null;
   };
 
   app.post("/api/restaurants/signup", async (req: any, res) => {
@@ -116,6 +159,19 @@ export function registerRestaurantSignupRoutes(
                 "An account already exists for this phone number. Please sign in instead.",
               code: "account_exists_phone",
             });
+        }
+
+        const recentDuplicate = await findRecentPossibleDuplicateByName({
+          firstName: validatedUserData.firstName,
+          lastName: validatedUserData.lastName,
+          email: validatedUserData.email,
+        });
+        if (recentDuplicate) {
+          return res.status(409).json({
+            message:
+              "It looks like you may already have a MealScout account. Please sign in to that account, or contact MealScout support and we will connect the right profile.",
+            code: "possible_duplicate_account",
+          });
         }
 
         const passwordHash = await bcrypt.hash(validatedUserData.password, 10);

@@ -25,7 +25,7 @@ import {
 } from "./utils/passwordPolicy";
 import { db } from "./db";
 import { insertRestaurantSchema, menus, users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
@@ -1025,6 +1025,11 @@ export async function setupUnifiedAuth(app: Express) {
   }
 
   const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
+  const normalizeIdentityName = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
   const duplicateAccountResponse = (error: any) => {
     const code = String(error?.code || "");
     const message = String(error?.message || "");
@@ -1049,6 +1054,49 @@ export async function setupUnifiedAuth(app: Express) {
       },
     };
   };
+  const findRecentPossibleDuplicateByName = async ({
+    firstName,
+    lastName,
+    email,
+  }: {
+    firstName: unknown;
+    lastName: unknown;
+    email: unknown;
+  }) => {
+    const first = normalizeIdentityName(firstName);
+    const last = normalizeIdentityName(lastName);
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    if (first.length < 2 || last.length < 2) return null;
+
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const [match] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        userType: users.userType,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(
+        and(
+          sql`lower(btrim(coalesce(${users.firstName}, ''))) = ${first}`,
+          sql`lower(btrim(coalesce(${users.lastName}, ''))) = ${last}`,
+          normalizedEmail
+            ? sql`lower(btrim(coalesce(${users.email}, ''))) <> ${normalizedEmail}`
+            : sql`true`,
+          gte(users.createdAt, since),
+          or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+        ),
+      )
+      .limit(1);
+
+    return match || null;
+  };
+  const possibleDuplicateAccountResponse = () => ({
+    error:
+      "It looks like you may already have a MealScout account. Please sign in to that account, or contact MealScout support and we will connect the right profile.",
+    code: "possible_duplicate_account",
+  });
   const normalizePublicHttpUrl = (value: unknown): string => {
     const raw = String(value || "").trim();
     if (!raw) return "";
@@ -1293,6 +1341,14 @@ export async function setupUnifiedAuth(app: Express) {
       if (existingPhone) {
         return res.status(400).json({ error: "Phone number already in use" });
       }
+      const recentDuplicate = await findRecentPossibleDuplicateByName({
+        firstName,
+        lastName,
+        email,
+      });
+      if (recentDuplicate) {
+        return res.status(409).json(possibleDuplicateAccountResponse());
+      }
 
       if (requirePhoneVerification) {
         if (!otpCode) {
@@ -1383,6 +1439,14 @@ export async function setupUnifiedAuth(app: Express) {
       const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {
         return res.status(400).json({ error: "Phone number already in use" });
+      }
+      const recentDuplicate = await findRecentPossibleDuplicateByName({
+        firstName,
+        lastName,
+        email,
+      });
+      if (recentDuplicate) {
+        return res.status(409).json(possibleDuplicateAccountResponse());
       }
 
       if (requirePhoneVerification) {
@@ -1561,6 +1625,14 @@ export async function setupUnifiedAuth(app: Express) {
       if (existingPhone) {
         return res.status(400).json({ error: "Phone number already in use" });
       }
+      const recentDuplicate = await findRecentPossibleDuplicateByName({
+        firstName,
+        lastName,
+        email,
+      });
+      if (recentDuplicate) {
+        return res.status(409).json(possibleDuplicateAccountResponse());
+      }
 
       if (requirePhoneVerification) {
         if (!otpCode) {
@@ -1671,6 +1743,14 @@ export async function setupUnifiedAuth(app: Express) {
       const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {
         return res.status(400).json({ error: "Phone number already in use" });
+      }
+      const recentDuplicate = await findRecentPossibleDuplicateByName({
+        firstName,
+        lastName,
+        email,
+      });
+      if (recentDuplicate) {
+        return res.status(409).json(possibleDuplicateAccountResponse());
       }
 
       if (requirePhoneVerification) {
