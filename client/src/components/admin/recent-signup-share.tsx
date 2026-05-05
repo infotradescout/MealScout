@@ -691,7 +691,7 @@ export default function RecentSignupShare() {
               ? "Public profile"
               : "Visitor fallback";
             const cleanShareUrl = signup.shareUrl || signup.profileUrl;
-            const graphicUrlLabel = shortShareUrl(cleanShareUrl, 48);
+            const graphicUrlLabel = shortShareUrl(cleanShareUrl, 38);
             const detailParts = [
               signup.category || signup.typeLabel,
               signup.locationLabel,
@@ -702,12 +702,12 @@ export default function RecentSignupShare() {
             const nameLength = signup.displayName.length;
             const graphicNameClass =
               nameLength > 46
-                ? "text-[3rem]"
+                ? "text-[3.2cqw]"
                 : nameLength > 32
-                  ? "text-[3.7rem]"
+                  ? "text-[3.8cqw]"
                   : nameLength > 22
-                    ? "text-[4.4rem]"
-                    : "text-[5.1rem]";
+                    ? "text-[4.5cqw]"
+                    : "text-[5.35cqw]";
             const graphicSubline =
               menuHighlights.length > 0
                 ? menuHighlights.slice(0, 3).join(" / ")
@@ -787,6 +787,7 @@ export default function RecentSignupShare() {
                     className="relative aspect-[1200/630] overflow-hidden rounded-[1.5rem] border bg-neutral-950 text-white shadow-sm"
                     style={{
                       background: hasBusinessImage ? "#050505" : tone.gradient,
+                      containerType: "inline-size",
                     }}
                   >
                     {hasBusinessImage ? (
@@ -817,73 +818,91 @@ export default function RecentSignupShare() {
                           style={{ backgroundColor: tone.accent }}
                         />
                         <div className="absolute inset-y-0 right-[31%] w-[18rem] skew-x-[-12deg] bg-black/35" />
-                        <div className="absolute right-12 top-[8.5rem] flex h-[17rem] w-[17rem] items-center justify-center rounded-[3.25rem] bg-black/18 text-[7rem] font-black text-black/90 shadow-[inset_0_0_0_1px_rgba(0,0,0,.14)]">
-                          {initialsFor(signup.displayName)}
-                        </div>
                       </>
                     )}
 
-                    <div className="relative flex h-full flex-col justify-between p-10">
-                      <div className="flex items-start justify-between gap-6">
-                        <div className="inline-flex items-center gap-3 text-sm font-black uppercase text-white">
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xs text-black">
-                            MS
-                          </span>
-                          <span>MealScout</span>
-                        </div>
-                        <div className="flex max-w-[30rem] flex-wrap justify-end gap-2">
-                          <span
-                            className="rounded-full px-5 py-2 text-sm font-black text-black"
-                            style={{ backgroundColor: tone.accent }}
-                          >
-                            {tone.label}
-                          </span>
-                          <span className="rounded-full bg-white px-5 py-2 text-sm font-black text-black">
-                            {statusText}
-                          </span>
-                        </div>
+                    <div className="relative h-full p-[3.33cqw]">
+                      <div className="absolute left-[3.33cqw] top-[3.33cqw] inline-flex items-center gap-[1cqw] text-[1.15cqw] font-black uppercase tracking-[0.18em] text-white">
+                        <span className="flex h-[3.33cqw] w-[3.33cqw] items-center justify-center rounded-full bg-white text-[0.9cqw] tracking-normal text-black">
+                          MS
+                        </span>
+                        <span>MealScout</span>
                       </div>
 
-                      <div className="max-w-[47rem]">
+                      <div className="absolute right-[3.33cqw] top-[3.33cqw] flex max-w-[35cqw] flex-wrap justify-end gap-[0.65cqw]">
+                        <span
+                          className="rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black text-black shadow-[0_10px_28px_rgba(0,0,0,.28)]"
+                          style={{ backgroundColor: tone.accent }}
+                        >
+                          {tone.label}
+                        </span>
+                        <span className="rounded-full bg-white px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black text-black shadow-[0_10px_28px_rgba(0,0,0,.22)]">
+                          {statusText}
+                        </span>
+                      </div>
+
+                      <div className="absolute bottom-[8cqw] left-[3.33cqw] top-[10.6cqw] flex w-[55%] flex-col justify-center">
                         <div
-                          className="mb-5 inline-flex rounded-full px-5 py-2 text-sm font-black uppercase text-black shadow-[0_12px_34px_rgba(0,0,0,.32)]"
+                          className="mb-[1.6cqw] inline-flex w-fit rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black uppercase tracking-[0.18em] text-black shadow-[0_12px_34px_rgba(0,0,0,.32)]"
                           style={{ backgroundColor: tone.accent }}
                         >
                           {announcement}
                         </div>
-                        <p className="text-sm font-black uppercase text-white/68">
+                        <p className="text-[1.1cqw] font-black uppercase tracking-[0.22em] text-white/70">
                           Just joined MealScout
                         </p>
                         <h3
-                          className={`mt-3 max-w-[14ch] break-words ${graphicNameClass} font-black leading-[0.92] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.45)]`}
+                          className={`mt-[0.9cqw] max-w-[11.5ch] break-words ${graphicNameClass} font-black leading-[0.96] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.45)]`}
                         >
                           {signup.displayName}
                         </h3>
                         {graphicSubline ? (
-                          <p className="mt-5 line-clamp-2 max-w-[42rem] text-[1.55rem] font-black leading-tight text-white/90">
+                          <p className="mt-[1.5cqw] line-clamp-2 max-w-[44cqw] text-[1.55cqw] font-black leading-tight text-white/90">
                             {graphicSubline}
                           </p>
                         ) : null}
-                        <p className="mt-4 max-w-[35rem] text-lg font-semibold leading-snug text-white/68">
-                          {graphicAction}
-                        </p>
                       </div>
 
-                      <div className="flex items-end justify-between gap-8">
-                        <div className="min-w-0">
-                          <p className="mb-2 text-xs font-black uppercase text-white/55">
-                            Share their MealScout link
-                          </p>
-                          <div className="flex min-w-0 items-center gap-2 text-lg font-black text-white">
-                            <MapPin className="h-5 w-5 shrink-0" />
-                            <span className="truncate">{graphicUrlLabel}</span>
-                          </div>
+                      <div className="absolute bottom-[3.33cqw] left-[3.33cqw] w-[55%] min-w-0">
+                        <p className="mb-[0.65cqw] text-[0.82cqw] font-black uppercase tracking-[0.2em] text-white/60">
+                          Share this MealScout link
+                        </p>
+                        <div className="flex min-w-0 items-center gap-[0.65cqw] text-[1.35cqw] font-black text-white">
+                          <MapPin className="h-[1.35cqw] w-[1.35cqw] shrink-0" />
+                          <span className="min-w-0 truncate">
+                            {graphicUrlLabel}
+                          </span>
                         </div>
+                      </div>
+
+                      <div className="absolute bottom-[3.33cqw] right-[3.33cqw] top-[10.6cqw] w-[32%] overflow-hidden rounded-[2.65cqw] border border-white/15 bg-black/30 p-[2cqw] shadow-[0_28px_80px_rgba(0,0,0,.38)] backdrop-blur-sm">
                         <div
-                          className="rounded-full px-6 py-3 text-sm font-black text-black shadow-[0_16px_44px_rgba(0,0,0,.35)]"
+                          className="absolute inset-0 opacity-[0.42]"
                           style={{ backgroundColor: tone.accent }}
-                        >
-                          View profile
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/40" />
+                        <div className="relative flex h-full flex-col justify-between">
+                          <div className="flex justify-end">
+                            <span className="rounded-full bg-white px-[1.35cqw] py-[0.65cqw] text-[0.95cqw] font-black text-black">
+                              View profile
+                            </span>
+                          </div>
+                          <div className="flex flex-1 items-center justify-center py-[1.33cqw]">
+                            <div
+                              className="flex h-[13.5cqw] w-[13.5cqw] items-center justify-center rounded-[2.7cqw] text-[5.1cqw] font-black text-black shadow-[0_20px_60px_rgba(0,0,0,.28)]"
+                              style={{ backgroundColor: tone.accent }}
+                            >
+                              {initialsFor(signup.displayName)}
+                            </div>
+                          </div>
+                          <div className="rounded-[1.65cqw] border border-white/15 bg-black/30 p-[1.65cqw]">
+                            <p className="mb-[1cqw] text-[0.78cqw] font-black uppercase tracking-[0.24em] text-white/70">
+                              Featured
+                            </p>
+                            <p className="line-clamp-2 text-[1.5cqw] font-black leading-tight text-white">
+                              {graphicAction}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>

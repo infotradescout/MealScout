@@ -178,7 +178,10 @@ const cleanAffiliateSharePath = (
   fallback = "/map",
 ) => {
   const targetPath = normalizeAdminPath(destinationPath, fallback);
-  const tag = String(affiliateTag || "").trim();
+  const tag = String(affiliateTag || "")
+    .trim()
+    .replace(/^\/+/, "")
+    .split(/[/?#]/)[0];
   if (!tag) return targetPath;
   return `/ref/${encodeURIComponent(tag)}`;
 };
