@@ -296,7 +296,26 @@ const dedupeRecentSignupCards = (items: any[]) => {
     }
 
     const rankedRows = [...rows].sort((a, b) => {
+      const rolePriority = (row: any) => {
+        const kind = String(row?.kind || "").toLowerCase();
+        if (
+          [
+            "food_truck",
+            "restaurant",
+            "caterer",
+            "private_chef",
+            "host",
+            "supplier",
+          ].includes(kind)
+        ) {
+          return 40;
+        }
+        if (kind === "team") return 5;
+        return 0;
+      };
       const score = (row: any) =>
+        rolePriority(row) +
+        (row?.entity !== "user" ? 30 : 0) +
         (row?.isPublic ? 20 : 0) +
         (row?.imageUrl ? 10 : 0) +
         (row?.description ? 8 : 0) +

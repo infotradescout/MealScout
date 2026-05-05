@@ -119,6 +119,13 @@ function requiresEmailVerification(user: User | undefined | null) {
   return !["admin", "super_admin"].includes(String(user.userType || ""));
 }
 
+function isPossibleDuplicateAccountError(error: any) {
+  return (
+    error?.status === 409 &&
+    String(error?.code || "").toUpperCase() === "POSSIBLE_DUPLICATE_ACCOUNT"
+  );
+}
+
 async function sanitizeUserWithOwnerProfilePrompt(user: User) {
   const safeUser: any = sanitizeUser(user) || {};
   try {
@@ -560,6 +567,11 @@ export async function setupUnifiedAuth(app: Express) {
                 Boolean(profile?.emails?.[0]?.value) ||
                 Boolean(profile?._json?.email),
             });
+            if (isPossibleDuplicateAccountError(error)) {
+              return done(null, false, {
+                message: "possible_duplicate_account",
+              });
+            }
             return done(error, null);
           }
         },
@@ -673,6 +685,11 @@ export async function setupUnifiedAuth(app: Express) {
                 Boolean(profile?.emails?.[0]?.value) ||
                 Boolean(profile?._json?.email),
             });
+            if (isPossibleDuplicateAccountError(error)) {
+              return done(null, false, {
+                message: "possible_duplicate_account",
+              });
+            }
             return done(error, null);
           }
         },
@@ -927,6 +944,11 @@ export async function setupUnifiedAuth(app: Express) {
                 Boolean(profile?.emails?.[0]?.value) ||
                 Boolean(profile?._json?.email),
             });
+            if (isPossibleDuplicateAccountError(error)) {
+              return done(null, false, {
+                message: "possible_duplicate_account",
+              });
+            }
             return done(error, null);
           }
         },
@@ -1034,6 +1056,12 @@ export async function setupUnifiedAuth(app: Express) {
     const code = String(error?.code || "");
     const message = String(error?.message || "");
     const duplicateField = String(error?.duplicateField || "");
+    if (code.toUpperCase() === "POSSIBLE_DUPLICATE_ACCOUNT") {
+      return {
+        status: 409,
+        body: possibleDuplicateAccountResponse(),
+      };
+    }
     const isDuplicate =
       error?.status === 409 ||
       code === "23505" ||

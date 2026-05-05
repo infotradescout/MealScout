@@ -38,6 +38,16 @@ export function registerRestaurantSignupRoutes(
     const code = String(error?.code || "");
     const message = String(error?.message || "");
     const duplicateField = String(error?.duplicateField || "");
+    if (code.toUpperCase() === "POSSIBLE_DUPLICATE_ACCOUNT") {
+      return {
+        status: 409,
+        body: {
+          message:
+            "It looks like you may already have a MealScout account. Please sign in to that account, or contact MealScout support and we will connect the right profile.",
+          code: "possible_duplicate_account",
+        },
+      };
+    }
     const isDuplicate =
       error?.status === 409 ||
       code === "23505" ||

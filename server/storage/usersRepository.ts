@@ -9,7 +9,7 @@ import {
 } from "@shared/schema";
 import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { db, pool } from "../db";
-import { eq, and, or, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql, gte } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { syncUserToBrevo } from "../brevoCrm";
 import { ensureAffiliateTag } from "../affiliateTagService";
@@ -111,6 +111,13 @@ function normalizePhone(value?: string | null): string | null {
   return normalized || null;
 }
 
+function normalizeIdentityName(value?: string | null): string {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function emailMatchesNormalized(value: string) {
   return sql`lower(btrim(${users.email})) = ${value}`;
 }
@@ -128,6 +135,19 @@ function duplicateAccountError(kind: "email" | "phone") {
   error.code = kind === "email" ? "ACCOUNT_EXISTS_EMAIL" : "ACCOUNT_EXISTS_PHONE";
   error.status = 409;
   error.duplicateField = kind;
+  return error;
+}
+
+function possibleDuplicateAccountError(match: Pick<User, "id" | "email" | "userType" | "createdAt">) {
+  const error: any = new Error(
+    "It looks like this person may already have a MealScout account. Please sign in to the existing account, or ask MealScout support to connect the right profile.",
+  );
+  error.code = "POSSIBLE_DUPLICATE_ACCOUNT";
+  error.status = 409;
+  error.duplicateField = "identity";
+  error.duplicateUserId = match.id;
+  error.duplicateEmail = match.email;
+  error.duplicateUserType = match.userType;
   return error;
 }
 
@@ -188,6 +208,63 @@ async function findUserByNormalizedEmail(value?: string | null): Promise<User | 
     .where(emailMatchesNormalized(normalized))
     .limit(1);
   return user;
+}
+
+async function findRecentPossibleDuplicateByIdentity(params: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): Promise<Pick<User, "id" | "email" | "userType" | "createdAt"> | undefined> {
+  const firstName = normalizeIdentityName(params.firstName);
+  const lastName = normalizeIdentityName(params.lastName);
+  const email = normalizeEmail(params.email);
+  const combined = `${firstName} ${lastName}`.trim();
+  if (firstName.length < 2 || lastName.length < 2 || combined.length < 7) {
+    return undefined;
+  }
+
+  const placeholderNames = new Set([
+    "google user",
+    "facebook user",
+    "meal scout",
+    "mealscout user",
+    "new user",
+    "test user",
+  ]);
+  if (placeholderNames.has(combined)) return undefined;
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [match] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      userType: users.userType,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(
+      and(
+        sql`lower(btrim(coalesce(${users.firstName}, ''))) = ${firstName}`,
+        sql`lower(btrim(coalesce(${users.lastName}, ''))) = ${lastName}`,
+        email
+          ? sql`lower(btrim(coalesce(${users.email}, ''))) <> ${email}`
+          : sql`true`,
+        gte(users.createdAt, since),
+        or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+      ),
+    )
+    .limit(1);
+
+  return match || undefined;
+}
+
+async function assertNoRecentIdentityDuplicate(params: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}) {
+  const match = await findRecentPossibleDuplicateByIdentity(params);
+  if (match) throw possibleDuplicateAccountError(match);
 }
 
 // ── Repository factory ────────────────────────────────────────────────────────
@@ -417,6 +494,12 @@ export function createUsersRepository() {
             }
           }
 
+          await assertNoRecentIdentityDuplicate({
+            firstName: tsData.firstName,
+            lastName: tsData.lastName,
+            email: tsEmail,
+          });
+
           const [user] = await db
             .insert(users)
             .values({
@@ -485,6 +568,12 @@ export function createUsersRepository() {
               return user;
             }
           }
+
+          await assertNoRecentIdentityDuplicate({
+            firstName: googleData.firstName,
+            lastName: googleData.lastName,
+            email: googleEmail,
+          });
 
           const [user] = await db
             .insert(users)
@@ -557,6 +646,12 @@ export function createUsersRepository() {
             }
           }
 
+          await assertNoRecentIdentityDuplicate({
+            firstName: facebookData.firstName,
+            lastName: facebookData.lastName,
+            email: facebookEmail,
+          });
+
           const [user] = await db
             .insert(users)
             .values({
@@ -599,6 +694,12 @@ export function createUsersRepository() {
               throw duplicateAccountError("phone");
             }
           }
+
+          await assertNoRecentIdentityDuplicate({
+            firstName: emailData.firstName,
+            lastName: emailData.lastName,
+            email,
+          });
 
           const [user] = await db
             .insert(users)

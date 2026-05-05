@@ -4247,6 +4247,22 @@ export default function AdminDashboard() {
     });
   }, [sortedUsers, userSearch, userTypeFilter]);
 
+  const userRoleRank = (userType?: string) => {
+    const value = String(userType || "")
+      .trim()
+      .toLowerCase();
+    if (value === "super_admin") return 100;
+    if (value === "admin") return 90;
+    if (value === "staff") return 80;
+    if (value === "restaurant_owner") return 70;
+    if (value === "caterer") return 65;
+    if (value === "private_chef") return 64;
+    if (value === "food_truck") return 60;
+    if (value === "host") return 50;
+    if (value === "event_coordinator") return 40;
+    return 10;
+  };
+
   const duplicateEmailGroups = useMemo(() => {
     const groups = new Map<string, any[]>();
     for (const user of users) {
@@ -4259,22 +4275,6 @@ export default function AdminDashboard() {
       groups.set(normalizedEmail, existing);
     }
 
-    const roleRank = (userType?: string) => {
-      const value = String(userType || "")
-        .trim()
-        .toLowerCase();
-      if (value === "super_admin") return 100;
-      if (value === "admin") return 90;
-      if (value === "staff") return 80;
-      if (value === "restaurant_owner") return 70;
-      if (value === "caterer") return 65;
-      if (value === "private_chef") return 64;
-      if (value === "food_truck") return 60;
-      if (value === "host") return 50;
-      if (value === "event_coordinator") return 40;
-      return 10;
-    };
-
     return Array.from(groups.entries())
       .map(([normalizedEmail, members]) => {
         if (members.length < 2) return null;
@@ -4283,8 +4283,8 @@ export default function AdminDashboard() {
           const bVerified = b?.emailVerified ? 1 : 0;
           if (aVerified !== bVerified) return bVerified - aVerified;
 
-          const aRank = roleRank(a?.userType);
-          const bRank = roleRank(b?.userType);
+          const aRank = userRoleRank(a?.userType);
+          const bRank = userRoleRank(b?.userType);
           if (aRank !== bRank) return bRank - aRank;
 
           const aCreated = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -4294,6 +4294,52 @@ export default function AdminDashboard() {
 
         return {
           normalizedEmail,
+          primary: sortedMembers[0],
+          duplicates: sortedMembers.slice(1),
+          members: sortedMembers,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.members.length - a.members.length);
+  }, [users]);
+
+  const duplicateIdentityGroups = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const user of users) {
+      const normalizedName = `${user?.firstName || ""} ${user?.lastName || ""}`
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+      if (!normalizedName || normalizedName.length < 7) continue;
+      const existing = groups.get(normalizedName) || [];
+      existing.push(user);
+      groups.set(normalizedName, existing);
+    }
+
+    return Array.from(groups.entries())
+      .map(([normalizedName, members]) => {
+        const uniqueEmails = new Set(
+          members
+            .map((member) => String(member?.email || "").trim().toLowerCase())
+            .filter(Boolean),
+        );
+        if (members.length < 2 || uniqueEmails.size < 2) return null;
+        const sortedMembers = [...members].sort((a: any, b: any) => {
+          const aRank = userRoleRank(a?.userType);
+          const bRank = userRoleRank(b?.userType);
+          if (aRank !== bRank) return bRank - aRank;
+
+          const aVerified = a?.emailVerified ? 1 : 0;
+          const bVerified = b?.emailVerified ? 1 : 0;
+          if (aVerified !== bVerified) return bVerified - aVerified;
+
+          const aCreated = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return aCreated - bCreated;
+        });
+
+        return {
+          normalizedName,
           primary: sortedMembers[0],
           duplicates: sortedMembers.slice(1),
           members: sortedMembers,
@@ -9516,6 +9562,108 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {duplicateIdentityGroups.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Possible Duplicate People
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Exact-name matches with different emails. These are
+                          usually OAuth or role-switch duplicates that should be
+                          merged or cleaned up before sharing.
+                        </p>
+                      </div>
+                      <Badge variant="outline">
+                        {duplicateIdentityGroups.reduce(
+                          (sum: number, group: any) =>
+                            sum + group.duplicates.length,
+                          0,
+                        )}{" "}
+                        review
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {duplicateIdentityGroups
+                        .slice(0, 20)
+                        .map((group: any) => (
+                          <div
+                            key={group.normalizedName}
+                            className="rounded-md border border-[color:var(--border-subtle)] bg-background p-2.5"
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium">
+                                  {group.normalizedName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Preferred: {group.primary?.email || "no email"} ·{" "}
+                                  {group.primary?.userType || "customer"} · ID{" "}
+                                  {group.primary?.id}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedUser(group.primary);
+                                  setUserDetailsOpen(true);
+                                }}
+                              >
+                                Details
+                              </Button>
+                            </div>
+                            <div className="space-y-1.5">
+                              {group.duplicates.map((dup: any) => (
+                                <div
+                                  key={dup.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-[color:var(--border-subtle)] p-2"
+                                >
+                                  <p className="text-xs text-muted-foreground">
+                                    {dup.email || "no email"} ·{" "}
+                                    {dup.userType || "customer"} · created{" "}
+                                    {dup.createdAt
+                                      ? new Date(dup.createdAt).toLocaleString()
+                                      : "unknown"}{" "}
+                                    · ID {dup.id}
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedUser(dup);
+                                        setUserDetailsOpen(true);
+                                      }}
+                                    >
+                                      Details
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      disabled={deleteUser.isPending}
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `Delete duplicate account ${dup.id} (${dup.email || group.normalizedName})?`,
+                                          )
+                                        ) {
+                                          deleteUser.mutate(dup.id);
+                                        }
+                                      }}
+                                    >
+                                      Delete Duplicate
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}
