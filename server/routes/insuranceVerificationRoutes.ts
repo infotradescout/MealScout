@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import multer from "multer";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -13,6 +14,30 @@ import {
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { validateDocuments } from "../documentValidation";
 import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
+import { isCloudinaryConfigured, uploadRawToCloudinary } from "../imageUpload";
+
+const insuranceDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set([
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+      "image/heic-sequence",
+      "image/heif-sequence",
+      "application/pdf",
+    ]);
+    if (allowed.has(String(file.mimetype).toLowerCase())) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only JPG, PNG, or PDF files are allowed"));
+  },
+});
 
 const entityInputSchema = z.object({
   entityType: z.enum([
@@ -233,6 +258,48 @@ async function resolveAdminInsuranceEntity(
 }
 
 export function registerInsuranceVerificationRoutes(app: Express) {
+  app.post(
+    "/api/business/insurance/upload-document",
+    isAuthenticated,
+    (req: any, res, next) => {
+      insuranceDocumentUpload.single("document")(req, res, (err: any) => {
+        if (!err) return next();
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({ message: "File is too large. Max 12MB." });
+        }
+        return res.status(400).json({ message: err?.message || "Invalid upload" });
+      });
+    },
+    async (req: any, res) => {
+      try {
+        if (!isCloudinaryConfigured()) {
+          return res
+            .status(503)
+            .json({ message: "Document upload service not configured." });
+        }
+        if (!req.file?.buffer) {
+          return res.status(400).json({ message: "No document uploaded." });
+        }
+        const uploaded = await uploadRawToCloudinary(
+          req.file.buffer,
+          "insurance-documents",
+          `insurance-${req.user?.id || "user"}-${Date.now()}`,
+        );
+        return res.status(201).json({
+          url: uploaded.secureUrl,
+          bytes: uploaded.bytes,
+          format: uploaded.format,
+          name: req.file.originalname,
+        });
+      } catch (error: any) {
+        console.error("Error uploading insurance document:", error);
+        return res
+          .status(500)
+          .json({ message: error?.message || "Failed to upload document" });
+      }
+    },
+  );
+
   app.get("/api/business/insurance/status", isAuthenticated, async (req: any, res) => {
     try {
       const entity = await requireOwnedInsuranceEntity(req, res);

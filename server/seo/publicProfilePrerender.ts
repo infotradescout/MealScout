@@ -14,6 +14,7 @@ import {
   suppliers,
 } from "@shared/schema";
 import { shouldServePrerender } from "./botDetection";
+import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
 
 type PageLink = { label: string; href: string };
 
@@ -296,6 +297,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <meta name="twitter:title" content="${escapeHtml(page.title)}">
   <meta name="twitter:description" content="${escapeHtml(page.description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
+  ${buildOfficialSocialEntityMetaTags()}
   ${schema
     .map(
       (entry) =>

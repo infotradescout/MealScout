@@ -4,6 +4,7 @@ import path from "path";
 import { type Server } from "http";
 import { fileURLToPath } from "url";
 import { nanoid } from "nanoid";
+import { injectOfficialSocialEntityMeta } from "./seo/officialSocialEntity";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,6 +61,7 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
+      template = injectOfficialSocialEntityMeta(template);
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
@@ -82,6 +84,7 @@ export function serveStatic(app: Express) {
 
   app.use(
     express.static(distPath, {
+      index: false,
       setHeaders: (res, filePath) => {
         // Service workers and web manifests must be revalidated to allow updates.
         if (
@@ -133,6 +136,16 @@ export function serveStatic(app: Express) {
 
   // Fall through to index.html for SPA routes only.
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const indexPath = path.resolve(distPath, "index.html");
+    const html = fs.readFileSync(indexPath, "utf-8");
+    res
+      .status(200)
+      .set({
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      })
+      .send(injectOfficialSocialEntityMeta(html));
   });
 }

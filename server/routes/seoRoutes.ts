@@ -29,6 +29,7 @@ import {
   videoStories,
 } from "@shared/schema";
 import { getIndexNowConfig } from "../services/indexNow";
+import { getOfficialSocialProfiles } from "../seo/officialSocialEntity";
 
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
@@ -244,10 +245,7 @@ const buildMealScoutAiFacts = (baseUrl: string) => {
           "Food truck booking",
           "Food and hospitality hiring",
         ],
-        sameAs: [
-          "https://www.facebook.com/mealscout",
-          "https://twitter.com/mealscout",
-        ],
+        sameAs: getOfficialSocialProfiles(),
         contactPoint: {
           "@type": "ContactPoint",
           email: "info.mealscout@gmail.com",

@@ -13,6 +13,11 @@ const ACCEPTED_MIME_TYPES = [
   "image/jpeg",
   "image/jpg",
   "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
   "application/pdf",
 ];
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -53,12 +58,28 @@ export function validateDocuments(documents: string[]): DocumentValidationResult
 function validateSingleDocument(document: string, index: number): DocumentValidationError[] {
   const errors: DocumentValidationError[] = [];
   const fieldName = `documents[${index}]`;
-  
+
+  // Allow uploaded document URLs from Cloudinary in addition to inline data URLs.
+  if (/^https?:\/\//i.test(document)) {
+    const cloudName = (process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+    const cloudinaryPrefix = cloudName
+      ? `https://res.cloudinary.com/${cloudName}/`
+      : "https://res.cloudinary.com/";
+    if (!document.startsWith(cloudinaryPrefix)) {
+      errors.push({
+        field: fieldName,
+        message:
+          "Document URL must come from MealScout secure storage",
+      });
+    }
+    return errors;
+  }
+
   // Check if it's a data URL
   if (!document.startsWith('data:')) {
     errors.push({
       field: fieldName,
-      message: 'Document must be a valid data URL'
+      message: 'Document must be a valid data URL or uploaded document URL'
     });
     return errors;
   }

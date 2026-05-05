@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { shouldServePrerender } from "./botDetection";
+import { buildOfficialSocialEntityMetaTags } from "./officialSocialEntity";
 
 type AcquisitionPageConfig = {
   path: string;
@@ -54,6 +55,7 @@ const buildPageHtml = (
   <meta name="twitter:title" content="${escapeHtml(page.title)}">
   <meta name="twitter:description" content="${escapeHtml(page.description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
+  ${buildOfficialSocialEntityMetaTags()}
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <script type="application/ld+json">${JSON.stringify(schema)}</script>
   <style>
