@@ -233,7 +233,7 @@ async function findRecentPossibleDuplicateByIdentity(params: {
   ]);
   if (placeholderNames.has(combined)) return undefined;
 
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const [match] = await db
     .select({
       id: users.id,
@@ -869,6 +869,29 @@ export function createUsersRepository() {
         throw err;
       }
 
+      const normalizedPhone = normalizePhone(userData.phone);
+      if (normalizedPhone) {
+        const [existingPhone] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(
+            and(
+              phoneMatchesNormalized(normalizedPhone),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
+          .limit(1);
+        if (existingPhone) {
+          throw duplicateAccountError("phone");
+        }
+      }
+
+      await assertNoRecentIdentityDuplicate({
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: normalizedEmail,
+      });
+
       const hashedPassword = await bcrypt.hash(userData.tempPassword, 10);
       const affiliatePercent = getDefaultAffiliatePercent(userData.userType);
 
@@ -878,7 +901,7 @@ export function createUsersRepository() {
           email: normalizedEmail,
           firstName: userData.firstName,
           lastName: userData.lastName,
-          phone: userData.phone,
+          phone: normalizedPhone ?? userData.phone,
           userType: userData.userType,
           passwordHash: hashedPassword,
           mustResetPassword: true,
@@ -928,6 +951,29 @@ export function createUsersRepository() {
         throw err;
       }
 
+      const normalizedPhone = normalizePhone(data.phone);
+      if (normalizedPhone) {
+        const [existingPhone] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(
+            and(
+              phoneMatchesNormalized(normalizedPhone),
+              or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+            ),
+          )
+          .limit(1);
+        if (existingPhone) {
+          throw duplicateAccountError("phone");
+        }
+      }
+
+      await assertNoRecentIdentityDuplicate({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: normalizedEmail,
+      });
+
       const affiliatePercent = getDefaultAffiliatePercent(data.userType);
       const shouldAutoVerify = data.userType === "admin" || data.userType === "super_admin";
 
@@ -937,7 +983,7 @@ export function createUsersRepository() {
           email: normalizedEmail,
           firstName: data.firstName,
           lastName: data.lastName,
-          phone: data.phone,
+          phone: normalizedPhone ?? data.phone,
           userType: data.userType,
           passwordHash: null,
           mustResetPassword: false,
