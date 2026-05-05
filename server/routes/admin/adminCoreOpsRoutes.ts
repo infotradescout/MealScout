@@ -263,76 +263,124 @@ const normalizeRecentSignupCardName = (value: unknown) =>
     .toLowerCase()
     .replace(/\s+/g, " ");
 
-const dedupeRecentSignupCards = (items: any[]) => {
-  const groups = new Map<string, any[]>();
-  const passthrough: any[] = [];
+const normalizeRecentSignupEmail = (value: unknown) =>
+  String(value || "").trim().toLowerCase();
 
-  for (const item of items) {
-    const name = normalizeRecentSignupCardName(item?.displayName);
-    if (!name || name === "new mealscout member" || name.length < 4) {
-      passthrough.push(item);
-      continue;
-    }
+const normalizeRecentSignupPhone = (value: unknown) =>
+  String(value || "").replace(/\D/g, "");
 
-    const rows = groups.get(name) || [];
-    rows.push(item);
-    groups.set(name, rows);
+const recentSignupRolePriority = (row: any) => {
+  const kind = String(row?.kind || "").toLowerCase();
+  if (
+    [
+      "food_truck",
+      "restaurant",
+      "caterer",
+      "private_chef",
+      "host",
+      "supplier",
+    ].includes(kind)
+  ) {
+    return 40;
   }
+  if (kind === "team") return 5;
+  return 0;
+};
 
-  const kept = [...passthrough];
+const scoreRecentSignupCard = (row: any) =>
+  recentSignupRolePriority(row) +
+  (row?.entity !== "user" ? 30 : 0) +
+  (row?.isPublic ? 20 : 0) +
+  (row?.imageUrl ? 10 : 0) +
+  (row?.description ? 8 : 0) +
+  (row?.isVerified ? 6 : 0);
+
+const compareRecentSignupCards = (a: any, b: any) => {
+  const scoreDiff = scoreRecentSignupCard(b) - scoreRecentSignupCard(a);
+  if (scoreDiff) return scoreDiff;
+  return (
+    new Date(b?.createdAt || 0).getTime() -
+    new Date(a?.createdAt || 0).getTime()
+  );
+};
+
+const recentSignupStrongIdentityKeys = (item: any) => {
+  const keys: string[] = [];
+  const ownerId = String(item?.ownerId || "").trim();
+  const email = normalizeRecentSignupEmail(item?.ownerEmail);
+  const phone = normalizeRecentSignupPhone(item?.ownerPhone);
+  if (ownerId) keys.push(`owner:${ownerId}`);
+  if (email) keys.push(`email:${email}`);
+  if (phone && phone.length >= 7) keys.push(`phone:${phone}`);
+  return keys;
+};
+
+const dedupeRecentSignupCards = (items: any[]) => {
+  const kept = new Set(items);
   const hidden: any[] = [];
 
-  for (const rows of groups.values()) {
-    if (rows.length === 1) {
-      kept.push(rows[0]);
-      continue;
-    }
+  const hideRow = (row: any) => {
+    if (!kept.has(row)) return;
+    kept.delete(row);
+    hidden.push(row);
+  };
 
-    const businessRows = rows.filter((row) => row?.entity !== "user");
-    if (businessRows.length) {
-      kept.push(...businessRows);
-      hidden.push(...rows.filter((row) => row?.entity === "user"));
-      continue;
-    }
+  const applyGroups = (
+    groups: Map<string, any[]>,
+    options: { weakName?: boolean } = {},
+  ) => {
+    for (const rows of groups.values()) {
+      const activeRows = rows.filter((row) => kept.has(row));
+      if (activeRows.length < 2) continue;
 
-    const rankedRows = [...rows].sort((a, b) => {
-      const rolePriority = (row: any) => {
-        const kind = String(row?.kind || "").toLowerCase();
-        if (
-          [
-            "food_truck",
-            "restaurant",
-            "caterer",
-            "private_chef",
-            "host",
-            "supplier",
-          ].includes(kind)
-        ) {
-          return 40;
-        }
-        if (kind === "team") return 5;
-        return 0;
-      };
-      const score = (row: any) =>
-        rolePriority(row) +
-        (row?.entity !== "user" ? 30 : 0) +
-        (row?.isPublic ? 20 : 0) +
-        (row?.imageUrl ? 10 : 0) +
-        (row?.description ? 8 : 0) +
-        (row?.isVerified ? 6 : 0);
-      const scoreDiff = score(b) - score(a);
-      if (scoreDiff) return scoreDiff;
-      return (
-        new Date(b?.createdAt || 0).getTime() -
-        new Date(a?.createdAt || 0).getTime()
-      );
-    });
-    kept.push(rankedRows[0]);
-    hidden.push(...rankedRows.slice(1));
+      const businessRows = activeRows.filter((row) => row?.entity !== "user");
+      if (businessRows.length) {
+        activeRows
+          .filter((row) => row?.entity === "user")
+          .forEach((row) => hideRow(row));
+        continue;
+      }
+
+      if (options.weakName) {
+        const hasCustomer = activeRows.some(
+          (row) => String(row?.kind || "").toLowerCase() === "customer",
+        );
+        const hasHigherIntentUser = activeRows.some(
+          (row) =>
+            row?.entity === "user" &&
+            recentSignupRolePriority(row) > 0 &&
+            String(row?.kind || "").toLowerCase() !== "team",
+        );
+        if (!hasCustomer || !hasHigherIntentUser) continue;
+      }
+
+      const rankedRows = [...activeRows].sort(compareRecentSignupCards);
+      rankedRows.slice(1).forEach((row) => hideRow(row));
+    }
+  };
+
+  const strongGroups = new Map<string, any[]>();
+  for (const item of items) {
+    for (const key of recentSignupStrongIdentityKeys(item)) {
+      const rows = strongGroups.get(key) || [];
+      rows.push(item);
+      strongGroups.set(key, rows);
+    }
   }
+  applyGroups(strongGroups);
+
+  const nameGroups = new Map<string, any[]>();
+  for (const item of items) {
+    const name = normalizeRecentSignupCardName(item?.displayName);
+    if (!name || name === "new mealscout member" || name.length < 4) continue;
+    const rows = nameGroups.get(name) || [];
+    rows.push(item);
+    nameGroups.set(name, rows);
+  }
+  applyGroups(nameGroups, { weakName: true });
 
   return {
-    kept: kept.sort(
+    kept: Array.from(kept).sort(
       (a, b) =>
         new Date(b?.createdAt || 0).getTime() -
         new Date(a?.createdAt || 0).getTime(),
@@ -1686,6 +1734,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             facebookPageUrl: restaurants.facebookPageUrl,
             createdAt: restaurants.createdAt,
             ownerEmail: users.email,
+            ownerPhone: users.phone,
             ownerFirstName: users.firstName,
             ownerLastName: users.lastName,
             ownerProfileImageUrl: users.profileImageUrl,
@@ -1738,6 +1787,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             profileLastSynced: hosts.profileLastSynced,
             createdAt: hosts.createdAt,
             ownerEmail: users.email,
+            ownerPhone: users.phone,
             ownerFirstName: users.firstName,
             ownerLastName: users.lastName,
             ownerProfileImageUrl: users.profileImageUrl,
@@ -1774,6 +1824,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             deliveryNotes: suppliers.deliveryNotes,
             createdAt: suppliers.createdAt,
             ownerEmail: users.email,
+            ownerPhone: users.phone,
             ownerFirstName: users.firstName,
             ownerLastName: users.lastName,
             ownerProfileImageUrl: users.profileImageUrl,
@@ -2166,6 +2217,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
               null,
             ownerEmail: row.ownerEmail || null,
+            ownerPhone: row.ownerPhone || null,
             ownerAffiliateTag: row.ownerAffiliateTag || null,
             facebookPageId: row.facebookPageId || null,
             facebookPageUrl: row.facebookPageUrl || null,
@@ -2255,6 +2307,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
               null,
             ownerEmail: row.ownerEmail || null,
+            ownerPhone: row.ownerPhone || null,
             ownerAffiliateTag: row.ownerAffiliateTag || null,
             facebookPageId: row.facebookPageId || null,
             facebookPageUrl: row.facebookPageUrl || null,
@@ -2338,6 +2391,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") ||
               null,
             ownerEmail: row.ownerEmail || row.contactEmail || null,
+            ownerPhone: row.ownerPhone || null,
             ownerAffiliateTag: row.ownerAffiliateTag || null,
             facebookPageId: null,
             facebookPageUrl: null,
@@ -2394,6 +2448,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             createdAt: row.createdAt,
             ownerName: displayName,
             ownerEmail: row.email || null,
+            ownerPhone: row.phone || null,
             ownerAffiliateTag: row.affiliateTag || null,
             facebookPageId: null,
             facebookPageUrl: null,
