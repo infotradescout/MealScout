@@ -36,6 +36,8 @@ import {
   Building2,
   Beer,
   Truck,
+  ChefHat,
+  UtensilsCrossed,
 } from "lucide-react";
 import { BackHeader } from "@/components/back-header";
 import { SEOHead } from "@/components/seo-head";
@@ -76,7 +78,12 @@ type AccountType =
   | "event_organizer"
   | "business"
   | "supplier";
-type BusinessSubType = "restaurant" | "bar" | "food_truck";
+type BusinessSubType =
+  | "restaurant"
+  | "bar"
+  | "food_truck"
+  | "caterer"
+  | "private_chef";
 
 type SignupFlowOption = {
   id: string;
@@ -123,6 +130,24 @@ const signupFlowOptions: SignupFlowOption[] = [
     description: "Promote food, drinks, and events.",
     href: "/customer-signup?role=business&businessType=bar",
     icon: Beer,
+  },
+  {
+    id: "caterer",
+    accountType: "business",
+    businessSubType: "caterer",
+    label: "Caterer",
+    description: "Create a catering-ready profile and booking path.",
+    href: "/customer-signup?role=business&businessType=caterer",
+    icon: UtensilsCrossed,
+  },
+  {
+    id: "private_chef",
+    accountType: "business",
+    businessSubType: "private_chef",
+    label: "Private Chef",
+    description: "Get booked for private dinners and events.",
+    href: "/customer-signup?role=business&businessType=private_chef",
+    icon: ChefHat,
   },
   {
     id: "host",
@@ -190,11 +215,12 @@ export default function CustomerSignup({
     useState<AccountType>(initialAccountType);
   const businessTypeParam = searchParams.get("businessType");
   const initialBusinessSubType: BusinessSubType =
-    businessTypeParam === "food_truck"
-      ? "food_truck"
-      : businessTypeParam === "bar"
-        ? "bar"
-        : "restaurant";
+    businessTypeParam === "food_truck" ||
+    businessTypeParam === "bar" ||
+    businessTypeParam === "caterer" ||
+    businessTypeParam === "private_chef"
+      ? businessTypeParam
+      : "restaurant";
   const [businessSubType, setBusinessSubType] = useState<BusinessSubType>(
     initialAccountType === "business" ? initialBusinessSubType : "restaurant",
   );
@@ -277,6 +303,12 @@ export default function CustomerSignup({
       params.set("businessType", subtype);
     }
     window.location.href = `/verify-email?${params.toString()}`;
+  };
+
+  const businessProfileRedirect = (subtype: BusinessSubType) => {
+    if (subtype === "food_truck") return "/truck-onboarding";
+    const params = new URLSearchParams({ businessType: subtype });
+    return `/restaurant-signup?${params.toString()}`;
   };
 
   const customerSignupMutation = useMutation({
@@ -369,12 +401,7 @@ export default function CustomerSignup({
         businessSubType,
         stage: "signup_success",
       });
-      const businessRedirect =
-        businessSubType === "food_truck"
-          ? "/truck-onboarding"
-          : businessSubType === "bar"
-            ? "/restaurant-signup?businessType=bar"
-            : "/restaurant-signup";
+      const businessRedirect = businessProfileRedirect(businessSubType);
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_login",
@@ -537,12 +564,7 @@ export default function CustomerSignup({
     }
 
     if (accountType === "business") {
-      const businessRedirect =
-        businessSubType === "food_truck"
-          ? "/truck-onboarding"
-          : businessSubType === "bar"
-            ? "/restaurant-signup?businessType=bar"
-            : "/restaurant-signup";
+      const businessRedirect = businessProfileRedirect(businessSubType);
       setLocation(businessRedirect);
       return;
     }
@@ -681,7 +703,11 @@ export default function CustomerSignup({
             ? "Create food truck profile"
             : businessSubType === "bar"
               ? "Create bar profile"
-              : "Create restaurant profile"
+              : businessSubType === "caterer"
+                ? "Create caterer profile"
+                : businessSubType === "private_chef"
+                  ? "Create private chef profile"
+                  : "Create restaurant profile"
           : accountType === "supplier"
             ? "Create supplier profile"
             : "Go to dashboard";
@@ -794,11 +820,11 @@ export default function CustomerSignup({
             </div>
 
             {accountType === "business" && (
-              <div className="inline-flex w-full overflow-hidden rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-clean">
+              <div className="grid w-full grid-cols-2 overflow-hidden rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-clean sm:grid-cols-5">
                 <button
                   type="button"
                   onClick={() => setBusinessSubType("restaurant")}
-                  className={`flex-1 px-3 py-2 transition-colors ${
+                  className={`px-3 py-2 transition-colors ${
                     businessSubType === "restaurant"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                       : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
@@ -809,7 +835,7 @@ export default function CustomerSignup({
                 <button
                   type="button"
                   onClick={() => setBusinessSubType("bar")}
-                  className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                  className={`border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
                     businessSubType === "bar"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                       : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
@@ -820,13 +846,35 @@ export default function CustomerSignup({
                 <button
                   type="button"
                   onClick={() => setLocation("/truck-onboarding")}
-                  className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                  className={`border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors sm:border-l sm:border-t-0 ${
                     businessSubType === "food_truck"
                       ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                       : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
                   }`}
                 >
                   Food Truck
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusinessSubType("caterer")}
+                  className={`border-l border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors sm:border-t-0 ${
+                    businessSubType === "caterer"
+                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                      : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                >
+                  Caterer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusinessSubType("private_chef")}
+                  className={`col-span-2 border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors sm:col-span-1 sm:border-l sm:border-t-0 ${
+                    businessSubType === "private_chef"
+                      ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                      : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                  }`}
+                >
+                  Private Chef
                 </button>
               </div>
             )}
@@ -1202,6 +1250,12 @@ export default function CustomerSignup({
                   {accountType === "business" &&
                   businessSubType === "food_truck"
                     ? "Create Account & Claim Food Truck"
+                    : accountType === "business" &&
+                        businessSubType === "caterer"
+                      ? "Create Account & Build Catering Profile"
+                      : accountType === "business" &&
+                          businessSubType === "private_chef"
+                        ? "Create Account & Build Private Chef Profile"
                     : "Create Account"}
                 </Button>
               </form>
