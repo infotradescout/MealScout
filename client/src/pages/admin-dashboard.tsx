@@ -5900,7 +5900,7 @@ export default function AdminDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({
-        title: "User Verified",
+        title: "Email Verified",
         description: "Email verification marked as complete.",
       });
     },
@@ -5932,6 +5932,7 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({
         queryKey: ["/api/admin/insurance-verifications"],
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({
         title: "Business Proof Approved",
         description:
@@ -9616,7 +9617,7 @@ export default function AdminDashboard() {
                               data-testid={`button-verify-user-${user.id}`}
                             >
                               <CheckCircle className="w-3 h-3 mr-1" />
-                              Verify Email
+                              Mark Email Verified
                             </Button>
                           )}
                           {isAdminOrSuper && isBusinessUser && (
@@ -9644,7 +9645,9 @@ export default function AdminDashboard() {
                               data-testid={`button-verify-business-${user.id}`}
                             >
                               <Shield className="w-3 h-3 mr-1" />
-                              {pendingInsurance ? "Verify Business" : "Needs Proof"}
+                              {pendingInsurance
+                                ? "Approve Business Proof"
+                                : "Needs Proof"}
                             </Button>
                           )}
                           <Button

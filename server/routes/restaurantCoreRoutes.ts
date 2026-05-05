@@ -920,7 +920,16 @@ export function registerRestaurantCoreRoutes(
         let insuranceStatus: "valid" | "pending" | "rejected" | "expired" | "not_submitted" =
           "not_submitted";
         if (primaryRestaurant) {
-          const insuranceEntityType = isFoodTruckOwner ? "food_truck" : "restaurant";
+          const primaryBusinessType = String(
+            (primaryRestaurant as any).businessType || "",
+          ).toLowerCase();
+          const insuranceEntityType = isFoodTruckOwner
+            ? "food_truck"
+            : primaryBusinessType === "caterer"
+              ? "caterer"
+              : primaryBusinessType === "private_chef"
+                ? "private_chef"
+                : "restaurant";
           const [insuranceRecord] = await db
             .select({
               status: businessInsuranceVerifications.status,

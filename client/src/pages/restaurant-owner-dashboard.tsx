@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import DocumentUpload from "@/components/document-upload";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -164,6 +165,11 @@ interface OnboardingCompletion {
     snoozedAt?: string | null;
     snoozedUntil?: string | null;
   };
+  insurance?: {
+    required: boolean;
+    status: "valid" | "pending" | "rejected" | "expired" | "not_submitted";
+    valid: boolean;
+  };
 }
 
 interface OwnerMenuSummary {
@@ -224,6 +230,14 @@ export default function RestaurantOwnerDashboard() {
   >("month");
   const [onboardingDocuments, setOnboardingDocuments] = useState<string[]>([]);
   const [onboardingLicenseNumber, setOnboardingLicenseNumber] = useState("");
+  const [insuranceForm, setInsuranceForm] = useState({
+    carrierName: "",
+    policyNumber: "",
+    expiresAt: "",
+    coverageAmount: "",
+    attestedCommercialCoverage: false,
+    attestedJurisdictionCompliance: false,
+  });
   const [verificationUploadOpen, setVerificationUploadOpen] = useState(false);
   const [verificationSkippedToday, setVerificationSkippedToday] =
     useState(false);
@@ -685,6 +699,9 @@ export default function RestaurantOwnerDashboard() {
   const selectedBusinessIndex = restaurants.findIndex(
     (restaurant) => restaurant.id === selectedRestaurant,
   );
+  const selectedBusinessType = String(
+    (currentRestaurant as any)?.businessType || "",
+  ).toLowerCase();
   const ownerBusinessLabel = currentRestaurant
     ? isFoodTruckBusiness(currentRestaurant)
       ? "truck"
@@ -698,8 +715,15 @@ export default function RestaurantOwnerDashboard() {
   const selectedRestaurantIsFoodTruck = Boolean(
     isFoodTruck ||
     currentRestaurant?.isFoodTruck ||
-    (currentRestaurant as any)?.businessType === "food_truck",
+    selectedBusinessType === "food_truck",
   );
+  const selectedInsuranceEntityType = selectedRestaurantIsFoodTruck
+    ? "food_truck"
+    : selectedBusinessType === "caterer"
+      ? "caterer"
+      : selectedBusinessType === "private_chef"
+        ? "private_chef"
+        : "restaurant";
   const visibleActiveDeals = deals.filter(
     (deal: any) => deal?.isActive !== false,
   );
@@ -708,13 +732,13 @@ export default function RestaurantOwnerDashboard() {
     !isStaff &&
     onboardingCompletion &&
     (onboardingCompletion.overallPct < 100 ||
-      (!selectedRestaurantIsFoodTruck &&
-        onboardingCompletion.verification.status !== "verified")),
+      onboardingCompletion.insurance?.valid !== true),
   );
-  const verificationStatus = onboardingCompletion?.verification.status || null;
-  const needsVerificationSubmission = Boolean(
-    !selectedRestaurantIsFoodTruck &&
-      onboardingCompletion?.verification.needsSubmission,
+  const insuranceStatus =
+    onboardingCompletion?.insurance?.status || "not_submitted";
+  const needsInsuranceSubmission = Boolean(
+    onboardingCompletion?.insurance?.required &&
+      !["valid", "pending"].includes(insuranceStatus),
   );
   const verificationSnoozed = Boolean(onboardingCompletion?.verification.snoozed);
   const isClaimedImport = Boolean((currentRestaurant as any)?.claimedFromImportId);
@@ -852,7 +876,7 @@ export default function RestaurantOwnerDashboard() {
   }, [selectedRestaurant, currentRestaurant?.updatedAt]);
 
   useEffect(() => {
-    if (!selectedRestaurant || !needsVerificationSubmission) {
+    if (!selectedRestaurant || !needsInsuranceSubmission) {
       setVerificationSkippedToday(false);
       setVerificationUploadOpen(false);
       return;
@@ -868,7 +892,7 @@ export default function RestaurantOwnerDashboard() {
     if (params.get("goLive") === "1") {
       setVerificationUploadOpen(true);
     }
-  }, [needsVerificationSubmission, selectedRestaurant, verificationSnoozed]);
+  }, [needsInsuranceSubmission, selectedRestaurant, verificationSnoozed]);
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
@@ -1598,20 +1622,54 @@ export default function RestaurantOwnerDashboard() {
         throw new Error("Select a restaurant first");
       }
       if (onboardingDocuments.length === 0) {
-        throw new Error("Upload at least one verification document");
+        throw new Error("Upload at least one insurance document");
       }
+      if (!insuranceForm.expiresAt) {
+        throw new Error("Add the policy expiration date");
+      }
+      if (
+        !insuranceForm.attestedCommercialCoverage ||
+        !insuranceForm.attestedJurisdictionCompliance
+      ) {
+        throw new Error("Confirm the two insurance attestations");
+      }
+      const coverageAmountCents = insuranceForm.coverageAmount.trim()
+        ? Math.round(Number(insuranceForm.coverageAmount) * 100)
+        : null;
       return await apiRequest(
         "POST",
-        `/api/restaurants/${selectedRestaurant}/verification/request`,
+        "/api/business/insurance/submit",
         {
+          entityType: selectedInsuranceEntityType,
+          entityId: selectedRestaurant,
           documents: onboardingDocuments,
-          licenseNumber: onboardingLicenseNumber.trim() || undefined,
+          carrierName: insuranceForm.carrierName.trim() || undefined,
+          policyNumber: insuranceForm.policyNumber.trim() || undefined,
+          coverageAmountCents: Number.isFinite(coverageAmountCents)
+            ? coverageAmountCents
+            : null,
+          expiresAt: insuranceForm.expiresAt,
+          attestedCommercialCoverage:
+            insuranceForm.attestedCommercialCoverage,
+          attestedJurisdictionCompliance:
+            insuranceForm.attestedJurisdictionCompliance,
+          notes: onboardingLicenseNumber.trim()
+            ? `Permit or registry number: ${onboardingLicenseNumber.trim()}`
+            : undefined,
         },
       );
     },
     onSuccess: async () => {
       setOnboardingDocuments([]);
       setOnboardingLicenseNumber("");
+      setInsuranceForm({
+        carrierName: "",
+        policyNumber: "",
+        expiresAt: "",
+        coverageAmount: "",
+        attestedCommercialCoverage: false,
+        attestedJurisdictionCompliance: false,
+      });
       setVerificationUploadOpen(false);
       setVerificationSkippedToday(false);
       await queryClient.invalidateQueries({
@@ -1621,15 +1679,15 @@ export default function RestaurantOwnerDashboard() {
       });
       await queryClient.invalidateQueries({ queryKey: ["owner-onboarding"] });
       toast({
-        title: "Verification submitted",
+        title: "Insurance submitted",
         description:
-          "Your documents were submitted. We will review your business shortly.",
+          "Your proof is in the review queue. We will check it shortly.",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Verification failed",
-        description: error?.message || "Unable to submit verification request",
+        title: "Insurance upload failed",
+        description: error?.message || "Unable to submit insurance proof",
         variant: "destructive",
       });
     },
@@ -2234,21 +2292,19 @@ export default function RestaurantOwnerDashboard() {
                       Recommended {onboardingCompletion.recommended.done}/
                       {onboardingCompletion.recommended.total}
                     </Badge>
-                    {!selectedRestaurantIsFoodTruck ? (
-                      <Badge
-                        variant={
-                          onboardingCompletion.verification.status === "verified"
-                            ? "default"
-                            : "outline"
-                        }
-                      >
-                        Verification:{" "}
-                        {onboardingCompletion.verification.status.replace(
-                          "_",
-                          " ",
-                        )}
-                      </Badge>
-                    ) : null}
+                    <Badge
+                      variant={
+                        onboardingCompletion.insurance?.valid
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      Insurance:{" "}
+                      {(onboardingCompletion.insurance?.status || "not_submitted").replace(
+                        "_",
+                        " ",
+                      )}
+                    </Badge>
                   </div>
 
                   {onboardingCompletion.required.missing.length > 0 && (
@@ -2294,7 +2350,7 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   )}
 
-                  {needsVerificationSubmission && (
+                  {needsInsuranceSubmission && (
                     <div className="space-y-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex gap-3">
@@ -2303,12 +2359,12 @@ export default function RestaurantOwnerDashboard() {
                           </span>
                           <div>
                             <p className="text-sm font-semibold">
-                              Verify when you have a document nearby
+                              Submit commercial insurance when you have it nearby
                             </p>
                             <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
                               You can keep setting up today. Verification stays
-                              on the checklist and we will remind you once per
-                              day until you submit.
+                              on the checklist and we will send a friendly
+                              reminder once per day until proof is submitted.
                             </p>
                           </div>
                         </div>
@@ -2321,7 +2377,7 @@ export default function RestaurantOwnerDashboard() {
                         <div className="flex flex-col gap-2 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="text-sm text-[color:var(--text-secondary)]">
                             Snoozed for today. It will come back tomorrow if no
-                            request is submitted.
+                            proof is submitted.
                           </div>
                           <Button
                             type="button"
@@ -2347,6 +2403,55 @@ export default function RestaurantOwnerDashboard() {
                                 data-testid="input-dashboard-license-number"
                               />
                             ) : null}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <Input
+                                value={insuranceForm.carrierName}
+                                onChange={(e) =>
+                                  setInsuranceForm((prev) => ({
+                                    ...prev,
+                                    carrierName: e.target.value,
+                                  }))
+                                }
+                                placeholder="Insurance carrier (optional)"
+                                data-testid="input-dashboard-insurance-carrier"
+                              />
+                              <Input
+                                value={insuranceForm.policyNumber}
+                                onChange={(e) =>
+                                  setInsuranceForm((prev) => ({
+                                    ...prev,
+                                    policyNumber: e.target.value,
+                                  }))
+                                }
+                                placeholder="Policy number (optional)"
+                                data-testid="input-dashboard-insurance-policy"
+                              />
+                              <Input
+                                type="date"
+                                value={insuranceForm.expiresAt}
+                                onChange={(e) =>
+                                  setInsuranceForm((prev) => ({
+                                    ...prev,
+                                    expiresAt: e.target.value,
+                                  }))
+                                }
+                                data-testid="input-dashboard-insurance-expiry"
+                              />
+                              <Input
+                                type="number"
+                                min="0"
+                                step="1000"
+                                value={insuranceForm.coverageAmount}
+                                onChange={(e) =>
+                                  setInsuranceForm((prev) => ({
+                                    ...prev,
+                                    coverageAmount: e.target.value,
+                                  }))
+                                }
+                                placeholder="Coverage amount (optional)"
+                                data-testid="input-dashboard-insurance-coverage"
+                              />
+                            </div>
                             <DocumentUpload
                               onDocumentsChange={setOnboardingDocuments}
                               maxFiles={3}
@@ -2358,6 +2463,44 @@ export default function RestaurantOwnerDashboard() {
                                 "application/pdf",
                               ]}
                             />
+                            <div className="space-y-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                              <label className="flex items-start gap-2 text-sm text-[color:var(--text-secondary)]">
+                                <Checkbox
+                                  checked={
+                                    insuranceForm.attestedCommercialCoverage
+                                  }
+                                  onCheckedChange={(checked) =>
+                                    setInsuranceForm((prev) => ({
+                                      ...prev,
+                                      attestedCommercialCoverage:
+                                        checked === true,
+                                    }))
+                                  }
+                                />
+                                <span>
+                                  This is current commercial coverage for this
+                                  business.
+                                </span>
+                              </label>
+                              <label className="flex items-start gap-2 text-sm text-[color:var(--text-secondary)]">
+                                <Checkbox
+                                  checked={
+                                    insuranceForm.attestedJurisdictionCompliance
+                                  }
+                                  onCheckedChange={(checked) =>
+                                    setInsuranceForm((prev) => ({
+                                      ...prev,
+                                      attestedJurisdictionCompliance:
+                                        checked === true,
+                                    }))
+                                  }
+                                />
+                                <span>
+                                  This coverage meets the requirements where
+                                  this business operates.
+                                </span>
+                              </label>
+                            </div>
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                               <Button
                                 onClick={() =>
@@ -2365,7 +2508,10 @@ export default function RestaurantOwnerDashboard() {
                                 }
                                 disabled={
                                   submitVerificationMutation.isPending ||
-                                  onboardingDocuments.length === 0
+                                  onboardingDocuments.length === 0 ||
+                                  !insuranceForm.expiresAt ||
+                                  !insuranceForm.attestedCommercialCoverage ||
+                                  !insuranceForm.attestedJurisdictionCompliance
                                 }
                                 data-testid="button-submit-dashboard-verification"
                               >
@@ -2375,7 +2521,7 @@ export default function RestaurantOwnerDashboard() {
                                     Submitting...
                                   </>
                                 ) : (
-                                  "Submit verification"
+                                  "Submit insurance"
                                 )}
                               </Button>
                               <Button
@@ -2419,11 +2565,9 @@ export default function RestaurantOwnerDashboard() {
                     </div>
                   )}
 
-                  {!selectedRestaurantIsFoodTruck &&
-                    onboardingCompletion.verification.status === "pending" && (
+                  {onboardingCompletion.insurance?.status === "pending" && (
                     <p className="text-sm text-[color:var(--text-secondary)]">
-                      Verification is pending review. No action needed right
-                      now.
+                      Insurance proof is pending review. No action needed right now.
                     </p>
                   )}
                 </>

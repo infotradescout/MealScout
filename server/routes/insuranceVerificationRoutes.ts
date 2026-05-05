@@ -15,7 +15,13 @@ import { validateDocuments } from "../documentValidation";
 import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 
 const entityInputSchema = z.object({
-  entityType: z.enum(["restaurant", "food_truck", "host"]),
+  entityType: z.enum([
+    "restaurant",
+    "food_truck",
+    "caterer",
+    "private_chef",
+    "host",
+  ]),
   entityId: z.string().trim().min(1),
 });
 
@@ -76,12 +82,34 @@ async function requireOwnedInsuranceEntity(req: any, res: any) {
   const isFoodTruck =
     Boolean(restaurant.isFoodTruck) ||
     String(restaurant.businessType || "").toLowerCase() === "food_truck";
+  const businessType = String(restaurant.businessType || "").toLowerCase();
+  const actualEntityType = isFoodTruck
+    ? "food_truck"
+    : businessType === "caterer"
+      ? "caterer"
+      : businessType === "private_chef"
+        ? "private_chef"
+        : "restaurant";
   if (entityType === "food_truck" && !isFoodTruck) {
     res.status(400).json({ message: "Business is not marked as a food truck" });
     return null;
   }
+  if (entityType === "caterer" && actualEntityType !== "caterer") {
+    res.status(400).json({ message: "Business is not marked as a caterer" });
+    return null;
+  }
+  if (entityType === "private_chef" && actualEntityType !== "private_chef") {
+    res.status(400).json({ message: "Business is not marked as a private chef" });
+    return null;
+  }
 
-  return { entityType, entityId, ownerId: userId, city: restaurant.city, state: restaurant.state };
+  return {
+    entityType: actualEntityType,
+    entityId,
+    ownerId: userId,
+    city: restaurant.city,
+    state: restaurant.state,
+  };
 }
 
 export function registerInsuranceVerificationRoutes(app: Express) {

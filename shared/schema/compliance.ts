@@ -20,7 +20,7 @@ export const businessInsuranceVerifications = pgTable(
     id: varchar("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    entityType: varchar("entity_type", { length: 40 }).notNull(), // restaurant | food_truck | host
+    entityType: varchar("entity_type", { length: 40 }).notNull(), // restaurant | food_truck | caterer | private_chef | host
     entityId: varchar("entity_id").notNull(),
     ownerId: varchar("owner_id")
       .notNull()
@@ -77,7 +77,13 @@ export const insertBusinessInsuranceVerificationSchema = createInsertSchema(
     updatedAt: true,
   })
   .extend({
-    entityType: z.enum(["restaurant", "food_truck", "host"]),
+    entityType: z.enum([
+      "restaurant",
+      "food_truck",
+      "caterer",
+      "private_chef",
+      "host",
+    ]),
     entityId: z.string().min(1),
     documents: z.array(z.string()).min(1).max(5),
     jurisdictionCity: z.string().trim().max(120).optional().nullable(),

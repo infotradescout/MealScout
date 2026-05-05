@@ -317,6 +317,16 @@ export function registerRestaurantOperationsRoutes(
             String((restaurant as any).businessType || "").toLowerCase() ===
               "food_truck",
         );
+        const restaurantBusinessType = String(
+          (restaurant as any).businessType || "",
+        ).toLowerCase();
+        const insuranceEntityType = isFoodTruckBusiness
+          ? "food_truck"
+          : restaurantBusinessType === "caterer"
+            ? "caterer"
+            : restaurantBusinessType === "private_chef"
+              ? "private_chef"
+              : "restaurant";
 
         let verificationStatus: "verified" | "pending" | "not_submitted" =
           "not_submitted";
@@ -345,7 +355,7 @@ export function registerRestaurantOperationsRoutes(
             and(
               eq(
                 businessInsuranceVerifications.entityType,
-                isFoodTruckBusiness ? "food_truck" : "restaurant",
+                insuranceEntityType,
               ),
               eq(businessInsuranceVerifications.entityId, restaurantId),
             ),

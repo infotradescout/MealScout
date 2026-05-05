@@ -19,7 +19,12 @@ import {
 import { getVerificationSnooze } from "./verificationSnooze";
 
 type ReminderCandidate = {
-  entityType: "restaurant" | "food_truck" | "host";
+  entityType:
+    | "restaurant"
+    | "food_truck"
+    | "caterer"
+    | "private_chef"
+    | "host";
   entityId: string;
   businessName: string | null;
   ownerId: string;
@@ -128,6 +133,10 @@ async function fetchCandidates(): Promise<ReminderCandidate[]> {
         when coalesce(r.is_food_truck, false) = true
           or lower(coalesce(r.business_type, '')) = 'food_truck'
         then 'food_truck'
+        when lower(coalesce(r.business_type, '')) = 'caterer'
+        then 'caterer'
+        when lower(coalesce(r.business_type, '')) = 'private_chef'
+        then 'private_chef'
         else 'restaurant'
       end as "entityType",
       r.id as "entityId",
@@ -146,7 +155,7 @@ async function fetchCandidates(): Promise<ReminderCandidate[]> {
         select 1
         from ${businessInsuranceVerifications} biv
         where biv.entity_id = r.id
-          and biv.entity_type in ('restaurant', 'food_truck')
+          and biv.entity_type in ('restaurant', 'food_truck', 'caterer', 'private_chef')
           and (
             biv.status = 'pending'
             or (
