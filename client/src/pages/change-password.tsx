@@ -45,19 +45,8 @@ export default function ChangePassword() {
       // Refetch user to clear the requiresPasswordReset flag
       await refetch();
 
-      // Redirect based on user type
       setTimeout(() => {
-        if (user?.userType === "restaurant_owner") {
-          setLocation("/restaurant-owner-dashboard");
-        } else if (
-          user?.userType === "admin" ||
-          user?.userType === "super_admin" ||
-          user?.userType === "staff"
-        ) {
-          setLocation("/admin/dashboard");
-        } else {
-          setLocation("/map");
-        }
+        setLocation("/dashboard");
       }, 1000);
     },
     onError: (error: any) => {

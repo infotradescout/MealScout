@@ -48,9 +48,13 @@ export default function DashboardSwitcher({ defaultView = 'admin' }: DashboardSw
     if (
       user?.userType === 'restaurant_owner' ||
       user?.userType === 'caterer' ||
-      user?.userType === 'private_chef'
+      user?.userType === 'private_chef' ||
+      user?.userType === 'food_truck'
     ) {
       return <RestaurantOwnerDashboard />;
+    } else if (user?.userType === 'supplier') {
+      navigate("/supplier/dashboard");
+      return null;
     } else {
       return <UserDashboard />;
     }

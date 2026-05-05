@@ -4265,6 +4265,7 @@ export default function AdminDashboard() {
       "caterer",
       "private_chef",
       "food_truck",
+      "supplier",
       "host",
       "event_coordinator",
       "customer",
@@ -4305,6 +4306,7 @@ export default function AdminDashboard() {
       { value: "restaurant_owner", label: "Restaurants" },
       { value: "caterer", label: "Caterers" },
       { value: "private_chef", label: "Private Chefs" },
+      { value: "supplier", label: "Suppliers" },
       { value: "host", label: "Hosts" },
       { value: "event_coordinator", label: "Events" },
       { value: "staff", label: "Staff" },
@@ -12143,7 +12145,7 @@ export default function AdminDashboard() {
                   })}
                   <div className="border rounded-lg p-3 space-y-3">
                     <div className="text-sm font-medium">
-                      Add Business Profile (Restaurant/Food Truck)
+                      Add Business Profile
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <input

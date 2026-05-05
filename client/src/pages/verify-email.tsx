@@ -31,6 +31,12 @@ const getSignupPath = (accountType: AccountType, businessType: string) => {
     if (businessType === "bar") {
       return "/customer-signup?role=business&businessType=bar";
     }
+    if (businessType === "caterer") {
+      return "/customer-signup?role=business&businessType=caterer";
+    }
+    if (businessType === "private_chef") {
+      return "/customer-signup?role=business&businessType=private_chef";
+    }
     return "/customer-signup?role=business";
   }
   if (accountType === "host") return "/customer-signup?role=host";

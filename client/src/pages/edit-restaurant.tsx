@@ -324,6 +324,7 @@ export default function EditRestaurantPage() {
                     <SelectItem value="restaurant">Restaurant</SelectItem>
                     <SelectItem value="bar">Bar</SelectItem>
                     <SelectItem value="caterer">Caterer</SelectItem>
+                    <SelectItem value="private_chef">Private chef</SelectItem>
                     <SelectItem value="food_truck">Food truck</SelectItem>
                   </SelectContent>
                 </Select>
