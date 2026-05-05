@@ -51,6 +51,26 @@ export function registerBookingRoutes(
     return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
   };
 
+  const truckScheduleEntryTypes = [
+    "public_stop",
+    "private_booking",
+    "unavailable",
+  ] as const;
+
+  type TruckScheduleEntryType = (typeof truckScheduleEntryTypes)[number];
+
+  const normalizeTruckScheduleEntryType = (
+    value: unknown,
+    fallback: TruckScheduleEntryType = "public_stop",
+  ): TruckScheduleEntryType => {
+    return truckScheduleEntryTypes.includes(value as TruckScheduleEntryType)
+      ? (value as TruckScheduleEntryType)
+      : fallback;
+  };
+
+  const truckSchedulePublicLabel = (entryType: TruckScheduleEntryType) =>
+    entryType === "unavailable" ? "Unavailable" : "Booked for a private event";
+
   // Lookup booking state by Stripe PaymentIntent (used by the client to poll after payment confirmation).
   app.get(
     "/api/bookings/payment-intent/:paymentIntentId",
@@ -620,7 +640,9 @@ export function registerBookingRoutes(
           date: z.string().min(1),
           startTime: z.string().min(1),
           endTime: z.string().min(1),
-          address: z.string().min(1),
+          entryType: z.enum(truckScheduleEntryTypes).optional(),
+          publicLabel: z.string().optional(),
+          address: z.string().optional(),
           locationName: z.string().optional(),
           city: z.string().optional(),
           state: z.string().optional(),
@@ -634,17 +656,39 @@ export function registerBookingRoutes(
           return res.status(400).json({ message: "Invalid date" });
         }
 
+        const entryType = normalizeTruckScheduleEntryType(
+          parsed.entryType,
+          parsed.isPublic === false ? "private_booking" : "public_stop",
+        );
+        const isAvailabilityBlock =
+          entryType === "private_booking" || entryType === "unavailable";
+        const address = String(parsed.address || "").trim();
+        if (entryType === "public_stop" && !address) {
+          return res.status(400).json({
+            message: "Address is required for public schedule stops.",
+          });
+        }
+        const defaultPublicLabel = isAvailabilityBlock
+          ? truckSchedulePublicLabel(entryType)
+          : undefined;
+        const publicLabel = String(
+          parsed.publicLabel || defaultPublicLabel || "",
+        ).trim();
+
         const created = await storage.createTruckManualSchedule({
           truckId,
           date: parsedDate,
           startTime: parsed.startTime,
           endTime: parsed.endTime,
-          locationName: parsed.locationName || null,
-          address: parsed.address,
+          locationName:
+            parsed.locationName || (isAvailabilityBlock ? publicLabel : null),
+          address: address || publicLabel || "Unavailable",
           city: parsed.city || null,
           state: parsed.state || null,
           notes: parsed.notes || null,
-          isPublic: parsed.isPublic ?? true,
+          entryType,
+          publicLabel: publicLabel || null,
+          isPublic: entryType === "public_stop" ? (parsed.isPublic ?? true) : false,
         });
 
         try {
@@ -655,6 +699,7 @@ export function registerBookingRoutes(
               truckId,
               scheduleId: created.id,
               date: parsed.date,
+              entryType,
             },
           });
         } catch (trackingError) {
@@ -1071,6 +1116,13 @@ export function registerBookingRoutes(
       ];
 
       const manualEntries = await storage.getTruckManualSchedules(truckId);
+      const isAvailabilityBlock = (entry: (typeof manualEntries)[number]) => {
+        const entryType = normalizeTruckScheduleEntryType(
+          (entry as any).entryType,
+          entry.isPublic === false ? "private_booking" : "public_stop",
+        );
+        return entryType === "private_booking" || entryType === "unavailable";
+      };
       const isPublicManualSlot = (entry: (typeof manualEntries)[number]) => {
         const timeZone = resolveCityTimeZoneSync({
           city: (entry as any)?.city ?? null,
@@ -1106,33 +1158,54 @@ export function registerBookingRoutes(
 
       const manualSchedule = manualEntries
         .filter(() => ownerHasPremiumAccess)
-        .filter((entry) => entry.isPublic)
         .filter((entry) => entry.date >= today)
-        .filter((entry) => (includePending ? true : isPublicManualSlot(entry)))
-        .map((entry) => ({
-          type: "manual",
-          status: "manual",
-          createdAt: entry.createdAt,
-          manual: {
-            id: entry.id,
-            date:
-              toDateKey(
-                entry.date,
-                resolveCityTimeZoneSync({
-                  city: (entry as any)?.city ?? null,
-                  state: (entry as any)?.state ?? null,
-                }),
-              ) ?? entry.date,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
-            locationName: entry.locationName,
-            address: entry.address,
-            city: entry.city,
-            state: entry.state,
-            notes: entry.notes,
-            lastConfirmedAt: (entry as any).lastConfirmedAt ?? null,
-          },
-        }));
+        .filter((entry) => {
+          if (includePending) return true;
+          if (isAvailabilityBlock(entry)) return true;
+          return entry.isPublic && isPublicManualSlot(entry);
+        })
+        .map((entry) => {
+          const entryType = normalizeTruckScheduleEntryType(
+            (entry as any).entryType,
+            entry.isPublic === false ? "private_booking" : "public_stop",
+          );
+          const isBlock =
+            entryType === "private_booking" || entryType === "unavailable";
+          const publicLabel =
+            (entry as any).publicLabel ||
+            (isBlock ? truckSchedulePublicLabel(entryType) : null);
+          const shouldRedact = isBlock && !includePending;
+
+          return {
+            type: "manual",
+            status: "manual",
+            createdAt: entry.createdAt,
+            manual: {
+              id: entry.id,
+              date:
+                toDateKey(
+                  entry.date,
+                  resolveCityTimeZoneSync({
+                    city: (entry as any)?.city ?? null,
+                    state: (entry as any)?.state ?? null,
+                  }),
+                ) ?? entry.date,
+              startTime: entry.startTime,
+              endTime: entry.endTime,
+              entryType,
+              publicLabel,
+              isAvailabilityBlock: isBlock,
+              locationName: shouldRedact
+                ? publicLabel
+                : entry.locationName || (isBlock ? publicLabel : null),
+              address: shouldRedact ? null : entry.address,
+              city: shouldRedact ? null : entry.city,
+              state: shouldRedact ? null : entry.state,
+              notes: shouldRedact ? null : entry.notes,
+              lastConfirmedAt: (entry as any).lastConfirmedAt ?? null,
+            },
+          };
+        });
 
       const combined = [...schedule, ...manualSchedule].sort((a, b) => {
         const dateA =

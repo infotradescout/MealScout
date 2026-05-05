@@ -387,17 +387,36 @@ export default function RestaurantDetailPage() {
     )
     .map((item: any) => {
       if (item.type === "manual") {
+        const entryType =
+          item.manual.entryType ||
+          (item.manual.isAvailabilityBlock ? "private_booking" : "public_stop");
+        const isAvailabilityBlock =
+          item.manual.isAvailabilityBlock ||
+          entryType === "private_booking" ||
+          entryType === "unavailable";
+        const availabilityTitle =
+          item.manual.publicLabel ||
+          (entryType === "unavailable"
+            ? "Unavailable"
+            : "Booked for a private event");
         return {
           id: `manual-${item.manual.id}`,
           manualId: item.manual.id,
           date: item.manual.date,
           startTime: item.manual.startTime,
           endTime: item.manual.endTime,
-          title: item.manual.locationName || "Manual stop",
-          subtitle: [item.manual.address, item.manual.city, item.manual.state]
-            .filter(Boolean)
-            .join(", "),
-          type: "manual" as const,
+          title: isAvailabilityBlock
+            ? availabilityTitle
+            : item.manual.locationName || "Manual stop",
+          subtitle: isAvailabilityBlock
+            ? "Not available during this window"
+            : [item.manual.address, item.manual.city, item.manual.state]
+                .filter(Boolean)
+                .join(", "),
+          type: isAvailabilityBlock
+            ? ("availability_block" as const)
+            : ("manual" as const),
+          manualEntryType: entryType,
           isPublic: true,
           lastConfirmedAt:
             item.manual.lastConfirmedAt || item.createdAt || null,
@@ -1890,7 +1909,7 @@ export default function RestaurantDetailPage() {
           ) : parkingScheduleItems.length > 0 ? (
             <ParkingScheduleCalendar
               items={parkingScheduleItems}
-              subtitle="Auto-updated by Parking Pass bookings and public manual stops."
+              subtitle="Auto-updated by bookings, public stops, and availability blocks."
             />
           ) : (
             <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">

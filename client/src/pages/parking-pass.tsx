@@ -177,6 +177,8 @@ type ParkingPassLocationGroup = {
   listings: ParkingPassListing[];
 };
 
+type ManualScheduleEntryType = "public_stop" | "private_booking" | "unavailable";
+
 interface ManualScheduleEntry {
   id: string;
   date: string;
@@ -187,6 +189,8 @@ interface ManualScheduleEntry {
   city?: string | null;
   state?: string | null;
   notes?: string | null;
+  entryType?: ManualScheduleEntryType | null;
+  publicLabel?: string | null;
   isPublic?: boolean | null;
 }
 
@@ -208,7 +212,7 @@ interface TruckScheduleEntry {
   host?: {
     id?: string;
     businessName: string;
-    address: string;
+    address?: string | null;
     locationType: string;
   };
   manual?: {
@@ -217,10 +221,13 @@ interface TruckScheduleEntry {
     startTime: string;
     endTime: string;
     locationName?: string | null;
-    address: string;
+    address?: string | null;
     city?: string | null;
     state?: string | null;
     notes?: string | null;
+    entryType?: ManualScheduleEntryType | null;
+    publicLabel?: string | null;
+    isAvailabilityBlock?: boolean | null;
   };
 }
 
@@ -242,6 +249,15 @@ interface TruckParkingReport {
   salesCents?: number | null;
   notes?: string | null;
 }
+
+const manualScheduleEntryTypeLabels: Record<ManualScheduleEntryType, string> = {
+  public_stop: "Public stop",
+  private_booking: "Private event",
+  unavailable: "Unavailable",
+};
+
+const getDefaultSchedulePublicLabel = (entryType: ManualScheduleEntryType) =>
+  entryType === "unavailable" ? "Unavailable" : "Booked for a private event";
 
 type GeoPoint = { lat: number; lng: number };
 
@@ -1019,10 +1035,12 @@ export default function ParkingPassPage() {
   );
   const geocodeInFlight = useRef(false);
   const [scheduleForm, setScheduleForm] = useState({
+    entryType: "public_stop" as ManualScheduleEntryType,
     date: format(new Date(), "yyyy-MM-dd"),
     startTime: "",
     endTime: "",
     locationName: "",
+    publicLabel: "",
     address: "",
     city: "",
     state: "",
@@ -1624,10 +1642,28 @@ export default function ParkingPassPage() {
     field: keyof typeof scheduleForm,
     value: string | boolean,
   ) => {
-    setScheduleForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setScheduleForm((current) => {
+      if (field === "entryType") {
+        const entryType = value as ManualScheduleEntryType;
+        const isPublicStop = entryType === "public_stop";
+        return {
+          ...current,
+          entryType,
+          isPublic: isPublicStop,
+          publicLabel: isPublicStop
+            ? ""
+            : current.publicLabel || getDefaultSchedulePublicLabel(entryType),
+          locationName: isPublicStop
+            ? current.locationName
+            : current.locationName || getDefaultSchedulePublicLabel(entryType),
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
   };
 
   const hydrateFromPlaceDetails = async (placeId: string) => {
@@ -1722,14 +1758,26 @@ export default function ParkingPassPage() {
       });
       return;
     }
-    if (!scheduleForm.address) {
+    if (
+      scheduleForm.entryType === "public_stop" &&
+      !scheduleForm.address.trim()
+    ) {
       toast({
         title: "Missing address",
-        description: "Address is required for schedule entries.",
+        description: "Address is required for public stops.",
         variant: "destructive",
       });
       return;
     }
+
+    const isAvailabilityBlock = scheduleForm.entryType !== "public_stop";
+    const defaultPublicLabel = isAvailabilityBlock
+      ? getDefaultSchedulePublicLabel(scheduleForm.entryType)
+      : "";
+    const publicLabel =
+      scheduleForm.publicLabel.trim() ||
+      scheduleForm.locationName.trim() ||
+      defaultPublicLabel;
 
     setIsSavingSchedule(true);
     try {
@@ -1737,11 +1785,15 @@ export default function ParkingPassPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          entryType: scheduleForm.entryType,
           date: scheduleForm.date,
           startTime: scheduleForm.startTime,
           endTime: scheduleForm.endTime,
           locationName: scheduleForm.locationName || undefined,
-          address: scheduleForm.address,
+          publicLabel: publicLabel || undefined,
+          address:
+            scheduleForm.address ||
+            (isAvailabilityBlock ? publicLabel : undefined),
           city: scheduleForm.city || undefined,
           state: scheduleForm.state || undefined,
           notes: scheduleForm.notes || undefined,
@@ -1756,17 +1808,22 @@ export default function ParkingPassPage() {
       setManualSchedules((prev) => [...prev, created]);
       setScheduleForm((current) => ({
         ...current,
+        entryType: "public_stop",
         startTime: "",
         endTime: "",
         locationName: "",
+        publicLabel: "",
         address: "",
         city: "",
         state: "",
         notes: "",
+        isPublic: true,
       }));
       toast({
         title: "Schedule saved",
-        description: "Your stop is now on your schedule.",
+        description: isAvailabilityBlock
+          ? "Your unavailable time is now on your schedule."
+          : "Your stop is now on your schedule.",
       });
       const shareDate = scheduleForm.date
         ? format(new Date(`${scheduleForm.date}T00:00:00`), "EEE, MMM d")
@@ -1775,13 +1832,13 @@ export default function ParkingPassPage() {
         scheduleForm.startTime && scheduleForm.endTime
           ? `${scheduleForm.startTime} - ${scheduleForm.endTime}`
           : "Time TBD";
-      const locationLabel =
-        scheduleForm.locationName || scheduleForm.address || "a new stop";
-      const shareMessage = `${
-        truck?.name || "We"
-      } are parked at ${locationLabel} on ${shareDate} (${timeLabel}). Find us on MealScout.`;
       const shareLink = buildTruckShareLink();
-      if (shareLink) {
+      if (shareLink && !isAvailabilityBlock) {
+        const locationLabel =
+          scheduleForm.locationName || scheduleForm.address || "a new stop";
+        const shareMessage = `${
+          truck?.name || "We"
+        } are parked at ${locationLabel} on ${shareDate} (${timeLabel}). Find us on MealScout.`;
         maybePromptSocialPost("schedule", {
           title: "Share your updated schedule",
           message: shareMessage,
@@ -1886,24 +1943,37 @@ export default function ParkingPassPage() {
       })
       .filter(Boolean) as ParkingScheduleItem[];
 
-    const manualItems = manualSchedules.map((entry) => ({
-      id: `manual-${entry.id}`,
-      manualId: entry.id,
-      date: entry.date,
-      startTime: entry.startTime,
-      endTime: entry.endTime,
-      title: entry.locationName || "Manual stop",
-      subtitle: [entry.address, entry.city, entry.state]
-        .filter(Boolean)
-        .join(", "),
-      type: "manual" as const,
-      isPublic: entry.isPublic,
-      locationName: entry.locationName ?? "Manual stop",
-      address: entry.address,
-      city: entry.city,
-      state: entry.state,
-      reportKey: `manual:${entry.id}`,
-    }));
+    const manualItems = manualSchedules.map((entry) => {
+      const entryType =
+        entry.entryType || (entry.isPublic === false ? "private_booking" : "public_stop");
+      const isAvailabilityBlock =
+        entryType === "private_booking" || entryType === "unavailable";
+      const title = isAvailabilityBlock
+        ? entry.publicLabel || getDefaultSchedulePublicLabel(entryType)
+        : entry.locationName || "Manual stop";
+
+      return {
+        id: `manual-${entry.id}`,
+        manualId: entry.id,
+        date: entry.date,
+        startTime: entry.startTime,
+        endTime: entry.endTime,
+        title,
+        subtitle: isAvailabilityBlock
+          ? "Not available during this window"
+          : [entry.address, entry.city, entry.state].filter(Boolean).join(", "),
+        type: isAvailabilityBlock
+          ? ("availability_block" as const)
+          : ("manual" as const),
+        manualEntryType: entryType,
+        isPublic: entry.isPublic,
+        locationName: entry.locationName ?? title,
+        address: entry.address,
+        city: entry.city,
+        state: entry.state,
+        reportKey: isAvailabilityBlock ? undefined : `manual:${entry.id}`,
+      };
+    });
 
     return [...bookingItems, ...manualItems].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
@@ -5730,12 +5800,38 @@ export default function ParkingPassPage() {
                 <div className="rounded-2xl border border-[color:var(--border-subtle)] pp-glass-muted p-4 space-y-4">
                   <div>
                     <p className="text-sm font-semibold text-[color:var(--text-primary)]">
-                      Add manual stop
+                      Add schedule item
                     </p>
                     <p className="text-xs text-[color:var(--text-muted)]">
-                      Share where you will be parked even if it isn’t a Parking
-                      Pass location.
+                      Public stops show your location. Private events and
+                      blocked time show that you are not available.
                     </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        "public_stop",
+                        "private_booking",
+                        "unavailable",
+                      ] as ManualScheduleEntryType[]
+                    ).map((entryType) => (
+                      <Button
+                        key={entryType}
+                        type="button"
+                        variant={
+                          scheduleForm.entryType === entryType
+                            ? "default"
+                            : "outline"
+                        }
+                        className="justify-center"
+                        disabled={!hasPremiumTruckTools}
+                        onClick={() =>
+                          handleScheduleFieldChange("entryType", entryType)
+                        }
+                      >
+                        {manualScheduleEntryTypeLabels[entryType]}
+                      </Button>
+                    ))}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
@@ -5754,7 +5850,11 @@ export default function ParkingPassPage() {
                       <Label htmlFor="schedule-location">Location name</Label>
                       <Input
                         id="schedule-location"
-                        placeholder="Downtown plaza"
+                        placeholder={
+                          scheduleForm.entryType === "public_stop"
+                            ? "Downtown plaza"
+                            : getDefaultSchedulePublicLabel(scheduleForm.entryType)
+                        }
                         value={scheduleForm.locationName}
                         disabled={!hasPremiumTruckTools}
                         onChange={(event) =>
@@ -5796,11 +5896,40 @@ export default function ParkingPassPage() {
                       />
                     </div>
                   </div>
+                  {scheduleForm.entryType !== "public_stop" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="schedule-public-label">
+                        Public label
+                      </Label>
+                      <Input
+                        id="schedule-public-label"
+                        placeholder={getDefaultSchedulePublicLabel(
+                          scheduleForm.entryType,
+                        )}
+                        value={scheduleForm.publicLabel}
+                        disabled={!hasPremiumTruckTools}
+                        onChange={(event) =>
+                          handleScheduleFieldChange(
+                            "publicLabel",
+                            event.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <Label htmlFor="schedule-address">Address</Label>
+                    <Label htmlFor="schedule-address">
+                      {scheduleForm.entryType === "public_stop"
+                        ? "Address"
+                        : "Address or venue"}
+                    </Label>
                     <PlaceAutocompleteInput
                       id="schedule-address"
-                      placeholder="123 Main St, City"
+                      placeholder={
+                        scheduleForm.entryType === "public_stop"
+                          ? "123 Main St, City"
+                          : "Optional internal address"
+                      }
                       value={scheduleForm.address}
                       disabled={!hasPremiumTruckTools}
                       onChange={(value) =>
@@ -5848,26 +5977,36 @@ export default function ParkingPassPage() {
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 text-xs text-[color:var(--text-muted)]">
-                      <input
-                        type="checkbox"
-                        checked={scheduleForm.isPublic}
-                        disabled={!hasPremiumTruckTools}
-                        onChange={(event) =>
-                          handleScheduleFieldChange(
-                            "isPublic",
-                            event.target.checked,
-                          )
-                        }
-                      />
-                      Show on public profile
-                    </label>
+                    {scheduleForm.entryType === "public_stop" ? (
+                      <label className="flex items-center gap-2 text-xs text-[color:var(--text-muted)]">
+                        <input
+                          type="checkbox"
+                          checked={scheduleForm.isPublic}
+                          disabled={!hasPremiumTruckTools}
+                          onChange={(event) =>
+                            handleScheduleFieldChange(
+                              "isPublic",
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        Show on public profile
+                      </label>
+                    ) : (
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        Public profile shows unavailable time only.
+                      </p>
+                    )}
                     <Button
                       size="sm"
                       onClick={handleCreateSchedule}
                       disabled={isSavingSchedule || !hasPremiumTruckTools}
                     >
-                      {isSavingSchedule ? "Saving..." : "Add stop"}
+                      {isSavingSchedule
+                        ? "Saving..."
+                        : scheduleForm.entryType === "public_stop"
+                          ? "Add stop"
+                          : "Block time"}
                     </Button>
                   </div>
                 </div>

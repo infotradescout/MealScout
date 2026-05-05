@@ -27,7 +27,8 @@ export type ParkingScheduleItem = {
   cleanupEndTime?: string | null;
   title: string;
   subtitle?: string | null;
-  type: "booking" | "manual" | "accepted_interest";
+  type: "booking" | "manual" | "accepted_interest" | "availability_block";
+  manualEntryType?: "public_stop" | "private_booking" | "unavailable" | null;
   slotLabel?: string | null;
   isPublic?: boolean | null;
   lastConfirmedAt?: string | Date | null;
@@ -58,18 +59,29 @@ const typeBadgeClass: Record<ParkingScheduleItem["type"], string> = {
   booking: "pp-calendar-badge pp-calendar-badge--booking",
   manual: "pp-calendar-badge pp-calendar-badge--manual",
   accepted_interest: "pp-calendar-badge pp-calendar-badge--accepted",
+  availability_block: "pp-calendar-badge pp-calendar-badge--accepted",
 };
 
 const typeDotClass: Record<ParkingScheduleItem["type"], string> = {
   booking: "pp-calendar-dot pp-calendar-dot--booking",
   manual: "pp-calendar-dot pp-calendar-dot--manual",
   accepted_interest: "pp-calendar-dot pp-calendar-dot--accepted",
+  availability_block: "pp-calendar-dot pp-calendar-dot--accepted",
 };
 
 const toDate = (value: string | Date) =>
   value instanceof Date ? value : parseISO(value);
 
 const toDateKey = (value: string | Date) => format(toDate(value), "yyyy-MM-dd");
+
+const getScheduleTypeLabel = (item: ParkingScheduleItem) => {
+  if (item.type === "booking") return "Parking Pass";
+  if (item.type === "accepted_interest") return "Accepted";
+  if (item.type === "availability_block") {
+    return item.manualEntryType === "unavailable" ? "Unavailable" : "Private event";
+  }
+  return "Manual";
+};
 
 export function ParkingScheduleCalendar({
   items,
@@ -239,10 +251,10 @@ export function ParkingScheduleCalendar({
               </p>
               <p className="text-xs text-muted-foreground">
                 {activeItems.length
-                  ? `${activeItems.length} stop${
+                  ? `${activeItems.length} item${
                       activeItems.length === 1 ? "" : "s"
                     } scheduled`
-                  : "No stops scheduled"}
+                  : "Nothing scheduled"}
               </p>
             </div>
           </div>
@@ -261,11 +273,7 @@ export function ParkingScheduleCalendar({
                           variant="outline"
                           className={`text-[10px] ${typeBadgeClass[item.type]}`}
                         >
-                          {item.type === "booking"
-                            ? "Parking Pass"
-                            : item.type === "manual"
-                              ? "Manual"
-                              : "Accepted"}
+                          {getScheduleTypeLabel(item)}
                         </Badge>
                         {item.isPublic === false && (
                           <Badge
@@ -299,7 +307,8 @@ export function ParkingScheduleCalendar({
                       ) : null}
                     </div>
                     {allowManualEdits &&
-                      item.type === "manual" &&
+                      (item.type === "manual" ||
+                        item.type === "availability_block") &&
                       item.manualId &&
                       onDeleteManual && (
                         <Button
@@ -355,7 +364,7 @@ export function ParkingScheduleCalendar({
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-[color:var(--border-subtle)] pp-glass-muted p-6 text-center text-xs text-muted-foreground">
-              Choose another day to see scheduled stops.
+              Choose another day to see scheduled items.
             </div>
           )}
         </CardContent>

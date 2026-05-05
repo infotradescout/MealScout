@@ -3773,6 +3773,8 @@ export const truckManualSchedules = pgTable(
     city: varchar("city"),
     state: varchar("state"),
     notes: text("notes"),
+    entryType: varchar("entry_type").notNull().default("public_stop"),
+    publicLabel: varchar("public_label"),
     isPublic: boolean("is_public").default(true),
     lastConfirmedAt: timestamp("last_confirmed_at"),
     createdAt: timestamp("created_at").defaultNow(),
