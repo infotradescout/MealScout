@@ -282,6 +282,28 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
   link.click();
 };
 
+const waitForGraphicImages = async (root: HTMLElement) => {
+  const images = Array.from(root.querySelectorAll("img"));
+  if (!images.length) return;
+
+  await Promise.race([
+    Promise.all(
+      images.map(
+        (image) =>
+          new Promise<void>((resolve) => {
+            if (image.complete && image.naturalWidth > 0) {
+              resolve();
+              return;
+            }
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+          }),
+      ),
+    ),
+    new Promise((resolve) => window.setTimeout(resolve, 2500)),
+  ]);
+};
+
 export default function RecentSignupShare() {
   const { toast } = useToast();
   const graphicRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -326,6 +348,7 @@ export default function RecentSignupShare() {
 
     try {
       await new Promise((resolve) => requestAnimationFrame(resolve));
+      await waitForGraphicImages(clone);
       const canvas = await html2canvas(clone, {
         backgroundColor: null,
         width: 1200,

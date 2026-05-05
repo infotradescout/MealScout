@@ -257,6 +257,71 @@ const isFilteredRecentSignup = (signup: any) => {
   return false;
 };
 
+const normalizeRecentSignupCardName = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const dedupeRecentSignupCards = (items: any[]) => {
+  const groups = new Map<string, any[]>();
+  const passthrough: any[] = [];
+
+  for (const item of items) {
+    const name = normalizeRecentSignupCardName(item?.displayName);
+    if (!name || name === "new mealscout member" || name.length < 4) {
+      passthrough.push(item);
+      continue;
+    }
+
+    const rows = groups.get(name) || [];
+    rows.push(item);
+    groups.set(name, rows);
+  }
+
+  const kept = [...passthrough];
+  const hidden: any[] = [];
+
+  for (const rows of groups.values()) {
+    if (rows.length === 1) {
+      kept.push(rows[0]);
+      continue;
+    }
+
+    const businessRows = rows.filter((row) => row?.entity !== "user");
+    if (businessRows.length) {
+      kept.push(...businessRows);
+      hidden.push(...rows.filter((row) => row?.entity === "user"));
+      continue;
+    }
+
+    const rankedRows = [...rows].sort((a, b) => {
+      const score = (row: any) =>
+        (row?.isPublic ? 20 : 0) +
+        (row?.imageUrl ? 10 : 0) +
+        (row?.description ? 8 : 0) +
+        (row?.isVerified ? 6 : 0);
+      const scoreDiff = score(b) - score(a);
+      if (scoreDiff) return scoreDiff;
+      return (
+        new Date(b?.createdAt || 0).getTime() -
+        new Date(a?.createdAt || 0).getTime()
+      );
+    });
+    kept.push(rankedRows[0]);
+    hidden.push(...rankedRows.slice(1));
+  }
+
+  return {
+    kept: kept.sort(
+      (a, b) =>
+        new Date(b?.createdAt || 0).getTime() -
+        new Date(a?.createdAt || 0).getTime(),
+    ),
+    hidden,
+  };
+};
+
 const formatSignupLocation = (row: {
   city?: string | null;
   state?: string | null;
@@ -2409,10 +2474,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             new Date(b.createdAt || 0).getTime() -
             new Date(a.createdAt || 0).getTime(),
         );
-        const filteredOut = rawSignups.filter(isFilteredRecentSignup);
-        const signups = includeFiltered
-          ? rawSignups
-          : rawSignups.filter((item) => !isFilteredRecentSignup(item));
+        const syntheticFilteredOut = rawSignups.filter(isFilteredRecentSignup);
+        const publicCandidates = rawSignups.filter(
+          (item) => !isFilteredRecentSignup(item),
+        );
+        const deduped = includeFiltered
+          ? { kept: rawSignups, hidden: [] as any[] }
+          : dedupeRecentSignupCards(publicCandidates);
+        const filteredOut = [...syntheticFilteredOut, ...deduped.hidden];
+        const signups = deduped.kept;
 
         res.json({
           windowHours: includeAll ? null : hours,
