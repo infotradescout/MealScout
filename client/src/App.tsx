@@ -14,10 +14,9 @@ import { AdminInlineCopyProvider } from "@/components/admin-inline-copy";
 import { InAppBrowserNotice } from "@/components/in-app-browser-notice";
 import { trackMetaPageView } from "@/lib/meta-pixel";
 
-// Eager load only critical pages (home, login) - everything else lazy loads
+// Eager load only critical login shell - everything else lazy loads
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import Home from "@/pages/home-v2";
 import PurposeSelector from "@/pages/purpose-selector";
 
 // Lazy load all other pages - they only download when the user navigates to them
@@ -316,12 +315,21 @@ function AuthenticatedRestaurantSignupRoute() {
   return <Redirect to="/dashboard" />;
 }
 
+function GuestHomeRoute() {
+  return <CustomerSignup homePage />;
+}
+
+function AuthenticatedHomeRoute() {
+  return <Redirect to="/user-dashboard" />;
+}
+
 function Router() {
   const { authState, isAuthenticated, user } = useAuth();
   const { toast } = useToast();
   const shownAnnouncementRef = useRef<string>("");
   const shownOwnerProfilePromptRef = useRef<string>("");
   const [location, setLocation] = useLocation();
+  const isRootPath = location === "/";
   const isLikelyPublicRoute = isPublicPath(location);
   const shouldUseGuestRoutes =
     !isAuthenticated || (authState === "loading" && isLikelyPublicRoute);
@@ -392,6 +400,10 @@ function Router() {
     return <PageLoader />;
   }
 
+  if (authState === "loading" && isRootPath) {
+    return <PageLoader />;
+  }
+
   return (
     <Suspense fallback={<PageLoader />}>
       <AdminQuickHeader />
@@ -399,7 +411,7 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
-            <Route path="/" component={Home} />
+            <Route path="/" component={GuestHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
@@ -621,7 +633,7 @@ function Router() {
         ) : (
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
-            <Route path="/" component={Home} />
+            <Route path="/" component={AuthenticatedHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">
               {() => <Redirect to="/find-food" />}
