@@ -1004,6 +1004,9 @@ export async function populateHostProfile(
     if (profile.googleCategories)
       updates.googleCategories = profile.googleCategories;
     if (!host.contactPhone && profile.googleFormattedPhone) {
+      updates.contactPhone = profile.googleFormattedPhone;
+      updates.googleFormattedPhone = profile.googleFormattedPhone;
+    } else if (profile.googleFormattedPhone) {
       updates.googleFormattedPhone = profile.googleFormattedPhone;
     }
     if (!host.businessHours && profile.operatingHours) {

@@ -26,6 +26,7 @@ import {
 } from "../services/marketExpansionAutomation";
 import { runSocialQueueProcessor } from "../services/socialQueueProcessor";
 import { runMenuAutoRefreshCron } from "../services/menuAutoRefresh";
+import { runGoogleBusinessAutoLinkBackfill } from "../services/googleBusinessProfileBackfill";
 import { submitIndexNowUrls, getIndexNowConfig } from "../services/indexNow";
 import { runVerificationReminderCron } from "../services/verificationReminderService";
 import { registerStoryCronJobs } from "../storiesCronJobs";
@@ -944,6 +945,31 @@ export async function registerSchedulers(app: Express): Promise<void> {
       console.error("[market-expansion] Daily directory autopopulate failed:", error);
     }
   });
+
+  // Google business profile enrichment — keeps new public share cards and profiles
+  // supplied with listing photos, ratings, phone, website, and hours when Google has them.
+  const googleAutoLinkSchedule =
+    process.env.GOOGLE_AUTOLINK_CRON || "17 * * * *";
+  if (
+    String(process.env.GOOGLE_AUTOLINK_CRON_ENABLED || "true").toLowerCase() !==
+      "false" &&
+    cron.validate(googleAutoLinkSchedule)
+  ) {
+    cron.schedule(googleAutoLinkSchedule, async () => {
+      try {
+        const result = await runGoogleBusinessAutoLinkBackfill({
+          context: "scheduler",
+        });
+        console.log("[google-autolink] complete", result);
+      } catch (error) {
+        console.error("[google-autolink] failed:", error);
+      }
+    });
+  } else if (!cron.validate(googleAutoLinkSchedule)) {
+    console.warn(
+      `[google-autolink] invalid cron expression "${googleAutoLinkSchedule}" — skipping registration`,
+    );
+  }
 
   // Menu auto-refresh — re-scrape stale URL-imported menus.
   // Default 4:30 AM daily; override with MENU_AUTO_REFRESH_CRON.

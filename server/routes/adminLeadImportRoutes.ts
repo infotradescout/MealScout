@@ -6,6 +6,7 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService, isEmailConfigured } from "../emailService";
 import { db } from "../db";
+import { queueGoogleRestaurantAutoLink } from "../services/googleBusinessAutoLink";
 import {
   CLAIM_TYPES,
   claims,
@@ -423,6 +424,10 @@ async function ensureImportedRestaurant({
     const [created] = await db.insert(restaurants).values(restaurantData).returning();
     restaurant = created;
     restaurantCreated = true;
+    queueGoogleRestaurantAutoLink(
+      restaurant as any,
+      "adminLeadImport.upsertRestaurantFromBusiness",
+    );
   } else {
     const updatePayload: any = {};
     for (const [key, value] of Object.entries(restaurantData)) {

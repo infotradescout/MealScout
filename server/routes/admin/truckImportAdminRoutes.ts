@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { sendAccountSetupInvite } from "../../utils/accountSetup";
 import { parseTruckImportFile } from "../../utils/truckImport";
+import { queueGoogleRestaurantAutoLink } from "../../services/googleBusinessAutoLink";
 import {
   eventBookings,
   restaurants,
@@ -372,7 +373,7 @@ export function registerTruckImportAdminRoutes(
             .set({ ownerId: inviteUser.id, updatedAt: new Date() })
             .where(eq(restaurants.id, restaurant.id));
         } else {
-          await db.insert(restaurants).values({
+          const [createdRestaurant] = await db.insert(restaurants).values({
             ownerId: inviteUser.id,
             name: listing.name,
             address: listing.address,
@@ -390,7 +391,11 @@ export function registerTruckImportAdminRoutes(
             isActive: false,
             isVerified: false,
             claimedFromImportId: listing.id,
-          } as any);
+          } as any).returning();
+          queueGoogleRestaurantAutoLink(
+            createdRestaurant as any,
+            "truckImportAdmin.sendInvite",
+          );
         }
 
         const [updated] = await db

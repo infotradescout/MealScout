@@ -10,7 +10,7 @@ import { emailService } from "../../emailService";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
-import { populateHostProfile } from "../../services/googleProfileService";
+import { runGoogleBusinessAutoLinkBackfill } from "../../services/googleBusinessProfileBackfill";
 import {
   computeParkingPassQualityFlags,
   isParkingPassPublicReady,
@@ -2819,59 +2819,33 @@ export function registerUserAdminRoutes(
     },
   );
 
-   // POST /api/admin/backfill/google-profiles - Backfill Google data for all hosts missing it
+  // POST /api/admin/backfill/google-profiles - Backfill Google listing data for businesses missing it.
   app.post(
     "/api/admin/backfill/google-profiles",
     isAuthenticated,
     isStaffOrAdmin,
     async (_req: any, res) => {
       try {
-        const allHosts = await storage.getAllHosts();
-        const hostsNeedingPopulation = allHosts.filter((h: any) => {
-          if (!h.businessName || !h.address) return false;
-          return (
-            !h.googlePlaceId ||
-            !h.description ||
-            !h.googleRating ||
-            !h.googleReviewCount ||
-            !h.googlePhotos ||
-            !h.googleCategories ||
-            !h.googleFormattedPhone ||
-            !h.businessHours ||
-            !h.businessWebsite
+        runGoogleBusinessAutoLinkBackfill({
+          restaurantLimit: 40,
+          hostLimit: 30,
+          delayMs: 500,
+          context: "admin-backfill",
+        })
+          .then((result) =>
+            console.log("[Backfill] Google business profiles complete", result),
+          )
+          .catch((error) =>
+            console.error("[Backfill] Google business profiles failed", error),
           );
-        });
-
-        // Process in background, return immediately
-        const total = hostsNeedingPopulation.length;
-        let succeeded = 0;
-        let failed = 0;
-
-        // Process sequentially with a small delay to avoid rate limits
-        (async () => {
-          for (const host of hostsNeedingPopulation) {
-            try {
-              const result = await populateHostProfile(host.id);
-              if (result.success) {
-                succeeded++;
-              } else {
-                failed++;
-                console.warn(`[Backfill] Host ${host.id} (${host.businessName}): ${result.error}`);
-              }
-            } catch (err) {
-              failed++;
-              console.warn(`[Backfill] Host ${host.id} error:`, err);
-            }
-            // Small delay between requests to avoid rate limiting
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-          console.log(`[Backfill] Complete: ${succeeded} succeeded, ${failed} failed out of ${total}`);
-        })();
 
         res.json({
-          message: `Backfill started for ${total} hosts without Google data`,
-          total,
-          alreadyPopulated: allHosts.length - total,
+          message:
+            "Google business profile backfill started for restaurants, trucks, caterers, private chefs, and hosts.",
+          limits: {
+            restaurants: 40,
+            hosts: 30,
+          },
         });
       } catch (error) {
         console.error("Error starting backfill:", error);
