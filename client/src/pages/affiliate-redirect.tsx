@@ -15,14 +15,12 @@ export default function AffiliateRedirect() {
         credentials: "include", // Include cookies
       })
         .then(() => {
-          // Redirect to home page with affiliate tag as query parameter
-          // The backend will have set the referral cookies
-          setLocation(`/?ref=${tag}`);
+          // The backend records the click and sets referral cookies.
+          setLocation("/");
         })
         .catch((error) => {
           console.error("Failed to record referral:", error);
-          // Still redirect even if tracking fails
-          setLocation(`/?ref=${tag}`);
+          setLocation("/");
         });
     }
   }, [match, params, setLocation]);

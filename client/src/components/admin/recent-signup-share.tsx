@@ -761,6 +761,9 @@ export default function RecentSignupShare() {
                             {graphicSubline}
                           </p>
                         ) : null}
+                        <p className="mt-4 max-w-[31rem] text-lg font-semibold leading-snug text-white/65">
+                          {graphicAction}
+                        </p>
                       </div>
 
                       <div className="flex items-end justify-between gap-8">
@@ -783,16 +786,8 @@ export default function RecentSignupShare() {
                         {statusText}
                       </span>
                     </div>
-                    <div className="absolute bottom-8 right-8 max-w-[25rem] rounded-[1.35rem] bg-black/70 p-6 text-white backdrop-blur">
-                      <p className="mb-4 line-clamp-2 text-[1.75rem] font-black leading-tight">
-                        {graphicAction}
-                      </p>
-                      <span
-                        className="inline-flex rounded-full px-5 py-2 text-sm font-black text-black"
-                        style={{ backgroundColor: tone.accent }}
-                      >
-                        View profile
-                      </span>
+                    <div className="absolute bottom-8 right-8 rounded-full bg-white px-6 py-3 text-sm font-black text-black shadow-[0_16px_44px_rgba(0,0,0,.35)]">
+                      View on MealScout
                     </div>
                   </div>
 

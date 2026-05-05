@@ -218,10 +218,48 @@ export function registerSystemUtilityRoutes(
     findIncidentHandler(incidentRoutes, "/cron/escalations"),
   );
 
-  app.get("/ref/:tag", (req, res) => {
-    const tag = req.params?.tag || "";
-    const safeTag = encodeURIComponent(tag);
-    res.redirect(`/?ref=${safeTag}`);
+  app.get("/ref/:tag", async (req: any, res) => {
+    const tag = String(req.params?.tag || "").trim();
+    if (!tag) return res.redirect("/");
+
+    try {
+      const { resolveAffiliateUserId } = await import("../affiliateTagService");
+      const { recordReferralClick } = await import("../referralService");
+      const affiliateUserId = await resolveAffiliateUserId(tag);
+      let referralRecordId: string | null = null;
+
+      if (affiliateUserId) {
+        const result = await recordReferralClick(
+          affiliateUserId,
+          "/",
+          req.get("user-agent") || undefined,
+          req.ip || undefined,
+        );
+        referralRecordId = result?.referralId || null;
+      }
+
+      res.cookie("referralId", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      res.cookie("referralTag", tag, {
+        maxAge: 1000 * 60 * 60 * 24 * 365,
+        httpOnly: false,
+        sameSite: "lax",
+      });
+      if (referralRecordId) {
+        res.cookie("referralRecordId", referralRecordId, {
+          maxAge: 1000 * 60 * 60 * 24 * 365,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    } catch (error) {
+      console.error("[affiliate] Failed to process clean referral root:", error);
+    }
+
+    res.redirect("/");
   });
 
   app.get("/ref/:tag/*", async (req: any, res) => {

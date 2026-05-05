@@ -19,6 +19,7 @@ import {
   populateHostProfile,
   populateRestaurantProfile,
 } from "../../services/googleProfileService";
+import { ensureAffiliateTag } from "../../affiliateTagService";
 import {
   getPublicBusinessVisibilityChecks,
   isPublicBusinessVisible,
@@ -266,31 +267,39 @@ const formatSignupLocation = (row: {
   "local";
 
 const publicRestaurantPath = (row: any, isFoodTruck: boolean) => {
-  const slug = toShareSlug(row?.name) || row?.id;
+  const id = String(row?.id || "").trim();
+  const slug = toShareSlug(row?.name) || id;
+  const slugWithId = id ? `${slug}--${id}` : slug;
   const businessType = String(row?.businessType || "").toLowerCase();
   if (isFoodTruck) {
-    return `/truck/${encodeURIComponent(slug)}`;
+    return `/truck/${encodeURIComponent(slugWithId)}`;
   }
   if (businessType === "bar") {
-    return `/bar/${encodeURIComponent(slug)}`;
+    return `/bar/${encodeURIComponent(slugWithId)}`;
   }
   if (businessType === "private_chef") {
-    return `/chef/${encodeURIComponent(slug)}`;
+    return `/chef/${encodeURIComponent(slugWithId)}`;
   }
   if (businessType === "caterer") {
-    return `/restaurant/${encodeURIComponent(slug)}`;
+    return id
+      ? `/restaurant/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`
+      : `/restaurant/${encodeURIComponent(slug)}`;
   }
-  return `/restaurant/${encodeURIComponent(slug)}`;
+  return id
+    ? `/restaurant/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`
+    : `/restaurant/${encodeURIComponent(slug)}`;
 };
 
 const publicHostPath = (row: any) => {
-  const slug = toShareSlug(row?.businessName) || row?.id;
-  return `/location/${encodeURIComponent(slug)}`;
+  const id = String(row?.id || "").trim();
+  const slug = toShareSlug(row?.businessName) || id;
+  return `/location/${encodeURIComponent(id ? `${slug}--${id}` : slug)}`;
 };
 
 const publicSupplierPath = (row: any) => {
-  const slug = toShareSlug(row?.businessName) || row?.id;
-  return `/supplier/${encodeURIComponent(slug)}`;
+  const id = String(row?.id || "").trim();
+  const slug = toShareSlug(row?.businessName) || id;
+  return `/supplier/${encodeURIComponent(id ? `${slug}--${id}` : slug)}`;
 };
 
 const splitMenuHighlights = (value: unknown) =>
@@ -430,6 +439,60 @@ const displayNameForSignupUser = (user: any) => {
   if (email) return email;
 
   return "New MealScout member";
+};
+
+const ensureRecentSignupAffiliateTags = async (params: {
+  userRows: any[];
+  restaurantRows: any[];
+  hostRows: any[];
+  supplierRows: any[];
+}) => {
+  const userIds = new Set<string>();
+  for (const row of params.userRows) {
+    if (!row?.affiliateTag && row?.id) userIds.add(String(row.id));
+  }
+  for (const row of params.restaurantRows) {
+    if (!row?.ownerAffiliateTag && row?.ownerId) userIds.add(String(row.ownerId));
+  }
+  for (const row of params.hostRows) {
+    if (!row?.ownerAffiliateTag && row?.userId) userIds.add(String(row.userId));
+  }
+  for (const row of params.supplierRows) {
+    if (!row?.ownerAffiliateTag && row?.userId) userIds.add(String(row.userId));
+  }
+
+  if (!userIds.size) return;
+
+  const tagByUserId = new Map<string, string>();
+  await Promise.all(
+    Array.from(userIds).map(async (userId) => {
+      try {
+        tagByUserId.set(userId, await ensureAffiliateTag(userId));
+      } catch (error) {
+        console.warn("[admin/recent-signups] affiliate tag repair failed", {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
+  );
+
+  for (const row of params.userRows) {
+    const tag = tagByUserId.get(String(row?.id || ""));
+    if (tag) row.affiliateTag = tag;
+  }
+  for (const row of params.restaurantRows) {
+    const tag = tagByUserId.get(String(row?.ownerId || ""));
+    if (tag) row.ownerAffiliateTag = tag;
+  }
+  for (const row of params.hostRows) {
+    const tag = tagByUserId.get(String(row?.userId || ""));
+    if (tag) row.ownerAffiliateTag = tag;
+  }
+  for (const row of params.supplierRows) {
+    const tag = tagByUserId.get(String(row?.userId || ""));
+    if (tag) row.ownerAffiliateTag = tag;
+  }
 };
 
 const dataUrlToBlob = (dataUrl: string) => {
@@ -1647,6 +1710,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const restaurantRowsAny = restaurantRows as any[];
         const hostRowsAny = hostRows as any[];
         const supplierRowsAny = supplierRows as any[];
+
+        await ensureRecentSignupAffiliateTags({
+          userRows: recentUserRows,
+          restaurantRows: restaurantRowsAny,
+          hostRows: hostRowsAny,
+          supplierRows: supplierRowsAny,
+        });
 
         await enrichRecentSignupGoogleRows(restaurantRowsAny, hostRowsAny);
 
