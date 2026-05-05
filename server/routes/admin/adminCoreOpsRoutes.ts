@@ -39,6 +39,7 @@ import {
   menus,
   menuItems,
   menuImportLogs,
+  businessInsuranceVerifications,
 } from "@shared/schema";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -432,6 +433,70 @@ const publicSupplierPath = (row: any) => {
   const id = String(row?.id || "").trim();
   const slug = toShareSlug(row?.businessName) || id;
   return `/supplier/${encodeURIComponent(id ? `${slug}--${id}` : slug)}`;
+};
+
+type RecentSignupInsuranceStatus =
+  | "valid"
+  | "pending"
+  | "rejected"
+  | "expired"
+  | "not_submitted"
+  | "not_required";
+
+const insuranceEntityTypeForRestaurantRow = (row: any) => {
+  const businessType = String(row?.businessType || "").trim().toLowerCase();
+  if (Boolean(row?.isFoodTruck) || businessType === "food_truck") {
+    return "food_truck";
+  }
+  if (businessType === "caterer") return "caterer";
+  if (businessType === "private_chef") return "private_chef";
+  return "restaurant";
+};
+
+const summarizeRecentSignupInsurance = (
+  record?: any,
+): {
+  required: boolean;
+  status: RecentSignupInsuranceStatus;
+  valid: boolean;
+  expiresAt: string | null;
+  documentsCount: number;
+} => {
+  if (!record) {
+    return {
+      required: true,
+      status: "not_submitted",
+      valid: false,
+      expiresAt: null,
+      documentsCount: 0,
+    };
+  }
+
+  const expiresAt = record.expiresAt ? new Date(record.expiresAt) : null;
+  const isExpired = Boolean(expiresAt && expiresAt.getTime() <= Date.now());
+  const documents = Array.isArray(record.documents) ? record.documents : [];
+  let status: RecentSignupInsuranceStatus = "pending";
+
+  if (record.status === "approved") {
+    status =
+      isExpired ||
+      !record.attestedCommercialCoverage ||
+      !record.attestedJurisdictionCompliance
+        ? "expired"
+        : "valid";
+  } else if (record.status === "rejected") {
+    status = "rejected";
+  } else if (record.status === "expired") {
+    status = "expired";
+  }
+
+  return {
+    required: true,
+    status,
+    valid: status === "valid",
+    expiresAt: expiresAt ? expiresAt.toISOString() : null,
+    documentsCount: documents.length,
+  };
 };
 
 const splitMenuHighlights = (value: unknown) =>
@@ -1891,6 +1956,74 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         >();
         const videoCountsByEntity = new Map<string, number>();
         const videoThumbByEntity = new Map<string, string>();
+        const insuranceByEntity = new Map<
+          string,
+          ReturnType<typeof summarizeRecentSignupInsurance>
+        >();
+
+        try {
+          const insuranceClauses: any[] = [];
+          const restaurantInsuranceIdsByType = new Map<string, string[]>();
+          for (const row of restaurantRowsAny) {
+            const id = String(row.id || "").trim();
+            if (!id) continue;
+            const entityType = insuranceEntityTypeForRestaurantRow(row);
+            const ids = restaurantInsuranceIdsByType.get(entityType) || [];
+            ids.push(id);
+            restaurantInsuranceIdsByType.set(entityType, ids);
+          }
+          for (const [entityType, ids] of restaurantInsuranceIdsByType) {
+            if (!ids.length) continue;
+            insuranceClauses.push(
+              and(
+                eq(businessInsuranceVerifications.entityType, entityType),
+                inArray(businessInsuranceVerifications.entityId, ids),
+              ),
+            );
+          }
+          if (hostIds.length) {
+            insuranceClauses.push(
+              and(
+                eq(businessInsuranceVerifications.entityType, "host"),
+                inArray(businessInsuranceVerifications.entityId, hostIds),
+              ),
+            );
+          }
+
+          if (insuranceClauses.length) {
+            const insuranceRows = await db
+              .select({
+                entityType: businessInsuranceVerifications.entityType,
+                entityId: businessInsuranceVerifications.entityId,
+                status: businessInsuranceVerifications.status,
+                expiresAt: businessInsuranceVerifications.expiresAt,
+                documents: businessInsuranceVerifications.documents,
+                attestedCommercialCoverage:
+                  businessInsuranceVerifications.attestedCommercialCoverage,
+                attestedJurisdictionCompliance:
+                  businessInsuranceVerifications.attestedJurisdictionCompliance,
+                createdAt: businessInsuranceVerifications.createdAt,
+              })
+              .from(businessInsuranceVerifications)
+              .where(
+                insuranceClauses.length === 1
+                  ? insuranceClauses[0]
+                  : or(...insuranceClauses),
+              )
+              .orderBy(desc(businessInsuranceVerifications.createdAt));
+
+            for (const row of insuranceRows as any[]) {
+              const key = `${row.entityType}:${row.entityId}`;
+              if (insuranceByEntity.has(key)) continue;
+              insuranceByEntity.set(key, summarizeRecentSignupInsurance(row));
+            }
+          }
+        } catch (error) {
+          console.warn(
+            "[admin/recent-signups] insurance status unavailable; continuing",
+            error,
+          );
+        }
 
         if (restaurantIds.length) {
           try {
@@ -2135,6 +2268,10 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               ? "Restaurant or Bar"
               : "Restaurant";
           const owner = { accountSettings: row.ownerAccountSettings };
+          const insuranceEntityType = insuranceEntityTypeForRestaurantRow(row);
+          const insurance =
+            insuranceByEntity.get(`${insuranceEntityType}:${row.id}`) ||
+            summarizeRecentSignupInsurance();
           const isPublic = row.isActive !== false && isOwnerProfilePublic(owner);
           const canonicalProfilePath = publicRestaurantPath(row, isFoodTruck);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
@@ -2202,6 +2339,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             googleRating: row.googleRating || null,
             googleReviewCount: row.googleReviewCount || null,
             googleProfileLinked: Boolean(row.googlePlaceId),
+            insurance,
             profileSource: row.profileSource || null,
             profileCompleteness: {
               hasImage: Boolean(
@@ -2209,6 +2347,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               ),
               hasDescription: Boolean(String(row.description || "").trim()),
               hasMenu: menuStats.itemCount > 0 || Boolean(row.menuUrl),
+              hasInsurance: insurance.valid,
               hasLocation: Boolean(locationLabel && locationLabel !== "local"),
               isPublic,
             },
@@ -2239,6 +2378,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             "event_coordinator";
           const typeLabel = isEventCoordinator ? "Event Host" : "Host Location";
           const owner = { accountSettings: row.ownerAccountSettings };
+          const insurance =
+            insuranceByEntity.get(`host:${row.id}`) ||
+            summarizeRecentSignupInsurance();
           const isPublic = isOwnerProfilePublic(owner);
           const canonicalProfilePath = publicHostPath(row);
           const profilePath = isPublic ? canonicalProfilePath : "/map";
@@ -2292,12 +2434,14 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             googleRating: row.googleRating || null,
             googleReviewCount: row.googleReviewCount || null,
             googleProfileLinked: Boolean(row.googlePlaceId),
+            insurance,
             profileSource: row.profileSource || null,
             profileCompleteness: {
               hasImage: Boolean(hostImageUrl),
               hasDescription: Boolean(
                 String(row.description || row.notes || "").trim(),
               ),
+              hasInsurance: insurance.valid,
               hasLocation: Boolean(locationLabel && locationLabel !== "local"),
               hasCapacity: Number(row.spotCount || 0) > 0,
               isPublic,
@@ -2582,6 +2726,18 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             suppliers: signups.filter((item) => item.kind === "supplier").length,
             team: signups.filter((item) => item.kind === "team").length,
             notPublic: signups.filter((item) => !item.isPublic).length,
+            insuranceValid: signups.filter((item) => item.insurance?.valid)
+              .length,
+            insurancePending: signups.filter(
+              (item) => item.insurance?.status === "pending",
+            ).length,
+            insuranceNeedsSubmission: signups.filter(
+              (item) =>
+                item.insurance?.required &&
+                ["not_submitted", "expired", "rejected"].includes(
+                  item.insurance.status,
+                ),
+            ).length,
           },
           signups,
           facebookPagePostingConfigured: Boolean(

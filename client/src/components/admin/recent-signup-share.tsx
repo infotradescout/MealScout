@@ -13,6 +13,7 @@ import {
   Megaphone,
   RefreshCw,
   Send,
+  ShieldCheck,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -61,6 +62,19 @@ type RecentSignup = {
   spotCount?: number | null;
   canonicalProfilePath?: string | null;
   profileCompleteness?: Record<string, boolean>;
+  insurance?: {
+    required: boolean;
+    status:
+      | "valid"
+      | "pending"
+      | "rejected"
+      | "expired"
+      | "not_submitted"
+      | "not_required";
+    valid: boolean;
+    expiresAt?: string | null;
+    documentsCount?: number;
+  } | null;
   profileUrl: string;
   shareUrl?: string | null;
   sharePath?: string | null;
@@ -97,6 +111,9 @@ type RecentSignupsResponse = {
     suppliers: number;
     team: number;
     notPublic: number;
+    insuranceValid?: number;
+    insurancePending?: number;
+    insuranceNeedsSubmission?: number;
   };
   signups: RecentSignup[];
   facebookPagePostingConfigured: boolean;
@@ -273,6 +290,23 @@ const completionLabel = (signup: RecentSignup) => {
   if (!signup.isPublic) return "Not public yet";
   if (!missing.length) return "Launch-ready";
   return `Missing ${missing.slice(0, 2).join(", ")}`;
+};
+
+const insuranceLabel = (signup: RecentSignup) => {
+  const insurance = signup.insurance;
+  if (!insurance?.required) return null;
+  if (insurance.valid) return "Insurance OK";
+  if (insurance.status === "pending") return "Insurance pending";
+  if (insurance.status === "rejected") return "Insurance rejected";
+  if (insurance.status === "expired") return "Insurance expired";
+  return "Needs insurance";
+};
+
+const insuranceBadgeVariant = (signup: RecentSignup) => {
+  const insurance = signup.insurance;
+  if (!insurance?.required || insurance.valid) return "outline" as const;
+  if (insurance.status === "pending") return "secondary" as const;
+  return "destructive" as const;
 };
 
 const downloadDataUrl = (dataUrl: string, filename: string) => {
@@ -569,6 +603,18 @@ export default function RecentSignupShare() {
                 {data?.summary.notPublic ?? 0}
               </p>
             </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Insurance OK</p>
+              <p className="text-2xl font-semibold">
+                {data?.summary.insuranceValid ?? 0}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Needs proof</p>
+              <p className="text-2xl font-semibold">
+                {data?.summary.insuranceNeedsSubmission ?? 0}
+              </p>
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge
@@ -623,6 +669,7 @@ export default function RecentSignupShare() {
             const graphicImageUrl = signup.shareImageUrl || signup.imageUrl;
             const hasBusinessImage = Boolean(graphicImageUrl);
             const readiness = completionLabel(signup);
+            const insuranceReadiness = insuranceLabel(signup);
             const profileDestination = signup.isPublic
               ? "Public profile"
               : "Visitor fallback";
@@ -680,6 +727,12 @@ export default function RecentSignupShare() {
                         {signup.linkLabel || profileDestination}
                       </Badge>
                       <Badge variant="outline">{readiness}</Badge>
+                      {insuranceReadiness ? (
+                        <Badge variant={insuranceBadgeVariant(signup)}>
+                          <ShieldCheck className="mr-1 h-3 w-3" />
+                          {insuranceReadiness}
+                        </Badge>
+                      ) : null}
                       {Number(signup.menuItemCount || 0) > 0 ? (
                         <Badge variant="outline">
                           {signup.menuItemCount} menu item
@@ -878,6 +931,12 @@ export default function RecentSignupShare() {
                       {new Date(signup.createdAt).toLocaleString()}
                     </span>
                     {signup.ownerEmail ? <span>{signup.ownerEmail}</span> : null}
+                    {insuranceReadiness ? (
+                      <span className="inline-flex items-center gap-1">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        {insuranceReadiness}
+                      </span>
+                    ) : null}
                     {signup.facebookPageUrl ? (
                       <a
                         className="inline-flex items-center gap-1 font-medium text-orange-600"
