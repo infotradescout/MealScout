@@ -1343,7 +1343,7 @@ router.post("/users/create", isAdmin, async (req: any, res) => {
         locationType: resolvedLocationType,
         expectedFootTraffic: footTrafficMap[footTraffic] || 100,
         amenities: Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
-        isVerified: true,
+        isVerified: false,
         adminCreated: true,
       };
 
@@ -1425,7 +1425,7 @@ router.post("/hosts/create", isAdmin, async (req: any, res) => {
       amenities: amenities || null,
       contactPhone: contactPhone || null,
       notes: notes || null,
-      isVerified: true,
+      isVerified: false,
       adminCreated: true,
     };
 

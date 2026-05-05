@@ -2297,7 +2297,7 @@ function ManualUserCreation({ adminUser }: { adminUser?: any }) {
                 <strong>Note:</strong>{" "}
                 {formData.userType === "supplier"
                   ? "Supplier profile is provisioned and active so you can work the same supplier dashboard flow immediately."
-                  : "Restaurant will be created as verified and active. No document verification required for manual onboarding."}
+                  : "Business profile is created active for setup, but business verification still requires commercial insurance proof."}
               </p>
             </div>
           </>
@@ -5758,15 +5758,16 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/verifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
-        title: "Restaurant Approved",
-        description: "The restaurant has been activated successfully.",
+        title: "Business Profile Activated",
+        description:
+          "The profile is active. Business verification still requires proof approval.",
       });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
         description:
-          error?.message || "Failed to approve restaurant. Please try again.",
+          error?.message || "Failed to activate profile. Please try again.",
         variant: "destructive",
       });
     },
@@ -6712,7 +6713,7 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Verification Approved",
-        description: "Restaurant verification has been approved successfully.",
+        description: "Business verification has been approved successfully.",
       });
     },
     onError: () => {
@@ -6749,7 +6750,7 @@ export default function AdminDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({
         title: "Verification Rejected",
-        description: "Restaurant verification has been rejected.",
+        description: "Business verification has been rejected.",
       });
     },
     onError: () => {
@@ -9360,7 +9361,7 @@ export default function AdminDashboard() {
                                     className="w-full gap-2"
                                   >
                                     <CheckCircle className="h-4 w-4" />
-                                    Activate & verify
+                                    Activate Profile
                                   </Button>
                                 </div>
                               </div>
@@ -10319,7 +10320,7 @@ export default function AdminDashboard() {
                   <span>Business Verification Requests</span>
                 </CardTitle>
                 <CardDescription>
-                  Review and approve restaurant verification documents
+                  Review business proof and verification documents
                 </CardDescription>
               </CardHeader>
               <CardContent>

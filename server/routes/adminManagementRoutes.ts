@@ -1405,7 +1405,7 @@ export function registerAdminManagementRoutes(app: Express) {
                   userType === "caterer" || userType === "private_chef",
                 cuisineType: cuisineType || "Various",
                 isActive: true,
-                isVerified: true,
+                isVerified: false,
                 ...(parsedLatitude !== null && parsedLongitude !== null
                   ? {
                       latitude: String(parsedLatitude),
@@ -1446,7 +1446,7 @@ export function registerAdminManagementRoutes(app: Express) {
                 contactPhone: phone?.trim() || null,
                 amenities:
                   Object.keys(amenitiesObj).length > 0 ? amenitiesObj : null,
-                isVerified: true,
+                isVerified: false,
                 adminCreated: true,
                 ...(parsedLatitude !== null && parsedLongitude !== null
                   ? {

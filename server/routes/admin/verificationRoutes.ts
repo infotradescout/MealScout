@@ -180,6 +180,12 @@ export function registerVerificationAdminRoutes(
         ) {
           return res.status(404).json({ message: error.message });
         }
+        if (
+          error instanceof Error &&
+          error.message.includes("business proof is required")
+        ) {
+          return res.status(400).json({ message: error.message });
+        }
         console.error("Error approving verification request:", error);
         res
           .status(500)

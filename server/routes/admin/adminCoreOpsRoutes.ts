@@ -1588,7 +1588,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     async (req: any, res) => {
       try {
         await storage.approveRestaurant(req.params.id, req.user?.id || null);
-        res.json({ message: "Restaurant approved successfully" });
+        res.json({ message: "Business profile activated successfully" });
       } catch (error) {
         console.error("Error approving restaurant:", error);
         if (

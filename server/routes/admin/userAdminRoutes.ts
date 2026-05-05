@@ -1775,7 +1775,7 @@ export function registerUserAdminRoutes(
           notes: req.body?.notes || null,
           amenities: req.body?.amenities,
           spotCount: Number.isFinite(spotCount) ? spotCount : undefined,
-          isVerified: true,
+          isVerified: false,
           adminCreated: true,
           latitude:
             req.body?.latitude !== undefined && req.body?.latitude !== null
@@ -1876,7 +1876,7 @@ export function registerUserAdminRoutes(
           offersCatering:
             businessType === "caterer" || businessType === "private_chef",
           isActive: req.body?.isActive ?? true,
-          isVerified: req.body?.isVerified ?? true,
+          isVerified: req.body?.isVerified ?? false,
           description: req.body?.description || null,
           websiteUrl: req.body?.websiteUrl || null,
           instagramUrl: req.body?.instagramUrl || null,

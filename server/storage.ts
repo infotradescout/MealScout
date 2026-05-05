@@ -2489,7 +2489,7 @@ export class DatabaseStorage implements IStorage {
 
       await tx
         .update(restaurants)
-        .set({ isActive: true, isVerified: true, updatedAt: now })
+        .set({ isActive: true, updatedAt: now })
         .where(eq(restaurants.id, restaurantId));
 
       await tx
@@ -2676,7 +2676,7 @@ export class DatabaseStorage implements IStorage {
         isFoodTruck: restaurantData.isFoodTruck || false,
         offersCatering: restaurantData.offersCatering || false,
         isActive: true,
-        isVerified: true, // Admin-created restaurants are pre-verified
+        isVerified: false,
       })
       .returning();
 
@@ -4097,6 +4097,29 @@ export class DatabaseStorage implements IStorage {
   ): Promise<void> {
     // Start transaction to update both tables
     await db.transaction(async (tx: any) => {
+      const [existingRequest] = await tx
+        .select({
+          id: verificationRequests.id,
+          restaurantId: verificationRequests.restaurantId,
+          documents: verificationRequests.documents,
+        })
+        .from(verificationRequests)
+        .where(eq(verificationRequests.id, id))
+        .limit(1);
+
+      if (!existingRequest) {
+        throw new Error("Verification request not found");
+      }
+
+      const documents = Array.isArray(existingRequest.documents)
+        ? existingRequest.documents.filter(Boolean)
+        : [];
+      if (documents.length === 0) {
+        throw new Error(
+          "Uploaded business proof is required before verification can be approved",
+        );
+      }
+
       // Update verification request status
       const [request] = await tx
         .update(verificationRequests)
@@ -4111,10 +4134,6 @@ export class DatabaseStorage implements IStorage {
           id: verificationRequests.id,
           restaurantId: verificationRequests.restaurantId,
         });
-
-      if (!request) {
-        throw new Error("Verification request not found");
-      }
 
       // Set restaurant as verified
       await tx

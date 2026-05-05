@@ -414,7 +414,7 @@ async function ensureImportedRestaurant({
     facebookPageUrl: toNullableString(business.facebookPageUrl),
     isFoodTruck: businessType === "food_truck",
     isActive: true,
-    isVerified: true,
+    isVerified: false,
     profileSource: "manual",
   };
   if (business.latitude !== undefined) restaurantData.latitude = String(business.latitude);
