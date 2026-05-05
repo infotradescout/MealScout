@@ -230,7 +230,10 @@ export default function AdminAffiliateManagement() {
             <option value="all">All user types</option>
             <option value="customer">Customer</option>
             <option value="restaurant_owner">Restaurant</option>
+            <option value="caterer">Caterer</option>
+            <option value="private_chef">Private Chef</option>
             <option value="food_truck">Food Truck</option>
+            <option value="supplier">Supplier</option>
             <option value="host">Host</option>
             <option value="event_coordinator">Event Coordinator</option>
             <option value="staff">Staff</option>
