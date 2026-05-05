@@ -23,14 +23,119 @@ import {
   affiliateWallet,
   affiliateShareEvents,
   creditLedger,
+  hosts,
   referralClicks,
   referrals,
+  restaurants,
+  suppliers,
 } from '@shared/schema';
 import { ensureAffiliateTag, setAffiliateTag } from "./affiliateTagService";
 import { appendReferralParam } from "./referralService";
 import { getUserCreditBalance } from "./creditService";
 
 const router = Router();
+
+const affiliateSlug = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 80);
+
+const affiliateRestaurantPath = (row: any) => {
+  const id = String(row?.id || "").trim();
+  const slug = affiliateSlug(row?.name) || id;
+  const slugWithId = id ? `${slug}--${id}` : slug;
+  const businessType = String(row?.businessType || "").toLowerCase();
+  if (row?.isFoodTruck || businessType === "food_truck") {
+    return `/truck/${encodeURIComponent(slugWithId)}`;
+  }
+  if (businessType === "bar") {
+    return `/bar/${encodeURIComponent(slugWithId)}`;
+  }
+  if (businessType === "private_chef") {
+    return `/chef/${encodeURIComponent(slugWithId)}`;
+  }
+  return id
+    ? `/restaurant/${encodeURIComponent(id)}/${encodeURIComponent(slug)}`
+    : "/map";
+};
+
+const affiliateHostPath = (row: any) => {
+  const id = String(row?.id || "").trim();
+  const slug = affiliateSlug(row?.businessName) || id;
+  return id ? `/location/${encodeURIComponent(`${slug}--${id}`)}` : "/map";
+};
+
+const affiliateSupplierPath = (row: any) => {
+  const id = String(row?.id || "").trim();
+  const slug = affiliateSlug(row?.businessName) || id;
+  return id
+    ? `/supplier/${encodeURIComponent(`${slug}--${id}`)}`
+    : "/suppliers";
+};
+
+async function resolveAffiliateDefaultRedirectPath(affiliateUserId: string) {
+  const [restaurant] = await db
+    .select({
+      id: restaurants.id,
+      name: restaurants.name,
+      businessType: restaurants.businessType,
+      isFoodTruck: restaurants.isFoodTruck,
+      isVerified: restaurants.isVerified,
+      isActive: restaurants.isActive,
+      updatedAt: restaurants.updatedAt,
+      createdAt: restaurants.createdAt,
+    })
+    .from(restaurants)
+    .where(
+      and(eq(restaurants.ownerId, affiliateUserId), eq(restaurants.isActive, true)),
+    )
+    .orderBy(
+      desc(restaurants.isVerified),
+      desc(restaurants.updatedAt),
+      desc(restaurants.createdAt),
+    )
+    .limit(1);
+  if (restaurant) return affiliateRestaurantPath(restaurant);
+
+  const [host] = await db
+    .select({
+      id: hosts.id,
+      businessName: hosts.businessName,
+      isVerified: hosts.isVerified,
+      updatedAt: hosts.updatedAt,
+      createdAt: hosts.createdAt,
+    })
+    .from(hosts)
+    .where(eq(hosts.userId, affiliateUserId))
+    .orderBy(
+      desc(hosts.isVerified),
+      desc(hosts.updatedAt),
+      desc(hosts.createdAt),
+    )
+    .limit(1);
+  if (host) return affiliateHostPath(host);
+
+  const [supplier] = await db
+    .select({
+      id: suppliers.id,
+      businessName: suppliers.businessName,
+      isActive: suppliers.isActive,
+      updatedAt: suppliers.updatedAt,
+      createdAt: suppliers.createdAt,
+    })
+    .from(suppliers)
+    .where(
+      and(eq(suppliers.userId, affiliateUserId), eq(suppliers.isActive, true)),
+    )
+    .orderBy(desc(suppliers.updatedAt), desc(suppliers.createdAt))
+    .limit(1);
+  if (supplier) return affiliateSupplierPath(supplier);
+
+  return "/";
+}
 
 /**
  * GET /api/affiliate/tag
@@ -672,7 +777,15 @@ router.get('/ref/:tag', async (req, res) => {
       sameSite: 'lax',
     });
 
-    res.json({ success: true, affiliateUserId, referralId: result?.referralId });
+    const redirectPath =
+      await resolveAffiliateDefaultRedirectPath(affiliateUserId);
+
+    res.json({
+      success: true,
+      affiliateUserId,
+      referralId: result?.referralId,
+      redirectPath,
+    });
   } catch (error) {
     console.error('Failed to handle affiliate redirect:', error);
     res.status(500).json({ error: 'Failed to process referral' });

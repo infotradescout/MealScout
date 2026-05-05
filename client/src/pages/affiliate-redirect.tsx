@@ -14,9 +14,14 @@ export default function AffiliateRedirect() {
         method: "GET",
         credentials: "include", // Include cookies
       })
-        .then(() => {
-          // The backend records the click and sets referral cookies.
-          setLocation("/");
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          const redirectPath =
+            typeof data?.redirectPath === "string" &&
+            data.redirectPath.startsWith("/")
+              ? data.redirectPath
+              : "/";
+          setLocation(redirectPath);
         })
         .catch((error) => {
           console.error("Failed to record referral:", error);

@@ -179,7 +179,7 @@ const cleanAffiliateSharePath = (
   const targetPath = normalizeAdminPath(destinationPath, fallback);
   const tag = String(affiliateTag || "").trim();
   if (!tag) return targetPath;
-  return `/ref/${encodeURIComponent(tag)}${targetPath === "/" ? "" : targetPath}`;
+  return `/ref/${encodeURIComponent(tag)}`;
 };
 
 const proxiedAdminImageUrl = (value: unknown) => {
@@ -191,7 +191,7 @@ const proxiedAdminImageUrl = (value: unknown) => {
 const RECENT_SIGNUP_HARD_TEST_PATTERN =
   /\b(test|testing|dummy|fake|placeholder|asdf|qwer|lorem|ipsum)\b/i;
 const RECENT_SIGNUP_SYNTHETIC_EMAIL_PATTERN =
-  /(@example\.(?:com|net|org|test)$|@test\.com$|@mailinator\.com$|@yopmail\.com$|@invalid\.)/i;
+  /(^deleted\+.*@mealscout\.invalid$|@example\.(?:com|net|org|test)$|@test\.com$|@mailinator\.com$|@yopmail\.com$|@invalid\.)/i;
 const RECENT_SIGNUP_SYNTHETIC_PROFILE_SOURCES = new Set([
   "search_query_seed",
   "demo_seed",
@@ -1697,6 +1697,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               recentOrOwnedRestaurantWhere,
+              or(eq(restaurants.isActive, true), isNull(restaurants.isActive)),
               sql`${users.id} is not null`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
@@ -1784,6 +1785,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           .where(
             and(
               recentOrOwnedSupplierWhere,
+              eq(suppliers.isActive, true),
               sql`${users.id} is not null`,
               or(eq(users.isDisabled, false), isNull(users.isDisabled)),
             ),
@@ -2354,12 +2356,13 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           const displayName = displayNameForSignupUser(row);
           const locationLabel =
             String(row.postalCode || "").trim() || "MealScout";
-          const profilePath = cleanAffiliateSharePath(
-            row.affiliateTag,
-            "/map",
-          );
+          const profilePath = "/map";
           const profileUrl = `${baseUrl}${profilePath}`;
-          const shareUrl = profileUrl;
+          const sharePath = cleanAffiliateSharePath(
+            row.affiliateTag,
+            profilePath,
+          );
+          const shareUrl = `${baseUrl}${sharePath}`;
           const imageUrl = absoluteAdminUrl(
             baseUrl,
             firstAdminPhotoUrl(row.profileImageUrl),
@@ -2383,7 +2386,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             shareImageUrl: proxiedAdminImageUrl(imageUrl),
             profilePath,
             profileUrl,
-            sharePath: profilePath,
+            sharePath,
             shareUrl,
             isPublic: true,
             linkLabel: "Referral link",
