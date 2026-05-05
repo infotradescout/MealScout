@@ -176,7 +176,7 @@ export default function TruckLanding() {
         schemaData={schemaData}
       />
 
-      <section className="relative min-h-[86svh] overflow-hidden bg-neutral-950 text-white">
+      <section className="relative min-h-[82svh] overflow-hidden bg-neutral-950 text-white">
         <img
           src="/backgrounds/food-truck-day.jpg"
           alt=""
@@ -214,14 +214,14 @@ export default function TruckLanding() {
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(86svh-4rem)] max-w-6xl flex-col justify-center px-4 py-14 sm:px-6">
+        <div className="relative z-10 mx-auto flex min-h-[calc(82svh-4rem)] max-w-6xl flex-col justify-center px-4 py-14 sm:px-6">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-md border border-white/16 bg-black/42 px-3 py-2 text-sm font-black text-white/88 backdrop-blur">
               <ShieldCheck className="h-4 w-4 text-[color:var(--accent-text)]" />
               Food truck owner tools
             </div>
 
-            <h1 className="mt-5 max-w-[14ch] text-4xl font-black leading-[1.02] tracking-normal sm:text-6xl lg:text-7xl">
+            <h1 className="mt-5 max-w-[14ch] text-4xl font-black leading-[1.02] tracking-normal sm:text-6xl lg:text-6xl">
               One profile for stops, menus, and bookings.
             </h1>
 
