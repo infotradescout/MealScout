@@ -804,7 +804,7 @@ export default function PublicProfilePage() {
         description={description}
         canonicalUrl={data.canonicalUrl}
         ogType="profile"
-        ogImage={visibleProfileImageUrl || "/og-default.jpg"}
+        ogImage={visibleProfileImageUrl || "/og-default.jpg?v=20260506"}
         schemaData={schemaData}
       />
 

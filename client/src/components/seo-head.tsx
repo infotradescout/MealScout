@@ -44,13 +44,15 @@ const PRIVATE_NOINDEX_PREFIXES = [
   "/account-setup",
 ];
 
+const DEFAULT_SOCIAL_IMAGE = "/og-default.jpg?v=20260506";
+
 export function SEOHead({
   title,
   description,
   keywords,
   canonicalUrl,
   allowCanonicalHostOverride = false,
-  ogImage = "/og-default.jpg",
+  ogImage = DEFAULT_SOCIAL_IMAGE,
   ogType = "website",
   schemaData,
   noIndex = false,
@@ -87,6 +89,15 @@ export function SEOHead({
         document.head.appendChild(link);
       }
       link.setAttribute("href", url);
+    };
+    const setLinkTag = (rel: string, href: string) => {
+      let link = document.querySelector(`link[rel="${rel}"]`);
+      if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", rel);
+        document.head.appendChild(link);
+      }
+      link.setAttribute("href", href);
     };
 
     const resolveCanonicalUrl = (url?: string) => {
@@ -185,6 +196,7 @@ export function SEOHead({
     setMetaTag("og:locale", "en_US", true);
     if (resolvedOgImage) {
       setMetaTag("og:image", resolvedOgImage, true);
+      setMetaTag("og:image:url", resolvedOgImage, true);
       setMetaTag("og:image:secure_url", resolvedOgImage, true);
       setMetaTag(
         "og:image:alt",
@@ -215,6 +227,7 @@ export function SEOHead({
         "twitter:image:alt",
         "MealScout food truck discovery preview",
       );
+      setLinkTag("image_src", resolvedOgImage);
     }
 
     // Structured data (JSON-LD)

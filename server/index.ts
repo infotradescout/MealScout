@@ -77,6 +77,9 @@ function resolveCanonicalBaseUrl() {
 }
 
 const canonicalBaseUrl = resolveCanonicalBaseUrl().toString().replace(/\/+$/, "");
+const defaultSocialImagePath = "/og-default.jpg?v=20260506";
+const socialPreviewBotPattern =
+  /(facebookexternalhit|facebot|facebookbot|meta-externalagent|meta-externalfetcher|whatsapp|discordbot|telegrambot|linkedinbot|twitterbot|slackbot|pinterest|embedly)/i;
 const trackingQueryKeys = new Set([
   "ref",
   "utm_source",
@@ -357,6 +360,8 @@ app.use((req, res, next) => {
   if (isApiOrAsset) return next();
 
   const requestUrl = new URL(req.originalUrl || req.url || "/", canonicalBaseUrl);
+  const userAgent = String(req.headers["user-agent"] || "");
+  const isSocialPreviewBot = socialPreviewBotPattern.test(userAgent);
   const hasTrackingParams = Array.from(requestUrl.searchParams.keys()).some((key) =>
     trackingQueryKeys.has(String(key).toLowerCase()),
   );
@@ -364,7 +369,7 @@ app.use((req, res, next) => {
     pathValue.toLowerCase().startsWith(prefix),
   );
 
-  if (hasTrackingParams || isPrivatePath) {
+  if ((hasTrackingParams && !isSocialPreviewBot) || isPrivatePath) {
     res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
   }
 
@@ -1325,7 +1330,7 @@ app.use((req, res, next) => {
         ? String(story.thumbnailUrl).startsWith("http")
           ? String(story.thumbnailUrl)
           : `${canonicalBaseUrl}${String(story.thumbnailUrl).startsWith("/") ? "" : "/"}${story.thumbnailUrl}`
-        : `${canonicalBaseUrl}/og-default.jpg`;
+        : `${canonicalBaseUrl}${defaultSocialImagePath}`;
       const isDefaultSocialImage = /\/og-default\.jpg(?:$|\?)/i.test(image);
 
       const schema = {
@@ -1367,6 +1372,7 @@ app.use((req, res, next) => {
             <meta property="og:type" content="video.other">
             <meta property="og:url" content="${canonical}">
             <meta property="og:image" content="${escapeHtml(image)}">
+            <meta property="og:image:url" content="${escapeHtml(image)}">
             <meta property="og:image:secure_url" content="${escapeHtml(image)}">
             ${
               isDefaultSocialImage
@@ -1380,6 +1386,7 @@ app.use((req, res, next) => {
             <meta name="twitter:description" content="${escapeHtml(description)}">
             <meta name="twitter:image" content="${escapeHtml(image)}">
             <meta name="twitter:image:alt" content="${escapeHtml(title)}">
+            <link rel="image_src" href="${escapeHtml(image)}">
             <script type="application/ld+json">${JSON.stringify(
               schema
             )}</script>

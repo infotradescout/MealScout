@@ -47,6 +47,8 @@ const escapeHtml = (value: string | null | undefined) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const defaultSocialImagePath = "/og-default.jpg?v=20260506";
+
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
     .toLowerCase()
@@ -171,7 +173,7 @@ const resolveRestaurantImage = (baseUrl: string, row: any) =>
       row.facebookCoverUrl ||
       row.logoUrl ||
       firstPhotoUrl(row.googlePhotos) ||
-      "/og-default.jpg",
+      defaultSocialImagePath,
   );
 
 const resolveHostImage = (baseUrl: string, row: any) =>
@@ -180,7 +182,7 @@ const resolveHostImage = (baseUrl: string, row: any) =>
     row.spotImageUrl ||
       row.facebookCoverUrl ||
       firstPhotoUrl(row.googlePhotos) ||
-      "/og-default.jpg",
+      defaultSocialImagePath,
   );
 
 async function publicVideosFor(
@@ -231,7 +233,10 @@ const videoSchemas = (
       `Public video from ${fallbackName}`,
     ),
     contentUrl: video.fileUrl,
-    thumbnailUrl: absoluteUrl(baseUrl, video.thumbnailUrl || "/og-default.jpg"),
+    thumbnailUrl: absoluteUrl(
+      baseUrl,
+      video.thumbnailUrl || defaultSocialImagePath,
+    ),
     uploadDate: video.createdAt
       ? new Date(video.createdAt as any).toISOString()
       : undefined,
@@ -276,7 +281,7 @@ const menuSnippetForRestaurant = async (restaurantId: string) => {
 
 const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   const canonicalUrl = absoluteUrl(baseUrl, page.canonicalPath);
-  const image = absoluteUrl(baseUrl, page.imageUrl || "/og-default.jpg");
+  const image = absoluteUrl(baseUrl, page.imageUrl || defaultSocialImagePath);
   const isDefaultSocialImage = /\/og-default\.jpg(?:$|\?)/i.test(image);
   const schema = Array.isArray(page.schema) ? page.schema : [page.schema];
   return `<!DOCTYPE html>
@@ -293,6 +298,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <meta property="og:type" content="website">
   <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
   <meta property="og:image" content="${escapeHtml(image)}">
+  <meta property="og:image:url" content="${escapeHtml(image)}">
   <meta property="og:image:secure_url" content="${escapeHtml(image)}">
   ${isDefaultSocialImage ? '<meta property="og:image:type" content="image/jpeg">\n  <meta property="og:image:width" content="1200">\n  <meta property="og:image:height" content="630">' : ""}
   <meta property="og:image:alt" content="${escapeHtml(page.title)}">
@@ -302,6 +308,7 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <meta name="twitter:description" content="${escapeHtml(page.description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
   <meta name="twitter:image:alt" content="${escapeHtml(page.title)}">
+  <link rel="image_src" href="${escapeHtml(image)}">
   ${buildOfficialSocialEntityMetaTags()}
   ${schema
     .map(
@@ -604,7 +611,7 @@ async function eventPage(baseUrl: string, eventId: string) {
     title: `${title}${cityState ? ` in ${cityState}` : ""} | MealScout`,
     description,
     canonicalPath,
-    imageUrl: videos[0]?.thumbnailUrl || "/og-default.jpg",
+    imageUrl: videos[0]?.thumbnailUrl || defaultSocialImagePath,
     robots:
       ended || row.status === "cancelled"
         ? "noindex,follow"
@@ -693,7 +700,7 @@ async function dealPage(baseUrl: string, dealId: string) {
     title: `${title} - ${row.restaurantName || "MealScout"} | MealScout`,
     description,
     canonicalPath,
-    imageUrl: row.imageUrl || "/og-default.jpg",
+    imageUrl: row.imageUrl || defaultSocialImagePath,
     robots: active
       ? "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
       : "noindex,follow",
@@ -703,7 +710,7 @@ async function dealPage(baseUrl: string, dealId: string) {
       name: title,
       description,
       url: absoluteUrl(baseUrl, canonicalPath),
-      image: absoluteUrl(baseUrl, row.imageUrl || "/og-default.jpg"),
+      image: absoluteUrl(baseUrl, row.imageUrl || defaultSocialImagePath),
       validFrom: row.startDate
         ? new Date(row.startDate as any).toISOString()
         : undefined,
@@ -833,7 +840,7 @@ async function jobPage(baseUrl: string, jobId: string) {
       row.restaurantCoverImageUrl ||
       row.restaurantLogoUrl ||
       row.hostLogoUrl ||
-      "/og-default.jpg",
+      defaultSocialImagePath,
     schema: {
       "@context": "https://schema.org",
       "@type": "JobPosting",
@@ -929,7 +936,7 @@ async function supplierPage(baseUrl: string, supplierId: string) {
     title: `${name}${cityState ? ` in ${cityState}` : ""} | MealScout Supplier`,
     description,
     canonicalPath,
-    imageUrl: "/og-default.jpg",
+    imageUrl: defaultSocialImagePath,
     schema: {
       "@context": "https://schema.org",
       "@type": "LocalBusiness",

@@ -21,12 +21,14 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const defaultSocialImagePath = "/og-default.jpg?v=20260506";
+
 const buildPageHtml = (
   canonicalBaseUrl: string,
   page: AcquisitionPageConfig,
 ) => {
   const canonical = `${canonicalBaseUrl}${page.path}`;
-  const image = `${canonicalBaseUrl}/og-default.jpg`;
+  const image = `${canonicalBaseUrl}${defaultSocialImagePath}`;
   const schema = {
     "@context": "https://schema.org",
     "@type": page.schemaType,
@@ -50,6 +52,7 @@ const buildPageHtml = (
   <meta property="og:type" content="website">
   <meta property="og:url" content="${escapeHtml(canonical)}">
   <meta property="og:image" content="${escapeHtml(image)}">
+  <meta property="og:image:url" content="${escapeHtml(image)}">
   <meta property="og:image:secure_url" content="${escapeHtml(image)}">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
@@ -61,6 +64,7 @@ const buildPageHtml = (
   <meta name="twitter:description" content="${escapeHtml(page.description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
   <meta name="twitter:image:alt" content="${escapeHtml(page.title)}">
+  <link rel="image_src" href="${escapeHtml(image)}">
   ${buildOfficialSocialEntityMetaTags()}
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1">
   <script type="application/ld+json">${JSON.stringify(schema)}</script>
