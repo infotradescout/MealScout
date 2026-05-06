@@ -250,6 +250,22 @@
   transform: translate(-50%, -50%);
 }
 
+.ms-giveaway-center-logo::before {
+  position: absolute;
+  left: 50%;
+  top: 29%;
+  z-index: 0;
+  width: 28%;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: #fffaf0;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.8),
+    inset 0 -3px 7px rgba(245, 158, 11, 0.16);
+  content: "";
+  transform: translateX(-50%);
+}
+
 .ms-giveaway-center-logo img {
   position: relative;
   z-index: 1;
