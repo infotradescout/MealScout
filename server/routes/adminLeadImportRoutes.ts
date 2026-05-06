@@ -5,6 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { storage } from "../storage";
 import { emailService, isEmailConfigured } from "../emailService";
+import { createEmailVerificationUrl } from "../utils/emailVerification";
 import { db } from "../db";
 import { queueGoogleRestaurantAutoLink } from "../services/googleBusinessAutoLink";
 import {
@@ -187,15 +188,6 @@ export const buildLocationKey = (
     normalizeLocationValue(city),
     normalizeLocationValue(state),
   ].join("|");
-
-function buildVerifyBaseUrl(req: any) {
-  return String(
-    process.env.PUBLIC_BASE_URL ||
-      process.env.CLIENT_ORIGIN ||
-      `${req.protocol}://${req.get("host")}` ||
-      "http://localhost:5000",
-  ).replace(/\/+$/, "");
-}
 
 function actorIdFromRequest(req: any) {
   return String(
@@ -683,17 +675,10 @@ async function sendVerificationIfNeeded(req: any, user: any) {
     return { sent: false, skipped: "email_not_configured" };
   }
 
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  await storage.createEmailVerificationToken({
-    userId: user.id,
-    tokenHash,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    requestIp: req.ip || req.connection?.remoteAddress || undefined,
-    userAgent: req.get("User-Agent") || undefined,
-  });
-
-  const verifyUrl = `${buildVerifyBaseUrl(req)}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+  const verifyUrl = await createEmailVerificationUrl(user, req);
+  if (!verifyUrl) {
+    return { sent: false, skipped: "missing_email" };
+  }
   const sent = await emailService.sendEmailVerificationEmail(user, verifyUrl);
   return { sent: Boolean(sent), skipped: null };
 }

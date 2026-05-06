@@ -217,6 +217,54 @@ async function ensureLaunchSchemaCompatibility() {
       ALTER TABLE IF EXISTS restaurant_user_recommendations
       ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
     `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS email_verification_tokens (
+        id varchar PRIMARY KEY DEFAULT (gen_random_uuid())::text,
+        user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash text NOT NULL,
+        expires_at timestamp NOT NULL,
+        used_at timestamp,
+        request_ip varchar,
+        user_agent varchar,
+        created_at timestamp DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS email_verification_tokens
+      ALTER COLUMN id SET DEFAULT (gen_random_uuid())::text
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS email_verification_tokens
+      ADD COLUMN IF NOT EXISTS request_ip varchar
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS email_verification_tokens
+      ADD COLUMN IF NOT EXISTS user_agent varchar
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS email_verification_tokens
+      ADD COLUMN IF NOT EXISTS used_at timestamp
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS email_verification_tokens
+      ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_email_verification_user
+      ON email_verification_tokens (user_id, created_at)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_email_verification_token
+      ON email_verification_tokens (token_hash)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_email_verification_expires
+      ON email_verification_tokens (expires_at)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_email_verification_used
+      ON email_verification_tokens (used_at)
+    `);
   } catch (error) {
     console.warn(
       "[db] Launch schema compatibility check failed:",

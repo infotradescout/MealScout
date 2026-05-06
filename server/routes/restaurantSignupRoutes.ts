@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import bcrypt from "bcryptjs";
-import { createHash, randomBytes } from "crypto";
 import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -9,6 +8,7 @@ import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { emailService } from "../emailService";
 import { storage } from "../storage";
 import { isPasswordStrong, PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
+import { createEmailVerificationUrl } from "../utils/emailVerification";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { menus, users, insertRestaurantSchema, type User } from "@shared/schema";
 
@@ -191,26 +191,12 @@ export function registerRestaurantSignupRoutes(
           "restaurant_owner",
         );
 
-        const token = randomBytes(32).toString("hex");
-        const tokenHash = createHash("sha256").update(token).digest("hex");
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await storage.createEmailVerificationToken({
-          userId: user.id,
-          tokenHash,
-          expiresAt,
-          requestIp: req.ip || req.connection?.remoteAddress || undefined,
-          userAgent: req.get("User-Agent") || undefined,
+        const verifyUrl = await createEmailVerificationUrl(user, req, {
+          next: req.body?.next || "/restaurant-signup",
         });
-
-        const apiBaseUrl = (
-          process.env.PUBLIC_BASE_URL ||
-          (req.get("host") ? `${req.protocol}://${req.get("host")}` : null) ||
-          "http://localhost:5000"
-        ).replace(/\/+$/, "");
-        const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-          token,
-        )}`;
-        await emailService.sendEmailVerificationEmail(user, verifyUrl);
+        if (verifyUrl) {
+          await emailService.sendEmailVerificationEmail(user, verifyUrl);
+        }
 
         return res.status(201).json({
           message:

@@ -24,7 +24,12 @@ import {
   PASSWORD_REQUIREMENTS,
 } from "./utils/passwordPolicy";
 import { db } from "./db";
-import { insertRestaurantSchema, menus, users } from "@shared/schema";
+import {
+  emailVerificationTokens,
+  insertRestaurantSchema,
+  menus,
+  users,
+} from "@shared/schema";
 import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import {
   ensureAffiliateTag,
@@ -32,6 +37,10 @@ import {
 } from "./affiliateTagService";
 import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { getOwnerProfileRecoveryPromptForUser } from "./services/ownerProfileRecovery";
+import {
+  createEmailVerificationUrl as createStoredEmailVerificationUrl,
+  resolveEmailVerificationBaseUrl,
+} from "./utils/emailVerification";
 
 // Extend session to include app context for multi-app OAuth
 declare module "express-session" {
@@ -354,36 +363,11 @@ export async function setupUnifiedAuth(app: Express) {
   };
 
   const createEmailVerificationUrl = async (user: User, req: any) => {
-    if (!user.email) return null;
-    const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await storage.createEmailVerificationToken({
-      userId: user.id,
-      tokenHash,
-      expiresAt,
-      requestIp: req.ip || req.connection.remoteAddress || undefined,
-      userAgent: req.get("User-Agent") || undefined,
-    });
-
-    const reqHost = req.get("host");
-    const inferredBaseUrl = reqHost ? `${req.protocol}://${reqHost}` : null;
-    const apiBaseUrl = (
-      resolveConfiguredBaseUrl(process.env.PUBLIC_BASE_URL) ||
-      resolveConfiguredBaseUrl(inferredBaseUrl || undefined) ||
-      "http://localhost:5000"
-    ).replace(/\/+$/, "");
-    const verifyUrl = new URL(`${apiBaseUrl}/api/auth/verify-email`);
-    verifyUrl.searchParams.set("token", token);
     const safeNext = safeOAuthReturnPath(
       firstRequestValue(req.body?.next, req.body?.returnTo, req.query?.next),
       "",
     );
-    if (safeNext) {
-      verifyUrl.searchParams.set("next", safeNext);
-    }
-    return verifyUrl.toString();
+    return createStoredEmailVerificationUrl(user, req, { next: safeNext });
   };
 
   const sendWelcomeOrVerification = async (
@@ -2533,30 +2517,50 @@ export async function setupUnifiedAuth(app: Express) {
   app.get("/api/auth/verify-email", async (req, res) => {
     try {
       const { token } = req.query;
+      const redirectBase =
+        resolveConfiguredBaseUrl(process.env.CLIENT_ORIGIN) ||
+        resolveConfiguredBaseUrl(process.env.PUBLIC_BASE_URL) ||
+        resolveEmailVerificationBaseUrl(req);
+      const redirectToStatus = (status: string) => {
+        const url = new URL("/verify-email", redirectBase);
+        url.searchParams.set("status", status);
+        return res.redirect(url.toString());
+      };
+
       if (!token || typeof token !== "string") {
-        return res.status(400).json({ error: "Invalid token" });
+        return redirectToStatus("invalid");
       }
 
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-      const verificationToken =
-        await storage.getEmailVerificationTokenByTokenHash(tokenHash);
+      const [verificationToken] = await db
+        .select()
+        .from(emailVerificationTokens)
+        .where(eq(emailVerificationTokens.tokenHash, tokenHash))
+        .limit(1);
 
       if (!verificationToken) {
-        return res.status(400).json({ error: "Invalid or expired token" });
+        return redirectToStatus("invalid");
       }
 
       const user = await storage.getUser(verificationToken.userId);
       if (!user) {
-        return res.status(400).json({ error: "User not found" });
+        return redirectToStatus("invalid");
       }
 
-      await storage.updateUser(user.id, { emailVerified: true });
-      await storage.markEmailVerificationTokenUsed(verificationToken.id);
+      const expiresAtMs = new Date(verificationToken.expiresAt as any).getTime();
+      const isExpired =
+        Number.isFinite(expiresAtMs) && expiresAtMs < Date.now();
+      if (!user.emailVerified && isExpired) {
+        return redirectToStatus("expired");
+      }
 
-      const redirectBase =
-        process.env.CLIENT_ORIGIN ||
-        process.env.PUBLIC_BASE_URL ||
-        "http://localhost:5000";
+      if (!user.emailVerified) {
+        await storage.updateUser(user.id, { emailVerified: true });
+      }
+      if (!verificationToken.usedAt) {
+        await storage.markEmailVerificationTokenUsed(verificationToken.id);
+      }
+
       const requestedNext = String(req.query.next || "").trim();
       const safeNext =
         requestedNext.startsWith("/") &&

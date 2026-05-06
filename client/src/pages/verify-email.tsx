@@ -61,6 +61,7 @@ export default function VerifyEmailPage() {
 
   const nextPath = getSafePath(params.get("next") || "/", "/");
   const source = String(params.get("source") || "signup").trim();
+  const status = String(params.get("status") || "").trim();
   const accountType = (String(params.get("accountType") || "unknown").trim() ||
     "unknown") as AccountType;
   const businessType = String(params.get("businessType") || "").trim();
@@ -92,7 +93,7 @@ export default function VerifyEmailPage() {
     if (!email) {
       toast({
         title: "Email required",
-        description: "Enter the signup email on the login page and retry.",
+        description: "Enter the signup email below and retry.",
         variant: "destructive",
       });
       return;
@@ -100,7 +101,10 @@ export default function VerifyEmailPage() {
 
     setSending(true);
     try {
-      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      await apiRequest("POST", "/api/auth/resend-verification", {
+        email,
+        next: nextPath,
+      });
       toast({
         title: "Verification sent",
         description:
@@ -147,6 +151,13 @@ export default function VerifyEmailPage() {
               {email ? (
                 <p className="mt-2 text-sm text-[color:var(--text-primary)] font-medium">
                   {email}
+                </p>
+              ) : null}
+              {status === "expired" || status === "invalid" ? (
+                <p className="mt-3 rounded-xl border border-[color:var(--status-warning)]/30 bg-[color:var(--status-warning)]/10 px-3 py-2 text-sm text-[color:var(--status-warning)]">
+                  {status === "expired"
+                    ? "That verification link expired. Send yourself a fresh one."
+                    : "That verification link is invalid or has already been replaced. Send yourself a fresh one."}
                 </p>
               ) : null}
             </div>

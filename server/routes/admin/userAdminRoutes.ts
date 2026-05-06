@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import type { Express } from "express";
 import { and, desc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
@@ -7,6 +6,7 @@ import { registerDealAdminRoutes } from "./dealsRoutes";
 import { registerVerificationAdminRoutes } from "./verificationRoutes";
 import { sanitizeUser } from "../../utils/sanitize";
 import { emailService } from "../../emailService";
+import { createEmailVerificationUrl } from "../../utils/emailVerification";
 import { db } from "../../db";
 import { logAudit } from "../../auditLogger";
 import { ensurePremiumTrialForUserId } from "../../services/premiumTrial";
@@ -569,28 +569,12 @@ export function registerUserAdminRoutes(
           return res.status(400).json({ message: "Email is already verified" });
         }
 
-        const token = crypto.randomBytes(32).toString("hex");
-        const tokenHash = crypto
-          .createHash("sha256")
-          .update(token)
-          .digest("hex");
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-        await storage.createEmailVerificationToken({
-          userId: user.id,
-          tokenHash,
-          expiresAt,
-          requestIp: req.ip || req.connection.remoteAddress || undefined,
-          userAgent: req.get("User-Agent") || undefined,
-        });
-
-        const apiBaseUrl =
-          `${req.protocol}://${req.get("host")}` ||
-          process.env.PUBLIC_BASE_URL ||
-          "http://localhost:5000";
-        const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-          token,
-        )}`;
+        const verifyUrl = await createEmailVerificationUrl(user, req);
+        if (!verifyUrl) {
+          return res
+            .status(400)
+            .json({ message: "User has no email address" });
+        }
 
         await emailService.sendEmailVerificationEmail(user, verifyUrl);
 

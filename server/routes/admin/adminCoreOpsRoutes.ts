@@ -1,10 +1,10 @@
 import type { Express } from "express";
-import crypto from "crypto";
 import Stripe from "stripe";
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
+import { createEmailVerificationUrl } from "../../utils/emailVerification";
 import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
 import { db } from "../../db";
 import { emailService, isEmailConfigured } from "../../emailService";
@@ -3366,19 +3366,12 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               .status(503)
               .json({ message: "Email provider not configured" });
           }
-          const token = crypto.randomBytes(32).toString("hex");
-          const tokenHash = crypto
-            .createHash("sha256")
-            .update(token)
-            .digest("hex");
-          await storage.createEmailVerificationToken({
-            userId: user.id,
-            tokenHash,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            requestIp: req.ip || undefined,
-            userAgent: req.get("User-Agent") || undefined,
-          });
-          const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+          const verifyUrl = await createEmailVerificationUrl(user as any, req);
+          if (!verifyUrl) {
+            return res
+              .status(400)
+              .json({ message: "User has no email address" });
+          }
           const ok = await emailService.sendEmailVerificationEmail(
             user as any,
             verifyUrl,
