@@ -29,10 +29,11 @@ type Segment = WheelEntry & {
   path: string;
   color: string;
   centerAngle: number;
-  text: string;
+  lines: string[];
   labelX: number;
   labelY: number;
-  textLength: number;
+  maxLineLength?: number;
+  lineHeight: number;
 };
 
 const wheelColors = [
@@ -136,6 +137,29 @@ const truncateLabel = (label: string, max = 18) =>
   label.length > max
     ? `${label.slice(0, Math.max(1, max - 3))}...`
     : label;
+
+const splitWheelLabel = (label: string, maxLength: number, allowTwoLines: boolean) => {
+  const text = truncateLabel(label, maxLength);
+  if (!allowTwoLines || text.length <= 10 || !text.includes(" ")) return [text];
+
+  const words = text.split(/\s+/).filter(Boolean);
+  let bestSplit = 1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < words.length; i += 1) {
+    const first = words.slice(0, i).join(" ");
+    const second = words.slice(i).join(" ");
+    const score = Math.abs(first.length - second.length);
+    if (score < bestScore) {
+      bestSplit = i;
+      bestScore = score;
+    }
+  }
+
+  return [
+    words.slice(0, bestSplit).join(" "),
+    words.slice(bestSplit).join(" "),
+  ].filter(Boolean);
+};
 
 const polarPoint = (angle: number, radius = 47) => {
   const radians = (angle * Math.PI) / 180;
@@ -288,29 +312,31 @@ export default function AdminGiveawayWheel() {
   const angle = 360 / displayEntries.length;
   const labelMaxLength =
     displayEntries.length <= 8
-      ? 18
+      ? 20
       : displayEntries.length <= 16
-        ? 14
+        ? 17
         : displayEntries.length <= 36
           ? 10
           : 7;
   const labelRadius =
-    displayEntries.length <= 10 ? 28 : displayEntries.length <= 36 ? 32 : 35;
+    displayEntries.length <= 10 ? 29 : displayEntries.length <= 36 ? 33 : 36;
   const labelFontSize =
     displayEntries.length <= 8
-      ? 3.55
+      ? 3.05
       : displayEntries.length <= 16
-        ? 2.7
+        ? 2.25
         : displayEntries.length <= 36
-          ? 1.95
-          : 1.35;
-  const labelTextLength = Math.max(
-    displayEntries.length <= 16 ? 7 : 4.2,
+          ? 1.72
+          : 1.22;
+  const allowTwoLineLabels = displayEntries.length <= 16;
+  const maxLineLength = Math.max(
+    displayEntries.length <= 16 ? 8 : 4.2,
     Math.min(
-      displayEntries.length <= 8 ? 22 : displayEntries.length <= 36 ? 13 : 8,
-      ((2 * Math.PI * labelRadius * angle) / 360) * 0.76,
+      displayEntries.length <= 8 ? 18 : displayEntries.length <= 36 ? 12 : 7,
+      ((2 * Math.PI * labelRadius * angle) / 360) * 0.8,
     ),
   );
+  const lineHeight = labelFontSize * 1.08;
   const winnerNumber = winner
     ? displayEntries.findIndex((entry) => entry.id === winner.id) + 1
     : null;
@@ -321,26 +347,28 @@ export default function AdminGiveawayWheel() {
       const end = start + angle;
       const centerAngle = start + angle / 2;
       const labelPoint = polarPoint(centerAngle, labelRadius);
-      const text = truncateLabel(entry.label, labelMaxLength);
-      const estimatedTextLength = text.length * labelFontSize * 0.58;
+      const lines = splitWheelLabel(entry.label, labelMaxLength, allowTwoLineLabels);
       return {
         ...entry,
         path: segmentPath(start, end),
         color: wheelColors[index % wheelColors.length],
         centerAngle,
-        text,
+        lines,
         labelX: labelPoint.x,
         labelY: labelPoint.y,
-        textLength: Math.max(labelFontSize * 1.4, Math.min(labelTextLength, estimatedTextLength)),
+        maxLineLength: displayEntries.length > 16 ? maxLineLength : undefined,
+        lineHeight,
       };
     });
   }, [
+    allowTwoLineLabels,
     angle,
     displayEntries,
     labelFontSize,
     labelMaxLength,
     labelRadius,
-    labelTextLength,
+    lineHeight,
+    maxLineLength,
   ]);
 
   const bulbs = useMemo(
@@ -480,9 +508,6 @@ export default function AdminGiveawayWheel() {
         <main className="flex flex-1 flex-col px-4 pb-5">
           <section className="relative flex min-h-[58vh] flex-1 flex-col items-center justify-center py-4">
             <div className="mb-4 text-center">
-              <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-full border border-amber-300/60 bg-black/45 shadow-[0_0_24px_rgba(245,158,11,0.35)]">
-                <img src="/brand/logo-mark-512.png" alt="" className="h-7 w-7" />
-              </div>
               <h1 className="text-3xl font-black tracking-normal text-white drop-shadow sm:text-4xl">
                 {title || "MealScout Giveaway"}
               </h1>
@@ -537,7 +562,7 @@ export default function AdminGiveawayWheel() {
                           stroke="rgba(0,0,0,0.28)"
                           strokeWidth="0.35"
                         />
-                        {segment.text ? (
+                        {segment.lines.length ? (
                           <text
                             x={segment.labelX}
                             y={segment.labelY}
@@ -546,35 +571,46 @@ export default function AdminGiveawayWheel() {
                             dominantBaseline="middle"
                             fontSize={labelFontSize}
                             fontWeight="900"
-                            textLength={segment.textLength}
-                            lengthAdjust="spacingAndGlyphs"
                             fill={index % 3 === 1 ? "#061412" : "#0b0a09"}
                             style={{
                               paintOrder: "stroke",
-                              stroke: "rgba(255,255,255,0.58)",
-                              strokeWidth: displayEntries.length <= 16 ? 0.64 : 0.42,
+                              stroke: "rgba(255,255,255,0.7)",
+                              strokeWidth: displayEntries.length <= 16 ? 0.52 : 0.34,
                             }}
                           >
-                            {segment.text}
+                            {segment.lines.map((line, lineIndex) => {
+                              const estimatedLineLength = line.length * labelFontSize * 0.58;
+                              const squeezedLength = segment.maxLineLength
+                                ? Math.max(
+                                    labelFontSize * 1.35,
+                                    Math.min(segment.maxLineLength, estimatedLineLength),
+                                  )
+                                : undefined;
+                              return (
+                                <tspan
+                                  key={`${segment.id}-${line}`}
+                                  x={segment.labelX}
+                                  dy={
+                                    lineIndex === 0
+                                      ? -((segment.lines.length - 1) * segment.lineHeight) / 2
+                                      : segment.lineHeight
+                                  }
+                                  textLength={squeezedLength}
+                                  lengthAdjust={squeezedLength ? "spacingAndGlyphs" : undefined}
+                                >
+                                  {line}
+                                </tspan>
+                              );
+                            })}
                           </text>
                         ) : null}
                       </g>
                     ))}
                   </g>
-                  <circle cx="50" cy="50" r="10.5" fill="#0b0a09" stroke="#f59e0b" strokeWidth="1.4" />
-                  <circle cx="50" cy="50" r="6.2" fill="#f59e0b" />
-                  <text
-                    x="50"
-                    y="52"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize="5"
-                    fontWeight="900"
-                    fill="#0b0a09"
-                  >
-                    MS
-                  </text>
                 </svg>
+                <div className="ms-giveaway-center-logo" aria-hidden="true">
+                  <img src="/brand/logo-mark-512.png" alt="" />
+                </div>
               </div>
             </div>
 
@@ -614,6 +650,24 @@ export default function AdminGiveawayWheel() {
                     }
                   />
                 ))}
+              </div>
+            ) : null}
+            {winner && showFinale ? (
+              <div className="ms-giveaway-prize-modal" role="status" aria-live="polite">
+                <div className="ms-giveaway-prize-icon">
+                  <Crown className="h-6 w-6" />
+                </div>
+                <div className="text-xs font-black uppercase tracking-normal text-amber-200">
+                  Congratulations!
+                </div>
+                <div className="mt-1 text-3xl font-black leading-tight text-white">
+                  {winner.label}
+                </div>
+                {winnerNumber ? (
+                  <div className="mt-2 text-sm font-bold text-white/75">
+                    Entry #{winnerNumber}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </section>

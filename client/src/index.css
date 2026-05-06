@@ -227,6 +227,36 @@
   will-change: transform;
 }
 
+.ms-giveaway-center-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  display: flex;
+  width: clamp(62px, 20%, 82px);
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 3px solid #f59e0b;
+  background:
+    radial-gradient(circle at 50% 36%, rgba(245, 158, 11, 0.24), transparent 48%),
+    #080706;
+  box-shadow:
+    0 0 0 7px rgba(8, 7, 6, 0.88),
+    0 0 0 10px rgba(245, 158, 11, 0.78),
+    0 14px 26px rgba(0, 0, 0, 0.48),
+    inset 0 0 18px rgba(245, 158, 11, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.ms-giveaway-center-logo img {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(245, 158, 11, 0.35));
+}
+
 .ms-giveaway-ready,
 .ms-giveaway-winner {
   margin-inline: auto;
@@ -269,6 +299,60 @@
   animation: ms-giveaway-confetti-fall 2.8s cubic-bezier(0.12, 0.72, 0.3, 1) forwards;
 }
 
+.ms-giveaway-prize-modal {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 35;
+  width: min(86%, 330px);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 221, 128, 0.6);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.34), rgba(239, 68, 68, 0.18)),
+    rgba(5, 5, 5, 0.9);
+  box-shadow:
+    0 26px 90px rgba(0, 0, 0, 0.72),
+    0 0 58px rgba(245, 158, 11, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  padding: 1.25rem;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  animation: ms-giveaway-prize-pop 0.64s cubic-bezier(0.17, 0.84, 0.44, 1);
+  pointer-events: none;
+}
+
+.ms-giveaway-prize-modal::before,
+.ms-giveaway-prize-modal::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 74%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 241, 184, 0.86), transparent);
+  transform: translateX(-50%);
+}
+
+.ms-giveaway-prize-modal::before {
+  top: 0.7rem;
+}
+
+.ms-giveaway-prize-modal::after {
+  bottom: 0.7rem;
+}
+
+.ms-giveaway-prize-icon {
+  display: flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.75rem;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #080706;
+  box-shadow: 0 0 32px rgba(245, 158, 11, 0.68);
+}
+
 @keyframes ms-giveaway-light-sweep {
   0%,
   100% {
@@ -307,6 +391,20 @@
   }
 }
 
+@keyframes ms-giveaway-prize-pop {
+  0% {
+    transform: translate(-50%, -45%) scale(0.86);
+    opacity: 0;
+  }
+  68% {
+    transform: translate(-50%, -50%) scale(1.04);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 @keyframes ms-giveaway-confetti-fall {
   0% {
     transform: translateY(0) rotate(0deg);
@@ -320,6 +418,7 @@
   .ms-giveaway-bg::before,
   .ms-giveaway-bulb,
   .ms-giveaway-confetti,
+  .ms-giveaway-prize-modal,
   .ms-giveaway-winner {
     animation: none !important;
   }
