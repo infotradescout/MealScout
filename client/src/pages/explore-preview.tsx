@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 import { GoogleMapSurface } from "@/components/maps/google-map-surface";
+import { ThemedScoutMap } from "@/components/maps/themed-scout-map";
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import type {
@@ -477,32 +478,57 @@ export default function ExplorePreview() {
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
           }}
         >
-          {/* Map */}
+          {/* Map
+              ----
+              DEFAULT state: a custom themed atmospheric overlay (ThemedScoutMap)
+                that uses real map data but renders in MealScout's brand
+                aesthetic — dark, glowing amber pins, user pin anchored to
+                the right third, slow drift animation. NO Google Maps SDK
+                is mounted in this state, so referrer/billing failures on
+                the JS API can never break the hero.
+              FULLMAP state: the real interactive Google Map widget
+                (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
+          */}
           <div className="absolute inset-0">
-            {hasMapKey && coords && mapCenter ? (
-              <MapErrorBoundary>
-                <GoogleMapSurface
-                  apiKey={GOOGLE_MAPS_WEB_API_KEY}
-                  center={mapCenter}
-                  zoom={mapZoom}
-                  markers={truckMarkers}
-                  showRoadTrafficLayer={false}
-                  userLocation={coords}
-                  isNightTheme={true}
-                  onBoundsChanged={handleMapBoundsChanged}
-                  onZoomChanged={handleMapZoomChanged}
-                  onCenterChanged={handleMapCenterChanged}
-                  onMarkerTap={handleMarkerTap}
+            {sheetState === "fullMap" ? (
+              hasMapKey && coords && mapCenter ? (
+                <MapErrorBoundary>
+                  <GoogleMapSurface
+                    apiKey={GOOGLE_MAPS_WEB_API_KEY}
+                    center={mapCenter}
+                    zoom={mapZoom}
+                    markers={truckMarkers}
+                    showRoadTrafficLayer={false}
+                    userLocation={coords}
+                    isNightTheme={true}
+                    onBoundsChanged={handleMapBoundsChanged}
+                    onZoomChanged={handleMapZoomChanged}
+                    onCenterChanged={handleMapCenterChanged}
+                    onMarkerTap={handleMarkerTap}
+                  />
+                </MapErrorBoundary>
+              ) : (
+                <HeroMapFallback
+                  reason={
+                    !hasMapKey
+                      ? "no-key"
+                      : locationStatus === "denied"
+                        ? "denied"
+                        : "loading"
+                  }
                 />
-              </MapErrorBoundary>
+              )
+            ) : coords ? (
+              <ThemedScoutMap
+                userLocation={coords}
+                markers={truckMarkers}
+                onMarkerTap={handleMarkerTap}
+                zoom={HERO_ZOOM}
+              />
             ) : (
               <HeroMapFallback
                 reason={
-                  !hasMapKey
-                    ? "no-key"
-                    : locationStatus === "denied"
-                      ? "denied"
-                      : "loading"
+                  locationStatus === "denied" ? "denied" : "loading"
                 }
               />
             )}
