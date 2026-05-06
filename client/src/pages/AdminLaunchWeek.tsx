@@ -291,15 +291,25 @@ export default function AdminLaunchWeek() {
         />
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* Toolbar
+          ----
+          Mobile-first stacked layout: search on its own row, then filter
+          pill scroller on its own row, then "Auto-refreshes" hint on its
+          own row. On md+ everything stays on one row. This eliminates
+          the overlap between the pill row and the auto-refresh hint that
+          was happening on narrow viewports. */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:flex-wrap">
         <Input
           placeholder="Search by name, email, phone, restaurant…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          className="w-full md:max-w-sm"
         />
-        <div className="flex gap-1 flex-wrap">
+        {/* Horizontal-scroll pill row on mobile so labels never clip */}
+        <div
+          className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1 md:flex-wrap md:overflow-visible md:mx-0 md:px-0 md:pb-0"
+          aria-label="Filter signups"
+        >
           {(
             [
               "all",
@@ -309,14 +319,10 @@ export default function AdminLaunchWeek() {
               "failedImport",
               "subscribed",
             ] as const
-          ).map((k) => (
-            <Button
-              key={k}
-              size="sm"
-              variant={filter === k ? "default" : "outline"}
-              onClick={() => setFilter(k)}
-            >
-              {k === "all"
+          ).map((k) => {
+            const isActive = filter === k;
+            const label =
+              k === "all"
                 ? "All"
                 : k === "today"
                   ? "Today"
@@ -326,11 +332,28 @@ export default function AdminLaunchWeek() {
                       ? "No menu"
                       : k === "failedImport"
                         ? "Import failed"
-                        : "Subscribed"}
-            </Button>
-          ))}
+                        : "Subscribed";
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setFilter(k)}
+                aria-pressed={isActive}
+                className={
+                  "shrink-0 inline-flex items-center justify-center whitespace-nowrap " +
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition " +
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
+                  (isActive
+                    ? "bg-amber-500 text-black border-amber-500 shadow-sm"
+                    : "bg-background text-foreground border-input hover:bg-accent hover:text-accent-foreground")
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
-        <div className="ml-auto text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground md:ml-auto">
           Auto-refreshes every minute
         </div>
       </div>
@@ -680,7 +703,13 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
   const busy = action.isPending;
 
   return (
-    <Card className={owner.stuck ? "border-orange-300 bg-orange-50/30" : ""}>
+    <Card
+      className={
+        owner.stuck
+          ? "border-amber-500/60 bg-amber-500/5 dark:border-amber-400/40 dark:bg-amber-400/[0.06]"
+          : ""
+      }
+    >
       <CardContent className="py-3">
         <div className="flex items-start gap-3 flex-wrap">
           <div className="flex-shrink-0 mt-1">
@@ -739,7 +768,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                     {r.failedImports > 0 && (
                       <Badge
                         variant="outline"
-                        className="border-red-300 text-red-700"
+                        className="border-red-400/70 text-red-500 dark:border-red-400/60 dark:text-red-300"
                       >
                         <FileWarning className="w-3 h-3 mr-1" />
                         {r.failedImports} import failed
@@ -752,7 +781,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                       </a>
                     </Button>
                     {r.lastImportFailure && (
-                      <span className="text-red-700">
+                      <span className="text-red-500 dark:text-red-300">
                         Last {r.lastImportFailure.source} import{" "}
                         {r.lastImportFailure.createdAt
                           ? fmtDate(r.lastImportFailure.createdAt)
@@ -770,7 +799,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                         email={owner.email}
                         name={name}
                         buttonLabel="Tell them fixed"
-                        buttonVariant="ghost"
+                        buttonVariant="outline"
                         defaultSubject={`MealScout menu import update for ${r.name}`}
                         defaultMessage={`Hi ${firstName},\n\nGood news - I fixed the issue that was blocking the menu import for ${r.name}. Please try the import again from your MealScout dashboard.\n\nIf it still gives you trouble, reply to this email and I will help directly.\n\nThanks,\nThe MealScout team`}
                         context={`launch-week-menu-import:${r.id}`}
@@ -822,15 +851,14 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
           )}
           {owner.restaurants.length > 0 &&
             owner.restaurants.some((r) => !r.isVerified || !r.isActive) && (
-              <Button
-                size="sm"
+              <Badge
                 variant="outline"
-                disabled
-                title="Business verification now requires uploaded commercial insurance or acceptable proof."
+                className="border-amber-400/70 text-amber-600 dark:border-amber-300/60 dark:text-amber-300 px-2 py-1 text-[11px]"
+                title="Business verification now requires uploaded commercial insurance or acceptable proof. Use ‘Message about proof’ to request the document."
               >
                 <FileWarning className="w-3 h-3 mr-1" />
                 Needs insurance proof
-              </Button>
+              </Badge>
             )}
           {owner.email && (
             <MessageUserDialog
@@ -838,7 +866,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
               email={owner.email}
               name={name}
               buttonLabel="Message user"
-              buttonVariant="ghost"
+              buttonVariant="outline"
               defaultSubject="Quick update from MealScout"
               defaultMessage={`Hi ${firstName},\n\nQuick update from MealScout:\n\n\nThanks,\nThe MealScout team`}
               context="launch-week-general"
@@ -852,7 +880,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                 email={owner.email}
                 name={name}
                 buttonLabel="Message about proof"
-                buttonVariant="ghost"
+                buttonVariant="outline"
                 defaultSubject="Quick MealScout setup help"
                 defaultMessage={`Hi ${firstName},\n\nThanks for setting up your MealScout listing. You're almost there.\n\nWhen you have a minute, please upload a photo or PDF of your insurance document so we can finish reviewing the listing. You can keep adding your menu, photos, and details now.\n\nYou can upload it from your dashboard, or reply here with the file and I will help get it added.\n\nThanks,\nThe MealScout team`}
                 context="launch-week-insurance-proof"
