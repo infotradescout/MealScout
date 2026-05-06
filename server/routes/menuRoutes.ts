@@ -368,6 +368,7 @@ export async function importMenuItemsFromPublicUrl({
   source: ExternalMenuSource;
 }) {
   const parsed = new URL(url);
+  let importSource = source;
   const urlValidation = await validatePublicImportUrl(parsed);
   if (!urlValidation.ok) {
     throw Object.assign(new Error(urlValidation.message), { statusCode: 400 });
@@ -403,6 +404,17 @@ export async function importMenuItemsFromPublicUrl({
       });
     }
     rawData = extractMenuRowsFromHtml(html);
+    if (rawData.length === 0 && isSquareOnlineHtml(html)) {
+      const squareRows = await extractSquareOnlineRowsFromHtml(
+        html,
+        parsed,
+        controller.signal,
+      );
+      if (squareRows.length > 0) {
+        rawData = squareRows;
+        importSource = "square";
+      }
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -412,7 +424,7 @@ export async function importMenuItemsFromPublicUrl({
     await db.insert(menuImportLogs).values({
       restaurantId: menu.restaurantId,
       importedByUserId: userId,
-      source,
+      source: importSource,
       fileName: url,
       itemsImported: 0,
       itemsSkipped: 0,
@@ -431,7 +443,7 @@ export async function importMenuItemsFromPublicUrl({
           imported: 0,
           skipped: 0,
           errors,
-          source,
+          source: importSource,
         },
       },
     );
@@ -439,7 +451,7 @@ export async function importMenuItemsFromPublicUrl({
 
   const { imported, skipped, errors } = normalizeExternalMenuData(
     rawData,
-    source,
+    importSource,
     menuId,
     menu.restaurantId,
   );
@@ -451,7 +463,7 @@ export async function importMenuItemsFromPublicUrl({
   await db.insert(menuImportLogs).values({
     restaurantId: menu.restaurantId,
     importedByUserId: userId,
-    source,
+    source: importSource,
     fileName: url,
     itemsImported: imported.length,
     itemsSkipped: skipped,
@@ -462,7 +474,7 @@ export async function importMenuItemsFromPublicUrl({
   await db
     .update(menus)
     .set({
-      importSource: source,
+      importSource: importSource,
       importedAt: new Date(),
       importUrl: url,
       updatedAt: new Date(),
@@ -473,7 +485,7 @@ export async function importMenuItemsFromPublicUrl({
     imported: imported.length,
     skipped,
     errors,
-    source,
+    source: importSource,
   };
 }
 
@@ -1515,6 +1527,9 @@ export function normalizeExternalSource(source?: string): ExternalMenuSource {
 export function detectSourceFromUrl(url: string): string {
   const value = String(url || "").toLowerCase();
   if (value.includes("ubereats") || value.includes("uber.com")) return "ubereats";
+  if (value.includes("square.site") || value.includes("squareup.com")) {
+    return "square";
+  }
   if (value.includes("google.") || value.includes("g.page") || value.includes("maps.app.goo.gl")) {
     return "google";
   }
@@ -1557,6 +1572,155 @@ export async function fetchPublicMenuUrl(
   throw Object.assign(new Error("Too many redirects while importing menu URL."), {
     statusCode: 400,
   });
+}
+
+export async function extractSquareOnlineRowsFromHtml(
+  html: string,
+  baseUrl: URL,
+  signal: AbortSignal,
+): Promise<Record<string, any>[]> {
+  const bootstrap = parseSquareBootstrapState(html);
+  const userId = bootstrap?.siteData?.user?.id;
+  const siteId =
+    bootstrap?.siteData?.site?.properties?.classicSiteID ||
+    bootstrap?.siteData?.site?.properties?.catalogSiteId;
+
+  if (!userId || !siteId) return [];
+
+  const rows: Record<string, any>[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages && rows.length < 500) {
+    const apiUrl = new URL(
+      `/app/store/api/v28/editor/users/${encodeURIComponent(
+        String(userId),
+      )}/sites/${encodeURIComponent(String(siteId))}/products`,
+      baseUrl.origin,
+    );
+    apiUrl.searchParams.set("page", String(page));
+    apiUrl.searchParams.set("per_page", "100");
+    apiUrl.searchParams.set("include", "images,media_files,discounts");
+
+    const response = await fetchPublicMenuUrl(apiUrl, signal);
+    if (!response.ok) break;
+
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MENU_URL_IMPORT_MAX_BYTES
+    ) {
+      throw Object.assign(new Error("That Square menu is too large to import."), {
+        statusCode: 413,
+      });
+    }
+
+    const rawJson = await response.text();
+    if (Buffer.byteLength(rawJson, "utf8") > MENU_URL_IMPORT_MAX_BYTES) {
+      throw Object.assign(new Error("That Square menu is too large to import."), {
+        statusCode: 413,
+      });
+    }
+
+    const payload = parseJsonSafe(rawJson) as Record<string, any> | null;
+    const products = Array.isArray(payload?.data) ? payload.data : [];
+    for (const product of products) {
+      const row = squareProductToMenuRow(product);
+      if (row) rows.push(row);
+      if (rows.length >= 500) break;
+    }
+
+    const pagination = payload?.meta?.pagination;
+    const parsedTotalPages = Number(pagination?.total_pages || 1);
+    totalPages =
+      Number.isFinite(parsedTotalPages) && parsedTotalPages > 0
+        ? Math.min(parsedTotalPages, 5)
+        : 1;
+    page += 1;
+  }
+
+  return rows;
+}
+
+function parseSquareBootstrapState(html: string): Record<string, any> | null {
+  const match = html.match(
+    /window\.__BOOTSTRAP_STATE__\s*=\s*([\s\S]*?)\s*;\s*<\/script>/i,
+  );
+  if (!match) return null;
+  return parseJsonSafe(match[1]) as Record<string, any> | null;
+}
+
+function isSquareOnlineHtml(html: string): boolean {
+  return (
+    /<meta[^>]+name=["']generator["'][^>]+content=["']Square Online["'][^>]*>/i.test(
+      html,
+    ) ||
+    (html.includes("window.__BOOTSTRAP_STATE__") &&
+      html.includes("classicSiteID") &&
+      html.includes("/app/store/api/"))
+  );
+}
+
+function squareProductToMenuRow(product: unknown): Record<string, any> | null {
+  if (!product || typeof product !== "object") return null;
+
+  const value = product as Record<string, any>;
+  const visibility = String(value.visibility || "").toLowerCase();
+  if (visibility && visibility !== "visible") return null;
+
+  const name = String(value.name || "").trim();
+  if (!looksLikeMenuItemName(name)) return null;
+
+  const priceCents = squareProductPriceCents(value);
+  if (priceCents === null || priceCents <= 0) return null;
+
+  return {
+    name,
+    description: stripHtmlText(value.short_description || value.description),
+    price_cents: priceCents,
+  };
+}
+
+function squareProductPriceCents(product: Record<string, any>): number | null {
+  const price = product.price || {};
+  const centCandidates = [
+    price.low_subunits,
+    price.regular_low_subunits,
+    price.low_with_modifiers_subunits,
+    price.high_subunits,
+    price.regular_high_subunits,
+    price.high_with_modifiers_subunits,
+  ]
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  if (centCandidates.length > 0) return Math.round(centCandidates[0]);
+
+  const dollarCandidates = [
+    price.low,
+    price.regular_low,
+    price.low_with_modifiers,
+    price.high,
+    price.regular_high,
+    price.high_with_modifiers,
+  ];
+  for (const candidate of dollarCandidates) {
+    const cents = toPriceCents(candidate);
+    if (cents !== null && cents > 0) return cents;
+  }
+
+  return null;
+}
+
+function stripHtmlText(value: unknown): string {
+  return decodeHtmlEntities(
+    String(value || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li)>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function validatePublicImportUrl(url: URL): Promise<{

@@ -20,6 +20,7 @@ interface DocumentUploadProps {
   maxFiles?: number;
   maxFileSize?: number; // in bytes
   acceptedTypes?: string[];
+  uploadEndpoint?: string;
   className?: string;
 }
 
@@ -43,6 +44,7 @@ export default function DocumentUpload({
   maxFiles = MAX_FILES,
   maxFileSize = MAX_FILE_SIZE,
   acceptedTypes = ACCEPTED_TYPES,
+  uploadEndpoint = '/api/upload/verification-document',
   className
 }: DocumentUploadProps) {
   const [documents, setDocuments] = useState<DocumentFile[]>([]);
@@ -109,14 +111,18 @@ export default function DocumentUpload({
   const uploadDocument = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('document', file);
-    const response = await fetch('/api/upload/verification-document', {
+    const response = await fetch(uploadEndpoint, {
       method: 'POST',
       credentials: 'include',
       body: formData,
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(payload?.message || 'Failed to upload document');
+      const error = new Error(
+        payload?.message || `Failed to upload document (${response.status})`,
+      ) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     if (!payload?.url) {
       throw new Error('Document upload did not return a file URL');
@@ -146,10 +152,10 @@ export default function DocumentUpload({
         try {
           dataUrl = await uploadDocument(file);
         } catch (uploadError: any) {
-          const message = String(uploadError?.message || '').toLowerCase();
-          if (!message.includes('not configured') && !message.includes('not found')) {
-            throw uploadError;
-          }
+          console.warn(
+            "Document upload endpoint failed; using inline document fallback",
+            uploadError,
+          );
           dataUrl = await convertToBase64(file);
         }
         const lowerName = file.name.toLowerCase();
@@ -192,7 +198,7 @@ export default function DocumentUpload({
     }
 
     setIsUploading(false);
-  }, [documents, onDocumentsChange, toast, maxFiles, maxFileSize, acceptedTypes]);
+  }, [documents, onDocumentsChange, toast, maxFiles, maxFileSize, acceptedTypes, uploadEndpoint]);
 
   const removeDocument = (id: string) => {
     const updatedDocuments = documents.filter(doc => doc.id !== id);

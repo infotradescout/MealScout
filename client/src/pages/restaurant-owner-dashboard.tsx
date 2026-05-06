@@ -2522,12 +2522,7 @@ export default function RestaurantOwnerDashboard() {
                               onDocumentsChange={setOnboardingDocuments}
                               maxFiles={3}
                               maxFileSize={10 * 1024 * 1024}
-                              acceptedTypes={[
-                                "image/jpeg",
-                                "image/jpg",
-                                "image/png",
-                                "application/pdf",
-                              ]}
+                              uploadEndpoint="/api/business/insurance/upload-document"
                             />
                             <div className="space-y-3 rounded-md border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
                               <label className="flex items-start gap-2 text-sm text-[color:var(--text-secondary)]">
