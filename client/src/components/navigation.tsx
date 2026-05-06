@@ -228,6 +228,11 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     "/truck-landing",
     "/truck-onboarding",
     "/claim-truck",
+    // Atmospheric immersive pages own their entire chrome
+    // (top bar + floating bottom nav). The global Navigation is
+    // hidden so it doesn't double-stack on these routes.
+    "/explore",
+    "/home-scene",
   ];
   const hiddenGuestMobileNavRoutes = [
     "/login",
