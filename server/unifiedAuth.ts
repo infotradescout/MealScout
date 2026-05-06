@@ -35,6 +35,7 @@ import {
   ensureAffiliateTag,
   resolveAffiliateUserId,
 } from "./affiliateTagService";
+import { attachReferralToSignup } from "./referralService";
 import { getDefaultAffiliatePercent } from "@shared/affiliatePolicy";
 import { getOwnerProfileRecoveryPromptForUser } from "./services/ownerProfileRecovery";
 import {
@@ -1709,6 +1710,10 @@ export async function setupUnifiedAuth(app: Express) {
           normalizedBusinessType,
           fallbackPhone: normalizedPhone,
         });
+        await attachAffiliateReferralToBusinessProfile(
+          req,
+          starterBusinessProfile?.id,
+        );
 
         return res.status(200).json({
           message: "Business profile connected to your existing MealScout account.",
@@ -1791,6 +1796,10 @@ export async function setupUnifiedAuth(app: Express) {
         normalizedBusinessType,
         fallbackPhone: normalizedPhone,
       });
+      await attachAffiliateReferralToBusinessProfile(
+        req,
+        starterBusinessProfile?.id,
+      );
 
       // Send welcome email with verification link (don't block auth flow)
       void sendWelcomeOrVerification(
@@ -2620,15 +2629,60 @@ export async function setupUnifiedAuth(app: Express) {
   });
 }
 
+function collectAffiliateReferralRefs(req: any): string[] {
+  const values = [
+    req.cookies?.referralRecordId,
+    req.cookies?.referralId,
+    req.cookies?.referralTag,
+    req.body?.referralId,
+    req.body?.ref,
+    req.query?.referralId,
+    req.query?.ref,
+  ];
+  const seen = new Set<string>();
+  const refs: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const ref = value.trim();
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    refs.push(ref);
+  }
+  return refs;
+}
+
+async function attachAffiliateReferralToBusinessProfile(
+  req: any,
+  restaurantId?: string | null,
+) {
+  if (!restaurantId) return;
+  for (const ref of collectAffiliateReferralRefs(req)) {
+    try {
+      const attached = await attachReferralToSignup(ref, restaurantId);
+      if (attached) {
+        console.log("[affiliate] Referral attached to business profile:", {
+          referralId: attached.id,
+          restaurantId,
+        });
+        return;
+      }
+    } catch (error) {
+      console.error("[affiliate] Failed to attach referral to business:", error);
+    }
+  }
+}
+
 async function applyAffiliateReferral(req: any, user: User) {
   try {
-    const ref =
-      typeof req.cookies?.referralId === "string"
-        ? req.cookies.referralId.trim()
-        : "";
-    if (!ref) return;
+    const refs = collectAffiliateReferralRefs(req);
+    if (refs.length === 0) return;
     if (user.affiliateCloserUserId) return;
-    const affiliateUserId = await resolveAffiliateUserId(ref);
+    let affiliateUserId: string | null = null;
+    for (const ref of refs) {
+      affiliateUserId = await resolveAffiliateUserId(ref);
+      if (affiliateUserId && affiliateUserId !== user.id) break;
+      affiliateUserId = null;
+    }
     if (!affiliateUserId || affiliateUserId === user.id) return;
 
     const [affiliate] = await db

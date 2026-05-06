@@ -455,6 +455,11 @@ app.use(async (req: any, res, next) => {
       httpOnly: false,
       sameSite: "lax",
     });
+    res.cookie("referralId", parsed.tag, {
+      maxAge: REFERRAL_COOKIE_MAX_AGE_MS,
+      httpOnly: false,
+      sameSite: "lax",
+    });
 
     if (affiliateUserId) {
       const { recordReferralClick } = await import("./referralService");
