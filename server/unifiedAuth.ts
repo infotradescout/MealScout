@@ -380,13 +380,21 @@ export async function setupUnifiedAuth(app: Express) {
         user.email && !user.emailVerified
           ? await createEmailVerificationUrl(user, req)
           : null;
-      const supportsWelcome =
-        user.userType === "customer" ||
-        user.userType === "restaurant_owner" ||
-        user.userType === "caterer" ||
-        user.userType === "private_chef" ||
-        user.userType === "food_truck" ||
-        user.userType === "admin";
+      const normalizedUserType = String(user.userType ?? "")
+        .trim()
+        .toLowerCase();
+      const supportsWelcome = new Set([
+        "customer",
+        "restaurant_owner",
+        "restaurant-owner",
+        "food_truck",
+        "food-truck",
+        "food_truck_owner",
+        "truck_owner",
+        "caterer",
+        "private_chef",
+        "admin",
+      ]).has(normalizedUserType);
 
       if (supportsWelcome) {
         emailService
@@ -397,9 +405,20 @@ export async function setupUnifiedAuth(app: Express) {
             }
             return sent;
           })
-          .catch((err) =>
-            console.error(`Failed to send ${welcomeLabel} welcome email:`, err),
-          );
+          .catch((err) => {
+            console.error(`Failed to send ${welcomeLabel} welcome email:`, err);
+            if (verifyUrl) {
+              return emailService
+                .sendEmailVerificationEmail(user, verifyUrl)
+                .catch((fallbackErr) =>
+                  console.error(
+                    "Failed to send fallback email verification:",
+                    fallbackErr,
+                  ),
+                );
+            }
+            return undefined;
+          });
         return;
       }
 

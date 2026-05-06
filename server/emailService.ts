@@ -1619,8 +1619,11 @@ export class EmailService {
   async sendWelcomeEmail(user: User, verifyUrl?: string): Promise<boolean> {
     let template: { html: string; text: string };
     let subject: string;
+    const normalizedUserType = String(user.userType ?? "")
+      .trim()
+      .toLowerCase();
 
-    switch (user.userType) {
+    switch (normalizedUserType) {
       case "customer":
         template = EmailTemplates.getCustomerWelcomeTemplate(user, verifyUrl);
         subject =
@@ -1628,6 +1631,9 @@ export class EmailService {
         break;
       case "restaurant_owner":
       case "food_truck":
+      case "food-truck":
+      case "food_truck_owner":
+      case "truck_owner":
       case "caterer":
       case "private_chef":
         template = EmailTemplates.getRestaurantOwnerWelcomeTemplate(
@@ -1641,7 +1647,14 @@ export class EmailService {
         subject = "MealScout Admin Access Granted 🔐";
         break;
       default:
-        console.warn(`Unknown user type: ${user.userType}`);
+        console.warn("Unknown user type for welcome email", {
+          userType: user.userType,
+          normalizedUserType,
+          userId: user.id,
+        });
+        if (verifyUrl) {
+          return this.sendEmailVerificationEmail(user, verifyUrl);
+        }
         return false;
     }
 
