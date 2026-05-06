@@ -104,7 +104,11 @@ export const defaultGiveawayEntries = [
 ];
 
 const defaultStorageKey = "mealscout-giveaway-wheel-v1";
-const defaultLogoSrc = "/brand/logo-mark-wheel.svg";
+// The canonical MealScout brand mark (orange pin + utensils) lives at
+// /brand/logo-mark-512.png. We use the PNG directly so the wheel center
+// hub renders the *exact* same artwork as the rest of the app instead of
+// a redrawn SVG approximation.
+const defaultLogoSrc = "/brand/logo-mark-512.png";
 const defaultBackgroundImageUrl = "/backgrounds/food-truck-night.png";
 const defaultNoiseImageUrl = "/backgrounds/noise.png";
 

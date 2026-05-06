@@ -141,20 +141,35 @@
   will-change: transform;
 }
 
+/*
+ * Wheel center hub.
+ *
+ * Hosts the canonical MealScout brand mark (orange pin + utensils on
+ * transparent). Goals:
+ *  - Hub is big enough that the pin shape reads as the MealScout logo
+ *    at thumbnail / phone size, not a generic location pin.
+ *  - Backplate is a flat near-black disc, NOT a gradient, so the dark
+ *    outline of the pin doesn't compete with the disc gradient.
+ *  - Amber stage ring stays for marquee feel.
+ *  - Image fills 96% of the hub (was 88%) so the pin's lower point and
+ *    rounded top sit close to the rim, the way the logo is meant to read.
+ *  - No saturation / contrast / drop-shadow filters baked in; we want
+ *    the brand mark to render exactly the way it does everywhere else.
+ */
 .ms-giveaway-center-logo {
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 4;
   display: flex;
-  width: clamp(62px, 20%, 82px);
+  width: clamp(74px, 24%, 104px);
   aspect-ratio: 1;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border-radius: 999px;
   border: 2px solid #ffd86a;
-  background: linear-gradient(145deg, #17110a 0%, #050504 60%, #1c1107 100%);
+  background: #0a0807;
   box-shadow:
     0 0 0 5px rgba(8, 7, 6, 0.96),
     0 0 0 8px rgba(245, 158, 11, 0.88),
@@ -172,14 +187,11 @@
 .ms-giveaway-center-logo img {
   position: relative;
   z-index: 1;
-  width: 88%;
-  height: 88%;
+  width: 96%;
+  height: 96%;
   object-fit: contain;
-  filter:
-    contrast(1.14)
-    saturate(1.16)
-    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.26))
-    drop-shadow(0 3px 5px rgba(24, 12, 4, 0.46));
+  /* Single soft drop-shadow so the pin doesn't float, no color shifts. */
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }
 
 .ms-giveaway-ready,
