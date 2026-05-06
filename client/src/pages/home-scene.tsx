@@ -237,29 +237,11 @@ export default function HomeScene() {
         description="Live food trucks, crowd vibes, and what's happening right now in your local food scene."
       />
 
-      {/* PAGE-SCOPED ATMOSPHERIC BACKGROUND
-          Sits above the global TimeOfDayBackground so this page gets the
-          food-park-at-night hero photo, while every other page is unaffected. */}
+      {/* SOLID PAGE BASE — keeps the lower band a true black so craving bubbles
+          and LIVE cards pop and don't ghost the global theme. */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 -z-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "url('/atmospheric/foodpark-night-hero.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center top",
-          backgroundRepeat: "no-repeat",
-        }}
-      />
-      {/* Vertical gradient overlay so the dark hero text reads cleanly while
-          the background photo still breathes through the lower half. */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 -z-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(8,10,15,0.55) 0%, rgba(8,10,15,0.30) 35%, rgba(8,10,15,0.85) 78%, rgba(8,10,15,0.97) 100%)",
-        }}
+        className="fixed inset-0 -z-10 pointer-events-none bg-[#0a0c10]"
       />
 
       {/* Top glass bar — contextual header above the immersive backdrop. */}
@@ -307,51 +289,95 @@ export default function HomeScene() {
       </header>
 
       {/* Page body */}
-      <main
-        className="relative z-10 pb-32"
-        style={{
-          paddingTop: "calc(env(safe-area-inset-top) + 4.5rem)",
-        }}
-      >
-        {/* HERO */}
-        <section className="px-5 pt-2 pb-8">
-          <p className="text-[11px] tracking-[0.32em] text-white/80 uppercase mb-3 font-medium">
-            MealScout
-          </p>
-          <h1
-            className="text-white font-extrabold leading-[0.95] tracking-tight text-[52px] sm:text-[64px] md:text-[72px]"
+      <main className="relative z-10 pb-32">
+        {/* HERO BAND — full-bleed food-park photo with the eyebrow, headline,
+            and Explore the Map CTA layered on the LEFT column only. The top
+            right ~40% is intentionally left empty as a reserved slot for the
+            upcoming live map widget (data-slot="hero-map"). */}
+        <section
+          className="relative w-full overflow-hidden"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top) + 4.5rem)",
+          }}
+        >
+          {/* Hero photo */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
             style={{
-              fontFamily:
-                "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
-              textShadow: "0 2px 24px rgba(0,0,0,0.55)",
+              backgroundImage:
+                "url('/atmospheric/foodpark-night-hero.jpg')",
+              backgroundSize: "cover",
+              backgroundPosition: "center center",
+              backgroundRepeat: "no-repeat",
             }}
-          >
-            {greetingFirstLine}
-            <br />
-            {greetingSecondLine}
-          </h1>
-          <p className="mt-3 text-white/85 text-base sm:text-lg">
-            Your local scene.
-          </p>
+          />
+          {/* Soft top + strong bottom gradient so the headline reads cleanly
+              and the band fades into the black lower band underneath. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(180deg, rgba(8,10,15,0.45) 0%, rgba(8,10,15,0.10) 28%, rgba(8,10,15,0.10) 55%, rgba(8,10,15,0.85) 92%, rgba(10,12,16,1) 100%)",
+            }}
+          />
 
-          <button
-            type="button"
-            onClick={() => navigate("/map")}
-            className="mt-6 inline-flex items-center justify-center gap-3 h-14 px-7 rounded-full text-amber-100 font-semibold text-base sm:text-lg w-full bg-black/40 backdrop-blur-md atmo-glow-amber"
-            aria-label="Explore the live food scene on the map"
-          >
-            <span
-              className="h-9 w-9 rounded-full bg-amber-400/20 ring-1 ring-amber-300/50 flex items-center justify-center"
+          {/* Hero grid: left content column + reserved right map slot */}
+          <div className="relative px-5 pt-2 pb-12 min-h-[78vh] grid grid-cols-12 gap-3">
+            {/* LEFT COLUMN — eyebrow, headline, sub-line, CTA */}
+            <div className="col-span-7 sm:col-span-7 md:col-span-7 flex flex-col">
+              <p className="text-[11px] tracking-[0.32em] text-white/85 uppercase mb-3 font-medium">
+                MealScout
+              </p>
+              <h1
+                className="text-white font-extrabold leading-[0.95] tracking-tight text-[44px] sm:text-[56px] md:text-[68px]"
+                style={{
+                  fontFamily:
+                    "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+                  textShadow: "0 2px 28px rgba(0,0,0,0.65)",
+                }}
+              >
+                {greetingFirstLine}
+                <br />
+                {greetingSecondLine}
+              </h1>
+              <p className="mt-3 text-white/90 text-base sm:text-lg">
+                Your local scene.
+              </p>
+
+              {/* CTA pinned toward the bottom of the hero band */}
+              <div className="mt-auto pt-10">
+                <button
+                  type="button"
+                  onClick={() => navigate("/map")}
+                  className="inline-flex items-center justify-center gap-3 h-14 px-6 rounded-full text-amber-100 font-semibold text-base sm:text-lg w-full bg-black/55 backdrop-blur-md atmo-glow-amber ring-1 ring-amber-300/60"
+                  aria-label="Explore the live food scene on the map"
+                >
+                  <span
+                    className="h-9 w-9 rounded-full bg-amber-400/15 ring-1 ring-amber-300/50 flex items-center justify-center"
+                    aria-hidden="true"
+                  >
+                    <NavigationIcon className="h-4 w-4 text-amber-200" />
+                  </span>
+                  Explore the Map
+                </button>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN — reserved slot for the upcoming live map tool.
+                Intentionally empty. Drop the map component inside this div
+                when ready; no other layout changes will be required. */}
+            <div
+              data-slot="hero-map"
               aria-hidden="true"
-            >
-              <NavigationIcon className="h-4 w-4 text-amber-200" />
-            </span>
-            Explore the Map
-          </button>
+              className="col-span-5 sm:col-span-5 md:col-span-5"
+            />
+          </div>
         </section>
 
         {/* EXPLORE BY CRAVING — circular photo bubbles with amber glow rings */}
-        <section className="pl-5 pr-5 pb-10">
+        <section className="pl-5 pr-5 pt-8 pb-10 bg-[#0a0c10]">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="text-white text-xl sm:text-2xl font-bold">
               Explore by Craving
@@ -400,7 +426,7 @@ export default function HomeScene() {
         </section>
 
         {/* LIVE NOW — full-bleed image cards with LIVE pill, name, vibe, distance */}
-        <section className="pl-5 pr-0 pb-12">
+        <section className="pl-5 pr-0 pb-12 bg-[#0a0c10]">
           <div className="flex items-baseline justify-between pr-5 mb-4">
             <h2 className="text-white text-xl sm:text-2xl font-bold">
               Live Now
@@ -465,7 +491,7 @@ export default function HomeScene() {
                 aria-label="Live food trucks near you"
               >
                 {liveTrucks.slice(0, 12).map((truck) => (
-                  <li key={truck.id} className="shrink-0 w-[260px]">
+                  <li key={truck.id} className="shrink-0 w-[200px] sm:w-[230px]">
                     <LiveTruckCard truck={truck} />
                   </li>
                 ))}
