@@ -33,7 +33,12 @@ const accountSetupSchema = z
     confirmPassword: z.string().min(1, "Please confirm your password"),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
-    phone: z.string().min(5, "Phone number is required"),
+    phone: z
+      .string()
+      .refine(
+        (value) => String(value || "").replace(/\D/g, "").length >= 10,
+        "Valid phone number is required",
+      ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -343,6 +348,10 @@ export default function AccountSetup() {
                   id="phone"
                   {...form.register("phone")}
                   placeholder="(555) 123-4567"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
                   disabled={setupMutation.isPending}
                 />
                 {form.formState.errors.phone && (

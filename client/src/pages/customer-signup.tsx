@@ -58,7 +58,12 @@ const signupSchema = z
     email: z.string().email("Valid email is required"),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
-    phone: z.string().min(10, "Phone number must be at least 10 digits"),
+    phone: z
+      .string()
+      .refine(
+        (value) => String(value || "").replace(/\D/g, "").length >= 10,
+        "Phone number must be at least 10 digits",
+      ),
     otpCode: z.string().optional(),
     password: z
       .string()
@@ -1126,8 +1131,10 @@ export default function CustomerSignup({
                           <Input
                             data-testid="input-phone"
                             type="tel"
+                            inputMode="tel"
                             autoComplete="tel"
                             placeholder="(555) 123-4567"
+                            required
                             {...field}
                           />
                           {requirePhoneVerification && (

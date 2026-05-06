@@ -59,7 +59,12 @@ const restaurantSchema = z
     address: z.string().optional().or(z.literal("")),
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
-    phone: z.string().optional().or(z.literal("")),
+    phone: z
+      .string()
+      .refine(
+        (value) => String(value || "").replace(/\D/g, "").length >= 10,
+        COPY.validation.restaurant.phoneInvalid,
+      ),
     businessType: z.enum(BUSINESS_TYPES, {
       required_error: COPY.validation.restaurant.businessTypeRequired,
     }),
@@ -110,7 +115,12 @@ const signupSchema = z
     email: z.string().email(COPY.validation.signup.emailInvalid),
     firstName: z.string().min(1, COPY.validation.signup.firstNameRequired),
     lastName: z.string().min(1, COPY.validation.signup.lastNameRequired),
-    phone: z.string().min(10, COPY.validation.signup.phoneInvalid),
+    phone: z
+      .string()
+      .refine(
+        (value) => String(value || "").replace(/\D/g, "").length >= 10,
+        COPY.validation.signup.phoneInvalid,
+      ),
     password: z
       .string()
       .min(1, PASSWORD_REQUIREMENTS)
@@ -136,6 +146,8 @@ const safeRelativePath = (value: string) => {
   if (!raw.startsWith("/") || raw.startsWith("//")) return "";
   return raw;
 };
+
+const compactPhone = (value: string) => String(value || "").replace(/\D/g, "");
 
 const addClaimParam = (path: string) => {
   const safePath = safeRelativePath(path);
@@ -338,13 +350,20 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  useEffect(() => {
+    const accountPhone = String(user?.phone || "").trim();
+    if (!isAuthenticated || !accountPhone) return;
+    if (String(form.getValues("phone") || "").trim()) return;
+    form.setValue("phone", accountPhone, { shouldDirty: false });
+  }, [form, isAuthenticated, user?.phone]);
+
   const businessOAuthUserType =
     selectedBusinessType === "food_truck" ||
     selectedBusinessType === "caterer" ||
     selectedBusinessType === "private_chef"
       ? selectedBusinessType
       : "restaurant_owner";
-  const buildRestaurantGoogleAuthUrl = () => {
+  const buildRestaurantGoogleAuthUrl = (phone?: string) => {
     const returnPath =
       typeof window === "undefined"
         ? "/restaurant-signup"
@@ -353,6 +372,8 @@ export default function RestaurantSignup() {
       userType: businessOAuthUserType,
       next: returnPath,
     });
+    const normalizedPhone = compactPhone(phone || "");
+    if (normalizedPhone.length >= 10) params.set("phone", normalizedPhone);
     return authUrl(`/api/auth/google/restaurant?${params.toString()}`);
   };
   const isPrivateChef = selectedBusinessType === "private_chef";
@@ -760,7 +781,9 @@ export default function RestaurantSignup() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = buildRestaurantGoogleAuthUrl();
+          window.location.href = buildRestaurantGoogleAuthUrl(
+            String(form.getValues("phone") || signupForm.getValues("phone") || ""),
+          );
         }, 500);
         return;
       }
@@ -898,6 +921,29 @@ export default function RestaurantSignup() {
     loginMutation.mutate(data);
   };
 
+  const handleGoogleAuth = () => {
+    if (authMode === "signup") {
+      const phone = String(signupForm.getValues("phone") || "");
+      if (compactPhone(phone).length < 10) {
+        signupForm.setError("phone", {
+          type: "manual",
+          message: COPY.validation.signup.phoneInvalid,
+        });
+        toast({
+          title: "Phone number required",
+          description: "Enter a valid phone number before continuing with Google.",
+          variant: "destructive",
+        });
+        return;
+      }
+      rememberGeneratedClaimPath();
+      window.location.href = buildRestaurantGoogleAuthUrl(phone);
+      return;
+    }
+    rememberGeneratedClaimPath();
+    window.location.href = buildRestaurantGoogleAuthUrl();
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-md mx-auto bg-background min-h-screen flex items-center justify-center">
@@ -1012,10 +1058,7 @@ export default function RestaurantSignup() {
                   type="button"
                   data-testid="button-google-signin"
                   variant="outline"
-                  onClick={() => {
-                    rememberGeneratedClaimPath();
-                    window.location.href = buildRestaurantGoogleAuthUrl();
-                  }}
+                  onClick={handleGoogleAuth}
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -1139,8 +1182,10 @@ export default function RestaurantSignup() {
                               <Input
                                 data-testid="input-phone"
                                 type="tel"
+                                inputMode="tel"
                                 autoComplete="tel"
                                 placeholder={COPY.forms.signup.phonePlaceholder}
+                                required
                                 {...field}
                               />
                             </FormControl>
@@ -1647,8 +1692,10 @@ export default function RestaurantSignup() {
                         <FormControl>
                           <Input
                             type="tel"
+                            inputMode="tel"
                             placeholder={COPY.forms.restaurant.phonePlaceholder}
                             data-testid="input-phone"
+                            required
                             {...field}
                           />
                         </FormControl>

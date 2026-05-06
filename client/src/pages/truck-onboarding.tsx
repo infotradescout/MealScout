@@ -232,11 +232,13 @@ const makeVerifyEmailUrl = () => {
   return `/verify-email?${params.toString()}`;
 };
 
-const makeTruckGoogleAuthUrl = () => {
+const makeTruckGoogleAuthUrl = (phone?: string) => {
   const params = new URLSearchParams({
     userType: "food_truck",
     next: getSafeCurrentOnboardingPath(),
   });
+  const normalizedPhone = compactPhone(phone || "");
+  if (normalizedPhone.length >= 10) params.set("phone", normalizedPhone);
   return authUrl(`/api/auth/google/restaurant?${params.toString()}`);
 };
 
@@ -620,6 +622,23 @@ export default function TruckOnboardingPage() {
     }
   };
 
+  const handleGoogleAuth = () => {
+    if (authMode === "signup") {
+      const normalizedPhone = compactPhone(signup.phone);
+      if (normalizedPhone.length < 10) {
+        toast({
+          title: "Phone number required",
+          description: "Enter a valid phone number before continuing with Google.",
+          variant: "destructive",
+        });
+        return;
+      }
+      window.location.href = makeTruckGoogleAuthUrl(signup.phone);
+      return;
+    }
+    window.location.href = makeTruckGoogleAuthUrl();
+  };
+
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!login.email.trim() || !login.password) {
@@ -959,7 +978,7 @@ export default function TruckOnboardingPage() {
             type="button"
             variant="outline"
             className="mb-4 w-full gap-2"
-            onClick={() => (window.location.href = makeTruckGoogleAuthUrl())}
+            onClick={handleGoogleAuth}
           >
             <ShieldCheck className="h-4 w-4" />
             Continue with Google
@@ -993,7 +1012,9 @@ export default function TruckOnboardingPage() {
                 onChange={(event) => updateSignup("phone", event.target.value)}
                 placeholder="Phone"
                 type="tel"
+                inputMode="tel"
                 autoComplete="tel"
+                required
               />
               <Input
                 value={signup.truckName}
@@ -1316,6 +1337,8 @@ export default function TruckOnboardingPage() {
                 onChange={(event) => updateProfile("phone", event.target.value)}
                 placeholder="(555) 123-4567"
                 type="tel"
+                inputMode="tel"
+                required
               />
             </label>
             <label className="space-y-1">

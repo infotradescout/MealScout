@@ -131,6 +131,21 @@ export function registerRestaurantSignupRoutes(
           await storage.updateUserType(user.id, "restaurant_owner");
           user = (await storage.getUserById(user.id)) || user;
         }
+
+        const authenticatedPhone = normalizePhone(
+          (restaurantData as any)?.phone || user.phone || "",
+        );
+        if (authenticatedPhone.length < 10) {
+          return res.status(400).json({
+            message: "Valid phone number is required",
+            code: "phone_required",
+          });
+        }
+        if (normalizePhone(user.phone).length < 10) {
+          user = await storage.updateUser(user.id, {
+            phone: authenticatedPhone,
+          });
+        }
       } else {
         const validatedUserData = z
           .object({

@@ -755,6 +755,7 @@ The MealScout Team
     restaurant?: Restaurant,
   ): { html: string; text: string } {
     const userTypeDisplay = this.getUserTypeDisplay(user.userType);
+    const userPhone = String(user.phone || restaurant?.phone || "").trim();
 
     let locationInfo = "";
     if (restaurant) {
@@ -777,6 +778,7 @@ The MealScout Team
         <strong>User Information:</strong><br>
         Name: ${user.firstName || ""} ${user.lastName || ""}<br>
         Email: ${user.email}<br>
+        Phone: ${userPhone || "Not provided"}<br>
         User Type: ${userTypeDisplay}<br>
         Registration Date: ${new Date().toLocaleDateString()}<br>
         ${locationInfo}
@@ -796,6 +798,7 @@ A new user has joined MealScout!
 User Information:
 Name: ${user.firstName || ""} ${user.lastName || ""}
 Email: ${user.email}
+Phone: ${userPhone || "Not provided"}
 User Type: ${userTypeDisplay}
 Registration Date: ${new Date().toLocaleDateString()}
 
@@ -823,6 +826,7 @@ This notification was generated automatically by the MealScout system.
     context?: AdminSignupNotificationContext,
   ): { html: string; text: string } {
     const userTypeDisplay = this.getUserTypeDisplay(user.userType);
+    const userPhone = String(user.phone || context?.restaurant?.phone || "").trim();
     const isBusinessReviewRole = [
       "restaurant_owner",
       "caterer",
@@ -896,6 +900,7 @@ This notification was generated automatically by the MealScout system.
         <strong>📋 User Summary</strong><br>
         <strong>Name:</strong> ${user.firstName || ""} ${user.lastName || ""}<br>
         <strong>Email:</strong> ${user.email}<br>
+        <strong>Phone:</strong> ${userPhone || "Not provided"}<br>
         <strong>User Type:</strong> ${userTypeDisplay}<br>
         <strong>Signup Method:</strong> ${signupMethod}<br>
         <strong>Registration Date:</strong> ${new Date().toLocaleDateString()}
@@ -942,6 +947,7 @@ A new account was created in MealScout:
 User Information:
 Name: ${user.firstName || ""} ${user.lastName || ""}
 Email: ${user.email}
+Phone: ${userPhone || "Not provided"}
 User Type: ${userTypeDisplay}
 Signup Method: ${signupMethod}
 Registration Date: ${new Date().toLocaleDateString()}

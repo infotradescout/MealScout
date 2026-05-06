@@ -50,6 +50,7 @@ declare module "express-session" {
     googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
     oauthReturnTo?: string;
+    oauthSignupPhone?: string;
   }
 }
 
@@ -455,6 +456,22 @@ export async function setupUnifiedAuth(app: Express) {
     }
     return fallback;
   };
+  const normalizePhone = (phone: unknown) =>
+    String(phone || "").replace(/\D/g, "");
+  const captureOAuthSignupPhone = (req: any) => {
+    const normalized = normalizePhone(
+      firstRequestValue(req.query?.phone, req.query?.signupPhone),
+    );
+    req.session.oauthSignupPhone =
+      normalized.length >= 10 ? normalized : undefined;
+  };
+  const applyOAuthSignupPhone = async (req: any, user: User) => {
+    const normalized = normalizePhone(req.session?.oauthSignupPhone);
+    req.session.oauthSignupPhone = undefined;
+    if (!normalized || normalized.length < 10) return user;
+    if (normalizePhone(user.phone).length >= 10) return user;
+    return await storage.updateUser(user.id, { phone: normalized });
+  };
 
   // Ensure configured super admin email is upgraded
   const superAdminEmail = process.env.ADMIN_EMAIL || "info.mealscout@gmail.com";
@@ -599,11 +616,12 @@ export async function setupUnifiedAuth(app: Express) {
               hasProfileImage: Boolean(userData.profileImageUrl),
             });
 
-            const user = await storage.upsertUserByAuth(
+            let user = await storage.upsertUserByAuth(
               "google",
               userData,
               "customer",
             );
+            user = await applyOAuthSignupPhone(req, user);
             kickAffiliateTag(user);
             await applyAffiliateReferral(req, user);
             req.session.oauthUserType = undefined;
@@ -712,11 +730,12 @@ export async function setupUnifiedAuth(app: Express) {
             });
 
             const userType = getOauthUserType(req, "restaurant_owner");
-            const user = await storage.upsertUserByAuth(
+            let user = await storage.upsertUserByAuth(
               "google",
               userData,
               userType === "customer" ? "restaurant_owner" : userType,
             );
+            user = await applyOAuthSignupPhone(req, user);
             kickAffiliateTag(user);
             await applyAffiliateReferral(req, user);
             req.session.oauthUserType = undefined;
@@ -780,6 +799,7 @@ export async function setupUnifiedAuth(app: Express) {
     app.get("/api/auth/google/customer", (req, res, next) => {
       req.session.googleAppContext = getOAuthAppContext(req);
       req.session.oauthUserType = "customer";
+      captureOAuthSignupPhone(req);
       captureOAuthReturnTo(req, "/");
       passport.authenticate("google-customer", {
         scope: ["profile", "email"],
@@ -830,6 +850,7 @@ export async function setupUnifiedAuth(app: Express) {
       )
         ? (desiredType as User["userType"])
         : "restaurant_owner";
+      captureOAuthSignupPhone(req);
       const oauthUserType = getOauthUserType(req, "restaurant_owner");
       captureOAuthReturnTo(req, oauthFallbackForUserType(oauthUserType));
       passport.authenticate("google-restaurant", {
@@ -1138,7 +1159,6 @@ export async function setupUnifiedAuth(app: Express) {
     );
   }
 
-  const normalizePhone = (phone: string) => phone.replace(/\D/g, "");
   const normalizeIdentityName = (value: unknown) =>
     String(value || "")
       .trim()
@@ -2480,6 +2500,13 @@ export async function setupUnifiedAuth(app: Express) {
           .json({ error: "Profile details and password are required" });
       }
 
+      const normalizedPhone = normalizePhone(phone);
+      if (normalizedPhone.length < 10) {
+        return res
+          .status(400)
+          .json({ error: "Valid phone number is required" });
+      }
+
       if (!isPasswordStrong(password)) {
         return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
       }
@@ -2523,7 +2550,7 @@ export async function setupUnifiedAuth(app: Express) {
         passwordHash,
         firstName,
         lastName,
-        phone,
+        phone: normalizedPhone,
       };
 
       await storage.updateUser(user.id, updateData);
