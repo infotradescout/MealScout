@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
   Flame,
+  Heart,
   MapPin,
   Navigation as NavigationIcon,
   Search,
@@ -15,11 +16,12 @@ import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
 
 /**
- * /home-scene — Local Food Scene at your fingertips
+ * /explore (alias /home-scene) — Local Food Scene at your fingertips
  *
  * Logged-in home built on the Atmospheric UI foundation.
- * Relies on the global TimeOfDayBackground (theme-night) that is already
- * mounted at the app root, so the immersive dark backdrop is inherited.
+ * Renders its own immersive food-park background image scoped to this page,
+ * then layers the editorial headline, glowing pill CTA, photo+glow craving
+ * bubbles, and image-overlay LIVE NOW cards on top.
  *
  * This page is purely additive. It does not modify any existing route,
  * style, or component contract.
@@ -50,19 +52,47 @@ type LiveTrucksResponse =
 type CravingCategory = {
   id: string;
   label: string;
-  emoji: string;
+  image: string;
   query: string;
 };
 
 const CRAVING_CATEGORIES: CravingCategory[] = [
-  { id: "tacos", label: "Tacos", emoji: "🌮", query: "tacos" },
-  { id: "burgers", label: "Burgers", emoji: "🍔", query: "burgers" },
-  { id: "ramen", label: "Ramen", emoji: "🍜", query: "ramen" },
-  { id: "pizza", label: "Pizza", emoji: "🍕", query: "pizza" },
-  { id: "drinks", label: "Drinks", emoji: "🍹", query: "drinks" },
-  { id: "dessert", label: "Dessert", emoji: "🍰", query: "dessert" },
-  { id: "bbq", label: "BBQ", emoji: "🍖", query: "bbq" },
-  { id: "seafood", label: "Seafood", emoji: "🍤", query: "seafood" },
+  {
+    id: "tacos",
+    label: "Tacos",
+    image: "/atmospheric/craving-tacos.jpg",
+    query: "tacos",
+  },
+  {
+    id: "burgers",
+    label: "Burgers",
+    image: "/atmospheric/craving-burgers.jpg",
+    query: "burgers",
+  },
+  {
+    id: "ramen",
+    label: "Ramen",
+    image: "/atmospheric/craving-ramen.jpg",
+    query: "ramen",
+  },
+  {
+    id: "pizza",
+    label: "Pizza",
+    image: "/atmospheric/craving-pizza.jpg",
+    query: "pizza",
+  },
+  {
+    id: "drinks",
+    label: "Drinks",
+    image: "/atmospheric/craving-drinks.jpg",
+    query: "drinks",
+  },
+  {
+    id: "dessert",
+    label: "Dessert",
+    image: "/atmospheric/craving-dessert.jpg",
+    query: "dessert",
+  },
 ];
 
 function formatDistance(truck: LiveTruckSummary): string | null {
@@ -88,16 +118,18 @@ function formatWait(truck: LiveTruckSummary): string | null {
 
 function getCrowdVibe(truck: LiveTruckSummary): {
   label: string;
-  tone: "hot" | "lively" | "steady";
 } {
   const raw = (truck.crowdLevel || truck.vibe || "").toLowerCase();
   if (raw.includes("hot") || raw.includes("packed")) {
-    return { label: "Crowd is hot", tone: "hot" };
+    return { label: "Crowd is Hot" };
   }
-  if (raw.includes("lively") || raw.includes("busy")) {
-    return { label: "Lively crowd", tone: "lively" };
+  if (raw.includes("busy")) {
+    return { label: "Busy Right Now" };
   }
-  return { label: "Open & serving", tone: "steady" };
+  if (raw.includes("lively")) {
+    return { label: "Lively Crowd" };
+  }
+  return { label: "Open & Serving" };
 }
 
 function getGreetingTime(): "morning" | "afternoon" | "evening" {
@@ -191,9 +223,8 @@ export default function HomeScene() {
   }, [liveTrucksData]);
 
   const greetingTime = getGreetingTime();
-  const greetingLine = firstName
-    ? `Good ${greetingTime}, ${firstName}.`
-    : `Good ${greetingTime}.`;
+  const greetingFirstLine = `Good ${greetingTime},`;
+  const greetingSecondLine = firstName ? `${firstName}.` : "Welcome.";
 
   const goToCraving = (cat: CravingCategory) => {
     navigate(`/find-food?cuisine=${encodeURIComponent(cat.query)}`);
@@ -206,17 +237,41 @@ export default function HomeScene() {
         description="Live food trucks, crowd vibes, and what's happening right now in your local food scene."
       />
 
-      {/* Top glass bar — does not replace the global app navigation, this is
-          a thin contextual header layered on top of the immersive backdrop. */}
+      {/* PAGE-SCOPED ATMOSPHERIC BACKGROUND
+          Sits above the global TimeOfDayBackground so this page gets the
+          food-park-at-night hero photo, while every other page is unaffected. */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 -z-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "url('/atmospheric/foodpark-night-hero.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+          backgroundRepeat: "no-repeat",
+        }}
+      />
+      {/* Vertical gradient overlay so the dark hero text reads cleanly while
+          the background photo still breathes through the lower half. */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 -z-0 pointer-events-none"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, rgba(8,10,15,0.55) 0%, rgba(8,10,15,0.30) 35%, rgba(8,10,15,0.85) 78%, rgba(8,10,15,0.97) 100%)",
+        }}
+      />
+
+      {/* Top glass bar — contextual header above the immersive backdrop. */}
       <header
-        className="fixed top-0 left-0 right-0 z-40 atmo-glass-soft"
+        className="fixed top-0 left-0 right-0 z-40"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <Link
             href="/profile"
             aria-label="Open profile"
-            className="flex items-center justify-center h-11 w-11 rounded-full overflow-hidden atmo-glass atmo-shadow-glass"
+            className="flex items-center justify-center h-11 w-11 rounded-full overflow-hidden ring-2 ring-white/20 bg-black/50 backdrop-blur-md"
           >
             {user?.profileImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -233,26 +288,25 @@ export default function HomeScene() {
           <button
             type="button"
             onClick={() => navigate("/find-food")}
-            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full atmo-glass text-white/90 text-sm font-medium px-4"
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-full text-white text-sm font-medium px-4 bg-black/40 backdrop-blur-md ring-1 ring-white/10"
             aria-label={`Change location. Currently ${shortLocation}.`}
           >
             <MapPin className="h-4 w-4 text-amber-300" aria-hidden="true" />
             <span className="truncate max-w-[160px]">{shortLocation}</span>
-            <ChevronRight className="h-4 w-4 text-white/50" aria-hidden="true" />
           </button>
 
           <button
             type="button"
             onClick={() => navigate("/find-food")}
             aria-label="Search the local food scene"
-            className="flex items-center justify-center h-11 w-11 rounded-full atmo-glass atmo-shadow-glass"
+            className="flex items-center justify-center h-11 w-11 rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10"
           >
             <Search className="h-5 w-5 text-white" aria-hidden="true" />
           </button>
         </div>
       </header>
 
-      {/* Page body — sits on top of the global TimeOfDayBackground (theme-night). */}
+      {/* Page body */}
       <main
         className="relative z-10 pb-32"
         style={{
@@ -261,31 +315,43 @@ export default function HomeScene() {
       >
         {/* HERO */}
         <section className="px-5 pt-2 pb-8">
-          <p className="text-[11px] tracking-[0.32em] text-amber-300/80 uppercase mb-3">
+          <p className="text-[11px] tracking-[0.32em] text-white/80 uppercase mb-3 font-medium">
             MealScout
           </p>
-          <h1 className="text-white font-extrabold leading-[0.95] tracking-tight text-[44px] sm:text-[56px] md:text-[64px]">
-            {greetingLine.split(",")[0]},
+          <h1
+            className="text-white font-extrabold leading-[0.95] tracking-tight text-[52px] sm:text-[64px] md:text-[72px]"
+            style={{
+              fontFamily:
+                "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+              textShadow: "0 2px 24px rgba(0,0,0,0.55)",
+            }}
+          >
+            {greetingFirstLine}
             <br />
-            {greetingLine.split(",")[1]?.trim() || "Welcome."}
+            {greetingSecondLine}
           </h1>
-          <p className="mt-4 text-white/70 text-base sm:text-lg">
+          <p className="mt-3 text-white/85 text-base sm:text-lg">
             Your local scene.
           </p>
 
           <button
             type="button"
             onClick={() => navigate("/map")}
-            className="mt-7 inline-flex items-center justify-center gap-3 h-14 px-7 rounded-full bg-amber-400/10 text-amber-200 font-semibold text-base sm:text-lg atmo-glow-amber w-full sm:w-auto"
+            className="mt-6 inline-flex items-center justify-center gap-3 h-14 px-7 rounded-full text-amber-100 font-semibold text-base sm:text-lg w-full bg-black/40 backdrop-blur-md atmo-glow-amber"
             aria-label="Explore the live food scene on the map"
           >
-            <NavigationIcon className="h-5 w-5" aria-hidden="true" />
+            <span
+              className="h-9 w-9 rounded-full bg-amber-400/20 ring-1 ring-amber-300/50 flex items-center justify-center"
+              aria-hidden="true"
+            >
+              <NavigationIcon className="h-4 w-4 text-amber-200" />
+            </span>
             Explore the Map
           </button>
         </section>
 
-        {/* EXPLORE BY CRAVING */}
-        <section className="pl-5 pr-5 pb-8">
+        {/* EXPLORE BY CRAVING — circular photo bubbles with amber glow rings */}
+        <section className="pl-5 pr-5 pb-10">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="text-white text-xl sm:text-2xl font-bold">
               Explore by Craving
@@ -299,19 +365,31 @@ export default function HomeScene() {
           </div>
 
           <div className="-mx-5 px-5 overflow-x-auto atmo-hide-scrollbar">
-            <ul className="flex gap-4 sm:gap-5 pb-1" role="list">
+            <ul className="flex gap-4 sm:gap-5 pb-2" role="list">
               {CRAVING_CATEGORIES.map((cat) => (
                 <li key={cat.id}>
                   <button
                     type="button"
                     onClick={() => goToCraving(cat)}
-                    className="flex flex-col items-center gap-2 w-[88px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-xl"
+                    className="flex flex-col items-center gap-2 w-[92px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl"
                     aria-label={`Explore ${cat.label}`}
                   >
-                    <span className="h-[88px] w-[88px] rounded-full atmo-ring-glow flex items-center justify-center text-[40px] bg-black/40">
-                      <span aria-hidden="true">{cat.emoji}</span>
+                    <span
+                      className="h-[88px] w-[88px] rounded-full overflow-hidden ring-2 ring-amber-300 bg-black/60"
+                      style={{
+                        boxShadow:
+                          "0 0 0 4px rgba(245,158,11,0.18), 0 0 28px rgba(245,158,11,0.55)",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={cat.image}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
                     </span>
-                    <span className="text-white text-sm font-medium">
+                    <span className="text-white text-sm font-semibold">
                       {cat.label}
                     </span>
                   </button>
@@ -321,7 +399,7 @@ export default function HomeScene() {
           </div>
         </section>
 
-        {/* LIVE NOW */}
+        {/* LIVE NOW — full-bleed image cards with LIVE pill, name, vibe, distance */}
         <section className="pl-5 pr-0 pb-12">
           <div className="flex items-baseline justify-between pr-5 mb-4">
             <h2 className="text-white text-xl sm:text-2xl font-bold">
@@ -411,8 +489,11 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
   return (
     <Link
       href={`/truck/${truck.id}`}
-      className="block atmo-glass atmo-shadow-glass rounded-3xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block rounded-3xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 bg-black/40 ring-1 ring-white/10"
       aria-label={`Open ${truck.name}`}
+      style={{
+        boxShadow: "0 16px 48px rgba(0,0,0,0.55)",
+      }}
     >
       <div className="relative aspect-[4/5] w-full bg-black/60">
         {heroImage ? (
@@ -437,12 +518,13 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0) 38%, rgba(0,0,0,0.92) 100%)",
           }}
           aria-hidden="true"
         />
 
-        <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide text-white bg-amber-500/90 atmo-glow-amber-soft">
+        {/* LIVE pill, top-left */}
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow-md">
           <span
             className="h-1.5 w-1.5 rounded-full bg-white atmo-pulse-amber"
             aria-hidden="true"
@@ -450,15 +532,27 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           Live
         </span>
 
+        {/* Heart, top-right */}
+        <button
+          type="button"
+          aria-label="Save"
+          onClick={(e) => {
+            e.preventDefault();
+          }}
+          className="absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
+        >
+          <Heart className="h-5 w-5 text-white" aria-hidden="true" />
+        </button>
+
         <div className="absolute bottom-3 left-3 right-3">
           <p className="text-white font-bold text-lg leading-tight truncate">
             {truck.name}
           </p>
-          <p className="mt-1 inline-flex items-center gap-1.5 text-amber-200 text-sm font-medium">
+          <p className="mt-1 inline-flex items-center gap-1.5 text-amber-200 text-sm font-semibold">
             <Flame className="h-4 w-4" aria-hidden="true" />
             <span>{vibe.label}</span>
           </p>
-          <p className="mt-1 text-white/70 text-xs">
+          <p className="mt-1 text-white/75 text-xs">
             {[wait, distance].filter(Boolean).join(" • ") || "Open now"}
           </p>
         </div>
@@ -476,7 +570,7 @@ function LiveTrucksSkeleton() {
       <ul className="flex gap-4 pr-5" role="list">
         {[0, 1, 2].map((i) => (
           <li key={i} className="shrink-0 w-[260px]">
-            <div className="atmo-glass-soft rounded-3xl overflow-hidden">
+            <div className="rounded-3xl overflow-hidden bg-white/5">
               <div className="aspect-[4/5] w-full animate-pulse bg-white/5" />
             </div>
           </li>
@@ -485,4 +579,3 @@ function LiveTrucksSkeleton() {
     </div>
   );
 }
-
