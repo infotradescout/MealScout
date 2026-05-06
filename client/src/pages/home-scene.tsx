@@ -288,8 +288,8 @@ export default function HomeScene() {
         </div>
       </header>
 
-      {/* Page body */}
-      <main className="relative z-10 pb-32">
+      {/* Page body — bottom padding clears the floating glass nav. */}
+      <main className="relative z-10 pb-36">
         {/* HERO BAND — full-bleed food-park photo with the eyebrow, headline,
             and Explore the Map CTA layered on the LEFT column only. The top
             right ~40% is intentionally left empty as a reserved slot for the
@@ -323,15 +323,18 @@ export default function HomeScene() {
             }}
           />
 
-          {/* Hero grid: left content column + reserved right map slot */}
-          <div className="relative px-5 pt-2 pb-12 min-h-[78vh] grid grid-cols-12 gap-3">
-            {/* LEFT COLUMN — eyebrow, headline, sub-line, CTA */}
-            <div className="col-span-7 sm:col-span-7 md:col-span-7 flex flex-col">
+          {/* Hero content. On mobile (<md) the headline takes full width and
+              the hero-map slot lives BELOW the CTA so it never steals headline
+              real estate. At md+ the layout becomes a 7/5 grid with the map
+              slot reserved on the right. */}
+          <div className="relative px-5 pt-2 pb-8 md:pb-10 md:grid md:grid-cols-12 md:gap-6 md:min-h-[520px]">
+            {/* LEFT COLUMN (full width on mobile) — eyebrow, headline, CTA */}
+            <div className="md:col-span-7 flex flex-col">
               <p className="text-[11px] tracking-[0.32em] text-white/85 uppercase mb-3 font-medium">
                 MealScout
               </p>
               <h1
-                className="text-white font-extrabold leading-[0.95] tracking-tight text-[44px] sm:text-[56px] md:text-[68px]"
+                className="text-white font-extrabold leading-[0.95] tracking-tight text-[52px] sm:text-[60px] md:text-[64px]"
                 style={{
                   fontFamily:
                     "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
@@ -346,8 +349,7 @@ export default function HomeScene() {
                 Your local scene.
               </p>
 
-              {/* CTA pinned toward the bottom of the hero band */}
-              <div className="mt-auto pt-10">
+              <div className="mt-6 md:mt-auto md:pt-10">
                 <button
                   type="button"
                   onClick={() => navigate("/map")}
@@ -365,13 +367,14 @@ export default function HomeScene() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN — reserved slot for the upcoming live map tool.
-                Intentionally empty. Drop the map component inside this div
-                when ready; no other layout changes will be required. */}
+            {/* RIGHT COLUMN — reserved slot for the upcoming live map widget.
+                Hidden on mobile (the map will live in its own row when needed).
+                On md+ it occupies the right ~40% of the hero band so the map
+                can render and accept interactions without any layout fight. */}
             <div
               data-slot="hero-map"
               aria-hidden="true"
-              className="col-span-5 sm:col-span-5 md:col-span-5"
+              className="hidden md:block md:col-span-5"
             />
           </div>
         </section>
