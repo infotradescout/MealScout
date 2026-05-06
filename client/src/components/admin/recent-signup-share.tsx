@@ -31,6 +31,12 @@ import {
 import BrandedBackground, {
   type BrandedBackgroundKind,
 } from "@/components/admin/welcome-card/branded-backgrounds";
+import {
+  buildWelcomeCardCaptions,
+  PLATFORM_LABELS,
+  type CaptionPlatform,
+  type CaptionSignupKind,
+} from "@/components/admin/welcome-card/build-captions";
 
 type RecentSignupKind =
   | "customer"
@@ -359,6 +365,12 @@ export default function RecentSignupShare() {
   const graphicRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [isBackfillingGoogle, setIsBackfillingGoogle] = useState(false);
+  // Active caption platform per signup card. Lets the admin preview Facebook,
+  // Instagram, or X copy without changing other cards. Defaults to Facebook
+  // since that's the canonical/longest version.
+  const [captionPlatformByKey, setCaptionPlatformByKey] = useState<
+    Record<string, CaptionPlatform>
+  >({});
 
   const { data, isLoading, isFetching, refetch } =
     useQuery<RecentSignupsResponse>({
@@ -960,12 +972,97 @@ export default function RecentSignupShare() {
                     </div>
                   </div>
 
-                  <div className="rounded-lg border bg-muted/30 p-3">
-                    <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                      Caption
-                    </p>
-                    <p className="text-sm">{signup.caption}</p>
-                  </div>
+                  {/*
+                   * Per-platform captions (Round 2). Each variant is built
+                   * client-side from real signup fields via
+                   * buildWelcomeCardCaptions(). The Facebook variant matches
+                   * the long-form server caption; IG and X are derived locally
+                   * with platform-specific limits and conventions.
+                   */}
+                  {(() => {
+                    const captions = buildWelcomeCardCaptions({
+                      displayName: signup.displayName,
+                      kind: signup.kind as CaptionSignupKind,
+                      typeLabel: signup.typeLabel,
+                      locationLabel: signup.locationLabel,
+                      profileUrl: signup.profileUrl,
+                      shareUrl: signup.shareUrl,
+                      category: signup.category,
+                      menuItemNames: signup.menuItemNames,
+                      videoCount: signup.videoCount,
+                      websiteUrl: signup.websiteUrl,
+                      menuUrl: signup.menuUrl,
+                      orderUrl: signup.orderUrl,
+                    });
+                    const activePlatform: CaptionPlatform =
+                      captionPlatformByKey[signup.key] || "facebook";
+                    const active = captions[activePlatform];
+                    const platformOrder: CaptionPlatform[] = [
+                      "facebook",
+                      "instagram",
+                      "x",
+                    ];
+                    return (
+                      <div className="rounded-lg border bg-muted/30 p-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div
+                            role="tablist"
+                            aria-label="Caption platform"
+                            className="inline-flex rounded-full border border-amber-400/30 bg-black/30 p-0.5"
+                          >
+                            {platformOrder.map((p) => {
+                              const selected = activePlatform === p;
+                              return (
+                                <button
+                                  key={p}
+                                  role="tab"
+                                  type="button"
+                                  aria-selected={selected}
+                                  aria-pressed={selected}
+                                  onClick={() =>
+                                    setCaptionPlatformByKey((prev) => ({
+                                      ...prev,
+                                      [signup.key]: p,
+                                    }))
+                                  }
+                                  className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                                    selected
+                                      ? "bg-amber-400 text-black"
+                                      : "text-amber-200/80 hover:text-amber-100"
+                                  }`}
+                                >
+                                  {PLATFORM_LABELS[p]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wider ${
+                              active.withinLimit
+                                ? "text-muted-foreground"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {active.length}
+                            {active.platform === "x"
+                              ? ` / ${active.charLimit}`
+                              : active.platform === "instagram"
+                                ? ` / ${active.charLimit}`
+                                : " chars"}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {active.composed}
+                        </p>
+                        {!active.withinLimit ? (
+                          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-red-400">
+                            Over the {PLATFORM_LABELS[active.platform]} limit —
+                            shorten before posting.
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -979,13 +1076,44 @@ export default function RecentSignupShare() {
                       )}
                       Post to Facebook
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => copyText(signup.caption, "Caption")}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Caption
-                    </Button>
+                    {/*
+                     * Copy active platform caption. We rebuild here so the
+                     * button always copies the latest variant matching the
+                     * active tab without needing to lift state out of the IIFE.
+                     */}
+                    {(() => {
+                      const captions = buildWelcomeCardCaptions({
+                        displayName: signup.displayName,
+                        kind: signup.kind as CaptionSignupKind,
+                        typeLabel: signup.typeLabel,
+                        locationLabel: signup.locationLabel,
+                        profileUrl: signup.profileUrl,
+                        shareUrl: signup.shareUrl,
+                        category: signup.category,
+                        menuItemNames: signup.menuItemNames,
+                        videoCount: signup.videoCount,
+                        websiteUrl: signup.websiteUrl,
+                        menuUrl: signup.menuUrl,
+                        orderUrl: signup.orderUrl,
+                      });
+                      const activePlatform: CaptionPlatform =
+                        captionPlatformByKey[signup.key] || "facebook";
+                      const active = captions[activePlatform];
+                      return (
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            copyText(
+                              active.composed,
+                              `${PLATFORM_LABELS[activePlatform]} caption`,
+                            )
+                          }
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy {PLATFORM_LABELS[activePlatform]}
+                        </Button>
+                      );
+                    })()}
                     <Button
                       variant="outline"
                       onClick={() => copyText(cleanShareUrl, "Profile link")}
