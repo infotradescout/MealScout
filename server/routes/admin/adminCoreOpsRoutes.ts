@@ -731,7 +731,7 @@ const dataUrlToBlob = (dataUrl: string) => {
 };
 
 const fetchAdminImageResponse = async (url: string) => {
-  const parsed = new URL(url);
+  const parsed = new URL(url, resolveAdminPublicBaseUrl());
   if (!["http:", "https:"].includes(parsed.protocol)) return null;
 
   const response = await fetch(parsed.toString(), {

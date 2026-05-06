@@ -479,6 +479,17 @@ const formatAdminDealTime = (deal: any) => {
   return "Time not set";
 };
 
+const adminImageProxyUrl = (value: unknown) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return `/api/admin/recent-signups/image?url=${encodeURIComponent(raw)}`;
+};
+
+const adminGooglePhotoProxyUrl = (photoName: string, maxWidth = 512) =>
+  adminImageProxyUrl(
+    `/api/google/photo?name=${encodeURIComponent(photoName)}&maxWidth=${maxWidth}`,
+  );
+
 const firstUsablePhotoUrl = (value: unknown) => {
   let photos = value;
   if (typeof photos === "string") {
@@ -504,9 +515,7 @@ const firstUsablePhotoUrl = (value: unknown) => {
     const trimmedUrl = url.trim();
     if (trimmedUrl) {
       if (trimmedUrl.startsWith("places/")) {
-        return `/api/google/photo?name=${encodeURIComponent(
-          trimmedUrl,
-        )}&maxWidth=512`;
+        return adminGooglePhotoProxyUrl(trimmedUrl);
       }
       return trimmedUrl;
     }
@@ -521,9 +530,7 @@ const firstUsablePhotoUrl = (value: unknown) => {
           ).trim()
         : "";
     if (googlePhotoName) {
-      return `/api/google/photo?name=${encodeURIComponent(
-        googlePhotoName,
-      )}&maxWidth=512`;
+      return adminGooglePhotoProxyUrl(googlePhotoName);
     }
   }
   return "";
