@@ -4,7 +4,7 @@
  * Prompts restaurant owners to create their first deal if they haven't within 7 days of signup.
  * A second nudge fires at 14 days if they still haven't created a deal.
  *
- * Runs via daily cron (3:30 AM). Idempotency via telemetryEvents.
+ * Runs via daily cron around 9:15 AM Central. Idempotency via telemetryEvents.
  * Respects accountSettings.notifications.channels.email opt-out.
  */
 

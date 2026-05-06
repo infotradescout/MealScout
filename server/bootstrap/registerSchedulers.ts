@@ -56,6 +56,10 @@ const getParkingPassHoldTtlMs = () => {
   return minutes * 60 * 1000;
 };
 
+const emailReminderTimeZone =
+  process.env.EMAIL_REMINDER_TIMEZONE || "America/Chicago";
+const emailReminderCronOptions = { timezone: emailReminderTimeZone };
+
 // ---------------------------------------------------------------------------
 // Public registration entry point
 // ---------------------------------------------------------------------------
@@ -67,7 +71,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
   // Featured video cron endpoint
   await registerFeaturedVideoCronJobs(app);
 
-  // Weekly Digest — Monday 8:00 AM
+  // Weekly Digest — Monday 8:00 AM Central
   cron.schedule("0 8 * * 1", async () => {
     console.log("⏰ Triggering Weekly Digest Cron Job");
     try {
@@ -76,7 +80,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Weekly Digest Cron Job Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
   // Admin Daily Digest — every morning at 8:00 AM UTC.
   // Sends an ops summary to ADMIN_EMAIL: new owners, stuck, imports, etc.
@@ -131,13 +135,14 @@ export async function registerSchedulers(app: Express): Promise<void> {
   }
 
   // Owner recovery: signed-up owners whose public profile still has no useful
-  // business/menu data. This catches pre-fix signups and new interrupted flows.
+  // business/menu data. Default send window is 9:45 AM Central so owner-facing
+  // reminders do not fire at night.
   if (
     String(process.env.OWNER_PROFILE_RECOVERY_ENABLED || "true").toLowerCase() !==
     "false"
   ) {
     const expression =
-      process.env.OWNER_PROFILE_RECOVERY_CRON || "*/30 * * * *";
+      process.env.OWNER_PROFILE_RECOVERY_CRON || "45 9 * * *";
     cron.schedule(expression, async () => {
       console.log("⏰ Triggering Owner Profile Recovery scan");
       try {
@@ -148,10 +153,10 @@ export async function registerSchedulers(app: Express): Promise<void> {
       } catch (error) {
         console.error("❌ Owner Profile Recovery failed:", error);
       }
-    });
+    }, emailReminderCronOptions);
   }
 
-  // Premium Weekly Summary — Monday 8:30 AM (subscribed trucks)
+  // Premium Weekly Summary — Monday 8:30 AM Central (subscribed trucks)
   cron.schedule("30 8 * * 1", async () => {
     console.log("⏰ Triggering Premium Weekly Summary Cron");
     try {
@@ -249,9 +254,9 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Premium Weekly Summary Cron Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
-  // Diner Deals Digest — Wednesday 9:00 AM
+  // Diner Deals Digest — Wednesday 9:00 AM Central
   cron.schedule("0 9 * * 3", async () => {
     console.log("⏰ Triggering Diner Deals Digest");
     try {
@@ -260,10 +265,10 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Diner Deals Digest Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
-  // Post-signup onboarding drip — daily 3:00 AM (Day 3 referral + Day 7 discovery)
-  cron.schedule("0 3 * * *", async () => {
+  // Post-signup onboarding drip — daily 9:00 AM Central (Day 3 referral + Day 7 discovery)
+  cron.schedule("0 9 * * *", async () => {
     try {
       const stats = await OnboardingDripService.getInstance().run();
       if (stats.day3Sent + stats.day7Sent > 0) {
@@ -272,10 +277,10 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Onboarding Drip Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
-  // Restaurant deal-creation nudge — daily 3:30 AM (Day 7 + Day 14 prompts)
-  cron.schedule("30 3 * * *", async () => {
+  // Restaurant deal-creation nudge — daily 9:15 AM Central (Day 7 + Day 14 prompts)
+  cron.schedule("15 9 * * *", async () => {
     try {
       const stats = await RestaurantActivationService.getInstance().run();
       if (stats.nudge7Sent + stats.nudge14Sent > 0) {
@@ -284,11 +289,11 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Restaurant Activation Nudge Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
-  // Verification reminder - daily 3:45 AM. Owners can defer document upload,
+  // Verification reminder - daily 9:30 AM Central. Owners can defer document upload,
   // but get a once-daily email until a verification request is submitted.
-  cron.schedule("45 3 * * *", async () => {
+  cron.schedule("30 9 * * *", async () => {
     try {
       const stats = await runVerificationReminderCron();
       if (stats.sent > 0) {
@@ -297,7 +302,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Verification Reminder Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
   // Pensacola food truck onboarding/upsell drip — every 30 min (feature-flagged)
   if (
@@ -399,7 +404,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     });
   }
 
-  // Parking Pass completion reminders — 1st of each month at 9:00 AM
+  // Parking Pass completion reminders — 1st of each month at 9:00 AM Central
   cron.schedule("0 9 1 * *", async () => {
     console.log("⏰ Triggering Parking Pass Completion Reminders");
     try {
@@ -408,7 +413,7 @@ export async function registerSchedulers(app: Express): Promise<void> {
     } catch (error) {
       console.error("❌ Parking Pass Completion Reminders Failed:", error);
     }
-  });
+  }, emailReminderCronOptions);
 
   // Social post queue processor — every 10 minutes (enabled by default)
   if (

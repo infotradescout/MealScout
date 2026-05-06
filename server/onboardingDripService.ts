@@ -6,7 +6,7 @@
  * Day 3 email: "Share MealScout with friends" — referral nudge with affiliate link.
  * Day 7 email: "Find deals near you this week" — content-discovery nudge.
  *
- * Runs via daily cron (3:00 AM). Idempotency via telemetryEvents per user per step.
+ * Runs via daily cron around 9:00 AM Central. Idempotency via telemetryEvents per user per step.
  * Respects accountSettings.notifications.channels.email opt-out.
  */
 
