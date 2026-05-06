@@ -313,8 +313,34 @@ const scoreSearchFields = (
   return score;
 };
 
+const fetchGooglePhotoResponse = async (photoUrl: string) => {
+  const response = await fetch(photoUrl, {
+    headers: {
+      "user-agent":
+        "MealScoutBot/1.0 (+https://www.mealscout.us; Google photo proxy)",
+      accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().startsWith("image/")) return null;
+
+  const contentLength = Number(response.headers.get("content-length") || 0);
+  if (contentLength > 8 * 1024 * 1024) return null;
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > 8 * 1024 * 1024) return null;
+
+  return {
+    contentType,
+    buffer: Buffer.from(arrayBuffer),
+  };
+};
+
 export function registerPublicSearchRoutes(app: Express) {
-  app.get("/api/google/photo", (req, res) => {
+  app.get("/api/google/photo", async (req, res) => {
     const photoName = String(req.query.name || "").trim();
     const maxWidth = Math.max(
       120,
@@ -332,7 +358,22 @@ export function registerPublicSearchRoutes(app: Express) {
       return res.status(404).json({ message: "Google photo is not available" });
     }
 
-    res.redirect(302, photoUrl);
+    try {
+      const image = await fetchGooglePhotoResponse(photoUrl);
+      if (!image) {
+        return res.status(404).json({ message: "Google photo is not available" });
+      }
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Content-Type", image.contentType);
+      res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(image.buffer);
+    } catch (error) {
+      console.warn("[google/photo] proxy failed:", error);
+      res.status(404).json({ message: "Google photo is not available" });
+    }
   });
 
   app.post("/api/search/google-place/:placeId/profile", async (req, res) => {

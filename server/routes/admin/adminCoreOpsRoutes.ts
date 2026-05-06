@@ -110,12 +110,23 @@ const labelPublicDataIssue = (issue: string) => {
   return labels[issue] || issue.replace(/_/g, " ");
 };
 
-const resolveAdminPublicBaseUrl = () =>
-  String(
+const resolveAdminPublicBaseUrl = () => {
+  const raw = String(
     process.env.PUBLIC_BASE_URL ||
       process.env.SERVICE_URL ||
       "https://www.mealscout.us",
   ).replace(/\/+$/, "");
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.hostname.toLowerCase() === "mealscout.us") {
+      url.hostname = "www.mealscout.us";
+    }
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "https://www.mealscout.us";
+  }
+};
 
 const toShareSlug = (value: unknown) =>
   String(value || "")
@@ -204,7 +215,6 @@ const cleanAffiliateSharePath = (
 const proxiedAdminImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
-  if (isGoogleManagedImageUrl(raw)) return "";
   return `/api/admin/recent-signups/image?url=${encodeURIComponent(raw)}`;
 };
 
@@ -1685,9 +1695,6 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         const rawUrl = String(req.query?.url || "").trim();
         if (!rawUrl) {
           return res.status(400).send("Missing image URL");
-        }
-        if (isGoogleManagedImageUrl(rawUrl)) {
-          return res.status(404).send("Image unavailable");
         }
 
         const image = await fetchAdminImageResponse(rawUrl);
