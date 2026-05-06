@@ -230,7 +230,7 @@ export default function HomeScene() {
             style={{
               backgroundImage: "url('/atmospheric/foodpark-night-hero.jpg')",
               backgroundSize: "cover",
-              backgroundPosition: "center 35%",
+              backgroundPosition: "center 22%",
               backgroundRepeat: "no-repeat",
             }}
           />
@@ -293,12 +293,12 @@ export default function HomeScene() {
               right ~40% becomes a reserved slot for the upcoming map widget. */}
           <div className="relative z-10 px-5 pt-5 pb-9 md:grid md:grid-cols-12 md:gap-6">
             <div className="md:col-span-7 flex flex-col">
-              <p className="text-[11px] tracking-[0.32em] text-white/85 uppercase font-medium mb-3">
+              <p className="text-[11px] tracking-[0.32em] text-white/85 uppercase font-semibold mb-5">
                 MealScout
               </p>
 
               <h1
-                className="text-white font-extrabold leading-[0.92] tracking-tight"
+                className="text-white font-extrabold leading-[1.0] tracking-tight"
                 style={{
                   fontFamily:
                     "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
@@ -367,21 +367,24 @@ export default function HomeScene() {
             </Link>
           </div>
 
-          <div className="-mx-5 px-5 overflow-x-auto atmo-hide-scrollbar">
-            <ul className="flex gap-5 pb-2" role="list">
-              {CRAVING_CATEGORIES.map((cat) => (
+          {/* All 6 bubbles must fit on a 430px viewport without scrolling. */}
+          <ul
+            className="flex items-start justify-between gap-2 pb-2"
+            role="list"
+          >
+            {CRAVING_CATEGORIES.map((cat) => (
                 <li key={cat.id} className="shrink-0">
                   <button
                     type="button"
                     onClick={() => goToCraving(cat)}
                     aria-label={`Explore ${cat.label}`}
-                    className="group flex flex-col items-center gap-2.5 w-[88px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl active:scale-[0.97] transition-transform"
+                    className="group flex flex-col items-center gap-2 w-[58px] sm:w-[68px] md:w-[88px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl active:scale-[0.97] transition-transform"
                   >
                     <span
-                      className="h-[84px] w-[84px] rounded-full overflow-hidden ring-2 ring-amber-400 bg-black/60 group-hover:ring-amber-300 transition-all"
+                      className="h-[58px] w-[58px] sm:h-[68px] sm:w-[68px] md:h-[84px] md:w-[84px] rounded-full overflow-hidden ring-2 ring-amber-400 bg-black/60 group-hover:ring-amber-300 transition-all"
                       style={{
                         boxShadow:
-                          "0 0 0 4px rgba(245,158,11,0.16), 0 0 24px rgba(245,158,11,0.55)",
+                          "0 0 0 3px rgba(245,158,11,0.16), 0 0 22px rgba(245,158,11,0.55)",
                       }}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -392,14 +395,13 @@ export default function HomeScene() {
                         loading="lazy"
                       />
                     </span>
-                    <span className="text-white text-sm font-semibold">
+                    <span className="text-white text-[12px] sm:text-sm font-semibold">
                       {cat.label}
                     </span>
                   </button>
                 </li>
               ))}
-            </ul>
-          </div>
+          </ul>
         </section>
 
         {/* ============================================================
@@ -419,60 +421,56 @@ export default function HomeScene() {
             </Link>
           </div>
 
-          {locationStatus === "denied" && !coords && (
-            <LiveNowMessage
-              title="Turn on location to see what's live near you."
-              body="MealScout uses your location only to show food trucks, deals, and events around you in real time."
-              ctaLabel="Open the map"
-              onCta={() => navigate("/map")}
-            />
-          )}
-
-          {locationStatus !== "denied" && liveTrucksLoading && (
-            <LiveTrucksSkeleton />
-          )}
-
-          {locationStatus !== "denied" &&
-            !liveTrucksLoading &&
-            liveTrucksError && (
-              <LiveNowMessage
-                title="We couldn't reach the live feed."
-                body="Pull down to refresh, or try again in a moment."
-                ctaLabel="Open the map"
-                onCta={() => navigate("/map")}
-              />
-            )}
-
-          {locationStatus !== "denied" &&
-            !liveTrucksLoading &&
-            !liveTrucksError &&
-            liveTrucks.length === 0 && (
-              <LiveNowMessage
-                title="No trucks are live right here, right now."
-                body="Trucks pop up throughout the day. Open the map to scout what's planned tonight."
-                ctaLabel="Open the map"
-                onCta={() => navigate("/map")}
-              />
-            )}
-
-          {liveTrucks.length > 0 && (
-            <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-              <ul
-                className="flex gap-4 pr-5"
-                role="list"
-                aria-label="Live food trucks near you"
-              >
-                {liveTrucks.slice(0, 12).map((truck) => (
+          {/* The carousel structure is ALWAYS rendered so the section
+              keeps its mockup-correct shape. When there are no trucks
+              (loading, error, denied, empty), a single card-shaped slot
+              appears with a designed empty state inside it. */}
+          <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+            <ul
+              className="flex gap-4 pr-5"
+              role="list"
+              aria-label="Live food trucks near you"
+            >
+              {liveTrucks.length > 0 ? (
+                liveTrucks.slice(0, 12).map((truck) => (
                   <li
                     key={truck.id}
                     className="shrink-0 w-[230px] sm:w-[260px]"
                   >
                     <LiveTruckCard truck={truck} />
                   </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                ))
+              ) : locationStatus !== "denied" && liveTrucksLoading ? (
+                <>
+                  {[0, 1, 2].map((i) => (
+                    <li key={i} className="shrink-0 w-[230px] sm:w-[260px]">
+                      <LiveTruckSkeletonCard />
+                    </li>
+                  ))}
+                </>
+              ) : (
+                <li className="shrink-0 w-[230px] sm:w-[260px]">
+                  <LiveNowEmptyCard
+                    title={
+                      locationStatus === "denied"
+                        ? "Turn on location to see what's live near you."
+                        : liveTrucksError
+                          ? "We couldn't reach the live feed."
+                          : "Nothing live right here, right now."
+                    }
+                    body={
+                      locationStatus === "denied"
+                        ? "MealScout uses your location only to show food trucks, deals, and events around you in real time."
+                        : liveTrucksError
+                          ? "Pull down to refresh, or try again in a moment."
+                          : "Trucks pop up throughout the day. Open the map to scout what's planned tonight."
+                    }
+                    onCta={() => navigate("/map")}
+                  />
+                </li>
+              )}
+            </ul>
+          </div>
         </section>
       </main>
 
@@ -583,43 +581,50 @@ function NavSlot({
 
 /* -------------------------- subcomponents -------------------------- */
 
-function LiveNowMessage({
+function LiveNowEmptyCard({
   title,
   body,
-  ctaLabel,
   onCta,
 }: {
   title: string;
   body: string;
-  ctaLabel: string;
   onCta: () => void;
 }) {
   return (
-    <div className="mr-5 rounded-3xl p-5 bg-white/5 backdrop-blur-md ring-1 ring-white/10">
-      <div className="flex items-start gap-3">
+    <button
+      type="button"
+      onClick={onCta}
+      className="block w-full text-left rounded-3xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
+      aria-label={`${title} Open the map.`}
+    >
+      <div className="relative aspect-[4/5] w-full p-5 flex flex-col">
         <span
           className="h-10 w-10 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0"
           aria-hidden="true"
         >
           <MapPin className="h-5 w-5 text-amber-300" />
         </span>
-        <div className="flex-1">
-          <p className="font-semibold text-white text-base leading-snug">
-            {title}
-          </p>
-          <p className="mt-1 text-sm text-white/70 leading-relaxed">
-            {body}
-          </p>
-          <button
-            type="button"
-            onClick={onCta}
-            className="mt-3 inline-flex items-center gap-2 h-10 px-4 rounded-full text-amber-100 text-sm font-semibold bg-black/55 ring-1 ring-amber-300/60"
-          >
-            <NavigationIcon className="h-4 w-4 text-amber-200" aria-hidden="true" />
-            {ctaLabel}
-          </button>
-        </div>
+        <p className="mt-3 font-semibold text-white text-base leading-snug">
+          {title}
+        </p>
+        <p className="mt-1 text-sm text-white/70 leading-relaxed">{body}</p>
+        <span className="mt-auto inline-flex items-center gap-2 text-amber-200 text-sm font-semibold">
+          <NavigationIcon className="h-4 w-4" aria-hidden="true" />
+          Open the map
+        </span>
       </div>
+    </button>
+  );
+}
+
+function LiveTruckSkeletonCard() {
+  return (
+    <div
+      aria-hidden="true"
+      className="rounded-3xl overflow-hidden bg-white/5 ring-1 ring-white/10"
+    >
+      <div className="aspect-[4/5] w-full animate-pulse bg-white/5" />
     </div>
   );
 }
@@ -701,18 +706,3 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
   );
 }
 
-function LiveTrucksSkeleton() {
-  return (
-    <div className="overflow-x-auto atmo-hide-scrollbar -mr-1" aria-hidden="true">
-      <ul className="flex gap-4 pr-5" role="list">
-        {[0, 1, 2].map((i) => (
-          <li key={i} className="shrink-0 w-[230px] sm:w-[260px]">
-            <div className="rounded-3xl overflow-hidden bg-white/5">
-              <div className="aspect-[4/5] w-full animate-pulse bg-white/5" />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
