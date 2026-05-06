@@ -3111,6 +3111,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               errorCount: number;
               createdAt: Date | null;
             } | null;
+            resolvedByNewerSuccess: boolean;
           }
         >();
         for (const row of importRows as any[]) {
@@ -3118,13 +3119,21 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             attempts: 0,
             failed: 0,
             lastFailure: null,
+            resolvedByNewerSuccess: false,
           };
           const itemsImported = Number(row.itemsImported || 0);
           const failed =
             row.status === "failed" ||
             (row.status === "complete" && itemsImported === 0);
           current.attempts += 1;
+          if (!failed && current.failed === 0) {
+            current.resolvedByNewerSuccess = true;
+          }
           if (failed) {
+            if (current.resolvedByNewerSuccess) {
+              importsByRestaurant.set(row.restaurantId, current);
+              continue;
+            }
             current.failed += 1;
             if (!current.lastFailure) {
               current.lastFailure = {
@@ -3150,6 +3159,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             attempts: 0,
             failed: 0,
             lastFailure: null,
+            resolvedByNewerSuccess: false,
           };
           const enriched = {
             ...r,
