@@ -28,6 +28,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import BrandedBackground, {
+  type BrandedBackgroundKind,
+} from "@/components/admin/welcome-card/branded-backgrounds";
 
 type RecentSignupKind =
   | "customer"
@@ -129,11 +132,15 @@ type FacebookShareResponse = {
   facebookPhotoId?: string | null;
 };
 
+/**
+ * Welcome-card visual tones. Per Thomas's locked brand rules every card now
+ * shares the same amber accent (#f59e0b); only the announcement label and
+ * noun change per category. Backgrounds come from <BrandedBackground />.
+ */
 const toneByKind: Record<
   RecentSignupKind,
   {
     label: string;
-    gradient: string;
     accent: string;
     badge: string;
     noun: string;
@@ -141,68 +148,76 @@ const toneByKind: Record<
 > = {
   customer: {
     label: "Customer",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #23211a 38%, #10302b 100%)",
-    accent: "#facc15",
-    badge: "bg-yellow-300 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "member",
   },
   food_truck: {
     label: "Food Truck",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #241307 38%, #0d2d2b 100%)",
-    accent: "#ff9f0a",
-    badge: "bg-orange-500 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "truck",
   },
   restaurant: {
     label: "Restaurant",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #10251b 40%, #33220a 100%)",
-    accent: "#22c55e",
-    badge: "bg-emerald-400 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "restaurant",
   },
   caterer: {
     label: "Caterer",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #241b32 40%, #143229 100%)",
     accent: "#f59e0b",
     badge: "bg-amber-400 text-black",
     noun: "caterer",
   },
   private_chef: {
     label: "Private Chef",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #2d1f16 38%, #24183a 100%)",
-    accent: "#fb7185",
-    badge: "bg-rose-300 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "private chef",
   },
   host: {
     label: "Host",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #11223a 42%, #34240d 100%)",
-    accent: "#38bdf8",
-    badge: "bg-sky-300 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "host",
   },
   supplier: {
     label: "Supplier",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #1d2530 40%, #2e2614 100%)",
-    accent: "#a3e635",
-    badge: "bg-lime-300 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "supplier",
   },
   team: {
     label: "Team",
-    gradient:
-      "linear-gradient(135deg, #111111 0%, #27242f 40%, #302515 100%)",
-    accent: "#f97316",
-    badge: "bg-orange-400 text-black",
+    accent: "#f59e0b",
+    badge: "bg-amber-400 text-black",
     noun: "team member",
   },
+};
+
+/**
+ * Map a RecentSignupKind to a BrandedBackgroundKind. Customer + team are
+ * filtered out before render so they never reach this map, but we keep the
+ * fallback so type-safety holds.
+ */
+const backgroundKindFor = (kind: RecentSignupKind): BrandedBackgroundKind => {
+  switch (kind) {
+    case "food_truck":
+      return "food_truck";
+    case "restaurant":
+      return "restaurant";
+    case "caterer":
+      return "caterer";
+    case "private_chef":
+      return "private_chef";
+    case "host":
+      return "host";
+    case "supplier":
+      return "supplier";
+    default:
+      return "default";
+  }
 };
 
 const formatSignupAge = (value: string) => {
@@ -360,7 +375,16 @@ export default function RecentSignupShare() {
       refetchOnWindowFocus: false,
     });
 
-  const signups = data?.signups || [];
+  // Per locked brand rules, welcome cards generate ONLY for businesses
+  // (and Critics, handled separately). Customer + team signups never get
+  // a welcome graphic. They still flow through the API for admin counts,
+  // but they are never rendered as cards here.
+  const allSignups = data?.signups || [];
+  const signups = allSignups.filter(
+    (s) => s.kind !== "customer" && s.kind !== "team",
+  );
+  const hiddenNonBusinessCount =
+    allSignups.length - signups.length;
 
   const captureGraphic = async (signup: RecentSignup) => {
     const target = graphicRefs.current[signup.key];
@@ -651,6 +675,13 @@ export default function RecentSignupShare() {
                 {data.filteredOut === 1 ? "" : "s"} hidden.
               </span>
             ) : null}
+            {hiddenNonBusinessCount > 0 ? (
+              <span>
+                {hiddenNonBusinessCount} customer or team signup
+                {hiddenNonBusinessCount === 1 ? "" : "s"} hidden (welcome
+                cards generate for businesses and critics only).
+              </span>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -780,126 +811,147 @@ export default function RecentSignupShare() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/*
+                   * Welcome-card visual (1200x630 export size).
+                   * - Branded SVG background per category (no scraped photos).
+                   * - User photo (when present) shown as a contained circular
+                   *   thumbnail in the right panel, NOT as a full-bleed blurry
+                   *   background.
+                   * - Editorial Playfair Display headline.
+                   * - "Follow The Flavor." tagline locked into bottom right.
+                   */}
                   <div
                     ref={(node) => {
                       graphicRefs.current[signup.key] = node;
                     }}
-                    className="relative aspect-[1200/630] overflow-hidden rounded-[1.5rem] border bg-neutral-950 text-white shadow-sm"
-                    style={{
-                      background: hasBusinessImage ? "#050505" : tone.gradient,
-                      containerType: "inline-size",
-                    }}
+                    className="relative aspect-[1200/630] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#050505] text-white shadow-sm"
+                    style={{ containerType: "inline-size" }}
                   >
-                    {hasBusinessImage ? (
-                      <>
-                        <img
-                          src={graphicImageUrl || ""}
-                          alt={imageAlt}
-                          crossOrigin="anonymous"
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/58" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/78 to-black/22" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-transparent to-black/42" />
-                      </>
-                    ) : (
-                      <>
-                        <div className="absolute inset-0 bg-[#050505]" />
-                        <div
-                          className="absolute inset-0 opacity-[0.12]"
-                          style={{
-                            backgroundImage:
-                              "linear-gradient(90deg, rgba(255,255,255,.14) 1px, transparent 1px), linear-gradient(0deg, rgba(255,255,255,.12) 1px, transparent 1px)",
-                            backgroundSize: "72px 72px",
-                          }}
-                        />
-                        <div
-                          className="absolute inset-y-0 right-0 w-[39%]"
-                          style={{ backgroundColor: tone.accent }}
-                        />
-                        <div className="absolute inset-y-0 right-[31%] w-[18rem] skew-x-[-12deg] bg-black/35" />
-                      </>
-                    )}
+                    {/* Branded SVG background, always */}
+                    <BrandedBackground kind={backgroundKindFor(signup.kind)} />
 
                     <div className="relative h-full p-[3.33cqw]">
-                      <div className="absolute left-[3.33cqw] top-[3.33cqw] inline-flex items-center gap-[1cqw] text-[1.15cqw] font-black uppercase tracking-[0.18em] text-white">
-                        <span className="flex h-[3.33cqw] w-[3.33cqw] items-center justify-center rounded-full bg-white text-[0.9cqw] tracking-normal text-black">
+                      {/* Top-left: MealScout wordmark */}
+                      <div className="absolute left-[3.33cqw] top-[3.33cqw] inline-flex items-center gap-[1cqw] text-[1.15cqw] font-bold uppercase tracking-[0.22em] text-white/85">
+                        <span className="flex h-[3.33cqw] w-[3.33cqw] items-center justify-center rounded-full bg-white text-[0.95cqw] font-black tracking-normal text-black shadow-[0_4px_12px_rgba(245,158,11,0.35)]">
                           MS
                         </span>
                         <span>MealScout</span>
                       </div>
 
+                      {/* Top-right: status pills */}
                       <div className="absolute right-[3.33cqw] top-[3.33cqw] flex max-w-[35cqw] flex-wrap justify-end gap-[0.65cqw]">
                         <span
-                          className="rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black text-black shadow-[0_10px_28px_rgba(0,0,0,.28)]"
+                          className="rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-bold uppercase tracking-[0.16em] text-black shadow-[0_8px_24px_rgba(245,158,11,0.45)]"
                           style={{ backgroundColor: tone.accent }}
                         >
                           {tone.label}
                         </span>
-                        <span className="rounded-full bg-white px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black text-black shadow-[0_10px_28px_rgba(0,0,0,.22)]">
+                        <span className="rounded-full border border-white/25 bg-black/40 px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur-sm">
                           {statusText}
                         </span>
                       </div>
 
-                      <div className="absolute bottom-[8cqw] left-[3.33cqw] top-[10.6cqw] flex w-[55%] flex-col justify-center">
+                      {/* Center-left: announcement, name, subline */}
+                      <div className="absolute bottom-[10cqw] left-[3.33cqw] top-[10.6cqw] flex w-[58%] flex-col justify-center">
                         <div
-                          className="mb-[1.6cqw] inline-flex w-fit rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-black uppercase tracking-[0.18em] text-black shadow-[0_12px_34px_rgba(0,0,0,.32)]"
-                          style={{ backgroundColor: tone.accent }}
+                          className="mb-[1.6cqw] inline-flex w-fit items-center gap-[0.65cqw] rounded-full border border-amber-400/30 bg-amber-400/15 px-[1.4cqw] py-[0.55cqw] text-[1cqw] font-bold uppercase tracking-[0.22em] text-amber-300"
                         >
+                          <span
+                            className="h-[0.7cqw] w-[0.7cqw] rounded-full"
+                            style={{ backgroundColor: tone.accent }}
+                          />
                           {announcement}
                         </div>
-                        <p className="text-[1.1cqw] font-black uppercase tracking-[0.22em] text-white/70">
-                          Just joined MealScout
-                        </p>
                         <h3
-                          className={`mt-[0.9cqw] max-w-[11.5ch] break-words ${graphicNameClass} font-black leading-[0.96] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.45)]`}
+                          className={`max-w-[12ch] break-words ${graphicNameClass} font-bold italic leading-[0.96] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.55)]`}
+                          style={{
+                            fontFamily:
+                              "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+                            letterSpacing: "-0.01em",
+                          }}
                         >
                           {signup.displayName}
                         </h3>
                         {graphicSubline ? (
-                          <p className="mt-[1.5cqw] line-clamp-2 max-w-[44cqw] text-[1.55cqw] font-black leading-tight text-white/90">
+                          <p
+                            className="mt-[1.5cqw] line-clamp-2 max-w-[44cqw] text-[1.5cqw] font-medium leading-tight text-white/90"
+                            style={{
+                              fontFamily:
+                                "'Space Grotesk', system-ui, sans-serif",
+                            }}
+                          >
                             {graphicSubline}
                           </p>
                         ) : null}
                       </div>
 
-                      <div className="absolute bottom-[3.33cqw] left-[3.33cqw] w-[55%] min-w-0">
-                        <p className="mb-[0.65cqw] text-[0.82cqw] font-black uppercase tracking-[0.2em] text-white/60">
-                          Share this MealScout link
+                      {/* Bottom-left: profile link */}
+                      <div className="absolute bottom-[3.33cqw] left-[3.33cqw] w-[58%] min-w-0">
+                        <p className="mb-[0.65cqw] text-[0.82cqw] font-bold uppercase tracking-[0.24em] text-white/55">
+                          Find them on MealScout
                         </p>
-                        <div className="flex min-w-0 items-center gap-[0.65cqw] text-[1.35cqw] font-black text-white">
-                          <MapPin className="h-[1.35cqw] w-[1.35cqw] shrink-0" />
+                        <div className="flex min-w-0 items-center gap-[0.65cqw] text-[1.35cqw] font-semibold text-white">
+                          <MapPin
+                            className="h-[1.35cqw] w-[1.35cqw] shrink-0"
+                            style={{ color: tone.accent }}
+                          />
                           <span className="min-w-0 truncate">
                             {graphicUrlLabel}
                           </span>
                         </div>
                       </div>
 
-                      <div className="absolute bottom-[3.33cqw] right-[3.33cqw] top-[10.6cqw] w-[32%] overflow-hidden rounded-[2.65cqw] border border-white/15 bg-black/30 p-[2cqw] shadow-[0_28px_80px_rgba(0,0,0,.38)] backdrop-blur-sm">
-                        <div
-                          className="absolute inset-0 opacity-[0.42]"
-                          style={{ backgroundColor: tone.accent }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/40" />
-                        <div className="relative flex h-full flex-col justify-between">
-                          <div className="flex justify-end">
-                            <span className="rounded-full bg-white px-[1.35cqw] py-[0.65cqw] text-[0.95cqw] font-black text-black">
-                              View profile
-                            </span>
-                          </div>
-                          <div className="flex flex-1 items-center justify-center py-[1.33cqw]">
+                      {/* Right panel: photo or initials thumbnail + tagline */}
+                      <div className="absolute bottom-[3.33cqw] right-[3.33cqw] top-[10.6cqw] flex w-[32%] flex-col items-center justify-between overflow-hidden rounded-[2.4cqw] border border-white/15 bg-black/40 p-[1.8cqw] shadow-[0_28px_80px_rgba(0,0,0,.4)] backdrop-blur-sm">
+                        {/* View profile pill at top */}
+                        <div className="flex w-full justify-end">
+                          <span
+                            className="rounded-full px-[1.2cqw] py-[0.55cqw] text-[0.9cqw] font-bold uppercase tracking-[0.18em] text-black"
+                            style={{ backgroundColor: tone.accent }}
+                          >
+                            View
+                          </span>
+                        </div>
+
+                        {/* Photo as circular thumbnail OR amber initials */}
+                        <div className="flex flex-1 items-center justify-center py-[1cqw]">
+                          {hasBusinessImage ? (
+                            <div className="relative h-[14cqw] w-[14cqw] overflow-hidden rounded-full border-[0.4cqw] border-amber-400 shadow-[0_18px_50px_rgba(245,158,11,0.35)]">
+                              <img
+                                src={graphicImageUrl || ""}
+                                alt={imageAlt}
+                                crossOrigin="anonymous"
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
                             <div
-                              className="flex h-[13.5cqw] w-[13.5cqw] items-center justify-center rounded-[2.7cqw] text-[5.1cqw] font-black text-black shadow-[0_20px_60px_rgba(0,0,0,.28)]"
+                              className="flex h-[14cqw] w-[14cqw] items-center justify-center rounded-full text-[5.4cqw] font-black text-black shadow-[0_18px_50px_rgba(245,158,11,0.45)]"
                               style={{ backgroundColor: tone.accent }}
                             >
                               {initialsFor(signup.displayName)}
                             </div>
-                          </div>
-                          <div className="rounded-[1.65cqw] border border-white/15 bg-black/30 p-[1.65cqw]">
-                            <p className="mb-[1cqw] text-[0.78cqw] font-black uppercase tracking-[0.24em] text-white/70">
+                          )}
+                        </div>
+
+                        {/* Locked tagline + featured CTA */}
+                        <div className="w-full space-y-[0.9cqw]">
+                          <p
+                            className="text-center text-[1.4cqw] font-bold italic leading-tight text-amber-300"
+                            style={{
+                              fontFamily:
+                                "'Playfair Display', Georgia, serif",
+                              letterSpacing: "0.01em",
+                            }}
+                          >
+                            Follow The Flavor.
+                          </p>
+                          <div className="rounded-[1.4cqw] border border-white/12 bg-white/[0.04] p-[1.1cqw]">
+                            <p className="mb-[0.5cqw] text-[0.74cqw] font-bold uppercase tracking-[0.26em] text-amber-300/80">
                               Featured
                             </p>
-                            <p className="line-clamp-2 text-[1.5cqw] font-black leading-tight text-white">
+                            <p className="line-clamp-2 text-[1.15cqw] font-semibold leading-tight text-white">
                               {graphicAction}
                             </p>
                           </div>
