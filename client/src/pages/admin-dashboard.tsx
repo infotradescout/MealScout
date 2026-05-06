@@ -4269,6 +4269,15 @@ export default function AdminDashboard() {
     setBusinessProofDialogOpen(true);
   };
 
+  const openUserMessageDialog = (user: any, options?: { closeDetails?: boolean }) => {
+    if (options?.closeDetails) {
+      setUserDetailsOpen(false);
+    }
+    setMessageTargetUser(user);
+    setMessageDraft("");
+    setMessageUserDialogOpen(true);
+  };
+
   const sortedUsers = useMemo(() => {
     const typeOrder = [
       "super_admin",
@@ -10151,6 +10160,18 @@ export default function AdminDashboard() {
                             <Mail className="w-3 h-3 mr-1" />
                             {user.emailVerified ? "Email Verified" : "Resend Email"}
                           </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => openUserMessageDialog(user)}
+                            disabled={
+                              !user.id ||
+                              String(user.id) === String(adminUser?.id || "")
+                            }
+                            data-testid={`button-message-user-${user.id}`}
+                          >
+                            <MessageCircle className="w-3 h-3 mr-1" />
+                            Message User
+                          </Button>
                           {isAdminOrSuper && !user.emailVerified && (
                             <Button
                               size="sm"
@@ -10232,23 +10253,6 @@ export default function AdminDashboard() {
                             Send Monthly Link
                           </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setMessageTargetUser(user);
-                            setMessageDraft("");
-                            setMessageUserDialogOpen(true);
-                          }}
-                          disabled={
-                            !user.id ||
-                            String(user.id) === String(adminUser?.id || "")
-                          }
-                          data-testid={`button-message-user-${user.id}`}
-                        >
-                          <MessageCircle className="w-4 h-4 mr-1" />
-                          Message
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -11353,6 +11357,32 @@ export default function AdminDashboard() {
 
           {selectedUser && (
             <div className="space-y-6 mt-4">
+              <div className="flex flex-col gap-2 rounded-lg border border-[color:var(--border-subtle)] bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">
+                    {getUserDisplayName(selectedUser)}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {selectedUser.email || "No email on file"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    openUserMessageDialog(selectedUser, { closeDetails: true })
+                  }
+                  disabled={
+                    !selectedUser.id ||
+                    String(selectedUser.id) === String(adminUser?.id || "")
+                  }
+                  data-testid={`button-message-selected-user-${selectedUser.id}`}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Message User
+                </Button>
+              </div>
+
               {/* Edit User */}
               {!isStaff && userEdits && (
                 <div>
