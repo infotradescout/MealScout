@@ -30,6 +30,9 @@ type Segment = WheelEntry & {
   color: string;
   centerAngle: number;
   text: string;
+  labelX: number;
+  labelY: number;
+  textLength: number;
 };
 
 const wheelColors = [
@@ -130,7 +133,9 @@ const parseEntries = (value: string): WheelEntry[] => {
 const fallbackWheelEntries = parseEntries(fallbackEntries.join("\n"));
 
 const truncateLabel = (label: string, max = 18) =>
-  label.length > max ? `${label.slice(0, Math.max(1, max - 1))}...` : label;
+  label.length > max
+    ? `${label.slice(0, Math.max(1, max - 3))}...`
+    : label;
 
 const polarPoint = (angle: number, radius = 47) => {
   const radians = (angle * Math.PI) / 180;
@@ -281,31 +286,62 @@ export default function AdminGiveawayWheel() {
   const entries = useMemo(() => parseEntries(rawList), [rawList]);
   const displayEntries = entries.length ? entries : fallbackWheelEntries;
   const angle = 360 / displayEntries.length;
+  const labelMaxLength =
+    displayEntries.length <= 8
+      ? 18
+      : displayEntries.length <= 16
+        ? 14
+        : displayEntries.length <= 36
+          ? 10
+          : 7;
+  const labelRadius =
+    displayEntries.length <= 10 ? 28 : displayEntries.length <= 36 ? 32 : 35;
   const labelFontSize =
     displayEntries.length <= 8
-      ? 5.5
+      ? 3.55
       : displayEntries.length <= 16
-        ? 4.2
-        : displayEntries.length <= 28
-          ? 3.1
-          : 2.5;
+        ? 2.7
+        : displayEntries.length <= 36
+          ? 1.95
+          : 1.35;
+  const labelTextLength = Math.max(
+    displayEntries.length <= 16 ? 7 : 4.2,
+    Math.min(
+      displayEntries.length <= 8 ? 22 : displayEntries.length <= 36 ? 13 : 8,
+      ((2 * Math.PI * labelRadius * angle) / 360) * 0.76,
+    ),
+  );
+  const winnerNumber = winner
+    ? displayEntries.findIndex((entry) => entry.id === winner.id) + 1
+    : null;
 
   const segments = useMemo<Segment[]>(() => {
     return displayEntries.map((entry, index) => {
       const start = -90 + index * angle;
       const end = start + angle;
+      const centerAngle = start + angle / 2;
+      const labelPoint = polarPoint(centerAngle, labelRadius);
+      const text = truncateLabel(entry.label, labelMaxLength);
+      const estimatedTextLength = text.length * labelFontSize * 0.58;
       return {
         ...entry,
         path: segmentPath(start, end),
         color: wheelColors[index % wheelColors.length],
-        centerAngle: start + angle / 2,
-        text:
-          displayEntries.length > 32
-            ? String(index + 1)
-            : truncateLabel(entry.label, displayEntries.length > 18 ? 11 : 18),
+        centerAngle,
+        text,
+        labelX: labelPoint.x,
+        labelY: labelPoint.y,
+        textLength: Math.max(labelFontSize * 1.4, Math.min(labelTextLength, estimatedTextLength)),
       };
     });
-  }, [angle, displayEntries]);
+  }, [
+    angle,
+    displayEntries,
+    labelFontSize,
+    labelMaxLength,
+    labelRadius,
+    labelTextLength,
+  ]);
 
   const bulbs = useMemo(
     () =>
@@ -486,6 +522,11 @@ export default function AdminGiveawayWheel() {
                     <filter id="ms-wheel-shadow" x="-20%" y="-20%" width="140%" height="140%">
                       <feDropShadow dx="0" dy="2" stdDeviation="1.4" floodOpacity="0.32" />
                     </filter>
+                    {segments.map((segment, index) => (
+                      <clipPath key={segment.id} id={`ms-giveaway-label-clip-${index}`}>
+                        <path d={segment.path} />
+                      </clipPath>
+                    ))}
                   </defs>
                   <g filter="url(#ms-wheel-shadow)">
                     {segments.map((segment, index) => (
@@ -496,19 +537,27 @@ export default function AdminGiveawayWheel() {
                           stroke="rgba(0,0,0,0.28)"
                           strokeWidth="0.35"
                         />
-                        <text
-                          x="50"
-                          y="15"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          transform={`rotate(${segment.centerAngle + 90} 50 50)`}
-                          fontSize={labelFontSize}
-                          fontWeight="800"
-                          fill={index % 3 === 1 ? "#061412" : "#0b0a09"}
-                          style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.42)", strokeWidth: 0.7 }}
-                        >
-                          {segment.text}
-                        </text>
+                        {segment.text ? (
+                          <text
+                            x={segment.labelX}
+                            y={segment.labelY}
+                            clipPath={`url(#ms-giveaway-label-clip-${index})`}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                            fontSize={labelFontSize}
+                            fontWeight="900"
+                            textLength={segment.textLength}
+                            lengthAdjust="spacingAndGlyphs"
+                            fill={index % 3 === 1 ? "#061412" : "#0b0a09"}
+                            style={{
+                              paintOrder: "stroke",
+                              stroke: "rgba(255,255,255,0.58)",
+                              strokeWidth: displayEntries.length <= 16 ? 0.64 : 0.42,
+                            }}
+                          >
+                            {segment.text}
+                          </text>
+                        ) : null}
                       </g>
                     ))}
                   </g>
@@ -535,7 +584,7 @@ export default function AdminGiveawayWheel() {
                   <Crown className="h-5 w-5 text-amber-300" />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold uppercase text-amber-200">
-                      Winner
+                      Winner{winnerNumber ? ` #${winnerNumber}` : ""}
                     </div>
                     <div className="truncate text-2xl font-black text-white">
                       {winner.label}
