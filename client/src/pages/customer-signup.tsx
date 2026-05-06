@@ -100,6 +100,15 @@ type SignupFlowOption = {
   icon: typeof UserPlus;
 };
 
+/**
+ * Account-type picker order.
+ *
+ * Per Thomas: Event Organizer is a high-priority entry path for MealScout
+ * (events drive vendor activity + foot traffic on the platform), so it sits
+ * directly under Diner instead of being buried near the bottom. The order
+ * below is intentional and must not be re-sorted alphabetically by future
+ * automation.
+ */
 const signupFlowOptions: SignupFlowOption[] = [
   {
     id: "diner",
@@ -108,6 +117,14 @@ const signupFlowOptions: SignupFlowOption[] = [
     description: "Save deals and favorite local spots.",
     href: "/customer-signup?role=diner",
     icon: UserPlus,
+  },
+  {
+    id: "event_organizer",
+    accountType: "event_organizer",
+    label: "Event Organizer",
+    description: "Coordinate vendors and event requests.",
+    href: "/customer-signup?role=event_coordinator",
+    icon: CalendarDays,
   },
   {
     id: "food_truck",
@@ -161,14 +178,6 @@ const signupFlowOptions: SignupFlowOption[] = [
     description: "Offer parking or event space to trucks.",
     href: "/customer-signup?role=host",
     icon: MapPinned,
-  },
-  {
-    id: "event_organizer",
-    accountType: "event_organizer",
-    label: "Event Organizer",
-    description: "Coordinate vendors and event requests.",
-    href: "/customer-signup?role=event_coordinator",
-    icon: CalendarDays,
   },
   {
     id: "supplier",
@@ -932,18 +941,28 @@ export default function CustomerSignup({
         className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
+      {/*
+       * Account-type picker dialog.
+       *
+       * Density goals:
+       *  - All 9 account types must fit one mobile screen WITHOUT scrolling.
+       *  - Two-up grid kicks in at 380px so phones still get a tight grid.
+       *  - Per-tile padding/icon/text reduced; min-height removed.
+       *  - Dialog itself runs near full-height with internal flex so the grid
+       *    expands to fill, not the tiles.
+       */}
       <Dialog open={accountChooserOpen} onOpenChange={setAccountChooserOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 sm:max-w-md">
-          <DialogHeader className="space-y-1 text-left">
-            <DialogTitle className="text-xl font-black text-[color:var(--text-primary)]">
+        <DialogContent className="flex max-h-[calc(100vh-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-3 overflow-hidden rounded-2xl border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:max-w-md sm:p-4">
+          <DialogHeader className="space-y-0.5 text-left">
+            <DialogTitle className="text-base font-black text-[color:var(--text-primary)] sm:text-lg">
               Choose account type
             </DialogTitle>
-            <DialogDescription className="text-sm text-[color:var(--text-secondary)]">
+            <DialogDescription className="text-xs text-[color:var(--text-secondary)] sm:text-sm">
               Pick the path that matches what you want to do first.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid flex-1 grid-cols-2 gap-1.5 overflow-y-auto sm:gap-2">
             {signupFlowOptions.map((option) => {
               const Icon = option.icon;
               const selected = selectedSignupFlowOption.id === option.id;
@@ -952,19 +971,19 @@ export default function CustomerSignup({
                   key={option.id}
                   type="button"
                   onClick={() => handleChooseSignupFlow(option)}
-                  className={`min-h-[5.5rem] rounded-2xl border p-3 text-left transition-colors ${
+                  className={`rounded-xl border px-2.5 py-2 text-left transition-colors ${
                     selected
                       ? "border-[color:var(--action-primary)] bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)] shadow-clean"
                       : "border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[color:var(--text-primary)] hover:border-[color:var(--action-primary)]/60 hover:bg-[var(--bg-surface-muted)]"
                   }`}
                   data-testid={`button-signup-flow-${option.id}`}
                 >
-                  <span className="flex items-center gap-2 text-base font-black leading-tight">
-                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  <span className="flex items-center gap-1.5 text-sm font-black leading-tight sm:text-[15px]">
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {option.label}
                   </span>
                   <span
-                    className={`mt-1 block text-xs leading-snug ${
+                    className={`mt-0.5 line-clamp-2 block text-[11px] leading-snug ${
                       selected
                         ? "text-[color:var(--action-primary-text)]/85"
                         : "text-[color:var(--text-secondary)]"
