@@ -345,8 +345,8 @@ export default function HomeScene() {
                 <br />
                 {greetingSecondLine}
               </h1>
-              <p className="mt-3 text-white/90 text-base sm:text-lg">
-                Your local scene.
+              <p className="mt-3 text-white/90 text-base sm:text-lg italic">
+                Follow The Flavor.
               </p>
 
               <div className="mt-6 md:mt-auto md:pt-10">
