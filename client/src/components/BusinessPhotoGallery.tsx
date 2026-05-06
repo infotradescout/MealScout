@@ -67,7 +67,6 @@ export default function BusinessPhotoGallery({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // Fetch gallery photos
@@ -96,16 +95,19 @@ export default function BusinessPhotoGallery({
       // First upload to the media endpoint
       const formData = new FormData();
       formData.append("image", file);
-      formData.append("restaurantId", entityType === "restaurant" ? entityId : "");
+      formData.append("entityType", entityType);
+      formData.append("entityId", entityId);
 
-      const uploadRes = await fetch(`/api/upload/restaurant-cover`, {
+      const uploadRes = await fetch(`/api/upload/business-photo`, {
         method: "POST",
         body: formData,
         credentials: "include",
       });
 
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadData = await uploadRes.json();
+      const uploadData = await uploadRes.json().catch(() => null);
+      if (!uploadRes.ok) {
+        throw new Error(uploadData?.message || "Upload failed");
+      }
 
       // Then add to gallery
       const res = await apiRequest(
@@ -113,10 +115,10 @@ export default function BusinessPhotoGallery({
         `/api/profiles/${entityType}/${entityId}/photos`,
         {
           url: uploadData.url || uploadData.imageUrl,
-          width: null,
-          height: null,
+          width: uploadData.width || null,
+          height: uploadData.height || null,
           mimeType: file.type,
-          fileSize: file.size,
+          fileSize: uploadData.bytes || file.size,
         },
       );
       return res.json();
@@ -127,10 +129,10 @@ export default function BusinessPhotoGallery({
       });
       toast({ title: "Photo uploaded", description: "Your photo has been added to the gallery" });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Upload failed",
-        description: "Could not upload photo. Please try again.",
+        description: error?.message || "Could not upload photo. Please try again.",
         variant: "destructive",
       });
     },
@@ -268,7 +270,7 @@ export default function BusinessPhotoGallery({
                 variant="outline"
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || totalPhotos >= maxPhotos}
+                disabled={uploadMutation.isPending || totalPhotos >= maxPhotos}
                 className="gap-1.5"
               >
                 {uploadMutation.isPending ? (

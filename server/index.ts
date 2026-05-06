@@ -46,6 +46,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
 import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
+import { shouldServePrerender } from "./seo/botDetection";
 import { registerAiFactRoutes } from "./routes/seoRoutes";
 
 validateEnv();
@@ -208,6 +209,14 @@ async function ensureLaunchSchemaCompatibility() {
       ALTER TABLE IF EXISTS users
       ADD COLUMN IF NOT EXISTS false_flag_count integer NOT NULL DEFAULT 0
     `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS verification_requests
+      ADD COLUMN IF NOT EXISTS license_number varchar
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS restaurant_user_recommendations
+      ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+    `);
   } catch (error) {
     console.warn(
       "[db] Launch schema compatibility check failed:",
@@ -336,6 +345,83 @@ app.use((req: any, _res, next) => {
   }
   req.cookies = cookies;
   next();
+});
+
+const REFERRAL_COOKIE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
+
+const parseReferralPath = (pathValue: string) => {
+  const match = /^\/ref\/([^/?#]+)(?:\/(.*))?$/i.exec(pathValue);
+  if (!match?.[1]) return null;
+
+  const tag = (() => {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  })().trim();
+  if (!tag) return null;
+
+  const rawTarget = String(match[2] || "").replace(/^\/+/, "");
+  const targetPath = rawTarget ? `/${rawTarget}` : "/";
+  const safeTargetPath = /^\/(?:api|assets|static|@)/i.test(targetPath)
+    ? "/"
+    : targetPath;
+
+  return { tag, targetPath: safeTargetPath };
+};
+
+// Shared /ref/<tag>/<path> links need to work for humans and for social crawlers.
+// Humans get credited and redirected; crawlers get the target page HTML so OG tags
+// can be read without executing the SPA.
+app.use(async (req: any, res, next) => {
+  if (!["GET", "HEAD"].includes(req.method)) return next();
+
+  const parsed = parseReferralPath(String(req.path || ""));
+  if (!parsed) return next();
+
+  const queryIndex = String(req.originalUrl || "").indexOf("?");
+  const queryString =
+    queryIndex >= 0 ? String(req.originalUrl || "").slice(queryIndex) : "";
+  const targetUrl = `${parsed.targetPath}${queryString}`;
+
+  try {
+    const { resolveAffiliateUserId } = await import("./affiliateTagService");
+    const affiliateUserId = await resolveAffiliateUserId(parsed.tag);
+
+    res.cookie("referralTag", parsed.tag, {
+      maxAge: REFERRAL_COOKIE_MAX_AGE_MS,
+      httpOnly: false,
+      sameSite: "lax",
+    });
+
+    if (affiliateUserId) {
+      const { recordReferralClick } = await import("./referralService");
+      const result = await recordReferralClick(
+        affiliateUserId,
+        parsed.targetPath,
+        req.get("user-agent") || undefined,
+        req.ip || undefined,
+      );
+
+      if (result?.referralId) {
+        res.cookie("referralRecordId", result.referralId, {
+          maxAge: REFERRAL_COOKIE_MAX_AGE_MS,
+          httpOnly: true,
+          sameSite: "lax",
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[referral] Failed to process clean ref URL:", error);
+  }
+
+  if (shouldServePrerender(req)) {
+    req.url = targetUrl;
+    return next();
+  }
+
+  return res.redirect(302, targetUrl);
 });
 
 // ---- CORS (required for www.mealscout.us -> mealscout.onrender.com) ----
@@ -1169,6 +1255,12 @@ app.use((req, res, next) => {
         story.description ||
         `Watch ${title} - a local food recommendation on MealScout`;
       const canonical = `${canonicalBaseUrl}/video/${storyId}`;
+      const image = story.thumbnailUrl
+        ? String(story.thumbnailUrl).startsWith("http")
+          ? String(story.thumbnailUrl)
+          : `${canonicalBaseUrl}${String(story.thumbnailUrl).startsWith("/") ? "" : "/"}${story.thumbnailUrl}`
+        : `${canonicalBaseUrl}/og-default.jpg`;
+      const isDefaultSocialImage = /\/og-default\.jpg(?:$|\?)/i.test(image);
 
       const schema = {
         "@context": "https://schema.org",
@@ -1176,6 +1268,7 @@ app.use((req, res, next) => {
         name: title,
         description,
         contentUrl: story.videoUrl || undefined,
+        thumbnailUrl: image,
         uploadDate: story.createdAt
           ? new Date(story.createdAt).toISOString()
           : undefined,
@@ -1203,6 +1296,24 @@ app.use((req, res, next) => {
       } - Video | MealScout</title>
             <meta name="description" content="${escapeHtml(description)}">
             <link rel="canonical" href="${canonical}">
+            <meta property="og:title" content="${escapeHtml(title)}">
+            <meta property="og:description" content="${escapeHtml(description)}">
+            <meta property="og:type" content="video.other">
+            <meta property="og:url" content="${canonical}">
+            <meta property="og:image" content="${escapeHtml(image)}">
+            <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+            ${
+              isDefaultSocialImage
+                ? '<meta property="og:image:type" content="image/jpeg">\n            <meta property="og:image:width" content="1200">\n            <meta property="og:image:height" content="630">'
+                : ""
+            }
+            <meta property="og:image:alt" content="${escapeHtml(title)}">
+            <meta property="og:site_name" content="MealScout">
+            <meta name="twitter:card" content="summary_large_image">
+            <meta name="twitter:title" content="${escapeHtml(title)}">
+            <meta name="twitter:description" content="${escapeHtml(description)}">
+            <meta name="twitter:image" content="${escapeHtml(image)}">
+            <meta name="twitter:image:alt" content="${escapeHtml(title)}">
             <script type="application/ld+json">${JSON.stringify(
               schema
             )}</script>

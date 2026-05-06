@@ -1627,6 +1627,7 @@ export class EmailService {
           "Welcome to MealScout - Start Discovering Amazing Food Deals! 🍽️";
         break;
       case "restaurant_owner":
+      case "food_truck":
       case "caterer":
       case "private_chef":
         template = EmailTemplates.getRestaurantOwnerWelcomeTemplate(

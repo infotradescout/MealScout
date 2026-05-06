@@ -3983,8 +3983,19 @@ export class DatabaseStorage implements IStorage {
       const [newRequest] = await db
         .insert(verificationRequests)
         .values(fallbackVerificationRequest)
-        .returning();
-      return newRequest;
+        .returning({
+          id: verificationRequests.id,
+          restaurantId: verificationRequests.restaurantId,
+          status: verificationRequests.status,
+          documents: verificationRequests.documents,
+          submittedAt: verificationRequests.submittedAt,
+          reviewedAt: verificationRequests.reviewedAt,
+          reviewerId: verificationRequests.reviewerId,
+          rejectionReason: verificationRequests.rejectionReason,
+          createdAt: verificationRequests.createdAt,
+          updatedAt: verificationRequests.updatedAt,
+        });
+      return { ...newRequest, licenseNumber: null };
     }
   }
 

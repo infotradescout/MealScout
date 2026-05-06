@@ -8,6 +8,7 @@ import { isPublicBusinessVisible } from "../utils/publicBusinessVisibility";
 import {
   ensureGoogleRestaurantProfile,
   getGooglePhotoUrl,
+  sanitizeGoogleRestaurantMedia,
   searchPlacesFreeText,
 } from "../services/googleProfileService";
 import {
@@ -738,6 +739,7 @@ export function registerPublicSearchRoutes(app: Express) {
           name: restaurants.name,
           cuisineType: restaurants.cuisineType,
           address: restaurants.address,
+          claimedFromImportId: restaurants.claimedFromImportId,
           isActive: restaurants.isActive,
           isFoodTruck: restaurants.isFoodTruck,
           isVerified: restaurants.isVerified,
@@ -763,6 +765,7 @@ export function registerPublicSearchRoutes(app: Express) {
         .leftJoin(users, eq(restaurants.ownerId, users.id));
       const restaurantsBase = restaurantMatches
         .map((restaurant: any) => {
+          restaurant = sanitizeGoogleRestaurantMedia(restaurant) as any;
           if (!restaurant?.isActive) return false;
           if (!isPublicBusinessVisible(restaurant)) return false;
           const name = String(restaurant.name || "").toLowerCase();

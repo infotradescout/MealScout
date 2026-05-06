@@ -182,6 +182,7 @@ const publicRoutePrefixes = [
   "/truck-onboarding",
   "/claim-truck",
   "/share-hub",
+  "/ref/",
   "/jobs",
   "/deal-creation",
   "/deal/",
@@ -410,7 +411,7 @@ function Router() {
       <Switch>
         {shouldUseGuestRoutes ? (
           <>
-            <Route path="/ref/:tag" component={AffiliateRedirect} />
+            <Route path="/ref/:tag/*?" component={AffiliateRedirect} />
             <Route path="/" component={GuestHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">
@@ -632,7 +633,7 @@ function Router() {
           </>
         ) : (
           <>
-            <Route path="/ref/:tag" component={AffiliateRedirect} />
+            <Route path="/ref/:tag/*?" component={AffiliateRedirect} />
             <Route path="/" component={AuthenticatedHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">

@@ -3,24 +3,32 @@ import { useRoute, useLocation } from "wouter";
 
 export default function AffiliateRedirect() {
   const [, setLocation] = useLocation();
-  const [match, params] = useRoute("/ref/:tag");
+  const [match, params] = useRoute("/ref/:tag/*?");
 
   useEffect(() => {
     if (match && params?.tag) {
       const tag = encodeURIComponent(params.tag);
+      const targetPath = String(params["*"] || "").trim();
+      const redirectTarget = targetPath
+        ? `/${targetPath.replace(/^\/+/, "")}`
+        : "";
+      const sourceQuery = redirectTarget
+        ? `?source=${encodeURIComponent(redirectTarget)}`
+        : "";
       
       // Call backend to record the referral click and set cookies
-      fetch(`/api/referral/ref/${tag}`, {
+      fetch(`/api/affiliate/ref/${tag}${sourceQuery}`, {
         method: "GET",
         credentials: "include", // Include cookies
       })
         .then(async (response) => {
           const data = await response.json().catch(() => ({}));
-          const redirectPath =
+          const backendRedirectPath =
             typeof data?.redirectPath === "string" &&
             data.redirectPath.startsWith("/")
               ? data.redirectPath
-              : "/";
+              : "";
+          const redirectPath = redirectTarget || backendRedirectPath || "/";
           setLocation(redirectPath);
         })
         .catch((error) => {

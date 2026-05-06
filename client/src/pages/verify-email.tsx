@@ -153,6 +153,17 @@ export default function VerifyEmailPage() {
           </div>
 
           <div className="mt-6 space-y-3">
+            {!email ? (
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email address"
+                className="w-full rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-3 text-sm text-[color:var(--text-primary)] outline-none focus:border-[color:var(--action-primary)]"
+                autoComplete="email"
+                data-testid="input-verify-email-resend"
+              />
+            ) : null}
             <button
               onClick={resendVerification}
               disabled={sending}

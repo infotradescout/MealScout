@@ -18,6 +18,25 @@ export const toExternalImageUrl = (value: unknown): string => {
   return `https://${raw}`;
 };
 
+export const isGoogleManagedImageUrl = (value: unknown): boolean => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+  return (
+    raw.includes("places.googleapis.com/") ||
+    raw.includes("maps.googleapis.com/maps/api/place") ||
+    raw.includes("/api/google/photo")
+  );
+};
+
+export const isMobileFoodBusiness = (value: {
+  businessType?: unknown;
+  claimedFromImportId?: unknown;
+  isFoodTruck?: unknown;
+} | null | undefined): boolean =>
+  Boolean(value?.isFoodTruck) ||
+  String(value?.businessType || "").toLowerCase() === "food_truck" ||
+  Boolean(String(value?.claimedFromImportId || "").trim());
+
 export const buildGooglePlacesPhotoUrl = (
   photoName: string,
   apiKey = GOOGLE_MAPS_WEB_API_KEY,
@@ -77,24 +96,35 @@ export function resolveBusinessImageUrl(options: {
   googlePhotos?: unknown;
   locationQuery?: string | null;
   apiKey?: string | null;
+  allowGooglePhotos?: boolean;
+  businessType?: unknown;
+  claimedFromImportId?: unknown;
+  isFoodTruck?: unknown;
 }) {
   const uploaded = options.uploaded || [];
+  const allowGoogleDerivedImages =
+    options.allowGooglePhotos !== false && !isMobileFoodBusiness(options);
   for (const candidate of uploaded) {
     const url = toExternalImageUrl(candidate);
+    if (!allowGoogleDerivedImages && isGoogleManagedImageUrl(url)) continue;
     if (url) return url;
   }
 
-  const googlePhoto = getGooglePhotoSrc(
-    options.googlePhotos,
-    options.apiKey || GOOGLE_MAPS_WEB_API_KEY,
-  );
-  if (googlePhoto) return googlePhoto;
+  if (allowGoogleDerivedImages) {
+    const googlePhoto = getGooglePhotoSrc(
+      options.googlePhotos,
+      options.apiKey || GOOGLE_MAPS_WEB_API_KEY,
+    );
+    if (googlePhoto) return googlePhoto;
 
-  return (
-    buildGoogleStreetViewImageUrl(
-      options.locationQuery,
-      options.apiKey || "",
-    ) ||
-    buildGoogleStaticMapImageUrl(options.locationQuery, options.apiKey || "")
-  );
+    return (
+      buildGoogleStreetViewImageUrl(
+        options.locationQuery,
+        options.apiKey || "",
+      ) ||
+      buildGoogleStaticMapImageUrl(options.locationQuery, options.apiKey || "")
+    );
+  }
+
+  return "";
 }

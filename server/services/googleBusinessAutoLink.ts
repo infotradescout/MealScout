@@ -2,6 +2,8 @@ type GoogleAutoLinkBusiness = {
   id?: string | null;
   name?: string | null;
   businessName?: string | null;
+  businessType?: string | null;
+  claimedFromImportId?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -12,6 +14,7 @@ type GoogleAutoLinkBusiness = {
   contactPhone?: string | null;
   websiteUrl?: string | null;
   businessWebsite?: string | null;
+  isFoodTruck?: boolean | null;
   profileSource?: string | null;
 };
 
@@ -61,9 +64,15 @@ const hasGoogleRichData = (row: GoogleAutoLinkBusiness) =>
         row.businessWebsite),
   );
 
+const isMobileFoodRestaurant = (row: GoogleAutoLinkBusiness) =>
+  Boolean(row.isFoodTruck) ||
+  String(row.businessType || "").toLowerCase() === "food_truck" ||
+  Boolean(String(row.claimedFromImportId || "").trim());
+
 export const shouldAttemptGoogleRestaurantAutoLink = (
   row: GoogleAutoLinkBusiness,
 ) => {
+  if (isMobileFoodRestaurant(row)) return false;
   if (!row?.id || isPlaceholderText(row.name)) return false;
   if (!hasUsefulLocation(row)) return false;
   return !hasGoogleRichData(row);

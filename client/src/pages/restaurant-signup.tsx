@@ -338,6 +338,23 @@ export default function RestaurantSignup() {
   });
 
   const selectedBusinessType = form.watch("businessType");
+  const businessOAuthUserType =
+    selectedBusinessType === "food_truck" ||
+    selectedBusinessType === "caterer" ||
+    selectedBusinessType === "private_chef"
+      ? selectedBusinessType
+      : "restaurant_owner";
+  const buildRestaurantGoogleAuthUrl = () => {
+    const returnPath =
+      typeof window === "undefined"
+        ? "/restaurant-signup"
+        : `${window.location.pathname}${window.location.search}`;
+    const params = new URLSearchParams({
+      userType: businessOAuthUserType,
+      next: returnPath,
+    });
+    return authUrl(`/api/auth/google/restaurant?${params.toString()}`);
+  };
   const isPrivateChef = selectedBusinessType === "private_chef";
   const isCaterer = selectedBusinessType === "caterer";
   const mainHero =
@@ -490,10 +507,14 @@ export default function RestaurantSignup() {
   const signupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
+      const nextPath = generatedClaimPath || `/restaurant-signup?businessType=${encodeURIComponent(selectedBusinessType)}`;
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        signupData,
+        {
+          ...signupData,
+          next: nextPath,
+        },
       );
       return await res.json();
     },
@@ -739,7 +760,7 @@ export default function RestaurantSignup() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = authUrl("/api/auth/google/restaurant");
+          window.location.href = buildRestaurantGoogleAuthUrl();
         }, 500);
         return;
       }
@@ -993,9 +1014,7 @@ export default function RestaurantSignup() {
                   variant="outline"
                   onClick={() => {
                     rememberGeneratedClaimPath();
-                    window.location.href = authUrl(
-                      "/api/auth/google/restaurant",
-                    );
+                    window.location.href = buildRestaurantGoogleAuthUrl();
                   }}
                   className="mb-4 w-full justify-center gap-2 border-[color:var(--border-subtle)]"
                 >

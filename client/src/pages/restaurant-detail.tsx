@@ -321,6 +321,7 @@ export default function RestaurantDetailPage() {
     Boolean((restaurant as any)?.isVerified) &&
     Boolean((restaurant as any)?.isActive);
   const isGeneratedProfile =
+    Boolean((restaurant as any)?.generatedProfileClaimAvailable) ||
     String((restaurant as any)?.profileSource || "") === "google" ||
     Boolean((restaurant as any)?.googlePlaceId);
   const canClaimGeneratedProfile =
@@ -760,19 +761,25 @@ export default function RestaurantDetailPage() {
     ],
     googlePhotos: (restaurant as any)?.googlePhotos,
     locationQuery: locationImageQuery,
+    businessType: (restaurant as any)?.businessType,
+    claimedFromImportId: (restaurant as any)?.claimedFromImportId,
+    isFoodTruck,
   });
   const hasHeroImage = Boolean(
     heroImageSrc && failedHeroImageSrc !== heroImageSrc,
   );
-  const mapsDestination = (restaurant as any)?.googlePlaceId
-    ? `place_id:${(restaurant as any).googlePlaceId}`
+  const safeGooglePlaceId = isFoodTruck
+    ? ""
+    : String((restaurant as any)?.googlePlaceId || "").trim();
+  const mapsDestination = safeGooglePlaceId
+    ? `place_id:${safeGooglePlaceId}`
     : hasCoords
       ? `${lat},${lng}`
       : [restaurantName, locationDisplay || address].filter(Boolean).join(", ");
   const directionsUrl = mapsDestination
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
         mapsDestination,
-      )}${(restaurant as any)?.googlePlaceId ? `&destination_place_id=${encodeURIComponent((restaurant as any).googlePlaceId)}` : ""}`
+      )}${safeGooglePlaceId ? `&destination_place_id=${encodeURIComponent(safeGooglePlaceId)}` : ""}`
     : "";
   const primaryDeal = restaurantDeals[0] as any | undefined;
   const popularMenuItems = onsiteMenuCategories

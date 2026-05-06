@@ -150,6 +150,18 @@ export function SEOHead({
     };
 
     const resolvedOgImage = ogImage ? resolveOgImage(ogImage) : "";
+    const imageType = (() => {
+      const cleanImage = resolvedOgImage.split("?")[0].toLowerCase();
+      if (cleanImage.endsWith(".png")) return "image/png";
+      if (cleanImage.endsWith(".webp")) return "image/webp";
+      if (cleanImage.endsWith(".jpg") || cleanImage.endsWith(".jpeg")) {
+        return "image/jpeg";
+      }
+      return "";
+    })();
+    const isDefaultOgImage = /\/og-default\.jpg(?:$|\?)/i.test(
+      resolvedOgImage,
+    );
 
     // Basic meta tags
     setMetaTag("description", description);
@@ -173,6 +185,19 @@ export function SEOHead({
     setMetaTag("og:locale", "en_US", true);
     if (resolvedOgImage) {
       setMetaTag("og:image", resolvedOgImage, true);
+      setMetaTag("og:image:secure_url", resolvedOgImage, true);
+      setMetaTag(
+        "og:image:alt",
+        "MealScout food truck discovery preview",
+        true,
+      );
+      if (imageType) {
+        setMetaTag("og:image:type", imageType, true);
+      }
+      if (isDefaultOgImage) {
+        setMetaTag("og:image:width", "1200", true);
+        setMetaTag("og:image:height", "630", true);
+      }
     }
     if (resolvedCanonical) {
       setMetaTag("og:url", resolvedCanonical, true);
@@ -186,6 +211,10 @@ export function SEOHead({
     setMetaTag("twitter:site", "@mealscout");
     if (resolvedOgImage) {
       setMetaTag("twitter:image", resolvedOgImage);
+      setMetaTag(
+        "twitter:image:alt",
+        "MealScout food truck discovery preview",
+      );
     }
 
     // Structured data (JSON-LD)

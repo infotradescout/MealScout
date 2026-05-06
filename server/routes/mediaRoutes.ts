@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { and, desc, eq, gte, isNull, or, sql } from "drizzle-orm";
+import multer from "multer";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -9,6 +10,7 @@ import {
   isCloudinaryConfigured,
   upload,
   uploadToCloudinary,
+  uploadRawToCloudinary,
   uploadVideo,
   uploadVideoToCloudinary,
 } from "../imageUpload";
@@ -29,6 +31,28 @@ const mediaOwnerTypeSet = new Set<string>(mediaOwnerTypes);
 const mediaStatusSet = new Set<string>(mediaStatuses);
 const mediaVisibilitySet = new Set<string>(mediaVisibilities);
 const PUBLIC_USER_RECOMMENDATION_VIDEO_LIMIT = 8;
+const verificationDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set([
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
+      "image/heic-sequence",
+      "image/heif-sequence",
+      "application/pdf",
+    ]);
+    if (allowed.has(String(file.mimetype || "").toLowerCase())) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only JPG, PNG, WEBP, HEIC, HEIF, or PDF files are allowed"));
+  },
+});
 
 export type PublicUserVideoRecommendationRow = {
   id: string;
@@ -142,11 +166,18 @@ export const toPublicUserVideoRecommendation = (
 export function registerMediaRoutes(app: Express) {
   const isAdminUser = (user: any) =>
     user?.userType === "admin" || user?.userType === "super_admin";
+  const isStaffOrAdminUser = (user: any) =>
+    user?.userType === "staff" || isAdminUser(user);
 
   const canManageRestaurant = (user: any, restaurant: any) =>
     Boolean(restaurant) &&
-    (isAdminUser(user) ||
+    (isStaffOrAdminUser(user) ||
       String(restaurant.ownerId) === String(user?.id || ""));
+
+  const canManageHost = (user: any, host: any) =>
+    Boolean(host) &&
+    (isStaffOrAdminUser(user) ||
+      String(host.userId) === String(user?.id || ""));
 
   const normalizeOwnerType = (value: unknown): MediaOwnerType | null => {
     const ownerType = String(value || "").trim();
@@ -220,6 +251,137 @@ export function registerMediaRoutes(app: Express) {
         ),
       );
   };
+
+  app.post(
+    "/api/upload/business-photo",
+    isAuthenticated,
+    upload.single("image"),
+    async (req: any, res) => {
+      try {
+        if (!isCloudinaryConfigured()) {
+          return res
+            .status(503)
+            .json({ message: "Image upload service not configured" });
+        }
+
+        if (!req.file) {
+          return res.status(400).json({ message: "No image file provided" });
+        }
+
+        const entityType = String(req.body.entityType || "").trim();
+        const entityId = String(req.body.entityId || "").trim();
+        if (!entityId || !["restaurant", "host"].includes(entityType)) {
+          return res
+            .status(400)
+            .json({ message: "Business type and ID are required" });
+        }
+
+        if (entityType === "restaurant") {
+          const restaurant = await storage.getRestaurant(entityId);
+          if (!canManageRestaurant(req.user, restaurant)) {
+            return res.status(403).json({ message: "Not authorized" });
+          }
+        } else {
+          const host = await storage.getHost(entityId);
+          if (!canManageHost(req.user, host)) {
+            return res.status(403).json({ message: "Not authorized" });
+          }
+        }
+
+        const result = await uploadToCloudinary(
+          req.file.buffer,
+          "business-photos",
+          `${entityType}-${entityId}-${Date.now()}`,
+        );
+
+        const [imageUpload] = await db
+          .insert(imageUploads)
+          .values({
+            uploadedByUserId: req.user.id,
+            imageType: "business_photo",
+            entityId,
+            entityType,
+            cloudinaryPublicId: result.publicId,
+            cloudinaryUrl: result.secureUrl,
+            thumbnailUrl: result.thumbnailUrl,
+            width: result.width,
+            height: result.height,
+            fileSize: result.bytes,
+            mimeType: req.file.mimetype,
+          })
+          .returning();
+
+        res.status(201).json({
+          imageUpload,
+          url: result.secureUrl,
+          thumbnailUrl: result.thumbnailUrl,
+          width: result.width,
+          height: result.height,
+          bytes: result.bytes,
+          mimeType: req.file.mimetype,
+        });
+      } catch (error: any) {
+        console.error("Error uploading business photo:", error);
+        if (error instanceof (multer as any).MulterError) {
+          return res
+            .status(413)
+            .json({ message: "Image is too large. Max 12MB." });
+        }
+        res
+          .status(500)
+          .json({ message: error?.message || "Failed to upload image" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/upload/verification-document",
+    isAuthenticated,
+    (req: any, res, next) => {
+      verificationDocumentUpload.single("document")(req, res, (err: any) => {
+        if (!err) return next();
+        if (err instanceof (multer as any).MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(413)
+            .json({ message: "Document is too large. Max 12MB." });
+        }
+        return res
+          .status(400)
+          .json({ message: err?.message || "Invalid document upload" });
+      });
+    },
+    async (req: any, res) => {
+      try {
+        if (!isCloudinaryConfigured()) {
+          return res
+            .status(503)
+            .json({ message: "Document upload service not configured" });
+        }
+        if (!req.file?.buffer) {
+          return res.status(400).json({ message: "No document uploaded" });
+        }
+
+        const result = await uploadRawToCloudinary(
+          req.file.buffer,
+          "verification-documents",
+          `verification-${req.user?.id || "user"}-${Date.now()}`,
+        );
+
+        res.status(201).json({
+          url: result.secureUrl,
+          bytes: result.bytes,
+          format: result.format,
+          name: req.file.originalname,
+          mimeType: req.file.mimetype,
+        });
+      } catch (error: any) {
+        console.error("Error uploading verification document:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to upload verification document",
+        });
+      }
+    },
+  );
 
   app.post(
     "/api/upload/restaurant-logo",

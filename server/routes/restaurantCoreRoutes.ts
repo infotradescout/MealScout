@@ -6,7 +6,11 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
-import { validateDocuments, checkRateLimit } from "../documentValidation";
+import {
+  validateDocuments,
+  checkRateLimit,
+  recordRateLimitAttempt,
+} from "../documentValidation";
 import { vacEvaluateRestaurantSignup } from "../vacLite";
 import { ensurePremiumTrialForUser } from "../services/premiumTrial";
 import {
@@ -29,7 +33,9 @@ import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 import {
   ensureGoogleRestaurantProfile,
   getGooglePhotoUrl,
+  sanitizeGoogleRestaurantMedia,
   searchPlacesFreeText,
+  shouldExposeGoogleRestaurantMedia,
 } from "../services/googleProfileService";
 import {
   insertRestaurantSchema,
@@ -1740,8 +1746,11 @@ export function registerRestaurantCoreRoutes(
       }
 
       const isGeneratedProfile =
-        profileSource === "google" ||
-        Boolean((restaurant as any).googlePlaceId);
+        shouldExposeGoogleRestaurantMedia(restaurant) &&
+        (profileSource === "google" ||
+          Boolean((restaurant as any).googlePlaceId));
+      const generatedProfileClaimAvailable =
+        profileSource === "google" || Boolean((restaurant as any).googlePlaceId);
 
       // Opportunistically enrich generated profiles so detail pages get a real banner photo.
       if (isGeneratedProfile && !restaurant.coverImageUrl) {
@@ -1815,9 +1824,11 @@ export function registerRestaurantCoreRoutes(
         ? await storage.getUser(String(restaurant.ownerId))
         : null;
       const customDomainHost = getVerifiedCustomDomainHost(owner?.accountSettings);
+      const publicRestaurant = sanitizeGoogleRestaurantMedia(restaurant) as any;
 
       res.json({
-        ...restaurant,
+        ...publicRestaurant,
+        generatedProfileClaimAvailable,
         customDomainHost,
       });
     } catch (error) {
@@ -2571,7 +2582,7 @@ export function registerRestaurantCoreRoutes(
             rur.id,
             rur.user_id,
             rur.created_at,
-            rur.updated_at,
+            null::timestamp as updated_at,
             rur.sentiment_score_100,
             rur.menu_item_name,
             u.first_name,
@@ -2587,7 +2598,7 @@ export function registerRestaurantCoreRoutes(
           left join recommendation_shares rs on rs.recommendation_id = rur.id
           left join recommendation_comments rc on rc.recommendation_id = rur.id and rc.is_approved = true
           where rur.restaurant_id = ${restaurantId}
-          group by rur.id, rur.user_id, rur.created_at, rur.updated_at, rur.sentiment_score_100, rur.menu_item_name, u.first_name, u.last_name
+          group by rur.id, rur.user_id, rur.created_at, rur.sentiment_score_100, rur.menu_item_name, u.first_name, u.last_name
           order by rur.created_at desc
           limit ${limit}
         `);
@@ -3263,7 +3274,7 @@ export function registerRestaurantCoreRoutes(
           }
         }
 
-        const rateLimit = checkRateLimit(restaurantId);
+        const rateLimit = checkRateLimit(restaurantId, { record: false });
         if (!rateLimit.allowed) {
           return res.status(429).json({
             message:
@@ -3298,6 +3309,7 @@ export function registerRestaurantCoreRoutes(
 
         const verificationRequest =
           await storage.createVerificationRequest(verificationData);
+        recordRateLimitAttempt(restaurantId);
         await db.insert(telemetryEvents).values({
           eventName: "verification_request_submitted",
           userId,

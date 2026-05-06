@@ -1,5 +1,7 @@
 import {
   getGooglePhotoSrc,
+  isGoogleManagedImageUrl,
+  isMobileFoodBusiness,
   toExternalImageUrl,
 } from "@/lib/business-images";
 import type { SyntheticEvent } from "react";
@@ -11,6 +13,7 @@ type ListingImageInput = {
   title?: unknown;
   cuisineType?: unknown;
   businessType?: unknown;
+  claimedFromImportId?: unknown;
   description?: unknown;
   imageUrl?: unknown;
   mediaUrl?: unknown;
@@ -22,6 +25,7 @@ type ListingImageInput = {
   facebookCoverUrl?: unknown;
   facebookPhotos?: unknown;
   googlePhotos?: unknown;
+  isFoodTruck?: unknown;
   restaurant?: ListingImageInput | null;
 };
 
@@ -173,6 +177,8 @@ export const getCategoryFallbackImageUrl = (input?: ListingImageInput | null) =>
 
 export const resolveListingImageUrl = (input?: ListingImageInput | null) => {
   const restaurant = input?.restaurant || null;
+  const blockGoogleDerivedImages =
+    isMobileFoodBusiness(input) || isMobileFoodBusiness(restaurant);
   const candidates = [
     input?.imageUrl,
     input?.mediaUrl,
@@ -189,6 +195,7 @@ export const resolveListingImageUrl = (input?: ListingImageInput | null) => {
 
   for (const candidate of candidates) {
     const url = toExternalImageUrl(candidate);
+    if (blockGoogleDerivedImages && isGoogleManagedImageUrl(url)) continue;
     if (url) return url;
   }
 
@@ -197,10 +204,12 @@ export const resolveListingImageUrl = (input?: ListingImageInput | null) => {
     firstJsonPhotoUrl(restaurant?.facebookPhotos);
   if (directPhoto) return directPhoto;
 
-  const googlePhoto =
-    getGooglePhotoSrc(input?.googlePhotos) ||
-    getGooglePhotoSrc(restaurant?.googlePhotos);
-  if (googlePhoto) return googlePhoto;
+  if (!blockGoogleDerivedImages) {
+    const googlePhoto =
+      getGooglePhotoSrc(input?.googlePhotos) ||
+      getGooglePhotoSrc(restaurant?.googlePhotos);
+    if (googlePhoto) return googlePhoto;
+  }
 
   return getCategoryFallbackImageUrl(input);
 };

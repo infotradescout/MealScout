@@ -47,6 +47,8 @@ type PublicProfile = {
   profilePath: string;
   viewerIsOwner?: boolean;
   ownerAffiliateTag?: string | null;
+  businessType?: string | null;
+  isFoodTruck?: boolean | null;
   profileSettings?: {
     templatePreset?: "classic" | "story" | "bold" | "minimal";
     theme?: "sunset" | "slate" | "forest" | "amber";
@@ -458,6 +460,8 @@ export default function PublicProfilePage() {
     googlePhotos: data.googlePhotos,
     locationQuery: [data.title, locationLine].filter(Boolean).join(", "),
     apiKey: effectiveGoogleMapsApiKey,
+    businessType: data.businessType,
+    isFoodTruck: data.isFoodTruck,
   });
   const visibleProfileImageUrl =
     profileImageUrl && failedProfileImageSrc !== profileImageUrl

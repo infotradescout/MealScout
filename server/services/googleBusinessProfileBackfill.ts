@@ -46,10 +46,13 @@ export async function runGoogleBusinessAutoLinkBackfill(options: {
           .select({
             id: restaurants.id,
             name: restaurants.name,
+            businessType: restaurants.businessType,
+            claimedFromImportId: restaurants.claimedFromImportId,
             address: restaurants.address,
             city: restaurants.city,
             state: restaurants.state,
             phone: restaurants.phone,
+            isFoodTruck: restaurants.isFoodTruck,
             description: restaurants.description,
             websiteUrl: restaurants.websiteUrl,
             googlePlaceId: restaurants.googlePlaceId,

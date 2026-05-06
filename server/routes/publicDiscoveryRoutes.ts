@@ -23,6 +23,8 @@ import {
   getGooglePhotoUrl,
   populateHostProfile,
   populateRestaurantProfile,
+  sanitizeGoogleRestaurantMedia,
+  shouldExposeGoogleRestaurantMedia,
 } from "../services/googleProfileService";
 
 const toSlug = (value: string | null | undefined) =>
@@ -156,15 +158,17 @@ const hasRichHostProfile = (row: any) =>
       parseArray(row?.googlePhotos).length > 0),
   );
 
-const hasRichRestaurantProfile = (row: any) =>
-  Boolean(
-    row?.googlePlaceId &&
-    (row?.description ||
-      row?.websiteUrl ||
-      row?.operatingHours ||
-      row?.googleFormattedPhone ||
-      parseArray(row?.googlePhotos).length > 0),
+const hasRichRestaurantProfile = (row: any) => {
+  const publicRow = sanitizeGoogleRestaurantMedia(row);
+  return Boolean(
+    publicRow?.googlePlaceId &&
+      (publicRow?.description ||
+        publicRow?.websiteUrl ||
+        publicRow?.operatingHours ||
+        publicRow?.googleFormattedPhone ||
+        parseArray(publicRow?.googlePhotos).length > 0),
   );
+};
 
 const normalizeLoose = (value: unknown) =>
   String(value || "")
@@ -612,7 +616,10 @@ export function registerPublicDiscoveryRoutes(app: Express) {
           return sendPrivateProfileResponse(res);
         }
 
-        if (!hasRichRestaurantProfile(row)) {
+        if (
+          !hasRichRestaurantProfile(row) &&
+          shouldExposeGoogleRestaurantMedia(row)
+        ) {
           const populated = await populateRestaurantProfile(id);
           if (populated.success) {
             const refreshed = await storage.getRestaurant(id);
@@ -623,14 +630,19 @@ export function registerPublicDiscoveryRoutes(app: Express) {
             );
           }
         }
+        const sanitizedRow = sanitizeGoogleRestaurantMedia(row as any);
+        if (!sanitizedRow) {
+          return res.status(404).json({ message: "Profile not found" });
+        }
+        const publicRow = sanitizedRow as any;
 
-        const ownerUser = await storage.getUser(row.ownerId);
+        const ownerUser = await storage.getUser(publicRow.ownerId);
         if (!isPublicProfileVisibleForVisitors(ownerUser)) {
           return sendPrivateProfileResponse(res);
         }
         const baseSettings = (ownerUser?.publicProfileSettings || {}) as any;
-        const importedGallery = googlePhotoUrls(row.googlePhotos);
-        const googleHighlights = importedHighlights(row.googleCategories);
+        const importedGallery = googlePhotoUrls(publicRow.googlePhotos);
+        const googleHighlights = importedHighlights(publicRow.googleCategories);
         const profileSettings = {
           ...baseSettings,
           galleryUrls: hasGallery(baseSettings)
@@ -642,44 +654,46 @@ export function registerPublicDiscoveryRoutes(app: Express) {
         };
         const showAddress = profileSettings.showAddress !== false;
         const showContact = profileSettings.showContact !== false;
-        const slug = toSlug(row.name) || row.id;
-        const profilePath = `/restaurant/${row.id}/${slug}`;
+        const slug = toSlug(publicRow.name) || publicRow.id;
+        const profilePath = `/restaurant/${publicRow.id}/${slug}`;
         return res.json({
           entity: "restaurant",
-          id: row.id,
-          viewerIsOwner: String((req as any).user?.id || "") === String(row.ownerId),
+          id: publicRow.id,
+          viewerIsOwner: String((req as any).user?.id || "") === String(publicRow.ownerId),
           ownerAffiliateTag: ownerUser?.affiliateTag || null,
-          isVerified: Boolean(row.isVerified),
-          title: row.name,
+          isVerified: Boolean(publicRow.isVerified),
+          title: publicRow.name,
+          businessType: publicRow.businessType || null,
+          isFoodTruck: Boolean(publicRow.isFoodTruck),
           subtitle:
-            row.cuisineType || (row.isFoodTruck ? "Food Truck" : "Restaurant"),
+            publicRow.cuisineType || (publicRow.isFoodTruck ? "Food Truck" : "Restaurant"),
           description:
-            row.description ||
-            `${row.name} on MealScout. Local hours, deals, and direct booking visibility.`,
-          address: showAddress ? row.address || null : null,
-          city: row.city || null,
-          state: row.state || null,
+            publicRow.description ||
+            `${publicRow.name} on MealScout. Local hours, deals, and direct booking visibility.`,
+          address: showAddress ? publicRow.address || null : null,
+          city: publicRow.city || null,
+          state: publicRow.state || null,
           phone: showContact
-            ? row.phone || row.googleFormattedPhone || null
+            ? publicRow.phone || publicRow.googleFormattedPhone || null
             : null,
-          websiteUrl: row.websiteUrl || null,
-          menuUrl: row.menuUrl || null,
-          orderUrl: row.orderUrl || null,
+          websiteUrl: publicRow.websiteUrl || null,
+          menuUrl: publicRow.menuUrl || null,
+          orderUrl: publicRow.orderUrl || null,
           imageUrl:
-            row.coverImageUrl ||
-            row.facebookCoverUrl ||
-            row.logoUrl ||
+            publicRow.coverImageUrl ||
+            publicRow.facebookCoverUrl ||
+            publicRow.logoUrl ||
             importedGallery[0] ||
             null,
-          googlePhotos: row.googlePhotos || null,
-          businessHours: row.operatingHours || null,
+          googlePhotos: publicRow.googlePhotos || null,
+          businessHours: publicRow.operatingHours || null,
           profilePath,
           canonicalUrl: `${baseUrl}${profilePath}`,
           profileSettings,
           social: {
-            instagramUrl: row.instagramUrl || null,
-            facebookPageUrl: row.facebookPageUrl || null,
-            xUrl: row.xUrl || null,
+            instagramUrl: publicRow.instagramUrl || null,
+            facebookPageUrl: publicRow.facebookPageUrl || null,
+            xUrl: publicRow.xUrl || null,
           },
         });
       }

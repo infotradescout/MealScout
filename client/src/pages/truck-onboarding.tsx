@@ -232,6 +232,14 @@ const makeVerifyEmailUrl = () => {
   return `/verify-email?${params.toString()}`;
 };
 
+const makeTruckGoogleAuthUrl = () => {
+  const params = new URLSearchParams({
+    userType: "food_truck",
+    next: getSafeCurrentOnboardingPath(),
+  });
+  return authUrl(`/api/auth/google/restaurant?${params.toString()}`);
+};
+
 const getIncomingClaimQuery = (params: URLSearchParams) =>
   String(params.get("q") || params.get("listingId") || "").trim();
 
@@ -516,6 +524,7 @@ export default function TruckOnboardingPage() {
         businessType: "food_truck",
         accountType: "business",
         sourcePage: "/truck-onboarding",
+        next: getSafeCurrentOnboardingPath(),
         source: funnelContext.source,
         flow: funnelContext.flow,
         intent: funnelContext.intent,
@@ -950,9 +959,7 @@ export default function TruckOnboardingPage() {
             type="button"
             variant="outline"
             className="mb-4 w-full gap-2"
-            onClick={() =>
-              (window.location.href = authUrl("/api/auth/google/restaurant"))
-            }
+            onClick={() => (window.location.href = makeTruckGoogleAuthUrl())}
           >
             <ShieldCheck className="h-4 w-4" />
             Continue with Google

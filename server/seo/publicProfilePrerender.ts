@@ -277,6 +277,7 @@ const menuSnippetForRestaurant = async (restaurantId: string) => {
 const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   const canonicalUrl = absoluteUrl(baseUrl, page.canonicalPath);
   const image = absoluteUrl(baseUrl, page.imageUrl || "/og-default.jpg");
+  const isDefaultSocialImage = /\/og-default\.jpg(?:$|\?)/i.test(image);
   const schema = Array.isArray(page.schema) ? page.schema : [page.schema];
   return `<!DOCTYPE html>
 <html lang="en">
@@ -292,11 +293,15 @@ const buildHtml = (baseUrl: string, page: PrerenderPage) => {
   <meta property="og:type" content="website">
   <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
   <meta property="og:image" content="${escapeHtml(image)}">
+  <meta property="og:image:secure_url" content="${escapeHtml(image)}">
+  ${isDefaultSocialImage ? '<meta property="og:image:type" content="image/jpeg">\n  <meta property="og:image:width" content="1200">\n  <meta property="og:image:height" content="630">' : ""}
+  <meta property="og:image:alt" content="${escapeHtml(page.title)}">
   <meta property="og:site_name" content="MealScout">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeHtml(page.title)}">
   <meta name="twitter:description" content="${escapeHtml(page.description)}">
   <meta name="twitter:image" content="${escapeHtml(image)}">
+  <meta name="twitter:image:alt" content="${escapeHtml(page.title)}">
   ${buildOfficialSocialEntityMetaTags()}
   ${schema
     .map(
@@ -1009,7 +1014,7 @@ export function registerPublicProfilePrerenderRoutes(
     gate((req) => hostPage(canonicalBaseUrl, extractId(req.params.slug))),
   );
   app.get(
-    "/event/:slug",
+    ["/event/:slug", "/events/:slug"],
     gate((req) => eventPage(canonicalBaseUrl, extractId(req.params.slug))),
   );
   app.get(

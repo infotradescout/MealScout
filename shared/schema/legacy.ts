@@ -2519,13 +2519,9 @@ export const insertVerificationRequestSchema = createInsertSchema(
   })
   .extend({
     documents: z
-      .array(z.string().url())
+      .array(z.string().min(1))
       .min(1, "At least one document is required")
-      .max(5, "Maximum 5 documents allowed")
-      .refine(
-        (docs) => docs.every((doc) => doc.startsWith("data:")),
-        "Documents must be valid base64 data URLs",
-      ),
+      .max(5, "Maximum 5 documents allowed"),
   });
 
 export const insertFoodTruckSessionSchema = createInsertSchema(

@@ -16,6 +16,7 @@ import {
   shouldAttemptGoogleRestaurantAutoLink,
 } from "../../services/googleBusinessAutoLink";
 import {
+  isGoogleManagedImageUrl,
   populateHostProfile,
   populateRestaurantProfile,
 } from "../../services/googleProfileService";
@@ -58,14 +59,24 @@ const parseAdminAuditPhotos = (value: unknown): any[] => {
 };
 
 const hasAdminAuditPhoto = (restaurant: any): boolean => {
+  const suppressGoogleImages =
+    Boolean(restaurant?.isFoodTruck) ||
+    String(restaurant?.businessType || "").toLowerCase() === "food_truck" ||
+    Boolean(String(restaurant?.claimedFromImportId || "").trim());
   const direct = [
     restaurant?.logoUrl,
-    restaurant?.coverImageUrl,
+    suppressGoogleImages && isGoogleManagedImageUrl(restaurant?.coverImageUrl)
+      ? null
+      : restaurant?.coverImageUrl,
     restaurant?.facebookCoverUrl,
   ].some((value) => String(value || "").trim().length >= 8);
   if (direct) return true;
 
-  return [restaurant?.googlePhotos, restaurant?.facebookPhotos].some((value) =>
+  const galleries = suppressGoogleImages
+    ? [restaurant?.facebookPhotos]
+    : [restaurant?.googlePhotos, restaurant?.facebookPhotos];
+
+  return galleries.some((value) =>
     parseAdminAuditPhotos(value).some((photo) =>
       String(
         photo?.url ||
@@ -189,6 +200,7 @@ const cleanAffiliateSharePath = (
 const proxiedAdminImageUrl = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
+  if (isGoogleManagedImageUrl(raw)) return "";
   return `/api/admin/recent-signups/image?url=${encodeURIComponent(raw)}`;
 };
 
@@ -1189,6 +1201,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             googlePhotos: restaurants.googlePhotos,
             facebookPhotos: restaurants.facebookPhotos,
             googleBusinessStatus: restaurants.googleBusinessStatus,
+            claimedFromImportId: restaurants.claimedFromImportId,
             profileSource: restaurants.profileSource,
             createdAt: restaurants.createdAt,
             updatedAt: restaurants.updatedAt,
@@ -1669,6 +1682,9 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         if (!rawUrl) {
           return res.status(400).send("Missing image URL");
         }
+        if (isGoogleManagedImageUrl(rawUrl)) {
+          return res.status(404).send("Image unavailable");
+        }
 
         const image = await fetchAdminImageResponse(rawUrl);
         if (!image) {
@@ -1795,6 +1811,7 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             googleBusinessStatus: restaurants.googleBusinessStatus,
             googleCategories: restaurants.googleCategories,
             googleFormattedPhone: restaurants.googleFormattedPhone,
+            claimedFromImportId: restaurants.claimedFromImportId,
             profileSource: restaurants.profileSource,
             profileLastSynced: restaurants.profileLastSynced,
             instagramUrl: restaurants.instagramUrl,
@@ -2285,13 +2302,19 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           );
           const shareUrl = `${baseUrl}${sharePath}`;
           const locationLabel = formatSignupLocation(row);
+          const shouldSuppressGoogleImages =
+            isFoodTruck || Boolean(String(row.claimedFromImportId || "").trim());
+          const coverImageUrl =
+            shouldSuppressGoogleImages && isGoogleManagedImageUrl(row.coverImageUrl)
+              ? null
+              : row.coverImageUrl;
           const imageUrl = absoluteAdminUrl(
             baseUrl,
             firstAdminPhotoUrl(
-              row.coverImageUrl,
+              coverImageUrl,
               row.facebookCoverUrl,
               row.facebookPhotos,
-              row.googlePhotos,
+              shouldSuppressGoogleImages ? null : row.googlePhotos,
               row.logoUrl,
               videoThumbByEntity.get(`restaurant:${row.id}`),
               row.ownerProfileImageUrl,

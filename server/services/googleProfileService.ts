@@ -24,6 +24,68 @@ const getApiKey = () =>
       "",
   ).trim();
 
+type RestaurantGoogleMediaInput = {
+  businessType?: unknown;
+  claimedFromImportId?: unknown;
+  coverImageUrl?: unknown;
+  googleBusinessStatus?: unknown;
+  googleCategories?: unknown;
+  googleFormattedPhone?: unknown;
+  googlePhotos?: unknown;
+  googlePlaceId?: unknown;
+  googlePriceLevel?: unknown;
+  googleRating?: unknown;
+  googleReviewCount?: unknown;
+  isFoodTruck?: unknown;
+  profileSource?: unknown;
+};
+
+export const isMobileFoodRestaurantProfile = (
+  restaurant: RestaurantGoogleMediaInput | null | undefined,
+) =>
+  Boolean(restaurant?.isFoodTruck) ||
+  String(restaurant?.businessType || "").toLowerCase() === "food_truck" ||
+  Boolean(String(restaurant?.claimedFromImportId || "").trim());
+
+export const isGoogleManagedImageUrl = (value: unknown) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return false;
+  return (
+    raw.includes("places.googleapis.com/") ||
+    raw.includes("maps.googleapis.com/maps/api/place") ||
+    raw.includes("/api/google/photo")
+  );
+};
+
+export const shouldExposeGoogleRestaurantMedia = (
+  restaurant: RestaurantGoogleMediaInput | null | undefined,
+) => !isMobileFoodRestaurantProfile(restaurant);
+
+export function sanitizeGoogleRestaurantMedia<T extends Record<string, any>>(
+  restaurant: T | null | undefined,
+): T | null | undefined {
+  if (!restaurant || shouldExposeGoogleRestaurantMedia(restaurant)) {
+    return restaurant;
+  }
+
+  const sanitized: Record<string, any> = { ...restaurant };
+  sanitized.googlePlaceId = null;
+  sanitized.googlePhotos = null;
+  sanitized.googleCategories = null;
+  sanitized.googleFormattedPhone = null;
+  sanitized.googleRating = null;
+  sanitized.googleReviewCount = null;
+  sanitized.googlePriceLevel = null;
+  sanitized.googleBusinessStatus = null;
+  if (isGoogleManagedImageUrl(sanitized.coverImageUrl)) {
+    sanitized.coverImageUrl = null;
+  }
+  if (String(sanitized.profileSource || "").toLowerCase() === "google") {
+    sanitized.profileSource = "none";
+  }
+  return sanitized as T;
+}
+
 // Full field mask for rich business profiles
 const PROFILE_FIELD_MASK = [
   "id",
@@ -867,6 +929,14 @@ export async function populateRestaurantProfile(
       .limit(1);
 
     if (!restaurant) return { success: false, error: "Restaurant not found" };
+
+    if (!shouldExposeGoogleRestaurantMedia(restaurant)) {
+      return {
+        success: false,
+        error:
+          "Google Places auto-fill is disabled for food truck profiles; owners should upload business photos directly.",
+      };
+    }
 
     // If we already have a placeId, use it; otherwise search
     let placeId = restaurant.googlePlaceId;

@@ -8,11 +8,12 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { restaurants, hosts, businessPhotos } from "../../shared/schema/legacy";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import {
   populateRestaurantProfile,
   populateHostProfile,
   getGooglePhotoUrl,
+  sanitizeGoogleRestaurantMedia,
 } from "../services/googleProfileService";
 import { isAuthenticated } from "../unifiedAuth";
 import { FacebookPagesProvider } from "../../shared/business-profile-import/providers/facebook";
@@ -82,10 +83,11 @@ app.get("/api/profiles/restaurant/:id", async (req, res) => {
       .limit(1);
 
     if (!restaurant) return res.status(404).json({ error: "Not found" });
+    const publicRestaurant = sanitizeGoogleRestaurantMedia(restaurant as any) as any;
 
     // Build photo URLs from google photo references
-    const photos = Array.isArray(restaurant.googlePhotos)
-      ? (restaurant.googlePhotos as any[]).map((p) => ({
+    const photos = Array.isArray(publicRestaurant.googlePhotos)
+      ? (publicRestaurant.googlePhotos as any[]).map((p: any) => ({
           url: getGooglePhotoUrl(p.name) || "",
           width: p.widthPx,
           height: p.heightPx,
@@ -96,32 +98,32 @@ app.get("/api/profiles/restaurant/:id", async (req, res) => {
     const priceLevelLabels = ["Free", "$", "$$", "$$$", "$$$$"];
 
     res.json({
-      id: restaurant.id,
-      name: restaurant.name,
-      address: restaurant.address,
-      city: restaurant.city,
-      state: restaurant.state,
-      businessType: restaurant.businessType,
-      cuisineType: restaurant.cuisineType,
-      description: restaurant.description,
-      phone: restaurant.phone || restaurant.googleFormattedPhone,
-      website: restaurant.websiteUrl,
-      logoUrl: restaurant.logoUrl,
-      coverImageUrl: restaurant.coverImageUrl,
-      operatingHours: restaurant.operatingHours,
-      amenities: restaurant.amenities,
-      googlePriceLevel: restaurant.googlePriceLevel,
+      id: publicRestaurant.id,
+      name: publicRestaurant.name,
+      address: publicRestaurant.address,
+      city: publicRestaurant.city,
+      state: publicRestaurant.state,
+      businessType: publicRestaurant.businessType,
+      cuisineType: publicRestaurant.cuisineType,
+      description: publicRestaurant.description,
+      phone: publicRestaurant.phone || publicRestaurant.googleFormattedPhone,
+      website: publicRestaurant.websiteUrl,
+      logoUrl: publicRestaurant.logoUrl,
+      coverImageUrl: publicRestaurant.coverImageUrl,
+      operatingHours: publicRestaurant.operatingHours,
+      amenities: publicRestaurant.amenities,
+      googlePriceLevel: publicRestaurant.googlePriceLevel,
       priceLevelLabel:
-        typeof restaurant.googlePriceLevel === "number"
-          ? priceLevelLabels[restaurant.googlePriceLevel] || null
+        typeof publicRestaurant.googlePriceLevel === "number"
+          ? priceLevelLabels[publicRestaurant.googlePriceLevel] || null
           : null,
-      googleCategories: restaurant.googleCategories,
-      menuUrl: restaurant.menuUrl,
-      orderUrl: restaurant.orderUrl,
+      googleCategories: publicRestaurant.googleCategories,
+      menuUrl: publicRestaurant.menuUrl,
+      orderUrl: publicRestaurant.orderUrl,
       photos,
-      isVerified: restaurant.isVerified,
-      hasGoldenPlate: restaurant.hasGoldenPlate,
-      profileSource: restaurant.profileSource,
+      isVerified: publicRestaurant.isVerified,
+      hasGoldenPlate: publicRestaurant.hasGoldenPlate,
+      profileSource: publicRestaurant.profileSource,
     });
   } catch (err) {
     console.error("[Profiles] Get restaurant error:", err);
@@ -528,13 +530,28 @@ app.get("/api/profiles/restaurant/:id/photos", async (req, res) => {
 
     // Also include Google photos from the restaurant record
     const [restaurant] = await db
-      .select({ googlePhotos: restaurants.googlePhotos })
+      .select({
+        businessType: restaurants.businessType,
+        claimedFromImportId: restaurants.claimedFromImportId,
+        coverImageUrl: restaurants.coverImageUrl,
+        googleBusinessStatus: restaurants.googleBusinessStatus,
+        googleCategories: restaurants.googleCategories,
+        googleFormattedPhone: restaurants.googleFormattedPhone,
+        googlePhotos: restaurants.googlePhotos,
+        googlePlaceId: restaurants.googlePlaceId,
+        googlePriceLevel: restaurants.googlePriceLevel,
+        googleRating: restaurants.googleRating,
+        googleReviewCount: restaurants.googleReviewCount,
+        isFoodTruck: restaurants.isFoodTruck,
+        profileSource: restaurants.profileSource,
+      })
       .from(restaurants)
       .where(eq(restaurants.id, id))
       .limit(1);
 
-    const googlePhotoUrls = Array.isArray(restaurant?.googlePhotos)
-      ? (restaurant.googlePhotos as any[]).map((p) => ({
+    const publicRestaurant = sanitizeGoogleRestaurantMedia(restaurant as any) as any;
+    const googlePhotoUrls = Array.isArray(publicRestaurant?.googlePhotos)
+      ? (publicRestaurant.googlePhotos as any[]).map((p: any) => ({
           url: getGooglePhotoUrl(p.name) || "",
           width: p.widthPx,
           height: p.heightPx,
@@ -550,8 +567,45 @@ app.get("/api/profiles/restaurant/:id/photos", async (req, res) => {
   }
 });
 
+// ── Business Photos Gallery: Get photos for a host ─────────────────────────
+app.get("/api/profiles/host/:id/photos", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Missing host id" });
+
+    const photos = await db
+      .select()
+      .from(businessPhotos)
+      .where(eq(businessPhotos.hostId, id))
+      .orderBy(businessPhotos.sortOrder);
+
+    const [host] = await db
+      .select({
+        googlePhotos: hosts.googlePhotos,
+      })
+      .from(hosts)
+      .where(eq(hosts.id, id))
+      .limit(1);
+
+    const googlePhotoUrls = Array.isArray(host?.googlePhotos)
+      ? (host.googlePhotos as any[]).map((p: any) => ({
+          url: getGooglePhotoUrl(p.name) || "",
+          width: p.widthPx,
+          height: p.heightPx,
+          source: "google",
+          attribution: p.authorAttributions?.[0]?.displayName || "",
+        }))
+      : [];
+
+    res.json({ gallery: photos, googlePhotos: googlePhotoUrls });
+  } catch (err) {
+    console.error("[Profiles] Get host photos error:", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 // ── Business Photos Gallery: Upload a photo ────────────────────────────────
-app.post("/api/profiles/:entityType/:id/photos", async (req: any, res) => {
+app.post("/api/profiles/:entityType/:id/photos", isAuthenticated, async (req: any, res) => {
   try {
     const entityType = String(req.params.entityType || "").trim();
     const id = String(req.params.id || "").trim();
@@ -560,6 +614,10 @@ app.post("/api/profiles/:entityType/:id/photos", async (req: any, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     if (!id || !['restaurant', 'host'].includes(entityType)) {
       return res.status(400).json({ error: "Invalid entity type or id" });
+    }
+
+    if (!(await hasProfileWriteAccess(req, entityType as "restaurant" | "host", id))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     const { url, caption, width, height, fileSize, mimeType } = req.body;
@@ -602,13 +660,30 @@ app.post("/api/profiles/:entityType/:id/photos", async (req: any, res) => {
 });
 
 // ── Business Photos Gallery: Delete a photo ────────────────────────────────
-app.delete("/api/profiles/photos/:photoId", async (req: any, res) => {
+app.delete("/api/profiles/photos/:photoId", isAuthenticated, async (req: any, res) => {
   try {
     const photoId = String(req.params.photoId || "").trim();
     const userId = req.user?.id;
 
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     if (!photoId) return res.status(400).json({ error: "Missing photo id" });
+
+    const [photo] = await db
+      .select({
+        id: businessPhotos.id,
+        restaurantId: businessPhotos.restaurantId,
+        hostId: businessPhotos.hostId,
+      })
+      .from(businessPhotos)
+      .where(eq(businessPhotos.id, photoId))
+      .limit(1);
+    if (!photo) return res.status(404).json({ error: "Photo not found" });
+
+    const entityType = photo.restaurantId ? "restaurant" : "host";
+    const entityId = String(photo.restaurantId || photo.hostId || "");
+    if (!entityId || !(await hasProfileWriteAccess(req, entityType, entityId))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     await db.delete(businessPhotos).where(eq(businessPhotos.id, photoId));
     res.json({ success: true });
@@ -619,7 +694,7 @@ app.delete("/api/profiles/photos/:photoId", async (req: any, res) => {
 });
 
 // ── Business Photos Gallery: Reorder photos ────────────────────────────────
-app.patch("/api/profiles/photos/reorder", async (req: any, res) => {
+app.patch("/api/profiles/photos/reorder", isAuthenticated, async (req: any, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -627,6 +702,36 @@ app.patch("/api/profiles/photos/reorder", async (req: any, res) => {
     const { photoIds } = req.body; // Array of photo IDs in desired order
     if (!Array.isArray(photoIds)) {
       return res.status(400).json({ error: "photoIds must be an array" });
+    }
+    if (photoIds.length === 0) {
+      return res.json({ success: true });
+    }
+
+    const rows = await db
+      .select({
+        id: businessPhotos.id,
+        restaurantId: businessPhotos.restaurantId,
+        hostId: businessPhotos.hostId,
+      })
+      .from(businessPhotos)
+      .where(inArray(businessPhotos.id, photoIds));
+    if (rows.length !== photoIds.length) {
+      return res.status(404).json({ error: "One or more photos were not found" });
+    }
+
+    const first = rows[0];
+    const entityType = first.restaurantId ? "restaurant" : "host";
+    const entityId = String(first.restaurantId || first.hostId || "");
+    const sameEntity = rows.every((row: { restaurantId: string | null; hostId: string | null }) =>
+      entityType === "restaurant"
+        ? String(row.restaurantId || "") === entityId
+        : String(row.hostId || "") === entityId,
+    );
+    if (!entityId || !sameEntity) {
+      return res.status(400).json({ error: "Photos must belong to one business" });
+    }
+    if (!(await hasProfileWriteAccess(req, entityType, entityId))) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     for (let i = 0; i < photoIds.length; i++) {
@@ -644,9 +749,9 @@ app.patch("/api/profiles/photos/reorder", async (req: any, res) => {
 });
 
 // ── Admin: Bulk auto-populate all hosts without profiles ────────────────────
-app.post("/api/profiles/bulk-populate/hosts", async (req, res) => {
+app.post("/api/profiles/bulk-populate/hosts", isAuthenticated, async (req: any, res) => {
   try {
-    // TODO: Add admin auth check
+    if (!requireStaffOrAdmin(req, res)) return;
     const unpopulated = await db
       .select({ id: hosts.id, businessName: hosts.businessName })
       .from(hosts)

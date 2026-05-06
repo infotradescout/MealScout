@@ -314,10 +314,18 @@ export default function CustomerSignup({
   const customerSignupMutation = useMutation({
     mutationFn: async (data: SignupFormData) => {
       const { confirmPassword, ...signupData } = data;
+      const redirectAfterLogin =
+        accountType === "host"
+          ? "/host-signup"
+          : accountType === "event_organizer"
+            ? "/events"
+            : accountType === "business"
+              ? "/restaurant-signup"
+              : "/";
       const res = await apiRequest(
         "POST",
         "/api/auth/customer/register",
-        signupData,
+        { ...signupData, next: redirectAfterLogin },
       );
       return await res.json();
     },
@@ -376,6 +384,7 @@ export default function CustomerSignup({
       const res = await apiRequest("POST", "/api/auth/restaurant/register", {
         ...signupData,
         businessType: businessSubType,
+        next: businessProfileRedirect(businessSubType),
       });
       return await res.json();
     },
@@ -431,7 +440,7 @@ export default function CustomerSignup({
       const res = await apiRequest(
         "POST",
         "/api/auth/event-coordinator/register",
-        signupData,
+        { ...signupData, next: "/events" },
       );
       return await res.json();
     },
@@ -480,7 +489,7 @@ export default function CustomerSignup({
       const res = await apiRequest(
         "POST",
         "/api/auth/supplier/register",
-        signupData,
+        { ...signupData, next: "/supplier/dashboard" },
       );
       return await res.json();
     },

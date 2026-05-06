@@ -23,7 +23,18 @@ interface DocumentUploadProps {
   className?: string;
 }
 
-const ACCEPTED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+const ACCEPTED_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+  'application/pdf',
+];
+const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.pdf'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_FILES = 5;
 
@@ -49,11 +60,23 @@ export default function DocumentUpload({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const validateFile = (file: File): { valid: boolean; error?: string } => {
-    if (!acceptedTypes.includes(file.type)) {
+  const isAcceptedFileType = (file: File) => {
+    const type = String(file.type || '').toLowerCase();
+    const name = String(file.name || '').toLowerCase();
+    return (
+      acceptedTypes.includes(type) ||
+      ACCEPTED_EXTENSIONS.some((extension) => name.endsWith(extension))
+    );
+  };
+
+  const validateFile = (
+    file: File,
+    nextCount: number,
+  ): { valid: boolean; error?: string } => {
+    if (!isAcceptedFileType(file)) {
       return {
         valid: false,
-        error: `File type ${file.type} is not supported. Please upload JPG, PNG, or PDF files.`
+        error: `File type ${file.type || file.name} is not supported. Please upload JPG, PNG, WEBP, HEIC, HEIF, or PDF files.`
       };
     }
 
@@ -64,7 +87,7 @@ export default function DocumentUpload({
       };
     }
 
-    if (documents.length >= maxFiles) {
+    if (nextCount > maxFiles) {
       return {
         valid: false,
         error: `Maximum ${maxFiles} files allowed.`
@@ -83,13 +106,31 @@ export default function DocumentUpload({
     });
   };
 
+  const uploadDocument = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('document', file);
+    const response = await fetch('/api/upload/verification-document', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.message || 'Failed to upload document');
+    }
+    if (!payload?.url) {
+      throw new Error('Document upload did not return a file URL');
+    }
+    return payload.url;
+  };
+
   const processFiles = useCallback(async (files: FileList | File[]) => {
     setIsUploading(true);
     const fileArray = Array.from(files);
     const newDocuments: DocumentFile[] = [];
 
     for (const file of fileArray) {
-      const validation = validateFile(file);
+      const validation = validateFile(file, documents.length + newDocuments.length + 1);
       
       if (!validation.valid) {
         toast({
@@ -101,8 +142,24 @@ export default function DocumentUpload({
       }
 
       try {
-        const dataUrl = await convertToBase64(file);
-        const docType = file.type.startsWith('image/') ? 'image' : 'pdf';
+        let dataUrl: string;
+        try {
+          dataUrl = await uploadDocument(file);
+        } catch (uploadError: any) {
+          const message = String(uploadError?.message || '').toLowerCase();
+          if (!message.includes('not configured') && !message.includes('not found')) {
+            throw uploadError;
+          }
+          dataUrl = await convertToBase64(file);
+        }
+        const lowerName = file.name.toLowerCase();
+        const docType =
+          file.type.startsWith('image/') ||
+          ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'].some((extension) =>
+            lowerName.endsWith(extension),
+          )
+            ? 'image'
+            : 'pdf';
         
         const document: DocumentFile = {
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -210,7 +267,7 @@ export default function DocumentUpload({
             <div className="space-y-2">
               <p className="text-lg font-medium">Drop files here or click to upload</p>
               <p className="text-sm text-[color:var(--text-muted)]">
-                Supported formats: JPG, PNG, PDF (max {formatFileSize(maxFileSize)} each)
+                Supported formats: JPG, PNG, WEBP, HEIC, HEIF, PDF (max {formatFileSize(maxFileSize)} each)
               </p>
               <p className="text-xs text-[color:var(--text-muted)]">
                 Maximum {maxFiles} files allowed
@@ -222,7 +279,7 @@ export default function DocumentUpload({
             ref={fileInputRef}
             type="file"
             multiple
-            accept={acceptedTypes.join(',')}
+            accept={[...acceptedTypes, ...ACCEPTED_EXTENSIONS].join(',')}
             onChange={handleFileInputChange}
             className="hidden"
             data-testid="file-input"

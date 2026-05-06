@@ -178,7 +178,38 @@ interface OwnerMenuSummary {
   isActive: boolean;
 }
 
+type AnalyticsDateRange = {
+  start: string;
+  end: string;
+};
+
 const DEAL_IMAGE_FALLBACK = "/og-default.jpg";
+
+const buildRestaurantAnalyticsUrl = (
+  restaurantId: string,
+  segment: string,
+  range: AnalyticsDateRange,
+) => {
+  const params = new URLSearchParams({
+    startDate: range.start,
+    endDate: range.end,
+  });
+  return `/api/restaurants/${encodeURIComponent(
+    restaurantId,
+  )}/analytics/${segment}?${params.toString()}`;
+};
+
+const fetchRestaurantAnalytics = async <T,>(
+  restaurantId: string,
+  segment: string,
+  range: AnalyticsDateRange,
+): Promise<T> => {
+  const res = await apiRequest(
+    "GET",
+    buildRestaurantAnalyticsUrl(restaurantId, segment, range),
+  );
+  return (await res.json()) as T;
+};
 
 const normalizeDealImageUrl = (value: unknown): string => {
   const raw = String(value || "").trim();
@@ -420,9 +451,17 @@ export default function RestaurantOwnerDashboard() {
   const { data: favoritesAnalytics, isLoading: loadingFavorites } =
     useQuery<FavoritesAnalytics>({
       queryKey: [
-        `/api/restaurants/${selectedRestaurant}/analytics/favorites`,
-        analyticsDateRange,
+        "restaurant-analytics-favorites",
+        selectedRestaurant,
+        analyticsDateRange.start,
+        analyticsDateRange.end,
       ],
+      queryFn: () =>
+        fetchRestaurantAnalytics<FavoritesAnalytics>(
+          selectedRestaurant,
+          "favorites",
+          analyticsDateRange,
+        ),
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
       retry: false,
       refetchOnWindowFocus: false,
@@ -432,9 +471,17 @@ export default function RestaurantOwnerDashboard() {
   const { data: recommendationsAnalytics, isLoading: loadingRecommendations } =
     useQuery<RecommendationsAnalytics>({
       queryKey: [
-        `/api/restaurants/${selectedRestaurant}/analytics/recommendations`,
-        analyticsDateRange,
+        "restaurant-analytics-recommendations",
+        selectedRestaurant,
+        analyticsDateRange.start,
+        analyticsDateRange.end,
       ],
+      queryFn: () =>
+        fetchRestaurantAnalytics<RecommendationsAnalytics>(
+          selectedRestaurant,
+          "recommendations",
+          analyticsDateRange,
+        ),
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
       retry: false,
       refetchOnWindowFocus: false,
@@ -490,11 +537,13 @@ export default function RestaurantOwnerDashboard() {
   // Fetch advanced analytics
   const { data: analyticsSummary, isLoading: loadingAnalytics } = useQuery({
     queryKey: [
-      "/api/restaurants",
+      "restaurant-analytics-summary",
       selectedRestaurant,
-      "analytics/summary",
-      analyticsDateRange,
+      analyticsDateRange.start,
+      analyticsDateRange.end,
     ],
+    queryFn: () =>
+      fetchRestaurantAnalytics(selectedRestaurant, "summary", analyticsDateRange),
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
     retry: false,
     refetchOnWindowFocus: false,
@@ -502,11 +551,17 @@ export default function RestaurantOwnerDashboard() {
 
   const { data: analyticsTimeseries } = useQuery({
     queryKey: [
-      "/api/restaurants",
+      "restaurant-analytics-timeseries",
       selectedRestaurant,
-      "analytics/timeseries",
-      analyticsDateRange,
+      analyticsDateRange.start,
+      analyticsDateRange.end,
     ],
+    queryFn: () =>
+      fetchRestaurantAnalytics(
+        selectedRestaurant,
+        "timeseries",
+        analyticsDateRange,
+      ),
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
     retry: false,
     refetchOnWindowFocus: false,
@@ -514,11 +569,17 @@ export default function RestaurantOwnerDashboard() {
 
   const { data: customerInsights } = useQuery({
     queryKey: [
-      "/api/restaurants",
+      "restaurant-analytics-customers",
       selectedRestaurant,
-      "analytics/customers",
-      analyticsDateRange,
+      analyticsDateRange.start,
+      analyticsDateRange.end,
     ],
+    queryFn: () =>
+      fetchRestaurantAnalytics(
+        selectedRestaurant,
+        "customers",
+        analyticsDateRange,
+      ),
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
     retry: false,
     refetchOnWindowFocus: false,
@@ -529,9 +590,11 @@ export default function RestaurantOwnerDashboard() {
       "/api/restaurants",
       selectedRestaurant,
       "analytics/compare",
+      analyticsDateRange.start,
+      analyticsDateRange.end,
       comparisonPeriod,
     ],
-    queryFn: () => {
+    queryFn: async () => {
       const currentEnd = new Date(analyticsDateRange.end);
       const currentStart = new Date(analyticsDateRange.start);
       const daysDiff = Math.ceil(
@@ -544,10 +607,13 @@ export default function RestaurantOwnerDashboard() {
         currentStart.getTime() - 24 * 60 * 60 * 1000,
       );
 
-      return apiRequest(
+      const res = await apiRequest(
         "GET",
-        `/api/restaurants/${selectedRestaurant}/analytics/compare?currentStart=${currentStart.toISOString()}&currentEnd=${currentEnd.toISOString()}&previousStart=${previousStart.toISOString()}&previousEnd=${previousEnd.toISOString()}`,
+        `/api/restaurants/${encodeURIComponent(
+          selectedRestaurant,
+        )}/analytics/compare?currentStart=${currentStart.toISOString()}&currentEnd=${currentEnd.toISOString()}&previousStart=${previousStart.toISOString()}&previousEnd=${previousEnd.toISOString()}`,
       );
+      return await res.json();
     },
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
     retry: false,

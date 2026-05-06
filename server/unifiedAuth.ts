@@ -39,6 +39,7 @@ declare module "express-session" {
     fbAppContext?: "mealscout" | "tradescout";
     googleAppContext?: "mealscout" | "tradescout";
     oauthUserType?: User["userType"];
+    oauthReturnTo?: string;
   }
 }
 
@@ -288,6 +289,69 @@ export async function setupUnifiedAuth(app: Express) {
     const appContext = String(req?.query?.app || fallback).toLowerCase();
     return appContext === "tradescout" ? "tradescout" : "mealscout";
   };
+  const allowedOAuthOrigins = new Set(
+    [baseUrl, tradeScoutBaseUrl]
+      .map((origin) => {
+        try {
+          return new URL(origin).origin;
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean),
+  );
+  const safeOAuthReturnPath = (value: unknown, fallback = "/") => {
+    const raw = String(value || "").trim();
+    if (!raw) return fallback;
+
+    let path = raw;
+    if (/^https?:\/\//i.test(raw)) {
+      try {
+        const parsed = new URL(raw);
+        if (!allowedOAuthOrigins.has(parsed.origin)) return fallback;
+        path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        return fallback;
+      }
+    }
+
+    if (
+      !path.startsWith("/") ||
+      path.startsWith("//") ||
+      path.startsWith("/\\") ||
+      /^\/api\/auth\//i.test(path)
+    ) {
+      return fallback;
+    }
+    return path;
+  };
+  const oauthFallbackForUserType = (userType: User["userType"]) => {
+    if (userType === "food_truck") return "/truck-onboarding";
+    if (userType === "caterer") return "/restaurant-signup?businessType=caterer";
+    if (userType === "private_chef") {
+      return "/restaurant-signup?businessType=private_chef";
+    }
+    if (userType === "host") return "/host-onboarding";
+    return "/restaurant-signup";
+  };
+  const captureOAuthReturnTo = (req: any, fallback: string) => {
+    req.session.oauthReturnTo = safeOAuthReturnPath(
+      firstRequestValue(req.query?.next, req.query?.returnTo, req.query?.redirect),
+      fallback,
+    );
+  };
+  const consumeOAuthSuccessPath = (req: any, fallback: string) => {
+    const path = safeOAuthReturnPath(req.session?.oauthReturnTo, fallback);
+    req.session.oauthReturnTo = undefined;
+    try {
+      const parsed = new URL(path, "https://mealscout.local");
+      parsed.searchParams.set("auth", "success");
+      parsed.searchParams.set("t", String(Date.now()));
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+      return `${fallback}?auth=success&t=${Date.now()}`;
+    }
+  };
 
   const createEmailVerificationUrl = async (user: User, req: any) => {
     if (!user.email) return null;
@@ -310,10 +374,16 @@ export async function setupUnifiedAuth(app: Express) {
       resolveConfiguredBaseUrl(inferredBaseUrl || undefined) ||
       "http://localhost:5000"
     ).replace(/\/+$/, "");
-    const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-      token,
-    )}`;
-    return verifyUrl;
+    const verifyUrl = new URL(`${apiBaseUrl}/api/auth/verify-email`);
+    verifyUrl.searchParams.set("token", token);
+    const safeNext = safeOAuthReturnPath(
+      firstRequestValue(req.body?.next, req.body?.returnTo, req.query?.next),
+      "",
+    );
+    if (safeNext) {
+      verifyUrl.searchParams.set("next", safeNext);
+    }
+    return verifyUrl.toString();
   };
 
   const sendWelcomeOrVerification = async (
@@ -337,6 +407,12 @@ export async function setupUnifiedAuth(app: Express) {
       if (supportsWelcome) {
         emailService
           .sendWelcomeEmail(user, verifyUrl ?? undefined)
+          .then((sent) => {
+            if (!sent && verifyUrl) {
+              return emailService.sendEmailVerificationEmail(user, verifyUrl);
+            }
+            return sent;
+          })
           .catch((err) =>
             console.error(`Failed to send ${welcomeLabel} welcome email:`, err),
           );
@@ -700,6 +776,7 @@ export async function setupUnifiedAuth(app: Express) {
     app.get("/api/auth/google/customer", (req, res, next) => {
       req.session.googleAppContext = getOAuthAppContext(req);
       req.session.oauthUserType = "customer";
+      captureOAuthReturnTo(req, "/");
       passport.authenticate("google-customer", {
         scope: ["profile", "email"],
       })(req, res, next);
@@ -722,6 +799,7 @@ export async function setupUnifiedAuth(app: Express) {
         const appContext = req.session.googleAppContext || "mealscout";
         const redirectBase =
           appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+        const redirectPath = consumeOAuthSuccessPath(req, "/");
         // Ensure session is saved before redirecting
         req.session.save((err) => {
           if (err) {
@@ -731,7 +809,7 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google customer OAuth success, session saved, redirecting...",
           );
-          res.redirect(`${redirectBase}/?auth=success&t=${Date.now()}`);
+          res.redirect(`${redirectBase}${redirectPath}`);
         });
       },
     );
@@ -748,6 +826,8 @@ export async function setupUnifiedAuth(app: Express) {
       )
         ? (desiredType as User["userType"])
         : "restaurant_owner";
+      const oauthUserType = getOauthUserType(req, "restaurant_owner");
+      captureOAuthReturnTo(req, oauthFallbackForUserType(oauthUserType));
       passport.authenticate("google-restaurant", {
         scope: ["profile", "email"],
       })(req, res, next);
@@ -770,6 +850,7 @@ export async function setupUnifiedAuth(app: Express) {
         const appContext = req.session.googleAppContext || "mealscout";
         const redirectBase =
           appContext === "tradescout" ? tradeScoutBaseUrl : baseUrl;
+        const redirectPath = consumeOAuthSuccessPath(req, "/restaurant-signup");
         // Ensure session is saved before redirecting
         req.session.save((err) => {
           if (err) {
@@ -779,9 +860,7 @@ export async function setupUnifiedAuth(app: Express) {
           console.log(
             "✅ Google restaurant OAuth success, session saved, redirecting...",
           );
-          res.redirect(
-            `${redirectBase}/restaurant-signup?auth=success&t=${Date.now()}`,
-          );
+          res.redirect(`${redirectBase}${redirectPath}`);
         });
       },
     );
@@ -980,6 +1059,11 @@ export async function setupUnifiedAuth(app: Express) {
         )
           ? (desiredUserType as User["userType"])
           : "customer";
+        const oauthUserType = getOauthUserType(req, "customer");
+        captureOAuthReturnTo(
+          req,
+          oauthUserType === "customer" ? "/" : oauthFallbackForUserType(oauthUserType),
+        );
         console.log(
           `🔵 Starting Facebook OAuth flow with app context: ${appContext}`,
         );
@@ -1007,6 +1091,10 @@ export async function setupUnifiedAuth(app: Express) {
       (req, res) => {
         const user = req.user as User;
         const appContext = req.session.fbAppContext || "mealscout";
+        const redirectPath = consumeOAuthSuccessPath(
+          req,
+          appContext === "tradescout" ? "/" : "/",
+        );
 
         console.log("✅ Facebook OAuth callback success:", {
           userId: user?.id,
@@ -1025,9 +1113,9 @@ export async function setupUnifiedAuth(app: Express) {
           const frontendBase =
             process.env.PUBLIC_BASE_URL || "http://localhost:5000";
           const redirectUrls = {
-            mealscout: `${frontendBase}/?auth=success&t=` + Date.now(),
+            mealscout: `${frontendBase}${redirectPath}`,
             tradescout:
-              "https://www.thetradescout.com/?auth=success&t=" + Date.now(),
+              "https://www.thetradescout.com" + redirectPath,
           };
 
           const redirectUrl =

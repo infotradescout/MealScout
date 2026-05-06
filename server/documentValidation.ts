@@ -148,9 +148,13 @@ function validateSingleDocument(document: string, index: number): DocumentValida
 // Rate limiting utilities (simple in-memory store)
 const submissionAttempts = new Map<string, number[]>();
 
-export function checkRateLimit(restaurantId: string): { allowed: boolean; nextAllowedTime?: Date } {
+export function checkRateLimit(
+  restaurantId: string,
+  options: { record?: boolean } = {},
+): { allowed: boolean; nextAllowedTime?: Date } {
   const now = Date.now();
   const oneHour = 60 * 60 * 1000;
+  const shouldRecord = options.record !== false;
   
   // Get existing attempts for this restaurant
   const attempts = submissionAttempts.get(restaurantId) || [];
@@ -172,11 +176,21 @@ export function checkRateLimit(restaurantId: string): { allowed: boolean; nextAl
     };
   }
   
-  // Record this attempt
-  recentAttempts.push(now);
-  submissionAttempts.set(restaurantId, recentAttempts);
+  if (shouldRecord) {
+    recentAttempts.push(now);
+    submissionAttempts.set(restaurantId, recentAttempts);
+  }
   
   return { allowed: true };
+}
+
+export function recordRateLimitAttempt(restaurantId: string): void {
+  const now = Date.now();
+  const oneHour = 60 * 60 * 1000;
+  const attempts = submissionAttempts.get(restaurantId) || [];
+  const recentAttempts = attempts.filter(timestamp => now - timestamp < oneHour);
+  recentAttempts.push(now);
+  submissionAttempts.set(restaurantId, recentAttempts);
 }
 
 // Clean up old rate limit entries periodically
