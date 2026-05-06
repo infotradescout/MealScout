@@ -86,6 +86,245 @@
   --radius: 18px;
 }
 
+.ms-giveaway {
+  --ms-stage-gold: #f59e0b;
+  --ms-stage-red: #ef4444;
+  --ms-stage-teal: #14b8a6;
+  --ms-stage-ink: #070605;
+  position: relative;
+  isolation: isolate;
+}
+
+.ms-giveaway-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(7, 6, 5, 0.32) 0%,
+      rgba(7, 6, 5, 0.82) 54%,
+      rgba(7, 6, 5, 0.96) 100%
+    ),
+    linear-gradient(110deg, rgba(239, 68, 68, 0.26), transparent 36%),
+    url("/backgrounds/food-truck-night.png");
+  background-position: center;
+  background-size: cover;
+}
+
+.ms-giveaway-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      105deg,
+      transparent 0%,
+      rgba(255, 244, 214, 0.08) 24%,
+      transparent 48%
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.055) 0 1px,
+      transparent 1px 84px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.78;
+  animation: ms-giveaway-light-sweep 6.8s ease-in-out infinite;
+}
+
+.ms-giveaway-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.58) 78%),
+    url("/backgrounds/noise.png");
+  opacity: 0.58;
+}
+
+.ms-giveaway-marquee {
+  position: absolute;
+  inset: -13px;
+  z-index: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 16px rgba(245, 158, 11, 0.42));
+}
+
+.ms-giveaway-bulb {
+  position: absolute;
+  width: clamp(8px, 2.7vw, 12px);
+  height: clamp(8px, 2.7vw, 12px);
+  border-radius: 999px;
+  background: #fff3c4;
+  box-shadow:
+    0 0 0 2px rgba(12, 10, 8, 0.74),
+    0 0 16px rgba(245, 158, 11, 0.82),
+    0 0 30px rgba(239, 68, 68, 0.35);
+  transform: translate(-50%, -50%);
+  animation: ms-giveaway-bulb-chase 0.72s steps(2, end) infinite;
+}
+
+.ms-giveaway-pointer {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  z-index: 4;
+  width: 0;
+  height: 0;
+  border-left: 18px solid transparent;
+  border-right: 18px solid transparent;
+  border-top: 34px solid #fef3c7;
+  filter:
+    drop-shadow(0 3px 0 rgba(0, 0, 0, 0.58))
+    drop-shadow(0 0 18px rgba(245, 158, 11, 0.78));
+  transform: translateX(-50%);
+}
+
+.ms-giveaway-pointer::after {
+  content: "";
+  position: absolute;
+  top: -31px;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.24);
+}
+
+.ms-giveaway-wheel-shell {
+  position: relative;
+  z-index: 1;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  padding: clamp(10px, 3vw, 14px);
+  background:
+    linear-gradient(145deg, #ffe8a3, #f59e0b 42%, #7c2d12 100%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.62),
+    0 0 58px rgba(245, 158, 11, 0.35),
+    inset 0 2px 2px rgba(255, 255, 255, 0.58);
+}
+
+.ms-giveaway-wheel-shell::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  pointer-events: none;
+}
+
+.ms-giveaway-wheel {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #0b0a09;
+  box-shadow: inset 0 0 0 2px rgba(8, 7, 6, 0.72);
+  will-change: transform;
+}
+
+.ms-giveaway-ready,
+.ms-giveaway-winner {
+  margin-inline: auto;
+  display: flex;
+  min-height: 76px;
+  width: min(100%, 360px);
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(5, 5, 5, 0.58);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.ms-giveaway-ready {
+  color: rgba(255, 255, 255, 0.86);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ms-giveaway-winner {
+  justify-content: flex-start;
+  padding-inline: 1rem;
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.38), rgba(239, 68, 68, 0.18)),
+    rgba(5, 5, 5, 0.7);
+  animation: ms-giveaway-winner-pop 0.6s cubic-bezier(0.17, 0.84, 0.44, 1);
+}
+
+.ms-giveaway-confetti {
+  position: absolute;
+  top: -14%;
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  opacity: 0.96;
+  animation: ms-giveaway-confetti-fall 2.8s cubic-bezier(0.12, 0.72, 0.3, 1) forwards;
+}
+
+@keyframes ms-giveaway-light-sweep {
+  0%,
+  100% {
+    transform: translateX(-10%);
+    opacity: 0.52;
+  }
+  50% {
+    transform: translateX(10%);
+    opacity: 0.86;
+  }
+}
+
+@keyframes ms-giveaway-bulb-chase {
+  0%,
+  100% {
+    opacity: 0.55;
+    background: #fde68a;
+  }
+  50% {
+    opacity: 1;
+    background: #ffffff;
+  }
+}
+
+@keyframes ms-giveaway-winner-pop {
+  0% {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ms-giveaway-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(110vh) rotate(680deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-giveaway-bg::before,
+  .ms-giveaway-bulb,
+  .ms-giveaway-confetti,
+  .ms-giveaway-winner {
+    animation: none !important;
+  }
+}
+
 .theme-day {
   /* Shadcn/Tailwind system vars should be light in day mode */
   --background: 24 20% 98%;

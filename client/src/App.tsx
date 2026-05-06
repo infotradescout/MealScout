@@ -38,6 +38,7 @@ const Orders = lazy(() => import("@/pages/orders"));
 const Profile = lazy(() => import("@/pages/profile"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
+const AdminGiveawayWheel = lazy(() => import("@/pages/admin-giveaway-wheel"));
 const StaffDashboard = lazy(() => import("@/pages/staff-dashboard"));
 const AdminIncidents = lazy(() => import("@/pages/AdminIncidents"));
 const AdminControlCenter = lazy(() => import("@/pages/AdminControlCenter"));
@@ -635,6 +636,7 @@ function Router() {
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/dashboard" component={AdminLogin} />
+            <Route path="/admin/giveaway-wheel" component={AdminLogin} />
             <Route path="/admin/legacy-dashboard" component={AdminLogin} />
             <Route path="/admin/lead-import" component={AdminLogin} />
             <Route path="/admin/media/videos" component={AdminLogin} />
@@ -748,6 +750,9 @@ function Router() {
             <Route path="/admin">{adminLandingRoute}</Route>
             <Route path="/admin/dashboard">
               {() => staffOrAdminRoute(<AdminDashboard />)}
+            </Route>
+            <Route path="/admin/giveaway-wheel">
+              {() => adminOnlyRoute(<AdminGiveawayWheel />)}
             </Route>
             <Route path="/admin/events">
               {() => staffOrAdminRoute(<EventsRouter />)}

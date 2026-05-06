@@ -43,6 +43,7 @@ import {
   ClipboardCheck,
   Megaphone,
   Database,
+  Gift,
   Share2,
   UserCog,
   Utensils,
@@ -7224,6 +7225,16 @@ export default function AdminDashboard() {
       description: "Load prospect and expansion lists",
       icon: Upload,
     },
+    ...(isAdminOrSuper
+      ? [
+          {
+            href: "/admin/giveaway-wheel",
+            label: "Giveaway Wheel",
+            description: "Mobile drawing studio",
+            icon: Gift,
+          },
+        ]
+      : []),
     {
       href: "/admin/affiliates",
       label: "Affiliates",
@@ -7301,6 +7312,14 @@ export default function AdminDashboard() {
                   Moderation
                 </Link>
               </Button>
+              {isAdminOrSuper ? (
+                <Button asChild variant="outline">
+                  <Link href="/admin/giveaway-wheel">
+                    <Gift className="h-4 w-4" />
+                    Giveaway
+                  </Link>
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 onClick={handleLogout}
