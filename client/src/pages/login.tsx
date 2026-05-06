@@ -30,6 +30,90 @@ const getSafeRedirectPath = (): string | null => {
   }
 };
 
+type OAuthUserType =
+  | "customer"
+  | "restaurant_owner"
+  | "food_truck"
+  | "caterer"
+  | "private_chef"
+  | "host"
+  | "event_coordinator";
+
+const getOAuthUserTypeForRedirect = (
+  redirectPath: string | null,
+): OAuthUserType => {
+  if (!redirectPath) return "customer";
+
+  try {
+    const parsed = new URL(redirectPath, "https://mealscout.local");
+    const path = parsed.pathname;
+    const businessType = String(
+      parsed.searchParams.get("businessType") ||
+        parsed.searchParams.get("businessSubType") ||
+        "",
+    );
+    const role = String(parsed.searchParams.get("role") || "");
+
+    if (path.startsWith("/truck-onboarding") || businessType === "food_truck") {
+      return "food_truck";
+    }
+    if (businessType === "caterer" || businessType === "private_chef") {
+      return businessType;
+    }
+    if (
+      role === "business" ||
+      path.startsWith("/restaurant-signup") ||
+      path.startsWith("/restaurant-owner-dashboard") ||
+      path.startsWith("/menu-builder") ||
+      path.startsWith("/edit-restaurant")
+    ) {
+      return "restaurant_owner";
+    }
+    if (path === "/host-signup" || path.startsWith("/host/")) {
+      return "host";
+    }
+    if (path.startsWith("/events") || path.startsWith("/event-coordinator")) {
+      return "event_coordinator";
+    }
+  } catch {
+    // Fall through to customer OAuth.
+  }
+
+  return "customer";
+};
+
+const buildOAuthLoginPath = (
+  provider: "google" | "facebook",
+  redirectPath: string | null,
+) => {
+  const userType = getOAuthUserTypeForRedirect(redirectPath);
+  const basePath =
+    provider === "google" && userType !== "customer"
+      ? "/api/auth/google/restaurant"
+      : provider === "google"
+        ? "/api/auth/google/customer"
+        : "/api/auth/facebook";
+  const params = new URLSearchParams();
+  if (userType !== "customer") params.set("userType", userType);
+  if (redirectPath) params.set("next", redirectPath);
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
+};
+
+const withOAuthRedirect = (authPath: string, redirectPath: string | null) => {
+  if (!redirectPath) return authPath;
+  try {
+    const parsed = new URL(authPath, "https://mealscout.local");
+    if (!parsed.searchParams.has("next")) {
+      parsed.searchParams.set("next", redirectPath);
+    }
+    const query = parsed.searchParams.toString();
+    return `${parsed.pathname}${query ? `?${query}` : ""}${parsed.hash}`;
+  } catch {
+    return authPath;
+  }
+};
+
 export default function Login() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
@@ -59,7 +143,7 @@ export default function Login() {
     ) {
       return "/restaurant-owner-dashboard";
     }
-    if (userType === "host") return "/host-dashboard";
+    if (userType === "host") return "/host/dashboard";
     if (userType === "event_coordinator") return "/event-coordinator/dashboard";
     if (userType === "supplier") return "/supplier/dashboard";
     return "/";
@@ -70,7 +154,7 @@ export default function Login() {
       "/api/auth/login",
       {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, next: redirectPath }),
         headers: { "Content-Type": "application/json" },
         credentials: "include",
       },
@@ -99,7 +183,7 @@ export default function Login() {
   }, [email]);
 
   const handleGoogleLogin = () => {
-    const googleLoginUrl = authUrl("/api/auth/google/customer");
+    const googleLoginUrl = authUrl(buildOAuthLoginPath("google", redirectPath));
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "google_login",
@@ -109,7 +193,9 @@ export default function Login() {
   };
 
   const handleFacebookLogin = () => {
-    const facebookLoginUrl = authUrl("/api/auth/facebook?userType=customer");
+    const facebookLoginUrl = authUrl(
+      buildOAuthLoginPath("facebook", redirectPath),
+    );
     trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
       page: "login",
       cta: "facebook_login",
@@ -151,8 +237,10 @@ export default function Login() {
             typeof payload?.authUrl === "string" &&
             payload.authUrl.startsWith("/")
               ? payload.authUrl
-              : "/api/auth/google/customer";
-          window.location.href = authUrl(nextAuthPath);
+              : buildOAuthLoginPath("google", redirectPath);
+          window.location.href = authUrl(
+            withOAuthRedirect(nextAuthPath, redirectPath),
+          );
           return;
         }
         if (payload?.code === "email_not_verified") {
@@ -216,7 +304,10 @@ export default function Login() {
 
     setIsResendingVerification(true);
     try {
-      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      await apiRequest("POST", "/api/auth/resend-verification", {
+        email,
+        next: redirectPath,
+      });
       toast({
         title: "Verification Sent",
         description:

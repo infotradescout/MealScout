@@ -25,8 +25,10 @@ const checks: Check[] = [
     run: () => {
       const source = read("server/unifiedAuth.ts");
       assert.match(source, /app\.post\("\/api\/auth\/restaurant\/register"/);
-      assert.match(source, /"restaurant",\s*"bar",\s*"food_truck"/);
-      assert.match(source, /normalizedBusinessType === "food_truck"\s*\?\s*"food_truck"\s*:\s*"restaurant_owner"/);
+      assert.match(source, /"restaurant",\s*"bar",\s*"food_truck",\s*"caterer",\s*"private_chef"/);
+      assert.match(source, /normalizedBusinessType === "food_truck"/);
+      assert.match(source, /normalizedBusinessType === "caterer"/);
+      assert.match(source, /normalizedBusinessType === "private_chef"/);
     },
   },
   {
@@ -63,7 +65,9 @@ const checks: Check[] = [
     run: () => {
       const source = read("client/src/pages/restaurant-signup.tsx");
       assert.match(source, /businessType === "bar"/);
-      assert.match(source, /z\.enum\(\["restaurant", "bar", "food_truck"\]/);
+      assert.match(source, /const BUSINESS_TYPES = \[/);
+      assert.match(source, /"restaurant",\s*"bar",\s*"food_truck",\s*"caterer",\s*"private_chef"/);
+      assert.match(source, /businessType:\s*z\.enum\(BUSINESS_TYPES/);
     },
   },
   {

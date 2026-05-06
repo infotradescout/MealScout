@@ -456,6 +456,98 @@ export async function setupUnifiedAuth(app: Express) {
     }
     return fallback;
   };
+  const businessOAuthUserTypes = new Set<User["userType"]>([
+    "restaurant_owner",
+    "caterer",
+    "private_chef",
+    "food_truck",
+  ]);
+  const inferBusinessOAuthUserTypeFromPath = (
+    value: unknown,
+  ): User["userType"] | null => {
+    const path = safeOAuthReturnPath(value, "");
+    if (!path) return null;
+    try {
+      const parsed = new URL(path, "https://mealscout.local");
+      const pathname = parsed.pathname;
+      const businessType = String(
+        parsed.searchParams.get("businessType") ||
+          parsed.searchParams.get("businessSubType") ||
+          "",
+      );
+      const role = String(parsed.searchParams.get("role") || "");
+
+      if (pathname.startsWith("/truck-onboarding") || businessType === "food_truck") {
+        return "food_truck";
+      }
+      if (businessType === "caterer" || businessType === "private_chef") {
+        return businessType;
+      }
+      if (
+        role === "business" ||
+        pathname.startsWith("/restaurant-signup") ||
+        pathname.startsWith("/restaurant-owner-dashboard") ||
+        pathname.startsWith("/menu-builder") ||
+        pathname.startsWith("/edit-restaurant")
+      ) {
+        return "restaurant_owner";
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+  const getRequestedBusinessOAuthUserType = (
+    req: any,
+  ): User["userType"] | null => {
+    const explicit =
+      typeof req.query?.userType === "string" ? req.query.userType : "";
+    if (businessOAuthUserTypes.has(explicit as User["userType"])) {
+      return explicit as User["userType"];
+    }
+    return inferBusinessOAuthUserTypeFromPath(
+      firstRequestValue(req.query?.next, req.query?.returnTo, req.query?.redirect),
+    );
+  };
+  const googleAuthPathForUser = (user: User, next?: unknown) => {
+    const userType = String(user.userType || "customer") as User["userType"];
+    const usesBusinessOAuth = businessOAuthUserTypes.has(userType);
+    const params = new URLSearchParams();
+    const safeNext = safeOAuthReturnPath(
+      next,
+      usesBusinessOAuth ? oauthFallbackForUserType(userType) : "/",
+    );
+
+    if (safeNext && safeNext !== "/") params.set("next", safeNext);
+    if (usesBusinessOAuth) {
+      params.set("userType", userType);
+      return `/api/auth/google/restaurant?${params.toString()}`;
+    }
+
+    const query = params.toString();
+    return query ? `/api/auth/google/customer?${query}` : "/api/auth/google/customer";
+  };
+  const postLoginRedirectForUser = (userType?: string | null) => {
+    switch (String(userType || "")) {
+      case "host":
+        return "/host/dashboard";
+      case "event_coordinator":
+        return "/event-coordinator/dashboard";
+      case "restaurant_owner":
+      case "food_truck":
+      case "caterer":
+      case "private_chef":
+        return "/restaurant-owner-dashboard";
+      case "supplier":
+        return "/supplier/dashboard";
+      case "staff":
+      case "admin":
+      case "super_admin":
+        return "/admin/dashboard";
+      default:
+        return "/";
+    }
+  };
   const normalizePhone = (phone: unknown) =>
     String(phone || "").replace(/\D/g, "");
   const captureOAuthSignupPhone = (req: any) => {
@@ -797,6 +889,19 @@ export async function setupUnifiedAuth(app: Express) {
 
     // Google OAuth routes for customers
     app.get("/api/auth/google/customer", (req, res, next) => {
+      const businessUserType = getRequestedBusinessOAuthUserType(req);
+      if (businessUserType) {
+        const params = new URLSearchParams();
+        params.set("userType", businessUserType);
+        for (const key of ["next", "returnTo", "redirect", "phone", "signupPhone", "app"]) {
+          const value = firstRequestValue(req.query?.[key]);
+          if (typeof value === "string" && value.trim()) {
+            params.set(key, value.trim());
+          }
+        }
+        return res.redirect(`/api/auth/google/restaurant?${params.toString()}`);
+      }
+
       req.session.googleAppContext = getOAuthAppContext(req);
       req.session.oauthUserType = "customer";
       captureOAuthSignupPhone(req);
@@ -1966,7 +2071,7 @@ export async function setupUnifiedAuth(app: Express) {
   // Email/password login for restaurant owners
   app.post("/api/auth/restaurant/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, next } = req.body;
 
       if (!email || !password) {
         return res
@@ -1989,7 +2094,7 @@ export async function setupUnifiedAuth(app: Express) {
           error: "This account uses Google sign-in. Continue with Google.",
           code: "google_auth_required",
           provider: "google",
-          authUrl: "/api/auth/google/restaurant",
+          authUrl: googleAuthPathForUser(user, next),
         });
       }
 
@@ -2021,7 +2126,7 @@ export async function setupUnifiedAuth(app: Express) {
   // Email/password login for all users
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, next } = req.body;
 
       if (!email || !password) {
         return res
@@ -2039,7 +2144,7 @@ export async function setupUnifiedAuth(app: Express) {
           error: "This account uses Google sign-in. Continue with Google.",
           code: "google_auth_required",
           provider: "google",
-          authUrl: "/api/auth/google/customer",
+          authUrl: googleAuthPathForUser(user, next),
         });
       }
 
@@ -2482,6 +2587,8 @@ export async function setupUnifiedAuth(app: Express) {
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
+        userType: user.userType,
+        redirectPath: postLoginRedirectForUser(user.userType),
       });
     } catch (error) {
       console.error("Token validation error:", error);
@@ -2553,15 +2660,19 @@ export async function setupUnifiedAuth(app: Express) {
         phone: normalizedPhone,
       };
 
-      await storage.updateUser(user.id, updateData);
+      const updatedUser = await storage.updateUser(user.id, updateData);
 
       // Mark token as used
       await storage.markAccountSetupTokenUsed(setupToken.id);
 
       // Send welcome email with verification link after profile completion
-      void sendWelcomeOrVerification(user, req, "account setup");
+      void sendWelcomeOrVerification(updatedUser || user, req, "account setup");
 
-      res.json({ message: "Account setup completed successfully" });
+      res.json({
+        message: "Account setup completed successfully",
+        userType: (updatedUser || user).userType,
+        redirectPath: postLoginRedirectForUser((updatedUser || user).userType),
+      });
     } catch (error) {
       console.error("Account setup error:", error);
       res.status(500).json({ error: "Unable to complete account setup" });
@@ -2579,6 +2690,14 @@ export async function setupUnifiedAuth(app: Express) {
       const redirectToStatus = (status: string) => {
         const url = new URL("/verify-email", redirectBase);
         url.searchParams.set("status", status);
+        const nextPath = safeOAuthReturnPath(req.query?.next, "");
+        if (nextPath) url.searchParams.set("next", nextPath);
+        for (const key of ["source", "accountType", "businessType"]) {
+          const value = firstRequestValue(req.query?.[key]);
+          if (typeof value === "string" && value.trim()) {
+            url.searchParams.set(key, value.trim());
+          }
+        }
         return res.redirect(url.toString());
       };
 
@@ -2616,34 +2735,10 @@ export async function setupUnifiedAuth(app: Express) {
         await storage.markEmailVerificationTokenUsed(verificationToken.id);
       }
 
-      const requestedNext = String(req.query.next || "").trim();
-      const safeNext =
-        requestedNext.startsWith("/") &&
-        !requestedNext.startsWith("//") &&
-        !requestedNext.includes("://")
-          ? requestedNext
-          : "";
-
       // After verification, send users to a role-appropriate place *after* they log in.
       // The login page honors `?redirect=` (safe, same-origin paths only).
-      const defaultRedirectPath = (() => {
-        switch (user.userType) {
-          case "host":
-            return "/host/dashboard";
-          case "event_coordinator":
-            return "/events";
-          case "restaurant_owner":
-          case "food_truck":
-            return "/restaurant-owner-dashboard";
-          case "staff":
-            return "/staff";
-          case "admin":
-          case "super_admin":
-            return "/admin/dashboard";
-          default:
-            return "/";
-        }
-      })();
+      const safeNext = safeOAuthReturnPath(req.query.next, "");
+      const defaultRedirectPath = postLoginRedirectForUser(user.userType);
 
       const redirectUrl = `${redirectBase}/login?verified=1&redirect=${encodeURIComponent(
         safeNext || defaultRedirectPath,

@@ -41,6 +41,24 @@ export function registerRestaurantOperationsRoutes(
     hasBusinessDistributionAccess,
   }: RestaurantOperationsRouteDependencies,
 ) {
+  const getAnalyticsDateRange = (
+    query: Record<string, unknown>,
+    fallbackDays?: number,
+  ) => {
+    const { startDate, endDate } = query;
+    if (startDate && endDate) {
+      return {
+        start: new Date(startDate as string),
+        end: new Date(endDate as string),
+      };
+    }
+    if (!fallbackDays) return undefined;
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - fallbackDays);
+    return { start, end };
+  };
+
   const urlOrEmpty = z.string().trim().url().optional().nullable().or(z.literal(""));
   const restaurantProfileUpdateSchema = z
     .object({
@@ -1070,12 +1088,14 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
-    "/api/restaurants/:restaurantId/analytics/summary",
+    [
+      "/api/restaurants/:restaurantId/analytics/summary",
+      "/api/restaurants/:restaurantId/analytics/summary/:legacyRange",
+    ],
     isAuthenticated,
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
-        const { startDate, endDate } = req.query;
 
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
@@ -1097,13 +1117,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        let dateRange: { start: Date; end: Date } | undefined;
-        if (startDate && endDate) {
-          dateRange = {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
-          };
-        }
+        const dateRange = getAnalyticsDateRange(
+          req.query,
+          req.params.legacyRange ? 30 : undefined,
+        );
 
         const summary = await storage.getRestaurantAnalyticsSummary(
           restaurantId,
@@ -1118,7 +1135,10 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
-    "/api/restaurants/:restaurantId/analytics/timeseries",
+    [
+      "/api/restaurants/:restaurantId/analytics/timeseries",
+      "/api/restaurants/:restaurantId/analytics/timeseries/:legacyRange",
+    ],
     isAuthenticated,
     async (req: any, res) => {
       try {
@@ -1145,7 +1165,12 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        if (!startDate || !endDate) {
+        const dateRange = getAnalyticsDateRange(
+          req.query,
+          req.params.legacyRange ? 30 : undefined,
+        );
+
+        if (!dateRange || (!startDate && !endDate && !req.params.legacyRange)) {
           return res
             .status(400)
             .json({ message: "startDate and endDate are required" });
@@ -1153,10 +1178,7 @@ export function registerRestaurantOperationsRoutes(
 
         const timeseries = await storage.getRestaurantAnalyticsTimeseries(
           restaurantId,
-          {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
-          },
+          dateRange,
           interval as "day" | "week",
         );
         res.json(timeseries);
@@ -1170,12 +1192,14 @@ export function registerRestaurantOperationsRoutes(
   );
 
   app.get(
-    "/api/restaurants/:restaurantId/analytics/customers",
+    [
+      "/api/restaurants/:restaurantId/analytics/customers",
+      "/api/restaurants/:restaurantId/analytics/customers/:legacyRange",
+    ],
     isAuthenticated,
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
-        const { startDate, endDate } = req.query;
 
         const isAuthorized = await storage.verifyRestaurantOwnership(
           restaurantId,
@@ -1197,13 +1221,10 @@ export function registerRestaurantOperationsRoutes(
           });
         }
 
-        let dateRange: { start: Date; end: Date } | undefined;
-        if (startDate && endDate) {
-          dateRange = {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
-          };
-        }
+        const dateRange = getAnalyticsDateRange(
+          req.query,
+          req.params.legacyRange ? 30 : undefined,
+        );
 
         const insights = await storage.getRestaurantCustomerInsights(
           restaurantId,

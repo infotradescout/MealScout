@@ -190,6 +190,21 @@ async function ensureFirstPartnerLifetimeAccess(user: any) {
   return updated || user;
 }
 
+function ownerUserTypeForRestaurants(ownedRestaurants: any[]) {
+  const primary =
+    ownedRestaurants.find((row) => Boolean(row?.isFoodTruck)) ||
+    ownedRestaurants.find((row) => String(row?.businessType || "").trim()) ||
+    ownedRestaurants[0];
+  const businessType = String(primary?.businessType || "").toLowerCase();
+
+  if (Boolean(primary?.isFoodTruck) || businessType === "food_truck") {
+    return "food_truck";
+  }
+  if (businessType === "caterer") return "caterer";
+  if (businessType === "private_chef") return "private_chef";
+  return ownedRestaurants.length > 0 ? "restaurant_owner" : null;
+}
+
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
     .toLowerCase()
@@ -340,20 +355,18 @@ export function registerAuthAccountRoutes(app: Express) {
 
       if (String(user?.userType || "") === "customer") {
         const ownedRestaurants = await storage.getRestaurantsByOwner(user.id);
-        const hasFoodTruckProfile = ownedRestaurants.some(
-          (row: any) =>
-            Boolean(row?.isFoodTruck) ||
-            String(row?.businessType || "").toLowerCase() === "food_truck",
+        const ownerUserType = ownerUserTypeForRestaurants(
+          ownedRestaurants as any[],
         );
 
-        if (hasFoodTruckProfile) {
+        if (ownerUserType) {
           try {
-            await storage.updateUserType(user.id, "food_truck");
-            user = { ...user, userType: "food_truck" };
+            await storage.updateUserType(user.id, ownerUserType);
+            user = { ...user, userType: ownerUserType };
             req.user = user;
           } catch (roleFixError) {
             console.warn(
-              "Unable to auto-correct userType to food_truck:",
+              "Unable to auto-correct userType for business owner:",
               roleFixError,
             );
           }

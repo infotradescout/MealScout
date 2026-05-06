@@ -47,6 +47,36 @@ const accountSetupSchema = z
 
 type AccountSetupFormData = z.infer<typeof accountSetupSchema>;
 
+const getDefaultRedirectForUserType = (userType?: string) => {
+  switch (String(userType || "")) {
+    case "host":
+      return "/host/dashboard";
+    case "event_coordinator":
+      return "/event-coordinator/dashboard";
+    case "restaurant_owner":
+    case "food_truck":
+    case "caterer":
+    case "private_chef":
+      return "/restaurant-owner-dashboard";
+    case "supplier":
+      return "/supplier/dashboard";
+    case "staff":
+    case "admin":
+    case "super_admin":
+      return "/admin/dashboard";
+    default:
+      return "/";
+  }
+};
+
+const getSafeRedirectPath = (candidate?: string | null, fallback = "/") => {
+  const value = String(candidate || "").trim();
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("://")) {
+    return fallback;
+  }
+  return value;
+};
+
 export default function AccountSetup() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -84,6 +114,8 @@ export default function AccountSetup() {
     firstName?: string;
     lastName?: string;
     phone?: string;
+    userType?: string;
+    redirectPath?: string;
     error?: string;
   }>({
     queryKey: ["/api/auth/validate-setup-token", token],
@@ -119,23 +151,30 @@ export default function AccountSetup() {
 
   const setupMutation = useMutation({
     mutationFn: async (data: AccountSetupFormData) => {
-      return await apiRequest("POST", "/api/auth/complete-setup", {
+      const res = await apiRequest("POST", "/api/auth/complete-setup", {
         token,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
       });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (payload: any) => {
       setSetupComplete(true);
       toast({
         title: "Account ready",
         description: "Your account is ready. You can now log in.",
       });
+      const redirectPath = getSafeRedirectPath(
+        payload?.redirectPath || tokenValidation?.redirectPath,
+        getDefaultRedirectForUserType(
+          payload?.userType || tokenValidation?.userType,
+        ),
+      );
       // Redirect to login after 2 seconds
       setTimeout(() => {
-        setLocation("/login?redirect=/truck-onboarding");
+        setLocation(`/login?redirect=${encodeURIComponent(redirectPath)}`);
       }, 2000);
     },
     onError: (error: any) => {
