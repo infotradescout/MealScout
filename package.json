@@ -71,6 +71,7 @@
     "test:admin-signup-email": "tsx scripts/testAdminSignupEmail.ts",
     "test:owner-discoverability-flow": "tsx scripts/testOwnerDiscoverabilityFlow.ts",
     "test:host-parking-pass-boundaries": "tsx scripts/testHostDashboardParkingPassBoundaries.ts",
+    "audit:admin-staff-surfaces": "tsx scripts/auditAdminStaffSurfaces.ts",
     "audit:signup-flows": "tsx scripts/auditSignupFlows.ts",
     "test:flows:with-server": "node scripts/testFlowsWithServer.mjs",
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",

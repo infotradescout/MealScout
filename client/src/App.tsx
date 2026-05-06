@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ToastAction } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from "react";
 import AdminQuickHeader from "@/components/admin-quick-header";
 import Navigation from "@/components/navigation";
 import { TimeOfDayBackground } from "@/components/TimeOfDayBackground";
@@ -334,6 +334,9 @@ function Router() {
   const [location, setLocation] = useLocation();
   const isRootPath = location === "/";
   const isLikelyPublicRoute = isPublicPath(location);
+  const userType = String(user?.userType || "").toLowerCase();
+  const isAdminUser = userType === "admin" || userType === "super_admin";
+  const isStaffOrAdminUser = isAdminUser || userType === "staff";
   const shouldUseGuestRoutes =
     !isAuthenticated || (authState === "loading" && isLikelyPublicRoute);
 
@@ -406,6 +409,22 @@ function Router() {
   if (authState === "loading" && isRootPath) {
     return <PageLoader />;
   }
+
+  const staffOrAdminRoute = (children: ReactNode) =>
+    isStaffOrAdminUser ? <>{children}</> : <Redirect to="/dashboard" />;
+
+  const adminOnlyRoute = (children: ReactNode) =>
+    isAdminUser ? (
+      <>{children}</>
+    ) : (
+      <Redirect to={isStaffOrAdminUser ? "/staff" : "/dashboard"} />
+    );
+
+  const adminLandingRoute = () => {
+    if (isAdminUser) return <Redirect to="/admin/dashboard" />;
+    if (isStaffOrAdminUser) return <Redirect to="/staff" />;
+    return <Redirect to="/dashboard" />;
+  };
 
   return (
     <Suspense fallback={<PageLoader />}>
@@ -566,7 +585,7 @@ function Router() {
             <Route path="/request-truck" component={RequestTruck} />
             <Route path="/events" component={EventsRouter} />
             <Route path="/truck-discovery" component={TruckDiscovery} />
-            <Route path="/admin/events" component={EventsRouter} />
+            <Route path="/admin/events" component={AdminLogin} />
             <Route
               path="/event-coordinator/dashboard"
               component={EventsRouter}
@@ -723,51 +742,79 @@ function Router() {
               component={SupplierDashboardPage}
             />
             <Route path="/affiliate/earnings" component={AffiliateEarnings} />
-            <Route path="/staff" component={StaffDashboard} />
-            <Route path="/admin" component={AdminLogin} />
-            <Route path="/admin/dashboard" component={AdminDashboard} />
-            <Route path="/admin/incidents" component={AdminIncidents} />
-            <Route path="/admin/launch-week" component={AdminLaunchWeek} />
-            <Route
-              path="/admin/control-center"
-              component={AdminControlCenter}
-            />
-            <Route path="/admin/legacy-dashboard" component={AdminDashboard} />
-            <Route path="/admin/tickets" component={AdminSupportTickets} />
-            <Route path="/admin/moderation" component={AdminModerationEvents} />
-            <Route path="/admin/moderation/queue" component={ModerationQueue} />
-            <Route
-              path="/admin/moderation/videos"
-              component={AdminModerationVideos}
-            />
-            <Route
-              path="/admin/moderation/metrics"
-              component={AdminModerationMetrics}
-            />
-            <Route
-              path="/admin/moderation/appeals"
-              component={AdminModerationAppeals}
-            />
-            <Route path="/admin/audit-logs" component={AdminAuditLogs} />
-            <Route path="/admin/vac-logs" component={AdminVacLogs} />
-            <Route path="/admin/telemetry" component={AdminTelemetry} />
-            <Route
-              path="/admin/sentiment-intelligence"
-              component={AdminSentimentIntelligence}
-            />
-            <Route path="/admin/geo-ads" component={AdminGeoAds} />
-            <Route path="/admin/lead-import" component={AdminLeadImport} />
-            <Route path="/admin/media/videos" component={AdminMediaVideos} />
-            <Route path="/admin/owner-seo" component={AdminOwnerSeoPage} />
-            <Route
-              path="/admin/truck-sightings"
-              component={AdminTruckSightings}
-            />
-            <Route
-              path="/admin/affiliates"
-              component={AdminAffiliateManagement}
-            />
-            <Route path="/admin/switcher" component={DashboardSwitcherPage} />
+            <Route path="/staff">
+              {() => staffOrAdminRoute(<StaffDashboard />)}
+            </Route>
+            <Route path="/admin">{adminLandingRoute}</Route>
+            <Route path="/admin/dashboard">
+              {() => staffOrAdminRoute(<AdminDashboard />)}
+            </Route>
+            <Route path="/admin/events">
+              {() => staffOrAdminRoute(<EventsRouter />)}
+            </Route>
+            <Route path="/admin/incidents">
+              {() => adminOnlyRoute(<AdminIncidents />)}
+            </Route>
+            <Route path="/admin/launch-week">
+              {() => staffOrAdminRoute(<AdminLaunchWeek />)}
+            </Route>
+            <Route path="/admin/control-center">
+              {() => adminOnlyRoute(<AdminControlCenter />)}
+            </Route>
+            <Route path="/admin/legacy-dashboard">
+              {() => staffOrAdminRoute(<AdminDashboard />)}
+            </Route>
+            <Route path="/admin/tickets">
+              {() => adminOnlyRoute(<AdminSupportTickets />)}
+            </Route>
+            <Route path="/admin/moderation">
+              {() => adminOnlyRoute(<AdminModerationEvents />)}
+            </Route>
+            <Route path="/admin/moderation/queue">
+              {() => adminOnlyRoute(<ModerationQueue />)}
+            </Route>
+            <Route path="/admin/moderation/videos">
+              {() => adminOnlyRoute(<AdminModerationVideos />)}
+            </Route>
+            <Route path="/admin/moderation/metrics">
+              {() => adminOnlyRoute(<AdminModerationMetrics />)}
+            </Route>
+            <Route path="/admin/moderation/appeals">
+              {() => adminOnlyRoute(<AdminModerationAppeals />)}
+            </Route>
+            <Route path="/admin/audit-logs">
+              {() => adminOnlyRoute(<AdminAuditLogs />)}
+            </Route>
+            <Route path="/admin/vac-logs">
+              {() => adminOnlyRoute(<AdminVacLogs />)}
+            </Route>
+            <Route path="/admin/telemetry">
+              {() => adminOnlyRoute(<AdminTelemetry />)}
+            </Route>
+            <Route path="/admin/sentiment-intelligence">
+              {() => adminOnlyRoute(<AdminSentimentIntelligence />)}
+            </Route>
+            <Route path="/admin/geo-ads">
+              {() => adminOnlyRoute(<AdminGeoAds />)}
+            </Route>
+            <Route path="/admin/lead-import">
+              {() => staffOrAdminRoute(<AdminLeadImport />)}
+            </Route>
+            <Route path="/admin/media/videos">
+              {() => adminOnlyRoute(<AdminMediaVideos />)}
+            </Route>
+            <Route path="/admin/owner-seo">
+              {() => adminOnlyRoute(<AdminOwnerSeoPage />)}
+            </Route>
+            <Route path="/admin/truck-sightings">
+              {() => staffOrAdminRoute(<AdminTruckSightings />)}
+            </Route>
+            <Route path="/admin/affiliates">
+              {() => adminOnlyRoute(<AdminAffiliateManagement />)}
+            </Route>
+            <Route path="/admin/switcher">
+              {() => staffOrAdminRoute(<DashboardSwitcherPage />)}
+            </Route>
             <Route path="/category/:category" component={CategoryPage} />
             <Route path="/cuisine/:type" component={CategoryPage} />
             <Route path="/deals" component={FeaturedDealsPage} />
@@ -886,7 +933,6 @@ function Router() {
               path="/food-truck-booking-software/:citySlug"
               component={FoodTruckOwnerIntentPage}
             />
-            <Route path="/admin/events" component={EventsRouter} />
             <Route path="/events/public" component={EventsRouter} />
             <Route path="/events/:slug" component={EventDetailPage} />
             <Route path="/event/:slug" component={EventDetailPage} />
@@ -916,8 +962,10 @@ function Router() {
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
-            <Route path="/admin/login" component={AdminLogin} />
-            <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
+            <Route path="/admin/login">{adminLandingRoute}</Route>
+            <Route path="/admin/oauth-setup">
+              {() => adminOnlyRoute(<OAuthSetupGuide />)}
+            </Route>
             <Route
               path="/profile/notifications"
               component={NotificationsPage}
