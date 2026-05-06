@@ -98,6 +98,8 @@ interface OwnerRow {
       itemsImported: number;
       itemsSkipped: number;
       errorCount: number;
+      /** First error reason, truncated server-side to ~240 chars. */
+      reason: string | null;
       createdAt: string | null;
     } | null;
     createdAt: string;
@@ -781,7 +783,7 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                       </a>
                     </Button>
                     {r.lastImportFailure && (
-                      <span className="text-red-500 dark:text-red-300">
+                      <span className="basis-full text-red-500 dark:text-red-300 leading-snug">
                         Last {r.lastImportFailure.source} import{" "}
                         {r.lastImportFailure.createdAt
                           ? fmtDate(r.lastImportFailure.createdAt)
@@ -791,6 +793,14 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                               r.lastImportFailure.errorCount === 1 ? "" : "s"
                             }`
                           : ""}
+                        {r.lastImportFailure.reason && (
+                          <span
+                            className="block text-[11px] text-red-400 dark:text-red-300/90 mt-0.5 break-words"
+                            title={r.lastImportFailure.reason}
+                          >
+                            → {r.lastImportFailure.reason}
+                          </span>
+                        )}
                       </span>
                     )}
                     {r.failedImports > 0 && (

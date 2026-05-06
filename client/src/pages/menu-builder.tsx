@@ -1266,11 +1266,20 @@ export default function MenuBuilderPage() {
                     importType === "csv"
                       ? ".csv,.tsv,.xlsx,.xls"
                       : importType === "image"
-                        ? "image/*"
-                        : ".pdf"
+                        ? // Accept anything image-like that the server normalizer
+                          // can transcode (HEIC, AVIF, TIFF, BMP, SVG all welcome).
+                          "image/*,.heic,.heif,.avif,.tif,.tiff,.bmp,.svg"
+                        : ".pdf,application/pdf"
                   }
                   onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
                 />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {importType === "csv"
+                    ? "CSV, TSV, XLSX, or XLS exports."
+                    : importType === "image"
+                      ? "Any photo of your menu works — JPG, PNG, HEIC, AVIF, WebP, GIF, TIFF, or BMP. iPhone photos upload directly."
+                      : "PDF menu (multi-page is fine)."}
+                </p>
               </div>
             )}
           </div>
