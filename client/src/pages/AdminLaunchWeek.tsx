@@ -23,6 +23,7 @@ import {
   CreditCard,
   Eye,
   FileWarning,
+  Send,
   Utensils,
   RefreshCw,
 } from "lucide-react";
@@ -36,6 +37,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -460,6 +471,43 @@ function useOwnerAction() {
   });
 }
 
+type UserMessageVars = {
+  userId: string;
+  subject: string;
+  message: string;
+  context?: string;
+};
+
+function useUserMessageAction() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (vars: UserMessageVars) => {
+      const res = await fetch(apiUrl("/api/admin/email/user-message"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vars),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || `Failed (${res.status})`);
+      return body;
+    },
+    onSuccess: (_data, vars) => {
+      toast({
+        title: "Email sent",
+        description: vars.subject,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Email failed",
+        description: err?.message || "Try again",
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 function SummaryCard({
   icon,
   label,
@@ -498,11 +546,129 @@ function SummaryCard({
   );
 }
 
+function MessageUserDialog({
+  userId,
+  email,
+  name,
+  buttonLabel = "Message user",
+  defaultSubject,
+  defaultMessage,
+  context,
+  buttonVariant = "outline",
+  buttonSize = "sm",
+}: {
+  userId: string;
+  email: string | null;
+  name: string;
+  buttonLabel?: string;
+  defaultSubject: string;
+  defaultMessage: string;
+  context?: string;
+  buttonVariant?: React.ComponentProps<typeof Button>["variant"];
+  buttonSize?: React.ComponentProps<typeof Button>["size"];
+}) {
+  const [open, setOpen] = useState(false);
+  const [subject, setSubject] = useState(defaultSubject);
+  const [message, setMessage] = useState(defaultMessage);
+  const sendMessage = useUserMessageAction();
+  const fieldId = `${userId}-${context || buttonLabel}`.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "-",
+  );
+  const canSend =
+    Boolean(email) &&
+    subject.trim().length >= 3 &&
+    message.trim().length > 0 &&
+    !sendMessage.isPending;
+
+  const handleSend = () => {
+    if (!canSend) return;
+    sendMessage.mutate(
+      {
+        userId,
+        subject: subject.trim(),
+        message: message.trim(),
+        context,
+      },
+      {
+        onSuccess: () => setOpen(false),
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size={buttonSize}
+          variant={buttonVariant}
+          disabled={!email}
+          title={email ? undefined : "User has no email on file"}
+        >
+          <Mail className="w-3 h-3 mr-1" />
+          {buttonLabel}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Message {name}</DialogTitle>
+          <DialogDescription>
+            This sends a real MealScout support email to {email}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor={`subject-${fieldId}`}>
+              Subject
+            </label>
+            <Input
+              id={`subject-${fieldId}`}
+              value={subject}
+              maxLength={160}
+              onChange={(event) => setSubject(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor={`message-${fieldId}`}>
+              Message
+            </label>
+            <Textarea
+              id={`message-${fieldId}`}
+              rows={8}
+              maxLength={5000}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            They can reply directly to the email if they need help.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setOpen(false)}
+            disabled={sendMessage.isPending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleSend} disabled={!canSend}>
+            <Send className="w-3 h-3 mr-1" />
+            {sendMessage.isPending ? "Sending..." : "Send email"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function OwnerCard({ owner }: { owner: OwnerRow }) {
   const name =
     [owner.firstName, owner.lastName].filter(Boolean).join(" ") ||
     owner.email ||
     "(no name)";
+  const firstName = owner.firstName || "there";
   const isFoodTruck = owner.userType === "food_truck";
   const action = useOwnerAction();
   const run = (a: string) =>
@@ -594,6 +760,18 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                           : ""}
                       </span>
                     )}
+                    {r.failedImports > 0 && (
+                      <MessageUserDialog
+                        userId={owner.id}
+                        email={owner.email}
+                        name={name}
+                        buttonLabel="Tell them fixed"
+                        buttonVariant="ghost"
+                        defaultSubject={`MealScout menu import update for ${r.name}`}
+                        defaultMessage={`Hi ${firstName},\n\nGood news - I fixed the issue that was blocking the menu import for ${r.name}. Please try the import again from your MealScout dashboard.\n\nIf it still gives you trouble, reply to this email and I will help directly.\n\nThanks,\nThe MealScout team`}
+                        context={`launch-week-menu-import:${r.id}`}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -651,10 +829,31 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
               </Button>
             )}
           {owner.email && (
-            <Button size="sm" variant="ghost" asChild>
-              <a href={`mailto:${owner.email}`}>Email directly</a>
-            </Button>
+            <MessageUserDialog
+              userId={owner.id}
+              email={owner.email}
+              name={name}
+              buttonLabel="Message user"
+              buttonVariant="ghost"
+              defaultSubject="Quick update from MealScout"
+              defaultMessage={`Hi ${firstName},\n\nQuick update from MealScout:\n\n\nThanks,\nThe MealScout team`}
+              context="launch-week-general"
+            />
           )}
+          {owner.email &&
+            owner.restaurants.length > 0 &&
+            owner.restaurants.some((r) => !r.isVerified || !r.isActive) && (
+              <MessageUserDialog
+                userId={owner.id}
+                email={owner.email}
+                name={name}
+                buttonLabel="Message about proof"
+                buttonVariant="ghost"
+                defaultSubject="MealScout verification proof update"
+                defaultMessage={`Hi ${firstName},\n\nQuick update on your MealScout listing: we still need commercial insurance or acceptable business proof before we can verify and fully publish it.\n\nYou can upload it from your dashboard, or reply to this email and I will help you get it handled.\n\nThanks,\nThe MealScout team`}
+                context="launch-week-insurance-proof"
+              />
+            )}
         </div>
       </CardContent>
     </Card>

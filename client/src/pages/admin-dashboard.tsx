@@ -6100,6 +6100,45 @@ export default function AdminDashboard() {
     },
   });
 
+  const overrideTruckInsurance = useMutation({
+    mutationFn: async (ownerId: string) => {
+      const res = await apiRequest(
+        "POST",
+        "/api/admin/insurance-verifications/override",
+        {
+          ownerId,
+          reviewerNotes:
+            "365-day admin override while insurance upload and verification issues are being resolved.",
+        },
+      );
+      return await res.json();
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications", "pending"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/admin/insurance-verifications"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({
+        title: result?.alreadyApproved
+          ? "Truck Already Approved"
+          : "Truck Approved for 365 Days",
+        description: `${result?.count || 1} truck profile(s) covered by the admin override.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Override failed",
+        description:
+          error?.message ||
+          "Could not apply the 365-day insurance verification override.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const submitBusinessProof = useMutation({
     mutationFn: async () => {
       const selectedEntity = businessProofEntityOptions.find(
@@ -9873,6 +9912,8 @@ export default function AdminDashboard() {
                     const pendingInsurance = pendingInsuranceByOwnerId.get(
                       String(user.id || ""),
                     );
+                    const canOverrideTruckInsurance =
+                      String(user.userType || "") === "food_truck";
                     return (
                     <div
                       key={user.id}
@@ -9985,6 +10026,26 @@ export default function AdminDashboard() {
                               {pendingInsurance
                                 ? "Approve Business Proof"
                                 : "Upload Business Proof"}
+                            </Button>
+                          )}
+                          {isAdminOrSuper && canOverrideTruckInsurance && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Approve ${user.firstName || user.email || "this truck owner"} for 365 days without requiring another insurance upload?`,
+                                  )
+                                ) {
+                                  overrideTruckInsurance.mutate(user.id);
+                                }
+                              }}
+                              disabled={overrideTruckInsurance.isPending}
+                              data-testid={`button-override-insurance-${user.id}`}
+                            >
+                              <Shield className="w-3 h-3 mr-1" />
+                              365d Insurance Override
                             </Button>
                           )}
                           <Button

@@ -15,6 +15,7 @@ import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { validateDocuments } from "../documentValidation";
 import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 import { isCloudinaryConfigured, uploadRawToCloudinary } from "../imageUpload";
+import { ensurePremiumTrialForUserId } from "../services/premiumTrial";
 
 const insuranceDocumentUpload = multer({
   storage: multer.memoryStorage(),
@@ -84,6 +85,45 @@ const adminInsuranceSubmitSchema = z.object({
   notes: z.string().trim().max(2000).optional().nullable(),
   metadata: z.record(z.any()).optional().default({}),
 });
+
+const adminInsuranceOverrideSchema = z
+  .object({
+    entityType: z
+      .enum([
+        "restaurant",
+        "food_truck",
+        "caterer",
+        "private_chef",
+        "host",
+      ])
+      .optional(),
+    entityId: z.string().trim().min(1).optional(),
+    ownerId: z.string().trim().min(1).optional(),
+    reviewerNotes: z.string().trim().max(2000).optional().nullable(),
+  })
+  .refine((value) => Boolean(value.entityId || value.ownerId), {
+    message: "A business or owner is required",
+  });
+
+type AdminInsuranceEntityInput = {
+  entityType: "restaurant" | "food_truck" | "caterer" | "private_chef" | "host";
+  entityId: string;
+  ownerId?: string | null;
+};
+
+type ResolvedInsuranceEntity = {
+  entityType: "restaurant" | "food_truck" | "caterer" | "private_chef" | "host";
+  entityId: string;
+  ownerId: string;
+  city: string | null;
+  state: string | null;
+};
+
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+};
 
 function getRestaurantInsuranceEntityType(restaurant: {
   isFoodTruck?: boolean | null;
@@ -182,7 +222,7 @@ async function requireOwnedInsuranceEntity(req: any, res: any) {
 }
 
 async function resolveAdminInsuranceEntity(
-  input: z.infer<typeof adminInsuranceSubmitSchema>,
+  input: AdminInsuranceEntityInput,
   res: any,
 ) {
   if (input.entityType === "host") {
@@ -255,6 +295,122 @@ async function resolveAdminInsuranceEntity(
     city: restaurant.city,
     state: restaurant.state,
   };
+}
+
+async function approveInsuranceOverrideEntity(
+  entity: ResolvedInsuranceEntity,
+  req: any,
+  reviewerNotes?: string | null,
+) {
+  const now = new Date();
+  const [latestApproved] = await db
+    .select()
+    .from(businessInsuranceVerifications)
+    .where(
+      and(
+        eq(businessInsuranceVerifications.entityType, entity.entityType),
+        eq(businessInsuranceVerifications.entityId, entity.entityId),
+        eq(businessInsuranceVerifications.status, "approved"),
+      ),
+    )
+    .orderBy(desc(businessInsuranceVerifications.createdAt))
+    .limit(1);
+
+  const latestApprovedExpiresAt = latestApproved?.expiresAt
+    ? new Date(latestApproved.expiresAt)
+    : null;
+  if (
+    latestApproved &&
+    latestApprovedExpiresAt &&
+    latestApprovedExpiresAt.getTime() > now.getTime() &&
+    latestApproved.attestedCommercialCoverage &&
+    latestApproved.attestedJurisdictionCompliance
+  ) {
+    if (entity.entityType === "host") {
+      await db
+        .update(hosts)
+        .set({ isVerified: true, updatedAt: now })
+        .where(eq(hosts.id, entity.entityId));
+    } else {
+      await db
+        .update(restaurants)
+        .set({ isVerified: true, isActive: true, updatedAt: now })
+        .where(eq(restaurants.id, entity.entityId));
+    }
+    return { record: latestApproved, alreadyApproved: true };
+  }
+
+  const expiresAt = addDays(now, 365);
+  const [record] = await db
+    .insert(businessInsuranceVerifications)
+    .values({
+      entityType: entity.entityType,
+      entityId: entity.entityId,
+      ownerId: entity.ownerId,
+      status: "approved",
+      jurisdictionCity: entity.city || null,
+      jurisdictionState: entity.state || null,
+      jurisdictionCountry: "US",
+      carrierName: "MealScout admin override",
+      policyNumber: null,
+      coverageType: "admin_override",
+      coverageAmountCents: null,
+      effectiveDate: now,
+      expiresAt,
+      documents: [],
+      attestedCommercialCoverage: true,
+      attestedJurisdictionCompliance: true,
+      notes:
+        "365-day admin insurance verification override while upload and verification issues are being resolved.",
+      reviewerNotes:
+        reviewerNotes ||
+        "Approved by admin override. Owner should not be asked to resubmit for 365 days.",
+      reviewedBy: req.user?.id || req.user?.claims?.sub || null,
+      reviewedAt: now,
+      metadata: {
+        adminOverride: true,
+        overrideDays: 365,
+        reason: "launch_support",
+        verifiedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      },
+      updatedAt: now,
+    })
+    .returning();
+
+  if (entity.entityType === "host") {
+    await db
+      .update(hosts)
+      .set({ isVerified: true, updatedAt: now })
+      .where(eq(hosts.id, entity.entityId));
+  } else {
+    await db
+      .update(restaurants)
+      .set({ isVerified: true, isActive: true, updatedAt: now })
+      .where(eq(restaurants.id, entity.entityId));
+  }
+
+  await ensurePremiumTrialForUserId(entity.ownerId).catch((error) => {
+    console.warn("ensurePremiumTrialForUserId failed after insurance override:", error);
+  });
+
+  recordMealScoutCreditAction({
+    userId: entity.ownerId,
+    action: "insurance_approved",
+    sourceId: record.id,
+    entityType: record.entityType,
+    entityId: record.entityId,
+    metadata: {
+      reviewedBy: req.user?.id || req.user?.claims?.sub || null,
+      adminOverride: true,
+      overrideDays: 365,
+      expiresAt: record.expiresAt,
+    },
+  }).catch((creditError) => {
+    console.error("[credits] failed to record insurance override approval:", creditError);
+  });
+
+  return { record, alreadyApproved: false };
 }
 
 export function registerInsuranceVerificationRoutes(app: Express) {
@@ -565,6 +721,93 @@ export function registerInsuranceVerificationRoutes(app: Express) {
         console.error("Error storing admin insurance proof:", error);
         res.status(400).json({
           message: error?.message || "Failed to store business proof",
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/insurance-verifications/override",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const parsed = adminInsuranceOverrideSchema.parse(req.body || {});
+        const reviewerNotes =
+          parsed.reviewerNotes ||
+          "365-day admin insurance verification override while upload and verification issues are being resolved.";
+
+        let entities: ResolvedInsuranceEntity[] = [];
+        if (parsed.entityId) {
+          const entityType = parsed.entityType || "food_truck";
+          const entity = await resolveAdminInsuranceEntity(
+            {
+              entityType,
+              entityId: parsed.entityId,
+              ownerId: parsed.ownerId || null,
+            },
+            res,
+          );
+          if (!entity) return;
+          entities = [entity];
+        } else if (parsed.ownerId) {
+          const rows = await db
+            .select({
+              id: restaurants.id,
+              ownerId: restaurants.ownerId,
+              city: restaurants.city,
+              state: restaurants.state,
+              isFoodTruck: restaurants.isFoodTruck,
+              businessType: restaurants.businessType,
+            })
+            .from(restaurants)
+            .where(eq(restaurants.ownerId, parsed.ownerId))
+            .limit(25);
+
+          entities = rows
+            .filter((restaurant: any) => {
+              const businessType = String(
+                restaurant.businessType || "",
+              ).toLowerCase();
+              return Boolean(restaurant.isFoodTruck) || businessType === "food_truck";
+            })
+            .map((restaurant: any) => ({
+              entityType: "food_truck" as const,
+              entityId: String(restaurant.id),
+              ownerId: String(restaurant.ownerId),
+              city: restaurant.city,
+              state: restaurant.state,
+            }));
+
+          if (entities.length === 0) {
+            return res.status(404).json({
+              message: "No food truck business profile found for this owner",
+            });
+          }
+        }
+
+        const results = [];
+        for (const entity of entities) {
+          results.push(
+            await approveInsuranceOverrideEntity(entity, req, reviewerNotes),
+          );
+        }
+
+        console.log(
+          `[admin/insurance-override] by=${req.user?.id || req.user?.claims?.sub || "admin"} owner=${parsed.ownerId || "specific"} count=${results.length}`,
+        );
+
+        res.status(201).json({
+          ok: true,
+          overrideDays: 365,
+          count: results.length,
+          records: results.map((result) => result.record),
+          alreadyApproved: results.every((result) => result.alreadyApproved),
+        });
+      } catch (error: any) {
+        console.error("Error applying insurance override:", error);
+        res.status(400).json({
+          message: error?.message || "Failed to apply insurance override",
         });
       }
     },
