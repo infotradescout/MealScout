@@ -3,6 +3,7 @@ type BusinessListingLike = {
   address?: string | null;
   cuisineType?: string | null;
   businessType?: string | null;
+  isFoodTruck?: boolean | null;
   description?: string | null;
   imageUrl?: string | null;
   logoUrl?: string | null;
@@ -36,11 +37,38 @@ const NON_PUBLIC_OWNER_EMAIL_PATTERN =
 
 const normalize = (value: unknown): string => String(value ?? "").trim();
 
+const isMobileBusiness = (listing: BusinessListingLike): boolean => {
+  const businessType = normalize(listing.businessType).toLowerCase();
+  return (
+    listing.isFoodTruck === true ||
+    ["food_truck", "caterer", "private_chef"].includes(businessType)
+  );
+};
+
+const looksLikeRealMarket = (value: string): boolean => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length < 3) return false;
+  if (
+    ["local", "nearby", "mobile", "various", "unknown", "none"].includes(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  return /[a-z]/i.test(normalized);
+};
+
 const hasLocationContext = (listing: BusinessListingLike): boolean => {
   const address = normalize(listing.address);
   const city = normalize(listing.city);
   const state = normalize(listing.state);
   if (address.length >= 5) return true;
+  if (
+    isMobileBusiness(listing) &&
+    (looksLikeRealMarket(city) || looksLikeRealMarket(state))
+  ) {
+    return true;
+  }
   return city.length >= 2 && state.length >= 2;
 };
 
