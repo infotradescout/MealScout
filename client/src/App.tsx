@@ -17,6 +17,7 @@ import { trackMetaPageView } from "@/lib/meta-pixel";
 // Eager load only critical login shell - everything else lazy loads
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Welcome from "@/pages/welcome";
 import PurposeSelector from "@/pages/purpose-selector";
 
 // Lazy load all other pages - they only download when the user navigates to them
@@ -319,7 +320,7 @@ function AuthenticatedRestaurantSignupRoute() {
 }
 
 function GuestHomeRoute() {
-  return <CustomerSignup homePage />;
+  return <Welcome />;
 }
 
 function AuthenticatedHomeRoute() {
