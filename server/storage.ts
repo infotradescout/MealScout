@@ -725,6 +725,9 @@ export interface IStorage {
     averageRating: number;
     totalFeedback: number;
     ratingDistribution: { [key: number]: number };
+    criticWeightedAverageRating: number;
+    criticFeedbackCount: number;
+    criticWeightApplied: boolean;
   }>;
 
   // Stripe lookup operations
@@ -5241,6 +5244,9 @@ export class DatabaseStorage implements IStorage {
     averageRating: number;
     totalFeedback: number;
     ratingDistribution: { [key: number]: number };
+    criticWeightedAverageRating: number;
+    criticFeedbackCount: number;
+    criticWeightApplied: boolean;
   }> {
     return this.dealFeedbackRepository.getDealFeedbackStats(dealId);
   }

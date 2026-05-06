@@ -2766,6 +2766,7 @@ export function registerRestaurantCoreRoutes(
           updated_at: Date | null;
           first_name: string | null;
           last_name: string | null;
+          author_is_critic: boolean;
         }>`
           select
             rc.id,
@@ -2776,7 +2777,8 @@ export function registerRestaurantCoreRoutes(
             rc.created_at,
             rc.updated_at,
             u.first_name,
-            u.last_name
+            u.last_name,
+            (coalesce(u.account_settings->'critic'->>'enabled', 'false') = 'true') as author_is_critic
           from recommendation_comments rc
           inner join users u on u.id = rc.user_id
           where rc.recommendation_id = ${recommendationId}
@@ -2801,6 +2803,7 @@ export function registerRestaurantCoreRoutes(
             authorName:
               [comment.first_name, comment.last_name].filter(Boolean).join(" ").trim() ||
               "MealScout member",
+            authorIsCritic: comment.author_is_critic === true,
           })),
         });
       } catch (error) {
@@ -2916,6 +2919,9 @@ export function registerRestaurantCoreRoutes(
             authorName:
               [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" ").trim() ||
               "MealScout member",
+            authorIsCritic:
+              ((req.user?.accountSettings as any)?.critic?.enabled || false) ===
+              true,
           },
         });
       } catch (error) {

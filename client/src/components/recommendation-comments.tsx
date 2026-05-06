@@ -4,6 +4,7 @@ import { MessageCircle, Reply, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CriticBadge } from "@/components/award-badges";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type CommentTargetType = "story" | "recommendation";
@@ -15,6 +16,7 @@ type RecommendationComment = {
   text: string;
   createdAt?: string;
   authorName: string;
+  authorIsCritic?: boolean;
 };
 
 type RecommendationCommentsProps = {
@@ -193,7 +195,12 @@ function CommentBubble({
     <div className="rounded-xl bg-[var(--bg-card)] px-3 py-2">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-foreground">{comment.authorName}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-foreground">
+              {comment.authorName}
+            </p>
+            {comment.authorIsCritic && <CriticBadge size="sm" />}
+          </div>
           <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
             {comment.text}
           </p>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -34,6 +34,9 @@ import {
   Loader2,
   Award,
   Plus,
+  Send,
+  CheckCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import { VideoUploadModal } from "@/components/video-upload-modal";
@@ -41,6 +44,9 @@ import type { Deal, Restaurant, DealClaim } from "@shared/schema";
 import { SEOHead } from "@/components/seo-head";
 import ShareHub from "@/components/share-hub";
 import { readDeviceLocation, writeDeviceLocation } from "@/lib/device-location";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { getCriticSettings, type CriticSettings } from "@/lib/critic";
 
 interface UserStats {
   totalDealsUsed: number;
@@ -87,15 +93,47 @@ interface UserJourneyStats {
   };
 }
 
+interface CriticTruck {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  cuisineType?: string | null;
+  businessType?: string | null;
+  imageUrl?: string | null;
+  distanceMiles?: number | null;
+  reviewedAt?: string | null;
+  createdAt?: string | null;
+  isVerified?: boolean | null;
+}
+
+interface CriticFeedResponse {
+  days: number;
+  radiusMiles: number;
+  hasLocation: boolean;
+  trucks: CriticTruck[];
+}
+
 export default function UserDashboard() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [routeLocation] = useLocation();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
     null,
   );
   const [locationName, setLocationName] = useState("Getting location...");
+  const [criticDays, setCriticDays] = useState(14);
+  const [criticRadiusDraft, setCriticRadiusDraft] = useState("25");
   const [activeTab, setActiveTab] = useState<
-    "recent" | "nearby" | "favorites" | "recommended" | "videos" | "share"
+    | "recent"
+    | "nearby"
+    | "favorites"
+    | "recommended"
+    | "videos"
+    | "share"
+    | "critic"
   >("recent");
 
   useEffect(() => {
@@ -103,7 +141,9 @@ export default function UserDashboard() {
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("tab")
         : null;
-    setActiveTab(tabParam === "share" ? "share" : "recent");
+    setActiveTab(
+      tabParam === "share" ? "share" : tabParam === "critic" ? "critic" : "recent",
+    );
   }, [routeLocation]);
 
   // Get user location
@@ -190,6 +230,110 @@ export default function UserDashboard() {
   const { data: userJourney } = useQuery<UserJourneyStats>({
     queryKey: ["/api/awards/journey/me"],
     enabled: !!user,
+  });
+
+  const { data: criticProfile } = useQuery<{ critic: CriticSettings }>({
+    queryKey: ["/api/critic/me"],
+    enabled: !!user,
+    retry: false,
+  });
+
+  const criticSettings = criticProfile?.critic ?? getCriticSettings(user);
+  const isCritic = criticSettings.enabled;
+
+  useEffect(() => {
+    setCriticRadiusDraft(String(criticSettings.radiusMiles || 25));
+  }, [criticSettings.radiusMiles]);
+
+  const { data: criticFeed, isLoading: criticLoading } =
+    useQuery<CriticFeedResponse>({
+      queryKey: [
+        "/api/critic/new-trucks",
+        criticDays,
+        criticSettings.radiusMiles,
+        location?.lat,
+        location?.lng,
+      ],
+      enabled: isCritic,
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          days: String(criticDays),
+          radiusMiles: String(criticSettings.radiusMiles),
+        });
+        if (location) {
+          params.set("lat", String(location.lat));
+          params.set("lng", String(location.lng));
+        }
+        const res = await fetch(`/api/critic/new-trucks?${params.toString()}`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          throw new Error("Failed to load Critic truck queue");
+        }
+        return (await res.json()) as CriticFeedResponse;
+      },
+    });
+
+  const { data: affiliateStats } = useQuery<any>({
+    queryKey: ["/api/affiliate/stats"],
+    enabled: isCritic,
+  });
+
+  const updateCriticRadius = useMutation({
+    mutationFn: async (radiusMiles: number) => {
+      const res = await apiRequest("PATCH", "/api/critic/me", { radiusMiles });
+      return (await res.json()) as { critic: CriticSettings };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/critic/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/critic/new-trucks"] });
+      toast({
+        title: "Critic radius updated",
+        description: "Your New Trucks queue will use the new radius.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Radius not saved",
+        description: error?.message || "Use a radius between 1 and 250 miles.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const markCriticReviewed = useMutation({
+    mutationFn: async (restaurantId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/critic/restaurants/${restaurantId}/reviewed`,
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/critic/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/critic/new-trucks"] });
+      toast({
+        title: "Marked reviewed",
+        description: "This truck is now tracked in your Critic dashboard.",
+      });
+    },
+  });
+
+  const pitchCriticVideo = useMutation({
+    mutationFn: async (restaurantId: string) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/critic/restaurants/${restaurantId}/video-pitch`,
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/critic/me"] });
+      toast({
+        title: "Video pitched",
+        description: "The assignment is saved in your Critic dashboard.",
+      });
+    },
   });
 
   const formatCurrency = (amount: number) => {
@@ -430,17 +574,25 @@ export default function UserDashboard() {
                 | "favorites"
                 | "recommended"
                 | "videos"
-                | "share",
+                | "share"
+                | "critic",
             )
           }
           className="space-y-4"
         >
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
+          <TabsList
+            className={
+              isCritic
+                ? "grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-7"
+                : "grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6"
+            }
+          >
             <TabsTrigger value="recent">Recent</TabsTrigger>
             <TabsTrigger value="nearby">Nearby</TabsTrigger>
             <TabsTrigger value="favorites">Favorites</TabsTrigger>
             <TabsTrigger value="recommended">For You</TabsTrigger>
             <TabsTrigger value="videos">My Videos</TabsTrigger>
+            {isCritic && <TabsTrigger value="critic">New Trucks</TabsTrigger>}
             <TabsTrigger value="share">Share Hub</TabsTrigger>
           </TabsList>
 
@@ -773,6 +925,248 @@ export default function UserDashboard() {
           <TabsContent value="videos" className="space-y-4">
             <VideoCreatorSection userId={user?.id} />
           </TabsContent>
+
+          {isCritic && (
+            <TabsContent value="critic" className="space-y-4">
+              <Card className="border-amber-300/40 bg-[linear-gradient(120deg,rgba(245,158,11,0.14),rgba(255,255,255,0.02))] shadow-clean">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Award className="h-5 w-5 text-amber-600" />
+                    Critic Dashboard
+                  </CardTitle>
+                  <CardDescription>
+                    Your review radius, truck queue, affiliate activity, and video pitches.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="text-xs uppercase text-muted-foreground">
+                        Reviewed Trucks
+                      </div>
+                      <div className="mt-1 text-2xl font-bold">
+                        {Object.keys(criticSettings.reviewedRestaurants || {}).length}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="text-xs uppercase text-muted-foreground">
+                        Affiliate Earnings
+                      </div>
+                      <div className="mt-1 text-2xl font-bold">
+                        {formatCurrency(affiliateStats?.wallet?.totalEarned || 0)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3">
+                      <div className="text-xs uppercase text-muted-foreground">
+                        Video Pitches
+                      </div>
+                      <div className="mt-1 text-2xl font-bold">
+                        {criticSettings.videoAssignments?.length || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-3 rounded-lg border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Radius
+                        </label>
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="250"
+                            value={criticRadiusDraft}
+                            onChange={(event) =>
+                              setCriticRadiusDraft(event.currentTarget.value)
+                            }
+                            className="h-9 w-24 rounded border bg-background px-2 text-sm"
+                          />
+                          <span className="text-sm text-muted-foreground">miles</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={updateCriticRadius.isPending}
+                        onClick={() =>
+                          updateCriticRadius.mutate(Number(criticRadiusDraft))
+                        }
+                      >
+                        <SlidersHorizontal className="mr-1 h-4 w-4" />
+                        Save Radius
+                      </Button>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Joined Window
+                      </label>
+                      <select
+                        value={criticDays}
+                        onChange={(event) =>
+                          setCriticDays(Number(event.currentTarget.value))
+                        }
+                        className="mt-1 h-9 rounded border bg-background px-2 text-sm"
+                      >
+                        <option value={7}>Last 7 days</option>
+                        <option value={14}>Last 14 days</option>
+                        <option value={30}>Last 30 days</option>
+                        <option value={60}>Last 60 days</option>
+                      </select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                  <CardHeader>
+                    <CardTitle className="text-lg">New Trucks</CardTitle>
+                    <CardDescription>
+                      {criticFeed?.hasLocation
+                        ? `${criticFeed.trucks.length} within ${criticFeed.radiusMiles} miles`
+                        : "Location unavailable, showing recent trucks"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {criticLoading ? (
+                      <div className="flex items-center justify-center py-10 text-muted-foreground">
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Loading trucks...
+                      </div>
+                    ) : criticFeed?.trucks?.length ? (
+                      <div className="space-y-3">
+                        {criticFeed.trucks.map((truck) => {
+                          const pitched = criticSettings.videoAssignments?.some(
+                            (assignment) => assignment.restaurantId === truck.id,
+                          );
+                          return (
+                            <div
+                              key={truck.id}
+                              className="rounded-lg border border-[color:var(--border-subtle)] p-3"
+                            >
+                              <div className="flex gap-3">
+                                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-amber-500/10">
+                                  {truck.imageUrl ? (
+                                    <img
+                                      src={truck.imageUrl}
+                                      alt={truck.name}
+                                      className="h-full w-full object-cover"
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center">
+                                      <Utensils className="h-6 w-6 text-amber-600" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="font-semibold">{truck.name}</h4>
+                                    {truck.reviewedAt && (
+                                      <Badge variant="outline">
+                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                        Reviewed
+                                      </Badge>
+                                    )}
+                                    {truck.isVerified && (
+                                      <Badge variant="secondary">Verified</Badge>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {[truck.cuisineType, truck.city, truck.state]
+                                      .filter(Boolean)
+                                      .join(" · ") || "Food truck"}
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    {truck.distanceMiles !== null &&
+                                      truck.distanceMiles !== undefined && (
+                                        <span className="flex items-center gap-1">
+                                          <NavigationIcon className="h-3 w-3" />
+                                          {truck.distanceMiles.toFixed(1)} mi
+                                        </span>
+                                      )}
+                                    {truck.createdAt && (
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        Joined{" "}
+                                        {new Date(truck.createdAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Button size="sm" variant="outline" asChild>
+                                  <Link href={`/restaurant/${truck.id}`}>View</Link>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={truck.reviewedAt ? "outline" : "default"}
+                                  disabled={
+                                    !!truck.reviewedAt ||
+                                    markCriticReviewed.isPending
+                                  }
+                                  onClick={() => markCriticReviewed.mutate(truck.id)}
+                                >
+                                  <CheckCircle className="mr-1 h-4 w-4" />
+                                  Mark Reviewed
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={pitched || pitchCriticVideo.isPending}
+                                  onClick={() => pitchCriticVideo.mutate(truck.id)}
+                                >
+                                  <Send className="mr-1 h-4 w-4" />
+                                  {pitched ? "Pitched" : "Pitch Video"}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center text-muted-foreground">
+                        No new trucks match this radius yet.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Assignments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {criticSettings.videoAssignments?.length ? (
+                      criticSettings.videoAssignments.slice(0, 8).map((assignment) => (
+                        <div
+                          key={`${assignment.restaurantId}-${assignment.assignedAt}`}
+                          className="rounded-md border border-[color:var(--border-subtle)] p-2"
+                        >
+                          <div className="font-medium">
+                            {assignment.restaurantName || assignment.restaurantId}
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{assignment.status}</span>
+                            <span>
+                              {new Date(assignment.assignedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No video pitches yet.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          )}
 
           <TabsContent value="share" className="space-y-4">
             <ShareHub

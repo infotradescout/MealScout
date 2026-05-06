@@ -30,6 +30,8 @@ import { SEOHead } from "@/components/seo-head";
 import { apiUrl, authUrl } from "@/lib/api";
 import { getOptimizedImageUrl } from "@/lib/images";
 import { useIsStandalone } from "@/hooks/useIsStandalone";
+import { CriticBadge } from "@/components/award-badges";
+import { isCriticAccount } from "@/lib/critic";
 
 export default function ProfilePage() {
   const { user, isAuthenticated } = useAuth();
@@ -243,14 +245,17 @@ export default function ProfilePage() {
                 </div>
               )}
               <div className="flex-1">
-                <h2
-                  className="text-xl font-bold text-foreground"
-                  data-testid="text-user-name"
-                >
-                  {user?.firstName && user?.lastName
-                    ? `${user.firstName} ${user.lastName}`
-                    : user?.email || "User"}
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2
+                    className="text-xl font-bold text-foreground"
+                    data-testid="text-user-name"
+                  >
+                    {user?.firstName && user?.lastName
+                      ? `${user.firstName} ${user.lastName}`
+                      : user?.email || "User"}
+                  </h2>
+                  {isCriticAccount(user) && <CriticBadge size="md" />}
+                </div>
                 <p
                   className="text-sm text-muted-foreground"
                   data-testid="text-user-email"

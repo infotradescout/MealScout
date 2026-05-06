@@ -37,6 +37,7 @@ import { logAudit } from "./auditLogger";
 import { registerAuthAccountRoutes } from "./routes/authAccountRoutes";
 import { registerAnalyticsRoutes } from "./routes/analyticsRoutes";
 import { registerAwardsRoutes } from "./routes/awardsRoutes";
+import { registerCriticRoutes } from "./routes/criticRoutes";
 import { registerClaimRoutes } from "./routes/claimRoutes";
 import { registerBusinessTeamRoutes } from "./routes/businessTeamRoutes";
 import { registerMessagingRoutes } from "./routes/messagingRoutes";
@@ -106,6 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   registerAnalyticsRoutes(app);
   registerAwardsRoutes(app);
+  registerCriticRoutes(app);
 
   registerClaimRoutes(app, { sendDealClaimedNotification });
   registerBusinessTeamRoutes(app);

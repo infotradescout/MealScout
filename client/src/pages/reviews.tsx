@@ -12,10 +12,11 @@ import {
   ArrowLeft,
   User,
   Calendar,
-  CheckCircle,
   AlertCircle,
 } from "lucide-react";
 import { getOptimizedImageUrl } from "@/lib/images";
+import { CriticBadge } from "@/components/award-badges";
+import { isCriticAccount } from "@/lib/critic";
 
 interface Review {
   id: string;
@@ -28,6 +29,9 @@ interface Review {
     firstName: string;
     lastName: string;
     profileImageUrl?: string;
+    accountSettings?: unknown;
+    hasGoldenFork?: boolean;
+    influenceScore?: number;
   };
 }
 
@@ -313,10 +317,15 @@ export default function ReviewsPage() {
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-2">
                           <div>
-                            <div className="font-semibold text-sm text-foreground">
-                              {review.user
-                                ? `${review.user.firstName} ${review.user.lastName}`
-                                : "Anonymous User"}
+                            <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                              <span>
+                                {review.user
+                                  ? `${review.user.firstName} ${review.user.lastName}`
+                                  : "Anonymous User"}
+                              </span>
+                              {isCriticAccount(review.user) && (
+                                <CriticBadge size="sm" />
+                              )}
                             </div>
                             <div className="flex items-center space-x-2 text-xs text-muted-foreground">
                               <Calendar className="w-3 h-3" />

@@ -11,6 +11,12 @@ const GOLD = {
   dark: "#9c6a12",
 };
 
+const CRITIC_AMBER = {
+  base: "#d97706",
+  light: "#fbbf24",
+  dark: "#92400e",
+};
+
 export const GoldenForkIcon = ({ className = "" }: { className?: string }) => (
   <svg
     viewBox="0 0 64 64"
@@ -115,6 +121,49 @@ export function GoldenForkBadge({
                 Influence Score: {influenceScore}
               </p>
             )}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+interface CriticBadgeProps {
+  size?: "sm" | "md";
+  showLabel?: boolean;
+}
+
+export function CriticBadge({
+  size = "sm",
+  showLabel = true,
+}: CriticBadgeProps) {
+  const badge = (
+    <span
+      className={`inline-flex items-center rounded-full border font-semibold ${
+        size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs"
+      }`}
+      style={{
+        borderColor: "rgba(217,119,6,0.35)",
+        backgroundColor: "rgba(251,191,36,0.16)",
+        color: CRITIC_AMBER.dark,
+      }}
+    >
+      {showLabel ? "Critic" : "C"}
+    </span>
+  );
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
+        <TooltipContent>
+          <div className="text-sm">
+            <p className="font-bold" style={{ color: CRITIC_AMBER.base }}>
+              MealScout Critic
+            </p>
+            <p className="text-xs text-[color:var(--text-muted)]">
+              Trusted local reviewer with a curated truck queue.
+            </p>
           </div>
         </TooltipContent>
       </Tooltip>

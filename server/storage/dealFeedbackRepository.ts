@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { desc, eq, sql } from "drizzle-orm";
+import { isCriticAccount } from "../utils/criticSettings";
 
 export function createDealFeedbackRepository() {
   return {
@@ -34,6 +35,9 @@ export function createDealFeedbackRepository() {
             firstName: users.firstName,
             lastName: users.lastName,
             profileImageUrl: users.profileImageUrl,
+            accountSettings: users.accountSettings,
+            hasGoldenFork: users.hasGoldenFork,
+            influenceScore: users.influenceScore,
           },
         })
         .from(reviews)
@@ -93,10 +97,20 @@ export function createDealFeedbackRepository() {
       averageRating: number;
       totalFeedback: number;
       ratingDistribution: { [key: number]: number };
+      criticWeightedAverageRating: number;
+      criticFeedbackCount: number;
+      criticWeightApplied: boolean;
     }> {
       const feedback = await db
-        .select()
+        .select({
+          id: dealFeedback.id,
+          rating: dealFeedback.rating,
+          user: {
+            accountSettings: users.accountSettings,
+          },
+        })
         .from(dealFeedback)
+        .leftJoin(users, eq(dealFeedback.userId, users.id))
         .where(eq(dealFeedback.dealId, dealId));
 
       const totalFeedback = feedback.length;
@@ -121,10 +135,37 @@ export function createDealFeedbackRepository() {
         }
       });
 
+      const weighted = feedback.reduce(
+        (
+          acc: {
+            ratingSum: number;
+            weightSum: number;
+            criticFeedbackCount: number;
+          },
+          f: any,
+        ) => {
+          const isCritic = isCriticAccount(f.user);
+          const weight = isCritic ? 2 : 1;
+          if (isCritic) {
+            acc.criticFeedbackCount += 1;
+          }
+          acc.ratingSum += f.rating * weight;
+          acc.weightSum += weight;
+          return acc;
+        },
+        { ratingSum: 0, weightSum: 0, criticFeedbackCount: 0 },
+      );
+      const criticWeightedAverageRating =
+        weighted.weightSum > 0 ? weighted.ratingSum / weighted.weightSum : 0;
+
       return {
         averageRating: Math.round(averageRating * 10) / 10,
         totalFeedback,
         ratingDistribution,
+        criticWeightedAverageRating:
+          Math.round(criticWeightedAverageRating * 10) / 10,
+        criticFeedbackCount: weighted.criticFeedbackCount,
+        criticWeightApplied: weighted.criticFeedbackCount > 0,
       };
     },
   };

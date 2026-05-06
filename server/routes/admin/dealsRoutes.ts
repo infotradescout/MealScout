@@ -43,6 +43,10 @@ export function registerDealAdminRoutes(app: Express) {
           averageRating: feedbackStats.averageRating,
           totalFeedback: feedbackStats.totalFeedback,
           ratingDistribution: feedbackStats.ratingDistribution,
+          criticWeightedAverageRating:
+            feedbackStats.criticWeightedAverageRating,
+          criticFeedbackCount: feedbackStats.criticFeedbackCount,
+          criticWeightApplied: feedbackStats.criticWeightApplied,
         });
       } catch (error) {
         console.error("Error fetching deal stats:", error);

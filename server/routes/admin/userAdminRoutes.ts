@@ -19,6 +19,11 @@ import { listParkingPassOccurrences } from "../../services/parkingPassVirtual";
 import { runParkingPassIntegrity } from "../../services/parkingPassIntegrity";
 import { isSlotWithinHours } from "@shared/parkingPassSlots";
 import {
+  clampCriticRadiusMiles,
+  mergeCriticSettings,
+  normalizeCriticSettings,
+} from "../../utils/criticSettings";
+import {
   CLAIM_TYPES,
   CLAIM_STATUS,
   claims,
@@ -37,7 +42,7 @@ import {
   users,
   verificationRequests,
 } from "@shared/schema";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 type DenyStaffEdits = (req: any, res: any) => boolean;
 type RequireAdminUser = (req: any, res: any) => boolean;
@@ -71,6 +76,11 @@ type GetHostPricingColumnsCheck = () => Promise<HostPricingColumnsCheck>;
 type HasHostSpotImageColumn = () => Promise<boolean>;
 type ResetHostPricingColumnsCache = () => void;
 type IsMissingColumnError = (error: unknown, columnName?: string) => boolean;
+
+const adminCriticSettingsSchema = z.object({
+  enabled: z.boolean(),
+  radiusMiles: z.coerce.number().min(1).max(250).optional(),
+});
 
 export function registerUserAdminRoutes(
   app: Express,
@@ -856,6 +866,61 @@ export function registerUserAdminRoutes(
         }
         res.status(500).json({
           message: error.message || "Failed to update user",
+        });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/users/:id/critic",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      if (denyStaffEdits(req, res)) return;
+      try {
+        const userId = String(req.params.id || "").trim();
+        const parsed = adminCriticSettingsSchema.parse(req.body || {});
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        const updated = await storage.updateUser(userId, {
+          accountSettings: mergeCriticSettings(user.accountSettings, {
+            enabled: parsed.enabled,
+            radiusMiles: clampCriticRadiusMiles(
+              parsed.radiusMiles ??
+                normalizeCriticSettings(user.accountSettings).radiusMiles,
+            ),
+            grantedByUserId: parsed.enabled ? req.user?.id || null : null,
+          }) as any,
+        });
+
+        void logAudit(
+          req.user?.id || "",
+          parsed.enabled ? "critic_badge_granted" : "critic_badge_removed",
+          "user",
+          userId,
+          String(req.ip || ""),
+          String(req.get("User-Agent") || ""),
+          {
+            radiusMiles: normalizeCriticSettings(
+              updated.accountSettings,
+            ).radiusMiles,
+          },
+        );
+
+        res.json(sanitizeUser(updated, { includeStripe: true }));
+      } catch (error: any) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            message: "Critic radius must be between 1 and 250 miles.",
+            errors: error.errors,
+          });
+        }
+        console.error("Error updating critic badge:", error);
+        res.status(500).json({
+          message: error.message || "Failed to update Critic badge",
         });
       }
     },

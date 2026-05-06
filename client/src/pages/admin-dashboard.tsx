@@ -52,7 +52,9 @@ import QuickDashboardAccess from "@/components/quick-dashboard-access";
 import HostLocationManager from "@/components/admin/host-location-manager";
 import RecentSignupShare from "@/components/admin/recent-signup-share";
 import ShareHub from "@/components/share-hub";
+import { CriticBadge } from "@/components/award-badges";
 import { getOptimizedImageUrl } from "@/lib/images";
+import { getCriticSettings, isCriticAccount } from "@/lib/critic";
 import {
   Dialog,
   DialogContent,
@@ -6331,6 +6333,107 @@ export default function AdminDashboard() {
     },
   });
 
+  const updateCriticSettings = useMutation({
+    mutationFn: async ({
+      userId,
+      enabled,
+      radiusMiles,
+    }: {
+      userId: string;
+      enabled: boolean;
+      radiusMiles: number;
+    }) => {
+      const res = await apiRequest("PATCH", `/api/admin/users/${userId}/critic`, {
+        enabled,
+        radiusMiles,
+      });
+      return await res.json();
+    },
+    onSuccess: (updatedUser) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setSelectedUser((prev: any) =>
+        prev && updatedUser?.id && prev.id === updatedUser.id
+          ? updatedUser
+          : prev,
+      );
+      toast({
+        title: isCriticAccount(updatedUser)
+          ? "Critic Badge Granted"
+          : "Critic Badge Removed",
+        description: isCriticAccount(updatedUser)
+          ? "This user can now access the Critic truck queue."
+          : "This user no longer has Critic access.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Critic update failed",
+        description: error?.message || "Could not update the Critic badge.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const renderCriticControls = (targetUser: any) => {
+    if (!isAdminOrSuper || !targetUser?.id) return null;
+    const criticSettings = getCriticSettings(targetUser);
+    const radius = criticSettings.radiusMiles || 25;
+
+    return (
+      <div className="rounded-md border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] px-2 py-2 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 font-semibold">
+            Critic
+            {criticSettings.enabled && <CriticBadge size="sm" />}
+          </span>
+          <Switch
+            checked={criticSettings.enabled}
+            onCheckedChange={(enabled) =>
+              updateCriticSettings.mutate({
+                userId: targetUser.id,
+                enabled,
+                radiusMiles: radius,
+              })
+            }
+            disabled={updateCriticSettings.isPending || isStaff}
+            data-testid={`switch-critic-${targetUser.id}`}
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            key={`${targetUser.id}-${radius}-${criticSettings.enabled}`}
+            type="number"
+            min="1"
+            max="250"
+            defaultValue={radius}
+            disabled={
+              !criticSettings.enabled ||
+              updateCriticSettings.isPending ||
+              isStaff
+            }
+            onBlur={(event) => {
+              const radiusMiles = Number(event.currentTarget.value);
+              if (
+                Number.isFinite(radiusMiles) &&
+                Math.round(radiusMiles) !== radius
+              ) {
+                updateCriticSettings.mutate({
+                  userId: targetUser.id,
+                  enabled: criticSettings.enabled,
+                  radiusMiles,
+                });
+              }
+            }}
+            className="h-8 w-20 rounded border bg-background px-2 text-xs"
+            aria-label="Critic radius miles"
+            data-testid={`input-critic-radius-${targetUser.id}`}
+          />
+          <span className="text-muted-foreground">mile radius</span>
+        </div>
+      </div>
+    );
+  };
+
   const uploadSelectedUserProfileImage = useMutation({
     mutationFn: async ({ userId, file }: { userId: string; file: File }) => {
       const formData = new FormData();
@@ -9974,8 +10077,11 @@ export default function AdminDashboard() {
                       className="flex flex-col gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex-1">
-                        <div className="font-medium">
-                          {user.firstName} {user.lastName}
+                        <div className="flex items-center gap-2 font-medium">
+                          <span>
+                            {user.firstName} {user.lastName}
+                          </span>
+                          {isCriticAccount(user) && <CriticBadge size="sm" />}
                         </div>
                         <div className="text-sm text-muted-foreground flex items-center gap-2">
                           <Mail className="w-3 h-3" />
@@ -10102,6 +10208,7 @@ export default function AdminDashboard() {
                               365d Insurance Override
                             </Button>
                           )}
+                          {renderCriticControls(user)}
                           <Button
                             size="sm"
                             variant="outline"
@@ -11456,6 +11563,9 @@ export default function AdminDashboard() {
                           })
                         }
                       />
+                    </div>
+                    <div className="sm:col-span-2">
+                      {renderCriticControls(selectedUser)}
                     </div>
                   </div>
                   <div className="mt-3">
@@ -13307,9 +13417,20 @@ export default function AdminDashboard() {
                         <Badge variant="outline">
                           {dealStats.averageRating.toFixed(1)} / 5.0
                         </Badge>
+                        {dealStats.criticWeightApplied && (
+                          <Badge className="border-amber-300/60 bg-amber-500/10 text-amber-700">
+                            Critic-weighted{" "}
+                            {dealStats.criticWeightedAverageRating.toFixed(1)}
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Based on {dealStats.totalFeedback} reviews
+                        {dealStats.criticWeightApplied
+                          ? `, including ${dealStats.criticFeedbackCount} Critic-weighted vote${
+                              dealStats.criticFeedbackCount === 1 ? "" : "s"
+                            }`
+                          : ""}
                       </div>
                     </div>
                   )}

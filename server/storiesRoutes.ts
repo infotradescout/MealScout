@@ -30,6 +30,7 @@ import { storage } from './storage';
 import { LISA_CLAIM_TYPES, LISA_CLAIM_SOURCES } from '@shared/schema';
 import { calculateRestaurantRankingScore } from './awardCalculations';
 import { recordMealScoutCreditAction } from './mealScoutCreditsService';
+import { isCriticAccount } from './utils/criticSettings';
 
 // Configure multer for video uploads
 const videoStorage = multer.memoryStorage();
@@ -818,6 +819,7 @@ export default function setupStoriesRoutes(app: Express) {
           updatedAt: storyComments.updatedAt,
           firstName: users.firstName,
           lastName: users.lastName,
+          accountSettings: users.accountSettings,
         })
         .from(storyComments)
         .innerJoin(users, eq(users.id, storyComments.userId))
@@ -951,6 +953,9 @@ export default function setupStoriesRoutes(app: Express) {
           authorName:
             [comment.firstName, comment.lastName].filter(Boolean).join(' ').trim() ||
             'MealScout member',
+          authorIsCritic: isCriticAccount({
+            accountSettings: comment.accountSettings,
+          }),
         })),
       });
     } catch (error) {
@@ -1237,6 +1242,9 @@ export default function setupStoriesRoutes(app: Express) {
                 .filter(Boolean)
                 .join(' ')
                 .trim() || 'MealScout member',
+            authorIsCritic:
+              (((req as any).user?.accountSettings as any)?.critic?.enabled ||
+                false) === true,
           },
         });
       } catch (error) {
