@@ -2,10 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Bell,
-  Bookmark,
   ChevronRight,
-  Compass,
   Flame,
   MapPin,
   Navigation as NavigationIcon,
@@ -399,47 +396,6 @@ export default function HomeScene() {
           )}
         </section>
       </main>
-
-      {/* Bottom glass nav */}
-      <nav
-        aria-label="Primary"
-        className="fixed bottom-0 left-0 right-0 z-40 atmo-glass-strong"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <ul className="grid grid-cols-5 items-end px-2 pt-2 pb-2" role="list">
-          <BottomTab
-            href="/home-scene"
-            label="Explore"
-            active
-            icon={<Compass className="h-5 w-5" aria-hidden="true" />}
-          />
-          <BottomTab
-            href="/saved"
-            label="Saved"
-            icon={<Bookmark className="h-5 w-5" aria-hidden="true" />}
-          />
-          <li className="flex justify-center">
-            <Link
-              href="/find-food"
-              aria-label="Open Scout search"
-              className="-mt-7 h-16 w-16 rounded-full atmo-glow-amber bg-black/60 flex items-center justify-center text-amber-200"
-            >
-              <Search className="h-7 w-7" aria-hidden="true" />
-              <span className="sr-only">Scout</span>
-            </Link>
-          </li>
-          <BottomTab
-            href="/notifications"
-            label="Alerts"
-            icon={<Bell className="h-5 w-5" aria-hidden="true" />}
-          />
-          <BottomTab
-            href="/profile"
-            label="Profile"
-            icon={<UserIcon className="h-5 w-5" aria-hidden="true" />}
-          />
-        </ul>
-      </nav>
     </>
   );
 }
@@ -530,29 +486,3 @@ function LiveTrucksSkeleton() {
   );
 }
 
-function BottomTab({
-  href,
-  label,
-  icon,
-  active = false,
-}: {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  active?: boolean;
-}) {
-  return (
-    <li className="flex">
-      <Link
-        href={href}
-        className={`flex flex-1 flex-col items-center gap-1 py-2 rounded-xl ${
-          active ? "text-amber-300" : "text-white/70"
-        }`}
-        aria-current={active ? "page" : undefined}
-      >
-        {icon}
-        <span className="text-[11px] font-medium">{label}</span>
-      </Link>
-    </li>
-  );
-}

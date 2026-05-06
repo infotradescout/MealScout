@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Home,
   Search,
+  Compass,
   Heart,
   Receipt,
   User,
@@ -55,6 +56,8 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>;
   labelKey?:
     | "nav.food"
+    | "nav.explore"
+    | "nav.scout"
     | "nav.map"
     | "nav.parkingPass"
     | "nav.video"
@@ -304,244 +307,138 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   // ─── NAV ITEM DEFINITIONS ───────────────────────────────────────
 
-  // Top 3 items per role (shown in bottom bar)
+  // Bottom nav layout (Atmospheric):
+  //   [Explore]  [role action]  [Scout center-glow]  [Share]  [More]
+  // getTopItems returns the LEFT side: slot 1 (Explore, universal) + slot 2 (role action).
+  // Scout, Share and More are rendered explicitly by the bottom-nav JSX.
+  const exploreItem: NavItem = {
+    path: "/explore",
+    icon: Compass,
+    labelKey: "nav.explore",
+    fallbackLabel: "Explore",
+  };
+
+  const videoItem: NavItem = {
+    path: "/video",
+    icon: Clapperboard,
+    labelKey: "nav.video",
+    fallbackLabel: "Video",
+  };
+
   const getTopItems = (): NavItem[] => {
     if (!user) {
-      return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
-        {
-          path: "/video",
-          icon: Clapperboard,
-          labelKey: "nav.video",
-          fallbackLabel: "Video",
-        },
-      ];
+      // Guest: Explore + Video
+      return [exploreItem, videoItem];
     }
     if (shouldUseHostNav) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/host/dashboard",
           icon: Users,
           labelKey: "nav.host",
           fallbackLabel: "Host",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isAdmin) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/admin/dashboard",
           icon: Shield,
           labelKey: "nav.admin",
           fallbackLabel: "Admin",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isStaff) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/staff",
           icon: Users,
           labelKey: "nav.staff",
           fallbackLabel: "Staff",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isEventCoordinator) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/events",
           icon: Calendar,
           labelKey: "nav.events",
           fallbackLabel: "Events",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isSupplier) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/supplier/dashboard",
           icon: LayoutDashboard,
           labelKey: "nav.dashboard",
           fallbackLabel: "Dashboard",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isFoodTruck) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/dashboard",
           icon: LayoutDashboard,
           labelKey: "nav.dashboard",
           fallbackLabel: "Dashboard",
-        },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
         },
       ];
     }
     if (isRestaurantOwner) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/dashboard",
           icon: LayoutDashboard,
           labelKey: "nav.dashboard",
           fallbackLabel: "Dashboard",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (hasBusinessTeamAccess) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/restaurant-owner-dashboard",
           icon: LayoutDashboard,
           labelKey: "nav.dashboard",
           fallbackLabel: "Dashboard",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
     if (isHost) {
       return [
-        {
-          path: "/",
-          icon: UtensilsCrossed,
-          labelKey: "nav.food",
-          fallbackLabel: "Food",
-        },
+        exploreItem,
         {
           path: "/host/dashboard",
           icon: Users,
           labelKey: "nav.host",
           fallbackLabel: "Host",
         },
-        {
-          path: "/map",
-          icon: MapPin,
-          labelKey: "nav.map",
-          fallbackLabel: "Map",
-        },
       ];
     }
-    // Customer
-    return [
-      {
-        path: "/",
-        icon: UtensilsCrossed,
-        labelKey: "nav.food",
-        fallbackLabel: "Food",
-      },
-      { path: "/map", icon: MapPin, labelKey: "nav.map", fallbackLabel: "Map" },
-      {
-        path: "/video",
-        icon: Clapperboard,
-        labelKey: "nav.video",
-        fallbackLabel: "Video",
-      },
-    ];
+    // Customer: Explore + Video (keeps Scout dead center)
+    return [exploreItem, videoItem];
+  };
+
+  // The center 'Scout' action — same for everyone.
+  const scoutItem: NavItem = {
+    path: "/find-food",
+    icon: Search,
+    labelKey: "nav.scout",
+    fallbackLabel: "Scout",
   };
 
   // All overflow items for the "More" drawer, grouped by category
@@ -1200,42 +1097,131 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          MOBILE: Bottom nav bar with top 3 + share + more
+          MOBILE: Atmospheric floating bottom nav
+          Layout: [slot1] [slot2] [Scout center-glow] [Share] [More]
           ═══════════════════════════════════════════════════════════════ */}
-      {shouldShowMobileNav && (
-        <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 h-[var(--mobile-nav-height)] w-full border-t px-2 pt-2 pb-[env(safe-area-inset-bottom)] z-[1100] lg:hidden">
-          <div className="flex items-stretch justify-around w-full max-w-md mx-auto">
-            {/* Top 3 role-specific items */}
-            {topItems.map((item) => renderNavLink(item))}
-
-            {/* Share button */}
-            <button
-              onClick={handleShare}
-              className="flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 nav-link--inactive"
-              aria-label="Share"
-            >
-              <Share2 className="w-5 h-5" />
-              <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                Share
+      {shouldShowMobileNav && (() => {
+        const slot1 = topItems[0];
+        const slot2 = topItems[1];
+        const isActive = (path?: string) =>
+          !!path && (path === "/" ? location === "/" : location.startsWith(path));
+        const renderAtmoItem = (item: NavItem | undefined) => {
+          if (!item) return <div className="flex-1" />;
+          const Icon = item.icon;
+          const active = isActive(item.path);
+          const label = item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel;
+          const content = (
+            <>
+              <Icon
+                className={`w-5 h-5 transition-colors ${
+                  active ? "text-amber-300" : "text-white/70"
+                }`}
+              />
+              <span
+                className={`text-[10px] leading-tight font-semibold tracking-wide transition-colors ${
+                  active ? "text-amber-300" : "text-white/70"
+                }`}
+              >
+                {label}
               </span>
-            </button>
-
-            {/* More button */}
-            <button
-              onClick={() => setMoreOpen(true)}
-              className={`flex flex-col items-center justify-center space-y-1 px-2 min-h-[56px] min-w-[64px] rounded-xl transition-colors duration-200 ${
-                moreOpen ? "nav-link--active" : "nav-link--inactive"
-              }`}
-              aria-label="More"
+            </>
+          );
+          const baseClass =
+            "flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] rounded-xl transition-colors";
+          if (item.onClick) {
+            return (
+              <button
+                key={item.fallbackLabel}
+                onClick={item.onClick}
+                className={baseClass}
+                aria-label={label}
+                aria-current={active ? "page" : undefined}
+              >
+                {content}
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={item.fallbackLabel}
+              href={item.path || "/"}
+              className={baseClass}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
             >
-              <MoreHorizontal className="w-5 h-5" />
-              <span className="text-[11px] leading-tight font-semibold tracking-normal">
-                More
-              </span>
-            </button>
+              {content}
+            </Link>
+          );
+        };
+        const scoutLabel = t(scoutItem.labelKey!, scoutItem.fallbackLabel);
+        const scoutActive = isActive(scoutItem.path);
+        const ScoutIcon = scoutItem.icon;
+        return (
+          <div className="fixed inset-x-0 bottom-0 z-[1100] lg:hidden pointer-events-none">
+            <div className="px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2">
+              <nav
+                className="atmo-glass pointer-events-auto relative mx-auto flex max-w-md items-end justify-between rounded-[28px] px-3 pt-2 pb-2.5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.85)]"
+                aria-label="Primary"
+              >
+                {/* Slot 1 (Explore) */}
+                {renderAtmoItem(slot1)}
+                {/* Slot 2 (role action) */}
+                {renderAtmoItem(slot2)}
+
+                {/* Center: Scout glow button (raised) */}
+                <div className="flex flex-1 flex-col items-center justify-end -mt-7">
+                  <Link
+                    href={scoutItem.path!}
+                    aria-label={scoutLabel}
+                    aria-current={scoutActive ? "page" : undefined}
+                    className="atmo-glow-amber group relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-b from-amber-400 to-amber-600 ring-4 ring-black/40 transition-transform active:scale-95"
+                  >
+                    <ScoutIcon className="h-7 w-7 text-black" />
+                  </Link>
+                  <span
+                    className={`mt-1 text-[10px] font-semibold tracking-wide ${
+                      scoutActive ? "text-amber-300" : "text-white/80"
+                    }`}
+                  >
+                    {scoutLabel}
+                  </span>
+                </div>
+
+                {/* Share */}
+                <button
+                  onClick={handleShare}
+                  className="flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] rounded-xl transition-colors"
+                  aria-label="Share"
+                >
+                  <Share2 className="w-5 h-5 text-white/70" />
+                  <span className="text-[10px] font-semibold tracking-wide text-white/70">
+                    {t("nav.share", "Share")}
+                  </span>
+                </button>
+
+                {/* More */}
+                <button
+                  onClick={() => setMoreOpen(true)}
+                  className="flex flex-1 flex-col items-center justify-center gap-1 min-h-[56px] rounded-xl transition-colors"
+                  aria-label="More"
+                  aria-expanded={moreOpen}
+                >
+                  <MoreHorizontal
+                    className={`w-5 h-5 ${moreOpen ? "text-amber-300" : "text-white/70"}`}
+                  />
+                  <span
+                    className={`text-[10px] font-semibold tracking-wide ${
+                      moreOpen ? "text-amber-300" : "text-white/70"
+                    }`}
+                  >
+                    More
+                  </span>
+                </button>
+              </nav>
+            </div>
           </div>
-        </nav>
-      )}
+        );
+      })()}
 
       {/* ═══════════════════════════════════════════════════════════════
           MOBILE: "More" drawer

@@ -13,6 +13,8 @@ const STORAGE_KEY = "mealscout_locale";
 
 type TranslationKey =
   | "nav.food"
+  | "nav.explore"
+  | "nav.scout"
   | "nav.map"
   | "nav.parkingPass"
   | "nav.video"
@@ -45,6 +47,8 @@ type TranslationKey =
 const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
   en: {
     "nav.food": "Food",
+    "nav.explore": "Explore",
+    "nav.scout": "Scout",
     "nav.map": "Map",
     "nav.parkingPass": "Parking Pass",
     "nav.video": "Video",
@@ -76,6 +80,8 @@ const translations: Record<SupportedLocale, Record<TranslationKey, string>> = {
   },
   es: {
     "nav.food": "Comida",
+    "nav.explore": "Explorar",
+    "nav.scout": "Buscar",
     "nav.map": "Mapa",
     "nav.parkingPass": "Pase de Estacionamiento",
     "nav.video": "Video",

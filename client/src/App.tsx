@@ -246,6 +246,8 @@ const publicRoutePrefixes = [
   "/checkout/",
   "/order-confirmation/",
   "/ref/",
+  "/home-scene",
+  "/explore",
 ];
 
 const isPublicPath = (path: string) =>
@@ -321,7 +323,7 @@ function GuestHomeRoute() {
 }
 
 function AuthenticatedHomeRoute() {
-  return <Redirect to="/user-dashboard" />;
+  return <Redirect to="/explore" />;
 }
 
 function Router() {
@@ -412,6 +414,8 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
+            <Route path="/explore" component={HomeScene} />
+            <Route path="/home-scene" component={HomeScene} />
             <Route path="/" component={GuestHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">
@@ -681,6 +685,7 @@ function Router() {
             />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/user-dashboard" component={UserDashboard} />
+            <Route path="/explore" component={HomeScene} />
             <Route path="/home-scene" component={HomeScene} />
             <Route path="/host/dashboard" component={HostDashboard} />
             <Route
