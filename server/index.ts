@@ -218,6 +218,19 @@ async function ensureLaunchSchemaCompatibility() {
       ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
     `);
     await db.execute(sql`
+      ALTER TABLE IF EXISTS restaurant_user_recommendations
+      ADD COLUMN IF NOT EXISTS sentiment_score_100 integer DEFAULT 70
+    `);
+    await db.execute(sql`
+      ALTER TABLE IF EXISTS restaurant_user_recommendations
+      ADD COLUMN IF NOT EXISTS menu_item_name varchar(140)
+    `);
+    await db.execute(sql`
+      UPDATE restaurant_user_recommendations
+      SET sentiment_score_100 = 70
+      WHERE sentiment_score_100 IS NULL
+    `);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS email_verification_tokens (
         id varchar PRIMARY KEY DEFAULT (gen_random_uuid())::text,
         user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,

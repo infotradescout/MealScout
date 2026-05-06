@@ -2583,8 +2583,8 @@ export function registerRestaurantCoreRoutes(
             rur.user_id,
             rur.created_at,
             null::timestamp as updated_at,
-            rur.sentiment_score_100,
-            rur.menu_item_name,
+            70::int as sentiment_score_100,
+            null::varchar(140) as menu_item_name,
             u.first_name,
             u.last_name,
             coalesce(sum(case rr.reaction_type when 'like' then 1 else 0 end), 0)::int as like_count,
@@ -2598,7 +2598,7 @@ export function registerRestaurantCoreRoutes(
           left join recommendation_shares rs on rs.recommendation_id = rur.id
           left join recommendation_comments rc on rc.recommendation_id = rur.id and rc.is_approved = true
           where rur.restaurant_id = ${restaurantId}
-          group by rur.id, rur.user_id, rur.created_at, rur.sentiment_score_100, rur.menu_item_name, u.first_name, u.last_name
+          group by rur.id, rur.user_id, rur.created_at, u.first_name, u.last_name
           order by rur.created_at desc
           limit ${limit}
         `);
