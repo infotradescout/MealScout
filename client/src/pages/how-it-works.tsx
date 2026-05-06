@@ -114,7 +114,7 @@ export default function HowItWorks() {
         "Track bookings per location",
         "Keep full host pricing minus processing"
       ],
-      cta: { label: "Host dashboard", href: "/host-dashboard" }
+      cta: { label: "Host dashboard", href: "/host/dashboard" }
     },
     {
       title: "Restaurants & Bars",

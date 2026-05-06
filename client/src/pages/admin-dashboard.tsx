@@ -31,6 +31,7 @@ import {
   MapPin,
   Phone,
   Mail,
+  MessageCircle,
   Calendar,
   CreditCard,
   UserMinus,
@@ -2823,7 +2824,7 @@ function StaffManagementTab() {
 }
 
 export default function AdminDashboard() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTab, setSelectedTab] = useState(
@@ -2848,6 +2849,9 @@ export default function AdminDashboard() {
   });
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userDetailsOpen, setUserDetailsOpen] = useState(false);
+  const [messageUserDialogOpen, setMessageUserDialogOpen] = useState(false);
+  const [messageTargetUser, setMessageTargetUser] = useState<any>(null);
+  const [messageDraft, setMessageDraft] = useState("");
   const [businessProofDialogOpen, setBusinessProofDialogOpen] =
     useState(false);
   const [businessProofForm, setBusinessProofForm] = useState<any>({
@@ -4337,6 +4341,10 @@ export default function AdminDashboard() {
     }
     return counts;
   }, [users]);
+  const getUserDisplayName = (user: any) => {
+    const fullName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
+    return fullName || user?.email || "MealScout user";
+  };
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase();
     return sortedUsers.filter((user: any) => {
@@ -6253,6 +6261,45 @@ export default function AdminDashboard() {
       toast({
         title: "Error",
         description: error.message || "Failed to send subscription link.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const sendAdminUserMessage = useMutation({
+    mutationFn: async ({
+      userId,
+      body,
+    }: {
+      userId: string;
+      body: string;
+    }) => {
+      const response = await apiRequest("POST", "/api/messages/conversations", {
+        recipientUserId: userId,
+        subject: "Message from MealScout",
+        body: body.trim(),
+      });
+      return (await response.json()) as { conversationId: string };
+    },
+    onSuccess: async (payload) => {
+      setMessageUserDialogOpen(false);
+      setMessageTargetUser(null);
+      setMessageDraft("");
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/messages/conversations"],
+      });
+      toast({
+        title: "Message sent",
+        description: "The conversation is open in your MealScout inbox.",
+      });
+      if (payload?.conversationId) {
+        setLocation(`/messages?conversationId=${payload.conversationId}`);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Message not sent",
+        description: error?.message || "Unable to start this conversation.",
         variant: "destructive",
       });
     },
@@ -10082,6 +10129,23 @@ export default function AdminDashboard() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
+                            setMessageTargetUser(user);
+                            setMessageDraft("");
+                            setMessageUserDialogOpen(true);
+                          }}
+                          disabled={
+                            !user.id ||
+                            String(user.id) === String(adminUser?.id || "")
+                          }
+                          data-testid={`button-message-user-${user.id}`}
+                        >
+                          <MessageCircle className="w-4 h-4 mr-1" />
+                          Message
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
                             setSelectedUser(user);
                             setUserDetailsOpen(true);
                           }}
@@ -10105,6 +10169,8 @@ export default function AdminDashboard() {
                             <Button
                               size="sm"
                               variant="destructive"
+                              aria-label={`Delete ${getUserDisplayName(user)}`}
+                              title="Delete user"
                               onClick={() => {
                                 if (
                                   confirm(
@@ -11077,6 +11143,87 @@ export default function AdminDashboard() {
                   {submitBusinessProof.isPending
                     ? "Storing..."
                     : "Store Proof"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Message User Dialog */}
+      <Dialog
+        open={messageUserDialogOpen}
+        onOpenChange={(open) => {
+          setMessageUserDialogOpen(open);
+          if (!open) {
+            setMessageTargetUser(null);
+            setMessageDraft("");
+          }
+        }}
+      >
+        <DialogContent className="admin-dialog w-full max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <MessageCircle className="w-5 h-5" />
+              <span>Message User</span>
+            </DialogTitle>
+            <DialogDescription>
+              Start a private MealScout inbox conversation.
+            </DialogDescription>
+          </DialogHeader>
+
+          {messageTargetUser && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-3">
+                <p className="font-medium">
+                  {getUserDisplayName(messageTargetUser)}
+                </p>
+                {messageTargetUser.email ? (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="w-3 h-3" />
+                    {messageTargetUser.email}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  Message
+                </p>
+                <textarea
+                  className="w-full px-3 py-2 border rounded-md text-sm min-h-[140px]"
+                  placeholder="Write a direct note to this user."
+                  value={messageDraft}
+                  maxLength={4000}
+                  onChange={(event) => setMessageDraft(event.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  The user can reply from their MealScout inbox.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMessageUserDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() =>
+                    sendAdminUserMessage.mutate({
+                      userId: String(messageTargetUser.id),
+                      body: messageDraft,
+                    })
+                  }
+                  disabled={
+                    sendAdminUserMessage.isPending ||
+                    messageDraft.trim().length === 0
+                  }
+                  data-testid="button-send-admin-user-message"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  {sendAdminUserMessage.isPending ? "Sending..." : "Send message"}
                 </Button>
               </div>
             </div>

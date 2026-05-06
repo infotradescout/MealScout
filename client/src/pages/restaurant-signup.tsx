@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ApiError, apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
@@ -611,6 +611,19 @@ export default function RestaurantSignup() {
       window.location.reload();
     },
     onError: (error) => {
+      const payload = error instanceof ApiError ? error.payload : null;
+      if (
+        error instanceof ApiError &&
+        error.status === 409 &&
+        (payload as any)?.code === "google_auth_required"
+      ) {
+        toast({
+          title: "Continue with Google",
+          description: "This account uses Google sign-in. Redirecting now...",
+        });
+        window.location.href = buildRestaurantGoogleAuthUrl();
+        return;
+      }
       toast({
         title: COPY.notifications.login.errorTitle,
         description: error.message || COPY.notifications.login.errorDescription,

@@ -436,10 +436,11 @@ export function registerMessagingRoutes(app: Express) {
       const senderUserId = String(user.id);
       const restaurantId = normalizeOptional(parsed.data.restaurantId);
       const recipientUserId = normalizeOptional(parsed.data.recipientUserId);
-      const contextType = normalizeOptional(parsed.data.contextType);
+      let contextType = normalizeOptional(parsed.data.contextType);
       const contextId = normalizeOptional(parsed.data.contextId);
       const subject = normalizeOptional(parsed.data.subject);
       const body = parsed.data.body.trim();
+      const senderIsElevated = isElevatedUser(user);
 
       let counterpartyUserId = recipientUserId;
       let restaurantRow:
@@ -484,14 +485,26 @@ export function registerMessagingRoutes(app: Express) {
         restaurantRow = restaurant;
 
         const canRepresentBusiness =
-          isElevatedUser(user) ||
+          senderIsElevated ||
           (await hasBusinessPermissionForRestaurant(
             senderUserId,
             restaurant.id,
             "manageProfile",
           ));
 
-        if (canRepresentBusiness) {
+        if (senderIsElevated && !recipientUserId) {
+          counterpartyUserId = restaurant.ownerId;
+          contextType = contextType || "business_support";
+          addParticipant(
+            senderUserId,
+            participantTypeFor(
+              user,
+              String(user.userType || "").includes("admin") ? "admin" : "staff",
+            ),
+            "MealScout team",
+          );
+          addParticipant(restaurant.ownerId, "business", restaurant.name);
+        } else if (canRepresentBusiness) {
           if (!recipientUserId) {
             return res.status(400).json({
               message: "Choose a user before starting a business message.",
@@ -502,16 +515,18 @@ export function registerMessagingRoutes(app: Express) {
             senderUserId,
             participantTypeFor(
               user,
-              isElevatedUser(user)
+              senderIsElevated
                 ? String(user.userType).includes("admin")
                   ? "admin"
                   : "staff"
                 : "business",
             ),
-            isElevatedUser(user) ? "MealScout team" : restaurant.name,
+            senderIsElevated ? "MealScout team" : restaurant.name,
           );
           addParticipant(restaurant.ownerId, "business", restaurant.name);
-          addParticipant(recipientUserId, "customer");
+          if (recipientUserId !== restaurant.ownerId) {
+            addParticipant(recipientUserId, "customer");
+          }
         } else {
           counterpartyUserId = restaurant.ownerId;
           addParticipant(senderUserId, participantTypeFor(user, "customer"));

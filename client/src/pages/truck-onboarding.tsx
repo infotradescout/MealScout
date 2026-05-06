@@ -677,6 +677,19 @@ export default function TruckOnboardingPage() {
         description: "Now add or choose your truck.",
       });
     } catch (loginError: any) {
+      const payload = loginError instanceof ApiError ? loginError.payload : null;
+      if (
+        loginError instanceof ApiError &&
+        loginError.status === 409 &&
+        (payload as any)?.code === "google_auth_required"
+      ) {
+        toast({
+          title: "Continue with Google",
+          description: "This account uses Google sign-in. Redirecting now...",
+        });
+        window.location.href = makeTruckGoogleAuthUrl();
+        return;
+      }
       if (loginError instanceof ApiError && loginError.status === 403) {
         try {
           window.sessionStorage.setItem(

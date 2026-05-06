@@ -112,6 +112,12 @@ type PublicMenu = {
   categories: PublicMenuCategory[];
 };
 
+type BusinessPermissionPreview = {
+  permissions?: {
+    manageProfile?: boolean;
+  };
+};
+
 const toSlug = (value: string | null | undefined) =>
   String(value || "")
     .toLowerCase()
@@ -311,6 +317,13 @@ export default function RestaurantDetailPage() {
     user?.userType === "staff" ||
     user?.userType === "admin" ||
     user?.userType === "super_admin";
+
+  const { data: businessPermissions } = useQuery<BusinessPermissionPreview>({
+    queryKey: ["/api/business/team/permissions", restaurantId],
+    enabled: Boolean(user && restaurantId),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   const isFoodTruck =
     (restaurant as any)?.isFoodTruck ||
@@ -631,13 +644,17 @@ export default function RestaurantDetailPage() {
     : `/restaurant/${restaurantId}/${profileSlug}`;
   const isOwnBusinessProfile =
     Boolean(user?.id) && String((restaurant as any)?.ownerId || "") === user?.id;
-  const messagePath = isOwnBusinessProfile
+  const viewerCanManageThisBusiness =
+    isOwnBusinessProfile ||
+    (!isStaffOrAdmin &&
+      businessPermissions?.permissions?.manageProfile === true);
+  const messagePath = viewerCanManageThisBusiness
     ? "/messages"
     : `/messages?businessId=${encodeURIComponent(String(restaurantId || ""))}&subject=${encodeURIComponent(restaurantName)}`;
   const messageHref = user
     ? messagePath
     : `/login?redirect=${encodeURIComponent(messagePath)}`;
-  const messageButtonLabel = isOwnBusinessProfile ? "Messages" : "Message";
+  const messageButtonLabel = viewerCanManageThisBusiness ? "Messages" : "Message";
   const claimBusinessPath = `/restaurant-signup?businessType=${encodeURIComponent(
     isFoodTruck ? "food_truck" : isPrivateChef ? "private_chef" : "restaurant",
   )}&claim=1&claimRestaurantId=${encodeURIComponent(String(restaurantId || ""))}&q=${encodeURIComponent(restaurantName)}&redirect=${encodeURIComponent(

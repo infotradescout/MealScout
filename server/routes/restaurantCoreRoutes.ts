@@ -235,6 +235,24 @@ export function registerRestaurantCoreRoutes(
 ) {
   const AUTOPROMO_SHARE_MILESTONES = new Set([5, 10, 25, 50]);
 
+  const getAnalyticsDateRange = (
+    query: Record<string, unknown>,
+    fallbackDays?: number,
+  ) => {
+    const { startDate, endDate } = query;
+    if (startDate && endDate) {
+      return {
+        start: new Date(startDate as string),
+        end: new Date(endDate as string),
+      };
+    }
+    if (!fallbackDays) return undefined;
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - fallbackDays);
+    return { start, end };
+  };
+
   const trackEngagement = async (
     eventName: string,
     userId: string | null | undefined,
@@ -3001,7 +3019,10 @@ export function registerRestaurantCoreRoutes(
   );
 
   app.get(
-    "/api/restaurants/:restaurantId/analytics/favorites",
+    [
+      "/api/restaurants/:restaurantId/analytics/favorites",
+      "/api/restaurants/:restaurantId/analytics/favorites/:legacyRange",
+    ],
     isAuthenticated,
     async (req: any, res) => {
       try {
@@ -3028,14 +3049,10 @@ export function registerRestaurantCoreRoutes(
           });
         }
 
-        const { startDate, endDate } = req.query;
-        let dateRange: { start: Date; end: Date } | undefined;
-        if (startDate && endDate) {
-          dateRange = {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
-          };
-        }
+        const dateRange = getAnalyticsDateRange(
+          req.query,
+          req.params.legacyRange ? 30 : undefined,
+        );
 
         const favoritesAnalytics =
           await storage.getRestaurantFavoritesAnalytics(
@@ -3053,7 +3070,10 @@ export function registerRestaurantCoreRoutes(
   );
 
   app.get(
-    "/api/restaurants/:restaurantId/analytics/recommendations",
+    [
+      "/api/restaurants/:restaurantId/analytics/recommendations",
+      "/api/restaurants/:restaurantId/analytics/recommendations/:legacyRange",
+    ],
     isAuthenticated,
     async (req: any, res) => {
       try {
@@ -3080,14 +3100,10 @@ export function registerRestaurantCoreRoutes(
           });
         }
 
-        const { startDate, endDate } = req.query;
-        let dateRange: { start: Date; end: Date } | undefined;
-        if (startDate && endDate) {
-          dateRange = {
-            start: new Date(startDate as string),
-            end: new Date(endDate as string),
-          };
-        }
+        const dateRange = getAnalyticsDateRange(
+          req.query,
+          req.params.legacyRange ? 30 : undefined,
+        );
 
         const recommendationsAnalytics =
           await storage.getRestaurantRecommendationsAnalytics(
