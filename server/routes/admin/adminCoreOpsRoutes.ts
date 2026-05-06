@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import Stripe from "stripe";
 import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
@@ -730,9 +732,94 @@ const dataUrlToBlob = (dataUrl: string) => {
   return new Blob([buffer], { type: mimeType });
 };
 
-const fetchAdminImageResponse = async (url: string) => {
+const ADMIN_IMAGE_PROXY_MAX_BYTES = 8 * 1024 * 1024;
+
+const isPrivateOrReservedIp = (address: string): boolean => {
+  const normalized = String(address || "").trim().toLowerCase();
+  if (normalized.startsWith("::ffff:")) {
+    return isPrivateOrReservedIp(normalized.slice("::ffff:".length));
+  }
+
+  const version = isIP(normalized);
+  if (version === 4) {
+    const octets = normalized.split(".").map((part) => Number(part));
+    if (
+      octets.length !== 4 ||
+      octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
+    ) {
+      return true;
+    }
+    const [a, b] = octets;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+
+  if (version === 6) {
+    return (
+      normalized === "::" ||
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80") ||
+      normalized.startsWith("fec0") ||
+      normalized.startsWith("ff") ||
+      normalized.startsWith("2001:db8")
+    );
+  }
+
+  return true;
+};
+
+const isAdminImageProxyLocalDevUrl = (parsed: URL) => {
+  if (process.env.NODE_ENV === "production") return false;
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+    parsed.hostname.toLowerCase(),
+  );
+};
+
+const assertAdminImageFetchAllowed = async (parsed: URL) => {
+  if (!["http:", "https:"].includes(parsed.protocol)) return false;
+  if (parsed.username || parsed.password) return false;
+  if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:") {
+    return false;
+  }
+  if (parsed.port && !["80", "443"].includes(parsed.port)) return false;
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    !hostname ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local") ||
+    hostname.endsWith(".internal")
+  ) {
+    return isAdminImageProxyLocalDevUrl(parsed);
+  }
+
+  if (isAdminImageProxyLocalDevUrl(parsed)) return true;
+
+  const addresses = await lookup(hostname, { all: true, verbatim: false }).catch(
+    () => [],
+  );
+  if (!addresses.length) return false;
+  return addresses.every((entry) => !isPrivateOrReservedIp(entry.address));
+};
+
+const fetchAdminImageResponse = async (
+  url: string,
+  redirectDepth = 0,
+): Promise<{ contentType: string; buffer: Buffer } | null> => {
   const parsed = new URL(url, resolveAdminPublicBaseUrl());
-  if (!["http:", "https:"].includes(parsed.protocol)) return null;
+  if (!(await assertAdminImageFetchAllowed(parsed))) return null;
 
   const response = await fetch(parsed.toString(), {
     headers: {
@@ -740,18 +827,28 @@ const fetchAdminImageResponse = async (url: string) => {
         "MealScoutBot/1.0 (+https://www.mealscout.us; image proxy for admin sharing)",
       accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     },
+    redirect: "manual",
     signal: AbortSignal.timeout(8000),
   });
+
+  if ([301, 302, 303, 307, 308].includes(response.status)) {
+    if (redirectDepth >= 3) return null;
+    const location = response.headers.get("location");
+    if (!location) return null;
+    const nextUrl = new URL(location, parsed).toString();
+    return fetchAdminImageResponse(nextUrl, redirectDepth + 1);
+  }
+
   if (!response.ok) return null;
 
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.toLowerCase().startsWith("image/")) return null;
 
   const contentLength = Number(response.headers.get("content-length") || 0);
-  if (contentLength > 8 * 1024 * 1024) return null;
+  if (contentLength > ADMIN_IMAGE_PROXY_MAX_BYTES) return null;
 
   const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength > 8 * 1024 * 1024) return null;
+  if (arrayBuffer.byteLength > ADMIN_IMAGE_PROXY_MAX_BYTES) return null;
 
   return {
     contentType,

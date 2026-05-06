@@ -138,19 +138,6 @@ function duplicateAccountError(kind: "email" | "phone") {
   return error;
 }
 
-function possibleDuplicateAccountError(match: Pick<User, "id" | "email" | "userType" | "createdAt">) {
-  const error: any = new Error(
-    "It looks like this person may already have a MealScout account. Please sign in to the existing account, or ask MealScout support to connect the right profile.",
-  );
-  error.code = "POSSIBLE_DUPLICATE_ACCOUNT";
-  error.status = 409;
-  error.duplicateField = "identity";
-  error.duplicateUserId = match.id;
-  error.duplicateEmail = match.email;
-  error.duplicateUserType = match.userType;
-  return error;
-}
-
 function disabledAccountError() {
   const error: any = new Error("This account is disabled. Please contact MealScout support.");
   error.status = 403;
@@ -258,13 +245,21 @@ async function findRecentPossibleDuplicateByIdentity(params: {
   return match || undefined;
 }
 
-async function assertNoRecentIdentityDuplicate(params: {
+async function recordRecentIdentityDuplicateRisk(params: {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
 }) {
   const match = await findRecentPossibleDuplicateByIdentity(params);
-  if (match) throw possibleDuplicateAccountError(match);
+  if (!match) return;
+
+  console.warn("[auth] possible duplicate account identity allowed", {
+    duplicateUserId: match.id,
+    duplicateEmail: match.email,
+    duplicateUserType: match.userType,
+    duplicateCreatedAt: match.createdAt,
+    attemptedEmail: normalizeEmail(params.email),
+  });
 }
 
 // ── Repository factory ────────────────────────────────────────────────────────
@@ -494,7 +489,7 @@ export function createUsersRepository() {
             }
           }
 
-          await assertNoRecentIdentityDuplicate({
+          await recordRecentIdentityDuplicateRisk({
             firstName: tsData.firstName,
             lastName: tsData.lastName,
             email: tsEmail,
@@ -569,7 +564,7 @@ export function createUsersRepository() {
             }
           }
 
-          await assertNoRecentIdentityDuplicate({
+          await recordRecentIdentityDuplicateRisk({
             firstName: googleData.firstName,
             lastName: googleData.lastName,
             email: googleEmail,
@@ -646,7 +641,7 @@ export function createUsersRepository() {
             }
           }
 
-          await assertNoRecentIdentityDuplicate({
+          await recordRecentIdentityDuplicateRisk({
             firstName: facebookData.firstName,
             lastName: facebookData.lastName,
             email: facebookEmail,
@@ -695,7 +690,7 @@ export function createUsersRepository() {
             }
           }
 
-          await assertNoRecentIdentityDuplicate({
+          await recordRecentIdentityDuplicateRisk({
             firstName: emailData.firstName,
             lastName: emailData.lastName,
             email,
@@ -886,7 +881,7 @@ export function createUsersRepository() {
         }
       }
 
-      await assertNoRecentIdentityDuplicate({
+      await recordRecentIdentityDuplicateRisk({
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: normalizedEmail,
@@ -968,7 +963,7 @@ export function createUsersRepository() {
         }
       }
 
-      await assertNoRecentIdentityDuplicate({
+      await recordRecentIdentityDuplicateRisk({
         firstName: data.firstName,
         lastName: data.lastName,
         email: normalizedEmail,

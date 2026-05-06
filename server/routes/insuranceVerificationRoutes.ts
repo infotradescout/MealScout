@@ -1,4 +1,5 @@
-import type { Express } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
+import { timingSafeEqual } from "crypto";
 import multer from "multer";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -11,7 +12,7 @@ import {
   restaurants,
   users,
 } from "@shared/schema";
-import { isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
+import { isAdmin, isAuthenticated, isStaffOrAdmin } from "../unifiedAuth";
 import { validateDocuments } from "../documentValidation";
 import { recordMealScoutCreditAction } from "../mealScoutCreditsService";
 import { isCloudinaryConfigured, uploadRawToCloudinary } from "../imageUpload";
@@ -39,6 +40,57 @@ const insuranceDocumentUpload = multer({
     cb(new Error("Only JPG, PNG, or PDF files are allowed"));
   },
 });
+
+const readBearerToken = (authorizationHeader?: string | null) => {
+  const raw = String(authorizationHeader || "").trim();
+  if (!raw.toLowerCase().startsWith("bearer ")) return "";
+  return raw.slice(7).trim();
+};
+
+const constantTimeEquals = (a: string, b: string) => {
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  if (aBuffer.length !== bBuffer.length) return false;
+  return timingSafeEqual(aBuffer, bBuffer);
+};
+
+const isLocalDevRequest = (req: Request) => {
+  if (process.env.NODE_ENV === "production") return false;
+  const ip = String(req.ip || "").toLowerCase();
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip === "localhost"
+  );
+};
+
+const requireInsuranceCronSecret = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const configuredSecret = String(
+    process.env.INSURANCE_CRON_SECRET || process.env.CRON_SECRET || "",
+  ).trim();
+
+  if (!configuredSecret) {
+    if (isLocalDevRequest(req)) return next();
+    return res.status(503).json({ error: "Cron secret not configured" });
+  }
+
+  const presented = [
+    String(req.headers["x-cron-secret"] || "").trim(),
+    readBearerToken(String(req.headers.authorization || "")),
+  ].filter((value) => value.length > 0);
+
+  const isAuthorized = presented.some((token) =>
+    constantTimeEquals(token, configuredSecret),
+  );
+  if (!isAuthorized) return res.status(401).json({ error: "Unauthorized" });
+
+  return next();
+};
 
 const entityInputSchema = z.object({
   entityType: z.enum([
@@ -642,7 +694,7 @@ export function registerInsuranceVerificationRoutes(app: Express) {
   app.post(
     "/api/admin/insurance-verifications",
     isAuthenticated,
-    isStaffOrAdmin,
+    isAdmin,
     async (req: any, res) => {
       try {
         const parsed = adminInsuranceSubmitSchema.parse(req.body || {});
@@ -729,7 +781,7 @@ export function registerInsuranceVerificationRoutes(app: Express) {
   app.post(
     "/api/admin/insurance-verifications/override",
     isAuthenticated,
-    isStaffOrAdmin,
+    isAdmin,
     async (req: any, res) => {
       try {
         const parsed = adminInsuranceOverrideSchema.parse(req.body || {});
@@ -816,7 +868,7 @@ export function registerInsuranceVerificationRoutes(app: Express) {
   app.post(
     "/api/admin/insurance-verifications/:id/approve",
     isAuthenticated,
-    isStaffOrAdmin,
+    isAdmin,
     async (req: any, res) => {
       try {
         const parsed = reviewSchema.parse(req.body || {});
@@ -892,7 +944,9 @@ export function registerInsuranceVerificationRoutes(app: Express) {
 
         res.json(record);
       } catch (error: any) {
-        res.status(400).json({ message: error?.message || "Failed to approve insurance verification" });
+        res.status(400).json({
+          message: error?.message || "Failed to approve insurance verification",
+        });
       }
     },
   );
@@ -900,7 +954,7 @@ export function registerInsuranceVerificationRoutes(app: Express) {
   app.post(
     "/api/admin/insurance-verifications/:id/reject",
     isAuthenticated,
-    isStaffOrAdmin,
+    isAdmin,
     async (req: any, res) => {
       try {
         const parsed = reviewSchema
@@ -917,29 +971,37 @@ export function registerInsuranceVerificationRoutes(app: Express) {
           })
           .where(eq(businessInsuranceVerifications.id, req.params.id))
           .returning();
-        if (!record) return res.status(404).json({ message: "Insurance verification not found" });
+        if (!record) {
+          return res.status(404).json({ message: "Insurance verification not found" });
+        }
         res.json(record);
       } catch (error: any) {
-        res.status(400).json({ message: error?.message || "Failed to reject insurance verification" });
+        res.status(400).json({
+          message: error?.message || "Failed to reject insurance verification",
+        });
       }
     },
   );
 
-  app.post("/api/cron/insurance-expiry-scan", async (_req, res) => {
-    try {
-      await db
-        .update(businessInsuranceVerifications)
-        .set({ status: "expired", updatedAt: new Date() })
-        .where(
-          and(
-            eq(businessInsuranceVerifications.status, "approved"),
-            sql`${businessInsuranceVerifications.expiresAt} < now()`,
-          ),
-        );
-      res.json({ ok: true });
-    } catch (error) {
-      console.error("Insurance expiry scan failed:", error);
-      res.status(500).json({ ok: false });
-    }
-  });
+  app.post(
+    "/api/cron/insurance-expiry-scan",
+    requireInsuranceCronSecret,
+    async (_req, res) => {
+      try {
+        await db
+          .update(businessInsuranceVerifications)
+          .set({ status: "expired", updatedAt: new Date() })
+          .where(
+            and(
+              eq(businessInsuranceVerifications.status, "approved"),
+              sql`${businessInsuranceVerifications.expiresAt} < now()`,
+            ),
+          );
+        res.json({ ok: true });
+      } catch (error) {
+        console.error("Insurance expiry scan failed:", error);
+        res.status(500).json({ ok: false });
+      }
+    },
+  );
 }
