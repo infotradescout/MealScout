@@ -2,6 +2,10 @@ import { db } from "./db";
 import { events, hosts, telemetryEvents } from "@shared/schema";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "./utils/reminderBusinessHours";
 
 type WeeklyDigestPreferenceShape = {
   notifications?: {
@@ -27,6 +31,12 @@ export class DigestService {
   }
 
   async sendWeeklyDigests() {
+    const hours = getReminderBusinessHoursStatus();
+    if (!hours.allowed) {
+      logReminderBusinessHoursSkip("weekly digest", hours);
+      return;
+    }
+
     console.log("[Digest] Starting weekly digest generation...");
 
     try {

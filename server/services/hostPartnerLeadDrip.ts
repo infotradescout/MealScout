@@ -5,6 +5,10 @@ import {
   hostPartnerLeads,
   hostPartnerLeadSequenceSends,
 } from "@shared/schema";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 
 const SEQUENCE = "host_partner_v1";
 
@@ -106,6 +110,11 @@ function htmlForStep(step: number, lead: any): string {
 export async function runHostPartnerLeadDripCron() {
   if (!envEnabled("HOST_PARTNER_DRIP_ENABLED", true)) {
     return { ok: true, sent: 0 };
+  }
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("host partner lead drip", hours);
+    return { ok: true, sent: 0, deferred: true, reason: hours.reason };
   }
 
   const lookbackDaysRaw = Number(process.env.HOST_PARTNER_LOOKBACK_DAYS ?? 45);

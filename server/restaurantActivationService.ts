@@ -12,6 +12,10 @@ import { db } from "./db";
 import { users, restaurants, deals, telemetryEvents } from "@shared/schema";
 import { and, eq, gte, lte, or, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "./utils/reminderBusinessHours";
 
 function isEmailEnabled(user: { accountSettings?: unknown }): boolean {
   const s = user.accountSettings as
@@ -68,7 +72,21 @@ export class RestaurantActivationService {
     nudge7Sent: number;
     nudge14Sent: number;
     errors: number;
+    deferred?: boolean;
+    reason?: string;
   }> {
+    const hours = getReminderBusinessHoursStatus();
+    if (!hours.allowed) {
+      logReminderBusinessHoursSkip("restaurant activation nudge", hours);
+      return {
+        nudge7Sent: 0,
+        nudge14Sent: 0,
+        errors: 0,
+        deferred: true,
+        reason: hours.reason,
+      };
+    }
+
     console.log("[RestaurantActivation] Running deal creation nudge...");
     const now = new Date();
     let nudge7Sent = 0;

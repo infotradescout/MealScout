@@ -17,6 +17,10 @@ import {
   users,
 } from "@shared/schema";
 import { getVerificationSnooze } from "./verificationSnooze";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 
 type ReminderCandidate = {
   entityType:
@@ -236,7 +240,21 @@ export async function runVerificationReminderCron(): Promise<{
   sent: number;
   skipped: number;
   errors: number;
+  deferred?: boolean;
+  reason?: string;
 }> {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("verification reminders", hours);
+    return {
+      sent: 0,
+      skipped: 0,
+      errors: 0,
+      deferred: true,
+      reason: hours.reason,
+    };
+  }
+
   console.log("[verification-reminders] Running daily verification reminders...");
   const key = dayKey();
   const candidates = await fetchCandidates();

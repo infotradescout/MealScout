@@ -15,6 +15,10 @@ import { users, telemetryEvents, userAddresses } from "@shared/schema";
 import { and, eq, gte, lte, sql, isNotNull } from "drizzle-orm";
 import { emailService } from "./emailService";
 import { appendReferralParam } from "./referralService";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "./utils/reminderBusinessHours";
 
 type NotifPrefs = {
   notifications?: {
@@ -60,7 +64,25 @@ export class OnboardingDripService {
     return OnboardingDripService.instance;
   }
 
-  async run(): Promise<{ day3Sent: number; day7Sent: number; errors: number }> {
+  async run(): Promise<{
+    day3Sent: number;
+    day7Sent: number;
+    errors: number;
+    deferred?: boolean;
+    reason?: string;
+  }> {
+    const hours = getReminderBusinessHoursStatus();
+    if (!hours.allowed) {
+      logReminderBusinessHoursSkip("onboarding drip", hours);
+      return {
+        day3Sent: 0,
+        day7Sent: 0,
+        errors: 0,
+        deferred: true,
+        reason: hours.reason,
+      };
+    }
+
     console.log("[OnboardingDrip] Running post-signup drip...");
     const now = new Date();
     let day3Sent = 0;

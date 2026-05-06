@@ -8,6 +8,10 @@ import {
   renderOwnerProfileRecoveryEmail,
 } from "../copy/ownerProfileRecoveryEmail.copy";
 import { getPublicBusinessVisibilityChecks } from "../utils/publicBusinessVisibility";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 import { telemetryEvents, type User } from "@shared/schema";
 
 const PROFILE_RECOVERY_PATH = "/truck-onboarding?resume=profile-recovery";
@@ -397,6 +401,12 @@ export async function sendOwnerProfileRecoveryEmail({
   force?: boolean;
   requestMeta?: { requestIp?: string; userAgent?: string; adminId?: string };
 }) {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("owner profile recovery email", hours);
+    return { ok: false, skipped: "outside_business_hours" as const };
+  }
+
   const email = String(user.email || "").trim();
   if (!email) return { ok: false, skipped: "missing_email" as const };
   if (email.toLowerCase().endsWith("@mealscout.invalid")) {
@@ -489,6 +499,20 @@ export async function runOwnerProfileRecoveryCron({
   intervalHours?: number;
   limit?: number;
 } = {}) {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("owner profile recovery cron", hours);
+    return {
+      ok: true,
+      considered: 0,
+      sent: 0,
+      skipped: 0,
+      errors: 0,
+      deferred: true,
+      reason: hours.reason,
+    };
+  }
+
   const candidates = await findOwnerProfileRecoveryCandidates({
     lookbackDays,
     thresholdMinutes,

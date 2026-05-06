@@ -5,6 +5,10 @@ import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
 import { createEmailVerificationUrl } from "../../utils/emailVerification";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../../utils/reminderBusinessHours";
 import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
 import { db } from "../../db";
 import { emailService, isEmailConfigured } from "../../emailService";
@@ -3415,6 +3419,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         }
 
         if (action === "send-menu-nudge") {
+          const hours = getReminderBusinessHoursStatus();
+          if (!hours.allowed) {
+            logReminderBusinessHoursSkip("manual menu nudge", hours);
+            return res.status(409).json({
+              ok: false,
+              skipped: "outside_business_hours",
+              message: "Reminder emails can only be sent during business hours",
+            });
+          }
           const firstName = user.firstName || "there";
           const dashUrl = `${baseUrl}/restaurant/dashboard`;
           const html = `
@@ -3446,6 +3459,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
         }
 
         if (action === "send-help-offer") {
+          const hours = getReminderBusinessHoursStatus();
+          if (!hours.allowed) {
+            logReminderBusinessHoursSkip("manual help-offer nudge", hours);
+            return res.status(409).json({
+              ok: false,
+              skipped: "outside_business_hours",
+              message: "Reminder emails can only be sent during business hours",
+            });
+          }
           const firstName = user.firstName || "there";
           const html = `
             <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">

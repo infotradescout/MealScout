@@ -34,6 +34,11 @@ import { registerFeaturedVideoCronJobs } from "../featuredVideoCron";
 import { sendAdminDailyDigest } from "../services/adminDailyDigest";
 import { sendOwnerDiscoverabilityAlerts } from "../services/ownerDiscoverabilityAlerts";
 import { runOwnerProfileRecoveryCron } from "../services/ownerProfileRecovery";
+import {
+  getReminderBusinessHoursStatus,
+  getReminderEmailTimeZone,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 import { db } from "../db";
 import { requestLogs, adminDailyReports, cities, sentimentSignalEvents } from "@shared/schema";
 import { and, gte, lt, desc, sql } from "drizzle-orm";
@@ -56,8 +61,7 @@ const getParkingPassHoldTtlMs = () => {
   return minutes * 60 * 1000;
 };
 
-const emailReminderTimeZone =
-  process.env.EMAIL_REMINDER_TIMEZONE || "America/Chicago";
+const emailReminderTimeZone = getReminderEmailTimeZone();
 const emailReminderCronOptions = { timezone: emailReminderTimeZone };
 
 // ---------------------------------------------------------------------------
@@ -71,8 +75,8 @@ export async function registerSchedulers(app: Express): Promise<void> {
   // Featured video cron endpoint
   await registerFeaturedVideoCronJobs(app);
 
-  // Weekly Digest — Monday 8:00 AM Central
-  cron.schedule("0 8 * * 1", async () => {
+  // Weekly Digest — Monday 9:00 AM Central
+  cron.schedule("0 9 * * 1", async () => {
     console.log("⏰ Triggering Weekly Digest Cron Job");
     try {
       await DigestService.getInstance().sendWeeklyDigests();
@@ -156,10 +160,15 @@ export async function registerSchedulers(app: Express): Promise<void> {
     }, emailReminderCronOptions);
   }
 
-  // Premium Weekly Summary — Monday 8:30 AM Central (subscribed trucks)
-  cron.schedule("30 8 * * 1", async () => {
+  // Premium Weekly Summary — Monday 10:00 AM Central (subscribed trucks)
+  cron.schedule("0 10 * * 1", async () => {
     console.log("⏰ Triggering Premium Weekly Summary Cron");
     try {
+      const hours = getReminderBusinessHoursStatus();
+      if (!hours.allowed) {
+        logReminderBusinessHoursSkip("premium weekly summary", hours);
+        return;
+      }
       const { users, restaurants, restaurantSubscriptions } = await import("@shared/schema");
       const { eq, isNotNull, inArray } = await import("drizzle-orm");
       const { emailService } = await import("../emailService");

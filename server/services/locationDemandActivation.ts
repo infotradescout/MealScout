@@ -3,6 +3,10 @@ import { emailService } from "../emailService";
 import { sendSms } from "../smsService";
 import { emailSequenceSends } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 
 const SEQUENCE_PREFIX = "location_demand_activation_v1";
 const MAX_SENDS_PER_RUN = 100;
@@ -118,6 +122,22 @@ function smsFor(params: { step: number; businessName: string }): string {
 }
 
 export async function runLocationDemandActivationCron(opts?: { limit?: number }) {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("location demand activation reminders", hours);
+    return {
+      ok: true,
+      candidates: 0,
+      sent: 0,
+      emailSent: 0,
+      smsSent: 0,
+      skippedNoChannel: 0,
+      deferred: true,
+      reason: hours.reason,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
   const limitRaw = Number(opts?.limit ?? process.env.LOCATION_DEMAND_ACTIVATION_LIMIT ?? 150);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 150;
 

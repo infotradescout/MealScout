@@ -3,6 +3,10 @@ import { events, hosts, restaurants, eventInterests, users } from '@shared/schem
 import { and, eq, gte, lte, isNull, sql } from 'drizzle-orm';
 import { emailService } from './emailService';
 import auditLogger from './auditLogger';
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from './utils/reminderBusinessHours';
 
 /**
  * Notify nearby food trucks about unbooked event slots.
@@ -22,12 +26,24 @@ export async function notifyUnbookedEvents(): Promise<{
   eventsProcessed: number;
   trucksNotified: number;
   errors: number;
+  deferred?: boolean;
+  reason?: string;
 }> {
   const stats = {
     eventsProcessed: 0,
     trucksNotified: 0,
     errors: 0,
   };
+
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip('unbooked event opportunity notifications', hours);
+    return {
+      ...stats,
+      deferred: true,
+      reason: hours.reason,
+    };
+  }
 
   try {
     console.log('[EventNotificationCron] Starting unbooked event notification check...');

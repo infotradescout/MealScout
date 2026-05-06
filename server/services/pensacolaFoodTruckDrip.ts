@@ -4,6 +4,10 @@ import { addCredit } from "../creditService";
 import { emailSequenceSends, restaurants, users } from "@shared/schema";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { normalizeUsStateAbbr } from "./parkingPassQuality";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "../utils/reminderBusinessHours";
 
 const SEQUENCE = "pensacola_food_truck_onboarding_v1";
 
@@ -208,6 +212,11 @@ export async function maybeTriggerPensacolaFoodTruckDrip(opts: {
 
 export async function runPensacolaFoodTruckDripCron() {
   if (!envEnabled("PENSACOLA_FOOD_TRUCK_DRIP_ENABLED")) return { ok: true, sent: 0 };
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("Pensacola food truck drip", hours);
+    return { ok: true, sent: 0, deferred: true, reason: hours.reason };
+  }
 
   const lookbackDaysRaw = Number(process.env.PENSACOLA_FOOD_TRUCK_DRIP_LOOKBACK_DAYS ?? 30);
   const lookbackDays = Number.isFinite(lookbackDaysRaw)

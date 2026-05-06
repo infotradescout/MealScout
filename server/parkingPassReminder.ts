@@ -3,6 +3,10 @@ import { db } from "./db";
 import { eventSeries, events, hosts, users } from "@shared/schema";
 import { emailService, isEmailConfigured } from "./emailService";
 import { storage } from "./storage";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "./utils/reminderBusinessHours";
 
 const isEmailNotificationsEnabled = (accountSettings: unknown) => {
   const settings =
@@ -461,6 +465,16 @@ export async function getParkingPassOnboardingQueue() {
 }
 
 export async function sendParkingPassReminderForHost(hostId: string) {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("manual parking pass reminder", hours);
+    return {
+      ok: false,
+      code: "outside_business_hours",
+      message: "Reminder emails can only be sent during business hours",
+    };
+  }
+
   const normalizedHostId = String(hostId || "").trim();
   if (!normalizedHostId) {
     return {
@@ -535,6 +549,20 @@ export async function sendParkingPassReminderForHost(hostId: string) {
 }
 
 export async function remindIncompleteParkingPassHosts() {
+  const hours = getReminderBusinessHoursStatus();
+  if (!hours.allowed) {
+    logReminderBusinessHoursSkip("parking pass completion reminders", hours);
+    return {
+      sent: 0,
+      skipped: 0,
+      eligible: 0,
+      pricingIncomplete: 0,
+      stripeIncomplete: 0,
+      deferred: true,
+      reason: hours.reason,
+    };
+  }
+
   if (!isEmailConfigured()) {
     console.warn("[parking-pass] Email not configured; skipping reminders");
     return { sent: 0, skipped: 0, eligible: 0 };

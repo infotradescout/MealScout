@@ -18,6 +18,10 @@ import {
 } from "@shared/schema";
 import { and, eq, gte, isNull, lte, or, ilike, sql } from "drizzle-orm";
 import { emailService } from "./emailService";
+import {
+  getReminderBusinessHoursStatus,
+  logReminderBusinessHoursSkip,
+} from "./utils/reminderBusinessHours";
 
 type NotifPrefs = {
   notifications?: {
@@ -74,7 +78,21 @@ export class DinerDigestService {
     sent: number;
     skipped: number;
     errors: number;
+    deferred?: boolean;
+    reason?: string;
   }> {
+    const hours = getReminderBusinessHoursStatus();
+    if (!hours.allowed) {
+      logReminderBusinessHoursSkip("diner digest", hours);
+      return {
+        sent: 0,
+        skipped: 0,
+        errors: 0,
+        deferred: true,
+        reason: hours.reason,
+      };
+    }
+
     console.log("[DinerDigest] Starting diner digest generation...");
 
     const now = new Date();
