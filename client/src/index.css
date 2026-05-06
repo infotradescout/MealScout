@@ -240,9 +240,7 @@
   overflow: hidden;
   border-radius: 999px;
   border: 2px solid #ffd86a;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(245, 158, 11, 0.24) 0 42%, transparent 43%),
-    linear-gradient(145deg, #17110a 0%, #050504 60%, #1c1107 100%);
+  background: linear-gradient(145deg, #17110a 0%, #050504 60%, #1c1107 100%);
   box-shadow:
     0 0 0 5px rgba(8, 7, 6, 0.96),
     0 0 0 8px rgba(245, 158, 11, 0.88),
@@ -252,29 +250,16 @@
   transform: translate(-50%, -50%);
 }
 
-.ms-giveaway-center-logo::before {
-  position: absolute;
-  inset: 12%;
-  border-radius: inherit;
-  background: #fffaf0;
-  box-shadow:
-    0 0 0 2px rgba(8, 7, 6, 0.82),
-    0 0 0 4px rgba(245, 158, 11, 0.48),
-    inset 0 2px 5px rgba(255, 255, 255, 0.9),
-    inset 0 -5px 10px rgba(245, 158, 11, 0.12);
-  content: "";
-}
-
 .ms-giveaway-center-logo img {
   position: relative;
   z-index: 1;
-  width: 84%;
-  height: 84%;
+  width: 88%;
+  height: 88%;
   object-fit: contain;
   filter:
-    contrast(1.1)
-    saturate(1.12)
-    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32))
+    contrast(1.14)
+    saturate(1.16)
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.26))
     drop-shadow(0 3px 5px rgba(24, 12, 4, 0.46));
 }
 
