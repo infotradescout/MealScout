@@ -52,6 +52,23 @@ function dayKey(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function friendlyFirstName(value: string | null): string {
+  const name = String(value || "").trim();
+  if (!name || /^(admin|administrator|staff|support)$/i.test(name)) {
+    return "there";
+  }
+  return name;
+}
+
 async function reminderAlreadySent(
   candidate: Pick<ReminderCandidate, "entityId" | "entityType">,
   key: string,
@@ -85,8 +102,10 @@ function buildEmail(candidate: ReminderCandidate): {
   html: string;
   text: string;
 } {
-  const ownerName = candidate.ownerFirstName || "there";
+  const ownerName = friendlyFirstName(candidate.ownerFirstName);
   const businessName = candidate.businessName || "your business";
+  const safeOwnerName = escapeHtml(ownerName);
+  const safeBusinessName = escapeHtml(businessName);
   const verifyUrl =
     candidate.entityType === "host"
       ? `${baseUrl()}/host/dashboard?src=insurance-reminder`
@@ -94,32 +113,46 @@ function buildEmail(candidate: ReminderCandidate): {
           candidate.entityId,
         )}&src=insurance-reminder&goLive=1`;
 
-  const subject = `Quick insurance step for ${businessName}`;
+  const subject = `A quick setup step for ${businessName}`;
   const html = `
     <!doctype html>
     <html>
       <body style="font-family: Arial, sans-serif; color: #111827; line-height: 1.55; margin: 0; padding: 0; background: #f9fafb;">
         <div style="max-width: 620px; margin: 0 auto; padding: 24px;">
           <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 22px;">
-            <h2 style="margin: 0 0 12px;">Hi ${ownerName}, finish the insurance step for ${businessName} when you have a document nearby</h2>
+            <h2 style="margin: 0 0 12px;">One quick setup step for ${safeBusinessName}</h2>
             <p style="margin: 0 0 12px;">
-              You can keep setting up MealScout without doing this immediately. Valid commercial insurance for your jurisdiction is still needed before the business can be fully trusted on the platform.
+              Hi ${safeOwnerName}, thanks for setting up ${safeBusinessName} on MealScout.
+            </p>
+            <p style="margin: 0 0 12px;">
+              When you have a minute, please upload a photo or PDF of your insurance document so we can finish reviewing the listing.
             </p>
             <p style="margin: 0 0 18px;">
-              A photo or PDF of your certificate of insurance or related commercial coverage document is enough to start review.
+              You can keep adding your menu, photos, and details now. This just helps us mark the business as verified.
             </p>
             <p style="margin: 24px 0;">
-              <a href="${verifyUrl}" style="background: #f97316; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none; font-weight: 700;">Submit insurance</a>
+              <a href="${verifyUrl}" style="background: #f97316; color: #ffffff; padding: 12px 18px; border-radius: 6px; text-decoration: none; font-weight: 700;">Upload document</a>
+            </p>
+            <p style="margin: 0 0 12px;">
+              If replying is easier, send the file here and we will help get it added.
             </p>
             <p style="margin: 18px 0 0; color: #6b7280; font-size: 13px;">
-              Friendly reminder: we keep this light, at most once per day while this step is still open.
+              We keep this light: one reminder per day while this step is open.
             </p>
           </div>
         </div>
       </body>
     </html>
   `;
-  const text = `Hi ${ownerName}, finish the insurance step for ${businessName} when you have a document nearby. Submit here: ${verifyUrl}`;
+  const text = `Hi ${ownerName},
+
+Thanks for setting up ${businessName} on MealScout. When you have a minute, please upload a photo or PDF of your insurance document so we can finish reviewing the listing.
+
+You can keep adding your menu, photos, and details now. This just helps us mark the business as verified.
+
+Upload here: ${verifyUrl}
+
+If replying is easier, send the file here and we will help get it added.`;
 
   return { subject, html, text };
 }

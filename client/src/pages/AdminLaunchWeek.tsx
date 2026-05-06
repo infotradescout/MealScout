@@ -668,7 +668,11 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
     [owner.firstName, owner.lastName].filter(Boolean).join(" ") ||
     owner.email ||
     "(no name)";
-  const firstName = owner.firstName || "there";
+  const firstName = /^(admin|administrator|staff|support)$/i.test(
+    String(owner.firstName || "").trim(),
+  )
+    ? "there"
+    : owner.firstName || "there";
   const isFoodTruck = owner.userType === "food_truck";
   const action = useOwnerAction();
   const run = (a: string) =>
@@ -849,8 +853,8 @@ function OwnerCard({ owner }: { owner: OwnerRow }) {
                 name={name}
                 buttonLabel="Message about proof"
                 buttonVariant="ghost"
-                defaultSubject="MealScout verification proof update"
-                defaultMessage={`Hi ${firstName},\n\nQuick update on your MealScout listing: we still need commercial insurance or acceptable business proof before we can verify and fully publish it.\n\nYou can upload it from your dashboard, or reply to this email and I will help you get it handled.\n\nThanks,\nThe MealScout team`}
+                defaultSubject="Quick MealScout setup help"
+                defaultMessage={`Hi ${firstName},\n\nThanks for setting up your MealScout listing. You're almost there.\n\nWhen you have a minute, please upload a photo or PDF of your insurance document so we can finish reviewing the listing. You can keep adding your menu, photos, and details now.\n\nYou can upload it from your dashboard, or reply here with the file and I will help get it added.\n\nThanks,\nThe MealScout team`}
                 context="launch-week-insurance-proof"
               />
             )}
