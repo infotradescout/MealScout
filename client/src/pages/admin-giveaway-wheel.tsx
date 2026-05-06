@@ -187,7 +187,18 @@ const randomIndex = (length: number) => {
   return buffer[0] % length;
 };
 
-const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+const spinMotionProgress = (progress: number) => {
+  const fastPhase = 0.34;
+  const fastDistance = 0.64;
+  if (progress <= fastPhase) {
+    return (progress / fastPhase) * fastDistance;
+  }
+
+  const slowProgress = (progress - fastPhase) / (1 - fastPhase);
+  return fastDistance + (1 - fastDistance) * easeOutCubic(slowProgress);
+};
 
 function createSoundDeck() {
   let context: AudioContext | null = null;
@@ -390,8 +401,8 @@ export default function AdminGiveawayWheel() {
     const targetNormalized =
       ((-(selectedIndex + 0.5) * angle) % 360 + 360) % 360;
     const delta = (targetNormalized - current + 360) % 360;
-    const targetRotation = startRotation + 360 * (7 + randomIndex(4)) + delta;
-    const duration = 5600 + randomIndex(900);
+    const targetRotation = startRotation + 360 * (9 + randomIndex(4)) + delta;
+    const duration = 7800 + randomIndex(1000);
     const started = performance.now();
 
     setWinner(null);
@@ -402,7 +413,7 @@ export default function AdminGiveawayWheel() {
 
     const animate = (timestamp: number) => {
       const progress = Math.min(1, (timestamp - started) / duration);
-      const eased = easeOutQuart(progress);
+      const eased = spinMotionProgress(progress);
       const nextRotation =
         startRotation + (targetRotation - startRotation) * eased;
       setRotation(nextRotation);
