@@ -97,6 +97,7 @@ const RestaurantOwnerDashboard = lazy(
 const EditRestaurantPage = lazy(() => import("@/pages/edit-restaurant"));
 const UserDashboard = lazy(() => import("@/pages/user-dashboard"));
 const HomeScene = lazy(() => import("@/pages/home-scene"));
+const ExplorePreview = lazy(() => import("@/pages/explore-preview"));
 const DashboardSwitcher = lazy(() => import("@/components/dashboard-switcher"));
 const TermsOfService = lazy(() => import("@/pages/terms-of-service"));
 const PrivacyPolicy = lazy(() => import("@/pages/privacy-policy"));
@@ -249,6 +250,7 @@ const publicRoutePrefixes = [
   "/ref/",
   "/home-scene",
   "/explore",
+  "/explore-preview",
 ];
 
 const isPublicPath = (path: string) =>
@@ -416,6 +418,7 @@ function Router() {
           <>
             <Route path="/ref/:tag" component={AffiliateRedirect} />
             <Route path="/explore" component={HomeScene} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/home-scene" component={HomeScene} />
             <Route path="/" component={GuestHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
@@ -687,6 +690,7 @@ function Router() {
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/user-dashboard" component={UserDashboard} />
             <Route path="/explore" component={HomeScene} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/home-scene" component={HomeScene} />
             <Route path="/host/dashboard" component={HostDashboard} />
             <Route

@@ -232,6 +232,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     // (top bar + floating bottom nav). The global Navigation is
     // hidden so it doesn't double-stack on these routes.
     "/explore",
+    "/explore-preview",
     "/home-scene",
   ];
   const hiddenGuestMobileNavRoutes = [
