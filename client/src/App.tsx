@@ -95,6 +95,7 @@ const RestaurantOwnerDashboard = lazy(
 );
 const EditRestaurantPage = lazy(() => import("@/pages/edit-restaurant"));
 const UserDashboard = lazy(() => import("@/pages/user-dashboard"));
+const ExplorePreview = lazy(() => import("@/pages/explore-preview"));
 const DashboardSwitcher = lazy(() => import("@/components/dashboard-switcher"));
 const TermsOfService = lazy(() => import("@/pages/terms-of-service"));
 const PrivacyPolicy = lazy(() => import("@/pages/privacy-policy"));
@@ -246,6 +247,7 @@ const publicRoutePrefixes = [
   "/checkout/",
   "/order-confirmation/",
   "/ref/",
+  "/explore-preview",
 ];
 
 const isPublicPath = (path: string) =>
@@ -412,6 +414,7 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/ref/:tag/*?" component={AffiliateRedirect} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/" component={GuestHomeRoute} />
             <Route path="/start" component={PurposeSelector} />
             <Route path="/find-food/location">
@@ -681,6 +684,7 @@ function Router() {
             />
             <Route path="/dashboard" component={DashboardRouter} />
             <Route path="/user-dashboard" component={UserDashboard} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/host/dashboard" component={HostDashboard} />
             <Route
               path="/event-coordinator/dashboard"
