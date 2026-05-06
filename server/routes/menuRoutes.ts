@@ -45,6 +45,7 @@ import { isAuthenticated } from "../unifiedAuth";
 import { storage } from "../storage";
 import { parseMenuCsv } from "../utils/menuCsvParser";
 import { parsePdfMenuWithAi } from "../utils/menuPdfParser";
+import { normalizeMenuFile } from "../utils/menuFileNormalizer";
 import { uploadToCloudinary, isCloudinaryConfigured } from "../imageUpload";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 
@@ -79,38 +80,65 @@ const MENU_URL_IMPORT_HEADERS = {
 };
 
 // ── Multer config (memory storage – files processed in-process) ───────────────
-// Anthropic Claude vision only accepts jpeg/png/gif/webp; HEIC/HEIF are rejected
-// up-front so users get a clear error instead of a cryptic API failure.
-const SUPPORTED_IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+// We accept anything the menu normalizer can handle: PDFs, every common image
+// format the menu owner might have on their phone (HEIC/HEIF/AVIF/TIFF/BMP/SVG
+// all get transcoded to JPEG server-side), plus the structured-data formats
+// supported by the CSV/external pipelines. Final type-validation and rejection
+// (with a logged human-readable reason) happens inside the route handler via
+// menuFileNormalizer.normalizeMenuFile() so admins can SEE why anything failed.
+const STRUCTURED_DATA_EXTS = new Set([".csv", ".tsv", ".json", ".xlsx", ".xls"]);
+const SUPPORTED_IMAGE_EXTS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".heic",
+  ".heif",
+  ".avif",
+  ".tif",
+  ".tiff",
+  ".bmp",
+  ".svg",
+];
 const SUPPORTED_IMAGE_MIMES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
+  "image/heic",
+  "image/heif",
+  "image/avif",
+  "image/tiff",
+  "image/bmp",
+  "image/x-bmp",
+  "image/x-ms-bmp",
+  "image/svg+xml",
 ]);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB – modern phone photos can exceed 10 MB
   fileFilter(_req, file, cb) {
-    const allowed = [".csv", ".pdf", ".json", ".xlsx", ".xls", ".tsv"];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) return cb(null, true);
+    if (ext === ".pdf" || file.mimetype === "application/pdf") {
+      return cb(null, true);
+    }
+    if (STRUCTURED_DATA_EXTS.has(ext)) return cb(null, true);
     if (
       SUPPORTED_IMAGE_EXTS.includes(ext) ||
-      SUPPORTED_IMAGE_MIMES.has(file.mimetype || "")
+      SUPPORTED_IMAGE_MIMES.has(file.mimetype || "") ||
+      // Browsers sometimes send application/octet-stream for HEIC and other
+      // non-standard mimes. We let those through and rely on the normalizer's
+      // magic-byte detection to figure out what they actually are.
+      file.mimetype === "application/octet-stream" ||
+      // Very loose net for any image/* mime we may not have enumerated.
+      (file.mimetype || "").startsWith("image/")
     ) {
       return cb(null, true);
     }
-    if (ext === ".heic" || ext === ".heif" || file.mimetype === "image/heic" || file.mimetype === "image/heif") {
-      return cb(
-        new Error(
-          "HEIC/HEIF photos are not supported. Please export as JPEG or PNG and try again.",
-        ),
-      );
-    }
     cb(
       new Error(
-        "Unsupported file type. Allowed: csv, pdf, json, xlsx, xls, jpg, jpeg, png, webp, gif.",
+        "We can't read this file type. Please upload a PDF, or a photo of your menu (JPG, PNG, HEIC, AVIF, WebP, GIF, TIFF, or BMP all work).",
       ),
     );
   },
@@ -1257,11 +1285,42 @@ export function registerMenuRoutes(app: Express) {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const { imported, skipped, errors } = await parsePdfMenuWithAi(
+      // Normalize the upload bytes into something Claude can ingest:
+      //  - PDFs pass through.
+      //  - jpeg/png/gif/webp pass through (already Claude-supported).
+      //  - heic/heif/avif/tiff/bmp/svg are transcoded to JPEG server-side.
+      //  - genuinely unsupported types short-circuit to a clean failure log.
+      const normalized = await normalizeMenuFile(
         req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname,
+      );
+
+      if (!normalized.ok) {
+        // Log so admins can SEE the rejection reason in the launch-week feed.
+        await db.insert(menuImportLogs).values({
+          restaurantId: menu.restaurantId,
+          importedByUserId: req.user.id,
+          source: "image",
+          fileName: req.file.originalname,
+          itemsImported: 0,
+          itemsSkipped: 0,
+          errors: [{ row: 0, reason: normalized.reason }] as any,
+          status: "failed",
+        });
+        return res.status(415).json({
+          message: normalized.reason,
+          imported: 0,
+          skipped: 0,
+          errors: [{ row: 0, reason: normalized.reason }],
+        });
+      }
+
+      const { imported, skipped, errors } = await parsePdfMenuWithAi(
+        normalized.buffer,
         menuId,
         menu.restaurantId,
-        req.file.mimetype,
+        normalized.mimeType,
       );
 
       if (imported.length > 0) {
@@ -1284,7 +1343,7 @@ export function registerMenuRoutes(app: Express) {
       await db.insert(menuImportLogs).values({
         restaurantId: menu.restaurantId,
         importedByUserId: req.user.id,
-        source: req.file.mimetype?.startsWith("image/") ? "image" : "pdf",
+        source: normalized.source,
         fileName: req.file.originalname,
         itemsImported: imported.length,
         itemsSkipped: skipped,
@@ -1295,15 +1354,21 @@ export function registerMenuRoutes(app: Express) {
       await db
         .update(menus)
         .set({
-          importSource: req.file.mimetype?.startsWith("image/")
-            ? "image"
-            : "pdf",
+          importSource: normalized.source,
           importedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(menus.id, menuId));
 
-      res.json({ imported: imported.length, skipped, errors });
+      res.json({
+        imported: imported.length,
+        skipped,
+        errors,
+        normalized: {
+          appliedTransform: normalized.appliedTransform,
+          detectedMime: normalized.detectedMime,
+        },
+      });
     }),
   );
 

@@ -3120,6 +3120,15 @@ export function registerAdminCoreOpsRoutes(app: Express) {
               itemsImported: number;
               itemsSkipped: number;
               errorCount: number;
+              /**
+               * Human-readable text of the FIRST error in the failed import,
+               * truncated to ~240 chars so admins can immediately diagnose
+               * "AI extraction failed: invalid x-api-key" vs "unsupported
+               * file type: image/heic" vs "Item 'Wings' has invalid price:
+               * MP" without opening the database. Prevents the admin
+               * dashboard from showing only an error count with no context.
+               */
+              reason: string | null;
               createdAt: Date | null;
             } | null;
             resolvedByNewerSuccess: boolean;
@@ -3147,12 +3156,22 @@ export function registerAdminCoreOpsRoutes(app: Express) {
             }
             current.failed += 1;
             if (!current.lastFailure) {
+              const errs = Array.isArray(row.errors) ? row.errors : [];
+              const firstReason =
+                errs.length > 0 &&
+                typeof (errs[0] as any)?.reason === "string"
+                  ? String((errs[0] as any).reason)
+                  : null;
               current.lastFailure = {
                 source: row.source || "unknown",
                 status: row.status || "unknown",
                 itemsImported,
                 itemsSkipped: Number(row.itemsSkipped || 0),
-                errorCount: Array.isArray(row.errors) ? row.errors.length : 0,
+                errorCount: errs.length,
+                reason:
+                  firstReason && firstReason.length > 240
+                    ? firstReason.slice(0, 239) + "\u2026"
+                    : firstReason,
                 createdAt: row.createdAt || null,
               };
             }
