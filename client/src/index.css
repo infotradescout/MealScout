@@ -237,24 +237,43 @@
   aspect-ratio: 1;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   border-radius: 999px;
-  border: 3px solid #f59e0b;
+  border: 3px solid #f8d36a;
   background:
-    radial-gradient(circle at 50% 36%, rgba(245, 158, 11, 0.24), transparent 48%),
-    #080706;
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.2), transparent 34%),
+    linear-gradient(145deg, #2b1608 0%, #090706 54%, #1b0f05 100%);
   box-shadow:
-    0 0 0 7px rgba(8, 7, 6, 0.88),
-    0 0 0 10px rgba(245, 158, 11, 0.78),
+    0 0 0 7px rgba(8, 7, 6, 0.92),
+    0 0 0 10px rgba(245, 158, 11, 0.82),
+    0 0 30px rgba(245, 158, 11, 0.42),
     0 14px 26px rgba(0, 0, 0, 0.48),
-    inset 0 0 18px rgba(245, 158, 11, 0.28);
+    inset 0 0 18px rgba(245, 158, 11, 0.32);
   transform: translate(-50%, -50%);
 }
 
+.ms-giveaway-center-logo::before {
+  position: absolute;
+  inset: 18%;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 44% 32%, #ffffff 0%, #fff8e6 42%, #f8d36a 100%);
+  box-shadow:
+    0 0 0 2px rgba(8, 7, 6, 0.72),
+    inset 0 3px 8px rgba(255, 255, 255, 0.78),
+    inset 0 -8px 14px rgba(245, 158, 11, 0.22);
+  content: "";
+}
+
 .ms-giveaway-center-logo img {
-  width: 72%;
-  height: 72%;
+  position: relative;
+  z-index: 1;
+  width: 78%;
+  height: 78%;
   object-fit: contain;
-  filter: drop-shadow(0 3px 8px rgba(245, 158, 11, 0.35));
+  filter:
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.36))
+    drop-shadow(0 4px 8px rgba(24, 12, 4, 0.55));
 }
 
 .ms-giveaway-ready,
