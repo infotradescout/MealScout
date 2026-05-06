@@ -1,21 +1,30 @@
 /**
- * Per-platform caption builder for welcome cards.
+ * Per-platform caption builder for MealScout welcome cards.
  *
- * Real-data only. Every line is derived from fields actually captured during
- * signup (displayName, kind, typeLabel, locationLabel, category, menuItemNames,
- * videoCount, websiteUrl, menuUrl, orderUrl, profileUrl/shareUrl). When a field
- * is missing we omit the line entirely — never fabricate.
+ * MISSION LENS (locked in project instruction):
+ *   MealScout exists to restore foot traffic to local food places. Every
+ *   line in every caption must push the reader toward "I need to GO there."
+ *   Never "order it," "have it delivered," "add to cart," or "shop now."
  *
- * Brand rules locked into the output:
- *  - "Follow The Flavor." tagline appears on every platform
- *  - No "AI" language anywhere
- *  - The shared link is the user's own MealScout profile/affiliate link
+ *   Concrete consequences for caption copy:
+ *     - Openers say "open in [city]," "come find them," "pull up to [name],"
+ *       "stop in tonight," "the back patio is open." Never "order now,"
+ *       "delivery available," "shop now."
+ *     - Closers reinforce the visit: "Come find them." "Stop in tonight."
+ *       "Pull up." Followed by the affiliate profile link.
+ *     - Real-data only. If a field is missing, the line is dropped, never
+ *       fabricated. No invented cities, cuisines, items, hours, or metrics.
  *
- * Platforms supported in Round 2:
- *  - facebook  (long form, link clickable inline, paragraph breaks)
- *  - instagram (link not clickable in caption, hashtag-rich, "link in bio"
- *               hint plus the full URL since users still copy/paste it)
- *  - x         (280-char hard limit, single sentence + link)
+ * BRAND RULES locked into the output:
+ *   - "Follow The Flavor." tagline appears on every platform
+ *   - No "AI" language (the agreed substitute is "Community-Powered")
+ *   - The shared link is the user's MealScout profile (= affiliate link)
+ *
+ * Platforms supported in Round 3a:
+ *   - facebook  (long form, link clickable inline, paragraph breaks)
+ *   - instagram (link not clickable in caption, hashtag-rich, "link in bio"
+ *                hint plus the full URL since users still copy/paste it)
+ *   - x         (280-char hard limit, single sentence + link)
  *
  * Future rounds may add linkedin / threads / tiktok-bio.
  */
@@ -41,7 +50,15 @@ export interface CaptionSignupInput {
   menuItemNames?: string[] | null;
   videoCount?: number | null;
   websiteUrl?: string | null;
+  /**
+   * @deprecated MealScout no longer surfaces order/delivery language. Field
+   * remains in the input shape so legacy callers don't break, but it is
+   * intentionally never rendered.
+   */
   menuUrl?: string | null;
+  /**
+   * @deprecated See note on menuUrl. Kept for shape-compat only.
+   */
   orderUrl?: string | null;
 }
 
@@ -49,105 +66,162 @@ export interface PlatformCaption {
   platform: CaptionPlatform;
   body: string;
   hashtags: string[];
-  /** Composed string ready to paste/post (body + hashtags joined per platform conventions). */
+  /** Composed string ready to paste/post. */
   composed: string;
-  /** True if the composed string fits within the platform's hard limit. */
+  /** True if composed fits within the platform's hard limit. */
   withinLimit: boolean;
   /** Hard character limit for the platform (informational; X = 280, others soft). */
   charLimit: number;
-  /** Length of the composed string for UI display. */
+  /** Length of composed for UI display. */
   length: number;
 }
 
 const TAGLINE = "Follow The Flavor.";
 
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Trimmed display name, with a safe fallback. */
+const nameOf = (signup: CaptionSignupInput): string =>
+  String(signup.displayName || "").trim() || "A new local spot";
+
 /**
- * Cinematic-tight opener per business kind. Real fields only — no
- * placeholder cities, cuisines, or items.
+ * Returns just the city portion of "City, ST" — what humans say out loud.
+ * Returns "" if no usable location is on the signup.
  */
-const cinematicOpener = (signup: CaptionSignupInput): string => {
-  const name = String(signup.displayName || "").trim() || "A new local spot";
-  const loc = String(signup.locationLabel || "").trim();
-  const inLoc = loc && loc.toLowerCase() !== "local" ? ` in ${loc}` : "";
+const cityOf = (signup: CaptionSignupInput): string => {
+  const raw = String(signup.locationLabel || "").trim();
+  if (!raw || raw.toLowerCase() === "local") return "";
+  return raw.split(",")[0].trim();
+};
+
+/* -------------------------------------------------------------------------- */
+/* Foot-traffic opener                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Mission-aligned opener per kind. Pushes the reader to GO there. Real fields
+ * only — no invented cities, cuisines, or items.
+ */
+const footTrafficOpener = (signup: CaptionSignupInput): string => {
+  const name = nameOf(signup);
+  const city = cityOf(signup);
+  const inCity = city ? ` in ${city}` : "";
 
   switch (signup.kind) {
     case "food_truck":
-      return loc
-        ? `${loc}'s food truck lineup just got bigger — meet ${name}.`
-        : `A new food truck just rolled into MealScout: ${name}.`;
+      return city
+        ? `${name} is now parked${inCity}. Come find them this week.`
+        : `${name} just rolled into the MealScout map. Come find them.`;
     case "restaurant":
-      return inLoc
-        ? `There's a new local spot${inLoc}: ${name}.`
-        : `New on MealScout: ${name}.`;
+      return city
+        ? `${name} is open${inCity}. Stop in tonight.`
+        : `${name} is open. Stop in tonight.`;
     case "caterer":
-      return inLoc
-        ? `Catering${inLoc}? ${name} just joined MealScout.`
-        : `${name} just joined MealScout's caterer lineup.`;
+      return city
+        ? `${name} is now booking${inCity}. Stop in and meet them.`
+        : `${name} is now booking on MealScout. Stop in and meet them.`;
     case "private_chef":
-      return inLoc
-        ? `Private dining${inLoc} just got an upgrade — ${name} is on MealScout.`
-        : `${name}, a private chef, just joined MealScout.`;
+      return city
+        ? `${name} is at the pass${inCity}. Sit at their counter.`
+        : `${name} is at the pass on MealScout. Sit at their counter.`;
     case "host":
-      return inLoc
-        ? `${name}${inLoc} is now hosting food trucks through MealScout.`
-        : `${name} just joined MealScout as a host location.`;
+      return city
+        ? `Doors are open at ${name}${inCity}. Pull up.`
+        : `Doors are open at ${name}. Pull up.`;
     case "supplier":
-      return inLoc
-        ? `${name}${inLoc} is now supplying local food businesses on MealScout.`
-        : `${name} just joined MealScout's supplier network.`;
+      return city
+        ? `${name} is stocking the local food scene${inCity}. Visit the floor.`
+        : `${name} is stocking the local food scene on MealScout. Visit the floor.`;
     default:
-      return inLoc
-        ? `${name}${inLoc} is now on MealScout.`
-        : `${name} just joined MealScout.`;
+      return city
+        ? `${name} is now open${inCity}. Come find them.`
+        : `${name} is now on MealScout. Come find them.`;
   }
 };
 
-/**
- * Optional factual lines pulled from real signup fields. Each returns "" if
- * the underlying field is missing, so we never fabricate.
- */
+/* -------------------------------------------------------------------------- */
+/* Optional factual lines                                                     */
+/* -------------------------------------------------------------------------- */
+
 const categoryLine = (signup: CaptionSignupInput): string => {
   const cat = String(signup.category || "").trim();
   return cat ? `${cat}.` : "";
 };
 
+/**
+ * Real menu items pulled from onboarding. Phrased as "what's on the pass" -
+ * the room/counter, not the cart. Drops to "" if no items.
+ */
 const menuLine = (signup: CaptionSignupInput): string => {
   const items = (signup.menuItemNames || [])
     .map((s) => String(s || "").trim())
     .filter(Boolean)
     .slice(0, 3);
   if (!items.length) return "";
-  if (items.length === 1) return `On the menu: ${items[0]}.`;
-  return `On the menu: ${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}.`;
+  if (items.length === 1) return `On the pass: ${items[0]}.`;
+  return `On the pass: ${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}.`;
 };
 
+/**
+ * If the owner uploaded videos to their profile, point readers at the
+ * profile - not at "watch the order link." Drops to "" if videoCount = 0.
+ */
 const videoLine = (signup: CaptionSignupInput): string => {
   return Number(signup.videoCount || 0) > 0
-    ? `Videos and updates are live on their profile.`
+    ? `Walk-throughs and updates are on their profile.`
     : "";
 };
 
 /**
- * Hashtags per kind. Conservative — we only use evergreen, brand-safe tags
- * that won't go stale and that map to actually local communities. Location
- * tag added when we have a city.
+ * Mission-aligned closer per kind. Always anchors the post in a real-world
+ * action ("stop in," "pull up," "come find them"), never "order."
+ */
+const footTrafficCloser = (signup: CaptionSignupInput): string => {
+  const city = cityOf(signup);
+  switch (signup.kind) {
+    case "food_truck":
+      return city ? `Find them in ${city} this week.` : `Come find them.`;
+    case "restaurant":
+      return `Stop in tonight.`;
+    case "caterer":
+      return city ? `Stop in${city ? ` in ${city}` : ""} and meet them.` : `Stop in and meet them.`;
+    case "private_chef":
+      return `Sit at the counter.`;
+    case "host":
+      return `Pull up.`;
+    case "supplier":
+      return `Visit their floor.`;
+    default:
+      return city ? `Come find them in ${city}.` : `Come find them.`;
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/* Hashtags                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Hashtags per kind. Conservative — evergreen, brand-safe, foot-traffic
+ * leaning. Adds locality tag when a clean city is on the signup.
  */
 const hashtagsFor = (signup: CaptionSignupInput): string[] => {
-  const base = ["#MealScout", "#FollowTheFlavor"];
+  const base = ["#MealScout", "#FollowTheFlavor", "#StopInTonight"];
   const kindTags: Record<string, string[]> = {
-    food_truck: ["#FoodTruck", "#FoodTruckLife", "#StreetFood"],
-    restaurant: ["#LocalEats", "#SupportLocal"],
+    food_truck: ["#FoodTruck", "#StreetFood", "#PullUp"],
+    restaurant: ["#LocalEats", "#SupportLocal", "#OpenTonight"],
     caterer: ["#Catering", "#PrivateEvents"],
-    private_chef: ["#PrivateChef", "#ChefLife"],
+    private_chef: ["#PrivateChef", "#ChefsCounter"],
     host: ["#FoodTrucksWelcome", "#LocalFood"],
     supplier: ["#FoodSupplier", "#LocalFood"],
   };
   const tags = [...base, ...(kindTags[signup.kind as string] || [])];
 
-  // Add a locality tag if we have a clean single-word or "City, ST" location.
-  const loc = String(signup.locationLabel || "").trim();
-  if (loc && loc.toLowerCase() !== "local") {
-    const cleaned = loc
+  // Add a locality tag if we have a clean city.
+  const city = cityOf(signup);
+  if (city) {
+    const cleaned = city
       .replace(/[^a-zA-Z]/g, " ")
       .split(/\s+/)
       .filter(Boolean)
@@ -161,28 +235,32 @@ const hashtagsFor = (signup: CaptionSignupInput): string[] => {
 };
 
 const profileLink = (signup: CaptionSignupInput): string => {
-  return String(signup.shareUrl || signup.profileUrl || "https://www.mealscout.us").trim();
+  return String(
+    signup.shareUrl || signup.profileUrl || "https://www.mealscout.us",
+  ).trim();
 };
 
+/* -------------------------------------------------------------------------- */
+/* Per-platform builders                                                      */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Build the Facebook caption — long form, paragraph breaks, link inline.
- * Facebook is the canonical/longest version.
+ * Facebook: long form, paragraph breaks, link inline. Canonical/longest.
  */
 const buildFacebook = (signup: CaptionSignupInput): PlatformCaption => {
-  const opener = cinematicOpener(signup);
-  const lines = [
-    categoryLine(signup),
-    menuLine(signup),
-    videoLine(signup),
-  ].filter(Boolean);
+  const opener = footTrafficOpener(signup);
+  const facts = [categoryLine(signup), menuLine(signup), videoLine(signup)]
+    .filter(Boolean)
+    .join(" ");
+  const closer = footTrafficCloser(signup);
   const link = profileLink(signup);
   const hashtags = hashtagsFor(signup);
 
   const body = [
     opener,
-    lines.join(" "),
-    `See their profile: ${link}`,
-    TAGLINE,
+    facts,
+    `See the place: ${link}`,
+    `${closer} ${TAGLINE}`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -200,22 +278,23 @@ const buildFacebook = (signup: CaptionSignupInput): PlatformCaption => {
 };
 
 /**
- * Build the Instagram caption. Link is NOT clickable in IG captions, so we
- * include it as plain text plus a short "link in bio" hint. Hashtag-rich.
+ * Instagram: link not clickable in caption, so include it as plain text + a
+ * "link in bio" hint. Hashtag-rich.
  */
 const buildInstagram = (signup: CaptionSignupInput): PlatformCaption => {
-  const opener = cinematicOpener(signup);
-  const lines = [
-    categoryLine(signup),
-    menuLine(signup),
-  ].filter(Boolean);
+  const opener = footTrafficOpener(signup);
+  const facts = [categoryLine(signup), menuLine(signup)]
+    .filter(Boolean)
+    .join(" ");
+  const closer = footTrafficCloser(signup);
   const link = profileLink(signup);
   const hashtags = hashtagsFor(signup);
 
   const body = [
     opener,
-    lines.join(" "),
-    `${TAGLINE} ${link}`,
+    facts,
+    `${closer} ${TAGLINE}`,
+    `${link}`,
     `(Link in bio for the full profile.)`,
   ]
     .filter(Boolean)
@@ -234,16 +313,17 @@ const buildInstagram = (signup: CaptionSignupInput): PlatformCaption => {
 };
 
 /**
- * Build the X (Twitter) caption — single sentence under 280 chars, link
- * counts as 23 chars regardless of actual length.
+ * X (Twitter): single sentence, under 280 chars. Link counts as 23 chars
+ * regardless of actual length.
  */
 const buildX = (signup: CaptionSignupInput): PlatformCaption => {
   const link = profileLink(signup);
   const hashtags = hashtagsFor(signup).slice(0, 2); // X favors fewer
-  const opener = cinematicOpener(signup);
+  const opener = footTrafficOpener(signup);
+  const closer = footTrafficCloser(signup);
+  const name = nameOf(signup);
+  const city = cityOf(signup);
 
-  // Try richer first, then progressively trim if over the limit.
-  // X effective length: full text minus actual link length plus 23.
   const measure = (text: string): number => {
     const linkRegex = /https?:\/\/\S+/g;
     let total = text.length;
@@ -255,11 +335,14 @@ const buildX = (signup: CaptionSignupInput): PlatformCaption => {
   };
 
   const candidates = [
-    `${opener} ${TAGLINE} ${link} ${hashtags.join(" ")}`.trim(),
+    `${opener} ${closer} ${TAGLINE} ${link} ${hashtags.join(" ")}`.trim(),
+    `${opener} ${closer} ${link} ${hashtags.join(" ")}`.trim(),
     `${opener} ${link} ${hashtags.join(" ")}`.trim(),
     `${opener} ${link}`.trim(),
-    // Final fallback: shortest possible
-    `${String(signup.displayName || "New on MealScout").trim()} is now on MealScout. ${link}`.trim(),
+    // Final fallback: shortest possible, still mission-aligned.
+    city
+      ? `${name} is open in ${city}. Stop in tonight. ${link}`.trim()
+      : `${name} is open. Stop in tonight. ${link}`.trim(),
   ];
 
   let composed = candidates[candidates.length - 1] || "";
@@ -281,10 +364,10 @@ const buildX = (signup: CaptionSignupInput): PlatformCaption => {
   };
 };
 
-/**
- * Public API: returns all three platform captions for a signup. Caller picks
- * which to display / post.
- */
+/* -------------------------------------------------------------------------- */
+/* Public API                                                                  */
+/* -------------------------------------------------------------------------- */
+
 export const buildWelcomeCardCaptions = (
   signup: CaptionSignupInput,
 ): Record<CaptionPlatform, PlatformCaption> => {
