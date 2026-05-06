@@ -239,6 +239,30 @@ const formatSignupAge = (value: string) => {
   return createdAt.toLocaleDateString();
 };
 
+/**
+ * Marquee-style launch-moment label for the welcome card.
+ *
+ * Welcome cards are generated at the moment of signup, before a business
+ * has built any inventory (menu items, videos, banner). The card needs a
+ * chip that is always honest at that moment, so we print one based purely
+ * on the signup timestamp:
+ *
+ *   <= 72h old   -> "Just opened"
+ *   <= 7d old    -> "This week"
+ *   <= 30d old   -> "This month"
+ *   older        -> "Now on MealScout"   (admin re-share, still safe)
+ */
+const launchMomentLabelFor = (createdAtIso: string): string => {
+  const createdAt = new Date(createdAtIso);
+  if (Number.isNaN(createdAt.getTime())) return "Now on MealScout";
+  const ageMs = Date.now() - createdAt.getTime();
+  const ageHours = ageMs / (1000 * 60 * 60);
+  if (ageHours <= 72) return "Just opened";
+  if (ageHours <= 24 * 7) return "This week";
+  if (ageHours <= 24 * 30) return "This month";
+  return "Now on MealScout";
+};
+
 const initialsFor = (value: string) =>
   String(value || "MS")
     .split(/\s+/)
@@ -246,18 +270,6 @@ const initialsFor = (value: string) =>
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "MS";
-
-const summarize = (value?: string | null) =>
-  String(value || "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 150);
-
-const compactList = (items?: string[] | null, limit = 3) =>
-  (items || [])
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .slice(0, limit);
 
 const shortShareUrl = (value: string, maxLength = 42) => {
   try {
@@ -274,28 +286,41 @@ const shortShareUrl = (value: string, maxLength = 42) => {
   }
 };
 
+/**
+ * Mission-aligned announcement labels. Read like a hand-painted marquee or
+ * a neighborhood newspaper kicker - foot-traffic energy, never delivery.
+ */
 const announcementFor = (signup: RecentSignup) => {
   const labels: Record<RecentSignupKind, string> = {
-    customer: "New MealScout member",
-    food_truck: "New truck in town",
-    restaurant: "New local spot",
-    caterer: "New caterer in town",
-    private_chef: "New private chef",
-    host: "New host location",
-    supplier: "New supplier partner",
-    team: "New MealScout teammate",
+    customer: "Now on MealScout",
+    food_truck: "Now parked in town",
+    restaurant: "Now open in town",
+    caterer: "Now booking in town",
+    private_chef: "Now at the pass",
+    host: "Doors open in town",
+    supplier: "Now stocking the scene",
+    team: "New on the MealScout team",
   };
-  return labels[signup.kind] || "New on MealScout";
+  return labels[signup.kind] || "Now on MealScout";
 };
 
+/**
+ * Featured-tile copy. Mission-aligned: every line pushes the viewer toward
+ * "go there," never "order it." Uses the locationLabel when present so it
+ * feels local on the post.
+ */
 const graphicActionFor = (signup: RecentSignup) => {
-  if (signup.kind === "food_truck") return "Follow menus, stops, and updates";
-  if (signup.kind === "caterer") return "Book catering and see menus";
-  if (signup.kind === "private_chef") return "Book a private chef";
-  if (signup.kind === "host") return "See parking and host details";
-  if (signup.kind === "supplier") return "Find supplies and services";
-  if (signup.kind === "restaurant") return "Follow menus and local updates";
-  return "Find local food activity";
+  const where = signup.locationLabel
+    ? signup.locationLabel.split(",")[0].trim()
+    : "";
+  const cityTag = where ? ` in ${where}` : "";
+  if (signup.kind === "food_truck") return `Find them${cityTag} this week`;
+  if (signup.kind === "caterer") return `Stop in${cityTag} and meet them`;
+  if (signup.kind === "private_chef") return `Sit at their counter${cityTag}`;
+  if (signup.kind === "host") return `Pull up${cityTag}`;
+  if (signup.kind === "supplier") return `Visit their floor${cityTag}`;
+  if (signup.kind === "restaurant") return `Stop in${cityTag} tonight`;
+  return `Come find them${cityTag}`;
 };
 
 const completionLabel = (signup: RecentSignup) => {
@@ -724,8 +749,6 @@ export default function RecentSignupShare() {
             const tone = toneByKind[signup.kind] || toneByKind.customer;
             const isPosting = busyKey === `${signup.key}:facebook`;
             const isDownloading = busyKey === `${signup.key}:download`;
-            const description = summarize(signup.description);
-            const menuHighlights = compactList(signup.menuItemNames);
             const graphicImageUrl = signup.shareImageUrl || signup.imageUrl;
             const hasBusinessImage = Boolean(graphicImageUrl);
             const readiness = completionLabel(signup);
@@ -735,10 +758,6 @@ export default function RecentSignupShare() {
               : "Visitor fallback";
             const cleanShareUrl = signup.shareUrl || signup.profileUrl;
             const graphicUrlLabel = shortShareUrl(cleanShareUrl, 38);
-            const detailParts = [
-              signup.category || signup.typeLabel,
-              signup.locationLabel,
-            ].filter(Boolean);
             const statusText = signup.isPublic
               ? "Live public profile"
               : "Profile finishing";
@@ -751,15 +770,34 @@ export default function RecentSignupShare() {
                   : nameLength > 22
                     ? "text-[4.5cqw]"
                     : "text-[5.35cqw]";
+            /**
+             * Launch-moment subline.
+             *
+             * Welcome cards are generated at signup, before any inventory
+             * (menu items, videos, banner, descriptions). The subline must
+             * be honest at that moment, so it is built ONLY from fields the
+             * business actually filled out on the signup form:
+             *   - category   (e.g. "BBQ", "Tex-Mex")
+             *   - typeLabel  (e.g. "Food Truck", "Restaurant")
+             *   - city       (split off the locationLabel comma)
+             *
+             * We never fall back to menu highlights or description here.
+             * Description tends to be scraped/owner-blurb and contradicts
+             * the launch-moment framing. Menu items are an inventory system
+             * surfaced elsewhere.
+             */
+            const sublineCity = signup.locationLabel
+              ? signup.locationLabel.split(",")[0].trim()
+              : "";
+            const sublineKind =
+              signup.category || signup.typeLabel || "";
             const graphicSubline =
-              menuHighlights.length > 0
-                ? menuHighlights.slice(0, 3).join(" / ")
-                : detailParts.join(" / ") ||
-                  description ||
-                  `${signup.typeLabel} on MealScout`;
+              [sublineKind, sublineCity].filter(Boolean).join(" \u00B7 ") ||
+              `Now on MealScout`;
             const announcement = announcementFor(signup);
             const graphicAction = graphicActionFor(signup);
             const imageAlt = `${signup.displayName} profile image`;
+            const launchMomentLabel = launchMomentLabelFor(signup.createdAt);
 
             return (
               <Card key={signup.key} className="overflow-hidden">
@@ -805,13 +843,16 @@ export default function RecentSignupShare() {
                           {Number(signup.videoCount) === 1 ? "" : "s"}
                         </Badge>
                       ) : null}
+                      {/*
+                       * Google linked indicator. We surface ONLY that the
+                       * Google profile is linked - never the rating value.
+                       * The numeric Google rating remains a backend-only
+                       * signal feeding the existing internal score/ranking
+                       * system; we do not want to re-create star-based
+                       * comparison in the admin UI either.
+                       */}
                       {signup.googleProfileLinked || signup.googlePlaceId ? (
-                        <Badge variant="outline">
-                          Google listing
-                          {signup.googleRating
-                            ? ` ${Number(signup.googleRating).toFixed(1)}`
-                            : ""}
-                        </Badge>
+                        <Badge variant="outline">Google linked</Badge>
                       ) : null}
                       {signup.spotCount ? (
                         <Badge variant="outline">
@@ -832,6 +873,16 @@ export default function RecentSignupShare() {
                    * - Editorial Playfair Display headline.
                    * - "Follow The Flavor." tagline locked into bottom right.
                    */}
+                  {/*
+                   * MAGAZINE-COVER LAYOUT (Round 3a).
+                   * - Brand panel LEFT ~42% (kicker, headline, subline,
+                   *   real-data signal chips, tagline, profile/affiliate URL).
+                   * - Hero panel RIGHT ~58% (uploaded banner if present;
+                   *   otherwise the BrandedBackground's typographic
+                   *   destination word reads through as the hero).
+                   * - Every signal chip pulls only from real signup fields.
+                   *   Missing field = chip omitted (never invented).
+                   */}
                   <div
                     ref={(node) => {
                       graphicRefs.current[signup.key] = node;
@@ -839,131 +890,263 @@ export default function RecentSignupShare() {
                     className="relative aspect-[1200/630] overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#050505] text-white shadow-sm"
                     style={{ containerType: "inline-size" }}
                   >
-                    {/* Branded SVG background, always */}
+                    {/* Atmospheric room backdrop, always under everything */}
                     <BrandedBackground kind={backgroundKindFor(signup.kind)} />
 
-                    <div className="relative h-full p-[3.33cqw]">
-                      {/* Top-left: MealScout wordmark */}
-                      <div className="absolute left-[3.33cqw] top-[3.33cqw] inline-flex items-center gap-[1cqw] text-[1.15cqw] font-bold uppercase tracking-[0.22em] text-white/85">
-                        <span className="flex h-[3.33cqw] w-[3.33cqw] items-center justify-center rounded-full bg-white text-[0.95cqw] font-black tracking-normal text-black shadow-[0_4px_12px_rgba(245,158,11,0.35)]">
-                          MS
-                        </span>
-                        <span>MealScout</span>
-                      </div>
-
-                      {/* Top-right: status pills */}
-                      <div className="absolute right-[3.33cqw] top-[3.33cqw] flex max-w-[35cqw] flex-wrap justify-end gap-[0.65cqw]">
-                        <span
-                          className="rounded-full px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-bold uppercase tracking-[0.16em] text-black shadow-[0_8px_24px_rgba(245,158,11,0.45)]"
-                          style={{ backgroundColor: tone.accent }}
-                        >
-                          {tone.label}
-                        </span>
-                        <span className="rounded-full border border-white/25 bg-black/40 px-[1.65cqw] py-[0.65cqw] text-[1.05cqw] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur-sm">
-                          {statusText}
-                        </span>
-                      </div>
-
-                      {/* Center-left: announcement, name, subline */}
-                      <div className="absolute bottom-[10cqw] left-[3.33cqw] top-[10.6cqw] flex w-[58%] flex-col justify-center">
-                        <div
-                          className="mb-[1.6cqw] inline-flex w-fit items-center gap-[0.65cqw] rounded-full border border-amber-400/30 bg-amber-400/15 px-[1.4cqw] py-[0.55cqw] text-[1cqw] font-bold uppercase tracking-[0.22em] text-amber-300"
-                        >
-                          <span
-                            className="h-[0.7cqw] w-[0.7cqw] rounded-full"
-                            style={{ backgroundColor: tone.accent }}
-                          />
-                          {announcement}
+                    <div className="relative flex h-full w-full">
+                      {/* ============================================ */}
+                      {/* LEFT  -  brand panel (~42%)                  */}
+                      {/* ============================================ */}
+                      <div className="relative z-10 flex w-[42%] flex-col justify-between p-[3.4cqw]">
+                        {/* Top: MealScout mark + ornamental amber rule */}
+                        <div>
+                          <div className="flex items-center gap-[0.9cqw]">
+                            <span className="flex h-[3cqw] w-[3cqw] items-center justify-center rounded-full bg-white text-[0.85cqw] font-black tracking-normal text-black shadow-[0_4px_12px_rgba(245,158,11,0.35)]">
+                              MS
+                            </span>
+                            <span className="text-[1.05cqw] font-bold uppercase tracking-[0.28em] text-white/90">
+                              MealScout
+                            </span>
+                          </div>
+                          <div
+                            className="mt-[1.6cqw] flex items-center gap-[0.7cqw]"
+                            aria-hidden="true"
+                          >
+                            <span
+                              className="h-[0.18cqw] w-[3.6cqw] rounded-full"
+                              style={{ backgroundColor: tone.accent }}
+                            />
+                            <span
+                              className="h-[0.7cqw] w-[0.7cqw] rotate-45"
+                              style={{ backgroundColor: tone.accent }}
+                            />
+                            <span
+                              className="h-[0.18cqw] flex-1 rounded-full opacity-60"
+                              style={{ backgroundColor: tone.accent }}
+                            />
+                          </div>
                         </div>
-                        <h3
-                          className={`max-w-[12ch] break-words ${graphicNameClass} font-bold italic leading-[0.96] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.55)]`}
-                          style={{
-                            fontFamily:
-                              "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
-                            letterSpacing: "-0.01em",
-                          }}
-                        >
-                          {signup.displayName}
-                        </h3>
-                        {graphicSubline ? (
+
+                        {/* Middle: kicker -> name -> subline -> chips */}
+                        <div className="flex flex-col">
+                          {/* Bebas-style kicker, marquee feel */}
                           <p
-                            className="mt-[1.5cqw] line-clamp-2 max-w-[44cqw] text-[1.5cqw] font-medium leading-tight text-white/90"
+                            className="text-[1.3cqw] font-normal uppercase tracking-[0.32em] text-amber-300"
                             style={{
                               fontFamily:
-                                "'Space Grotesk', system-ui, sans-serif",
+                                "'Bebas Neue', 'Impact', system-ui, sans-serif",
                             }}
                           >
-                            {graphicSubline}
+                            {announcement}
                           </p>
-                        ) : null}
-                      </div>
 
-                      {/* Bottom-left: profile link */}
-                      <div className="absolute bottom-[3.33cqw] left-[3.33cqw] w-[58%] min-w-0">
-                        <p className="mb-[0.65cqw] text-[0.82cqw] font-bold uppercase tracking-[0.24em] text-white/55">
-                          Find them on MealScout
-                        </p>
-                        <div className="flex min-w-0 items-center gap-[0.65cqw] text-[1.35cqw] font-semibold text-white">
-                          <MapPin
-                            className="h-[1.35cqw] w-[1.35cqw] shrink-0"
-                            style={{ color: tone.accent }}
-                          />
-                          <span className="min-w-0 truncate">
-                            {graphicUrlLabel}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Right panel: photo or initials thumbnail + tagline */}
-                      <div className="absolute bottom-[3.33cqw] right-[3.33cqw] top-[10.6cqw] flex w-[32%] flex-col items-center justify-between overflow-hidden rounded-[2.4cqw] border border-white/15 bg-black/40 p-[1.8cqw] shadow-[0_28px_80px_rgba(0,0,0,.4)] backdrop-blur-sm">
-                        {/* View profile pill at top */}
-                        <div className="flex w-full justify-end">
-                          <span
-                            className="rounded-full px-[1.2cqw] py-[0.55cqw] text-[0.9cqw] font-bold uppercase tracking-[0.18em] text-black"
-                            style={{ backgroundColor: tone.accent }}
+                          {/* Editorial italic Playfair name */}
+                          <h3
+                            className={`mt-[1.2cqw] break-words ${graphicNameClass} font-bold italic leading-[0.95] text-white drop-shadow-[0_3px_18px_rgba(0,0,0,.55)]`}
+                            style={{
+                              fontFamily:
+                                "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+                              letterSpacing: "-0.01em",
+                            }}
                           >
-                            View
-                          </span>
-                        </div>
+                            {signup.displayName}
+                          </h3>
 
-                        {/* Photo as circular thumbnail OR amber initials */}
-                        <div className="flex flex-1 items-center justify-center py-[1cqw]">
-                          {hasBusinessImage ? (
-                            <div className="relative h-[14cqw] w-[14cqw] overflow-hidden rounded-full border-[0.4cqw] border-amber-400 shadow-[0_18px_50px_rgba(245,158,11,0.35)]">
-                              <img
-                                src={graphicImageUrl || ""}
-                                alt={imageAlt}
-                                crossOrigin="anonymous"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              className="flex h-[14cqw] w-[14cqw] items-center justify-center rounded-full text-[5.4cqw] font-black text-black shadow-[0_18px_50px_rgba(245,158,11,0.45)]"
+                          {/* Cuisine / menu subline (real data only) */}
+                          {graphicSubline ? (
+                            <p
+                              className="mt-[1.4cqw] line-clamp-2 text-[1.3cqw] font-medium italic leading-tight text-white/85"
+                              style={{
+                                fontFamily:
+                                  "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+                              }}
+                            >
+                              {graphicSubline}
+                            </p>
+                          ) : null}
+
+                          {/* Vintage signal chips - launch-moment ONLY.
+                           *
+                           * Welcome cards are generated the moment a business
+                           * joins MealScout, before they have menu items,
+                           * videos, banners, or recommendations. Anchoring
+                           * chips on inventory would either lie or print
+                           * a card with no chips at all.
+                           *
+                           * Instead the chips reflect what is always true at
+                           * launch:
+                           *   - signup recency  ("Just opened" / "This week")
+                           *   - business kind   ("Food Truck", "Restaurant")
+                           *   - neighborhood    (rendered below, real-only)
+                           *   - profile status  (rendered below, always set)
+                           *
+                           * Google ratings are intentionally NOT shown in
+                           * user-facing UI. They remain a backend-only signal
+                           * that feeds the existing score/ranking system.
+                           * Profile imagery / share artifacts are handled by
+                           * a separate system and are not surfaced here.
+                           */}
+                          <div className="mt-[1.8cqw] flex flex-wrap items-center gap-[0.7cqw]">
+                            {/* Launch-moment chip: when did they open on MealScout? */}
+                            <span
+                              className="inline-flex items-center gap-[0.45cqw] rounded-[0.35cqw] px-[1cqw] py-[0.45cqw] text-[0.95cqw] font-bold uppercase tracking-[0.22em] text-black shadow-[0_4px_18px_rgba(245,158,11,0.35)]"
                               style={{ backgroundColor: tone.accent }}
                             >
-                              {initialsFor(signup.displayName)}
-                            </div>
-                          )}
+                              <span
+                                className="h-[0.55cqw] w-[0.55cqw] rounded-full bg-black/70"
+                                aria-hidden="true"
+                              />
+                              {launchMomentLabel}
+                            </span>
+
+                            {/* Business-kind chip - always present, never invented */}
+                            <span className="inline-flex items-center gap-[0.45cqw] rounded-[0.35cqw] border border-amber-300/55 bg-amber-300/10 px-[1cqw] py-[0.45cqw] text-[0.95cqw] font-bold uppercase tracking-[0.22em] text-amber-200">
+                              <span
+                                className="h-[0.55cqw] w-[0.55cqw] rotate-45"
+                                style={{ backgroundColor: tone.accent }}
+                                aria-hidden="true"
+                              />
+                              {tone.label}
+                            </span>
+
+                            {/* Neighborhood / city kicker */}
+                            {signup.locationLabel ? (
+                              <span className="inline-flex items-center gap-[0.45cqw] rounded-[0.35cqw] border border-white/25 bg-black/45 px-[1cqw] py-[0.45cqw] text-[0.95cqw] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+                                <MapPin
+                                  className="h-[1cqw] w-[1cqw] shrink-0"
+                                  style={{ color: tone.accent }}
+                                />
+                                {signup.locationLabel
+                                  .split(",")[0]
+                                  .trim()
+                                  .toUpperCase()}
+                              </span>
+                            ) : null}
+
+                            {/* Live profile / status marquee tag */}
+                            <span
+                              className="inline-flex items-center gap-[0.45cqw] rounded-[0.35cqw] px-[1cqw] py-[0.45cqw] text-[0.95cqw] font-bold uppercase tracking-[0.18em] text-black"
+                              style={{ backgroundColor: tone.accent }}
+                            >
+                              {statusText}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Locked tagline + featured CTA */}
-                        <div className="w-full space-y-[0.9cqw]">
+                        {/* Bottom: tagline + profile (affiliate) link */}
+                        <div>
                           <p
-                            className="text-center text-[1.4cqw] font-bold italic leading-tight text-amber-300"
+                            className="text-[1.85cqw] font-bold italic leading-none text-amber-300"
                             style={{
                               fontFamily:
                                 "'Playfair Display', Georgia, serif",
-                              letterSpacing: "0.01em",
+                              letterSpacing: "0.005em",
                             }}
                           >
                             Follow The Flavor.
                           </p>
-                          <div className="rounded-[1.4cqw] border border-white/12 bg-white/[0.04] p-[1.1cqw]">
-                            <p className="mb-[0.5cqw] text-[0.74cqw] font-bold uppercase tracking-[0.26em] text-amber-300/80">
-                              Featured
+                          <div className="mt-[1cqw] flex items-center gap-[0.6cqw]">
+                            <span
+                              className="h-[0.18cqw] w-[2cqw] rounded-full"
+                              style={{ backgroundColor: tone.accent }}
+                              aria-hidden="true"
+                            />
+                            <p className="text-[0.78cqw] font-bold uppercase tracking-[0.28em] text-white/55">
+                              Find them on MealScout
                             </p>
-                            <p className="line-clamp-2 text-[1.15cqw] font-semibold leading-tight text-white">
+                          </div>
+                          <div className="mt-[0.7cqw] flex min-w-0 items-center gap-[0.6cqw] text-[1.2cqw] font-semibold text-white">
+                            <span className="min-w-0 truncate">
+                              {graphicUrlLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ============================================ */}
+                      {/* RIGHT  -  hero panel (~58%)                  */}
+                      {/* ============================================ */}
+                      <div className="relative w-[58%] overflow-hidden">
+                        {/* Vertical seam between brand and hero */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-0 top-[6%] h-[88%] w-[0.18cqw] rounded-full"
+                          style={{
+                            backgroundColor: tone.accent,
+                            opacity: 0.55,
+                          }}
+                        />
+
+                        {hasBusinessImage ? (
+                          <>
+                            {/*
+                             * Owner-uploaded banner. Contained, never blown
+                             * out. Dark gradient on top of it keeps the
+                             * brand panel readable regardless of image
+                             * brightness; amber underglow at the bottom
+                             * mimics signage spill into the room.
+                             */}
+                            <img
+                              src={graphicImageUrl || ""}
+                              alt={imageAlt}
+                              crossOrigin="anonymous"
+                              className="h-full w-full object-cover"
+                            />
+                            <div
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0"
+                              style={{
+                                background:
+                                  "linear-gradient(90deg, rgba(5,5,5,0.92) 0%, rgba(5,5,5,0.55) 18%, rgba(5,5,5,0) 42%, rgba(5,5,5,0) 70%, rgba(5,5,5,0.45) 100%)",
+                              }}
+                            />
+                            <div
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-x-0 bottom-0 h-[35%]"
+                              style={{
+                                background:
+                                  "linear-gradient(0deg, rgba(245,158,11,0.18) 0%, rgba(245,158,11,0) 100%)",
+                              }}
+                            />
+                          </>
+                        ) : (
+                          /*
+                           * No banner uploaded. The atmospheric
+                           * BrandedBackground already paints the oversized
+                           * destination word (TRUCK / DINER / BAR /
+                           * KITCHEN / etc.) across the full canvas. We add
+                           * only a soft amber inner vignette here so the
+                           * right panel still reads as the hero target.
+                           */
+                          <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                              background:
+                                "radial-gradient(ellipse at 65% 45%, rgba(245,158,11,0.18) 0%, rgba(5,5,5,0) 60%)",
+                            }}
+                          />
+                        )}
+
+                        {/* Featured CTA, anchored bottom-right of hero */}
+                        <div className="absolute bottom-[3cqw] right-[3cqw] z-10 max-w-[34cqw]">
+                          <div className="rounded-[0.6cqw] border border-amber-300/55 bg-black/65 px-[1.6cqw] py-[1.1cqw] backdrop-blur-md">
+                            <p
+                              className="text-[0.85cqw] font-bold uppercase tracking-[0.32em] text-amber-300"
+                              style={{
+                                fontFamily:
+                                  "'Bebas Neue', 'Impact', system-ui, sans-serif",
+                              }}
+                            >
+                              Featured on MealScout
+                            </p>
+                            <p
+                              className="mt-[0.5cqw] line-clamp-2 text-[1.4cqw] font-bold italic leading-tight text-white"
+                              style={{
+                                fontFamily:
+                                  "'Playfair Display', Georgia, serif",
+                              }}
+                            >
                               {graphicAction}
                             </p>
                           </div>
