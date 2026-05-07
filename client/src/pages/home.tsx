@@ -38,6 +38,7 @@ import {
   Flame,
   ArrowDownToLine,
   PlayCircle,
+  Tag,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -1227,6 +1228,68 @@ export default function Home() {
             <p className="text-xs text-muted-foreground py-3">
               No live trucks nearby right now.
             </p>
+          )}
+        </div>
+      </section>
+
+      {/* Tonight's Specials - Deals Discovery Section */}
+      <section className="py-10 border-b border-white/5 bg-black/50">
+        <div className="px-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Tonight's Specials</span>
+              </div>
+              <h3 className="text-2xl font-serif font-bold text-white">Deals Near You</h3>
+            </div>
+            <Link href="/deals/featured">
+              <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
+                See All
+              </Button>
+            </Link>
+          </div>
+
+          {sortedFeaturedDeals.length > 0 ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+              {sortedFeaturedDeals.slice(0, 8).map((deal) => (
+                <Link key={deal.id} href={`/deal/${deal.id}`}>
+                  <div className="flex-shrink-0 w-56 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-md hover:bg-white/10 transition-all group">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded-full">
+                        {deal.dealType === "percentage" ? `${deal.discountValue}% OFF` : `$${deal.discountValue} OFF`}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">{deal.dealType}</span>
+                    </div>
+                    <h4 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors mb-2">
+                      {deal.title}
+                    </h4>
+                    {deal.restaurantId && (
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 truncate">
+                        {(dealsByRestaurant.get(String(deal.restaurantId)) || []).length > 0
+                          ? "View deal"
+                          : "Stop in tonight"}
+                      </p>
+                    )}
+                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+                      <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">
+                        {deal.startTime && deal.endTime
+                          ? `${deal.startTime.slice(0,5)} – ${deal.endTime.slice(0,5)}`
+                          : "All day"}
+                      </span>
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Pull Up →</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/20">No specials posted nearby yet.</p>
+              <Link href="/deals/featured">
+                <Button className="mt-4 bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-5 py-2 hover:bg-white/10">Browse Featured</Button>
+              </Link>
+            </div>
           )}
         </div>
       </section>
