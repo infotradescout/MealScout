@@ -142,56 +142,25 @@
 }
 
 /*
- * Wheel center hub.
- *
- * Hosts the canonical MealScout brand mark (orange pin + utensils on
- * transparent). Goals:
- *  - Hub is big enough that the pin shape reads as the MealScout logo
- *    at thumbnail / phone size, not a generic location pin.
- *  - Backplate is a flat near-black disc, NOT a gradient, so the dark
- *    outline of the pin doesn't compete with the disc gradient.
- *  - Amber stage ring stays for marquee feel.
- *  - Image fills 96% of the hub (was 88%) so the pin's lower point and
- *    rounded top sit close to the rim, the way the logo is meant to read.
- *  - No saturation / contrast / drop-shadow filters baked in; we want
- *    the brand mark to render exactly the way it does everywhere else.
+ * Wheel center hub — clean amber-ringed disc, no logo.
  */
-.ms-giveaway-center-logo {
+.ms-giveaway-center-hub {
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 4;
-  display: flex;
-  width: clamp(74px, 24%, 104px);
+  width: clamp(52px, 17%, 76px);
   aspect-ratio: 1;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
   border-radius: 999px;
-  border: 2px solid #ffd86a;
-  background: #0a0807;
+  background: radial-gradient(circle at 38% 36%, #1a1612, #0a0807 72%);
+  border: 2px solid rgba(255, 216, 106, 0.72);
   box-shadow:
-    0 0 0 5px rgba(8, 7, 6, 0.96),
-    0 0 0 8px rgba(245, 158, 11, 0.88),
-    0 0 26px rgba(245, 158, 11, 0.46),
-    0 14px 26px rgba(0, 0, 0, 0.48),
-    inset 0 0 0 3px rgba(255, 216, 106, 0.18);
+    0 0 0 4px rgba(8, 7, 6, 0.96),
+    0 0 0 7px rgba(245, 158, 11, 0.82),
+    0 0 28px rgba(245, 158, 11, 0.42),
+    0 10px 22px rgba(0, 0, 0, 0.52),
+    inset 0 0 0 2px rgba(255, 216, 106, 0.14);
   transform: translate(-50%, -50%);
-}
-
-.ms-giveaway-center-logo::before {
-  content: none;
-  display: none;
-}
-
-.ms-giveaway-center-logo img {
-  position: relative;
-  z-index: 1;
-  width: 96%;
-  height: 96%;
-  object-fit: contain;
-  /* Single soft drop-shadow so the pin doesn't float, no color shifts. */
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }
 
 .ms-giveaway-ready,

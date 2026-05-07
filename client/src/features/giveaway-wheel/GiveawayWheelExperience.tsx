@@ -576,9 +576,6 @@ export function GiveawayWheelExperience({
       config.background?.noiseUrl || defaultNoiseImageUrl,
     ),
   } as CSSProperties;
-  const logoSrc = logo.src || defaultLogoSrc;
-  const logoAlt = logo.alt || "";
-
   return (
     <div className="ms-giveaway min-h-screen bg-[#0b0a09] text-white" style={rootStyle}>
       <div className="ms-giveaway-bg" />
@@ -717,9 +714,7 @@ export function GiveawayWheelExperience({
                     ))}
                   </g>
                 </svg>
-                <div className="ms-giveaway-center-logo" aria-hidden="true">
-                  <img src={logoSrc} alt={logoAlt} />
-                </div>
+                <div className="ms-giveaway-center-hub" aria-hidden="true" />
               </div>
             </div>
 

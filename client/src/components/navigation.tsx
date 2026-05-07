@@ -172,6 +172,17 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // Hide nav on giveaway wheel page — record mode and fullscreen are handled
+  // inside the wheel itself; the global nav must not overlay the wheel canvas.
+  const isWheelPage = location.startsWith("/admin/giveaway-wheel");
+  const [isDocFullscreen, setIsDocFullscreen] = useState(false);
+  useEffect(() => {
+    const handler = () => setIsDocFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+  if (isWheelPage || isDocFullscreen) return null;
+
   if (!isGlobalScope && !showLocalNav) return null;
 
   // ── DASHBOARD path per role ──────────────────────────────────────────────
