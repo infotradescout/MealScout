@@ -12,6 +12,7 @@ import {
   eventSeries,
   foodTruckLocations,
   foodTruckSessions,
+  restaurants,
 } from "@shared/schema";
 
 const stripe = process.env.STRIPE_SECRET_KEY
@@ -442,7 +443,25 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     async (_req: any, res) => {
       try {
         const users = await storage.getAllUsers();
-        res.json(sanitizeUsers(users, { includeStripe: true }));
+        const sanitized = sanitizeUsers(users, { includeStripe: true });
+
+        // Attach business name from restaurants table (left join by owner_id)
+        const restaurantRows = await db
+          .select({ ownerId: restaurants.ownerId, name: restaurants.name })
+          .from(restaurants);
+        const restaurantByOwner = new Map<string, string>();
+        for (const r of restaurantRows) {
+          if (r.ownerId && !restaurantByOwner.has(r.ownerId)) {
+            restaurantByOwner.set(r.ownerId, r.name);
+          }
+        }
+
+        const withBusiness = sanitized.map((u: any) => ({
+          ...u,
+          businessName: u.businessName || restaurantByOwner.get(u.id) || null,
+        }));
+
+        res.json(withBusiness);
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
