@@ -168,7 +168,7 @@ export default function DealDetail() {
 
   if (dealLoading || restaurantLoading) {
     return (
-      <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen">
+      <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen atmospheric-theme">
         <div className="animate-pulse">
           <div className="w-full h-64 bg-[var(--bg-surface-muted)]"></div>
           <div className="p-4 space-y-4">
@@ -243,7 +243,7 @@ export default function DealDetail() {
   };
 
   return (
-    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen">
+    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen atmospheric-theme">
       <SEOHead
         title={`${dealTitle} - ${restaurantName} | MealScout`}
         description={`${dealDescription}. ${
@@ -261,11 +261,11 @@ export default function DealDetail() {
         title="Special Details"
         fallbackHref="/"
         icon={Tag}
-        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean sticky top-0 z-10"
+        className="bg-black/60 backdrop-blur-xl border-b border-white/5 sticky top-0 z-10"
       />
 
       {/* Action Buttons */}
-      <div className="bg-[hsl(var(--background))/0.94] px-4 py-2 border-b border-[color:var(--border-subtle)] sticky top-16 z-10">
+      <div className="bg-black/40 backdrop-blur-xl px-4 py-2 border-b border-white/5 sticky top-16 z-10">
         <div className="flex justify-end gap-2">
           <Button
             variant="ghost"
@@ -274,7 +274,7 @@ export default function DealDetail() {
             data-testid="button-share"
             aria-label="Share special"
           >
-            <i className="fas fa-share text-foreground"></i>
+            <i className="fas fa-share text-white/60"></i>
           </Button>
           <Button
             variant="ghost"
@@ -282,111 +282,105 @@ export default function DealDetail() {
             data-testid="button-favorite"
             aria-label="Save special"
           >
-            <i className="fas fa-heart text-muted-foreground hover:text-[color:var(--accent-text)]"></i>
+            <i className="fas fa-heart text-white/60 hover:text-primary"></i>
           </Button>
         </div>
       </div>
 
-      {/* Deal Image */}
+      {/* Deal Hero */}
       <div className="relative">
-        <div className="w-full h-64 bg-gradient-to-r from-[color:var(--accent-text)]/12 to-[color:var(--status-warning)]/12 flex items-center justify-center">
+        <div className="w-full h-64 bg-gradient-to-br from-amber-900/40 via-black to-black flex items-end justify-start overflow-hidden">
           {(deal as Deal)?.imageUrl ? (
             <img
               src={(deal as Deal).imageUrl}
               alt={(deal as Deal).title}
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover opacity-60"
               data-testid="img-deal"
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
             />
           ) : (
-            <i className="fas fa-utensils text-[color:var(--accent-text)] text-4xl"></i>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <i className="fas fa-utensils text-primary/20 text-6xl"></i>
+            </div>
           )}
-        </div>
-        <div
-          className="absolute top-4 left-4 bg-[color:var(--accent-text)]/15 text-[color:var(--accent-text)] px-3 py-1 rounded-full font-bold text-sm"
-          data-testid="text-discount-badge"
-        >
-          {formatDiscount(deal as Deal)}
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+          <div className="relative z-10 p-6">
+            <span
+              className="inline-block bg-primary text-black px-3 py-1 rounded-full font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(245,158,11,0.5)] mb-2"
+              data-testid="text-discount-badge"
+            >
+              {formatDiscount(deal as Deal)}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Deal Content */}
       <div className="px-4 py-6 pb-32">
         {/* Restaurant Info */}
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start justify-between mb-6">
           <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1">At</p>
             <h1
-              className="text-xl font-bold text-foreground mb-1"
+              className="text-2xl font-serif font-bold text-white mb-2"
               data-testid="text-restaurant-name"
             >
               {(restaurant as Restaurant)?.name || "Restaurant"}
             </h1>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-4 text-xs font-bold text-white/40 uppercase tracking-widest">
               {distance !== undefined && (
-                <div className="flex items-center space-x-1">
-                  <i className="fas fa-map-marker-alt"></i>
-                  <span data-testid="text-restaurant-distance">
-                    {distance.toFixed(1)} mi away
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center space-x-1">
-                <i className="fas fa-star text-[color:var(--status-warning)]"></i>
-                <span data-testid="text-restaurant-rating">
-                  {(rating as any)?.rating &&
-                  typeof (rating as any).rating === "number"
-                    ? (rating as any).rating.toFixed(1)
-                    : (rating as any)?.rating &&
-                        !isNaN(Number((rating as any).rating))
-                      ? Number((rating as any).rating).toFixed(1)
-                      : "New"}
-                  {Array.isArray(reviews) && ` (${reviews.length} reviews)`}
+                <span data-testid="text-restaurant-distance">
+                  <i className="fas fa-map-marker-alt mr-1 text-primary"></i>
+                  {distance.toFixed(1)} mi away
                 </span>
-              </div>
+              )}
+              <span data-testid="text-restaurant-rating">
+                <i className="fas fa-star mr-1 text-primary"></i>
+                {(rating as any)?.rating &&
+                typeof (rating as any).rating === "number"
+                  ? (rating as any).rating.toFixed(1)
+                  : (rating as any)?.rating &&
+                      !isNaN(Number((rating as any).rating))
+                    ? Number((rating as any).rating).toFixed(1)
+                    : "New"}
+                {Array.isArray(reviews) && ` (${reviews.length})`}
+              </span>
             </div>
           </div>
-          <div className="w-16 h-16 bg-[color:var(--accent-text)] rounded-full flex items-center justify-center">
-            <i className="fas fa-utensils text-white text-xl"></i>
+          <div className="w-14 h-14 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center">
+            <i className="fas fa-utensils text-primary text-xl"></i>
           </div>
         </div>
 
         {/* Deal Description */}
-        <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
-          <CardContent className="p-4">
-            <h2
-              className="font-semibold text-foreground mb-2"
-              data-testid="text-deal-title"
-            >
-              {(deal as Deal)?.title}
-            </h2>
-            <p
-              className="text-muted-foreground text-sm mb-3"
-              data-testid="text-deal-description"
-            >
-              {(deal as Deal)?.description}
-            </p>
-
-            <div className="flex items-center space-x-4 text-xs">
-              <div className="flex items-center space-x-1">
-                <i className="fas fa-clock text-muted-foreground"></i>
-                <span data-testid="text-deal-time">
-                  Valid {formatTime((deal as Deal)?.startTime || "11:00")} -{" "}
-                  {formatTime((deal as Deal)?.endTime || "15:00")}
-                </span>
-              </div>
-              {(deal as Deal)?.minOrderAmount && (
-                <div className="flex items-center space-x-1">
-                  <i className="fas fa-dollar-sign text-muted-foreground"></i>
-                  <span data-testid="text-min-order">
-                    Min. order ${(deal as Deal).minOrderAmount}
-                  </span>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-md p-5 mb-6">
+          <h2
+            className="text-lg font-bold text-white mb-2"
+            data-testid="text-deal-title"
+          >
+            {(deal as Deal)?.title}
+          </h2>
+          <p
+            className="text-white/50 text-sm leading-relaxed mb-4"
+            data-testid="text-deal-description"
+          >
+            {(deal as Deal)?.description}
+          </p>
+          <div className="flex items-center gap-4 text-[10px] font-bold text-white/30 uppercase tracking-widest">
+            <span data-testid="text-deal-time">
+              <i className="fas fa-clock mr-1 text-primary/60"></i>
+              {formatTime((deal as Deal)?.startTime || "11:00")} – {formatTime((deal as Deal)?.endTime || "15:00")}
+            </span>
+            {(deal as Deal)?.minOrderAmount && (
+              <span data-testid="text-min-order">
+                <i className="fas fa-dollar-sign mr-1 text-primary/60"></i>
+                Min. ${(deal as Deal).minOrderAmount}
+              </span>
+            )}
+          </div>
+        </div>
 
         {canonical ? (
           <Card className="bg-[var(--bg-surface-muted)] mb-6 border-[color:var(--border-subtle)] shadow-clean">
