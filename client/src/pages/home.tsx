@@ -248,6 +248,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, setNavigateTo] = useLocation();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const { isConnected, subscribeToNearby } = useFoodTruckSocket();
 
@@ -584,6 +585,16 @@ export default function Home() {
       });
   }, [publicProfiles, dealsByRestaurant]);
 
+  // Apply inline category filter from chip selection
+  const filteredBusinesses = useMemo(() => {
+    if (!activeCategory || activeCategory === "deals") return featuredBusinesses;
+    return featuredBusinesses.filter((b) => {
+      const cuisine = (b.cuisineType || "").toLowerCase();
+      const type = (b.businessType || "").toLowerCase();
+      return cuisine.includes(activeCategory) || type.includes(activeCategory);
+    });
+  }, [featuredBusinesses, activeCategory]);
+
   const {
     data: liveTrucksData,
     isLoading: liveTrucksLoading,
@@ -901,7 +912,7 @@ export default function Home() {
                   Open map
                 </Button>
               </Link>
-              <Link href="/deals/featured" className="w-full">
+              <Link href="#scout-deals-section" className="w-full">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -963,104 +974,36 @@ export default function Home() {
               </div>
             )}
 
-            {/* Filter Chips - Atmospheric Adaptation */}
+            {/* Filter Chips - Inline category filtering (no navigation away) */}
             <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide w-full">
-              <Link href="/deals/featured">
+              {[
+                { label: "Hot Deals", key: "deals", icon: "✦" },
+                { label: "Pizza", key: "pizza", icon: "🍕" },
+                { label: "Burgers", key: "burgers", icon: "🍔" },
+                { label: "Sushi", key: "sushi", icon: "🍣" },
+                { label: "Chinese", key: "chinese", icon: "🥡" },
+                { label: "Tacos", key: "mexican", icon: "🌮" },
+                { label: "Breakfast", key: "breakfast", icon: "🍳" },
+                { label: "Seafood", key: "seafood", icon: "🦞" },
+                { label: "BBQ", key: "bbq", icon: "🔥" },
+                { label: "Desserts", key: "dessert", icon: "🍰" },
+                { label: "Coffee", key: "coffee", icon: "☕" },
+                { label: "Healthy", key: "healthy", icon: "🥗" },
+              ].map((chip) => (
                 <Button
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-primary text-black font-bold shadow-[0_8px_20px_rgba(245,158,11,0.3)] hover:scale-105 transition-all"
+                  key={chip.key}
+                  onClick={() => setActiveCategory(activeCategory === chip.key ? null : chip.key)}
+                  className={`flex-shrink-0 rounded-2xl px-5 py-6 font-bold transition-all ${
+                    activeCategory === chip.key
+                      ? "bg-primary text-black shadow-[0_8px_20px_rgba(245,158,11,0.4)] scale-105"
+                      : "bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:text-white"
+                  }`}
                   size="sm"
+                  id={chip.key === "deals" ? "scout-deals-section" : undefined}
                 >
-                  <Sparkles className="w-4 h-4 mr-2" /> Hot Deals
+                  <span className="mr-1.5">{chip.icon}</span> {chip.label}
                 </Button>
-              </Link>
-              <Link href="/category/pizza">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Pizza
-                </Button>
-              </Link>
-              <Link href="/category/burgers">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Burgers
-                </Button>
-              </Link>
-              <Link href="/category/sushi">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Sushi
-                </Button>
-              </Link>
-              <Link href="/category/chinese">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Chinese
-                </Button>
-              </Link>
-              <Link href="/category/mexican">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Tacos
-                </Button>
-              </Link>
-              <Link href="/category/breakfast">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Breakfast
-                </Button>
-              </Link>
-              <Link href="/category/seafood">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Seafood
-                </Button>
-              </Link>
-              <Link href="/category/bbq">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   BBQ
-                </Button>
-              </Link>
-              <Link href="/category/dessert">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Desserts
-                </Button>
-              </Link>
-              <Link href="/category/coffee">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Coffee
-                </Button>
-              </Link>
-              <Link href="/category/healthy">
-                <Button
-                  variant="ghost"
-                  className="flex-shrink-0 rounded-2xl px-5 py-6 bg-white/5 border border-white/10 text-white/80 font-bold hover:bg-white/10 hover:text-white transition-all"
-                >
-                   Healthy
-                </Button>
-              </Link>
+              ))}
             </div>
 
             {/* Manual location input (only when we don't have a location) */}
@@ -1243,7 +1186,7 @@ export default function Home() {
               </div>
               <h3 className="text-2xl font-serif font-bold text-white">Deals Near You</h3>
             </div>
-            <Link href="/deals/featured">
+            <Link href="#scout-deals-section">
               <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
                 See All
               </Button>
@@ -1286,7 +1229,7 @@ export default function Home() {
           ) : (
             <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-white/20">No specials posted nearby yet.</p>
-              <Link href="/deals/featured">
+              <Link href="#scout-deals-section">
                 <Button className="mt-4 bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-5 py-2 hover:bg-white/10">Browse Featured</Button>
               </Link>
             </div>
@@ -1312,7 +1255,7 @@ export default function Home() {
                 Public truck, restaurant, and bar profiles. Community recommendations carry extra weight.
               </p>
             </div>
-            <Link href="/deals/featured">
+            <Link href="#scout-deals-section">
               <Button
                 variant="ghost"
                 className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
@@ -1346,9 +1289,9 @@ export default function Home() {
                 Retry Profiles
               </Button>
             </div>
-          ) : featuredBusinesses.length > 0 ? (
+          ) : filteredBusinesses.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {featuredBusinesses.map((business) => (
+              {filteredBusinesses.map((business) => (
                 <div key={business.id} className="flex-shrink-0 w-64">
                   <BusinessDealsCard business={business} />
                 </div>
@@ -1363,7 +1306,7 @@ export default function Home() {
                     Open Map
                   </Button>
                 </Link>
-                <Link href="/deals/featured">
+                <Link href="#scout-deals-section">
                   <Button size="sm" variant="outline">
                     View Featured
                   </Button>
@@ -1571,7 +1514,7 @@ export default function Home() {
             <div className="max-w-[600px] mx-auto">
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-2xl font-serif font-bold text-white">Nearby Profiles</h3>
-                <Link href="/deals/featured">
+                <Link href="#scout-deals-section">
                   <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
                     View All
                   </Button>
@@ -1598,9 +1541,9 @@ export default function Home() {
                     Retry Profiles
                   </Button>
                 </div>
-              ) : featuredBusinesses.length > 0 ? (
+              ) : filteredBusinesses.length > 0 ? (
                 <div className="space-y-4">
-                  {featuredBusinesses.map((business) => (
+                  {filteredBusinesses.map((business) => (
                     <BusinessDealsCard key={business.id} business={business} compact />
                   ))}
                 </div>
@@ -1613,7 +1556,7 @@ export default function Home() {
                         Open Map
                       </Button>
                     </Link>
-                    <Link href="/deals/featured">
+                    <Link href="#scout-deals-section">
                       <Button className="bg-primary/10 border border-primary/20 text-primary font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-primary/20">
                         Featured Deals
                       </Button>

@@ -305,11 +305,12 @@ function Router() {
             <Route path="/supplier/:slug" component={SupplierDetailPage} />
             <Route path="/video" component={VideoPage} />
             <Route path="/video/:id" component={VideoDetailPage} />
-            <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={CategoryPage} />
-            <Route path="/deals" component={FeaturedDealsPage} />
-            <Route path="/deals/featured" component={FeaturedDealsPage} />
-            <Route path="/deals/:city" component={DealsCityPage} />
+            {/* Discovery routes consolidated into Scout — redirect to / */}
+            <Route path="/category/:category" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/cuisine/:type" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals/featured" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals/:city" component={() => { window.location.replace("/"); return null; }} />
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
@@ -501,11 +502,12 @@ function Router() {
               component={AdminAffiliateManagement}
             />
             <Route path="/admin/switcher" component={DashboardSwitcherPage} />
-            <Route path="/category/:category" component={CategoryPage} />
-            <Route path="/cuisine/:type" component={CategoryPage} />
-            <Route path="/deals" component={FeaturedDealsPage} />
-            <Route path="/deals/featured" component={FeaturedDealsPage} />
-            <Route path="/deals/:city" component={DealsCityPage} />
+            {/* Discovery routes consolidated into Scout — redirect to / */}
+            <Route path="/category/:category" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/cuisine/:type" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals/featured" component={() => { window.location.replace("/"); return null; }} />
+            <Route path="/deals/:city" component={() => { window.location.replace("/"); return null; }} />
             <Route path="/restaurant/:id" component={RestaurantDetail} />
             <Route path="/truck/:slug" component={RestaurantDetail} />
             <Route path="/bar/:slug" component={RestaurantDetail} />
