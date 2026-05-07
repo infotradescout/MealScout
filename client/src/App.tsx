@@ -152,6 +152,7 @@ const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
+const ExplorePreview = lazy(() => import("@/pages/explore-preview"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -289,6 +290,7 @@ function Router() {
         {shouldUseGuestRoutes ? (
           <>
             <Route path="/" component={Home} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
@@ -415,6 +417,7 @@ function Router() {
         ) : (
           <>
             <Route path="/" component={Home} />
+            <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
