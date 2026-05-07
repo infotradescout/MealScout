@@ -13,6 +13,7 @@ export default function VideoPage() {
 
   const handleUploadClick = () => {
     if (isGuest) {
+      // Align with Saved Deals behavior: send guests to login
       window.location.href = "/login";
       return;
     }
@@ -20,40 +21,39 @@ export default function VideoPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-background min-h-screen relative pb-24 atmospheric-theme">
+    <div className="max-w-md mx-auto bg-background min-h-screen relative pb-20">
       <SEOHead
-        title="Critic Feed - MealScout"
-        description="Community-Powered food recommendations."
+        title="Video Stories - MealScout | Local Food Videos"
+        description="Watch and share local food recommendation videos from the MealScout community."
         canonicalUrl="https://www.mealscout.us/video"
       />
 
-      <header className="sticky top-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
-        <div className="flex flex-col">
-          <h1 className="text-xl font-serif font-bold text-white tracking-tight">Critic Feed</h1>
-          <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em]">Community Powered</p>
-        </div>
+      <BackHeader title="Video" fallbackHref="/" />
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-[var(--border-subtle)] px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-foreground">Video</h1>
         {isAuthenticated && (
           <button
             onClick={handleUploadClick}
-            className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest bg-primary text-black shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:scale-105 transition-all"
+            className="px-3 py-1.5 rounded-full text-sm font-medium bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-clean hover:from-orange-600 hover:to-red-600 transition"
           >
-            Share
+            Upload
           </button>
         )}
       </header>
 
-      {/* Guest upload CTA - Atmospheric */}
+      {/* Guest upload CTA */}
       {authState !== "loading" && isGuest && (
-        <div className="mx-6 mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 text-[10px] text-center text-white/40 uppercase tracking-widest font-bold">
-          <span>Sign in to share recommendations.</span>{" "}
-          <Link href="/login" className="text-primary underline">
+        <div className="px-4 py-3 bg-muted text-xs text-center text-muted-foreground border-b border-border">
+          <span>Sign in to upload your own food recommendations.</span>{" "}
+          <Link href="/login" className="underline font-medium">
             Sign in
           </Link>
         </div>
       )}
 
       {/* Feed */}
-      <main className="px-0 pt-2">
+      <main className="px-0 pt-2 pb-4">
         <VideoFeed onUploadClick={handleUploadClick} />
       </main>
 

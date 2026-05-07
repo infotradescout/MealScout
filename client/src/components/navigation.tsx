@@ -711,23 +711,23 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
 
   return (
     <>
-      <div data-nav-root={scope} className="hidden lg:block fixed top-6 right-6 z-50">
-        <div className="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
+      <div data-nav-root={scope} className="hidden lg:block fixed top-4 right-4 z-50">
+        <div className="rounded-2xl border border-white/20 bg-[hsl(var(--background))/0.82] backdrop-blur-xl shadow-clean-lg p-2">
           <div className="flex items-center gap-2">
             {desktopQuickActions.map((item) =>
               item.path ? (
                 <Link
                   key={`quick-${item.path}`}
                   href={item.path}
-                  className={`inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-all ${
+                  className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors ${
                     location === item.path
-                      ? "bg-primary text-black shadow-[0_0_20px_rgba(245,158,11,0.4)]"
-                      : "text-white/60 hover:text-white hover:bg-white/5"
+                      ? "bg-[color:var(--accent-text)] text-white"
+                      : "bg-[var(--bg-surface)] text-foreground hover:bg-[var(--bg-card-hover)]"
                   }`}
                   aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 >
-                  <item.icon className="h-4.5 w-4.5" />
-                  <span className="hidden lg:inline uppercase tracking-wider text-[11px]">
+                  <item.icon className="h-4 w-4" />
+                  <span className="hidden lg:inline">
                     {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                   </span>
                 </Link>
@@ -737,25 +737,23 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         </div>
       </div>
 
-      <nav className="nav-bar nav-bar-mobile fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 px-2 py-2 rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] z-[1100] lg:hidden">
-      <div className="w-full mx-auto overflow-x-auto scrollbar-hide">
-        <div className="flex items-center justify-start space-x-1 min-w-max">
+      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 w-full border-t px-3 pt-2 pb-[calc(0.45rem+env(safe-area-inset-bottom))] z-[1100] lg:hidden">
+      <div className="w-full mx-auto overflow-x-auto max-w-none">
+        <div className="flex items-stretch justify-start space-x-2 min-w-max snap-x snap-mandatory">
           {navItems.map((item) =>
             item.path ? (
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-300 ${
-                  location === item.path 
-                    ? "bg-primary text-black shadow-[0_0_20px_rgba(245,158,11,0.3)]" 
-                    : "text-white/40 hover:text-white/70"
+                className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
+                  location === item.path ? "nav-link--active" : "nav-link--inactive"
                 }`}
                 data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
                 aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 aria-current={location === item.path ? "page" : undefined}
               >
-                <item.icon className={`w-5 h-5 ${location === item.path ? "scale-110" : ""}`} />
-                <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">
+                <item.icon className="w-5 h-5" />
+                <span className="text-[11px] leading-tight font-semibold tracking-normal">
                   {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 </span>
               </Link>
@@ -764,18 +762,18 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 key={item.fallbackLabel}
                 onClick={item.onClick}
                 disabled={isReporting}
-                className={`flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-300 ${
-                  item.isBug ? "text-primary animate-pulse" : "text-white/40 hover:text-white/70"
+                className={`nav-link snap-start min-h-[56px] min-w-[72px] flex flex-col items-center justify-center space-y-1 px-2 rounded-xl transition-colors duration-200 ${
+                  item.isBug ? "nav-bug" : "nav-link--inactive"
                 } ${isReporting ? "opacity-80 cursor-not-allowed" : ""}`}
                 data-testid={`nav-${(item.testId ?? item.fallbackLabel).toLowerCase()}`}
                 aria-label={item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
               >
                 {isReporting ? (
-                  <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <item.icon className="w-5 h-5" />
                 )}
-                <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">
+                <span className="text-[11px] leading-tight font-semibold tracking-normal">
                   {item.labelKey ? t(item.labelKey, item.fallbackLabel) : item.fallbackLabel}
                 </span>
               </button>

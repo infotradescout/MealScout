@@ -162,13 +162,13 @@ export default function UserDashboard() {
 
   if (!user) {
     return (
-      <div className="max-w-md mx-auto bg-black min-h-screen flex flex-col items-center justify-center px-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
-          <User className="w-8 h-8 text-white/30" />
-        </div>
-        <h2 className="text-2xl font-serif font-bold text-white mb-3">Sign In Required</h2>
-        <p className="text-white/50 text-sm mb-8">Sign in to access your flavor trail, saved spots, and videos.</p>
-        <Button asChild className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-8 py-6" data-testid="button-sign-in">
+      <div className="max-w-md mx-auto text-center py-12">
+        <User className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Sign In Required</h2>
+        <p className="text-muted-foreground mb-4">
+          Please sign in to view your dashboard.
+        </p>
+        <Button asChild data-testid="button-sign-in">
           <Link href="/login">Sign In</Link>
         </Button>
       </div>
@@ -176,7 +176,7 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen pb-20">
+    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-[var(--bg-layered)] min-h-screen pb-20">
       <SEOHead
         title="My Dashboard - MealScout | Track Your Specials & Savings"
         description="View your personal dashboard with special history, savings tracker, favorite restaurants, and personalized recommendations. Track your food special journey on MealScout."
@@ -185,46 +185,79 @@ export default function UserDashboard() {
         noIndex={true}
       />
       {/* Header */}
-      <header className="px-6 pt-8 pb-6 border-b border-white/5">
-        <div className="flex items-center justify-between">
+      <header className="px-4 sm:px-6 py-6 bg-[linear-gradient(110deg,rgba(255,77,46,0.10),rgba(245,158,11,0.08))] border-b border-[color:var(--border-subtle)] shadow-clean">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mb-1">Your Flavor Trail</p>
-            <h1 className="text-3xl font-serif font-bold text-white" data-testid="text-user-welcome">
-              {user?.firstName ? `Hey, ${user.firstName}.` : "Hey, Scout."}
-            </h1>
-            <div className="flex items-center gap-1.5 mt-2 text-xs text-white/40">
-              <MapPin className="h-3.5 w-3.5" />
+            <h1 className="text-2xl font-bold text-foreground">My Dashboard</h1>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4" />
               <span>{locationName}</span>
             </div>
           </div>
-          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-            <User className="w-6 h-6 text-primary" />
+          <div className="text-right">
+            <div className="text-sm text-muted-foreground">Welcome back</div>
+            <div className="font-semibold" data-testid="text-user-welcome">
+              {user?.firstName ? `${user.firstName}!` : "Food Explorer!"}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Stats Strip */}
-      <div className="px-6 py-6 border-b border-white/5">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { icon: Receipt, label: "Specials Used", value: userStats?.totalDealsUsed || 0, color: "text-white" },
-            { icon: DollarSign, label: "Total Saved", value: formatCurrency(userStats?.totalSavings || 0), color: "text-emerald-400" },
-            { icon: Heart, label: "Saved Spots", value: userStats?.favoriteRestaurants || 0, color: "text-white" },
-            { icon: Calendar, label: "This Month", value: userStats?.dealsThisMonth || 0, color: "text-white" },
-          ].map(({ icon: Icon, label, value, color }) => (
-            <div key={label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Icon className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">{label}</span>
-              </div>
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            </div>
-          ))}
+      {/* Stats Overview */}
+      <div className="px-4 sm:px-6 py-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Receipt className="h-4 w-4" />
+                Specials Used
+              </CardDescription>
+              <CardTitle className="text-2xl">
+                {userStats?.totalDealsUsed || 0}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Total Saved
+              </CardDescription>
+              <CardTitle className="text-2xl text-[color:var(--status-success)]">
+                {formatCurrency(userStats?.totalSavings || 0)}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Heart className="h-4 w-4" />
+                Favorites
+              </CardDescription>
+              <CardTitle className="text-2xl">
+                {userStats?.favoriteRestaurants || 0}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                This Month
+              </CardDescription>
+              <CardTitle className="text-2xl">
+                {userStats?.dealsThisMonth || 0}
+              </CardTitle>
+            </CardHeader>
+          </Card>
         </div>
       </div>
 
       {/* Dashboard Content */}
-      <div className="px-6 pt-6">
+      <div className="px-4 sm:px-6">
         <Tabs
           value={activeTab}
           onValueChange={(value) =>
@@ -238,181 +271,339 @@ export default function UserDashboard() {
                 | "share",
             )
           }
-          className="space-y-6"
+          className="space-y-4"
         >
-          <TabsList className="flex w-full gap-1 overflow-x-auto bg-white/5 border border-white/10 rounded-2xl p-1 h-auto">
-            {["recent","nearby","favorites","recommended","videos","share"].map((tab) => (
-              <TabsTrigger
-                key={tab}
-                value={tab}
-                className="flex-1 min-w-fit text-[10px] font-bold uppercase tracking-widest rounded-xl py-2.5 px-3 text-white/40 data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-none transition-all"
-              >
-                {tab === "recent" ? "Recent" : tab === "nearby" ? "Nearby" : tab === "favorites" ? "Favorites" : tab === "recommended" ? "For You" : tab === "videos" ? "Videos" : "Share"}
-              </TabsTrigger>
-            ))}
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-6">
+            <TabsTrigger value="recent">Recent</TabsTrigger>
+            <TabsTrigger value="nearby">Nearby</TabsTrigger>
+            <TabsTrigger value="favorites">Favorites</TabsTrigger>
+            <TabsTrigger value="recommended">For You</TabsTrigger>
+            <TabsTrigger value="videos">My Videos</TabsTrigger>
+            <TabsTrigger value="share">Share Hub</TabsTrigger>
           </TabsList>
 
           <TabsContent value="recent" className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Recent Activity</span>
-              <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10" size="sm" asChild data-testid="button-view-all-orders">
+              <h3 className="text-lg font-semibold">Recent Activity</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                data-testid="button-view-all-orders"
+              >
                 <Link href="/orders">View All</Link>
               </Button>
             </div>
+
             {claimedLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                </CardContent>
+              </Card>
             ) : claimedDeals.length > 0 ? (
               <div className="space-y-3">
                 {claimedDeals.slice(0, 5).map((claim) => (
-                  <div key={claim.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-bold text-sm text-white truncate">{claim.deal.title}</h4>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${getDealTypeColor(claim.deal.dealType)}`}>{claim.deal.dealType}</span>
+                  <Card
+                    key={claim.id}
+                    className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold">
+                              {claim.deal.title}
+                            </h4>
+                            <Badge
+                              className={getDealTypeColor(claim.deal.dealType)}
+                            >
+                              {claim.deal.dealType}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            {claim.restaurant.name}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {claim.claimedAt
+                                ? new Date(claim.claimedAt).toLocaleDateString()
+                                : "Unknown"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {claim.deal.discountValue}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          data-testid={`button-view-deal-${claim.deal.id}`}
+                        >
+                          <Link href={`/deal/${claim.deal.id}`}>View</Link>
+                        </Button>
                       </div>
-                      <p className="text-xs text-white/50 mb-2">{claim.restaurant.name}</p>
-                      <div className="flex items-center gap-4 text-[10px] text-white/30">
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{claim.claimedAt ? new Date(claim.claimedAt).toLocaleDateString() : "Unknown"}</span>
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{claim.deal.discountValue}</span>
-                      </div>
-                    </div>
-                    <Button className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl px-3 py-2 hover:bg-white/10 flex-shrink-0" size="sm" asChild data-testid={`button-view-deal-${claim.deal.id}`}>
-                      <Link href={`/deal/${claim.deal.id}`}>View</Link>
-                    </Button>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 text-center">
-                <Gift className="h-10 w-10 mx-auto text-white/20 mb-4" />
-                <h3 className="text-lg font-serif font-bold text-white mb-2">No specials claimed yet</h3>
-                <p className="text-white/40 text-sm mb-6">Start discovering amazing specials near you.</p>
-                <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-6 py-5" asChild data-testid="button-explore-deals">
-                  <Link href="/">Scout Specials</Link>
-                </Button>
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="text-center py-12">
+                  <Gift className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    No specials claimed yet
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    Start discovering amazing specials near you!
+                  </p>
+                  <Button asChild data-testid="button-explore-deals">
+                    <Link href="/">Explore Specials</Link>
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
           <TabsContent value="nearby" className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Specials Near You</span>
-              <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10" size="sm" asChild data-testid="button-view-map">
+              <h3 className="text-lg font-semibold">Specials Near You</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                data-testid="button-view-map"
+              >
                 <Link href="/map">View Map</Link>
               </Button>
             </div>
+
             {nearbyLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                </CardContent>
+              </Card>
             ) : nearbyDeals.length > 0 ? (
               <div className="space-y-3">
                 {nearbyDeals.slice(0, 5).map((deal) => (
-                  <div key={deal.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-bold text-sm text-white truncate">{deal.title}</h4>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${getDealTypeColor(deal.dealType)}`}>{deal.dealType}</span>
+                  <Card
+                    key={deal.id}
+                    className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold">{deal.title}</h4>
+                            <Badge className={getDealTypeColor(deal.dealType)}>
+                              {deal.dealType}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            {deal.restaurant.name}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {deal.availableDuringBusinessHours
+                                ? "During business hours"
+                                : deal.startTime && deal.endTime
+                                  ? `${formatTime(deal.startTime)} - ${formatTime(
+                                      deal.endTime,
+                                    )}`
+                                  : "All day"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {deal.discountValue}
+                            </span>
+                            {(deal as any).distance !== undefined && (
+                              <span className="flex items-center gap-1">
+                                <NavigationIcon className="h-3 w-3" />
+                                {(deal as any).distance.toFixed(1)}mi
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          data-testid={`button-view-nearby-${deal.id}`}
+                        >
+                          <Link href={`/deal/${deal.id}`}>View</Link>
+                        </Button>
                       </div>
-                      <p className="text-xs text-white/50 mb-2">{deal.restaurant.name}</p>
-                      <div className="flex items-center gap-4 text-[10px] text-white/30">
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{deal.availableDuringBusinessHours ? "Business hours" : deal.startTime && deal.endTime ? `${formatTime(deal.startTime)} - ${formatTime(deal.endTime)}` : "All day"}</span>
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{deal.discountValue}</span>
-                        {(deal as any).distance !== undefined && <span className="flex items-center gap-1"><NavigationIcon className="h-3 w-3" />{(deal as any).distance.toFixed(1)}mi</span>}
-                      </div>
-                    </div>
-                    <Button className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl px-3 py-2 hover:bg-white/10 flex-shrink-0" size="sm" asChild data-testid={`button-view-nearby-${deal.id}`}>
-                      <Link href={`/deal/${deal.id}`}>View</Link>
-                    </Button>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 text-center">
-                <MapPin className="h-10 w-10 mx-auto text-white/20 mb-4" />
-                <h3 className="text-lg font-serif font-bold text-white mb-2">No nearby specials</h3>
-                <p className="text-white/40 text-sm">Check back later for specials in your area.</p>
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="text-center py-12">
+                  <MapPin className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    No nearby specials
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Check back later for specials in your area.
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
           <TabsContent value="favorites" className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Saved Spots</span>
-              <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10" size="sm" asChild data-testid="button-view-all-favorites">
+              <h3 className="text-lg font-semibold">Favorite Restaurants</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                data-testid="button-view-all-favorites"
+              >
                 <Link href="/favorites">View All</Link>
               </Button>
             </div>
+
             {favoritesLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="flex items-center justify-center py-12">
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                </CardContent>
+              </Card>
             ) : favoriteRestaurants.length > 0 ? (
               <div className="space-y-3">
                 {favoriteRestaurants.slice(0, 5).map((restaurant) => (
-                  <div key={restaurant.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-primary/20 flex items-center justify-center flex-shrink-0">
-                        <Utensils className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-white">{restaurant.name}</h4>
-                        <p className="text-xs text-white/40">{restaurant.cuisineType}</p>
-                        {(restaurant as any).averageRating && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Star className="h-3 w-3 text-primary fill-primary" />
-                            <span className="text-[10px] text-white/40">{(restaurant as any).averageRating.toFixed(1)}</span>
+                  <Card
+                    key={restaurant.id}
+                    className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-[color:var(--accent-text)]/12 rounded-lg flex items-center justify-center">
+                            <Utensils className="h-6 w-6 text-[color:var(--accent-text)]" />
                           </div>
-                        )}
+                          <div>
+                            <h4 className="font-semibold">{restaurant.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {restaurant.cuisineType}
+                            </p>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Star className="h-3 w-3 text-[color:var(--status-warning)] fill-current" />
+                              <span className="text-xs text-muted-foreground">
+                                {(restaurant as any).averageRating?.toFixed(
+                                  1,
+                                ) || "New"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          data-testid={`button-view-restaurant-${restaurant.id}`}
+                        >
+                          <Link href={`/restaurant/${restaurant.id}`}>
+                            View
+                          </Link>
+                        </Button>
                       </div>
-                    </div>
-                    <Button className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl px-3 py-2 hover:bg-white/10 flex-shrink-0" size="sm" asChild data-testid={`button-view-restaurant-${restaurant.id}`}>
-                      <Link href={`/restaurant/${restaurant.id}`}>Pull Up</Link>
-                    </Button>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 text-center">
-                <Heart className="h-10 w-10 mx-auto text-white/20 mb-4" />
-                <h3 className="text-lg font-serif font-bold text-white mb-2">No saved spots yet</h3>
-                <p className="text-white/40 text-sm">Scout local places and save the ones worth coming back to.</p>
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="text-center py-12">
+                  <Heart className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    No favorites yet
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Start exploring and save your favorite restaurants!
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
           <TabsContent value="recommended" className="space-y-4">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary block">For You</span>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Recommended For You</h3>
+            </div>
+
             {recommendedDeals.length > 0 ? (
               <div className="space-y-3">
                 {recommendedDeals.slice(0, 5).map((deal) => (
-                  <div key={deal.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-bold text-sm text-white truncate">{deal.title}</h4>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${getDealTypeColor(deal.dealType)}`}>{deal.dealType}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/20 text-primary flex items-center gap-1"><TrendingUp className="h-2.5 w-2.5" />Recommended</span>
+                  <Card
+                    key={deal.id}
+                    className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold">{deal.title}</h4>
+                            <Badge className={getDealTypeColor(deal.dealType)}>
+                              {deal.dealType}
+                            </Badge>
+                            <Badge variant="secondary">
+                              <TrendingUp className="h-3 w-3 mr-1" />
+                              Recommended
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            {deal.restaurant.name}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {deal.availableDuringBusinessHours
+                                ? "During business hours"
+                                : deal.startTime && deal.endTime
+                                  ? `${formatTime(deal.startTime)} - ${formatTime(
+                                      deal.endTime,
+                                    )}`
+                                  : "All day"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {deal.discountValue}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          data-testid={`button-view-recommended-${deal.id}`}
+                        >
+                          <Link href={`/deal/${deal.id}`}>View</Link>
+                        </Button>
                       </div>
-                      <p className="text-xs text-white/50 mb-2">{deal.restaurant.name}</p>
-                      <div className="flex items-center gap-4 text-[10px] text-white/30">
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{deal.availableDuringBusinessHours ? "Business hours" : deal.startTime && deal.endTime ? `${formatTime(deal.startTime)} - ${formatTime(deal.endTime)}` : "All day"}</span>
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{deal.discountValue}</span>
-                      </div>
-                    </div>
-                    <Button className="bg-white/5 border border-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl px-3 py-2 hover:bg-white/10 flex-shrink-0" size="sm" asChild data-testid={`button-view-recommended-${deal.id}`}>
-                      <Link href={`/deal/${deal.id}`}>View</Link>
-                    </Button>
-                  </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-10 text-center">
-                <ChefHat className="h-10 w-10 mx-auto text-white/20 mb-4" />
-                <h3 className="text-lg font-serif font-bold text-white mb-2">Building recommendations</h3>
-                <p className="text-white/40 text-sm">Use more specials to get personalized picks.</p>
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="text-center py-12">
+                  <ChefHat className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    Building recommendations
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Use more specials to get personalized recommendations!
+                  </p>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
@@ -520,9 +711,9 @@ function VideoCreatorSection({ userId }: { userId?: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-white/40">
-        <Loader2 className="h-6 w-6 animate-spin mr-2 text-primary" />
-        <span className="text-sm">Loading your videos...</span>
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Loading your videos...
       </div>
     );
   }
@@ -534,93 +725,134 @@ function VideoCreatorSection({ userId }: { userId?: string }) {
     <div className="space-y-5">
       {/* Reviewer level card */}
       {reviewerLevel && (
-        <div className="bg-gradient-to-r from-amber-900/30 to-black border border-primary/20 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-amber-400 flex items-center justify-center text-black font-bold text-lg">
-              {reviewerLevel.level}
+        <Card className="bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-200/30 shadow-clean">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold text-lg shadow">
+                {reviewerLevel.level}
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">
+                  {LEVEL_LABELS[reviewerLevel.level] ?? `Level ${reviewerLevel.level}`}
+                </p>
+                <p className="text-xs text-muted-foreground">Reviewer Level</p>
+              </div>
             </div>
-            <div>
-              <p className="font-bold text-white">{LEVEL_LABELS[reviewerLevel.level] ?? `Level ${reviewerLevel.level}`}</p>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Reviewer Level</p>
+            <div className="flex flex-wrap gap-4 sm:ml-auto text-sm">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Video className="h-4 w-4 text-orange-500" />
+                <span className="font-semibold text-foreground">{reviewerLevel.totalStories}</span> videos
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Eye className="h-4 w-4 text-blue-500" />
+                <span className="font-semibold text-foreground">{totalViews.toLocaleString()}</span> views
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <ThumbsUp className="h-4 w-4 text-pink-500" />
+                <span className="font-semibold text-foreground">{totalLikes.toLocaleString()}</span> likes
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-4 sm:ml-auto text-sm">
-            <div className="flex items-center gap-1.5 text-white/40">
-              <Video className="h-4 w-4 text-primary" />
-              <span className="font-bold text-white">{reviewerLevel.totalStories}</span> videos
-            </div>
-            <div className="flex items-center gap-1.5 text-white/40">
-              <Eye className="h-4 w-4 text-primary" />
-              <span className="font-bold text-white">{totalViews.toLocaleString()}</span> views
-            </div>
-            <div className="flex items-center gap-1.5 text-white/40">
-              <ThumbsUp className="h-4 w-4 text-primary" />
-              <span className="font-bold text-white">{totalLikes.toLocaleString()}</span> likes
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Upload button */}
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">My Videos ({stories.length})</span>
-        <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-amber-400" size="sm" onClick={() => setIsUploadOpen(true)}>
+        <h3 className="text-lg font-semibold">My Videos ({stories.length})</h3>
+        <Button size="sm" onClick={() => setIsUploadOpen(true)}>
           <Plus className="h-4 w-4 mr-1" />
-          Upload
+          Upload Video
         </Button>
       </div>
 
       {/* Video list */}
       {stories.length === 0 ? (
-        <div className="bg-white/5 border border-white/10 rounded-3xl p-10 text-center">
-          <Video className="h-10 w-10 mx-auto text-white/20 mb-4" />
-          <h3 className="text-lg font-serif font-bold text-white mb-2">No videos yet</h3>
-          <p className="text-white/40 text-sm mb-6">Share your food recommendations with the community.</p>
-          <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-6 py-5" onClick={() => setIsUploadOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Upload Your First Video
-          </Button>
-        </div>
+        <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+          <CardContent className="text-center py-12">
+            <Video className="h-12 w-12 mx-auto text-muted-foreground mb-4 opacity-40" />
+            <h3 className="text-lg font-semibold mb-2">No videos yet</h3>
+            <p className="text-muted-foreground mb-4">
+              Share your food recommendations with the community!
+            </p>
+            <Button onClick={() => setIsUploadOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Upload Your First Video
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {stories.map((story) => (
-            <div key={story.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-              <div className="flex gap-3 p-3">
-                {/* Thumbnail */}
-                <div className="shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-white/5 relative">
-                  {story.thumbnailUrl ? (
-                    <img src={story.thumbnailUrl} alt={story.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Video className="h-8 w-8 text-white/20" />
-                    </div>
-                  )}
-                  {story.duration && (
-                    <span className="absolute bottom-1 right-1 text-[10px] bg-black/80 text-white px-1.5 rounded-md font-bold">{story.duration}s</span>
-                  )}
-                </div>
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white truncate">{story.title}</p>
-                  {story.description && <p className="text-xs text-white/40 line-clamp-1 mt-0.5">{story.description}</p>}
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-white/30">
-                    <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{(story.viewCount ?? 0).toLocaleString()}</span>
-                    <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" />{(story.likeCount ?? 0).toLocaleString()}</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{(story.commentCount ?? 0).toLocaleString()}</span>
+            <Card
+              key={story.id}
+              className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden"
+            >
+              <CardContent className="p-0">
+                <div className="flex gap-3 p-3">
+                  {/* Thumbnail */}
+                  <div className="shrink-0 w-20 h-20 rounded-md overflow-hidden bg-muted relative">
+                    {story.thumbnailUrl ? (
+                      <img
+                        src={story.thumbnailUrl}
+                        alt={story.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Video className="h-8 w-8 text-muted-foreground opacity-40" />
+                      </div>
+                    )}
+                    {story.duration && (
+                      <span className="absolute bottom-1 right-1 text-[10px] bg-black/70 text-white px-1 rounded">
+                        {story.duration}s
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[10px] text-white/20 mt-1">{new Date(story.createdAt).toLocaleDateString()}{story.expiresAt && <> · expires {new Date(story.expiresAt).toLocaleDateString()}</>}</p>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-foreground truncate">{story.title}</p>
+                    {story.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        {story.description}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-3 w-3" />
+                        {(story.viewCount ?? 0).toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ThumbsUp className="h-3 w-3" />
+                        {(story.likeCount ?? 0).toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        {(story.commentCount ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(story.createdAt).toLocaleDateString()}
+                      {story.expiresAt && (
+                        <> · expires {new Date(story.expiresAt).toLocaleDateString()}</>
+                      )}
+                    </p>
+                  </div>
+                  {/* Delete */}
+                  <button
+                    className="shrink-0 self-start p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                    onClick={() => handleDelete(story.id)}
+                    disabled={deletingId === story.id}
+                    title="Delete video"
+                  >
+                    {deletingId === story.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
-                {/* Delete */}
-                <button
-                  className="shrink-0 self-start p-1.5 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                  onClick={() => handleDelete(story.id)}
-                  disabled={deletingId === story.id}
-                  title="Delete video"
-                >
-                  {deletingId === story.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

@@ -38,7 +38,6 @@ import {
   Flame,
   ArrowDownToLine,
   PlayCircle,
-  Tag,
 } from "lucide-react";
 import mealScoutLogo from "@assets/meal-scout-icon.png";
 import { useFoodTruckSocket } from "@/hooks/useFoodTruckSocket";
@@ -47,7 +46,6 @@ import { sendGeoPing, trackGeoAdEvent, trackGeoAdImpression } from "@/utils/geoA
 import { SEOHead } from "@/components/seo-head";
 import { SEOInternalLinks } from "@/components/seo-internal-links";
 import { trackUxEvent } from "@/utils/uxTelemetry";
-import { MapPreviewSheet } from "@/components/MapPreviewSheet";
 import {
   FUNNEL_EVENTS,
   trackFunnelEvent,
@@ -178,55 +176,58 @@ function BusinessDealsCard({
 
   return (
     <Link href={`/restaurant/${business.id}`}>
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md hover:bg-white/10 transition-all group h-full">
+      <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h4 className="text-base font-bold text-white truncate group-hover:text-primary transition-colors">
+            <h4 className="text-sm font-semibold text-foreground truncate">
               {business.name}
             </h4>
-            <p className="text-xs text-white/40 truncate mt-1 uppercase tracking-widest font-bold">
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {business.cuisineType || businessTypeLabel}
             </p>
+            {business.address && (
+              <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                {business.address}
+              </p>
+            )}
           </div>
-          <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white/40">
+          <span className="rounded-full border border-[color:var(--border-subtle)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {businessTypeLabel}
           </span>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-          <span className="flex items-center gap-1 text-primary">
-            <Sparkles className="w-3 h-3" />
-            {business.recommendationCount} Recs
-          </span>
-          <span>{business.favoriteCount} Favs</span>
-          {distanceLabel && <span>{distanceLabel}</span>}
+        {distanceLabel && (
+          <p className="mt-2 text-xs text-muted-foreground">{distanceLabel}</p>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <span>Recs {business.recommendationCount}</span>
+          <span>Video Recs {business.videoRecommendationCount}</span>
+          <span>Follows {business.followCount}</span>
+          <span>Favorites {business.favoriteCount}</span>
+          <span>Deals {business.activeDealCount}</span>
         </div>
+        <p className="mt-1 text-[11px] text-muted-foreground">{business.rankReason}</p>
 
-        <p className="mt-3 text-[11px] text-white/40 leading-relaxed italic line-clamp-2">
-          "{business.rankReason}"
-        </p>
-
-        <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-              Active Deals
-            </p>
-            <span className="text-[10px] font-bold text-primary">{business.deals.length}</span>
-          </div>
+        <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Active Deals ({business.deals.length})
+          </p>
           {business.deals.length > 0 ? (
-            <div className="space-y-2">
+            <div className="mt-1 space-y-1.5">
               {business.deals.slice(0, compact ? 1 : 2).map((deal) => (
-                <div key={deal.id} className="flex items-center gap-2">
-                  <div className="w-1 h-1 rounded-full bg-primary" />
-                  <p className="text-xs text-white/80 font-medium line-clamp-1">
-                    {deal.title}
-                  </p>
-                </div>
+                <p key={deal.id} className="text-xs text-foreground line-clamp-1">
+                  {deal.title}
+                </p>
               ))}
+              {business.deals.length > (compact ? 1 : 2) && (
+                <p className="text-[11px] text-muted-foreground">
+                  +{business.deals.length - (compact ? 1 : 2)} more
+                </p>
+              )}
             </div>
           ) : (
-            <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold italic">
-              No deals active
+            <p className="mt-1 text-xs text-muted-foreground">
+              No active deals yet
             </p>
           )}
         </div>
@@ -248,7 +249,6 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, setNavigateTo] = useLocation();
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const { isConnected, subscribeToNearby } = useFoodTruckSocket();
 
@@ -585,16 +585,6 @@ export default function Home() {
       });
   }, [publicProfiles, dealsByRestaurant]);
 
-  // Apply inline category filter from chip selection
-  const filteredBusinesses = useMemo(() => {
-    if (!activeCategory || activeCategory === "deals") return featuredBusinesses;
-    return featuredBusinesses.filter((b) => {
-      const cuisine = (b.cuisineType || "").toLowerCase();
-      const type = (b.businessType || "").toLowerCase();
-      return cuisine.includes(activeCategory) || type.includes(activeCategory);
-    });
-  }, [featuredBusinesses, activeCategory]);
-
   const {
     data: liveTrucksData,
     isLoading: liveTrucksLoading,
@@ -717,7 +707,7 @@ export default function Home() {
   );
 
   return (
-    <div className="home-page pb-24 min-h-screen bg-background atmospheric-theme">
+    <div className="page relative overflow-hidden home-cinematic pb-12">
       <SEOHead
         title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout"
         description="Find food trucks, restaurants, and bars near you. Discover live locations, local specials, and deals in your city — all on MealScout."
@@ -727,23 +717,19 @@ export default function Home() {
       />
       <Navigation />
 
-      {/* Map Preview Sheet Integration */}
-      <MapPreviewSheet location={location} liveTrucks={liveTrucks} />
-
-      {/* Header with Logo and Navigation - Atmospheric Adaptation */}
-      <header className="px-6 py-4 bg-black/20 backdrop-blur-md border-b border-white/5 sticky top-0 z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 flex items-center justify-center">
+      {/* Header with Logo and Navigation */}
+      <header className="section section--full bg-[var(--bg-card)] border-b border-[color:var(--border-subtle)] sticky top-0 z-10 shadow-clean">
+        <div className="content flex items-center justify-between py-3">
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            <div className="w-14 h-14 flex items-center justify-center overflow-hidden">
               <img
                 src={mealScoutLogo}
                 alt="MealScout Logo"
-                className="w-full h-full object-contain brightness-125"
+                className="w-full h-full object-contain object-center"
                 loading="lazy"
                 decoding="async"
               />
             </div>
-            <h2 className="text-xl font-serif font-bold text-white tracking-tight hidden sm:block">MEALSCOUT</h2>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -752,46 +738,107 @@ export default function Home() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white/40 hover:text-white"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
                   title="Install app"
+                  aria-label="Install app"
                 >
                   <ArrowDownToLine className="w-5 h-5" />
                 </Button>
               </Link>
             )}
             {!user ? (
-              <div className="flex items-center gap-1">
+              <>
                 <Button
                   variant="ghost"
-                  onClick={() => setNavigateTo("/login")}
-                  className="text-white/60 hover:text-white text-xs font-bold uppercase tracking-widest"
+                  size="icon"
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_login",
+                      destination: "/login",
+                    });
+                    setNavigateTo("/login");
+                  }}
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  title="Login"
+                  aria-label="Log in"
                 >
-                  Log In
+                  <LogIn className="w-5 h-5" />
                 </Button>
                 <Button
-                  onClick={() => setNavigateTo("/customer-signup")}
-                  className="bg-primary text-black text-xs font-bold uppercase tracking-widest rounded-xl px-4"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_customer_signup",
+                      destination: "/customer-signup",
+                      role: "diner",
+                    });
+                    setNavigateTo("/customer-signup");
+                  }}
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  title="Customer Sign Up"
+                  aria-label="Customer sign up"
                 >
-                  Join
+                  <UserPlus className="w-5 h-5" />
                 </Button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-3 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
-                <div className="w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_rgba(245,158,11,0.8)]" />
-                <span className="text-xs font-bold text-white/80 uppercase tracking-wider">
-                  {locationName.split(",")[0]}
-                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
+                      page: "home",
+                      cta: "header_business_signup",
+                      destination: "/customer-signup?role=business",
+                      role: "business",
+                    });
+                    setNavigateTo("/customer-signup?role=business");
+                  }}
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  title="Restaurant/Bar/Food Truck Sign Up"
+                  aria-label="Business sign up"
+                >
+                  <Store className="w-5 h-5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={retryLocation}
                   disabled={isLoadingLocation}
-                  className="h-6 w-6 text-white/40 hover:text-white"
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  title="Refresh Location"
+                  aria-label="Refresh location"
                 >
                   {isLoadingLocation ? (
-                    <RotateCw className="w-3 h-3 animate-spin" />
+                    <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    <Target className="w-3 h-3" />
+                    <Target className="w-4 h-4" />
+                  )}
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <span className="hidden sm:inline text-sm font-medium text-secondary">
+                  {locationName.split(",")[0]}
+                </span>
+                <div
+                  className="w-2 h-2 rounded-full bg-[color:var(--status-success)]"
+                  title="Real-time location active"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={retryLocation}
+                  disabled={isLoadingLocation}
+                  className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  title="Refresh Location"
+                  aria-label="Refresh location"
+                >
+                  {isLoadingLocation ? (
+                    <div className="w-3.5 h-3.5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Target className="w-3.5 h-3.5" />
                   )}
                 </Button>
               </div>
@@ -854,18 +901,20 @@ export default function Home() {
         </section>
       )}
 
-      {/* Hero & Search Section - Atmospheric Adaptation */}
-      <section className="px-6 py-8 border-b border-white/5 bg-black/20 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex flex-col items-start text-left">
-            <div className="mb-6">
-              <h1 className="text-3xl font-serif font-bold text-white tracking-tight">
+      {/* Hero & Search Section */}
+      <section className="section section--full section--surface border-b border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="home-hero-panel">
+            <div className="mb-3">
+              <h1 className="hero-title text-xl mb-1">
                 {firstName ? `Hey ${firstName}, hungry?` : "Hungry?"}
               </h1>
-              <p className="text-primary text-sm font-medium uppercase tracking-[0.2em] mt-2">
+              <p className="hero-subtitle text-sm">
+                See what's happening{" "}
                 {shortLocation === "Your Location"
-                  ? "Happening near you"
-                  : `Live in ${shortLocation}`}
+                  ? "near you"
+                  : `in ${shortLocation}`}
+                . Fresh deals and local favorites.
               </p>
             </div>
 
@@ -875,17 +924,16 @@ export default function Home() {
               onSearch={(query) =>
                 setNavigateTo(`/search?q=${encodeURIComponent(query)}`)
               }
-              className="mb-8 w-full"
+              className="mb-6 shadow-clean-lg"
               placeholder="Search deals, restaurants..."
             />
 
-            <div className="mb-8 grid grid-cols-2 sm:grid-cols-3 gap-3 w-full">
+            <div className="mb-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={retryLocation}
                 disabled={isLoadingLocation}
-                className="w-full bg-white/5 border border-white/10 text-white font-bold rounded-xl py-6 hover:bg-white/10 transition-all"
                 data-testid="button-home-use-location"
                 onPointerDown={() => {
                   trackUxEvent("home_location_request_quick", {
@@ -893,14 +941,14 @@ export default function Home() {
                   });
                 }}
               >
-                <MapPin className="w-4 h-4 mr-2 text-primary" />
+                <MapPin className="w-4 h-4 mr-1" />
                 {isLoadingLocation ? "Locating..." : "Use location"}
               </Button>
-              <Link href="/map" className="w-full">
+              <Link href="/map">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="w-full bg-white/5 border border-white/10 text-white font-bold rounded-xl py-6 hover:bg-white/10 transition-all"
+                  className="w-full"
                   data-testid="button-home-open-map"
                   onPointerDown={() => {
                     trackUxEvent("home_open_map_quick", {
@@ -908,15 +956,15 @@ export default function Home() {
                     });
                   }}
                 >
-                  <MapIcon className="w-4 h-4 mr-2 text-primary" />
+                  <MapIcon className="w-4 h-4 mr-1" />
                   Open map
                 </Button>
               </Link>
-              <Link href="#scout-deals-section" className="w-full">
+              <Link href="/deals/featured">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="w-full bg-white/5 border border-white/10 text-white font-bold rounded-xl py-6 hover:bg-white/10 transition-all"
+                  className="w-full"
                   data-testid="button-home-featured"
                   onPointerDown={() => {
                     trackUxEvent("home_open_featured_quick", {
@@ -924,49 +972,42 @@ export default function Home() {
                     });
                   }}
                 >
-                  <Sparkles className="w-4 h-4 mr-2 text-primary" />
+                  <Sparkles className="w-4 h-4 mr-1" />
                   Featured
                 </Button>
               </Link>
             </div>
 
             {geoAds.length > 0 && (
-              <div className="mb-8 w-full">
+              <div className="mb-5">
                 {geoAds.map((ad) => (
                   <div
                     key={ad.id}
-                    className="p-6 rounded-3xl border border-primary/20 bg-primary/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(245,158,11,0.1)]"
+                    className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean"
                   >
                     {ad.mediaUrl && (
                       <img
                         src={ad.mediaUrl}
                         alt={ad.title}
-                        className="w-full h-48 object-cover rounded-2xl mb-4 grayscale contrast-125 brightness-75"
+                        className="w-full h-40 object-cover rounded-xl mb-3"
                         loading="lazy"
                         decoding="async"
                       />
                     )}
-                    <div className="flex items-center gap-2 mb-3">
-                      <Sparkles className="w-4 h-4 text-primary" />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
-                        Local Spotlight
-                      </span>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Sponsored
                     </div>
-                    <div className="text-xl font-serif font-bold text-white">
+                    <div className="text-base font-semibold text-foreground mt-1">
                       {ad.title}
                     </div>
                     {ad.body && (
-                      <p className="text-sm text-white/60 mt-2 leading-relaxed">
+                      <p className="text-sm text-muted-foreground mt-1">
                         {ad.body}
                       </p>
                     )}
-                    <div className="mt-4">
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleGeoAdClick(ad)}
-                        className="rounded-xl bg-primary text-black font-bold hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]"
-                      >
-                        {ad.ctaText || "Pull Up"}
+                    <div className="mt-3">
+                      <Button size="sm" onClick={() => handleGeoAdClick(ad)}>
+                        {ad.ctaText || "Learn more"}
                       </Button>
                     </div>
                   </div>
@@ -974,36 +1015,115 @@ export default function Home() {
               </div>
             )}
 
-            {/* Filter Chips - Inline category filtering (no navigation away) */}
-            <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide w-full">
-              {[
-                { label: "Hot Deals", key: "deals", icon: "✦" },
-                { label: "Pizza", key: "pizza", icon: "🍕" },
-                { label: "Burgers", key: "burgers", icon: "🍔" },
-                { label: "Sushi", key: "sushi", icon: "🍣" },
-                { label: "Chinese", key: "chinese", icon: "🥡" },
-                { label: "Tacos", key: "mexican", icon: "🌮" },
-                { label: "Breakfast", key: "breakfast", icon: "🍳" },
-                { label: "Seafood", key: "seafood", icon: "🦞" },
-                { label: "BBQ", key: "bbq", icon: "🔥" },
-                { label: "Desserts", key: "dessert", icon: "🍰" },
-                { label: "Coffee", key: "coffee", icon: "☕" },
-                { label: "Healthy", key: "healthy", icon: "🥗" },
-              ].map((chip) => (
+            {/* Filter Chips */}
+            <div className="flex space-x-2 overflow-x-auto pb-1">
+              <Link href="/deals/featured">
                 <Button
-                  key={chip.key}
-                  onClick={() => setActiveCategory(activeCategory === chip.key ? null : chip.key)}
-                  className={`flex-shrink-0 rounded-2xl px-5 py-6 font-bold transition-all ${
-                    activeCategory === chip.key
-                      ? "bg-primary text-black shadow-[0_8px_20px_rgba(245,158,11,0.4)] scale-105"
-                      : "bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:text-white"
-                  }`}
+                  className="filter-pill filter-pill--active flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-semibold shadow-clean hover:shadow-clean-lg transition-all"
                   size="sm"
-                  id={chip.key === "deals" ? "scout-deals-section" : undefined}
                 >
-                  <span className="mr-1.5">{chip.icon}</span> {chip.label}
+                  <Sparkles className="w-4 h-4 mr-1.5" />  Hot Deals
                 </Button>
-              ))}
+              </Link>
+              <Link href="/category/pizza">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Pizza
+                </Button>
+              </Link>
+              <Link href="/category/burgers">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Burgers
+                </Button>
+              </Link>
+              <Link href="/category/sushi">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Sushi
+                </Button>
+              </Link>
+              <Link href="/category/chinese">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Chinese
+                </Button>
+              </Link>
+              <Link href="/category/mexican">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Tacos
+                </Button>
+              </Link>
+              <Link href="/category/breakfast">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Breakfast
+                </Button>
+              </Link>
+              <Link href="/category/seafood">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Seafood
+                </Button>
+              </Link>
+              <Link href="/category/bbq">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   BBQ
+                </Button>
+              </Link>
+              <Link href="/category/dessert">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Desserts
+                </Button>
+              </Link>
+              <Link href="/category/coffee">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Coffee
+                </Button>
+              </Link>
+              <Link href="/category/healthy">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="filter-pill flex-shrink-0 rounded-full px-3.5 py-2 text-sm sm:text-base font-medium"
+                >
+                   Healthy
+                </Button>
+              </Link>
             </div>
 
             {/* Manual location input (only when we don't have a location) */}
@@ -1046,25 +1166,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Food Trucks Nearby - Atmospheric Adaptation */}
-      <section className="py-8 border-b border-white/5 bg-black/40">
-        <div className="px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.8)]" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Live Now</span>
-              </div>
-              <h3 className="text-2xl font-serif font-bold text-white">
-                {shortLocation === "Your Location" ? "Nearby Trucks" : `Open in ${shortLocation}`}
+      {/* Food Trucks Nearby - Horizontal Scroll Row */}
+      <section className="section section--full section--surface-2 border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
+              <h3 className="text-sm font-bold text-foreground">
+                Live Trucks:{" "}
+                {shortLocation === "Your Location" ? "Nearby" : shortLocation}
               </h3>
             </div>
             <Link href="/map">
               <Button
-                variant="ghost"
-                className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
+                variant="link"
+                className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto text-xs"
               >
-                Full Map
+                View Map {"->"}
               </Button>
             </Link>
           </div>
@@ -1110,55 +1228,53 @@ export default function Home() {
 
                 return (
                   <Link key={truck.id} href={`/restaurant/${truck.id}`}>
-                    <div className="flex-shrink-0 w-64 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md hover:bg-white/10 transition-all group">
+                    <div className="flex-shrink-0 w-60 rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean hover:shadow-clean-lg transition-shadow">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h4 className="text-base font-bold text-white truncate group-hover:text-primary transition-colors">
+                          <h4 className="text-sm font-semibold text-foreground truncate">
                             {truck.name}
                           </h4>
-                          <p className="text-xs text-white/40 truncate mt-1 uppercase tracking-widest font-bold">
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
                             {truck.cuisineType || "Food Truck"}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1.5 rounded-full bg-primary/20 px-2.5 py-1 border border-primary/20">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
-                            Live
-                          </span>
-                        </div>
+                        <span className="rounded-full bg-[color:var(--status-success)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--status-success)]">
+                          Live
+                        </span>
                       </div>
 
-                      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-white/40 uppercase tracking-widest">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>
                           {distanceMiles != null
-                            ? `${distanceMiles.toFixed(1)} mi`
+                            ? `${distanceMiles.toFixed(1)} mi away`
                             : "Nearby"}
                         </span>
                         <span>{lastSeenLabel}</span>
                       </div>
 
-                      <div className="mt-4 pt-4 border-t border-white/5">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-                            Active Deals
-                          </p>
-                          <span className="text-[10px] font-bold text-primary">{truckDeals.length}</span>
-                        </div>
+                      <div className="mt-3 border-t border-[color:var(--border-subtle)] pt-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Active Deals ({truckDeals.length})
+                        </p>
                         {truckDeals.length > 0 ? (
-                          <div className="space-y-2">
-                            {truckDeals.slice(0, 1).map((deal) => (
-                              <div key={deal.id} className="flex items-center gap-2">
-                                <div className="w-1 h-1 rounded-full bg-primary" />
-                                <p className="text-xs text-white/80 font-medium line-clamp-1">
-                                  {deal.title}
-                                </p>
-                              </div>
+                          <div className="mt-1 space-y-1.5">
+                            {truckDeals.slice(0, 2).map((deal) => (
+                              <p
+                                key={deal.id}
+                                className="text-xs text-foreground line-clamp-1"
+                              >
+                                {deal.title}
+                              </p>
                             ))}
+                            {truckDeals.length > 2 && (
+                              <p className="text-[11px] text-muted-foreground">
+                                +{truckDeals.length - 2} more
+                              </p>
+                            )}
                           </div>
                         ) : (
-                          <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold italic">
-                            No deals active
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            No active deals yet
                           </p>
                         )}
                       </div>
@@ -1175,92 +1291,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Tonight's Specials - Deals Discovery Section */}
-      <section className="py-10 border-b border-white/5 bg-black/50">
-        <div className="px-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Tonight's Specials</span>
-              </div>
-              <h3 className="text-2xl font-serif font-bold text-white">Deals Near You</h3>
-            </div>
-            <Link href="#scout-deals-section">
-              <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
-                See All
-              </Button>
-            </Link>
-          </div>
-
-          {sortedFeaturedDeals.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {sortedFeaturedDeals.slice(0, 8).map((deal) => (
-                <Link key={deal.id} href={`/deal/${deal.id}`}>
-                  <div className="flex-shrink-0 w-56 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-md hover:bg-white/10 transition-all group">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 px-2 py-1 rounded-full">
-                        {deal.dealType === "percentage" ? `${deal.discountValue}% OFF` : `$${deal.discountValue} OFF`}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">{deal.dealType}</span>
-                    </div>
-                    <h4 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors mb-2">
-                      {deal.title}
-                    </h4>
-                    {deal.restaurantId && (
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 truncate">
-                        {(dealsByRestaurant.get(String(deal.restaurantId)) || []).length > 0
-                          ? "View deal"
-                          : "Stop in tonight"}
-                      </p>
-                    )}
-                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-                      <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">
-                        {deal.startTime && deal.endTime
-                          ? `${deal.startTime.slice(0,5)} – ${deal.endTime.slice(0,5)}`
-                          : "All day"}
-                      </span>
-                      <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Pull Up →</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/20">No specials posted nearby yet.</p>
-              <Link href="#scout-deals-section">
-                <Button className="mt-4 bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-5 py-2 hover:bg-white/10">Browse Featured</Button>
-              </Link>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Public Profiles Section - Atmospheric Adaptation */}
-      <section className="py-12 border-b border-white/5 bg-black/60">
-        <div className="px-6">
-          <div className="flex items-end justify-between mb-8">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Discover</span>
-              </div>
-              <h2 className="text-3xl font-serif font-bold text-white">
-                {shortLocation === "Your Location"
-                  ? "Local Favorites"
-                  : `Best of ${shortLocation}`}
-              </h2>
-              <p className="text-white/40 text-sm font-medium max-w-md">
-                Public truck, restaurant, and bar profiles. Community recommendations carry extra weight.
-              </p>
-            </div>
-            <Link href="#scout-deals-section">
+      {/* Public Profiles Section */}
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="mb-3">
+            <h2 className="text-base font-bold text-foreground flex items-center">
+              <Sparkles className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+              Food Spots in{" "}
+              {shortLocation === "Your Location"
+                ? "Your Neighborhood"
+                : shortLocation}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Public truck, restaurant, and bar profiles. Video recommendations carry extra weight.
+            </p>
+            <Link href="/deals/featured">
               <Button
-                variant="ghost"
-                className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
+                variant="link"
+                className="text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)] p-0 h-auto mt-1"
               >
-                View All
+                See all nearby deals {"->"}
               </Button>
             </Link>
           </div>
@@ -1289,9 +1339,9 @@ export default function Home() {
                 Retry Profiles
               </Button>
             </div>
-          ) : filteredBusinesses.length > 0 ? (
+          ) : featuredBusinesses.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
-              {filteredBusinesses.map((business) => (
+              {featuredBusinesses.map((business) => (
                 <div key={business.id} className="flex-shrink-0 w-64">
                   <BusinessDealsCard business={business} />
                 </div>
@@ -1306,7 +1356,7 @@ export default function Home() {
                     Open Map
                   </Button>
                 </Link>
-                <Link href="#scout-deals-section">
+                <Link href="/deals/featured">
                   <Button size="sm" variant="outline">
                     View Featured
                   </Button>
@@ -1322,37 +1372,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Video Recommendations - Atmospheric Adaptation */}
-      <section className="py-12 border-b border-white/5 bg-black/40">
-        <div className="px-6">
-          <div className="flex items-end justify-between mb-8">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <PlayCircle className="w-4 h-4 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Watch</span>
-              </div>
-              <h2 className="text-3xl font-serif font-bold text-white">Trending Stories</h2>
-              <p className="text-white/40 text-sm font-medium">Community food recommendations that are moving the needle this week.</p>
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-3">
+        <div className="content">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-foreground flex items-center">
+                <PlayCircle className="w-4 h-4 text-[color:var(--accent-text)] mr-1.5" />
+                Weekly Top Video Recommendations
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Most shared and watched community food videos this week.
+              </p>
             </div>
             <Link href="/video">
-              <Button
-                variant="ghost"
-                className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
-              >
-                Post Video
+              <Button size="sm" variant="outline">
+                Post Video Recommendation
               </Button>
             </Link>
           </div>
 
           {weeklyTrendingVideos.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-2.5">
               {weeklyTrendingVideos.map((story) => (
                 <Link key={story.id} href={`/video/${story.id}`}>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 hover:bg-white/10 transition-all group">
-                    <p className="text-base font-bold text-white group-hover:text-primary transition-colors">
+                  <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2.5 hover:bg-[var(--bg-surface-muted)] transition-colors">
+                    <p className="text-sm font-semibold text-foreground line-clamp-1">
                       {story.title || "Food recommendation"}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                       <span>{story.creatorName || "MealScout User"}</span>
                       <span>{Number(story.viewCount || 0).toLocaleString()} views</span>
                       <span>{Number(story.likeCount || 0).toLocaleString()} likes</span>
@@ -1362,8 +1409,8 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-xs text-white/20 font-bold uppercase tracking-widest">
-              No trending stories yet.
+            <div className="rounded-xl border border-dashed border-[color:var(--border-subtle)] p-4 text-center text-sm text-muted-foreground">
+              No trending recommendation videos yet.
             </div>
           )}
         </div>
@@ -1380,23 +1427,23 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Owner Section - Atmospheric Adaptation */}
+      {/* Owner Section - MOVED UP FOR LOGGED OUT USERS */}
       {!user && (
-        <section className="py-12 border-b border-white/5 bg-primary/5 backdrop-blur-md">
-          <div className="px-6 text-center max-w-lg mx-auto">
-            <div className="p-3 rounded-2xl bg-primary/10 w-fit mx-auto mb-6">
-              <ChefHat className="w-8 h-8 text-primary" />
-            </div>
-            <h3 className="text-2xl font-serif font-bold text-white mb-3">
-              Bring your place to the neighborhood
+        <section className="section section--full section--surface-2 py-2 text-foreground">
+          <div className="content text-center">
+            <ChefHat className="w-6 h-6 mx-auto mb-1 text-[color:var(--accent-text)]" />
+            <h3 className="text-base font-bold mb-0.5">
+              Bring your restaurant to the neighborhood
             </h3>
-            <p className="text-white/60 mb-8 text-sm leading-relaxed">
-              Post real-time deals, broadcast when you're open, and start converting nearby regulars today.
+            <p className="text-secondary mb-2 text-xs">
+              Post real-time deals, broadcast when you're open, reach people
+              nearby
             </p>
             <Link href="/customer-signup?role=business">
               <Button
-                size="lg"
-                className="bg-primary text-black font-bold uppercase tracking-widest px-8 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.3)]"
+                size="sm"
+                variant="secondary"
+                className="px-3 py-1 text-xs"
                 onClick={() => {
                   trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
                     page: "home",
@@ -1413,49 +1460,84 @@ export default function Home() {
         </section>
       )}
 
-      {/* TWO-COLUMN SECTIONS - Atmospheric Adaptation */}
-      <section className="py-16 border-b border-white/5 bg-black/80">
-        <div className="px-6">
+      {/* TWO-COLUMN SECTIONS - SIDE BY SIDE */}
+      <section className="section section--full border-y border-[color:var(--border-subtle)] py-4">
+        <div className="content">
           {!user ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            /* LOGGED OUT - TWO SECTIONS SIDE BY SIDE */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Stay Connected Section */}
-              <div className="space-y-8">
-                <div className="flex flex-col gap-2 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
-                    <Heart className="w-4 h-4 text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Join Us</span>
-                  </div>
-                  <h3 className="text-3xl font-serif font-bold text-white">
-                    Unlock the{" "}
-                    {shortLocation === "Your Location" ? "Local" : shortLocation}{" "}
+              <div>
+                <div className="text-center mb-6">
+              <h3 className="text-lg font-bold text-foreground mb-2">
+                Unlock the{" "}
+                    {shortLocation === "Your Location"
+                      ? "Local"
+                      : shortLocation}{" "}
                     Scene
                   </h3>
-                  <p className="text-white/40 text-sm font-medium">
-                    Save go-tos, track trucks live, and get a heads-up when spots reopen.
-                  </p>
-                </div>
+              <p className="text-sm text-muted-foreground">
+                Save go-tos, track trucks live, and get a heads-up when
+                spots reopen
+              </p>
+            </div>
 
-                <div className="space-y-4">
-                  {[
-                    { icon: Heart, title: `${shortLocation === "Your Location" ? "Neighborhood" : shortLocation} Favorites`, desc: "Keep your go-tos one tap away" },
-                    { icon: Truck, title: `Food trucks ${shortLocation === "Your Location" ? "nearby" : `in ${shortLocation}`}`, desc: "Live locations around you" },
-                    { icon: Bell, title: `Deals ${shortLocation === "Your Location" ? "nearby" : `in ${shortLocation}`}`, desc: "Quick wins close to you" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-center gap-4 group hover:bg-white/10 transition-all">
-                      <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <item.icon className="w-5 h-5 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-white text-sm">{item.title}</h4>
-                        <p className="text-xs text-white/40 font-medium">{item.desc}</p>
-                      </div>
+                <div className="space-y-2 mb-4">
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Heart className="w-4 h-4 text-[color:var(--accent-text)]" />
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs">
+                        {shortLocation === "Your Location"
+                          ? "Neighborhood"
+                          : shortLocation}{" "}
+                        favorites
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Keep your go-tos one tap away
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Truck className="w-4 h-4 text-[color:var(--accent-text)]" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs">
+                        Food trucks{" "}
+                        {shortLocation === "Your Location"
+                          ? "nearby"
+                          : `in ${shortLocation}`}
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Live locations around you
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Bell className="w-4 h-4 text-[color:var(--accent-text)]" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs">
+                        Deals{" "}
+                        {shortLocation === "Your Location"
+                          ? "nearby"
+                          : `in ${shortLocation}`}
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Quick wins close to you
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <Link href="/customer-signup">
                   <Button
-                    className="w-full bg-white text-black font-bold uppercase tracking-widest py-6 rounded-2xl hover:bg-primary transition-all"
+                    className="w-full text-xs font-medium"
                     onClick={() => {
                       trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
                         page: "home",
@@ -1465,74 +1547,105 @@ export default function Home() {
                       });
                     }}
                   >
-                    Create Free Account
+                    Create free account
                   </Button>
                 </Link>
               </div>
 
               {/* Community Building Section */}
-              <div className="space-y-8">
-                <div className="flex flex-col gap-2 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Promote</span>
-                  </div>
-                  <h3 className="text-3xl font-serif font-bold text-white">
-                    Support Local Gems
+              <div>
+                <div className="text-center mb-4">
+                  <h3 className="text-base font-bold text-foreground mb-1">
+                    Promote{" "}
+                    {shortLocation === "Your Location"
+                      ? "Local"
+                      : shortLocation}{" "}
+                    Gems
                   </h3>
-                  <p className="text-white/40 text-sm font-medium">
-                    Pass along great spots and help them stay busy.
+                  <p className="text-xs text-muted-foreground">
+                    Pass along great spots and help them stay busy
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  {[
-                    { step: "1", title: "Share Your Link", desc: "Get a unique referral link to share with restaurants" },
-                    { step: "2", title: "Restaurant Subscribes", desc: "When they join, you become their community partner" },
-                    { step: "3", title: "Earn Recurring Income", desc: "Receive commission as long as they remain active" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-4 group hover:bg-white/10 transition-all">
-                      <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-                        <span className="text-primary font-bold text-lg">{item.step}</span>
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-bold text-white text-sm mb-1">{item.title}</h4>
-                        <p className="text-xs text-white/40 font-medium leading-relaxed">{item.desc}</p>
-                      </div>
+                <div className="space-y-2 mb-4">
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-start gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-[color:var(--accent-text)] font-bold text-xs">
+                        1
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs mb-0.5">
+                        Share Your Link
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Get a unique referral link to share with restaurants
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-start gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-[color:var(--accent-text)] font-bold text-xs">
+                        2
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs mb-0.5">
+                        Restaurant Subscribes
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        When they join, you become their community partner
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-card)] p-3 rounded-xl border border-[color:var(--border-subtle)] flex items-start gap-3">
+                    <div className="w-8 h-8 bg-[var(--bg-surface-muted)] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="text-[color:var(--accent-text)] font-bold text-xs">
+                        3
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-foreground text-xs mb-0.5">
+                        Earn Recurring Income
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Receive commission as long as they remain active
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <Link href={user ? "/affiliate-dashboard" : "/customer-signup"}>
-                  <Button className="w-full bg-primary/10 border border-primary/20 text-primary font-bold uppercase tracking-widest py-6 rounded-2xl hover:bg-primary/20 transition-all">
+                  <Button className="w-full text-xs font-medium">
                     {user ? "Community Builder Dashboard" : "Start Building"}
                   </Button>
                 </Link>
               </div>
             </div>
           ) : (
-            <div className="max-w-[600px] mx-auto">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-serif font-bold text-white">Nearby Profiles</h3>
-                <Link href="#scout-deals-section">
-                  <Button variant="ghost" className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
-                    View All
-                  </Button>
-                </Link>
-              </div>
+            <div className="max-w-[520px] mx-auto">
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Nearby Profiles
+              </h3>
 
               {publicProfilesLoading ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-48 rounded-3xl bg-white/5 animate-pulse border border-white/10" />
+                    <div
+                      key={i}
+                      className="h-40 rounded-xl bg-[var(--bg-surface-muted)]/60 animate-pulse"
+                    />
                   ))}
                 </div>
               ) : publicProfilesError ? (
-                <div className="text-center py-12 rounded-3xl border border-white/10 bg-white/5">
-                  <p className="text-white/40 text-sm font-medium mb-4">We couldn't load profiles right now.</p>
+                <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
+                  <p>We couldn't load profiles right now. Try again in a bit.</p>
                   <Button
-                    variant="ghost"
-                    className="text-primary font-bold uppercase tracking-widest text-xs"
+                    size="sm"
+                    variant="outline"
+                    className="mt-3"
                     onClick={() => {
                       refetchPublicProfiles();
                       refetchFeaturedDeals();
@@ -1541,23 +1654,27 @@ export default function Home() {
                     Retry Profiles
                   </Button>
                 </div>
-              ) : filteredBusinesses.length > 0 ? (
-                <div className="space-y-4">
-                  {filteredBusinesses.map((business) => (
-                    <BusinessDealsCard key={business.id} business={business} compact />
+              ) : featuredBusinesses.length > 0 ? (
+                <div className="space-y-3">
+                  {featuredBusinesses.map((business) => (
+                    <BusinessDealsCard
+                      key={business.id}
+                      business={business}
+                      compact
+                    />
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-16 rounded-3xl border border-dashed border-white/10 bg-white/5">
-                  <p className="text-white/40 text-sm font-medium mb-6">No deals nearby yet.</p>
-                  <div className="flex flex-wrap justify-center gap-4">
+                <div className="text-center py-8 text-muted bg-surface-muted rounded-lg border border-dashed border-subtle">
+                  <p className="text-sm">No deals nearby yet.</p>
+                  <div className="mt-3 flex flex-wrap justify-center gap-2">
                     <Link href="/map">
-                      <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-white/10">
+                      <Button size="sm" variant="outline">
                         Open Map
                       </Button>
                     </Link>
-                    <Link href="#scout-deals-section">
-                      <Button className="bg-primary/10 border border-primary/20 text-primary font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-primary/20">
+                    <Link href="/deals/featured">
+                      <Button size="sm" variant="outline">
                         Featured Deals
                       </Button>
                     </Link>
@@ -1569,77 +1686,139 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer - Atmospheric Adaptation */}
-      <footer className="py-16 border-t border-white/5 bg-black">
-        <div className="px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
-            {[
-              { title: "Product", links: [{ label: "How It Works", href: "/how-it-works" }, { label: "FAQ", href: "/faq" }] },
-              { title: "Company", links: [{ label: "About", href: "/about" }, { label: "Comparisons", href: "/compare" }, { label: "Delivery Alternatives", href: "/delivery-app-alternatives" }, { label: "Ordering Platforms", href: "/online-ordering-platforms" }, { label: "Contact", href: "/contact" }] },
-              { title: "Legal", links: [{ label: "Privacy", href: "/privacy-policy" }, { label: "Terms", href: "/terms-of-service" }, { label: "Moderation Policy", href: "/moderation-policy" }] },
-              { title: "Support", links: [{ label: "Help Center", href: "/faq" }, { label: "Status", href: "/status" }] }
-            ].map((section, idx) => (
-              <div key={idx} className="space-y-4">
-                <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{section.title}</h4>
-                <ul className="space-y-3">
-                  {section.links.map((link, lIdx) => (
-                    <li key={lIdx}>
-                      <Link href={link.href} className="text-sm font-medium text-white/60 hover:text-primary transition-colors">
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20">
-              © 2026 MealScout. Follow The Flavor.
-            </p>
-            <div className="flex items-center gap-6">
-               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20">Mobile First</span>
-               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20">Fast Loading</span>
+      {/* Footer */}
+      <footer className="section section--full border-t border-[color:var(--border-subtle)] py-4">
+        <div className="content">
+          <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Product</h4>
+              <Link
+                href="/how-it-works"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                How It Works
+              </Link>
+              <Link
+                href="/faq"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                FAQ
+              </Link>
             </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Company</h4>
+              <Link
+                href="/about"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                About
+              </Link>
+              <Link
+                href="/compare"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Comparisons
+              </Link>
+              <Link
+                href="/delivery-app-alternatives"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Delivery Alternatives
+              </Link>
+              <Link
+                href="/online-ordering-platforms"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Ordering Platforms
+              </Link>
+              <Link
+                href="/contact"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Contact
+              </Link>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Legal</h4>
+              <Link
+                href="/privacy-policy"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/terms-of-service"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Terms
+              </Link>
+              <Link
+                href="/moderation-policy"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Moderation Policy
+              </Link>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-semibold text-foreground">Support</h4>
+              <Link
+                href="/faq"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Help Center
+              </Link>
+              <Link
+                href="/status"
+                className="block text-muted-foreground hover:text-[color:var(--accent-text)]"
+              >
+                Status
+              </Link>
+            </div>
+          </div>
+          <div className="text-center text-xs text-muted-foreground border-t border-[color:var(--border-subtle)] pt-4 mt-5">
+            <p>&copy; 2026 MealScout. A TradeScout Product.</p>
           </div>
         </div>
       </footer>
 
       {!location && !showWelcomeModal && (
-        <section className="px-6 md:hidden pb-8">
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-xl">
-            <div className="flex items-center gap-2 mb-3">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Location Required</span>
-            </div>
-            <p className="text-sm text-white/60 font-medium mb-6">
-              Turn on location to unlock nearby deals and live map updates.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                className="bg-white text-black font-bold uppercase tracking-widest text-[10px] rounded-xl py-6 hover:bg-primary transition-all"
-                onClick={retryLocation}
-                disabled={isLoadingLocation}
-                onPointerDown={() => {
-                  trackUxEvent("home_location_request_inline", {
-                    surface: "home_inline_cta",
-                  });
-                }}
-              >
-                {isLoadingLocation ? "Locating..." : "Use Location"}
-              </Button>
-              <Link href="/map">
+        <section className="section section--full md:hidden pb-4">
+          <div className="content">
+            <div className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-3 shadow-clean">
+              <p className="text-xs text-muted-foreground mb-2">
+                Turn on location to unlock nearby deals and live map updates.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
                 <Button
-                  className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl py-6 hover:bg-white/10 transition-all"
+                  size="sm"
+                  variant="outline"
+                  onClick={retryLocation}
+                  disabled={isLoadingLocation}
+                  data-testid="button-home-inline-location"
                   onPointerDown={() => {
-                    trackUxEvent("home_open_map_inline", {
+                    trackUxEvent("home_location_request_inline", {
                       surface: "home_inline_cta",
                     });
                   }}
                 >
-                  Open Map
+                  {isLoadingLocation ? "Locating..." : "Use location"}
                 </Button>
-              </Link>
+                <Link href="/map">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    data-testid="button-home-inline-map"
+                    onPointerDown={() => {
+                      trackUxEvent("home_open_map_inline", {
+                        surface: "home_inline_cta",
+                      });
+                    }}
+                  >
+                    Open map
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </section>

@@ -314,13 +314,13 @@ export default function RestaurantDetailPage() {
 
   if (restaurantLoading) {
     return (
-      <div className="max-w-md mx-auto bg-black min-h-screen relative pb-20">
+      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
         <div className="animate-pulse">
-          <div className="w-full h-72 bg-white/5"></div>
+          <div className="w-full h-64 bg-muted"></div>
           <div className="p-6 space-y-4">
-            <div className="h-8 bg-white/5 rounded-2xl w-3/4"></div>
-            <div className="h-4 bg-white/5 rounded-2xl w-1/2"></div>
-            <div className="h-20 bg-white/5 rounded-2xl"></div>
+            <div className="h-8 bg-muted rounded w-3/4"></div>
+            <div className="h-4 bg-muted rounded w-1/2"></div>
+            <div className="h-20 bg-muted rounded"></div>
           </div>
         </div>
       </div>
@@ -329,15 +329,11 @@ export default function RestaurantDetailPage() {
 
   if (!restaurant) {
     return (
-      <div className="max-w-md mx-auto bg-black min-h-screen relative pb-20">
-        <div className="text-center py-20 px-8">
-          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-6">
-            <Store className="w-8 h-8 text-white/30" />
-          </div>
-          <h2 className="text-2xl font-serif font-bold text-white mb-3">Not Found</h2>
-          <p className="text-white/50 text-sm mb-8">This spot doesn't exist or may have moved.</p>
+      <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
+        <div className="text-center py-12">
+          <h2 className="text-xl font-bold mb-4">Restaurant not found</h2>
           <Link href="/">
-            <Button className="bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-xl px-8 py-6">Back to Scout</Button>
+            <Button>Back to Home</Button>
           </Link>
         </div>
         <Navigation />
@@ -414,7 +410,7 @@ export default function RestaurantDetailPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-black min-h-screen relative pb-20">
+    <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
       <SEOHead
         title={`${restaurantName} - ${cuisineType} Restaurant | MealScout`}
         description={description}
@@ -427,71 +423,101 @@ export default function RestaurantDetailPage() {
         fallbackHref="/"
         icon={Store}
         rightActions={rightActions}
-        className="bg-black/80 backdrop-blur-xl border-b border-white/5"
+        className="bg-[hsl(var(--background))/0.94] border-b border-[color:var(--border-subtle)] shadow-clean"
       />
 
-      {/* Hero */}
-      <div className="relative h-64 overflow-hidden bg-[#0a0a0a]">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/30 via-black to-black" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-        <div className="absolute bottom-6 left-6 right-6">
-          <div className="flex items-center gap-2 mb-2">
-            {(restaurant as any)?.cuisineType && (
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">{(restaurant as any).cuisineType}</span>
-            )}
-            {isFoodTruck && (
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">· Food Truck</span>
-            )}
+      {/* Header Image */}
+      <div className="relative h-48 bg-[linear-gradient(110deg,rgba(255,77,46,0.12),rgba(245,158,11,0.12))] overflow-hidden">
+        <div className="absolute inset-0 bg-black/20"></div>
+
+        {/* Restaurant Image Placeholder */}
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="text-center text-white/80">
+            <div className="w-20 h-20 bg-[var(--bg-card)]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">--</span>
+            </div>
           </div>
-          <h1 className="text-3xl font-serif font-bold text-white leading-tight" data-testid="text-restaurant-name">
-            {(restaurant as any)?.name}
-            {(restaurant as any)?.isVerified && (
-              <CheckCircle className="inline w-5 h-5 text-primary ml-2 align-middle" data-testid="icon-verified-restaurant" />
-            )}
-          </h1>
         </div>
       </div>
 
-      {/* Info + Actions */}
-      <div className="px-6 py-6">
-        <div className="mb-8">
-          {/* Quick meta row */}
-          <div className="flex items-center gap-4 mb-6">
-            {currentRating > 0 && (
-              <div className="flex items-center gap-1.5">
-                <Star className="w-4 h-4 fill-primary text-primary" />
-                <span className="text-sm font-bold text-white" data-testid="text-rating">{currentRating.toFixed(1)}</span>
-                <span className="text-xs text-white/40" data-testid="text-review-count">({reviewCount})</span>
-              </div>
+      {/* Restaurant Info */}
+      <div className="px-4 sm:px-6 py-6">
+        <div className="mb-6">
+          <div className="flex items-start justify-between mb-2">
+            <h1
+              className="text-2xl font-bold text-foreground flex items-center space-x-2"
+              data-testid="text-restaurant-name"
+            >
+              <span>{(restaurant as any)?.name}</span>
+              {(restaurant as any)?.isVerified && (
+                <CheckCircle
+                  className="w-5 h-5 text-[color:var(--status-success)]"
+                  data-testid="icon-verified-restaurant"
+                />
+              )}
+            </h1>
+            {(restaurant as any)?.cuisineType && (
+              <Badge variant="secondary" data-testid="badge-cuisine-type">
+                {(restaurant as any)?.cuisineType}
+              </Badge>
             )}
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <Clock className="w-3.5 h-3.5" />
-              <span className="font-semibold uppercase tracking-wider">Open now</span>
+          </div>
+          <div className="mb-3">
+            <ShareButton
+              url={profilePath}
+              title={`Check out ${(restaurant as any)?.name || "this spot"} on MealScout`}
+              description={
+                (restaurant as any)?.description ||
+                "Discover this location on MealScout."
+              }
+              size="sm"
+              variant="outline"
+            />
+          </div>
+
+          {/* Rating */}
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="flex items-center space-x-1">
+              <Star className="w-4 h-4 fill-[color:var(--status-warning)] text-[color:var(--status-warning)]" />
+              <span className="font-semibold" data-testid="text-rating">
+                {currentRating.toFixed(1)}
+              </span>
+              <span
+                className="text-muted-foreground text-sm"
+                data-testid="text-review-count"
+              >
+                ({reviewCount} reviews)
+              </span>
             </div>
-            <div className="ml-auto">
-              <ShareButton
-                url={profilePath}
-                title={`Check out ${(restaurant as any)?.name || "this spot"} on MealScout`}
-                description={(restaurant as any)?.description || "Discover this location on MealScout."}
-                size="sm"
-                variant="outline"
-              />
+            <div className="flex items-center space-x-1 text-sm text-[color:var(--status-success)]">
+              <Clock className="w-4 h-4" />
+              <span>Open now</span>
             </div>
           </div>
 
           {/* Address */}
-          {(restaurant as any)?.address && (
-            <div className="flex items-start gap-3 mb-3">
-              <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-white/70 font-medium" data-testid="text-restaurant-address">{(restaurant as any)?.address}</p>
+          <div className="flex items-start space-x-2 mb-4">
+            <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+            <div>
+              <p
+                className="text-sm text-foreground"
+                data-testid="text-restaurant-address"
+              >
+                {(restaurant as any)?.address}
+              </p>
             </div>
-          )}
+          </div>
 
-          {/* Phone */}
+          {/* Contact Info */}
           {(restaurant as any)?.phone && (
-            <div className="flex items-center gap-3 mb-6">
-              <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-              <p className="text-sm text-white/70 font-medium" data-testid="text-restaurant-phone">{(restaurant as any)?.phone}</p>
+            <div className="flex items-center space-x-2 mb-6">
+              <Phone className="w-4 h-4 text-muted-foreground" />
+              <p
+                className="text-sm text-foreground"
+                data-testid="text-restaurant-phone"
+              >
+                {(restaurant as any)?.phone}
+              </p>
             </div>
           )}
 
@@ -655,17 +681,18 @@ export default function RestaurantDetailPage() {
             </Card>
           ) : null}
 
-          {/* Primary CTAs */}
-          <div className="flex flex-col gap-3 sm:flex-row">
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
-              className="flex-1 bg-primary text-black font-bold uppercase tracking-widest text-[10px] rounded-2xl py-6 hover:bg-amber-400 transition-all"
+              className="w-full sm:flex-1"
               data-testid="button-directions"
             >
               <DirectionsIcon className="w-4 h-4 mr-2" />
-              Get Directions
+              Directions
             </Button>
             <Button
-              className="flex-1 bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-2xl py-6 hover:bg-white/10 transition-all"
+              variant="outline"
+              className="w-full sm:flex-1"
               data-testid="button-call-restaurant"
             >
               <Phone className="w-4 h-4 mr-2" />
@@ -803,30 +830,36 @@ export default function RestaurantDetailPage() {
         </div>
 
         {isFoodTruck && (
-          <div className="mb-10">
-            <div className="flex items-center gap-2 mb-5">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Parking Schedule</span>
-            </div>
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-foreground mb-4">
+              Parking Schedule
+            </h2>
             {scheduleLoading ? (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-6 text-center text-white/40 text-sm">Loading schedule...</div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  Loading schedule...
+                </CardContent>
+              </Card>
             ) : parkingScheduleItems.length > 0 ? (
               <ParkingScheduleCalendar
                 items={parkingScheduleItems}
                 subtitle="Auto-updated by Parking Pass bookings and public manual stops."
               />
             ) : (
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-                <p className="text-white/40 text-sm">No upcoming stops scheduled yet.</p>
-              </div>
+              <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  No upcoming parking schedule yet.
+                </CardContent>
+              </Card>
             )}
           </div>
         )}
 
         {/* Current Specials */}
-        <div className="mb-10" id="restaurant-specials">
-          <div className="flex items-center gap-2 mb-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Tonight's Specials</span>
-          </div>
+        <div className="mb-8" id="restaurant-specials">
+          <h2 className="text-xl font-bold text-foreground mb-4">
+            Current Specials
+          </h2>
           {restaurantDeals.length > 0 ? (
             <div className="space-y-4">
               {restaurantDeals.map((deal: any) => (
@@ -834,18 +867,28 @@ export default function RestaurantDetailPage() {
               ))}
             </div>
           ) : (
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-              <p className="text-white/40 text-sm">No specials right now — check back soon.</p>
-            </div>
+            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+              <CardContent className="p-6 text-center">
+                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">-</span>
+                </div>
+                <p className="text-muted-foreground">
+                  No current specials available
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Check back soon!
+                </p>
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* Reviews */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Community Reviews</span>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-foreground">Reviews</h2>
             <Button
-              className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10 transition-all"
+              variant="outline"
               size="sm"
               data-testid="button-write-review"
             >
@@ -854,33 +897,47 @@ export default function RestaurantDetailPage() {
           </div>
 
           {Array.isArray(reviews) && reviews.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {reviews.slice(0, 3).map((review: any) => (
-                <div key={review.id} className="bg-white/5 border border-white/10 rounded-2xl p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-primary">U</span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-bold text-white">Community Member</span>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star key={star} className={`w-3 h-3 ${star <= (review.rating || 0) ? "fill-primary text-primary" : "text-white/20"}`} />
-                          ))}
-                        </div>
+                <Card key={review.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-8 h-8 bg-[color:var(--accent-text)]/12 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium">U</span>
                       </div>
-                      <p className="text-sm text-white/60">{review.comment}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="font-medium text-sm">User</span>
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`w-3 h-3 ${star <= (review.rating || 0) ? "fill-[color:var(--status-warning)] text-[color:var(--status-warning)]" : "text-[color:var(--border-strong)]"}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {review.comment}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-              <Star className="w-8 h-8 text-white/20 mx-auto mb-3" />
-              <p className="text-white/40 text-sm">No reviews yet — be the first to stop by and share.</p>
-            </div>
+            <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean">
+              <CardContent className="p-6 text-center">
+                <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <Star className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No reviews yet</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Be the first to review this restaurant!
+                </p>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -893,10 +950,10 @@ export default function RestaurantDetailPage() {
 
         {/* Community Recommendations */}
         <div className="mt-10">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-foreground">
               Community Recommendations
-            </span>
+            </h2>
             <div className="flex items-center gap-2">
               <Badge variant="outline">
                 {recommendationRows.length} total
@@ -909,11 +966,11 @@ export default function RestaurantDetailPage() {
           {recommendationRows.length > 0 ? (
             <div className="space-y-3">
               {recommendationRows.map((rec) => (
-                <div
+                <Card
                   key={rec.id}
-                  className="bg-white/5 border border-white/10 rounded-2xl p-4"
+                  className="border border-[color:var(--border-subtle)]"
                 >
-                  <div className="p-0">
+                  <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-medium text-sm text-foreground">
@@ -974,19 +1031,21 @@ export default function RestaurantDetailPage() {
                         <FlagRecommendationDialog recommendationId={rec.id} />
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 text-center">
-              <p className="text-white/40 text-sm">No recommendations yet. Stop by and be the first.</p>
-            </div>
+            <Card className="border border-[color:var(--border-subtle)]">
+              <CardContent className="p-6 text-sm text-muted-foreground text-center">
+                No recommendations yet. Be the first to recommend this spot.
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* FAQ Section - SEO optimized, minimal UI */}
-        <div className="mt-12 pt-8 border-t border-white/5">
+        <div className="mt-12 pt-8 border-t border-[color:var(--border-subtle)]">
           <MinimalFAQ
             items={[
               {
