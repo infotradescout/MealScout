@@ -801,10 +801,10 @@ export default function Home() {
       </header>
 
       {!user && (
-        <section className="section section--full border-b border-[color:var(--border-subtle)] py-3 bg-[var(--bg-card)]">
-          <div className="content">
-            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-4 shadow-clean">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--accent-text)]">
+        <section className="border-b border-white/5 py-3 bg-black/30 backdrop-blur-md">
+          <div className="px-6">
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 backdrop-blur-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
                 Traction Sprint Offer
               </p>
               <h2 className="mt-1 text-lg font-bold text-foreground">
@@ -817,7 +817,7 @@ export default function Home() {
                 <Link href="/customer-signup?role=business">
                   <Button
                     size="sm"
-                    className="action-primary"
+                    className="bg-primary text-black font-bold rounded-xl hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]"
                     data-testid="button-home-focused-business-cta"
                     onClick={() => {
                       trackFunnelEvent(FUNNEL_EVENTS.primaryCtaClick, {
@@ -1033,7 +1033,7 @@ export default function Home() {
                   size="sm"
                   onClick={retryLocation}
                   disabled={isLoadingLocation}
-                  className="mt-2 text-[color:var(--accent-text)] hover:text-[color:var(--accent-text-hover)]"
+                  className="mt-2 text-primary hover:text-primary/80"
                 >
                   Use my location
                 </Button>
@@ -1073,12 +1073,12 @@ export default function Home() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 w-60 h-40 rounded-xl bg-[var(--bg-surface-muted)]/70 animate-pulse"
+                  className="flex-shrink-0 w-60 h-40 rounded-xl bg-white/5 animate-pulse"
                 />
               ))}
             </div>
           ) : liveTrucksError ? (
-            <div className="text-center py-6 text-[color:var(--status-error)] text-sm">
+            <div className="text-center py-6 text-red-400 text-sm">
               <p>We couldn't load live trucks right now.</p>
               <Button
                 size="sm"
@@ -1270,12 +1270,12 @@ export default function Home() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="flex-shrink-0 w-64 bg-[var(--bg-surface-muted)]/60 rounded-lg h-52 animate-pulse"
+                  className="flex-shrink-0 w-64 bg-white/5 rounded-lg h-52 animate-pulse"
                 />
               ))}
             </div>
           ) : publicProfilesError ? (
-            <div className="text-center py-8 text-[color:var(--status-error)] text-sm">
+            <div className="text-center py-8 text-red-400 text-sm">
               <p>We couldn't load profiles right now. Try again in a bit.</p>
               <Button
                 size="sm"
@@ -1369,8 +1369,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section section--full section--surface py-3">
-        <div className="content">
+      <section className="py-3 bg-black/20 border-b border-white/5">
+        <div className="px-6">
           <SEOInternalLinks
             title={`What's Popular ${shortLocation === "Your Location" ? "Near You" : `in ${shortLocation}`}`}
             description="Popular food spots and cuisines people are checking out in your area."
