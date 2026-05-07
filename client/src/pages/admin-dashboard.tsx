@@ -5423,22 +5423,25 @@ export default function AdminDashboard() {
         : "Healthy: no threshold backlog breaches.";
 
   return (
-    <div className="admin-dashboard max-w-7xl mx-auto min-h-screen bg-[var(--bg-app)] pb-20">
+    <div className="admin-dashboard max-w-7xl mx-auto min-h-screen bg-background pb-20 atmospheric-theme">
       {/* Header */}
-      <header className="px-4 sm:px-6 py-4 sm:py-6 bg-[hsl(var(--background))] border-b border-white/5">
+      <header className="px-4 sm:px-6 py-8 bg-black/20 backdrop-blur-md border-b border-white/5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
+          <div className="flex items-center space-x-4">
+            <div className="p-3 rounded-2xl bg-primary/10 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+              <Shield className="w-8 h-8 text-primary" />
+            </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                Manage your MealScout platform and LISA intelligence feeds
+              <h1 className="text-3xl font-serif font-bold text-white tracking-tight">Admin Dashboard</h1>
+              <p className="text-primary text-sm font-medium uppercase tracking-[0.2em] mt-1">
+                Platform Control & Intelligence
               </p>
             </div>
           </div>
           <Button
             variant="outline"
             onClick={handleLogout}
+            className="border-white/10 hover:bg-white/5 text-white/60"
             data-testid="button-logout-admin"
           >
             Logout
@@ -5495,81 +5498,89 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-black/40 border-white/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-sm font-medium text-white/60 uppercase tracking-wider">
                 Total Users
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
+                <div className="text-3xl font-bold text-white">
                   {dashboardStats.totalUsers}
                 </div>
-                <Users className="w-5 h-5 text-primary" />
+                <div className="p-2 rounded-full bg-primary/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-primary mt-2 font-medium">
                 +{dashboardStats.newUsersToday} today
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-black/40 border-white/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-sm font-medium text-white/60 uppercase tracking-wider">
                 Restaurant Profiles
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
+                <div className="text-3xl font-bold text-white">
                   {dashboardStats.totalRestaurantProfiles ??
                     dashboardStats.totalRestaurants}
                 </div>
-                <Store className="w-5 h-5 text-primary" />
+                <div className="p-2 rounded-full bg-primary/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <Store className="w-5 h-5 text-primary" />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/40 mt-2">
                 {dashboardStats.totalRestaurantOwners ??
                   dashboardStats.memberCounts?.restaurantOwner ??
                   0}{" "}
-                owner accounts - {pendingRestaurants.length} pending
+                owners • {pendingRestaurants.length} pending
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-black/40 border-white/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-sm font-medium text-white/60 uppercase tracking-wider">
                 Active Deals
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
+                <div className="text-3xl font-bold text-white">
                   {dashboardStats.activeDeals}
                 </div>
-                <Package className="w-5 h-5 text-primary" />
+                <div className="p-2 rounded-full bg-primary/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <Package className="w-5 h-5 text-primary" />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/40 mt-2">
                 of {dashboardStats.totalDeals} total
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-black/40 border-white/5 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+              <CardTitle className="text-sm font-medium text-white/60 uppercase tracking-wider">
                 Claims Today
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
+                <div className="text-3xl font-bold text-white">
                   {dashboardStats.todayClaims}
                 </div>
-                <Activity className="w-5 h-5 text-primary" />
+                <div className="p-2 rounded-full bg-primary/10 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                  <Activity className="w-5 h-5 text-primary" />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-white/40 mt-2">
                 {dashboardStats.totalClaims} total
               </p>
             </CardContent>
@@ -5857,82 +5868,82 @@ export default function AdminDashboard() {
         )}
 
         {/* Main Content Tabs */}
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList className="w-full inline-flex h-auto flex-wrap gap-1 p-1">
+        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+          <TabsList className="mb-8 flex flex-wrap h-auto gap-2 bg-black/20 backdrop-blur-md p-2 rounded-2xl border border-white/5 overflow-x-auto">
             <TabsTrigger
               value="overview"
               data-testid="tab-overview"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Overview
             </TabsTrigger>
             <TabsTrigger
               value="restaurants"
               data-testid="tab-restaurants"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Restaurants
             </TabsTrigger>
             <TabsTrigger
               value="lisa"
               data-testid="tab-lisa"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               LISA
             </TabsTrigger>
             <TabsTrigger
               value="users"
               data-testid="tab-users"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Users
             </TabsTrigger>
             <TabsTrigger
               value="staff"
               data-testid="tab-staff"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Staff
             </TabsTrigger>
             <TabsTrigger
               value="deals"
               data-testid="tab-deals"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Deals
             </TabsTrigger>
             <TabsTrigger
               value="verifications"
               data-testid="tab-verifications"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Verifications
             </TabsTrigger>
             <TabsTrigger
               value="onboarding"
               data-testid="tab-onboarding"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Manual Onboarding
             </TabsTrigger>
             <TabsTrigger
               value="imports"
               data-testid="tab-imports"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Admin Uploads
             </TabsTrigger>
             <TabsTrigger
               value="host-locations"
               data-testid="tab-host-locations"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Host Locations
             </TabsTrigger>
             <TabsTrigger
               value="share-portal"
               data-testid="tab-share-portal"
-              className="flex-shrink-0"
+              className="px-6 py-2.5 rounded-xl transition-all data-[state=active]:bg-primary data-[state=active]:text-black data-[state=active]:shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white/60 hover:text-white"
             >
               Share Portal
             </TabsTrigger>
