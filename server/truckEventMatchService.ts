@@ -140,6 +140,146 @@ export async function notifyNearbyTrucksOfNewSeries(
   return { notified, errors };
 }
 
+// ── Event Coordinator Request Notifications ──────────────────────────────
+
+type EventRequestInfo = {
+  id: string;
+  eventName: string;
+  date: string;
+  city: string;
+  expectedCrowd?: string | null;
+  notes?: string | null;
+  contactEmail: string;
+  contactPhone?: string | null;
+};
+
+export async function notifyNearbyTrucksOfEventRequest(
+  request: EventRequestInfo,
+): Promise<{ notified: number; errors: number }> {
+  let notified = 0;
+  let errors = 0;
+
+  try {
+    if (!request.city?.trim()) return { notified: 0, errors: 0 };
+
+    const cityLike = `%${request.city.trim()}%`;
+
+    const trucks = await db
+      .select({
+        id: restaurants.id,
+        name: restaurants.name,
+        ownerId: restaurants.ownerId,
+      })
+      .from(restaurants)
+      .where(
+        and(
+          eq(restaurants.isFoodTruck, true),
+          eq(restaurants.isActive, true),
+          or(
+            ilike(restaurants.city, cityLike),
+            ilike(restaurants.address, cityLike),
+          ),
+        ),
+      );
+
+    for (const truck of trucks) {
+      if (!truck.ownerId) continue;
+
+      // Idempotency: skip if already notified about this request
+      const alreadySent = await db.query.telemetryEvents.findFirst({
+        where: and(
+          eq(telemetryEvents.eventName, "truck_event_request_match_sent"),
+          eq(telemetryEvents.userId, truck.ownerId),
+          sql`properties->>'requestId' = ${request.id}`,
+        ),
+      });
+      if (alreadySent) continue;
+
+      const [owner] = await db
+        .select({
+          email: users.email,
+          firstName: users.firstName,
+          accountSettings: users.accountSettings,
+        })
+        .from(users)
+        .where(eq(users.id, truck.ownerId))
+        .limit(1);
+
+      if (!owner?.email) continue;
+      if (!isNotifEnabled(owner.accountSettings)) continue;
+
+      try {
+        const name = owner.firstName || truck.name || "Food Truck Owner";
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Event Opportunity</title></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f8f9fa;color:#333;">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+    <div style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:#fff;padding:30px 40px;text-align:center;">
+      <h1 style="margin:0;font-size:28px;">🍽️ MealScout</h1>
+      <div style="margin:8px 0 0;font-size:16px;opacity:0.9;">Event opportunity in ${request.city}</div>
+    </div>
+    <div style="padding:40px;">
+      <h2 style="color:#ff6b35;font-size:24px;margin:0 0 16px;">New event looking for food trucks 📍</h2>
+      <p>Hey ${name}!</p>
+      <p>An event coordinator is looking for food trucks near <strong>${request.city}</strong>.</p>
+      <div style="background:#fff8f5;border-left:4px solid #ff6b35;padding:20px;margin:20px 0;border-radius:4px;">
+        <strong>${request.eventName}</strong><br>
+        📅 ${request.date}<br>
+        📍 ${request.city}<br>
+        ${request.expectedCrowd ? `👥 Expected crowd: ${request.expectedCrowd}<br>` : ""}
+        ${request.notes ? `<em style="font-size:13px;">${request.notes}</em><br>` : ""}
+      </div>
+      <p>Contact the coordinator directly to express interest:</p>
+      <p><strong>Email:</strong> <a href="mailto:${request.contactEmail}" style="color:#ff6b35;">${request.contactEmail}</a>${request.contactPhone ? `<br><strong>Phone:</strong> ${request.contactPhone}` : ""}</p>
+      <div style="text-align:center;margin:30px 0;">
+        <a href="https://www.mealscout.us/truck/discovery" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">View All Event Requests</a>
+      </div>
+      <p style="font-size:13px;color:#999;">You're receiving this because your truck operates near ${request.city}. To unsubscribe, update your <a href="https://www.mealscout.us/profile" style="color:#ff6b35;">notification settings</a>.</p>
+    </div>
+    <div style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;font-size:13px;color:#666;">
+      <p style="margin:0;">© 2025 MealScout. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        await emailService.sendBasicEmail(
+          owner.email,
+          `🚚 Event opportunity near you: ${request.eventName} in ${request.city}`,
+          html,
+        );
+
+        await db.insert(telemetryEvents).values({
+          eventName: "truck_event_request_match_sent",
+          userId: truck.ownerId,
+          properties: {
+            requestId: request.id,
+            truckId: truck.id,
+            city: request.city,
+          },
+        });
+
+        notified++;
+      } catch (err) {
+        console.error(
+          `[TruckEventMatch] Failed to notify truck owner ${truck.ownerId} of event request:`,
+          err,
+        );
+        errors++;
+      }
+    }
+  } catch (err) {
+    console.error("[TruckEventMatch] Fatal error in event request notify:", err);
+    errors++;
+  }
+
+  console.log(
+    `[TruckEventMatch] EventRequest ${request.id}: notified=${notified} errors=${errors}`,
+  );
+  return { notified, errors };
+}
+
 async function sendMatchEmail(
   to: string,
   firstName: string | null,

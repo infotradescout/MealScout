@@ -10,6 +10,7 @@ import {
   isStaffOrAdmin,
 } from "../unifiedAuth";
 import {
+  claims,
   eventBookings,
   events,
   eventSeries,
@@ -26,6 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 import { forwardGeocode, reverseGeocode } from "../utils/geocoding";
+import { notifyNearbyTrucksOfEventRequest } from "../truckEventMatchService";
 import { listParkingPassOccurrences } from "../services/parkingPassVirtual";
 import { PARKING_PASS_MEAL_WINDOWS } from "@shared/parkingPassSlots";
 import {
@@ -380,6 +382,27 @@ export function registerEventRoutes(
     return enhancedEvents;
   };
   // Get all upcoming events (public)
+  // ── Open event coordinator requests (visible to food trucks) ─────────────
+  app.get("/api/events/open-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const openRequests = await db
+        .select()
+        .from(claims)
+        .where(
+          and(
+            eq(claims.claimType, "event"),
+            eq(claims.status, "provisional"),
+          ),
+        )
+        .orderBy(desc(claims.createdAt));
+
+      res.json(openRequests);
+    } catch (error: any) {
+      console.error("Error fetching open event requests:", error);
+      res.json([]);
+    }
+  });
+
   app.get("/api/events/upcoming", async (req: any, res) => {
     try {
       const upcomingEvents = await storage.getAllUpcomingEvents();
@@ -1716,6 +1739,35 @@ export function registerEventRoutes(
 
       await emailService.sendBasicEmail(adminEmail, subject, html);
 
+      // ── Notify nearby food trucks (fire-and-forget, with opt-out + idempotency) ──
+      const claimRecord = await storage.createUnifiedClaim({
+        personId: req.user.id,
+        claimType: "event",
+        status: "provisional",
+        claimData: {
+          eventName: parsed.eventName,
+          date: parsed.date,
+          city: parsed.city,
+          expectedCrowd: parsed.expectedCrowd,
+          notes: parsed.notes,
+          contactEmail: parsed.contactEmail,
+          contactPhone: parsed.contactPhone,
+        },
+      });
+      notifyNearbyTrucksOfEventRequest({
+        id: claimRecord.id,
+        eventName: parsed.eventName,
+        date: parsed.date,
+        city: parsed.city,
+        expectedCrowd: parsed.expectedCrowd,
+        notes: parsed.notes,
+        contactEmail: parsed.contactEmail,
+        contactPhone: parsed.contactPhone,
+      }).catch((err) =>
+        console.error("[EventSignup] Truck notify fire-and-forget error:", err),
+      );
+      // ─────────────────────────────────────────────────────────────────────
+
       await storage.createTelemetryEvent({
         eventName: "event_coordinator_request_created",
         userId: req.user.id,
@@ -1723,24 +1775,6 @@ export function registerEventRoutes(
           eventName: parsed.eventName,
           city: parsed.city,
           expectedCrowd: parsed.expectedCrowd,
-        },
-      });
-
-      await storage.createUnifiedClaim({
-        personId: req.user.id,
-        claimType: CLAIM_TYPES.EVENT,
-        status: CLAIM_STATUS.PROVISIONAL,
-        claimData: {
-          eventName: parsed.eventName,
-          date: parsed.date,
-          city: parsed.city,
-          expectedCrowd: parsed.expectedCrowd,
-          contactEmail: parsed.contactEmail,
-          contactPhone: parsed.contactPhone ?? null,
-          notes: parsed.notes ?? null,
-        },
-        metadata: {
-          source: "event_signup",
         },
       });
 

@@ -506,6 +506,13 @@ function TruckDiscovery() {
 
   const events = useMemo(() => normalizeEvents(rawEvents), [rawEvents]);
 
+  // Fetch open event coordinator requests (visible to authenticated users)
+  const { data: openRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/events/open-requests"],
+    enabled: isAuthenticated,
+    staleTime: 60_000,
+  });
+
   // Search filter
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -882,6 +889,69 @@ function TruckDiscovery() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Open Event Coordinator Requests */}
+      {openRequests.length > 0 && (
+        <div className="mt-12">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-[color:var(--text-muted)] mb-4">
+            <Megaphone className="h-3.5 w-3.5" />
+            Open Requests — Looking for Trucks
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {openRequests.map((req: any) => {
+              const data = req.claimData || {};
+              return (
+                <div
+                  key={req.id}
+                  className="rounded-xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-5 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-[color:var(--text-primary)] leading-tight">
+                      {data.eventName || "Event Request"}
+                    </h3>
+                    <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      Open Call
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 text-sm text-[color:var(--text-secondary)]">
+                    {data.date && (
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 shrink-0 text-[color:var(--accent-text)]" />
+                        {data.date}
+                      </span>
+                    )}
+                    {data.city && (
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-[color:var(--accent-text)]" />
+                        {data.city}
+                      </span>
+                    )}
+                    {data.expectedCrowd && (
+                      <span className="flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5 shrink-0 text-[color:var(--accent-text)]" />
+                        {data.expectedCrowd} expected
+                      </span>
+                    )}
+                  </div>
+                  {data.notes && (
+                    <p className="text-xs text-[color:var(--text-muted)] line-clamp-3 border-t border-[color:var(--border-subtle)] pt-2">
+                      {data.notes}
+                    </p>
+                  )}
+                  {data.contactEmail && (
+                    <a
+                      href={`mailto:${data.contactEmail}`}
+                      className="mt-auto inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 transition-colors"
+                    >
+                      Contact Coordinator
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
