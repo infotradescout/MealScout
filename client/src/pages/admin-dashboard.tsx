@@ -5423,7 +5423,7 @@ export default function AdminDashboard() {
         : "Healthy: no threshold backlog breaches.";
 
   return (
-    <div className="admin-dashboard max-w-7xl mx-auto min-h-screen bg-background pb-20 atmospheric-theme">
+    <div className="admin-dashboard max-w-7xl mx-auto min-h-screen bg-background pb-20">
       {/* Header */}
       <header className="px-4 sm:px-6 py-8 bg-black/20 backdrop-blur-md border-b border-white/5">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

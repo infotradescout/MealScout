@@ -717,7 +717,7 @@ export default function Home() {
   );
 
   return (
-    <div className="home-page pb-24 min-h-screen bg-background atmospheric-theme">
+    <div className="home-page pb-24 min-h-screen bg-background">
       <SEOHead
         title="Food Trucks Near Me | Find Local Restaurants, Bars & Deals | MealScout"
         description="Find food trucks, restaurants, and bars near you. Discover live locations, local specials, and deals in your city — all on MealScout."
@@ -975,7 +975,7 @@ export default function Home() {
             )}
 
             {/* Filter Chips - Inline category filtering (no navigation away) */}
-            <div className="flex space-x-3 overflow-x-auto pb-2 scrollbar-hide w-full">
+            <div className="flex space-x-3 overflow-x-auto pb-2 w-full">
               {[
                 { label: "Hot Deals", key: "deals", icon: "✦" },
                 { label: "Pizza", key: "pizza", icon: "🍕" },
@@ -1069,7 +1069,7 @@ export default function Home() {
             </Link>
           </div>
           {liveTrucksLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -1094,7 +1094,7 @@ export default function Home() {
               Use your location to see live trucks nearby.
             </p>
           ) : liveTrucks.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
               {liveTrucks.map((truck) => {
                 const truckDeals = dealsByRestaurant.get(String(truck.id)) || [];
                 const distanceMiles =
@@ -1194,7 +1194,7 @@ export default function Home() {
           </div>
 
           {sortedFeaturedDeals.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
               {sortedFeaturedDeals.slice(0, 8).map((deal) => (
                 <Link key={deal.id} href={`/deal/${deal.id}`}>
                   <div className="flex-shrink-0 w-56 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-md hover:bg-white/10 transition-all group">
@@ -1266,7 +1266,7 @@ export default function Home() {
           </div>
 
           {publicProfilesLoading ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -1290,7 +1290,7 @@ export default function Home() {
               </Button>
             </div>
           ) : filteredBusinesses.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6">
               {filteredBusinesses.map((business) => (
                 <div key={business.id} className="flex-shrink-0 w-64">
                   <BusinessDealsCard business={business} />

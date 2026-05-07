@@ -737,8 +737,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         </div>
       </div>
 
-      <nav className="nav-bar nav-bar-mobile fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 px-2 py-2 rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] z-[1100] lg:hidden">
-      <div className="w-full mx-auto overflow-x-auto scrollbar-hide">
+      <nav className="nav-bar nav-bar-mobile fixed bottom-0 left-0 right-0 w-full z-[1100] lg:hidden pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto max-w-md px-3 py-2">
+      <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.6)] px-2 py-1.5">
+      <div className="w-full overflow-x-auto" style={{scrollbarWidth:'none',msOverflowStyle:'none'}}>
         <div className="flex items-center justify-start space-x-1 min-w-max">
           {navItems.map((item) =>
             item.path ? (
@@ -782,6 +784,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             ),
           )}
         </div>
+      </div>
+      </div>
       </div>
     </nav>
     </>

@@ -20,7 +20,7 @@ export default function VideoPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-background min-h-screen relative pb-24 atmospheric-theme">
+    <div className="max-w-md mx-auto bg-background min-h-screen relative pb-24">
       <SEOHead
         title="Critic Feed - MealScout"
         description="Community-Powered food recommendations."

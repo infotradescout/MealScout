@@ -168,7 +168,7 @@ export default function DealDetail() {
 
   if (dealLoading || restaurantLoading) {
     return (
-      <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen atmospheric-theme">
+      <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen">
         <div className="animate-pulse">
           <div className="w-full h-64 bg-[var(--bg-surface-muted)]"></div>
           <div className="p-4 space-y-4">
@@ -243,7 +243,7 @@ export default function DealDetail() {
   };
 
   return (
-    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen atmospheric-theme">
+    <div className="max-w-md lg:max-w-4xl xl:max-w-6xl mx-auto bg-black min-h-screen">
       <SEOHead
         title={`${dealTitle} - ${restaurantName} | MealScout`}
         description={`${dealDescription}. ${
