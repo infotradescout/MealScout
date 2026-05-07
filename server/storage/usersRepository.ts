@@ -89,6 +89,8 @@ async function selectUsersSafe(whereSql: string, params: any[]): Promise<any[]> 
     `${has("account_settings") ? `${q("account_settings")} as "accountSettings"` : `null as "accountSettings"`}`,
     `${has("created_at") ? `${q("created_at")} as "createdAt"` : `null as "createdAt"`}`,
     `${has("updated_at") ? `${q("updated_at")} as "updatedAt"` : `null as "updatedAt"`}`,
+    `${has("business_name") ? `${q("business_name")} as "businessName"` : `null as "businessName"`}`,
+    `${has("postal_code") ? `${q("postal_code")} as "postalCode"` : `null as "postalCode"`}`,
   ];
 
   const sqlText = `select ${select.join(", ")} from ${q(schema)}.${q("users")} ${whereSql}`;
