@@ -142,7 +142,7 @@
 }
 
 /*
- * Wheel center hub — clean amber-ringed disc, no logo.
+ * Wheel center hub — warm amber-lit stage glow, no logo.
  */
 .ms-giveaway-center-hub {
   position: absolute;
@@ -152,15 +152,41 @@
   width: clamp(52px, 17%, 76px);
   aspect-ratio: 1;
   border-radius: 999px;
-  background: radial-gradient(circle at 38% 36%, #1a1612, #0a0807 72%);
-  border: 2px solid rgba(255, 216, 106, 0.72);
+  background: radial-gradient(
+    circle at 44% 40%,
+    #fde68a 0%,
+    #f59e0b 28%,
+    #b45309 58%,
+    #3b1a04 82%,
+    #1a0d02 100%
+  );
+  border: 2px solid rgba(255, 230, 130, 0.85);
   box-shadow:
-    0 0 0 4px rgba(8, 7, 6, 0.96),
-    0 0 0 7px rgba(245, 158, 11, 0.82),
-    0 0 28px rgba(245, 158, 11, 0.42),
-    0 10px 22px rgba(0, 0, 0, 0.52),
-    inset 0 0 0 2px rgba(255, 216, 106, 0.14);
+    0 0 0 4px rgba(8, 7, 6, 0.92),
+    0 0 0 7px rgba(245, 158, 11, 0.78),
+    0 0 36px rgba(245, 158, 11, 0.55),
+    0 0 72px rgba(245, 158, 11, 0.22),
+    0 10px 22px rgba(0, 0, 0, 0.48),
+    inset 0 2px 4px rgba(255, 255, 200, 0.28);
   transform: translate(-50%, -50%);
+  animation: ms-giveaway-hub-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes ms-giveaway-hub-pulse {
+  0%, 100% { box-shadow:
+    0 0 0 4px rgba(8, 7, 6, 0.92),
+    0 0 0 7px rgba(245, 158, 11, 0.78),
+    0 0 36px rgba(245, 158, 11, 0.55),
+    0 0 72px rgba(245, 158, 11, 0.22),
+    0 10px 22px rgba(0, 0, 0, 0.48),
+    inset 0 2px 4px rgba(255, 255, 200, 0.28); }
+  50% { box-shadow:
+    0 0 0 4px rgba(8, 7, 6, 0.92),
+    0 0 0 7px rgba(245, 158, 11, 0.92),
+    0 0 52px rgba(245, 158, 11, 0.72),
+    0 0 96px rgba(245, 158, 11, 0.32),
+    0 10px 22px rgba(0, 0, 0, 0.48),
+    inset 0 2px 4px rgba(255, 255, 200, 0.38); }
 }
 
 .ms-giveaway-ready,
