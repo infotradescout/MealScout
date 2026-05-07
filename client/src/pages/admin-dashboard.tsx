@@ -7435,6 +7435,11 @@ export default function AdminDashboard() {
                         <div className="font-medium">
                           {user.firstName} {user.lastName}
                         </div>
+                        {user.businessName && (
+                          <div className="text-xs font-semibold text-amber-400 mt-0.5">
+                            {user.businessName}
+                          </div>
+                        )}
                         <div className="text-sm text-muted-foreground flex items-center gap-2">
                           <Mail className="w-3 h-3" />
                           {user.email}
