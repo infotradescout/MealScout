@@ -43,6 +43,7 @@ const AdminModerationEvents = lazy(
 const AdminModerationVideos = lazy(
   () => import("@/pages/admin-moderation-videos"),
 );
+const AdminGiveawayWheel = lazy(() => import("@/pages/admin-giveaway-wheel"));
 const AdminModerationMetrics = lazy(
   () => import("@/pages/admin-moderation-metrics"),
 );
@@ -480,6 +481,7 @@ function Router() {
               component={AdminControlCenter}
             />
             <Route path="/admin/legacy-dashboard" component={AdminDashboard} />
+            <Route path="/admin/giveaway-wheel" component={AdminGiveawayWheel} />
             <Route path="/admin/tickets" component={AdminSupportTickets} />
             <Route path="/admin/moderation" component={AdminModerationEvents} />
             <Route path="/admin/moderation/queue" component={ModerationQueue} />

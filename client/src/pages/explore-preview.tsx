@@ -8,11 +8,9 @@ import {
 import { Link, useLocation as useWouterLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Bell,
   Bookmark,
   CalendarDays,
   ChevronRight,
-  Compass,
   Flame,
   Heart,
   MapPin,
@@ -853,7 +851,6 @@ export default function ExplorePreview() {
         )}
       </main>
 
-      <AtmosphericBottomNav hidden={sheetState === "fullMap"} />
     </>
   );
 }
@@ -925,120 +922,7 @@ function HeroMapFallback({
   );
 }
 
-/* ============================================================
-   FLOATING ATMOSPHERIC BOTTOM NAV (5 items: Explore / Saved /
-   Scout (center, amber ring) / Alerts / Profile) — matches /explore
-   ============================================================ */
 
-function AtmosphericBottomNav({ hidden }: { hidden?: boolean }) {
-  const [location, navigate] = useWouterLocation();
-  const isActive = (path: string) =>
-    location === path || location.startsWith(`${path}/`);
-
-  if (hidden) return null;
-
-  return (
-    <nav
-      aria-label="Primary"
-      className="fixed left-0 right-0 z-50 px-4"
-      style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
-    >
-      <div
-        className="relative mx-auto max-w-md flex items-end justify-between gap-1 h-[68px] px-4 rounded-full bg-black/65 backdrop-blur-xl ring-1 ring-white/10"
-        style={{
-          boxShadow:
-            "0 0 0 1px rgba(245,158,11,0.10), 0 18px 48px rgba(0,0,0,0.65)",
-        }}
-      >
-        <NavSlot
-          label="Explore"
-          icon={<Compass className="h-5 w-5" aria-hidden="true" />}
-          active={isActive("/explore-preview") || isActive("/explore")}
-          onClick={() => navigate("/explore-preview")}
-        />
-        <NavSlot
-          label="Saved"
-          icon={<Bookmark className="h-5 w-5" aria-hidden="true" />}
-          active={isActive("/favorites")}
-          onClick={() => navigate("/favorites")}
-        />
-        <ScoutCenterSlot
-          active={isActive("/find-food")}
-          onClick={() => navigate("/find-food")}
-        />
-        <NavSlot
-          label="Alerts"
-          icon={<Bell className="h-5 w-5" aria-hidden="true" />}
-          active={isActive("/alerts")}
-          onClick={() => navigate("/alerts")}
-        />
-        <NavSlot
-          label="Profile"
-          icon={<UserIcon className="h-5 w-5" aria-hidden="true" />}
-          active={isActive("/profile")}
-          onClick={() => navigate("/profile")}
-        />
-      </div>
-    </nav>
-  );
-}
-
-function NavSlot({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-current={active ? "page" : undefined}
-      className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-        active ? "text-amber-300" : "text-white/85 hover:text-white"
-      }`}
-    >
-      {icon}
-      <span className="text-[11px] font-medium">{label}</span>
-    </button>
-  );
-}
-
-function ScoutCenterSlot({
-  active,
-  onClick,
-}: {
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Scout"
-      aria-current={active ? "page" : undefined}
-      className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
-    >
-      <span
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 ring-2 ring-amber-400 -mt-6"
-        style={{
-          boxShadow:
-            "0 0 0 4px rgba(245,158,11,0.15), 0 0 24px rgba(245,158,11,0.35)",
-        }}
-        aria-hidden="true"
-      >
-        <Search className="h-5 w-5 text-amber-300" />
-      </span>
-      <span className="text-[11px] font-medium text-amber-300">Scout</span>
-    </button>
-  );
-}
 
 /* ============================================================
    CARDS
