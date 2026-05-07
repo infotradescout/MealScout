@@ -348,7 +348,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       <nav
         aria-label="Primary navigation"
         className="fixed left-0 right-0 z-[1100] lg:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.5rem)" }}
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}
       >
         <div className="mx-auto max-w-md px-4">
           <div
