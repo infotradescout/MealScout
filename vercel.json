@@ -28,10 +28,6 @@
       "destination": "https://mealscout.onrender.com/ai.txt"
     },
     {
-      "source": "/:indexNowKey([a-fA-F0-9]{32}).txt",
-      "destination": "https://mealscout.onrender.com/:indexNowKey.txt"
-    },
-    {
       "source": "/api/(.*)",
       "destination": "https://mealscout.onrender.com/api/$1"
     },
@@ -57,3 +53,4 @@
     }
   ]
 }
+
