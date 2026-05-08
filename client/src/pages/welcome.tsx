@@ -43,7 +43,7 @@ export default function Welcome() {
             className="absolute inset-0"
             style={{
               backgroundImage:
-                "url('/atmospheric/foodpark-night-hero.jpg')",
+                "url('/atmospheric/mealscout-welcome-map-night.png')",
               backgroundSize: "cover",
               backgroundPosition: "center center",
               backgroundRepeat: "no-repeat",
