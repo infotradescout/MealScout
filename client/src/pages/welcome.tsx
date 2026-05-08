@@ -28,7 +28,7 @@ export default function Welcome() {
 
         <section className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 text-center">
           <img
-            src="/brand/logo.png"
+            src="/brand/mealscout-logo-pin.png"
             alt="MealScout"
             className="mb-10 h-auto w-56 max-w-[72vw] drop-shadow-[0_4px_30px_rgba(0,0,0,0.78)]"
           />
