@@ -1127,6 +1127,86 @@ function SectionHeader({
    Amber overlay + real projected pins sit on top.
    ============================================================ */
 
+function TearDropPin({ delay = "0s", hasTruck = true }: { delay?: string; hasTruck?: boolean }) {
+  // Classic Google Maps teardrop shape — wide circle top, pointed bottom
+  // Rendered as SVG so it scales perfectly at any DPR
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: 52,
+        height: 68,
+        filter: "drop-shadow(0 0 14px rgba(251,146,60,0.95)) drop-shadow(0 0 28px rgba(245,158,11,0.6)) drop-shadow(0 0 48px rgba(245,158,11,0.35))",
+      }}
+    >
+      {/* Outer pulse ring */}
+      <span
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          width: 64,
+          height: 64,
+          marginTop: -32,
+          marginLeft: -32,
+          borderRadius: "50%",
+          background: "rgba(245,158,11,0.18)",
+          animation: `hero-pin-pulse 3s ease-out ${delay} infinite`,
+          pointerEvents: "none",
+        }}
+      />
+      <svg
+        viewBox="0 0 52 68"
+        width="52"
+        height="68"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        {/* Pin body — filled amber with bright inner highlight */}
+        <path
+          d="M26 2C14.954 2 6 10.954 6 22c0 15 20 44 20 44s20-29 20-44C46 10.954 37.046 2 26 2z"
+          fill="#f97316"
+          stroke="#fbbf24"
+          strokeWidth="1.5"
+        />
+        {/* Inner bright highlight to give the glowing-from-inside look */}
+        <path
+          d="M26 5C16.611 5 9 12.611 9 22c0 12.5 17 38 17 38s17-25.5 17-38C43 12.611 35.389 5 26 5z"
+          fill="url(#pinGrad)"
+          opacity="0.55"
+        />
+        <defs>
+          <radialGradient id="pinGrad" cx="40%" cy="35%" r="55%">
+            <stop offset="0%" stopColor="#fff7ed" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {/* Food truck icon centered in the pin circle (circle center ≈ 26,22) */}
+        {hasTruck && (
+          <g transform="translate(13, 12)">
+            {/* Truck body */}
+            <rect x="0" y="5" width="18" height="9" rx="1.5" fill="#fff" opacity="0.95" />
+            {/* Cab */}
+            <rect x="13" y="3" width="5" height="7" rx="1" fill="#fff" opacity="0.95" />
+            {/* Window */}
+            <rect x="14" y="4" width="3" height="3" rx="0.5" fill="#f97316" opacity="0.8" />
+            {/* Wheels */}
+            <circle cx="4" cy="14.5" r="2" fill="#fff" opacity="0.95" />
+            <circle cx="14" cy="14.5" r="2" fill="#fff" opacity="0.95" />
+            {/* Serving window */}
+            <rect x="4" y="6.5" width="6" height="4" rx="0.5" fill="#f97316" opacity="0.7" />
+          </g>
+        )}
+        {/* Plain dot for non-truck pins */}
+        {!hasTruck && (
+          <circle cx="26" cy="22" r="7" fill="#fff" opacity="0.95" />
+        )}
+      </svg>
+    </div>
+  );
+}
+
 function CSSMapHero({
   markers,
   userLocation,
@@ -1139,19 +1219,19 @@ function CSSMapHero({
     <div className="absolute inset-0 overflow-hidden">
       <style>{`
         @keyframes hero-svg-drift {
-          0%   { transform: perspective(700px) rotateX(48deg) rotateZ(-6deg); }
-          50%  { transform: perspective(700px) rotateX(49.5deg) rotateZ(-6deg); }
-          100% { transform: perspective(700px) rotateX(48deg) rotateZ(-6deg); }
+          0%   { transform: perspective(900px) rotateX(52deg) rotateZ(-8deg) scale(1.15); }
+          50%  { transform: perspective(900px) rotateX(53.5deg) rotateZ(-8deg) scale(1.15); }
+          100% { transform: perspective(900px) rotateX(52deg) rotateZ(-8deg) scale(1.15); }
         }
         @keyframes hero-pin-pulse {
-          0%   { transform: scale(0.7); opacity: 0.8; }
-          70%  { transform: scale(2.4); opacity: 0; }
-          100% { transform: scale(2.4); opacity: 0; }
-        }
-        @keyframes hero-user-pulse {
-          0%   { transform: scale(0.8); opacity: 0.9; }
+          0%   { transform: scale(0.6); opacity: 0.7; }
           70%  { transform: scale(2.8); opacity: 0; }
           100% { transform: scale(2.8); opacity: 0; }
+        }
+        @keyframes hero-pin-float {
+          0%   { transform: translate(-50%, -100%) translateY(0px); }
+          50%  { transform: translate(-50%, -100%) translateY(-6px); }
+          100% { transform: translate(-50%, -100%) translateY(0px); }
         }
       `}</style>
 
@@ -1160,8 +1240,8 @@ function CSSMapHero({
         aria-hidden="true"
         className="absolute inset-0"
         style={{
-          transformOrigin: "50% 60%",
-          animation: "hero-svg-drift 20s ease-in-out infinite",
+          transformOrigin: "50% 65%",
+          animation: "hero-svg-drift 22s ease-in-out infinite",
         }}
       >
         <SVGStreetMap
@@ -1171,34 +1251,46 @@ function CSSMapHero({
         />
       </div>
 
+      {/* Atmospheric amber bloom — warm glow radiating from map center */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse 70% 55% at 52% 48%, rgba(245,158,11,0.13) 0%, rgba(249,115,22,0.07) 40%, transparent 72%)",
+          mixBlendMode: "screen",
+        }}
+      />
+
       {/* Edge fade so the tilted grid blends into the dark background */}
       <div
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
         style={{
           background: `
-            linear-gradient(180deg, rgba(5,7,13,0.45) 0%, transparent 20%, transparent 65%, rgba(5,7,13,0.92) 100%),
-            linear-gradient(90deg, rgba(5,7,13,0.35) 0%, transparent 12%, transparent 88%, rgba(5,7,13,0.35) 100%)
+            linear-gradient(180deg, rgba(5,7,13,0.55) 0%, transparent 18%, transparent 60%, rgba(5,7,13,0.95) 100%),
+            linear-gradient(90deg, rgba(5,7,13,0.5) 0%, transparent 10%, transparent 90%, rgba(5,7,13,0.5) 100%)
           `,
         }}
       />
 
-      {/* Truck marker pins — Mercator projection centered on userLocation.
+      {/* Truck marker pins — large glowing teardrop pins floating above the grid.
+          Mercator projection centered on userLocation.
           BOX_DEG matches the viewport span used inside SVGStreetMap (0.011 lat, 0.0154 lng).
           SVGStreetMap renders the user pin internally, so no user pin here. */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
         {markers
           .filter((m) => m.lat != null && m.lng != null)
+          .slice(0, 8) // cap at 8 pins to avoid clutter
           .map((marker, i) => {
             const LAT_SPAN = 0.011;
             const LNG_SPAN = 0.011 * 1.4;
             const dx = (marker.lng - userLocation.lng) / LNG_SPAN;
             const dy = (marker.lat - userLocation.lat) / LAT_SPAN;
-            // Center is 50%,50%; dx/dy are fractions of half-span
             const px = 0.5 + dx;
-            const py = 0.5 - dy; // lat increases upward, y increases downward
-            if (px < -0.05 || px > 1.05 || py < -0.05 || py > 1.05) return null;
-            const delay = `${(i * 0.4) % 2.4}s`;
+            const py = 0.5 - dy;
+            if (px < -0.08 || px > 1.08 || py < -0.08 || py > 1.08) return null;
+            const delay = `${(i * 0.55) % 3.3}s`;
+            const floatDelay = `${(i * 0.7) % 4}s`;
             return (
               <div
                 key={marker.id}
@@ -1206,29 +1298,12 @@ function CSSMapHero({
                 style={{
                   left: `${px * 100}%`,
                   top: `${py * 100}%`,
-                  transform: "translate(-50%, -50%)",
+                  // translate(-50%, -100%) so the pin tip sits exactly on the location
+                  animation: `hero-pin-float 4s ease-in-out ${floatDelay} infinite`,
+                  transform: "translate(-50%, -100%)",
                 }}
               >
-                <div style={{ position: "relative", width: 16, height: 16 }}>
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      borderRadius: "50%",
-                      background: "rgba(245,158,11,0.35)",
-                      animation: `hero-pin-pulse 2.8s ease-out ${delay} infinite`,
-                    }}
-                  />
-                  <span
-                    style={{
-                      position: "absolute",
-                      inset: 3,
-                      borderRadius: "50%",
-                      background: "#f59e0b",
-                      boxShadow: "0 0 10px 2px rgba(245,158,11,0.7)",
-                    }}
-                  />
-                </div>
+                <TearDropPin delay={delay} hasTruck={marker.kind === "truck"} />
               </div>
             );
           })}

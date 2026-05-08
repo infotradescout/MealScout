@@ -209,16 +209,20 @@ export function SVGStreetMap({ lat, lng, style, className }: Props) {
       >
         <defs>
           {/* Glow filter — spreads light outward from road pixels */}
-          <filter id="street-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <filter id="street-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
           {/* Stronger glow for major roads */}
-          <filter id="street-glow-major" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="7" result="blur" />
+          <filter id="street-glow-major" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="12" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
           {/* User pin pulse */}
+          <filter id="street-glow-halo" x="-120%" y="-120%" width="340%" height="340%">
+            <feGaussianBlur stdDeviation="20" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
           <filter id="pin-glow" x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="8" result="blur" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
@@ -226,7 +230,27 @@ export function SVGStreetMap({ lat, lng, style, className }: Props) {
         </defs>
 
         {/* ── GLOW PASS (blurred, behind) ─────────────────────── */}
-        <g opacity="0.7">
+        {/* Ultra-wide halo pass for deep bloom */}
+        <g opacity="0.45">
+          {paths.map((p, i) => {
+            const isMajor = ["motorway", "trunk", "primary", "secondary"].includes(p.highway);
+            if (!isMajor) return null;
+            return (
+              <path
+                key={`halo-${i}`}
+                d={p.d}
+                fill="none"
+                stroke={AMBER_GLOW}
+                strokeWidth={p.weight * 12}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={p.opacity * 0.4}
+                filter="url(#street-glow-halo)"
+              />
+            );
+          })}
+        </g>
+        <g opacity="0.9">
           {paths.map((p, i) => {
             const isMajor = ["motorway", "trunk", "primary", "secondary"].includes(p.highway);
             return (
@@ -235,10 +259,10 @@ export function SVGStreetMap({ lat, lng, style, className }: Props) {
                 d={p.d}
                 fill="none"
                 stroke={AMBER_GLOW}
-                strokeWidth={p.weight * (isMajor ? 5 : 3)}
+                strokeWidth={p.weight * (isMajor ? 8 : 5)}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                opacity={p.opacity * 0.6}
+                opacity={p.opacity * 0.85}
                 filter={isMajor ? "url(#street-glow-major)" : "url(#street-glow)"}
               />
             );
@@ -253,7 +277,7 @@ export function SVGStreetMap({ lat, lng, style, className }: Props) {
               d={p.d}
               fill="none"
               stroke={AMBER}
-              strokeWidth={p.weight}
+              strokeWidth={p.weight * 1.4}
               strokeLinecap="round"
               strokeLinejoin="round"
               opacity={p.opacity}
