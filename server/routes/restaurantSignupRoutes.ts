@@ -97,9 +97,11 @@ export function registerRestaurantSignupRoutes(
           (req.get("host") ? `${req.protocol}://${req.get("host")}` : null) ||
           "http://localhost:5000"
         ).replace(/\/+$/, "");
-        const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
+        const verifyParams = new URLSearchParams({
           token,
-        )}`;
+          redirect: "/restaurant-signup",
+        });
+        const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?${verifyParams.toString()}`;
         await emailService.sendEmailVerificationEmail(user, verifyUrl);
 
         return res.status(201).json({
