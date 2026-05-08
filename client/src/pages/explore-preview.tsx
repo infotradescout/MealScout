@@ -889,25 +889,104 @@ function CSSMapHero({
 }) {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Dark satellite/street map base — same technique as welcome screen */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage:
-            "url('https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2070&auto=format&fit=crop')",
-          filter: "grayscale(1) contrast(1.2) brightness(0.35)",
-        }}
-      />
-      {/* Amber tint overlay so the map reads warm, not cold */}
+      {/* Google Earth 3D-style city animation — perspective grid, building blocks,
+          amber-lit streets at night. Pure CSS + SVG, no image dependency. */}
+
+      {/* Deep space base */}
+      <div aria-hidden="true" className="absolute inset-0" style={{ background: "#05070d" }} />
+
+      {/* Perspective city grid — CSS 3D transform gives the tilted Earth view */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
         style={{
-          background:
-            "linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(8,10,15,0) 60%), linear-gradient(180deg, rgba(8,10,15,0.30) 0%, rgba(8,10,15,0) 40%, rgba(8,10,15,0) 65%, rgba(10,12,16,0.90) 100%)",
+          perspective: "600px",
+          perspectiveOrigin: "50% 30%",
+          overflow: "hidden",
         }}
-      />
+      >
+        {/* The grid plane tilted like Google Earth */}
+        <div
+          style={{
+            position: "absolute",
+            inset: "-60% -40%",
+            transform: "rotateX(52deg) rotateZ(-8deg)",
+            transformOrigin: "50% 60%",
+            animation: "earth3d-drift 18s ease-in-out infinite",
+          }}
+        >
+          <svg
+            width="100%"
+            height="100%"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ display: "block" }}
+          >
+            <defs>
+              {/* Street grid: major block every 60px, minor every 20px */}
+              <pattern id="ge-minor" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="0.4" />
+              </pattern>
+              <pattern id="ge-major" width="60" height="60" patternUnits="userSpaceOnUse">
+                <rect width="60" height="60" fill="url(#ge-minor)" />
+                <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(245,158,11,0.35)" strokeWidth="1.5" />
+              </pattern>
+              {/* Diagonal boulevard */}
+              <pattern id="ge-blvd" width="180" height="180" patternUnits="userSpaceOnUse">
+                <path d="M 0 180 L 180 0" fill="none" stroke="rgba(245,158,11,0.14)" strokeWidth="2" />
+                <path d="M -90 180 L 90 0" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="1.2" />
+                <path d="M 90 180 L 270 0" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="1.2" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="#080b12" />
+            <rect width="100%" height="100%" fill="url(#ge-major)" />
+            <rect width="100%" height="100%" fill="url(#ge-blvd)" />
+
+            {/* City block fills — dark rectangles between streets = buildings */}
+            {[
+              [20,20,38,38],[80,20,38,38],[140,20,38,18],[200,20,18,38],[260,20,38,38],[320,20,38,38],[380,20,18,18],[400,20,38,38],[460,20,38,38],[520,20,38,18],
+              [20,80,18,38],[40,80,38,38],[100,80,38,18],[140,80,18,38],[200,80,38,38],[260,80,18,18],[280,80,38,38],[340,80,38,18],[380,80,38,38],[440,80,18,38],[460,80,38,38],[520,80,38,38],
+              [20,140,38,18],[60,140,18,38],[80,140,38,38],[140,140,38,38],[200,140,18,18],[220,140,38,38],[280,140,38,18],[320,140,18,38],[340,140,38,38],[400,140,38,38],[460,140,18,18],[480,140,38,38],
+              [20,200,38,38],[80,200,18,18],[100,200,38,38],[160,200,38,18],[200,200,18,38],[220,200,38,38],[280,200,38,38],[340,200,18,18],[360,200,38,38],[420,200,38,18],[460,200,38,38],[520,200,18,38],
+              [20,260,18,38],[40,260,38,38],[100,260,38,18],[140,260,38,38],[200,260,18,38],[220,260,38,18],[260,260,18,38],[280,260,38,38],[340,260,38,38],[400,260,18,18],[420,260,38,38],[480,260,38,18],[520,260,18,38],
+              [20,320,38,18],[60,320,18,38],[80,320,38,38],[140,320,18,18],[160,320,38,38],[220,320,38,18],[260,320,38,38],[320,320,18,38],[340,320,38,38],[400,320,38,18],[440,320,18,38],[460,320,38,38],
+            ].map(([x, y, w, h], i) => (
+              <rect
+                key={i}
+                x={x} y={y} width={w} height={h}
+                fill={i % 7 === 0 ? "rgba(245,158,11,0.04)" : i % 3 === 0 ? "rgba(20,24,36,0.9)" : "rgba(12,15,22,0.95)"}
+                rx="1"
+              />
+            ))}
+          </svg>
+        </div>
+      </div>
+
+      {/* Ambient street-light glow pools along the grid */}
+      <div aria-hidden="true" className="absolute inset-0" style={{
+        background: `
+          radial-gradient(ellipse at 30% 55%, rgba(245,158,11,0.10) 0%, transparent 35%),
+          radial-gradient(ellipse at 65% 45%, rgba(245,158,11,0.08) 0%, transparent 30%),
+          radial-gradient(ellipse at 80% 65%, rgba(245,158,11,0.06) 0%, transparent 25%),
+          radial-gradient(ellipse at 45% 70%, rgba(180,83,9,0.07) 0%, transparent 30%),
+          linear-gradient(180deg, rgba(5,7,13,0.55) 0%, rgba(5,7,13,0) 35%, rgba(5,7,13,0) 60%, rgba(5,7,13,0.92) 100%)
+        `,
+        animation: "earth3d-glow 8s ease-in-out infinite",
+      }} />
+
+      {/* Keyframes */}
+      <style>{`
+        @keyframes earth3d-drift {
+          0%   { transform: rotateX(52deg) rotateZ(-8deg) translateX(0px) translateY(0px); }
+          25%  { transform: rotateX(54deg) rotateZ(-7deg) translateX(-8px) translateY(-5px); }
+          50%  { transform: rotateX(52deg) rotateZ(-9deg) translateX(-14px) translateY(-8px); }
+          75%  { transform: rotateX(50deg) rotateZ(-8deg) translateX(-6px) translateY(-3px); }
+          100% { transform: rotateX(52deg) rotateZ(-8deg) translateX(0px) translateY(0px); }
+        }
+        @keyframes earth3d-glow {
+          0%,100% { opacity: 1; }
+          50%      { opacity: 0.75; }
+        }
+      `}</style>
 
       {/* Inline keyframes for pin pulse */}
       <style>{`
