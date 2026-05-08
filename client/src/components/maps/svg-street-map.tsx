@@ -73,6 +73,12 @@ const SVG_W = 800;
 const SVG_H = 800;
 // Bounding box half-size in degrees (~1.2km at mid-latitudes)
 const BOX_DEG = 0.011;
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+const STREET_CACHE_TTL_MS = 10 * 60 * 1000;
+const streetPathCache = new Map<string, { expiresAt: number; paths: RoadPath[] }>();
 
 function lngToX(lng: number, minLng: number, maxLng: number): number {
   return ((lng - minLng) / (maxLng - minLng)) * SVG_W;
@@ -97,6 +103,62 @@ function buildOverpassQuery(lat: number, lng: number): string {
     >;
     out skel qt;
   `.trim();
+}
+
+function buildCacheKey(lat: number, lng: number): string {
+  return `${lat.toFixed(4)}:${lng.toFixed(4)}`;
+}
+
+async function parseOverpassJsonResponse(response: Response): Promise<OsmResponse> {
+  const raw = await response.text();
+  const text = raw.trim();
+  if (!text) {
+    throw new Error("Overpass returned an empty response");
+  }
+
+  try {
+    return JSON.parse(text) as OsmResponse;
+  } catch {
+    const snippet = text.slice(0, 120).replace(/\s+/g, " ");
+    throw new Error(`Overpass returned non-JSON payload: ${snippet}`);
+  }
+}
+
+async function fetchOverpassData(
+  query: string,
+  signal: AbortSignal,
+): Promise<OsmResponse> {
+  let lastError: Error | null = null;
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    if (signal.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: query,
+        signal,
+        headers: {
+          Accept: "application/json,text/plain,*/*",
+          "Content-Type": "text/plain;charset=UTF-8",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return await parseOverpassJsonResponse(response);
+    } catch (error: any) {
+      if (error?.name === "AbortError") throw error;
+      lastError =
+        error instanceof Error ? error : new Error(String(error || "Unknown error"));
+    }
+  }
+
+  throw lastError ?? new Error("All Overpass endpoints failed");
 }
 
 function parseOsmResponse(data: OsmResponse, lat: number, lng: number): RoadPath[] {
@@ -168,16 +230,25 @@ export function SVGStreetMap({ lat, lng, style, className }: Props) {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
+    const cacheKey = buildCacheKey(lat, lng);
+    const cached = streetPathCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      setPaths(cached.paths);
+      setLoading(false);
+      return () => ctrl.abort();
+    }
+
     setLoading(true);
 
     const query = buildOverpassQuery(lat, lng);
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-
-    fetch(url, { signal: ctrl.signal })
-      .then((r) => r.json())
+    fetchOverpassData(query, ctrl.signal)
       .then((data: OsmResponse) => {
         if (ctrl.signal.aborted) return;
         const parsed = parseOsmResponse(data, lat, lng);
+        streetPathCache.set(cacheKey, {
+          paths: parsed,
+          expiresAt: Date.now() + STREET_CACHE_TTL_MS,
+        });
         setPaths(parsed);
         setLoading(false);
       })
