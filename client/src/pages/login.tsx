@@ -157,6 +157,9 @@ export default function Login() {
         stage: "post_login_redirect",
         redirectPath: redirectPath || "/",
       });
+      try {
+        window.sessionStorage.removeItem("mealscout:post-verification-redirect");
+      } catch {}
       window.location.href = redirectPath || "/";
     } catch (error: any) {
       toast({

@@ -98,6 +98,20 @@ export default function CustomerSignup() {
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
   const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
 
+  const getCustomerRedirectPath = () =>
+    accountType === "host"
+      ? "/host-signup"
+      : accountType === "event_organizer"
+        ? "/event-signup"
+        : accountType === "business"
+          ? "/restaurant-signup"
+          : "/scout";
+
+  const getBusinessRedirectPath = () =>
+    businessSubType === "food_truck"
+      ? "/restaurant-signup?businessType=food_truck&claim=1"
+      : "/restaurant-signup";
+
   const goToVerificationHandoff = (redirectPath: string) => {
     try {
       window.sessionStorage.setItem(
@@ -175,7 +189,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/customer/register",
-        signupData
+        { ...signupData, intendedNextPath: getCustomerRedirectPath() }
       );
       return await res.json();
     },
@@ -183,14 +197,7 @@ export default function CustomerSignup() {
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(SIGNUP_DRAFT_KEY);
       }
-      const redirectAfterLogin =
-        accountType === "host"
-          ? "/host-signup"
-          : accountType === "event_organizer"
-            ? "/event-signup"
-          : accountType === "business"
-          ? "/restaurant-signup"
-            : "/scout";
+      const redirectAfterLogin = getCustomerRedirectPath();
       try {
         window.sessionStorage.setItem(
           "mealscout:lastSignupEmail",
@@ -230,7 +237,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        signupData
+        { ...signupData, intendedNextPath: getBusinessRedirectPath() }
       );
       return await res.json();
     },
@@ -256,10 +263,7 @@ export default function CustomerSignup() {
         businessSubType,
         stage: "signup_success",
       });
-      const businessRedirect =
-        businessSubType === "food_truck"
-          ? "/restaurant-signup?businessType=food_truck&claim=1"
-          : "/restaurant-signup";
+      const businessRedirect = getBusinessRedirectPath();
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
         stage: "redirect_to_email_handoff",
@@ -284,7 +288,7 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/supplier/register",
-        signupData
+        { ...signupData, intendedNextPath: "/supplier/dashboard" }
       );
       return await res.json();
     },

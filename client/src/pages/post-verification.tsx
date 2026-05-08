@@ -29,6 +29,11 @@ function getStoredValue(key: string): string | null {
 function getBestRedirect(params: URLSearchParams): string {
   const queryRedirect = getSafePath(params.get("redirect"));
   const storedRedirect = getSafePath(getStoredValue(REDIRECT_STORAGE_KEY));
+  const verifiedFromEmail = params.get("verified") === "1";
+
+  if (verifiedFromEmail) {
+    return queryRedirect || storedRedirect || "/scout";
+  }
 
   return storedRedirect || queryRedirect || "/scout";
 }
@@ -73,7 +78,10 @@ export default function PostVerification() {
 
     setIsResending(true);
     try {
-      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      await apiRequest("POST", "/api/auth/resend-verification", {
+        email,
+        intendedNextPath: redirectPath,
+      });
       toast({
         title: "Verification sent",
         description: "If that account still needs verification, a fresh link is on the way.",
@@ -184,6 +192,7 @@ export default function PostVerification() {
             <div className="space-y-3">
               <Link
                 href={loginHref}
+                onClick={clearStoredRedirect}
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
               >
                 I verified, log in
@@ -202,6 +211,7 @@ export default function PostVerification() {
           ) : (
             <Link
               href={loginHref}
+              onClick={clearStoredRedirect}
               className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
             >
               Log in to continue

@@ -57,7 +57,7 @@ export default function DashboardRouter() {
     }
 
     if (primaryType === "customer") {
-      setLocation("/user-dashboard");
+      setLocation("/scout");
       return;
     }
 
@@ -87,7 +87,7 @@ export default function DashboardRouter() {
       return;
     }
 
-    setLocation("/user-dashboard");
+    setLocation("/scout");
   }, [isLoading, roles, setLocation, user]);
 
   return null;

@@ -180,7 +180,44 @@ export async function setupUnifiedAuth(app: Express) {
     return appContext === "tradescout" ? "tradescout" : "mealscout";
   };
 
-  const createEmailVerificationUrl = async (user: User, req: any) => {
+  const getSafeRedirectPath = (value: unknown): string | null => {
+    const path = typeof value === "string" ? value.trim() : "";
+    if (!path) return null;
+    if (!path.startsWith("/")) return null;
+    if (path.startsWith("//")) return null;
+    if (path.includes("://")) return null;
+    return path;
+  };
+
+  const getDefaultPostVerificationRedirect = (
+    user: Pick<User, "userType">,
+  ): string => {
+    switch (user.userType) {
+      case "host":
+        return "/host/dashboard";
+      case "event_coordinator":
+        return "/event-coordinator/dashboard";
+      case "restaurant_owner":
+      case "food_truck":
+        return "/restaurant-owner-dashboard";
+      case "supplier":
+        return "/supplier/dashboard";
+      case "staff":
+        return "/staff";
+      case "admin":
+      case "super_admin":
+        return "/admin/dashboard";
+      case "customer":
+      default:
+        return "/scout";
+    }
+  };
+
+  const createEmailVerificationUrl = async (
+    user: User,
+    req: any,
+    intendedNextPath?: string | null,
+  ) => {
     if (!user.email) return null;
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -201,9 +238,12 @@ export async function setupUnifiedAuth(app: Express) {
       resolveConfiguredBaseUrl(inferredBaseUrl || undefined) ||
       "http://localhost:5000"
     ).replace(/\/+$/, "");
-    const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?token=${encodeURIComponent(
-      token,
-    )}`;
+    const params = new URLSearchParams({ token });
+    const safeRedirect = getSafeRedirectPath(intendedNextPath);
+    if (safeRedirect) {
+      params.set("redirect", safeRedirect);
+    }
+    const verifyUrl = `${apiBaseUrl}/api/auth/verify-email?${params.toString()}`;
     return verifyUrl;
   };
 
@@ -211,11 +251,12 @@ export async function setupUnifiedAuth(app: Express) {
     user: User,
     req: any,
     welcomeLabel: string,
+    intendedNextPath?: string | null,
   ) => {
     try {
       const verifyUrl =
         user.email && !user.emailVerified
-          ? await createEmailVerificationUrl(user, req)
+          ? await createEmailVerificationUrl(user, req, intendedNextPath)
           : null;
       const supportsWelcome =
         user.userType === "customer" ||
@@ -1042,8 +1083,11 @@ export async function setupUnifiedAuth(app: Express) {
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
+      const intendedNextPath =
+        getSafeRedirectPath(req.body?.intendedNextPath) || "/scout";
+
       // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "customer");
+      void sendWelcomeOrVerification(user, req, "customer", intendedNextPath);
       // Send admin signup notification with context asynchronously
       emailService
         .sendAdminSignupNotification(user, {
@@ -1128,8 +1172,16 @@ export async function setupUnifiedAuth(app: Express) {
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
+      const intendedNextPath =
+        getSafeRedirectPath(req.body?.intendedNextPath) || "/restaurant-signup";
+
       // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "restaurant owner");
+      void sendWelcomeOrVerification(
+        user,
+        req,
+        "restaurant owner",
+        intendedNextPath,
+      );
       // Send admin signup notification with context asynchronously
       emailService
         .sendAdminSignupNotification(user, {
@@ -1211,8 +1263,12 @@ export async function setupUnifiedAuth(app: Express) {
       kickAffiliateTag(user);
       await applyAffiliateReferral(req, user);
 
+      const intendedNextPath =
+        getSafeRedirectPath(req.body?.intendedNextPath) ||
+        "/supplier/dashboard";
+
       // Send welcome email with verification link (don't block auth flow)
-      void sendWelcomeOrVerification(user, req, "supplier");
+      void sendWelcomeOrVerification(user, req, "supplier", intendedNextPath);
       // Send admin signup notification with context asynchronously
       emailService
         .sendAdminSignupNotification(user, {
@@ -1342,7 +1398,14 @@ export async function setupUnifiedAuth(app: Express) {
 
       const user = await storage.getUserByEmail(email);
       if (user && user.email && !user.emailVerified) {
-        const verifyUrl = await createEmailVerificationUrl(user, req);
+        const intendedNextPath =
+          getSafeRedirectPath(req.body?.intendedNextPath) ||
+          getDefaultPostVerificationRedirect(user);
+        const verifyUrl = await createEmailVerificationUrl(
+          user,
+          req,
+          intendedNextPath,
+        );
         if (verifyUrl) {
           await emailService.sendEmailVerificationEmail(user, verifyUrl);
         }
@@ -1808,7 +1871,7 @@ export async function setupUnifiedAuth(app: Express) {
       await storage.markAccountSetupTokenUsed(setupToken.id);
 
       // Send welcome email with verification link after profile completion
-      void sendWelcomeOrVerification(user, req, "account setup");
+      void sendWelcomeOrVerification(user, req, "account setup", "/dashboard");
 
       res.json({ message: "Account setup completed successfully" });
     } catch (error) {
@@ -1846,30 +1909,11 @@ export async function setupUnifiedAuth(app: Express) {
         process.env.PUBLIC_BASE_URL ||
         "http://localhost:5000";
 
-      // After verification, send users to a role-appropriate place *after* they log in.
-      // The login page honors `?redirect=` (safe, same-origin paths only).
-      const defaultRedirectPath = (() => {
-        switch (user.userType) {
-          case "host":
-            return "/host/dashboard";
-          case "event_coordinator":
-            return "/event-coordinator/dashboard";
-          case "restaurant_owner":
-          case "food_truck":
-            return "/restaurant-owner-dashboard";
-          case "supplier":
-            return "/supplier/dashboard";
-          case "staff":
-            return "/staff";
-          case "admin":
-          case "super_admin":
-            return "/admin/dashboard";
-          case "customer":
-            return "/scout";
-          default:
-            return "/scout";
-        }
-      })();
+      // After verification, send users to the durable intent embedded in the
+      // verification link, then fall back to their role default.
+      const defaultRedirectPath =
+        getSafeRedirectPath(req.query.redirect) ||
+        getDefaultPostVerificationRedirect(user);
 
       const redirectUrl = `${redirectBase}/post-verification?verified=1&redirect=${encodeURIComponent(
         defaultRedirectPath,
