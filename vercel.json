@@ -36,6 +36,22 @@
       "destination": "https://mealscout.onrender.com/api/$1"
     },
     {
+      "source": "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
+      "has": [{ "type": "query", "key": "prerender" }],
+      "destination": "https://mealscout.onrender.com/:kind/:path*"
+    },
+    {
+      "source": "/:kind(restaurant|truck|bar|chef|location|event|events|deal|supplier|suppliers|p|video)/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(bot|Bot|crawler|Crawler|spider|Spider|preview|Preview|fetcher|Fetcher|facebookexternalhit|Facebot|facebot|WhatsApp|whatsapp|TelegramBot|telegrambot|Slackbot|slackbot|Discordbot|discordbot|LinkedInBot|linkedinbot|Twitterbot|twitterbot|Applebot|applebot|GPTBot|gptbot|ClaudeBot|claudebot|PerplexityBot|perplexitybot|Bytespider|bytespider|CCBot|ccbot).*"
+        }
+      ],
+      "destination": "https://mealscout.onrender.com/:kind/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
