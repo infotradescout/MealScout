@@ -164,8 +164,21 @@ const PageLoader = () => (
   </div>
 );
 
+const RedirectToScout = () => {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    setLocation("/scout");
+  }, [setLocation]);
+
+  return <PageLoader />;
+};
+
 const publicRoutePrefixes = [
   "/",
+  "/scout",
+  "/explore",
+  "/explore-preview",
   "/login",
   "/customer-signup",
   "/restaurant-signup",
@@ -295,8 +308,9 @@ function Router() {
           <>
             <Route path="/" component={Welcome} />
             <Route path="/home" component={Home} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
-            <Route path="/explore-preview" component={ScoutPage} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
@@ -423,9 +437,10 @@ function Router() {
           </>
         ) : (
           <>
-            <Route path="/" component={() => { window.location.replace("/scout"); return null; }} />
+            <Route path="/" component={RedirectToScout} />
+            <Route path="/explore" component={RedirectToScout} />
+            <Route path="/explore-preview" component={RedirectToScout} />
             <Route path="/scout" component={ScoutPage} />
-            <Route path="/explore-preview" component={ScoutPage} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />

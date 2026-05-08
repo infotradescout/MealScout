@@ -365,9 +365,9 @@ export default function CategoryPage() {
                 Featured deals
               </Button>
             </Link>
-            <Link href="/map">
+            <Link href="/scout">
               <Button variant="outline" size="sm">
-                Open map
+                Open Scout
               </Button>
             </Link>
             <Link href="/food-trucks/new-york">

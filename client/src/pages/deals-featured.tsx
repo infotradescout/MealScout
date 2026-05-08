@@ -222,7 +222,7 @@ export default function FeaturedDealsPage() {
               </Button>
             </Link>
             <div className="mt-2">
-              <Link href="/map">
+              <Link href="/scout">
                 <Button
                   variant="outline"
                   data-testid="button-open-map-featured"

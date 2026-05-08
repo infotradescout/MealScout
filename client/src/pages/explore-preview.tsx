@@ -37,7 +37,7 @@ import type {
 
 /**
  * /scout — The canonical MealScout food discovery page.
- * Also accessible at /explore-preview (backward-compat alias).
+ * Legacy explore routes redirect here from App.tsx.
  *
  * Goals (from Thomas):
  *  1. Live interactive Google Map REPLACES the food-park hero photo.
@@ -450,41 +450,9 @@ function shiftCenterForRightQuadrant(
    PAGE
    ============================================================ */
 
-// ============================================================
-// ACCESS GATE (TEMPORARY)
-// /explore-preview is hidden behind an email allow-list so we can
-// validate against real backend data without exposing it to anyone
-// else. To roll out publicly, remove this gate and rename the route.
-// ============================================================
-const EXPLORE_PREVIEW_ALLOWED_EMAILS = ["info.mealscout@gmail.com"];
-
 export default function ExplorePreview() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [, navigate] = useWouterLocation();
-
-  // ---- account gate ----
-  const userEmail = (user?.email || "").trim().toLowerCase();
-  const isAllowed = EXPLORE_PREVIEW_ALLOWED_EMAILS.includes(userEmail);
-
-  useEffect(() => {
-    if (authLoading) return; // wait until auth resolves
-    if (!isAllowed) {
-      navigate("/explore");
-    }
-    // we deliberately depend only on the resolved auth state and the
-    // computed allow flag so the redirect fires once per gate change
-  }, [authLoading, isAllowed, navigate]);
-
-  // While auth is resolving, render a quiet dark splash so non-allowed
-  // visitors never see a flash of the preview UI before the redirect.
-  if (authLoading || !isAllowed) {
-    return (
-      <div
-        className="min-h-[100dvh] w-full bg-[#0a0c10]"
-        aria-hidden="true"
-      />
-    );
-  }
 
   const firstName =
     typeof user?.name === "string" && user.name.trim().length > 0

@@ -65,7 +65,7 @@ export default function Sitemap() {
       pages: [
         { title: "Home", href: "/", description: "Discover local food deals near you" },
         { title: "Search Deals", href: "/search", description: "Search by city, cuisine, or restaurant" },
-        { title: "Map View", href: "/map", description: "Interactive live food and deal map" },
+        { title: "Scout", href: "/scout", description: "Local food dashboard and embedded discovery map" },
         { title: "Featured Deals", href: "/deals/featured", description: "Active local and limited-time offers" },
         { title: "Delivery App Alternatives", href: "/delivery-app-alternatives", description: "Compare MealScout with legacy delivery apps" },
         { title: "Online Ordering Platforms", href: "/online-ordering-platforms", description: "Local-first online ordering and discovery" },

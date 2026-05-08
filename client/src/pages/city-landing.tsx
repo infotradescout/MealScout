@@ -723,7 +723,7 @@ export default function CityLanding() {
                 </CardContent>
               </Card>
             </Link>
-            <Link href="/map">
+            <Link href="/scout">
               <Card className="border-[color:var(--border-subtle)] bg-[var(--bg-surface)] hover:shadow-clean-lg transition-shadow">
                 <CardContent className="p-4">
                   <div className="font-medium text-foreground">

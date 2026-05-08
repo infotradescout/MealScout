@@ -463,7 +463,7 @@ export function registerEventRoutes(
     }
   });
 
-  // Public alias used by the Scout page (/explore-preview)
+  // Public alias used by the Scout page (/scout)
   app.get("/api/events/public", async (req: any, res) => {
     try {
       const upcomingEvents = await storage.getAllUpcomingEvents();

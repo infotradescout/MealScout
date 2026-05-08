@@ -307,7 +307,7 @@ export default function UserDashboard() {
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Specials Near You</span>
               <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl px-4 py-2 hover:bg-white/10" size="sm" asChild data-testid="button-view-map">
-                <Link href="/map">View Map</Link>
+                <Link href="/scout">Open Scout</Link>
               </Button>
             </div>
             {nearbyLoading ? (

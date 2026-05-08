@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   User,
-  MapPin,
   Store,
   Plus,
   BarChart3,
@@ -56,6 +55,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const [showLocalNav, setShowLocalNav] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [location] = useLocation();
+  const currentPath = location.split("?")[0];
   const { user } = useAuth();
   const { toast } = useToast();
   const [isReporting, setIsReporting] = useState(false);
@@ -181,6 +181,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
+  if (isGlobalScope && !user && currentPath === "/") return null;
   if (isWheelPage || isDocFullscreen) return null;
 
   if (!isGlobalScope && !showLocalNav) return null;
@@ -218,7 +219,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       : { path: "/restaurant-owner-dashboard", icon: Store, label: "Business" }
     : isHost
     ? { path: "/events", icon: Calendar, label: "Events" }
-    : { path: "/map", icon: MapPin, label: "Map" };
+    : { path: "/favorites", icon: Bookmark, label: "Saved" };
 
   // ── MORE sheet items (everything not in the 5-item bar) ──────────────────
   const buildMoreItems = (): NavItem[] => {
@@ -227,7 +228,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     if (!user) {
       items.push(
         { path: "/", icon: Home, label: "Home" },
-        { path: "/map", icon: MapPin, label: "Map" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/login", icon: User, label: "Log In" },
@@ -235,7 +236,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isAdmin || isStaff) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/events", icon: Calendar, label: "Events" },
@@ -251,7 +251,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isEventCoordinator) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/event-coordinator/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -260,7 +259,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isSupplier) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/supplier/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -269,7 +267,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/parking-pass", icon: ParkingSquare, label: "Parking" },
@@ -284,7 +281,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else if (isHost) {
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/host/dashboard", icon: Users, label: "Host" },
@@ -295,7 +291,6 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       // Regular customer
       items.push(
         { path: "/scout", icon: Compass, label: "Scout" },
-        { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/alerts", icon: Bell, label: "Alerts" },
@@ -318,7 +313,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`);
   const isScoutExperience =
-    isActive("/scout") || isActive("/explore-preview");
+    isActive("/scout");
 
   // ── DESKTOP quick-action bar ─────────────────────────────────────────────
   // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
@@ -327,8 +322,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
   const scoutExperienceItems: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
-    { path: "/map", icon: MapPin, label: "Map" },
     { path: "/favorites", icon: Heart, label: "Saved" },
+    { path: "/deals/featured", icon: Receipt, label: "Deals" },
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
@@ -344,10 +339,10 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     ? scoutExperienceItems
     : defaultDesktopItems;
   const mobileSecondItem: NavItem = isScoutExperience || dashboardIsScout
-    ? { path: "/map", icon: MapPin, label: "Map" }
+    ? { path: "/favorites", icon: Heart, label: "Saved" }
     : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
   const mobileThirdItem: NavItem = isScoutExperience || dashboardIsScout
-    ? { path: "/favorites", icon: Heart, label: "Saved" }
+    ? { path: "/deals/featured", icon: Receipt, label: "Deals" }
     : userSpecificItem;
   const showMobileThirdItem =
     Boolean(mobileThirdItem.path) &&
@@ -399,7 +394,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             <Link
               href="/scout"
               aria-label="Scout"
-              aria-current={isActive("/scout") || isActive("/explore-preview") ? "page" : undefined}
+              aria-current={isActive("/scout") ? "page" : undefined}
               className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
             >
               <span

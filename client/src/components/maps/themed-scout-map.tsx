@@ -1,7 +1,7 @@
 /**
  * ThemedScoutMap
  * --------------
- * Custom atmospheric "scout view" for the MealScout /explore-preview hero.
+ * Custom atmospheric "scout view" for the embedded MealScout /scout map.
  *
  * - NOT a raw Google Maps widget. Uses MapLibre GL JS with a custom dark
  *   style + free Carto dark-matter raster tiles, then layers MealScout's

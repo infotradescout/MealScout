@@ -634,7 +634,7 @@ export default function SearchPage() {
   });
   const searchExploreLinks = [
     {
-      href: "/map",
+      href: "/scout",
       title: "Live Food Truck Map",
       description:
         "Open the interactive map to see trucks, events, and nearby deals.",
@@ -798,7 +798,7 @@ export default function SearchPage() {
               <MapPin className="w-4 h-4 mr-1" />
               Use location
             </Button>
-            <Link href="/map">
+            <Link href="/scout">
               <Button
                 variant="outline"
                 size="sm"
@@ -811,7 +811,7 @@ export default function SearchPage() {
                 }}
               >
                 <MapPin className="w-4 h-4 mr-1" />
-                Open map
+                Open Scout
               </Button>
             </Link>
           </div>
@@ -1212,7 +1212,7 @@ export default function SearchPage() {
                 View featured deals
               </Button>
             </Link>
-            <Link href="/map">
+            <Link href="/scout">
               <Button
                 variant="outline"
                 className="mt-2 ml-2"
@@ -1223,7 +1223,7 @@ export default function SearchPage() {
                   });
                 }}
               >
-                Open map
+                Open Scout
               </Button>
             </Link>
           </div>
@@ -1299,7 +1299,7 @@ export default function SearchPage() {
               >
                 Use location
               </Button>
-              <Link href="/map">
+              <Link href="/scout">
                 <Button
                   size="sm"
                   variant="outline"
@@ -1311,7 +1311,7 @@ export default function SearchPage() {
                     });
                   }}
                 >
-                  Open map
+                  Open Scout
                 </Button>
               </Link>
             </div>

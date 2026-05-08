@@ -483,11 +483,11 @@ export default function RestaurantOwnerDashboard() {
   );
   const liveShareUrl = selectedRestaurant
     ? `/restaurant/${selectedRestaurant}?live=1`
-    : "/map";
+    : "/scout";
   const liveShareTitle = currentRestaurant?.name
     ? `${currentRestaurant.name} is live on MealScout`
     : "We are live on MealScout";
-  const liveShareDescription = "Find us live right now on the MealScout map.";
+  const liveShareDescription = "Find us live right now on the MealScout local dashboard.";
 
   // GPS fallback function using IP geolocation
   const tryFallbackLocation = async (): Promise<{
