@@ -107,6 +107,21 @@ interface EventSummary {
 
 type EventsResponse = { events?: EventSummary[] } | EventSummary[] | null;
 
+interface RestaurantSummary {
+  id: string;
+  businessName?: string | null;
+  name?: string | null;
+  cuisineType?: string | null;
+  logoUrl?: string | null;
+  heroImageUrl?: string | null;
+  imageUrl?: string | null;
+  city?: string | null;
+  neighborhood?: string | null;
+  activeDealsCount?: number;
+  distanceMiles?: number | null;
+  distance?: number | null;
+}
+
 type CravingCategory = {
   id: string;
   label: string;
@@ -343,6 +358,31 @@ export default function ExplorePreview() {
     if (Array.isArray(eventsData.events)) return eventsData.events;
     return [];
   }, [eventsData]);
+
+  /* --------- nearby restaurants --------- */
+
+  const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } = useQuery<RestaurantSummary[]>({
+    queryKey: coords
+      ? ["/api/restaurants/subscribed", coords.lat, coords.lng]
+      : ["/api/restaurants/subscribed", "no-location"],
+    enabled: !!coords,
+    queryFn: async () => {
+      if (!coords) return [];
+      const response = await fetch(
+        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=25`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 120_000,
+  });
+
+  const nearbyRestaurants = useMemo<RestaurantSummary[]>(() => {
+    if (!nearbyRestaurantsData) return [];
+    if (Array.isArray(nearbyRestaurantsData)) return nearbyRestaurantsData;
+    return [];
+  }, [nearbyRestaurantsData]);
 
   /* --------- markers for the hero map --------- */
 
@@ -738,6 +778,46 @@ export default function ExplorePreview() {
               </ul>
             </section>
 
+            {/* NEARBY RESTAURANTS */}
+            <section className="pl-5 pr-0 pt-2 pb-10">
+              <SectionHeader title="Nearby Restaurants" linkHref="/find-food" />
+              {nearbyRestaurants.length > 0 ? (
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
+                    {nearbyRestaurants.slice(0, 10).map((r) => (
+                      <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <NearbyRestaurantCard restaurant={r} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : nearbyRestaurantsLoading ? (
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list">
+                    {[0, 1, 2].map((i) => (
+                      <li key={i} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
+                          <div className="aspect-[4/3] w-full animate-pulse bg-white/5" />
+                          <div className="p-3 space-y-2">
+                            <div className="h-3 w-3/4 rounded bg-white/10 animate-pulse" />
+                            <div className="h-2.5 w-1/2 rounded bg-white/8 animate-pulse" />
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <DiscoveryEmptyRow
+                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
+                  title="No restaurants in your area yet."
+                  body="As more restaurants join MealScout, they’ll show up here."
+                  onCta={() => navigate("/find-food")}
+                  ctaLabel="Browse all"
+                />
+              )}
+            </section>
+
             {/* DEALS NEAR YOU (restored) */}
             <section className="pl-5 pr-0 pt-2 pb-10">
               <SectionHeader title="Deals Near You" linkHref="/deals" />
@@ -1004,51 +1084,37 @@ function CSSMapHero({
             ))}
           </div>
 
-          {/* SVG filter layer — isolates the bright road pixels from the dark
-              tile background, then blurs only those bright pixels outward to
-              create a neon glow that traces the actual street lines.
-              mix-blend-mode:screen means it only brightens, never darkens. */}
-          <svg
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <defs>
-              <filter id="street-glow" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
-                {/* Step 1: boost contrast so roads (bright) pop and land (dark) goes black */}
-                <feComponentTransfer result="boosted">
-                  <feFuncR type="linear" slope="3" intercept="-0.8" />
-                  <feFuncG type="linear" slope="3" intercept="-0.8" />
-                  <feFuncB type="linear" slope="3" intercept="-0.8" />
-                </feComponentTransfer>
-                {/* Step 2: tint to orange-amber (#f97316) — shift R up, G mid, B to zero */}
-                <feColorMatrix type="matrix" result="tinted"
-                  values="1.2 0   0   0   0.05
-                          0.4 0.5 0   0   0
-                          0   0   0   0   0
-                          0   0   0   1   0" />
-                {/* Step 3: blur to spread the glow outward along road lines */}
-                <feGaussianBlur stdDeviation="3.5" result="glow" />
-                {/* Step 4: composite glow over original boosted image */}
-                <feBlend in="glow" in2="boosted" mode="screen" result="combined" />
-                {/* Step 5: merge back with a soft opacity */}
-                <feComposite in="combined" in2="SourceGraphic" operator="over" />
-              </filter>
-            </defs>
-            <image
-              href={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${centerTileX}/${centerTileY}@2x.png`}
-              x="256" y="256" width="256" height="256"
-              style={{ filter: "url(#street-glow)", mixBlendMode: "screen", opacity: 0.85 }}
-            />
-          </svg>
-          {/* Radial warmth from user pin — orange-amber, not pure amber */}
+          {/* Neon street glow: a blurred copy of the tile grid, tinted orange,
+              composited with screen blend. Screen blend only brightens bright
+              pixels (roads) — dark land stays dark. The blur spreads the glow
+              outward from the road lines without flooding the whole map. */}
           <div
             style={{
               position: "absolute",
-              inset: 0,
-              background: `radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(249,115,22,0.28) 0%, rgba(245,158,11,0.06) 18%, transparent 40%)`,
+              inset: -12,          // slightly oversized so blur doesn’t clip at edges
+              display: "grid",
+              gridTemplateColumns: "256px 256px 256px",
+              gridTemplateRows: "256px 256px 256px",
+              // sepia(1) + hue-rotate pushes the tile colors toward orange
+              // blur spreads the bright road pixels outward as a glow halo
+              // contrast boosts so only bright roads glow, not the dark land
+              filter: "brightness(2.5) contrast(4) sepia(1) hue-rotate(-10deg) blur(5px)",
               mixBlendMode: "screen",
+              opacity: 0.55,
+              pointerEvents: "none",
             }}
-          />
+          >
+            {tiles.map(({ tx, ty }) => (
+              <img
+                key={`glow-${tx}-${ty}`}
+                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
+                width={256}
+                height={256}
+                alt=""
+                style={{ display: "block" }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1252,20 +1318,22 @@ function LiveNowEmptyCard({
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
       aria-label={`${title} Open the map.`}
     >
-      <div className="flex items-center gap-4 px-4 py-4">
-        <span
-          className="h-10 w-10 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0"
-          aria-hidden="true"
-        >
-          <MapPin className="h-5 w-5 text-amber-300" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-white text-sm leading-snug">{title}</p>
-          <p className="mt-0.5 text-xs text-white/60 leading-snug">{body}</p>
+      <div className="p-4">
+        <div className="flex items-start gap-3 mb-3">
+          <span
+            className="h-9 w-9 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0 mt-0.5"
+            aria-hidden="true"
+          >
+            <MapPin className="h-4 w-4 text-amber-300" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-white text-sm leading-snug">{title}</p>
+            <p className="mt-1 text-xs text-white/60 leading-relaxed">{body}</p>
+          </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-amber-200 text-xs font-semibold shrink-0">
+        <span className="inline-flex items-center gap-1.5 text-amber-300 text-xs font-semibold">
           <NavigationIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          Expand
+          Open the map
         </span>
       </div>
     </button>
@@ -1512,5 +1580,78 @@ function DiscoveryEmptyRow({
         </div>
       </div>
     </div>
+  );
+}
+
+function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) {
+  const name = restaurant.businessName || restaurant.name || "Restaurant";
+  const img = restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
+  const cuisine = restaurant.cuisineType;
+  const location = restaurant.neighborhood || restaurant.city;
+  const dealCount = restaurant.activeDealsCount ?? 0;
+  const dist = restaurant.distanceMiles ?? (restaurant.distance ? restaurant.distance * 0.621371 : null);
+  const distLabel = typeof dist === "number" && Number.isFinite(dist)
+    ? `${dist.toFixed(dist < 10 ? 1 : 0)} mi`
+    : null;
+
+  return (
+    <Link
+      href={`/restaurant/${restaurant.id}`}
+      className="block rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 bg-black/40 ring-1 ring-white/10"
+      aria-label={`Open ${name}`}
+      style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
+    >
+      {/* Image */}
+      <div className="relative aspect-[4/3] w-full bg-black/60">
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: "linear-gradient(160deg, rgba(245,158,11,0.18), rgba(0,0,0,0.6))",
+            }}
+            aria-hidden="true"
+          />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
+          aria-hidden="true"
+        />
+        {dealCount > 0 && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow">
+            <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+            {dealCount} deal{dealCount > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      {/* Info */}
+      <div className="px-3 py-2.5">
+        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
+        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+          {cuisine && (
+            <span className="text-amber-300/80 text-[11px]">{cuisine}</span>
+          )}
+          {cuisine && (location || distLabel) && (
+            <span className="text-white/30 text-[11px]">·</span>
+          )}
+          {location && (
+            <span className="text-white/60 text-[11px] truncate">{location}</span>
+          )}
+          {distLabel && (
+            <>
+              <span className="text-white/30 text-[11px]">·</span>
+              <span className="text-white/50 text-[11px]">{distLabel}</span>
+            </>
+          )}
+        </div>
+      </div>
+    </Link>
   );
 }
