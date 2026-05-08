@@ -384,6 +384,91 @@ export default function ExplorePreview() {
     return [];
   }, [nearbyRestaurantsData]);
 
+  /* --------- parking pass hosts --------- */
+
+  interface ParkingPassListing {
+    id: string;
+    hostId?: string | null;
+    hostName?: string | null;
+    businessName?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    imageUrl?: string | null;
+    heroImageUrl?: string | null;
+    spotCount?: number | null;
+    availableSpots?: number | null;
+    paymentsEnabled?: boolean | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    host?: {
+      businessName?: string | null;
+      city?: string | null;
+      state?: string | null;
+      imageUrl?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    } | null;
+  }
+
+  const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
+    queryKey: ["/api/parking-pass"],
+    queryFn: async () => {
+      const response = await fetch("/api/parking-pass", { credentials: "include" });
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data.listings)) return data.listings;
+      if (Array.isArray(data.passes)) return data.passes;
+      return [];
+    },
+    staleTime: 120_000,
+  });
+
+  const parkingPassHosts = useMemo<ParkingPassListing[]>(() => {
+    if (!parkingPassData) return [];
+    if (Array.isArray(parkingPassData)) return parkingPassData;
+    return [];
+  }, [parkingPassData]);
+
+  /* --------- nearby deals (location-aware) --------- */
+
+  const { data: nearbyDealsData } = useQuery<DealSummary[]>({
+    queryKey: coords
+      ? ["/api/deals/nearby", coords.lat, coords.lng]
+      : ["/api/deals/nearby", "no-location"],
+    enabled: !!coords,
+    queryFn: async () => {
+      if (!coords) return [];
+      const response = await fetch(
+        `/api/deals/nearby/${coords.lat}/${coords.lng}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data.deals)) return data.deals;
+      return [];
+    },
+    staleTime: 60_000,
+  });
+
+  const nearbyDeals = useMemo<DealSummary[]>(() => {
+    if (!nearbyDealsData) return [];
+    if (Array.isArray(nearbyDealsData)) return nearbyDealsData;
+    return [];
+  }, [nearbyDealsData]);
+
+  // Merge nearby + featured deals, deduplicate by id, prefer nearby
+  const allDeals = useMemo<DealSummary[]>(() => {
+    const seen = new Set<string>();
+    const merged: DealSummary[] = [];
+    for (const d of [...nearbyDeals, ...deals]) {
+      if (!seen.has(d.id)) { seen.add(d.id); merged.push(d); }
+    }
+    return merged;
+  }, [nearbyDeals, deals]);
+
   /* --------- markers for the hero map --------- */
 
   const truckMarkers = useMemo<MapAdapterMarker[]>(() => {
@@ -700,48 +785,61 @@ export default function ExplorePreview() {
               onExpandMap={() => setSheetState("fullMap")}
             />
 
-            {/* EXPLORE BY CRAVING (second per Thomas) */}
+            {/* ── EXPLORE BY CRAVING ── */}
             <section className="px-5 pt-2 pb-10">
               <SectionHeader title="Explore by Craving" linkHref="/find-food" />
-              <ul
-                className="flex items-start justify-between gap-2 pb-2"
-                role="list"
-              >
+              <ul className="flex items-start justify-between gap-2 pb-2" role="list">
                 {CRAVING_CATEGORIES.map((cat) => (
                   <li key={cat.id} className="shrink-0">
                     <button
                       type="button"
                       onClick={() => goToCraving(cat)}
                       aria-label={`Explore ${cat.label}`}
-                      className="group flex flex-col items-center gap-2 w-[58px] sm:w-[68px] md:w-[88px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl active:scale-[0.97] transition-transform"
+                      className="group flex flex-col items-center gap-2 w-[52px] sm:w-[64px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl active:scale-[0.97] transition-transform"
                     >
                       <span
-                        className="h-[58px] w-[58px] sm:h-[68px] sm:w-[68px] md:h-[84px] md:w-[84px] rounded-full overflow-hidden ring-2 ring-amber-400 bg-black/60 group-hover:ring-amber-300 transition-all"
-                        style={{
-                          boxShadow:
-                            "0 0 0 3px rgba(245,158,11,0.16), 0 0 22px rgba(245,158,11,0.55)",
-                        }}
+                        className="h-[52px] w-[52px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden ring-2 ring-amber-400/70 bg-black/60 group-hover:ring-amber-300 transition-all"
+                        style={{ boxShadow: "0 0 0 3px rgba(245,158,11,0.14), 0 0 18px rgba(245,158,11,0.45)" }}
                       >
-                        <img
-                          src={cat.image}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
+                        <img src={cat.image} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </span>
-                      <span className="text-white text-[12px] sm:text-sm font-semibold">
-                        {cat.label}
-                      </span>
+                      <span className="text-white text-[11px] sm:text-xs font-semibold">{cat.label}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             </section>
 
-            {/* NEARBY RESTAURANTS */}
+            {/* ── FOOD TRUCKS NEAR YOU ── */}
             <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Nearby Restaurants" linkHref="/find-food" />
-              {nearbyRestaurants.length > 0 ? (
+              <SectionHeader title="Food Trucks Near You" linkHref="/trucks" />
+              {liveTrucksLoading && liveTrucks.length === 0 ? (
+                <HorizontalSkeletonRow count={3} width={200} />
+              ) : liveTrucks.length > 0 ? (
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
+                    {liveTrucks.slice(0, 12).map((t) => (
+                      <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <TruckCard truck={t} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <DiscoveryEmptyRow
+                  icon={<Flame className="h-5 w-5 text-amber-300" aria-hidden="true" />}
+                  title="No trucks broadcasting right now."
+                  body="Trucks pop up throughout the day — check back later or scout the map."
+                />
+              )}
+            </section>
+
+            {/* ── NEARBY RESTAURANTS ── */}
+            <section className="pl-5 pr-0 pt-2 pb-10">
+              <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
+              {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
+                <HorizontalSkeletonRow count={3} width={200} />
+              ) : nearbyRestaurants.length > 0 ? (
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
                     {nearbyRestaurants.slice(0, 10).map((r) => (
@@ -751,18 +849,26 @@ export default function ExplorePreview() {
                     ))}
                   </ul>
                 </div>
-              ) : nearbyRestaurantsLoading ? (
+              ) : (
+                <DiscoveryEmptyRow
+                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
+                  title="No restaurants in your area yet."
+                  body="As more restaurants join MealScout, they'll show up here."
+                />
+              )}
+            </section>
+
+            {/* ── PARKING PASS HOSTS ── */}
+            <section className="pl-5 pr-0 pt-2 pb-10">
+              <SectionHeader title="Parking Pass Hosts" linkHref="/parking-pass" />
+              {parkingPassLoading && parkingPassHosts.length === 0 ? (
+                <HorizontalSkeletonRow count={3} width={200} />
+              ) : parkingPassHosts.length > 0 ? (
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list">
-                    {[0, 1, 2].map((i) => (
-                      <li key={i} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
-                          <div className="aspect-[4/3] w-full animate-pulse bg-white/5" />
-                          <div className="p-3 space-y-2">
-                            <div className="h-3 w-3/4 rounded bg-white/10 animate-pulse" />
-                            <div className="h-2.5 w-1/2 rounded bg-white/8 animate-pulse" />
-                          </div>
-                        </div>
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
+                    {parkingPassHosts.slice(0, 8).map((h) => (
+                      <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                        <ParkingPassCard listing={h} />
                       </li>
                     ))}
                   </ul>
@@ -770,21 +876,21 @@ export default function ExplorePreview() {
               ) : (
                 <DiscoveryEmptyRow
                   icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No restaurants in your area yet."
-                  body="As more restaurants join MealScout, they’ll show up here."
-                  onCta={() => navigate("/find-food")}
-                  ctaLabel="Browse all"
+                  title="No parking pass hosts near you yet."
+                  body="Hosts offering truck parking spots will appear here as they go live."
+                  onCta={() => navigate("/parking-pass")}
+                  ctaLabel="Browse all hosts"
                 />
               )}
             </section>
 
-            {/* DEALS NEAR YOU (restored) */}
+            {/* ── DEALS NEAR YOU ── */}
             <section className="pl-5 pr-0 pt-2 pb-10">
               <SectionHeader title="Deals Near You" linkHref="/deals" />
-              {deals.length > 0 ? (
+              {allDeals.length > 0 ? (
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
-                    {deals.slice(0, 8).map((d) => (
+                    {allDeals.slice(0, 10).map((d) => (
                       <li key={d.id} className="shrink-0 w-[230px] sm:w-[260px]">
                         <DealCard deal={d} />
                       </li>
@@ -794,7 +900,7 @@ export default function ExplorePreview() {
               ) : (
                 <DiscoveryEmptyRow
                   icon={<Tag className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No featured deals right now."
+                  title="No deals near you right now."
                   body="When local restaurants and trucks publish deals, they'll show up here."
                   onCta={() => navigate("/deals")}
                   ctaLabel="Browse all deals"
@@ -802,7 +908,7 @@ export default function ExplorePreview() {
               )}
             </section>
 
-            {/* HAPPENING TONIGHT (restored from /events) */}
+            {/* ── HAPPENING TONIGHT ── */}
             <section className="pl-5 pr-0 pt-2 pb-10">
               <SectionHeader title="Happening Tonight" linkHref="/events" />
               {events.length > 0 ? (
@@ -826,28 +932,23 @@ export default function ExplorePreview() {
               )}
             </section>
 
-            {/* SAVED & FAVORITES (restored shortcut) */}
+            {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
               <SectionHeader title="Your Saved" linkHref="/favorites" />
               <button
                 type="button"
                 onClick={() => navigate("/favorites")}
-                className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors"
+                className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
               >
                 <div className="flex items-center gap-4">
-                  <span
-                    className="h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0"
-                    aria-hidden="true"
-                  >
+                  <span className="h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
                     <Bookmark className="h-5 w-5 text-amber-300" />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold">Open your saved spots</p>
-                    <p className="text-white/70 text-sm mt-0.5">
-                      Quickly pull up the trucks, restaurants, and deals you've saved.
-                    </p>
+                    <p className="text-white font-semibold">Your saved spots</p>
+                    <p className="text-white/60 text-sm mt-0.5">Trucks, restaurants, and deals you've saved.</p>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-white/60" aria-hidden="true" />
+                  <ChevronRight className="h-5 w-5 text-white/50" aria-hidden="true" />
                 </div>
               </button>
             </section>
@@ -1732,5 +1833,201 @@ function LiveNowSection({
         </div>
       )}
     </section>
+  );
+}
+
+/* ============================================================
+   TRUCK CARD
+   Shows a live food truck in the Food Trucks Near You section.
+   ============================================================ */
+
+function TruckCard({ truck }: { truck: LiveTruckSummary }) {
+  const name = truck.name || "Food Truck";
+  const cuisine = truck.cuisineType ?? null;
+  const img = truck.heroImageUrl ?? truck.imageUrl ?? truck.logoUrl ?? null;
+
+  const distMiles = truck.distanceMiles;
+  const distKm = truck.distance;
+  let distLabel: string | null = null;
+  if (typeof distMiles === "number" && Number.isFinite(distMiles)) {
+    distLabel = `${distMiles.toFixed(distMiles < 10 ? 1 : 0)} mi`;
+  } else if (typeof distKm === "number" && Number.isFinite(distKm)) {
+    const m = distKm * 0.621371;
+    distLabel = `${m.toFixed(m < 10 ? 1 : 0)} mi`;
+  }
+
+  const wait = truck.waitMinutes ?? truck.estimatedWaitMinutes;
+  const waitLabel =
+    typeof wait === "number" && Number.isFinite(wait) && wait > 0
+      ? `~${Math.round(wait)} min`
+      : null;
+
+  return (
+    <Link
+      href={`/trucks/${truck.id}`}
+      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+    >
+      {/* Hero image */}
+      <div className="relative aspect-[4/3] w-full bg-black/40 overflow-hidden">
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <Flame className="h-8 w-8 text-amber-400/40" aria-hidden="true" />
+          </div>
+        )}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
+          aria-hidden="true"
+        />
+        {/* Live badge */}
+        <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-red-500/90 shadow">
+          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" aria-hidden="true" />
+          Live
+        </span>
+        {truck.activeDealCount && truck.activeDealCount > 0 ? (
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow">
+            <Tag className="h-2.5 w-2.5" aria-hidden="true" />
+            Deal
+          </span>
+        ) : null}
+      </div>
+      {/* Info */}
+      <div className="px-3 py-2.5">
+        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
+        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+          {cuisine && <span className="text-amber-300/80 text-[11px]">{cuisine}</span>}
+          {cuisine && (distLabel || waitLabel) && <span className="text-white/30 text-[11px]">·</span>}
+          {distLabel && <span className="text-white/60 text-[11px]">{distLabel}</span>}
+          {distLabel && waitLabel && <span className="text-white/30 text-[11px]">·</span>}
+          {waitLabel && <span className="text-white/50 text-[11px]">{waitLabel} wait</span>}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* ============================================================
+   PARKING PASS CARD
+   Shows a parking pass host in the Parking Pass Hosts section.
+   ============================================================ */
+
+function ParkingPassCard({ listing }: { listing: {
+  id: string;
+  hostId?: string | null;
+  businessName?: string | null;
+  hostName?: string | null;
+  city?: string | null;
+  state?: string | null;
+  imageUrl?: string | null;
+  heroImageUrl?: string | null;
+  spotCount?: number | null;
+  availableSpots?: number | null;
+  host?: {
+    businessName?: string | null;
+    city?: string | null;
+    state?: string | null;
+    imageUrl?: string | null;
+  } | null;
+} }) {
+  const name =
+    listing.host?.businessName ??
+    listing.businessName ??
+    listing.hostName ??
+    "Parking Host";
+  const city = listing.host?.city ?? listing.city ?? null;
+  const state = listing.host?.state ?? listing.state ?? null;
+  const locationLabel = [city, state].filter(Boolean).join(", ") || null;
+  const img =
+    listing.heroImageUrl ??
+    listing.imageUrl ??
+    listing.host?.imageUrl ??
+    null;
+  const spots = listing.spotCount ?? null;
+  const available = listing.availableSpots ?? null;
+
+  return (
+    <Link
+      href={`/parking-pass`}
+      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+    >
+      {/* Hero image */}
+      <div className="relative aspect-[4/3] w-full bg-black/40 overflow-hidden">
+        {img ? (
+          <img
+            src={img}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <MapPin className="h-8 w-8 text-amber-400/40" aria-hidden="true" />
+          </div>
+        )}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
+          aria-hidden="true"
+        />
+        {available !== null && available > 0 && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-emerald-600/90 shadow">
+            {available} spot{available !== 1 ? "s" : ""} open
+          </span>
+        )}
+      </div>
+      {/* Info */}
+      <div className="px-3 py-2.5">
+        <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
+        <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+          {locationLabel && (
+            <span className="text-white/60 text-[11px] truncate">{locationLabel}</span>
+          )}
+          {locationLabel && spots !== null && (
+            <span className="text-white/30 text-[11px]">·</span>
+          )}
+          {spots !== null && (
+            <span className="text-amber-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* ============================================================
+   HORIZONTAL SKELETON ROW
+   Loading placeholder for any horizontal scroll section.
+   ============================================================ */
+
+function HorizontalSkeletonRow({
+  count = 3,
+  width = 200,
+}: {
+  count?: number;
+  width?: number;
+}) {
+  return (
+    <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+      <ul className="flex gap-4 pr-5" role="list" aria-label="Loading…">
+        {Array.from({ length: count }).map((_, i) => (
+          <li key={i} className="shrink-0" style={{ width }}>
+            <div className="rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10">
+              <div className="aspect-[4/3] w-full animate-pulse bg-white/5" />
+              <div className="p-3 space-y-2">
+                <div className="h-3 w-3/4 rounded bg-white/10 animate-pulse" />
+                <div className="h-2.5 w-1/2 rounded bg-white/8 animate-pulse" />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
