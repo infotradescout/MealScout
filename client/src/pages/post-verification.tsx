@@ -1,0 +1,225 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { ArrowRight, CheckCircle2, MailCheck, MapPin, RefreshCw } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { SEOHead } from "@/components/seo-head";
+
+const REDIRECT_STORAGE_KEY = "mealscout:post-verification-redirect";
+const EMAIL_STORAGE_KEY = "mealscout:lastSignupEmail";
+
+function getSafePath(value: string | null): string | null {
+  const path = (value || "").trim();
+  if (!path) return null;
+  if (!path.startsWith("/")) return null;
+  if (path.startsWith("//")) return null;
+  if (path.includes("://")) return null;
+  return path;
+}
+
+function getStoredValue(key: string): string | null {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function getBestRedirect(params: URLSearchParams): string {
+  const queryRedirect = getSafePath(params.get("redirect"));
+  const storedRedirect = getSafePath(getStoredValue(REDIRECT_STORAGE_KEY));
+
+  return storedRedirect || queryRedirect || "/scout";
+}
+
+function getLoginHref(redirectPath: string) {
+  return `/login?verified=1&redirect=${encodeURIComponent(redirectPath)}`;
+}
+
+export default function PostVerification() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { toast } = useToast();
+  const [isResending, setIsResending] = useState(false);
+
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const redirectPath = useMemo(() => getBestRedirect(params), [params]);
+  const email = getStoredValue(EMAIL_STORAGE_KEY) || "";
+  const mode = params.get("status") || "";
+  const isSetupComplete = params.get("setup") === "complete";
+  const isVerified = params.get("verified") === "1";
+  const needsEmailCheck = mode === "check-email" || isSetupComplete;
+  const loginHref = getLoginHref(redirectPath);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  const clearStoredRedirect = () => {
+    try {
+      window.sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
+    } catch {}
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      toast({
+        title: "Email needed",
+        description: "Use the login page to enter your email and resend the verification link.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResending(true);
+    try {
+      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      toast({
+        title: "Verification sent",
+        description: "If that account still needs verification, a fresh link is on the way.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Could not resend",
+        description: error?.message || "Please try again from the login page.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const headline = isAuthenticated
+    ? "You are ready to continue."
+    : needsEmailCheck
+      ? isSetupComplete
+        ? "Account setup is complete."
+        : "Check your email."
+      : isVerified
+        ? "Email verified."
+        : "Finish your MealScout setup.";
+
+  const body = isAuthenticated
+    ? "Your account is active. Continue to the next step MealScout picked for this account."
+    : needsEmailCheck
+      ? "We sent a verification link to your inbox. Open it on this device, then log in and we will send you to the right place."
+      : isVerified
+        ? "Your email is verified. Log in once and we will take you to the next step for your account."
+        : "Use this page as your checkpoint after signup, email verification, or account setup.";
+
+  const statusLabel = isAuthenticated
+    ? "Signed in"
+    : isVerified
+      ? "Verified"
+      : "Email step";
+
+  return (
+    <div className="min-h-screen overflow-hidden bg-[#07090d] text-white">
+      <SEOHead
+        title="Continue Setup - MealScout"
+        description="Continue your MealScout account setup after email verification."
+        noIndex={true}
+      />
+
+      <div className="fixed inset-0" aria-hidden="true">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(245,158,11,0.24),transparent_34%),radial-gradient(circle_at_80%_0%,rgba(249,115,22,0.16),transparent_28%),linear-gradient(180deg,#080a0f_0%,#050608_100%)]" />
+        <div className="absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black via-black/50 to-transparent" />
+      </div>
+
+      <main className="relative z-10 flex min-h-screen items-center justify-center px-5 py-10">
+        <section className="w-full max-w-lg rounded-[2rem] border border-white/10 bg-white/[0.075] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-8">
+          <div className="mb-8 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400 text-black shadow-[0_0_30px_rgba(251,191,36,0.45)]">
+                {isVerified || isAuthenticated ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : (
+                  <MailCheck className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-200/80">
+                  MealScout
+                </p>
+                <p className="text-sm text-white/55">Account handoff</p>
+              </div>
+            </div>
+            <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-200">
+              {statusLabel}
+            </span>
+          </div>
+
+          <h1 className="mb-4 text-4xl font-black leading-none tracking-tight sm:text-5xl">
+            {headline}
+          </h1>
+          <p className="mb-8 text-base leading-7 text-white/70">{body}</p>
+
+          <div className="mb-8 rounded-2xl border border-white/10 bg-black/30 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+              <MapPin className="h-4 w-4 text-amber-300" />
+              Next stop
+            </div>
+            <p className="text-sm text-white/60">
+              {redirectPath === "/scout"
+                ? "Your local Scout dashboard for food trucks, restaurants, hosts, and deals."
+                : "The setup or dashboard area that matches this account."}
+            </p>
+          </div>
+
+          {isLoading ? (
+            <div className="flex h-14 items-center justify-center rounded-2xl bg-white/10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-300 border-t-transparent" />
+            </div>
+          ) : isAuthenticated ? (
+            <Link
+              href={redirectPath}
+              onClick={clearStoredRedirect}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
+            >
+              Continue
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          ) : needsEmailCheck ? (
+            <div className="space-y-3">
+              <Link
+                href={loginHref}
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
+              >
+                I verified, log in
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={isResending}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 font-bold text-white/80 transition hover:bg-white/15 disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${isResending ? "animate-spin" : ""}`} />
+                {isResending ? "Sending..." : "Resend verification email"}
+              </button>
+            </div>
+          ) : (
+            <Link
+              href={loginHref}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 font-black text-black shadow-[0_12px_40px_rgba(251,191,36,0.28)] transition active:scale-[0.98]"
+            >
+              Log in to continue
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/40">
+            <Link href="/scout" className="hover:text-amber-200">
+              Explore Scout
+            </Link>
+            <span aria-hidden="true">/</span>
+            <Link href="/login" className="hover:text-amber-200">
+              Login help
+            </Link>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

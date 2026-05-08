@@ -1857,17 +1857,21 @@ export async function setupUnifiedAuth(app: Express) {
           case "restaurant_owner":
           case "food_truck":
             return "/restaurant-owner-dashboard";
+          case "supplier":
+            return "/supplier/dashboard";
           case "staff":
             return "/staff";
           case "admin":
           case "super_admin":
             return "/admin/dashboard";
+          case "customer":
+            return "/scout";
           default:
-            return "/";
+            return "/scout";
         }
       })();
 
-      const redirectUrl = `${redirectBase}/login?verified=1&redirect=${encodeURIComponent(
+      const redirectUrl = `${redirectBase}/post-verification?verified=1&redirect=${encodeURIComponent(
         defaultRedirectPath,
       )}`;
       res.redirect(redirectUrl);
