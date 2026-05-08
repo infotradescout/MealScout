@@ -1135,7 +1135,7 @@ function CSSMapHero({
               display: "grid",
               gridTemplateColumns: "256px 256px 256px",
               gridTemplateRows: "256px 256px 256px",
-              filter: "brightness(1.6) contrast(1.1)",
+              filter: "brightness(2.4) contrast(1.3) saturate(0.8)",
             }}
           >
             {tiles.map(({ tx, ty }) => (
@@ -1167,9 +1167,9 @@ function CSSMapHero({
               // sepia(1) + hue-rotate pushes the tile colors toward orange
               // blur spreads the bright road pixels outward as a glow halo
               // contrast boosts so only bright roads glow, not the dark land
-              filter: "brightness(2.5) contrast(4) sepia(1) hue-rotate(-10deg) blur(5px)",
+              filter: "brightness(4) contrast(6) sepia(1) hue-rotate(-15deg) blur(7px)",
               mixBlendMode: "screen",
-              opacity: 0.55,
+              opacity: 0.85,
               pointerEvents: "none",
             }}
           >
@@ -1193,8 +1193,8 @@ function CSSMapHero({
         className="absolute inset-0 pointer-events-none"
         style={{
           background: `
-            linear-gradient(180deg, rgba(5,7,13,0.6) 0%, transparent 22%, transparent 62%, rgba(5,7,13,0.95) 100%),
-            linear-gradient(90deg, rgba(5,7,13,0.5) 0%, transparent 15%, transparent 85%, rgba(5,7,13,0.5) 100%)
+            linear-gradient(180deg, rgba(5,7,13,0.45) 0%, transparent 20%, transparent 65%, rgba(5,7,13,0.92) 100%),
+            linear-gradient(90deg, rgba(5,7,13,0.35) 0%, transparent 12%, transparent 88%, rgba(5,7,13,0.35) 100%)
           `,
         }}
       />
