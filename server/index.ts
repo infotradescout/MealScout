@@ -32,6 +32,7 @@ import { apiMetricsMiddleware, requestIdMiddleware } from "./observability";
 import { videoStories, restaurants, requestLogs } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { registerAcquisitionPrerenderRoutes } from "./seo/acquisitionPrerender";
+import { registerPublicProfilePrerenderRoutes } from "./seo/publicProfilePrerender";
 
 validateEnv();
 
@@ -787,6 +788,7 @@ app.use((req, res, next) => {
   // Crawler-friendly static HTML routes for Facebook/Google compliance
   // MUST be registered before any SPA routing or Vite middleware
   registerAcquisitionPrerenderRoutes(app, canonicalBaseUrl);
+  registerPublicProfilePrerenderRoutes(app, canonicalBaseUrl);
 
   // Crawler-friendly SSR route for video transcripts
   // Serves initial HTML with transcript and VideoObject JSON-LD for /video/:id
@@ -1145,4 +1147,5 @@ app.use((req, res, next) => {
     }
   );
 })();
+
 
