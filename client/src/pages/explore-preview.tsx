@@ -128,6 +128,10 @@ interface RestaurantSummary {
   distanceMiles?: number | null;
   distance?: number | null;
   description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 type CravingCategory = {
@@ -498,6 +502,31 @@ export default function ExplorePreview() {
       .filter((m): m is MapAdapterMarker => m !== null);
   }, [liveTrucks]);
 
+  const restaurantMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return nearbyRestaurants
+      .map((r) => {
+        const lat = r.latitude ?? r.lat;
+        const lng = r.longitude ?? r.lng;
+        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        return {
+          id: `restaurant-${r.id}`,
+          sourceId: String(r.id),
+          kind: "restaurant" as const,
+          lat,
+          lng,
+          title: r.businessName ?? r.name ?? undefined,
+          subtitle: r.cuisineType ?? undefined,
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [nearbyRestaurants]);
+
+  // Combined markers for the full Google Map view
+  const allMapMarkers = useMemo<MapAdapterMarker[]>(
+    () => [...truckMarkers, ...restaurantMarkers],
+    [truckMarkers, restaurantMarkers],
+  );
+
   /* --------- map state --------- */
 
   const HERO_ZOOM = 14;
@@ -527,6 +556,7 @@ export default function ExplorePreview() {
   const handleMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
       if (marker.kind === "truck") navigate(`/truck/${marker.sourceId}`);
+      else if (marker.kind === "restaurant") navigate(`/restaurant/${marker.sourceId}`);
     },
     [navigate],
   );
@@ -632,7 +662,7 @@ export default function ExplorePreview() {
                     apiKey={GOOGLE_MAPS_WEB_API_KEY}
                     center={mapCenter}
                     zoom={mapZoom}
-                    markers={truckMarkers}
+                    markers={allMapMarkers}
                     showRoadTrafficLayer={false}
                     userLocation={coords}
                     isNightTheme={true}

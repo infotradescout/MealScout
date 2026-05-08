@@ -3,6 +3,7 @@ export type MapProvider = "legacy" | "google";
 export type MapMarkerKind =
   | "user"
   | "truck"
+  | "restaurant"
   | "parking"
   | "event"
   | "deal"
