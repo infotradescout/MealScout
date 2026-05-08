@@ -140,6 +140,47 @@ interface RestaurantSummary {
   lng?: number | null;
 }
 
+interface ParkingPassListing {
+  id: string;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  hostId?: string | null;
+  hostName?: string | null;
+  businessName?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  imageUrl?: string | null;
+  heroImageUrl?: string | null;
+  spotImageUrl?: string | null;
+  spotCount?: number | null;
+  maxTrucks?: number | null;
+  bookedSpots?: number | null;
+  availableSpotNumbers?: number[] | null;
+  availableSpots?: number | null;
+  hostPriceCents?: number | null;
+  breakfastPriceCents?: number | null;
+  lunchPriceCents?: number | null;
+  dinnerPriceCents?: number | null;
+  dailyPriceCents?: number | null;
+  weeklyPriceCents?: number | null;
+  monthlyPriceCents?: number | null;
+  paymentsEnabled?: boolean | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  host?: {
+    businessName?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    imageUrl?: string | null;
+    spotImageUrl?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+  } | null;
+}
+
 type CravingCategory = {
   id: string;
   label: string;
@@ -404,31 +445,6 @@ export default function ExplorePreview() {
 
   /* --------- parking pass hosts --------- */
 
-  interface ParkingPassListing {
-    id: string;
-    hostId?: string | null;
-    hostName?: string | null;
-    businessName?: string | null;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    imageUrl?: string | null;
-    heroImageUrl?: string | null;
-    spotCount?: number | null;
-    availableSpots?: number | null;
-    paymentsEnabled?: boolean | null;
-    latitude?: number | null;
-    longitude?: number | null;
-    host?: {
-      businessName?: string | null;
-      city?: string | null;
-      state?: string | null;
-      imageUrl?: string | null;
-      latitude?: number | null;
-      longitude?: number | null;
-    } | null;
-  }
-
   const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
     queryKey: ["/api/parking-pass"],
     queryFn: async () => {
@@ -530,11 +546,24 @@ export default function ExplorePreview() {
   const parkingMarkers = useMemo<MapAdapterMarker[]>(() => {
     return parkingPassHosts
       .map((p) => {
-        // Coordinates may be on the listing directly or nested under host
-        const lat = p.latitude ?? p.host?.latitude;
-        const lng = p.longitude ?? p.host?.longitude;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const parseCoord = (value: number | string | null | undefined) => {
+          if (value === null || value === undefined) return null;
+          const parsed = typeof value === "string" ? Number(value) : value;
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+        // Coordinates may be on the listing directly or nested under host.
+        const lat = parseCoord(p.latitude ?? p.host?.latitude);
+        const lng = parseCoord(p.longitude ?? p.host?.longitude);
+        if (lat === null || lng === null) return null;
         const name = p.businessName ?? p.hostName ?? p.host?.businessName ?? undefined;
+        const capacity = p.spotCount ?? p.maxTrucks ?? null;
+        const openSpots = Array.isArray(p.availableSpotNumbers)
+          ? p.availableSpotNumbers.length
+          : typeof p.availableSpots === "number"
+            ? p.availableSpots
+            : typeof capacity === "number" && typeof p.bookedSpots === "number"
+              ? Math.max(0, capacity - p.bookedSpots)
+              : null;
         return {
           id: `parking-${p.id}`,
           sourceId: String(p.id),
@@ -542,7 +571,10 @@ export default function ExplorePreview() {
           lat,
           lng,
           title: name,
-          subtitle: p.availableSpots != null ? `${p.availableSpots} spots` : undefined,
+          subtitle:
+            typeof openSpots === "number" && openSpots >= 0
+              ? `${openSpots} spot${openSpots === 1 ? "" : "s"} open`
+              : undefined,
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -1949,43 +1981,103 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
    Shows a parking pass host in the Parking Pass Hosts section.
    ============================================================ */
 
-function ParkingPassCard({ listing }: { listing: {
-  id: string;
-  hostId?: string | null;
-  businessName?: string | null;
-  hostName?: string | null;
-  city?: string | null;
-  state?: string | null;
-  imageUrl?: string | null;
-  heroImageUrl?: string | null;
-  spotCount?: number | null;
-  availableSpots?: number | null;
-  host?: {
-    businessName?: string | null;
-    city?: string | null;
-    state?: string | null;
-    imageUrl?: string | null;
-  } | null;
-} }) {
+function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
   const name =
     listing.host?.businessName ??
     listing.businessName ??
     listing.hostName ??
     "Parking Host";
+  const address = listing.host?.address ?? listing.address ?? null;
   const city = listing.host?.city ?? listing.city ?? null;
   const state = listing.host?.state ?? listing.state ?? null;
-  const locationLabel = [city, state].filter(Boolean).join(", ") || null;
+  const cityState = [city, state].filter(Boolean).join(", ");
+  const locationLabel = address
+    ? [address, cityState].filter(Boolean).join(", ")
+    : cityState || null;
   const img =
+    listing.spotImageUrl ??
+    listing.host?.spotImageUrl ??
     listing.heroImageUrl ??
     listing.imageUrl ??
     listing.host?.imageUrl ??
     null;
-  const spots = listing.spotCount ?? null;
-  const available = listing.availableSpots ?? null;
+  const spots = listing.spotCount ?? listing.maxTrucks ?? null;
+  const available = Array.isArray(listing.availableSpotNumbers)
+    ? listing.availableSpotNumbers.length
+    : typeof listing.availableSpots === "number"
+      ? listing.availableSpots
+      : typeof spots === "number" && typeof listing.bookedSpots === "number"
+        ? Math.max(0, spots - listing.bookedSpots)
+        : null;
+  const isFull = typeof available === "number" && available <= 0;
+
+  const toCents = (value: unknown): number | null => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.floor(parsed);
+  };
+
+  const startingCents = [
+    listing.hostPriceCents,
+    listing.breakfastPriceCents,
+    listing.lunchPriceCents,
+    listing.dinnerPriceCents,
+    listing.dailyPriceCents,
+    listing.weeklyPriceCents,
+    listing.monthlyPriceCents,
+  ]
+    .map(toCents)
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => a - b)[0] ?? null;
+  const startingPrice =
+    startingCents !== null ? `$${(startingCents / 100).toFixed(2)}` : null;
+
+  const formatClock = (value?: string | null) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (match) {
+      const hour24 = Number(match[1]);
+      const minute = match[2];
+      if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) return raw;
+      const suffix = hour24 >= 12 ? "PM" : "AM";
+      const hour12 = hour24 % 12 || 12;
+      return `${hour12}:${minute} ${suffix}`;
+    }
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+    return raw;
+  };
+
+  const dateLabel = (() => {
+    const raw = String(listing.date || "").trim();
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  })();
+  const startLabel = formatClock(listing.startTime);
+  const endLabel = formatClock(listing.endTime);
+  const timeLabel =
+    startLabel && endLabel
+      ? `${startLabel} - ${endLabel}`
+      : startLabel || endLabel || null;
+  const scheduleLabel =
+    dateLabel && timeLabel
+      ? `${dateLabel} · ${timeLabel}`
+      : dateLabel || timeLabel || null;
 
   return (
     <Link
-      href={`/parking-pass`}
+      href={listing.id ? `/parking-pass?pass=${encodeURIComponent(String(listing.id))}` : "/parking-pass"}
       className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
     >
       {/* Hero image */}
@@ -1998,8 +2090,18 @@ function ParkingPassCard({ listing }: { listing: {
             loading="lazy"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center">
-            <MapPin className="h-8 w-8 text-amber-400/40" aria-hidden="true" />
+          <div className="h-full w-full relative">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "linear-gradient(150deg, rgba(245,158,11,0.24), rgba(2,6,23,0.92))",
+              }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <MapPin className="h-8 w-8 text-amber-300/70" aria-hidden="true" />
+            </div>
           </div>
         )}
         <div
@@ -2007,9 +2109,16 @@ function ParkingPassCard({ listing }: { listing: {
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
           aria-hidden="true"
         />
-        {available !== null && available > 0 && (
+        {available !== null && (
           <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-emerald-600/90 shadow">
-            {available} spot{available !== 1 ? "s" : ""} open
+            {isFull
+              ? "Full"
+              : `${available} spot${available !== 1 ? "s" : ""} open`}
+          </span>
+        )}
+        {startingPrice && (
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-black bg-amber-300 shadow">
+            From {startingPrice}
           </span>
         )}
       </div>
@@ -2027,6 +2136,9 @@ function ParkingPassCard({ listing }: { listing: {
             <span className="text-amber-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
           )}
         </div>
+        {scheduleLabel && (
+          <p className="mt-1 text-white/55 text-[11px] truncate">{scheduleLabel}</p>
+        )}
       </div>
     </Link>
   );
