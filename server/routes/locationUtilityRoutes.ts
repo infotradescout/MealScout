@@ -101,7 +101,7 @@ export function registerLocationUtilityRoutes(
         longitude,
         radius,
       );
-      const restaurants = (
+      const subscribedRestaurants = (
         await Promise.all(
           nearbyRestaurants.map(async (restaurant) => {
             const ownerId = String((restaurant as any)?.ownerId || "").trim();
@@ -111,6 +111,15 @@ export function registerLocationUtilityRoutes(
           }),
         )
       ).filter(Boolean) as any[];
+
+      const restaurants =
+        subscribedRestaurants.length > 0 || nearbyRestaurants.length === 0
+          ? subscribedRestaurants
+          : nearbyRestaurants;
+
+      if (subscribedRestaurants.length === 0 && nearbyRestaurants.length > 0) {
+        res.setHeader("X-MealScout-Fallback", "unfiltered-restaurants");
+      }
 
       const restaurantIds = restaurants.map((restaurant) => restaurant.id);
       const dealCounts: Record<string, number> = {};
