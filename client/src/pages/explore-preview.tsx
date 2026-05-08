@@ -517,12 +517,7 @@ export default function ExplorePreview() {
                 />
               )
             ) : (
-              <ThemedScoutMap
-                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
-                markers={truckMarkers}
-                onMarkerTap={handleMarkerTap}
-                zoom={HERO_ZOOM}
-              />
+              <CSSMapHero markers={truckMarkers} hasLocation={!!coords} />
             )}
           </div>
 
@@ -841,6 +836,127 @@ function SectionHeader({
       >
         See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
       </Link>
+    </div>
+  );
+}
+
+/* ============================================================
+   CSS MAP HERO — dark satellite photo + amber pins (no SDK needed)
+   Matches the welcome screen reference design.
+   ============================================================ */
+
+// Fixed pin positions that look like a real neighborhood scatter.
+// These are visual only — they don't correspond to real coordinates.
+const STATIC_PINS = [
+  { left: "62%", top: "28%", delay: "0s",   size: "lg" },
+  { left: "74%", top: "52%", delay: "0.4s", size: "sm" },
+  { left: "55%", top: "60%", delay: "0.8s", size: "sm" },
+  { left: "80%", top: "35%", delay: "1.2s", size: "sm" },
+  { left: "68%", top: "72%", delay: "1.6s", size: "sm" },
+] as const;
+
+function CSSMapHero({
+  markers,
+  hasLocation,
+}: {
+  markers: MapAdapterMarker[];
+  hasLocation: boolean;
+}) {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Dark satellite/street map base — same technique as welcome screen */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-cover bg-center"
+        style={{
+          backgroundImage:
+            "url('https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2070&auto=format&fit=crop')",
+          filter: "grayscale(1) contrast(1.2) brightness(0.35)",
+        }}
+      />
+      {/* Amber tint overlay so the map reads warm, not cold */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(8,10,15,0) 60%), linear-gradient(180deg, rgba(8,10,15,0.30) 0%, rgba(8,10,15,0) 40%, rgba(8,10,15,0) 65%, rgba(10,12,16,0.90) 100%)",
+        }}
+      />
+
+      {/* Inline keyframes for pin pulse */}
+      <style>{`
+        @keyframes cssmap-pin-pulse {
+          0%   { transform: scale(0.7); opacity: 0.7; }
+          70%  { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @keyframes cssmap-user-pulse {
+          0%   { transform: scale(0.8); opacity: 0.8; }
+          70%  { transform: scale(2.6); opacity: 0; }
+          100% { transform: scale(2.6); opacity: 0; }
+        }
+      `}</style>
+
+      {/* Truck pins — static positions that look like a real scatter */}
+      <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
+        {STATIC_PINS.map((pin, i) => (
+          <div
+            key={i}
+            className="absolute"
+            style={{ left: pin.left, top: pin.top, transform: "translate(-50%, -50%)" }}
+          >
+            <div className="relative" style={{ width: pin.size === "lg" ? 20 : 14, height: pin.size === "lg" ? 20 : 14 }}>
+              {/* Pulse ring */}
+              <span
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "rgba(245,158,11,0.35)",
+                  animation: `cssmap-pin-pulse 2.8s ease-out ${pin.delay} infinite`,
+                }}
+              />
+              {/* Core dot */}
+              <span
+                className="absolute rounded-full bg-amber-400"
+                style={{
+                  inset: pin.size === "lg" ? 4 : 3,
+                  boxShadow: "0 0 10px 2px rgba(245,158,11,0.65)",
+                }}
+              />
+            </div>
+          </div>
+        ))}
+
+        {/* User location pin — center-right, amber with navigation icon */}
+        <div
+          className="absolute"
+          style={{ left: "72%", top: "50%", transform: "translate(-50%, -50%)" }}
+        >
+          <div className="relative">
+            <span
+              className="absolute inset-0 rounded-full"
+              style={{
+                background: "rgba(245,158,11,0.25)",
+                animation: "cssmap-user-pulse 2.4s ease-out infinite",
+                width: 32,
+                height: 32,
+                top: -6,
+                left: -6,
+              }}
+            />
+            <div
+              className="relative flex items-center justify-center rounded-full bg-amber-400"
+              style={{
+                width: 20,
+                height: 20,
+                boxShadow: "0 0 18px 4px rgba(245,158,11,0.7), 0 0 0 3px rgba(245,158,11,0.3)",
+              }}
+            >
+              <NavigationIcon className="w-3 h-3 text-black fill-current rotate-45" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
