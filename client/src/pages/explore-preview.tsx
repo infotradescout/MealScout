@@ -62,7 +62,11 @@ interface LiveTruckSummary {
   cuisineType?: string | null;
   imageUrl?: string | null;
   heroImageUrl?: string | null;
+  coverImageUrl?: string | null;
   logoUrl?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   lat?: number | null;
@@ -113,13 +117,17 @@ interface RestaurantSummary {
   name?: string | null;
   cuisineType?: string | null;
   logoUrl?: string | null;
+  coverImageUrl?: string | null;
   heroImageUrl?: string | null;
   imageUrl?: string | null;
   city?: string | null;
+  state?: string | null;
   neighborhood?: string | null;
+  address?: string | null;
   activeDealsCount?: number;
   distanceMiles?: number | null;
   distance?: number | null;
+  description?: string | null;
 }
 
 type CravingCategory = {
@@ -1643,7 +1651,7 @@ function DiscoveryEmptyRow({
 
 function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) {
   const name = restaurant.businessName || restaurant.name || "Restaurant";
-  const img = restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
+  const img = restaurant.coverImageUrl || restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
   const cuisine = restaurant.cuisineType;
   const location = restaurant.neighborhood || restaurant.city;
   const dealCount = restaurant.activeDealsCount ?? 0;
@@ -1844,7 +1852,7 @@ function LiveNowSection({
 function TruckCard({ truck }: { truck: LiveTruckSummary }) {
   const name = truck.name || "Food Truck";
   const cuisine = truck.cuisineType ?? null;
-  const img = truck.heroImageUrl ?? truck.imageUrl ?? truck.logoUrl ?? null;
+  const img = truck.coverImageUrl ?? truck.heroImageUrl ?? truck.imageUrl ?? truck.logoUrl ?? null;
 
   const distMiles = truck.distanceMiles;
   const distKm = truck.distance;

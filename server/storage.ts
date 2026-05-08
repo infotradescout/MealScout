@@ -4276,6 +4276,11 @@ export class DatabaseStorage implements IStorage {
         isVerified: restaurants.isVerified,
         createdAt: restaurants.createdAt,
         updatedAt: restaurants.updatedAt,
+        logoUrl: restaurants.logoUrl,
+        coverImageUrl: restaurants.coverImageUrl,
+        city: restaurants.city,
+        state: restaurants.state,
+        description: restaurants.description,
         sessionId: foodTruckSessions.id,
       })
       .from(restaurants)

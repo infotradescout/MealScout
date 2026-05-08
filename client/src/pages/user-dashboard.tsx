@@ -122,6 +122,13 @@ export default function UserDashboard() {
   >({
     queryKey: ["/api/deals/nearby", location?.lat, location?.lng],
     enabled: !!location,
+    queryFn: async () => {
+      if (!location) return [];
+      const res = await fetch(`/api/deals/nearby/${location.lat}/${location.lng}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.deals ?? []);
+    },
   });
 
   // Fetch recommended deals based on user preferences
