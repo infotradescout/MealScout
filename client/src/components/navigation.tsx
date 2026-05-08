@@ -317,19 +317,40 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
   const moreItems = buildMoreItems();
   const isActive = (path: string) =>
     location === path || location.startsWith(`${path}/`);
+  const isScoutExperience =
+    isActive("/scout") || isActive("/explore-preview");
 
   // ── DESKTOP quick-action bar ─────────────────────────────────────────────
   // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
   // omit it to avoid two nav items going to the same destination.
   const userSpecificIsUnique =
     !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
-  const desktopItems: NavItem[] = [
+  const scoutExperienceItems: NavItem[] = [
+    { path: "/scout", icon: Compass, label: "Scout" },
+    { path: "/map", icon: MapPin, label: "Map" },
+    { path: "/favorites", icon: Heart, label: "Saved" },
+    { path: "/share-hub", icon: Share2, label: "Share" },
+    { path: "/profile", icon: User, label: "Profile" },
+  ];
+  const defaultDesktopItems: NavItem[] = [
     { path: "/scout", icon: Compass, label: "Scout" },
     { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
     ...(userSpecificIsUnique ? [userSpecificItem] : []),
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
+  const desktopItems = isScoutExperience
+    ? scoutExperienceItems
+    : defaultDesktopItems;
+  const mobileSecondItem: NavItem = isScoutExperience
+    ? { path: "/map", icon: MapPin, label: "Map" }
+    : { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" };
+  const mobileThirdItem: NavItem = isScoutExperience
+    ? { path: "/favorites", icon: Heart, label: "Saved" }
+    : userSpecificItem;
+  const showMobileThirdItem =
+    Boolean(mobileThirdItem.path) &&
+    (isScoutExperience || userSpecificIsUnique);
 
   return (
     <>
@@ -390,31 +411,37 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               <span className="text-[11px] font-medium text-amber-300">Scout</span>
             </Link>
 
-            {/* 2 — Dashboard */}
+            {/* 2 — Scout-local secondary action, otherwise Dashboard */}
             <Link
-              href={dashboardPath}
-              aria-label="Dashboard"
-              aria-current={isActive(dashboardPath) ? "page" : undefined}
+              href={mobileSecondItem.path || "/scout"}
+              aria-label={mobileSecondItem.label}
+              aria-current={
+                mobileSecondItem.path && isActive(mobileSecondItem.path)
+                  ? "page"
+                  : undefined
+              }
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive(dashboardPath) ? "text-amber-300" : "text-white/70 hover:text-white"
+                mobileSecondItem.path && isActive(mobileSecondItem.path)
+                  ? "text-amber-300"
+                  : "text-white/70 hover:text-white"
               }`}
             >
-              <LayoutDashboard className="h-5 w-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">Dashboard</span>
+              <mobileSecondItem.icon className="h-5 w-5" aria-hidden="true" />
+              <span className="text-[11px] font-medium">{mobileSecondItem.label}</span>
             </Link>
 
-            {/* 3 — User-specific */}
-            {userSpecificIsUnique && userSpecificItem.path ? (
+            {/* 3 — Scout-local saved action, otherwise user-specific */}
+            {showMobileThirdItem && mobileThirdItem.path ? (
               <Link
-                href={userSpecificItem.path}
-                aria-label={userSpecificItem.label}
-                aria-current={isActive(userSpecificItem.path) ? "page" : undefined}
+                href={mobileThirdItem.path}
+                aria-label={mobileThirdItem.label}
+                aria-current={isActive(mobileThirdItem.path) ? "page" : undefined}
                 className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                  isActive(userSpecificItem.path) ? "text-amber-300" : "text-white/70 hover:text-white"
+                  isActive(mobileThirdItem.path) ? "text-amber-300" : "text-white/70 hover:text-white"
                 }`}
               >
-                <userSpecificItem.icon className="h-5 w-5" aria-hidden="true" />
-                <span className="text-[11px] font-medium">{userSpecificItem.label}</span>
+                <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
+                <span className="text-[11px] font-medium">{mobileThirdItem.label}</span>
               </Link>
             ) : null}
 
