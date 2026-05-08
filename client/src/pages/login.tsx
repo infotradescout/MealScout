@@ -184,7 +184,10 @@ export default function Login() {
 
     setIsResendingVerification(true);
     try {
-      await apiRequest("POST", "/api/auth/resend-verification", { email });
+      await apiRequest("POST", "/api/auth/resend-verification", {
+        email,
+        ...(redirectPath ? { intendedNextPath: redirectPath } : {}),
+      });
       toast({
         title: "Verification Sent",
         description:
