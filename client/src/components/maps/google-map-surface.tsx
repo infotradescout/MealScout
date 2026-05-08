@@ -60,16 +60,18 @@ const mapStyleDark = [
   // Labels
   { elementType: "labels.text.fill", stylers: [{ color: "#d4a843" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#080b12" }] },
-  // Roads — amber neon
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a1f00" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 0.5 }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3d2d00" }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 1.5 }] },
-  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#1e1600" }] },
-  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#d97706" }, { weight: 0.8 }] },
-  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#92400e" }, { weight: 0.4 }] },
-  // Road labels
-  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#f59e0b" }] },
+  // Roads — orange-amber neon (shifted warmer toward #f97316)
+  // Road fill is a warm dark orange so the road body itself glows
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#3d1f00" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#f97316" }, { weight: 0.6 }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#5c2d00" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#fb923c" }, { weight: 2.0 }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#2d1500" }] },
+  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#f97316" }, { weight: 1.0 }] },
+  { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#1a0d00" }] },
+  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#c2410c" }, { weight: 0.5 }] },
+  // Road labels — orange
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#fb923c" }] },
   { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#080b12" }] },
   // Water — deep navy
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#0a0f1e" }] },
@@ -522,8 +524,11 @@ export function GoogleMapSurface({
   return (
     <div className="h-full w-full relative">
       <div ref={mapContainerRef} className="h-full w-full rounded-lg overflow-hidden" />
-      {/* Neon amber glow overlay — screen blend makes road lines glow amber.
-          pointer-events:none so all Google Maps interactions pass through. */}
+      {/* Street glow overlay — pointer-events:none preserves all Google Maps
+          interactions. Uses backdrop-filter + screen blend to add a warm
+          orange-amber halo only to bright pixels (roads) without flooding
+          the dark land areas. The map JSON styles already make roads orange;
+          this layer adds the neon bloom on top of them. */}
       {isNightTheme && (
         <div
           aria-hidden="true"
@@ -533,28 +538,15 @@ export function GoogleMapSurface({
             pointerEvents: "none",
             borderRadius: "0.5rem",
             overflow: "hidden",
+            zIndex: 1,
+            // Screen blend: only brightens bright pixels (roads), leaves dark land untouched
+            mixBlendMode: "screen",
+            // Blur spreads the orange glow outward from road lines
+            backdropFilter: "blur(3px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(3px) saturate(1.4)",
+            background: "rgba(249,115,22,0.07)",
           }}
-        >
-          {/* Blurred amber screen layer — spreads glow along bright road pixels */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -6,
-              background: "rgba(245,158,11,0.12)",
-              mixBlendMode: "screen",
-              filter: "blur(4px)",
-            }}
-          />
-          {/* Subtle color tint to warm up the whole map */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "rgba(245,158,11,0.06)",
-              mixBlendMode: "color",
-            }}
-          />
-        </div>
+        />
       )}
       <div className="absolute top-5 right-5 flex flex-col space-y-2 z-[1000]">
         <Button

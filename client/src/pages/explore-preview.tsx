@@ -1004,34 +1004,48 @@ function CSSMapHero({
             ))}
           </div>
 
-          {/* Neon street glow — amber screen blend + heavy blur creates the
-              glowing road effect. The blur spreads the amber light outward
-              along bright pixels (street lines), giving the neon look. */}
+          {/* SVG filter layer — isolates the bright road pixels from the dark
+              tile background, then blurs only those bright pixels outward to
+              create a neon glow that traces the actual street lines.
+              mix-blend-mode:screen means it only brightens, never darkens. */}
+          <svg
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <filter id="street-glow" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+                {/* Step 1: boost contrast so roads (bright) pop and land (dark) goes black */}
+                <feComponentTransfer result="boosted">
+                  <feFuncR type="linear" slope="3" intercept="-0.8" />
+                  <feFuncG type="linear" slope="3" intercept="-0.8" />
+                  <feFuncB type="linear" slope="3" intercept="-0.8" />
+                </feComponentTransfer>
+                {/* Step 2: tint to orange-amber (#f97316) — shift R up, G mid, B to zero */}
+                <feColorMatrix type="matrix" result="tinted"
+                  values="1.2 0   0   0   0.05
+                          0.4 0.5 0   0   0
+                          0   0   0   0   0
+                          0   0   0   1   0" />
+                {/* Step 3: blur to spread the glow outward along road lines */}
+                <feGaussianBlur stdDeviation="3.5" result="glow" />
+                {/* Step 4: composite glow over original boosted image */}
+                <feBlend in="glow" in2="boosted" mode="screen" result="combined" />
+                {/* Step 5: merge back with a soft opacity */}
+                <feComposite in="combined" in2="SourceGraphic" operator="over" />
+              </filter>
+            </defs>
+            <image
+              href={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${centerTileX}/${centerTileY}@2x.png`}
+              x="256" y="256" width="256" height="256"
+              style={{ filter: "url(#street-glow)", mixBlendMode: "screen", opacity: 0.85 }}
+            />
+          </svg>
+          {/* Radial warmth from user pin — orange-amber, not pure amber */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: "rgba(245,158,11,0.28)",
-              mixBlendMode: "color",
-              filter: "blur(0px)",
-            }}
-          />
-          {/* Second pass: blurred amber screen layer creates the glow spread on streets */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -8,
-              background: "rgba(245,158,11,0.18)",
-              mixBlendMode: "screen",
-              filter: "blur(6px)",
-            }}
-          />
-          {/* Radial warmth from user pin position */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: `radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(245,158,11,0.30) 0%, rgba(245,158,11,0.08) 18%, transparent 40%)`,
+              background: `radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(249,115,22,0.28) 0%, rgba(245,158,11,0.06) 18%, transparent 40%)`,
               mixBlendMode: "screen",
             }}
           />
