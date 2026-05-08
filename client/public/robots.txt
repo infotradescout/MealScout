@@ -1,0 +1,41 @@
+User-agent: *
+Allow: /robots.txt
+Allow: /llms.txt
+Allow: /ai.txt
+Allow: /sitemap.xml
+Allow: /sitemap-*.xml
+Allow: /truck/
+Allow: /location/
+Allow: /city/
+Allow: /event/
+Allow: /cuisine/
+Allow: /deal/
+Allow: /bar/
+Allow: /supplier/
+Allow: /video/
+Allow: /food-trucks/
+Allow: /p/
+Allow: /api/public/
+Allow: /api/trucks/live
+Allow: /api/truck-claims/public-search
+
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api
+Disallow: /vendor-dashboard
+Disallow: /supplier-portal
+
+Sitemap: https://www.mealscout.us/sitemap.xml
+Sitemap: https://www.mealscout.us/sitemap-trucks.xml
+Sitemap: https://www.mealscout.us/sitemap-bars.xml
+Sitemap: https://www.mealscout.us/sitemap-locations.xml
+Sitemap: https://www.mealscout.us/sitemap-cities.xml
+Sitemap: https://www.mealscout.us/sitemap-cuisines.xml
+Sitemap: https://www.mealscout.us/sitemap-events.xml
+Sitemap: https://www.mealscout.us/sitemap-deals.xml
+Sitemap: https://www.mealscout.us/sitemap-suppliers.xml
+Sitemap: https://www.mealscout.us/sitemap-videos.xml
+Sitemap: https://www.mealscout.us/sitemap-time-pages.xml
+
+AI: https://www.mealscout.us/llms.txt
+IndexNow: https://www.mealscout.us/0ff1f027d834416684f7c3dfd6fc3e96.txt

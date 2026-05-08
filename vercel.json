@@ -20,10 +20,6 @@
       "destination": "https://mealscout.onrender.com/sitemap-:name.xml"
     },
     {
-      "source": "/robots.txt",
-      "destination": "https://mealscout.onrender.com/robots.txt"
-    },
-    {
       "source": "/llms.txt",
       "destination": "https://mealscout.onrender.com/llms.txt"
     },
