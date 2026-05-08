@@ -817,6 +817,12 @@ export default function ExplorePreview() {
   const showParkingHostsSection = parkingPassLoading || parkingPassHosts.length > 0;
   const showDealsSection = allDeals.length > 0;
   const showEventsSection = events.length > 0;
+  const localSignalCount =
+    liveTrucks.length +
+    nearbyRestaurants.length +
+    parkingPassHosts.length +
+    allDeals.length +
+    events.length;
 
   return (
     <>
@@ -1069,9 +1075,26 @@ export default function ExplorePreview() {
               onExpandMap={openScoutMap}
             />
 
+            <LocalFoodDashboard
+              locationLabel={shortLocation}
+              locationStatus={locationStatus}
+              liveTruckCount={liveTrucks.length}
+              restaurantCount={nearbyRestaurants.length}
+              parkingHostCount={parkingPassHosts.length}
+              dealCount={allDeals.length}
+              eventCount={events.length}
+              localSignalCount={localSignalCount}
+              onRefreshLocation={requestLocation}
+              onOpenMap={openScoutMap}
+            />
+
             {/* ── EXPLORE BY CRAVING ── */}
             <section className="px-5 pt-2 pb-10">
-              <SectionHeader title="Explore by Craving" linkHref="/find-food" />
+              <SectionHeader
+                title="Explore by Craving"
+                linkHref="/find-food"
+                subtitle="Jump into local food by mood, not by chain category."
+              />
               <ul className="flex items-start justify-between gap-2 pb-2" role="list">
                 {CRAVING_CATEGORIES.map((cat) => (
                   <li key={cat.id} className="shrink-0">
@@ -1100,7 +1123,7 @@ export default function ExplorePreview() {
                 <SectionHeader
                   title="Food Trucks Near You"
                   linkHref="/truck-discovery"
-                  subtitle="Live trucks currently broadcasting nearby."
+                  subtitle="All nearby trucks that are broadcasting or ready to be discovered."
                 />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
@@ -1121,7 +1144,11 @@ export default function ExplorePreview() {
             {/* ── NEARBY RESTAURANTS ── */}
             {showRestaurantsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
+                <SectionHeader
+                  title="Restaurants Near You"
+                  linkHref="/find-food"
+                  subtitle="Local restaurants and bars worth knowing about - not a fast-food feed."
+                />
                 {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
@@ -1144,7 +1171,7 @@ export default function ExplorePreview() {
                 <SectionHeader
                   title="Parking Pass Hosts"
                   linkHref="/parking-pass"
-                  subtitle="Places where food trucks can park and serve."
+                  subtitle="Host locations are places that let food trucks park, serve, and build a route."
                 />
                 {parkingPassLoading && parkingPassHosts.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
@@ -1168,7 +1195,7 @@ export default function ExplorePreview() {
                 <SectionHeader
                   title="Deals Near You"
                   linkHref="/deals"
-                  subtitle="Active food and drink offers in your area."
+                  subtitle="Active offers from nearby restaurants, bars, and food trucks."
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
@@ -1204,7 +1231,11 @@ export default function ExplorePreview() {
 
             {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
-              <SectionHeader title="Your Saved" linkHref="/favorites" />
+              <SectionHeader
+                title="Your Saved"
+                linkHref="/favorites"
+                subtitle="Your personal shortlist for trucks, restaurants, deals, and places to revisit."
+              />
               <button
                 type="button"
                 onClick={() => navigate("/favorites")}
@@ -1258,6 +1289,183 @@ function SectionHeader({
         <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
       ) : null}
     </div>
+  );
+}
+
+/* ============================================================
+   LOCAL FOOD DASHBOARD
+   A persistent dashboard strip so Scout still feels useful when
+   individual data sections are collapsed because there is no data.
+   ============================================================ */
+
+function LocalFoodDashboard({
+  locationLabel,
+  locationStatus,
+  liveTruckCount,
+  restaurantCount,
+  parkingHostCount,
+  dealCount,
+  eventCount,
+  localSignalCount,
+  onRefreshLocation,
+  onOpenMap,
+}: {
+  locationLabel: string;
+  locationStatus: "idle" | "requesting" | "ready" | "denied";
+  liveTruckCount: number;
+  restaurantCount: number;
+  parkingHostCount: number;
+  dealCount: number;
+  eventCount: number;
+  localSignalCount: number;
+  onRefreshLocation: () => void;
+  onOpenMap: () => void;
+}) {
+  const hasLocation = locationStatus === "ready";
+  const signalLabel =
+    localSignalCount > 0
+      ? `${localSignalCount} local signal${localSignalCount === 1 ? "" : "s"}`
+      : hasLocation
+        ? "Building local signal"
+        : "Location needed";
+
+  const stats = [
+    {
+      label: "Trucks",
+      value: liveTruckCount,
+      detail: liveTruckCount > 0 ? "live now" : "watching",
+      href: "/truck-discovery",
+      icon: <Flame className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
+      label: "Local spots",
+      value: restaurantCount,
+      detail: restaurantCount > 0 ? "nearby" : "scouting",
+      href: "/find-food",
+      icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
+      label: "Deals",
+      value: dealCount,
+      detail: dealCount > 0 ? "active" : "none posted",
+      href: "/deals",
+      icon: <Tag className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
+      label: "Events",
+      value: eventCount,
+      detail: eventCount > 0 ? "coming up" : "quiet",
+      href: "/events",
+      icon: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
+      label: "Truck hosts",
+      value: parkingHostCount,
+      detail: parkingHostCount > 0 ? "places to park" : "none nearby",
+      href: "/parking-pass",
+      icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
+    },
+  ];
+
+  const lanes = [
+    { label: "All trucks", href: "/truck-discovery" },
+    { label: "Find dinner", href: "/find-food" },
+    { label: "Deals", href: "/deals" },
+    { label: "Events", href: "/events" },
+    { label: "Host spots", href: "/parking-pass" },
+    { label: "Saved", href: "/favorites" },
+  ];
+
+  return (
+    <section className="px-5 pt-1 pb-10">
+      <div className="rounded-[2rem] overflow-hidden bg-white/[0.045] ring-1 ring-white/10 backdrop-blur-md">
+        <div
+          className="px-5 pt-5 pb-4"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 16% 0%, rgba(245,158,11,0.22), transparent 34%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.10), transparent 30%)",
+          }}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-amber-200/75 font-bold">
+                Today's Food Board
+              </p>
+              <h2 className="mt-1 text-white text-2xl font-bold leading-tight">
+                {locationLabel}
+              </h2>
+              <p className="mt-2 text-white/66 text-sm leading-relaxed max-w-[36rem]">
+                Your local dashboard for food trucks, independent restaurants,
+                bars, deals, events, host spots, and saved places. Built for
+                local food discovery, not generic fast-food noise.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-black/35 ring-1 ring-amber-300/25 px-3 py-1 text-[11px] font-semibold text-amber-100">
+              {signalLabel}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onOpenMap}
+              className="inline-flex items-center gap-2 rounded-full bg-amber-300 text-black px-3.5 py-2 text-sm font-bold active:scale-[0.98]"
+            >
+              <MapPin className="h-4 w-4" aria-hidden="true" />
+              Open map
+            </button>
+            <button
+              type="button"
+              onClick={onRefreshLocation}
+              className="inline-flex items-center gap-2 rounded-full bg-black/35 ring-1 ring-white/12 text-white px-3.5 py-2 text-sm font-semibold active:scale-[0.98]"
+            >
+              <Search className="h-4 w-4 text-amber-200" aria-hidden="true" />
+              Refresh local signal
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {stats.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="rounded-2xl bg-black/30 ring-1 ring-white/8 px-3 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-300/12 text-amber-200 ring-1 ring-amber-300/20">
+                  {item.icon}
+                </span>
+                <p className="mt-2 text-white text-lg font-bold leading-none">
+                  {item.value}
+                </p>
+                <p className="mt-1 text-white/82 text-xs font-semibold">
+                  {item.label}
+                </p>
+                <p className="mt-0.5 text-white/45 text-[11px]">
+                  {item.detail}
+                </p>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-4 overflow-x-auto atmo-hide-scrollbar -mr-4">
+            <div className="flex gap-2 pr-4">
+              {lanes.map((lane) => (
+                <Link
+                  key={lane.href}
+                  href={lane.href}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-sm font-semibold text-white/82 active:scale-[0.98]"
+                >
+                  {lane.label}
+                  <ChevronRight className="h-4 w-4 text-amber-200" aria-hidden="true" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1923,7 +2131,11 @@ function LiveNowSection({
   if (liveTrucksLoading && liveTrucks.length === 0) {
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
-        <SectionHeader title="Live Now" linkHref="/find-food" />
+        <SectionHeader
+          title="Live Now"
+          linkHref="/truck-discovery"
+          subtitle="Trucks currently broadcasting service nearby."
+        />
         <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
           <ul className="flex gap-4 pr-5" role="list">
             {[0, 1, 2].map((i) => (
@@ -1941,7 +2153,11 @@ function LiveNowSection({
   if (liveTrucks.length > 0) {
     return (
       <section className="pl-5 pr-0 pt-2 pb-10">
-        <SectionHeader title="Live Now" linkHref="/find-food" />
+        <SectionHeader
+          title="Live Now"
+          linkHref="/truck-discovery"
+          subtitle="Trucks currently broadcasting service nearby."
+        />
         <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
           <ul className="flex gap-4 pr-5" role="list" aria-label="Live food trucks near you">
             {liveTrucks.slice(0, 12).map((truck) => (
@@ -1985,7 +2201,7 @@ function LiveNowSection({
             </button>
           )}
           <Link
-            href="/find-food"
+            href="/truck-discovery"
             className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -2037,7 +2253,7 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
 
   return (
     <Link
-      href={`/trucks/${truck.id}`}
+      href={`/truck/${truck.id}`}
       className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
     >
       {/* Hero image */}
