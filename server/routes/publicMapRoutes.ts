@@ -1,5 +1,17 @@
 import type { Express } from "express";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
@@ -13,6 +25,8 @@ import {
   isHostProfileMapEligible,
   normalizeUsStateAbbr,
 } from "../services/parkingPassQuality";
+import { computeExternalReviewAdjustment } from "../services/externalReviewScoring";
+import { isLaunchDegradedMode } from "../launchMode";
 import {
   dealClaims,
   deals,
@@ -22,16 +36,18 @@ import {
   hosts,
   locationRequests,
   restaurants,
+  suppliers,
+  supplierProducts,
   users,
 } from "@shared/schema";
 
 let mapLocationsCache: {
   expiresAt: number;
-  payload: { hostLocations: any[]; eventLocations: any[] };
+  payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
 let mapLocationsLastGood: {
-  payload: { hostLocations: any[]; eventLocations: any[] };
+  payload: { hostLocations: any[]; eventLocations: any[]; supplierLocations: any[] };
 } | null = null;
 
 type FootTrafficPayload = {
@@ -40,6 +56,7 @@ type FootTrafficPayload = {
   requestedWindowMinutes: number;
   bounds: BoundsLike;
   mode: "avg" | "live";
+  degradedMode?: boolean;
   signalQuality: {
     tier: "sparse" | "emerging" | "solid";
     isLowDensity: boolean;
@@ -145,15 +162,17 @@ const estimateRadiusMetersFromBounds = (bounds: BoundsLike) => {
   );
   const latMeters = latDelta * metersPerLat;
   const lngMeters = lngDelta * metersPerLng;
-  return Math.max(100, Math.round(Math.sqrt(latMeters * latMeters + lngMeters * lngMeters)));
+  return Math.max(
+    100,
+    Math.round(Math.sqrt(latMeters * latMeters + lngMeters * lngMeters)),
+  );
 };
 
 const cellId = (
   source: "first_party" | "google_places" | "supply_signal",
   lat: number,
   lng: number,
-) =>
-  `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
+) => `${source}:${lat.toFixed(3)}:${lng.toFixed(3)}`;
 
 const roundCell = (value: number) => Math.round(value * 1000) / 1000;
 
@@ -177,7 +196,10 @@ const isMissingRelationError = (error: unknown, relationName?: string) => {
 const getGoogleMapsApiKey = () =>
   String(
     process.env.GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
       process.env.VITE_GOOGLE_MAPS_WEB_API_KEY ||
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      process.env.VITE_GOOGLE_API_KEY ||
       "",
   ).trim();
 
@@ -207,16 +229,20 @@ const PLACE_AUTOCOMPLETE_TTL_MS = 5 * 60_000;
 
 // Place details: cache by placeId, 24-hour TTL.
 // A placeId maps to a fixed address — it never changes.
-const placeDetailsCache = new Map<
-  string,
-  { expiresAt: number; place: any }
->();
+const placeDetailsCache = new Map<string, { expiresAt: number; place: any }>();
 const PLACE_DETAILS_TTL_MS = 24 * 60 * 60_000;
+const MAP_PROVIDER_TIMEOUT_MS = Math.max(
+  1000,
+  Number(process.env.MAP_PROVIDER_TIMEOUT_MS || 6500) || 6500,
+);
 
 // In-flight deduplication: if two requests arrive for the same query/placeId
 // before the first one resolves, they share the same Promise instead of making
 // two separate Google API calls.
-const autocompleteInflight = new Map<string, Promise<PlaceAutocompletePrediction[]>>();
+const autocompleteInflight = new Map<
+  string,
+  Promise<PlaceAutocompletePrediction[]>
+>();
 const placeDetailsInflight = new Map<string, Promise<any>>();
 
 const buildPlacesHeaders = (apiKey: string, fieldMask: string) => ({
@@ -225,8 +251,24 @@ const buildPlacesHeaders = (apiKey: string, fieldMask: string) => ({
   "X-Goog-FieldMask": fieldMask,
 });
 
+const fetchWithTimeout = async (
+  input: string,
+  init: RequestInit,
+  timeoutMs = MAP_PROVIDER_TIMEOUT_MS,
+) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const extractAddressComponent = (
-  components: Array<{ longText?: string; shortText?: string; types?: string[] }> | undefined,
+  components:
+    | Array<{ longText?: string; shortText?: string; types?: string[] }>
+    | undefined,
   type: string,
   preference: "long" | "short" = "long",
 ) => {
@@ -275,26 +317,60 @@ const normalizePlaceDetails = (raw: any): PlaceDetailsResult => {
   };
 };
 
+const parseAutocompleteCoordinate = (
+  value: unknown,
+  maxAbs: number,
+): number | null => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) > maxAbs) return null;
+  return parsed;
+};
+
+const optionalNonNegativeNumberEnv = (name: string): number | null => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || String(raw).trim() === "") {
+    return null;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, parsed);
+};
+
 export function registerPublicMapRoutes(app: Express) {
   app.get("/api/map/runtime", async (_req, res) => {
     try {
       const googleMapsApiKey = getGoogleMapsApiKey();
-      res.setHeader("Cache-Control", "public, max-age=60");
+      const googleMapsMapId = String(
+        process.env.GOOGLE_MAPS_MAP_ID ||
+          process.env.VITE_GOOGLE_MAPS_MAP_ID ||
+          "",
+      ).trim();
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=120, stale-while-revalidate=240",
+      );
       res.json({
         hasGoogleMapsKey: googleMapsApiKey.length > 0,
         googleMapsApiKey: googleMapsApiKey || null,
+        hasGoogleMapsMapId: googleMapsMapId.length > 0,
+        googleMapsMapId: googleMapsMapId || null,
       });
     } catch {
       res.status(500).json({
         hasGoogleMapsKey: false,
         googleMapsApiKey: null,
+        hasGoogleMapsMapId: false,
+        googleMapsMapId: null,
       });
     }
   });
 
   app.get("/api/map/locations", async (_req, res) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader(
+        "Cache-Control",
+        "public, max-age=120, stale-while-revalidate=240",
+      );
       if (mapLocationsCache && mapLocationsCache.expiresAt > Date.now()) {
         return res.json(mapLocationsCache.payload);
       }
@@ -412,37 +488,39 @@ export function registerPublicMapRoutes(app: Express) {
         return parts.join(", ");
       };
 
-      const MAX_GEOCODE_PER_REQUEST =
-        Math.max(0, Number(process.env.MAP_LOCATIONS_MAX_GEOCODE || 0) || 0) ||
-        (process.env.NODE_ENV === "production" ? 5 : 25);
+      const launchDegradedMode = isLaunchDegradedMode();
+      const MAX_GEOCODE_PER_REQUEST = launchDegradedMode
+        ? 0
+        : (optionalNonNegativeNumberEnv("MAP_LOCATIONS_MAX_GEOCODE") ??
+          (process.env.NODE_ENV === "production" ? 0 : 25));
       const GEOCODE_BUDGET_MS =
         Math.max(
           0,
           Number(process.env.MAP_LOCATIONS_GEOCODE_BUDGET_MS || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 1500 : 5000);
+        ) || (process.env.NODE_ENV === "production" ? 600 : 5000);
       const GEOCODE_TIMEOUT_MS =
         Math.max(
           0,
           Number(process.env.MAP_LOCATIONS_GEOCODE_TIMEOUT_MS || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 750 : 2000);
-      const MAX_REVERSE_GEOCODE_PER_REQUEST =
-        Math.max(
-          0,
-          Number(process.env.MAP_LOCATIONS_MAX_REVERSE_GEOCODE || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 2 : 10);
-      const MAX_COORD_CALIBRATIONS_PER_REQUEST =
-        Math.max(
-          0,
-          Number(process.env.MAP_LOCATIONS_MAX_COORD_CALIBRATIONS || 0) || 0,
-        ) || (process.env.NODE_ENV === "production" ? 10 : 30);
+        ) || (process.env.NODE_ENV === "production" ? 350 : 2000);
+      const MAX_REVERSE_GEOCODE_PER_REQUEST = launchDegradedMode
+        ? 0
+        : (optionalNonNegativeNumberEnv("MAP_LOCATIONS_MAX_REVERSE_GEOCODE") ??
+          (process.env.NODE_ENV === "production" ? 0 : 10));
+      const MAX_COORD_CALIBRATIONS_PER_REQUEST = launchDegradedMode
+        ? 0
+        : (optionalNonNegativeNumberEnv(
+            "MAP_LOCATIONS_MAX_COORD_CALIBRATIONS",
+          ) ?? (process.env.NODE_ENV === "production" ? 0 : 30));
       const COORD_CALIBRATION_THRESHOLD_METERS =
         Math.max(
           0,
           Number(process.env.MAP_LOCATIONS_COORD_CALIBRATION_METERS || 0) || 0,
         ) || 120;
-      const useGoogleCalibration = getGoogleMapsApiKey().length > 0;
+      const useGoogleCalibration =
+        !launchDegradedMode && getGoogleMapsApiKey().length > 0;
 
-      const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
+      const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
         if (timeoutMs <= 0) return promise;
         return await Promise.race([
           promise,
@@ -497,12 +575,48 @@ export function registerPublicMapRoutes(app: Express) {
         });
       };
 
-      const [openLocations, upcomingEvents] = await Promise.all([
+      const [
+        openLocations,
+        upcomingEvents,
+        allHosts,
+        activeSuppliers,
+        activeSupplierProducts,
+      ] = await Promise.all([
         storage.getOpenLocationRequests(),
         storage.getAllUpcomingEvents(),
+        storage.getAllHosts(),
+        db
+          .select({
+            id: suppliers.id,
+            businessName: suppliers.businessName,
+            address: suppliers.address,
+            city: suppliers.city,
+            state: suppliers.state,
+            latitude: suppliers.latitude,
+            longitude: suppliers.longitude,
+            contactPhone: suppliers.contactPhone,
+            contactEmail: suppliers.contactEmail,
+            offersDelivery: suppliers.offersDelivery,
+            deliveryRadiusMiles: suppliers.deliveryRadiusMiles,
+            updatedAt: suppliers.updatedAt,
+          })
+          .from(suppliers)
+          .where(eq(suppliers.isActive, true))
+          .limit(250)
+          .catch(() => []),
+        db
+          .select({
+            supplierId: supplierProducts.supplierId,
+            name: supplierProducts.name,
+            description: supplierProducts.description,
+          })
+          .from(supplierProducts)
+          .where(eq(supplierProducts.isActive, true))
+          .limit(1000)
+          .catch(() => []),
       ]);
 
-      const allHosts = (await storage.getAllHosts()) as Array<{
+      const typedAllHosts = allHosts as Array<{
         id: string;
         userId?: string | null;
         businessName: string;
@@ -515,11 +629,18 @@ export function registerPublicMapRoutes(app: Express) {
         expectedFootTraffic?: number | null;
         notes?: string | null;
         isVerified?: boolean | null;
+        showFuelPrices?: boolean | null;
+        gasPriceRegularCents?: number | null;
+        gasPriceMidgradeCents?: number | null;
+        gasPricePremiumCents?: number | null;
+        gasPriceDieselCents?: number | null;
+        gasPriceUpdatedAt?: Date | string | null;
+        gasPriceSource?: string | null;
       }>;
 
       const hostUserIds = Array.from(
         new Set(
-          allHosts
+          typedAllHosts
             .map((host) => String(host.userId || "").trim())
             .filter(Boolean),
         ),
@@ -542,7 +663,7 @@ export function registerPublicMapRoutes(app: Express) {
             )
           : null;
 
-      const hostProfiles = allHosts.filter((host) => {
+      const hostProfiles = typedAllHosts.filter((host) => {
         const address = String(host.address || "").trim();
         if (!address) return false;
         if (
@@ -588,7 +709,7 @@ export function registerPublicMapRoutes(app: Express) {
         address: host.address,
         city: host.city ?? null,
         state: host.state ?? null,
-        spotImageUrl: null,
+        spotImageUrl: (host as any).spotImageUrl ?? null,
         locationType: host.locationType || "other",
         expectedFootTraffic: host.expectedFootTraffic ?? null,
         notes: host.notes ?? null,
@@ -596,6 +717,27 @@ export function registerPublicMapRoutes(app: Express) {
         status: host.isVerified ? "verified" : "active",
         latitude: host.latitude ?? null,
         longitude: host.longitude ?? null,
+        // Google profile enrichment
+        description: (host as any).description ?? null,
+        googlePlaceId: (host as any).googlePlaceId ?? null,
+        googlePriceLevel: (host as any).googlePriceLevel ?? null,
+        googleBusinessStatus: (host as any).googleBusinessStatus ?? null,
+        googlePhotos: (host as any).googlePhotos ?? null,
+        googleCategories: (host as any).googleCategories ?? null,
+        googleFormattedPhone: (host as any).googleFormattedPhone ?? null,
+        businessHours: (host as any).businessHours ?? null,
+        businessWebsite: (host as any).businessWebsite ?? null,
+        showFuelPrices: Boolean((host as any).showFuelPrices),
+        fuelPrices: (host as any).showFuelPrices
+          ? {
+              regularCents: (host as any).gasPriceRegularCents ?? null,
+              midgradeCents: (host as any).gasPriceMidgradeCents ?? null,
+              premiumCents: (host as any).gasPricePremiumCents ?? null,
+              dieselCents: (host as any).gasPriceDieselCents ?? null,
+              updatedAt: (host as any).gasPriceUpdatedAt ?? null,
+              source: (host as any).gasPriceSource ?? null,
+            }
+          : null,
       }));
 
       const hostLocations = [
@@ -648,6 +790,92 @@ export function registerPublicMapRoutes(app: Express) {
         bookedRestaurantId: event.bookedRestaurantId,
       }));
 
+      const supplierProductsById = new Map<string, string[]>();
+      (activeSupplierProducts as any[]).forEach((product) => {
+        const supplierId = String(product.supplierId || "").trim();
+        if (!supplierId) return;
+        const label = [product.name, product.description]
+          .filter(Boolean)
+          .join(" - ")
+          .trim();
+        if (!label) return;
+        const previous = supplierProductsById.get(supplierId) || [];
+        previous.push(label);
+        supplierProductsById.set(supplierId, previous);
+      });
+
+      const classifySupplier = (supplier: any) => {
+        const products = supplierProductsById.get(String(supplier.id)) || [];
+        const haystack = [
+          supplier.businessName,
+          supplier.address,
+          supplier.city,
+          supplier.state,
+          ...products,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (
+          /\b(propane|lp gas|lpg|cylinder|tank refill|gas refill)\b/i.test(
+            haystack,
+          )
+        ) {
+          return {
+            category: "propane_dealer",
+            categoryLabel: "Propane dealer",
+          };
+        }
+        if (
+          /\b(equipment|manufacturer|fabricat|trailer|commissary|kitchen|generator|repair|service|parts)\b/i.test(
+            haystack,
+          )
+        ) {
+          return {
+            category: "equipment_supplier",
+            categoryLabel: "Equipment supplier",
+          };
+        }
+        return {
+          category: "supplier",
+          categoryLabel: "Supplier",
+        };
+      };
+
+      const supplierLocations = (activeSuppliers as any[])
+        .filter((supplier) => {
+          const hasAddress = String(supplier.address || "").trim();
+          const lat = parseCoord(supplier.latitude);
+          const lng = parseCoord(supplier.longitude);
+          return hasAddress || (lat !== null && lng !== null);
+        })
+        .map((supplier) => {
+          const classified = classifySupplier(supplier);
+          return {
+            id: supplier.id,
+            type: "supplier" as const,
+            supplierId: supplier.id,
+            name: supplier.businessName,
+            address: supplier.address,
+            city: supplier.city ?? null,
+            state: supplier.state ?? null,
+            latitude: supplier.latitude ?? null,
+            longitude: supplier.longitude ?? null,
+            contactPhone: supplier.contactPhone ?? null,
+            contactEmail: supplier.contactEmail ?? null,
+            offersDelivery: Boolean(supplier.offersDelivery),
+            deliveryRadiusMiles: supplier.deliveryRadiusMiles ?? null,
+            productHighlights: (
+              supplierProductsById.get(String(supplier.id)) || []
+            ).slice(0, 3),
+            profileUrl: `/suppliers?supplier=${encodeURIComponent(
+              String(supplier.id),
+            )}`,
+            ...classified,
+          };
+        });
+
       const applyCoords = (
         target: { latitude?: string | null; longitude?: string | null },
         coords: { lat: number; lng: number },
@@ -680,9 +908,9 @@ export function registerPublicMapRoutes(app: Express) {
         ) {
           coordCalibrations += 1;
           const calibrated = await withTimeout(
-            (
-              useGoogleCalibration ? forwardGeocodeGoogle : forwardGeocode
-            )(address),
+            (useGoogleCalibration ? forwardGeocodeGoogle : forwardGeocode)(
+              address,
+            ),
             GEOCODE_TIMEOUT_MS,
           ).catch(() => null);
           if (calibrated) {
@@ -761,7 +989,11 @@ export function registerPublicMapRoutes(app: Express) {
                   applyCoords(host, coords);
                   if (host.hostId) {
                     await storage
-                      .updateHostCoordinates(host.hostId, coords.lat, coords.lng)
+                      .updateHostCoordinates(
+                        host.hostId,
+                        coords.lat,
+                        coords.lng,
+                      )
                       .catch(() => undefined);
                   } else if (host.locationRequestId) {
                     await db
@@ -827,6 +1059,32 @@ export function registerPublicMapRoutes(app: Express) {
         });
       }
 
+      for (const supplier of supplierLocations) {
+        const lat = parseCoord(supplier.latitude);
+        const lng = parseCoord(supplier.longitude);
+        if (lat !== null && lng !== null) continue;
+        const address = buildFullAddress(
+          supplier.address,
+          supplier.city,
+          supplier.state,
+        );
+        if (!address) continue;
+        queueGeocode(
+          address,
+          (coords) => applyCoords(supplier, coords),
+          async (coords) => {
+            await db
+              .update(suppliers)
+              .set({
+                latitude: coords.lat.toString(),
+                longitude: coords.lng.toString(),
+                updatedAt: new Date(),
+              })
+              .where(eq(suppliers.id, supplier.supplierId));
+          },
+        );
+      }
+
       const pendingTasks = Array.from(pendingByAddress.values()).slice(
         0,
         MAX_GEOCODE_PER_REQUEST,
@@ -844,7 +1102,7 @@ export function registerPublicMapRoutes(app: Express) {
         );
       }
 
-      const payload = { hostLocations, eventLocations };
+      const payload = { hostLocations, eventLocations, supplierLocations };
       mapLocationsCache = {
         payload,
         expiresAt:
@@ -862,7 +1120,112 @@ export function registerPublicMapRoutes(app: Express) {
         res.setHeader("X-MealScout-Stale", "1");
         return res.json(mapLocationsLastGood.payload);
       }
-      res.status(200).json({ hostLocations: [], eventLocations: [] });
+      res
+        .status(200)
+        .json({ hostLocations: [], eventLocations: [], supplierLocations: [] });
+    }
+  });
+
+  app.get("/api/map/overlays", async (req, res) => {
+    try {
+      const bounds = parseBounds(req.query as Record<string, unknown>);
+      if (!bounds) {
+        return res.status(400).json({ message: "Valid bounds are required" });
+      }
+
+      const zoom = Math.max(
+        1,
+        Math.min(22, Number(req.query.zoom || 12) || 12),
+      );
+      const pad =
+        zoom <= 9 ? 0.12 : zoom <= 12 ? 0.06 : zoom <= 15 ? 0.03 : 0.015;
+      const expandedBounds: BoundsLike = {
+        north: Math.min(90, bounds.north + pad),
+        south: Math.max(-90, bounds.south - pad),
+        east: bounds.east + pad,
+        west: bounds.west - pad,
+      };
+
+      const rawPayloadSource = mapLocationsCache?.payload || mapLocationsLastGood?.payload;
+      const payloadSource = rawPayloadSource
+        ? {
+            hostLocations: Array.isArray(rawPayloadSource.hostLocations)
+              ? rawPayloadSource.hostLocations
+              : [],
+            eventLocations: Array.isArray(rawPayloadSource.eventLocations)
+              ? rawPayloadSource.eventLocations
+              : [],
+            supplierLocations: Array.isArray(rawPayloadSource.supplierLocations)
+              ? rawPayloadSource.supplierLocations
+              : [],
+          }
+        : {
+            hostLocations: [],
+            eventLocations: [],
+            supplierLocations: [],
+          };
+
+      const parseCoord = (value?: string | number | null) => {
+        if (value === null || value === undefined) return null;
+        const parsed = typeof value === "string" ? Number(value) : value;
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const hostLocations = (payloadSource.hostLocations || []).filter(
+        (host) => {
+          const lat = parseCoord(host?.latitude);
+          const lng = parseCoord(host?.longitude);
+          if (lat === null || lng === null) return false;
+          return pointInBounds(expandedBounds, lat, lng);
+        },
+      );
+
+      const eventLocations = (payloadSource.eventLocations || []).filter(
+        (event) => {
+          const lat = parseCoord(event?.hostLatitude);
+          const lng = parseCoord(event?.hostLongitude);
+          if (lat === null || lng === null) return false;
+          return pointInBounds(expandedBounds, lat, lng);
+        },
+      );
+      const supplierLocations = (payloadSource.supplierLocations || []).filter(
+        (supplier) => {
+          const lat = parseCoord(supplier?.latitude);
+          const lng = parseCoord(supplier?.longitude);
+          if (lat === null || lng === null) return false;
+          return pointInBounds(expandedBounds, lat, lng);
+        },
+      );
+
+      const maxPerLayer = zoom <= 9 ? 800 : zoom <= 12 ? 1200 : 2000;
+      const clippedHosts = hostLocations.slice(0, maxPerLayer);
+      const clippedEvents = eventLocations.slice(0, maxPerLayer);
+      const clippedSuppliers = supplierLocations.slice(0, maxPerLayer);
+
+      const version = String(
+        mapLocationsCache?.expiresAt ||
+          mapLocationsLastGood?.payload?.hostLocations?.length ||
+          Date.now(),
+      );
+
+      res.setHeader("Cache-Control", "public, max-age=20");
+      res.json({
+        version,
+        zoom,
+        bounds,
+        hostLocations: clippedHosts,
+        eventLocations: clippedEvents,
+        supplierLocations: clippedSuppliers,
+      });
+    } catch (error) {
+      console.error("Error building map overlays feed:", error);
+      res.status(200).json({
+        version: "fallback",
+        zoom: Number(req.query.zoom || 12) || 12,
+        hostLocations: [],
+        eventLocations: [],
+        supplierLocations: [],
+      });
     }
   });
 
@@ -885,7 +1248,9 @@ export function registerPublicMapRoutes(app: Express) {
       destLat === null ||
       destLng === null
     ) {
-      return res.status(400).json({ message: "origin/destination is required" });
+      return res
+        .status(400)
+        .json({ message: "origin/destination is required" });
     }
 
     const withinBounds =
@@ -916,11 +1281,13 @@ export function registerPublicMapRoutes(app: Express) {
 
     const apiKey = getGoogleMapsApiKey();
     if (!apiKey) {
-      return res.status(503).json({ message: "Google Maps key not configured" });
+      return res
+        .status(503)
+        .json({ message: "Google Maps key not configured" });
     }
 
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         "https://routes.googleapis.com/directions/v2:computeRoutes",
         {
           method: "POST",
@@ -954,6 +1321,7 @@ export function registerPublicMapRoutes(app: Express) {
             units: "METRIC",
           }),
         },
+        MAP_PROVIDER_TIMEOUT_MS,
       );
 
       if (!response.ok) {
@@ -1003,7 +1371,14 @@ export function registerPublicMapRoutes(app: Express) {
     // ── Server-side cache check (5-minute TTL) ──────────────────────────────────
     // Cache key excludes sessionToken so the same query always hits the same entry.
     // sessionToken is only used for billing grouping, not for result differentiation.
-    const autocompleteCacheKey = input.toLowerCase();
+    const biasLat = parseAutocompleteCoordinate(req.query.lat, 90);
+    const biasLng = parseAutocompleteCoordinate(req.query.lng, 180);
+    const hasLocationBias = biasLat !== null && biasLng !== null;
+    const autocompleteCacheKey = [
+      input.toLowerCase(),
+      hasLocationBias ? biasLat.toFixed(2) : "no-lat",
+      hasLocationBias ? biasLng.toFixed(2) : "no-lng",
+    ].join(":");
     const acCached = placeAutocompleteCache.get(autocompleteCacheKey);
     if (acCached && acCached.expiresAt > Date.now()) {
       res.setHeader("Cache-Control", "public, max-age=300");
@@ -1020,10 +1395,28 @@ export function registerPublicMapRoutes(app: Express) {
         const payload: Record<string, unknown> = {
           input,
           includedRegionCodes: ["us"],
+          includedPrimaryTypes: [
+            "restaurant",
+            "cafe",
+            "bar",
+            "meal_takeaway",
+            "meal_delivery",
+          ],
           languageCode: "en",
         };
         if (sessionToken) payload.sessionToken = sessionToken;
-        const response = await fetch(
+        if (hasLocationBias) {
+          payload.locationBias = {
+            circle: {
+              center: {
+                latitude: biasLat,
+                longitude: biasLng,
+              },
+              radius: 50_000,
+            },
+          };
+        }
+        const response = await fetchWithTimeout(
           "https://places.googleapis.com/v1/places:autocomplete",
           {
             method: "POST",
@@ -1038,11 +1431,14 @@ export function registerPublicMapRoutes(app: Express) {
             ),
             body: JSON.stringify(payload),
           },
+          MAP_PROVIDER_TIMEOUT_MS,
         );
         if (!response.ok) return [];
         const data = (await response.json().catch(() => ({}))) as any;
-        const suggestions: PlaceAutocompletePrediction[] = Array.isArray(data?.suggestions)
-          ? data.suggestions
+        const suggestions: PlaceAutocompletePrediction[] = Array.isArray(
+          data?.suggestions,
+        )
+          ? (data.suggestions
               .map((item: any) => {
                 const prediction = item?.placePrediction;
                 if (!prediction?.placeId) return null;
@@ -1058,7 +1454,7 @@ export function registerPublicMapRoutes(app: Express) {
                   ).trim(),
                 };
               })
-              .filter(Boolean) as PlaceAutocompletePrediction[]
+              .filter(Boolean) as PlaceAutocompletePrediction[])
           : [];
         // Store in server-side cache
         placeAutocompleteCache.set(autocompleteCacheKey, {
@@ -1068,7 +1464,9 @@ export function registerPublicMapRoutes(app: Express) {
         return suggestions;
       })();
       autocompleteInflight.set(autocompleteCacheKey, inflightPromise);
-      inflightPromise.finally(() => autocompleteInflight.delete(autocompleteCacheKey));
+      inflightPromise.finally(() =>
+        autocompleteInflight.delete(autocompleteCacheKey),
+      );
     }
 
     try {
@@ -1077,7 +1475,9 @@ export function registerPublicMapRoutes(app: Express) {
       res.json({ suggestions });
     } catch (error) {
       console.warn("[map.place-autocomplete] failed", error);
-      res.status(200).json({ suggestions: [] as PlaceAutocompletePrediction[] });
+      res
+        .status(200)
+        .json({ suggestions: [] as PlaceAutocompletePrediction[] });
     }
   });
 
@@ -1089,7 +1489,9 @@ export function registerPublicMapRoutes(app: Express) {
 
     const apiKey = getGoogleMapsApiKey();
     if (!apiKey) {
-      return res.status(503).json({ message: "Google Maps key not configured" });
+      return res
+        .status(503)
+        .json({ message: "Google Maps key not configured" });
     }
 
     // ── Server-side cache check (24-hour TTL) ─────────────────────────────────
@@ -1104,7 +1506,7 @@ export function registerPublicMapRoutes(app: Express) {
     let pdInflight = placeDetailsInflight.get(placeId);
     if (!pdInflight) {
       pdInflight = (async () => {
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
           {
             headers: buildPlacesHeaders(
@@ -1118,6 +1520,7 @@ export function registerPublicMapRoutes(app: Express) {
               ].join(","),
             ),
           },
+          MAP_PROVIDER_TIMEOUT_MS,
         );
         if (!response.ok) {
           const text = await response.text().catch(() => "");
@@ -1193,7 +1596,8 @@ export function registerPublicMapRoutes(app: Express) {
 
       const bookings = rows.map((row: (typeof rows)[number]) => ({
         eventId: String(row.eventId),
-        date: row.date instanceof Date ? row.date.toISOString() : String(row.date),
+        date:
+          row.date instanceof Date ? row.date.toISOString() : String(row.date),
         startTime: String(row.startTime || ""),
         endTime: String(row.endTime || ""),
         truck: {
@@ -1213,7 +1617,9 @@ export function registerPublicMapRoutes(app: Express) {
       });
     } catch (error) {
       console.error("[map] host upcoming bookings failed:", error);
-      return res.status(500).json({ message: "Failed to load upcoming bookings" });
+      return res
+        .status(500)
+        .json({ message: "Failed to load upcoming bookings" });
     }
   });
 
@@ -1228,7 +1634,10 @@ export function registerPublicMapRoutes(app: Express) {
         200,
       );
       if (uniqueRestaurantIds.length === 0) {
-        return res.json({ generatedAt: new Date().toISOString(), restaurants: {} });
+        return res.json({
+          generatedAt: new Date().toISOString(),
+          restaurants: {},
+        });
       }
 
       const now = new Date();
@@ -1239,6 +1648,8 @@ export function registerPublicMapRoutes(app: Express) {
         .select({
           id: restaurants.id,
           rankingScore: restaurants.rankingScore,
+          googleRating: restaurants.googleRating,
+          googleReviewCount: restaurants.googleReviewCount,
         })
         .from(restaurants)
         .where(and(inTargetIds, eq(restaurants.isActive, true)))
@@ -1247,7 +1658,7 @@ export function registerPublicMapRoutes(app: Express) {
       const activeDealRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(deals.id),
+          count: sql<number>`count(*)`,
         })
         .from(deals)
         .where(
@@ -1263,7 +1674,7 @@ export function registerPublicMapRoutes(app: Express) {
       const claimRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(dealClaims.id),
+          count: sql<number>`count(*)`,
         })
         .from(dealClaims)
         .innerJoin(deals, eq(dealClaims.dealId, deals.id))
@@ -1278,7 +1689,7 @@ export function registerPublicMapRoutes(app: Express) {
       const viewRows = await db
         .select({
           restaurantId: deals.restaurantId,
-          count: db.$count(dealViews.id),
+          count: sql<number>`count(*)`,
         })
         .from(dealViews)
         .innerJoin(deals, eq(dealViews.dealId, deals.id))
@@ -1293,7 +1704,7 @@ export function registerPublicMapRoutes(app: Express) {
       const bookingRows = await db
         .select({
           restaurantId: events.bookedRestaurantId,
-          count: db.$count(events.id),
+          count: sql<number>`count(*)`,
         })
         .from(events)
         .where(
@@ -1335,31 +1746,41 @@ export function registerPublicMapRoutes(app: Express) {
         ),
       );
 
-      const scored = restaurantRows.map((row: (typeof restaurantRows)[number]) => {
-        const restaurantId = String(row.id || "");
-        const ranking = Math.max(0, Number(row.rankingScore || 0));
-        const activeDeals = activeDealsByRestaurant.get(restaurantId) || 0;
-        const claims30d = claimsByRestaurant.get(restaurantId) || 0;
-        const views30d = viewsByRestaurant.get(restaurantId) || 0;
-        const bookings30d = bookingsByRestaurant.get(restaurantId) || 0;
-        const rawScore =
-          ranking * 0.5 +
-          activeDeals * 15 +
-          claims30d * 4 +
-          bookings30d * 12 +
-          Math.min(40, Math.round(views30d / 5));
-        return {
-          restaurantId,
-          rawScore,
-          metrics: {
-            ranking,
-            activeDeals,
-            claims30d,
-            views30d,
-            bookings30d,
-          },
-        };
-      });
+      const scored = restaurantRows.map(
+        (row: (typeof restaurantRows)[number]) => {
+          const restaurantId = String(row.id || "");
+          const ranking = Math.max(0, Number(row.rankingScore || 0));
+          const externalRating = Number(row.googleRating || 0);
+          const externalReviewCount = Number(row.googleReviewCount || 0);
+          const externalScoreAdjustment =
+            Number.isFinite(externalRating) && externalRating > 0
+              ? computeExternalReviewAdjustment(externalRating) *
+                Math.min(1, Math.log10(Math.max(1, externalReviewCount)) / 3)
+              : 0;
+          const activeDeals = activeDealsByRestaurant.get(restaurantId) || 0;
+          const claims30d = claimsByRestaurant.get(restaurantId) || 0;
+          const views30d = viewsByRestaurant.get(restaurantId) || 0;
+          const bookings30d = bookingsByRestaurant.get(restaurantId) || 0;
+          const rawScore =
+            ranking * 0.5 +
+            externalScoreAdjustment +
+            activeDeals * 15 +
+            claims30d * 4 +
+            bookings30d * 12 +
+            Math.min(40, Math.round(views30d / 5));
+          return {
+            restaurantId,
+            rawScore,
+            metrics: {
+              ranking,
+              activeDeals,
+              claims30d,
+              views30d,
+              bookings30d,
+            },
+          };
+        },
+      );
 
       const maxRawScore = Math.max(
         1,
@@ -1427,11 +1848,14 @@ export function registerPublicMapRoutes(app: Express) {
       });
     } catch (error) {
       console.error("[map] business popularity failed:", error);
-      return res.status(500).json({ message: "Failed to load business popularity" });
+      return res
+        .status(500)
+        .json({ message: "Failed to load business popularity" });
     }
   });
 
   app.get("/api/map/foot-traffic", async (req, res) => {
+    const launchDegradedMode = isLaunchDegradedMode();
     const bounds = parseBounds(req.query as Record<string, unknown>);
     if (!bounds) {
       return res.status(400).json({ message: "Invalid map bounds" });
@@ -1455,6 +1879,7 @@ export function registerPublicMapRoutes(app: Express) {
     const since = new Date(Date.now() - maxWindowMinutes * 60 * 1000);
 
     const googlePlacesRequested =
+      !launchDegradedMode &&
       String(req.query.includeGoogle || "")
         .trim()
         .toLowerCase() === "true";
@@ -1538,7 +1963,9 @@ export function registerPublicMapRoutes(app: Express) {
     }
 
     const summarizeForWindow = (windowMinutes: number) => {
-      const rows = inBoundsRows.filter((row) => row.ageMinutes <= windowMinutes);
+      const rows = inBoundsRows.filter(
+        (row) => row.ageMinutes <= windowMinutes,
+      );
       const buckets = new Map<
         string,
         {
@@ -1595,7 +2022,8 @@ export function registerPublicMapRoutes(app: Express) {
             : undefined;
           const freshnessFactor = Math.max(
             0.35,
-            1 - (freshnessMinutes ?? windowMinutes) / Math.max(15, windowMinutes),
+            1 -
+              (freshnessMinutes ?? windowMinutes) / Math.max(15, windowMinutes),
           );
           const weightRaw =
             (bucket.uniqueActors.size * 2.4 + bucket.count * 0.7) *
@@ -1686,59 +2114,64 @@ export function registerPublicMapRoutes(app: Express) {
       supplyBuckets.set(key, bucket);
     };
 
-    try {
-      const centerLat = (bounds.north + bounds.south) / 2;
-      const centerLng = (bounds.east + bounds.west) / 2;
-      const radiusKm = Math.max(
-        2,
-        Math.min(120, estimateRadiusMetersFromBounds(bounds) / 1000),
-      );
-      const liveTrucks = await storage.getLiveTrucksNearby(
-        centerLat,
-        centerLng,
-        radiusKm,
-      );
-      for (const truck of liveTrucks) {
-        const lat = toFiniteNumber((truck as any).currentLatitude);
-        const lng = toFiniteNumber((truck as any).currentLongitude);
-        if (lat === null || lng === null) continue;
-        upsertSupplyBucket(lat, lng, { truckDelta: 1 });
+    if (!launchDegradedMode) {
+      try {
+        const centerLat = (bounds.north + bounds.south) / 2;
+        const centerLng = (bounds.east + bounds.west) / 2;
+        const radiusKm = Math.max(
+          2,
+          Math.min(120, estimateRadiusMetersFromBounds(bounds) / 1000),
+        );
+        const liveTrucks = await storage.getLiveTrucksNearby(
+          centerLat,
+          centerLng,
+          radiusKm,
+        );
+        for (const truck of liveTrucks) {
+          if (!(truck as any)?.isVerified) continue;
+          const lat = toFiniteNumber((truck as any).currentLatitude);
+          const lng = toFiniteNumber((truck as any).currentLongitude);
+          if (lat === null || lng === null) continue;
+          upsertSupplyBucket(lat, lng, { truckDelta: 1 });
+        }
+      } catch (error) {
+        console.error("Error loading map supply truck signals:", error);
       }
-    } catch (error) {
-      console.error("Error loading map supply truck signals:", error);
-    }
 
-    try {
-      const now = new Date();
-      const bookingWindowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-      const upcomingHostBookings = await db
-        .select({
-          hostId: hosts.id,
-          lat: hosts.latitude,
-          lng: hosts.longitude,
-        })
-        .from(events)
-        .innerJoin(hosts, eq(events.hostId, hosts.id))
-        .where(
-          and(
-            ne(events.status, "cancelled"),
-            gte(events.date, now),
-            lte(events.date, bookingWindowEnd),
-          ),
-        )
-        .limit(6000);
+      try {
+        const now = new Date();
+        const bookingWindowEnd = new Date(
+          now.getTime() + 14 * 24 * 60 * 60 * 1000,
+        );
+        const upcomingHostBookings = await db
+          .select({
+            hostId: hosts.id,
+            lat: hosts.latitude,
+            lng: hosts.longitude,
+          })
+          .from(events)
+          .innerJoin(hosts, eq(events.hostId, hosts.id))
+          .where(
+            and(
+              ne(events.status, "cancelled"),
+              gte(events.date, now),
+              lte(events.date, bookingWindowEnd),
+            ),
+          )
+          .limit(6000);
 
-      for (const row of upcomingHostBookings) {
-        const lat = toFiniteNumber(row.lat);
-        const lng = toFiniteNumber(row.lng);
-        if (lat === null || lng === null) continue;
-        upsertSupplyBucket(lat, lng, {
-          hostId: String(row.hostId || ""),
-          bookingDelta: 1,
-        });
+        for (const row of upcomingHostBookings) {
+          const lat = toFiniteNumber(row.lat);
+          const lng = toFiniteNumber(row.lng);
+          if (lat === null || lng === null) continue;
+          upsertSupplyBucket(lat, lng, {
+            hostId: String(row.hostId || ""),
+            bookingDelta: 1,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading map supply host signals:", error);
       }
-    } catch (error) {
-      console.error("Error loading map supply host signals:", error);
     }
 
     const rawSupplyCells = Array.from(supplyBuckets.values())
@@ -1808,26 +2241,27 @@ export function registerPublicMapRoutes(app: Express) {
               },
             },
           };
-          const response = await fetch(nearbyUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Goog-Api-Key": googleApiKey,
-              // Request only the fields we need to minimise billing SKU
-              "X-Goog-FieldMask":
-                "places.location,places.userRatingCount",
+          const response = await fetchWithTimeout(
+            nearbyUrl,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": googleApiKey,
+                // Request only the fields we need to minimise billing SKU
+                "X-Goog-FieldMask": "places.location,places.userRatingCount",
+              },
+              body: JSON.stringify(nearbyBody),
             },
-            body: JSON.stringify(nearbyBody),
-          });
-          const payload = (await response.json().catch(() => null)) as
-            | {
-                error?: { message?: string; status?: string };
-                places?: Array<{
-                  location?: { latitude?: number; longitude?: number };
-                  userRatingCount?: number;
-                }>;
-              }
-            | null;
+            MAP_PROVIDER_TIMEOUT_MS,
+          );
+          const payload = (await response.json().catch(() => null)) as {
+            error?: { message?: string; status?: string };
+            places?: Array<{
+              location?: { latitude?: number; longitude?: number };
+              userRatingCount?: number;
+            }>;
+          } | null;
 
           if (!response.ok || !payload || payload.error) {
             googlePlaces.error =
@@ -1868,7 +2302,10 @@ export function registerPublicMapRoutes(app: Express) {
               id: cellId("google_places", bucket.lat, bucket.lng),
               lat: bucket.lat,
               lng: bucket.lng,
-              weight: Math.max(6, Math.min(70, Math.round(bucket.weight * 0.75))),
+              weight: Math.max(
+                6,
+                Math.min(70, Math.round(bucket.weight * 0.75)),
+              ),
               source: "google_places" as const,
               count: bucket.count,
             }));
@@ -1880,9 +2317,11 @@ export function registerPublicMapRoutes(app: Express) {
       }
     }
 
-    const combinedCells = [...firstPartyCells, ...supplyCells, ...googlePlaces.cells].sort(
-      (a, b) => (b.weight || 0) - (a.weight || 0),
-    );
+    const combinedCells = [
+      ...firstPartyCells,
+      ...supplyCells,
+      ...googlePlaces.cells,
+    ].sort((a, b) => (b.weight || 0) - (a.weight || 0));
 
     const payload: FootTrafficPayload = {
       generatedAt: new Date().toISOString(),
@@ -1890,6 +2329,7 @@ export function registerPublicMapRoutes(app: Express) {
       requestedWindowMinutes,
       bounds,
       mode: trafficMode,
+      degradedMode: launchDegradedMode,
       signalQuality: {
         tier: signalTier,
         isLowDensity: signalTier === "sparse",
