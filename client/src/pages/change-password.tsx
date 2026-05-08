@@ -56,7 +56,7 @@ export default function ChangePassword() {
         ) {
           setLocation("/admin/dashboard");
         } else {
-          setLocation("/map");
+          setLocation("/scout");
         }
       }, 1000);
     },

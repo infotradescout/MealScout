@@ -204,4 +204,33 @@ test.describe("Scout local dashboard", () => {
     await expect(page.getByText("Menu").first()).toBeVisible();
     await expect(page.getByText("Save").first()).toBeVisible();
   });
+
+  test("regular customer navigation does not link to standalone map", async ({ page }) => {
+    await page.setViewportSize({ width: 430, height: 932 });
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+
+    await expect(page.locator('a[href="/map"], a[href$="/map"]')).toHaveCount(0);
+  });
+
+  test("Scout map expand stays on Scout", async ({ page }) => {
+    await page.setViewportSize({ width: 430, height: 932 });
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+
+    const mapContainer = page.getByTestId("scout-map-container");
+    await expect(mapContainer).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("button", { name: /expand map to fullscreen/i })
+      .click({ force: true });
+
+    await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
+    await expect(page.getByRole("button", { name: /collapse/i })).toBeVisible();
+  });
+
+  test("Parking Pass route owns the parking map experience", async ({ page }) => {
+    await page.goto(`${FRONTEND}/parking-pass`, { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(/\/parking-pass(?:[?#].*)?$/);
+    await expect(page.locator('a[href="/map"], a[href$="/map"]')).toHaveCount(0);
+  });
 });

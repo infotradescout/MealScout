@@ -896,7 +896,7 @@ export default function Home() {
                 <MapPin className="w-4 h-4 mr-2 text-primary" />
                 {isLoadingLocation ? "Locating..." : "Use location"}
               </Button>
-              <Link href="/map" className="w-full">
+              <Link href="/scout" className="w-full">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -909,7 +909,7 @@ export default function Home() {
                   }}
                 >
                   <MapIcon className="w-4 h-4 mr-2 text-primary" />
-                  Open map
+                  Open Scout
                 </Button>
               </Link>
               <Link href="#scout-deals-section" className="w-full">
@@ -1059,7 +1059,7 @@ export default function Home() {
                 {shortLocation === "Your Location" ? "Nearby Trucks" : `Open in ${shortLocation}`}
               </h3>
             </div>
-            <Link href="/map">
+            <Link href="/scout">
               <Button
                 variant="ghost"
                 className="text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest"
@@ -1301,7 +1301,7 @@ export default function Home() {
             <div className="text-center py-8 text-muted-foreground">
               <p className="mb-3">No public profiles to show yet.</p>
               <div className="flex flex-wrap justify-center gap-2">
-                <Link href="/map">
+                <Link href="/scout">
                   <Button size="sm" variant="outline">
                     Open Map
                   </Button>
@@ -1551,7 +1551,7 @@ export default function Home() {
                 <div className="text-center py-16 rounded-3xl border border-dashed border-white/10 bg-white/5">
                   <p className="text-white/40 text-sm font-medium mb-6">No deals nearby yet.</p>
                   <div className="flex flex-wrap justify-center gap-4">
-                    <Link href="/map">
+                    <Link href="/scout">
                       <Button className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest px-6 rounded-xl hover:bg-white/10">
                         Open Map
                       </Button>
@@ -1628,7 +1628,7 @@ export default function Home() {
               >
                 {isLoadingLocation ? "Locating..." : "Use Location"}
               </Button>
-              <Link href="/map">
+              <Link href="/scout">
                 <Button
                   className="bg-white/5 border border-white/10 text-white font-bold uppercase tracking-widest text-[10px] rounded-xl py-6 hover:bg-white/10 transition-all"
                   onPointerDown={() => {

@@ -63,9 +63,9 @@ const USER_ITEMS: ShareHubItem[] = [
   },
   {
     key: "map",
-    title: "Live Food Map",
+    title: "Scout Dashboard",
     description: "Send people straight to nearby food trucks and restaurants.",
-    href: "/map",
+    href: "/scout",
     audience: "Customers",
   },
   {

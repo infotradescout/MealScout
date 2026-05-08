@@ -444,7 +444,7 @@ export function GoogleMapSurface({
           if (mapContainerRef.current) ro.observe(mapContainerRef.current);
 
           // Also listen to window resize so the post-transition dispatch
-          // from explore-preview (fired 340ms after pull-down) triggers a
+          // from Scout (fired 340ms after pull-down) triggers a
           // full re-tile at the correct 100dvh dimensions.
           onWindowResizeRef.current = () => {
             if (mapRef.current) {

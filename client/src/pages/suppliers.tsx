@@ -658,7 +658,7 @@ export default function SuppliersPage() {
   return (
     <div className="min-h-screen pb-24">
       <h1 className="sr-only">MealScout supply marketplace</h1>
-      <BackHeader title="Supply Marketplace" fallbackHref="/map" />
+      <BackHeader title="Supply Marketplace" fallbackHref="/scout" />
 
       <div className="px-4 space-y-4">
         {!canUseBuyerTools && (
