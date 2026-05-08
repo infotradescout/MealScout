@@ -933,9 +933,9 @@ function CSSMapHero({
     <div className="absolute inset-0 overflow-hidden">
       <style>{`
         @keyframes hero-tile-drift {
-          /* Subtle breathing — no translation, just a tiny tilt shift */
+          /* Pure X-axis breathing only — no Z rotation, no lateral drift */
           0%   { transform: rotateX(48deg) rotateZ(-6deg); }
-          50%  { transform: rotateX(49deg) rotateZ(-5.5deg); }
+          50%  { transform: rotateX(49.5deg) rotateZ(-6deg); }
           100% { transform: rotateX(48deg) rotateZ(-6deg); }
         }
         @keyframes hero-pin-pulse {
@@ -1234,24 +1234,24 @@ function LiveNowEmptyCard({
     <button
       type="button"
       onClick={onCta}
-      className="block w-full text-left rounded-3xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
-      style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
+      className="block w-full text-left rounded-2xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
       aria-label={`${title} Open the map.`}
     >
-      <div className="relative aspect-[4/5] w-full p-5 flex flex-col">
+      <div className="flex items-center gap-4 px-4 py-4">
         <span
           className="h-10 w-10 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0"
           aria-hidden="true"
         >
           <MapPin className="h-5 w-5 text-amber-300" />
         </span>
-        <p className="mt-3 font-semibold text-white text-base leading-snug">
-          {title}
-        </p>
-        <p className="mt-1 text-sm text-white/70 leading-relaxed">{body}</p>
-        <span className="mt-auto inline-flex items-center gap-2 text-amber-200 text-sm font-semibold">
-          <NavigationIcon className="h-4 w-4" aria-hidden="true" />
-          Expand the map
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-white text-sm leading-snug">{title}</p>
+          <p className="mt-0.5 text-xs text-white/60 leading-snug">{body}</p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-amber-200 text-xs font-semibold shrink-0">
+          <NavigationIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Expand
         </span>
       </div>
     </button>
