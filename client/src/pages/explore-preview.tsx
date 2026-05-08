@@ -844,40 +844,47 @@ function SectionHeader({
 }
 
 /* ============================================================
-   CSS MAP HERO
-   The animated neon layer IS the map. Real user coords + real truck
-   lat/lng are projected onto the canvas so pins represent actual
-   locations. No tile SDK needed — Google Maps handles the real
-   interactive map when the user pulls down to fullscreen.
+   REAL-TILE MAP HERO
+   Uses Carto dark tiles loaded via <img> tags (no SDK) stitched
+   into a 3×3 grid centered on the user's lat/lng at zoom 15.
+   CSS perspective tilt gives the Google Earth 3D look.
+   Amber overlay + real projected pins sit on top.
    ============================================================ */
 
-/**
- * Convert a lat/lng offset from the user's center into a canvas
- * percentage position. We treat the hero canvas as a ~7km viewport
- * (roughly zoom-14 scale) centered on the user, with the user pin
- * anchored at 72% left / 50% top (right-quadrant anchor).
- *
- * Mercator scale at the equator: 1 degree lat ≈ 111km.
- * At zoom 14, ~7km fits in the viewport width.
- */
-const VIEWPORT_KM = 7; // km represented by 100% canvas width
-const KM_PER_DEG_LAT = 111.0;
-const USER_ANCHOR_X = 0.72; // user pin sits at 72% from left
-const USER_ANCHOR_Y = 0.50; // user pin sits at 50% from top
+const HERO_TILE_ZOOM = 15;
 
-function latlngToCanvasPct(
+/** Convert lat/lng to tile x/y at a given zoom level (Mercator). */
+function latlngToTile(lat: number, lng: number, zoom: number) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
+  );
+  return { x, y };
+}
+
+/**
+ * Convert a lat/lng to a pixel offset within the 3×3 tile grid (768×768px).
+ * The center tile's top-left is at pixel (256, 256).
+ * Returns percentage of the 768px grid width/height.
+ */
+function latlngToGridPct(
   lat: number,
   lng: number,
-  userLat: number,
-  userLng: number,
+  centerTileX: number,
+  centerTileY: number,
+  zoom: number,
 ): { x: number; y: number } {
-  const kmPerDegLng = KM_PER_DEG_LAT * Math.cos((userLat * Math.PI) / 180);
-  const dxKm = (lng - userLng) * kmPerDegLng;
-  const dyKm = (lat - userLat) * KM_PER_DEG_LAT;
-  // x increases left→right, y increases top→bottom
-  const x = USER_ANCHOR_X + dxKm / VIEWPORT_KM;
-  const y = USER_ANCHOR_Y - dyKm / VIEWPORT_KM; // lat increases upward
-  return { x, y };
+  const n = Math.pow(2, zoom);
+  const tileX = ((lng + 180) / 360) * n;
+  const latRad = (lat * Math.PI) / 180;
+  const tileY =
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+  // Offset from top-left of center tile in pixels (each tile = 256px)
+  const pxX = (tileX - centerTileX + 1) * 256; // +1 because grid starts at centerTile-1
+  const pxY = (tileY - centerTileY + 1) * 256;
+  return { x: pxX / 768, y: pxY / 768 };
 }
 
 function CSSMapHero({
@@ -887,158 +894,183 @@ function CSSMapHero({
   markers: MapAdapterMarker[];
   userLocation: { lat: number; lng: number };
 }) {
+  // Recompute whenever userLocation changes — map tracks user movement
+  const { centerTileX, centerTileY, tiles, userPct } = useMemo(() => {
+    const { x: ctx, y: cty } = latlngToTile(
+      userLocation.lat,
+      userLocation.lng,
+      HERO_TILE_ZOOM,
+    );
+    const t: { tx: number; ty: number }[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        t.push({ tx: ctx + dx, ty: cty + dy });
+      }
+    }
+    // User is always at the exact center of the 768×768 grid (50%, 50%)
+    // because the tile grid is centered on their tile.
+    // Sub-tile offset: how far within the center tile the user sits.
+    const n = Math.pow(2, HERO_TILE_ZOOM);
+    const exactTileX = ((userLocation.lng + 180) / 360) * n;
+    const latRad = (userLocation.lat * Math.PI) / 180;
+    const exactTileY =
+      ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
+    // Sub-pixel offset within the center tile (0–1 within 256px tile)
+    const subX = exactTileX - Math.floor(exactTileX);
+    const subY = exactTileY - Math.floor(exactTileY);
+    // In the 768px grid, center tile starts at px 256
+    const pxX = 256 + subX * 256;
+    const pxY = 256 + subY * 256;
+    return {
+      centerTileX: ctx,
+      centerTileY: cty,
+      tiles: t,
+      userPct: { x: pxX / 768, y: pxY / 768 },
+    };
+  }, [userLocation.lat, userLocation.lng]);
+
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Google Earth 3D-style city animation — perspective grid, building blocks,
-          amber-lit streets at night. Pure CSS + SVG, no image dependency. */}
+      <style>{`
+        @keyframes hero-tile-drift {
+          0%   { transform: rotateX(48deg) rotateZ(-6deg) translateX(0px) translateY(0px); }
+          33%  { transform: rotateX(50deg) rotateZ(-5deg) translateX(-6px) translateY(-4px); }
+          66%  { transform: rotateX(47deg) rotateZ(-7deg) translateX(-10px) translateY(-6px); }
+          100% { transform: rotateX(48deg) rotateZ(-6deg) translateX(0px) translateY(0px); }
+        }
+        @keyframes hero-pin-pulse {
+          0%   { transform: scale(0.7); opacity: 0.8; }
+          70%  { transform: scale(2.4); opacity: 0; }
+          100% { transform: scale(2.4); opacity: 0; }
+        }
+        @keyframes hero-user-pulse {
+          0%   { transform: scale(0.8); opacity: 0.9; }
+          70%  { transform: scale(2.8); opacity: 0; }
+          100% { transform: scale(2.8); opacity: 0; }
+        }
+        /* Hide Leaflet attribution in hero — it's a non-interactive preview */
+        .hero-tile-grid .leaflet-control { display: none !important; }
+      `}</style>
 
-      {/* Deep space base */}
+      {/* Dark base */}
       <div aria-hidden="true" className="absolute inset-0" style={{ background: "#05070d" }} />
 
-      {/* Perspective city grid — CSS 3D transform gives the tilted Earth view */}
+      {/* 3D perspective wrapper */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
-        style={{
-          perspective: "600px",
-          perspectiveOrigin: "50% 30%",
-          overflow: "hidden",
-        }}
+        style={{ perspective: "700px", perspectiveOrigin: "50% 25%", overflow: "hidden" }}
       >
-        {/* The grid plane tilted like Google Earth */}
+        {/* Tilted tile plane — oversized so edges don't show after tilt */}
         <div
           style={{
             position: "absolute",
-            inset: "-60% -40%",
-            transform: "rotateX(52deg) rotateZ(-8deg)",
+            // Center the 768×768 grid and scale up slightly to fill after tilt
+            left: "50%",
+            top: "50%",
+            width: 768,
+            height: 768,
+            marginLeft: -384,
+            marginTop: -384,
+            transform: "rotateX(48deg) rotateZ(-6deg)",
             transformOrigin: "50% 60%",
-            animation: "earth3d-drift 18s ease-in-out infinite",
+            animation: "hero-tile-drift 20s ease-in-out infinite",
           }}
         >
-          <svg
-            width="100%"
-            height="100%"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ display: "block" }}
+          {/* 3×3 tile grid */}
+          <div
+            className="hero-tile-grid"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              gridTemplateColumns: "256px 256px 256px",
+              gridTemplateRows: "256px 256px 256px",
+            }}
           >
-            <defs>
-              {/* Street grid: major block every 60px, minor every 20px */}
-              <pattern id="ge-minor" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="0.4" />
-              </pattern>
-              <pattern id="ge-major" width="60" height="60" patternUnits="userSpaceOnUse">
-                <rect width="60" height="60" fill="url(#ge-minor)" />
-                <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(245,158,11,0.35)" strokeWidth="1.5" />
-              </pattern>
-              {/* Diagonal boulevard */}
-              <pattern id="ge-blvd" width="180" height="180" patternUnits="userSpaceOnUse">
-                <path d="M 0 180 L 180 0" fill="none" stroke="rgba(245,158,11,0.14)" strokeWidth="2" />
-                <path d="M -90 180 L 90 0" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="1.2" />
-                <path d="M 90 180 L 270 0" fill="none" stroke="rgba(245,158,11,0.08)" strokeWidth="1.2" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="#080b12" />
-            <rect width="100%" height="100%" fill="url(#ge-major)" />
-            <rect width="100%" height="100%" fill="url(#ge-blvd)" />
-
-            {/* City block fills — dark rectangles between streets = buildings */}
-            {[
-              [20,20,38,38],[80,20,38,38],[140,20,38,18],[200,20,18,38],[260,20,38,38],[320,20,38,38],[380,20,18,18],[400,20,38,38],[460,20,38,38],[520,20,38,18],
-              [20,80,18,38],[40,80,38,38],[100,80,38,18],[140,80,18,38],[200,80,38,38],[260,80,18,18],[280,80,38,38],[340,80,38,18],[380,80,38,38],[440,80,18,38],[460,80,38,38],[520,80,38,38],
-              [20,140,38,18],[60,140,18,38],[80,140,38,38],[140,140,38,38],[200,140,18,18],[220,140,38,38],[280,140,38,18],[320,140,18,38],[340,140,38,38],[400,140,38,38],[460,140,18,18],[480,140,38,38],
-              [20,200,38,38],[80,200,18,18],[100,200,38,38],[160,200,38,18],[200,200,18,38],[220,200,38,38],[280,200,38,38],[340,200,18,18],[360,200,38,38],[420,200,38,18],[460,200,38,38],[520,200,18,38],
-              [20,260,18,38],[40,260,38,38],[100,260,38,18],[140,260,38,38],[200,260,18,38],[220,260,38,18],[260,260,18,38],[280,260,38,38],[340,260,38,38],[400,260,18,18],[420,260,38,38],[480,260,38,18],[520,260,18,38],
-              [20,320,38,18],[60,320,18,38],[80,320,38,38],[140,320,18,18],[160,320,38,38],[220,320,38,18],[260,320,38,38],[320,320,18,38],[340,320,38,38],[400,320,38,18],[440,320,18,38],[460,320,38,38],
-            ].map(([x, y, w, h], i) => (
-              <rect
-                key={i}
-                x={x} y={y} width={w} height={h}
-                fill={i % 7 === 0 ? "rgba(245,158,11,0.04)" : i % 3 === 0 ? "rgba(20,24,36,0.9)" : "rgba(12,15,22,0.95)"}
-                rx="1"
+            {tiles.map(({ tx, ty }) => (
+              <img
+                key={`${tx}-${ty}`}
+                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
+                width={256}
+                height={256}
+                alt=""
+                style={{ display: "block", imageRendering: "crisp-edges" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.background = "#080b12";
+                }}
               />
             ))}
-          </svg>
+          </div>
+
+          {/* Amber neon overlay on the real tiles */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: `
+                radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(245,158,11,0.22) 0%, rgba(245,158,11,0.06) 20%, transparent 45%),
+                linear-gradient(180deg, rgba(5,7,13,0.3) 0%, transparent 30%, transparent 70%, rgba(5,7,13,0.5) 100%)
+              `,
+              mixBlendMode: "screen",
+            }}
+          />
         </div>
       </div>
 
-      {/* Ambient street-light glow pools along the grid */}
-      <div aria-hidden="true" className="absolute inset-0" style={{
-        background: `
-          radial-gradient(ellipse at 30% 55%, rgba(245,158,11,0.10) 0%, transparent 35%),
-          radial-gradient(ellipse at 65% 45%, rgba(245,158,11,0.08) 0%, transparent 30%),
-          radial-gradient(ellipse at 80% 65%, rgba(245,158,11,0.06) 0%, transparent 25%),
-          radial-gradient(ellipse at 45% 70%, rgba(180,83,9,0.07) 0%, transparent 30%),
-          linear-gradient(180deg, rgba(5,7,13,0.55) 0%, rgba(5,7,13,0) 35%, rgba(5,7,13,0) 60%, rgba(5,7,13,0.92) 100%)
-        `,
-        animation: "earth3d-glow 8s ease-in-out infinite",
-      }} />
+      {/* Edge fade so the tilted grid blends into the dark background */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `
+            linear-gradient(180deg, rgba(5,7,13,0.6) 0%, transparent 22%, transparent 62%, rgba(5,7,13,0.95) 100%),
+            linear-gradient(90deg, rgba(5,7,13,0.5) 0%, transparent 15%, transparent 85%, rgba(5,7,13,0.5) 100%)
+          `,
+        }}
+      />
 
-      {/* Keyframes */}
-      <style>{`
-        @keyframes earth3d-drift {
-          0%   { transform: rotateX(52deg) rotateZ(-8deg) translateX(0px) translateY(0px); }
-          25%  { transform: rotateX(54deg) rotateZ(-7deg) translateX(-8px) translateY(-5px); }
-          50%  { transform: rotateX(52deg) rotateZ(-9deg) translateX(-14px) translateY(-8px); }
-          75%  { transform: rotateX(50deg) rotateZ(-8deg) translateX(-6px) translateY(-3px); }
-          100% { transform: rotateX(52deg) rotateZ(-8deg) translateX(0px) translateY(0px); }
-        }
-        @keyframes earth3d-glow {
-          0%,100% { opacity: 1; }
-          50%      { opacity: 0.75; }
-        }
-      `}</style>
-
-      {/* Inline keyframes for pin pulse */}
-      <style>{`
-        @keyframes cssmap-pin-pulse {
-          0%   { transform: scale(0.7); opacity: 0.7; }
-          70%  { transform: scale(2.2); opacity: 0; }
-          100% { transform: scale(2.2); opacity: 0; }
-        }
-        @keyframes cssmap-user-pulse {
-          0%   { transform: scale(0.8); opacity: 0.8; }
-          70%  { transform: scale(2.6); opacity: 0; }
-          100% { transform: scale(2.6); opacity: 0; }
-        }
-      `}</style>
-
-      {/* Real truck pins — projected from actual lat/lng onto the canvas */}
+      {/* Pins layer — flat on top of the perspective view */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
         {markers
           .filter((m) => m.lat != null && m.lng != null)
           .map((marker, i) => {
-            const { x, y } = latlngToCanvasPct(
+            const pct = latlngToGridPct(
               marker.lat,
               marker.lng,
-              userLocation.lat,
-              userLocation.lng,
+              centerTileX,
+              centerTileY,
+              HERO_TILE_ZOOM,
             );
-            // Skip pins that fall outside the visible canvas
-            if (x < -0.05 || x > 1.05 || y < -0.05 || y > 1.05) return null;
-            const delay = `${(i * 0.35) % 2.4}s`;
+            if (pct.x < -0.05 || pct.x > 1.05 || pct.y < -0.05 || pct.y > 1.05) return null;
+            const delay = `${(i * 0.4) % 2.4}s`;
             return (
               <div
                 key={marker.id}
                 className="absolute"
                 style={{
-                  left: `${x * 100}%`,
-                  top: `${y * 100}%`,
+                  left: `${pct.x * 100}%`,
+                  top: `${pct.y * 100}%`,
                   transform: "translate(-50%, -50%)",
                 }}
               >
-                <div className="relative" style={{ width: 16, height: 16 }}>
+                <div style={{ position: "relative", width: 16, height: 16 }}>
                   <span
-                    className="absolute inset-0 rounded-full"
                     style={{
+                      position: "absolute",
+                      inset: 0,
+                      borderRadius: "50%",
                       background: "rgba(245,158,11,0.35)",
-                      animation: `cssmap-pin-pulse 2.8s ease-out ${delay} infinite`,
+                      animation: `hero-pin-pulse 2.8s ease-out ${delay} infinite`,
                     }}
                   />
                   <span
-                    className="absolute rounded-full bg-amber-400"
                     style={{
+                      position: "absolute",
                       inset: 3,
-                      boxShadow: "0 0 10px 2px rgba(245,158,11,0.65)",
+                      borderRadius: "50%",
+                      background: "#f59e0b",
+                      boxShadow: "0 0 10px 2px rgba(245,158,11,0.7)",
                     }}
                   />
                 </div>
@@ -1046,33 +1078,41 @@ function CSSMapHero({
             );
           })}
 
-        {/* User location pin — anchored at right-quadrant center */}
+        {/* User location pin */}
         <div
           className="absolute"
-          style={{ left: `${USER_ANCHOR_X * 100}%`, top: `${USER_ANCHOR_Y * 100}%`, transform: "translate(-50%, -50%)" }}
+          style={{
+            left: `${userPct.x * 100}%`,
+            top: `${userPct.y * 100}%`,
+            transform: "translate(-50%, -50%)",
+          }}
         >
-          <div className="relative">
-            <span
-              className="absolute rounded-full"
-              style={{
-                background: "rgba(245,158,11,0.25)",
-                animation: "cssmap-user-pulse 2.4s ease-out infinite",
-                width: 36,
-                height: 36,
-                top: -8,
-                left: -8,
-              }}
-            />
-            <div
-              className="relative flex items-center justify-center rounded-full bg-amber-400"
-              style={{
-                width: 20,
-                height: 20,
-                boxShadow: "0 0 18px 4px rgba(245,158,11,0.7), 0 0 0 3px rgba(245,158,11,0.3)",
-              }}
-            >
-              <NavigationIcon className="w-3 h-3 text-black fill-current rotate-45" />
-            </div>
+          <span
+            style={{
+              position: "absolute",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "rgba(245,158,11,0.22)",
+              animation: "hero-user-pulse 2.4s ease-out infinite",
+              top: -8,
+              left: -8,
+            }}
+          />
+          <div
+            style={{
+              position: "relative",
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              background: "#f59e0b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 0 20px 5px rgba(245,158,11,0.7), 0 0 0 3px rgba(245,158,11,0.3)",
+            }}
+          >
+            <NavigationIcon style={{ width: 12, height: 12, color: "#000", fill: "currentColor", transform: "rotate(45deg)" }} />
           </div>
         </div>
       </div>
