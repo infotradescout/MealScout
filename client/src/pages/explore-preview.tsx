@@ -472,7 +472,7 @@ export default function ExplorePreview() {
           className="relative w-full overflow-hidden"
           style={{
             height:
-              sheetState === "fullMap" ? "100dvh" : "min(58vh, 560px)",
+              sheetState === "fullMap" ? "100dvh" : "min(38vh, 320px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
           }}
         >
@@ -516,18 +516,12 @@ export default function ExplorePreview() {
                   }
                 />
               )
-            ) : coords ? (
+            ) : (
               <ThemedScoutMap
-                userLocation={coords}
+                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
                 markers={truckMarkers}
                 onMarkerTap={handleMarkerTap}
                 zoom={HERO_ZOOM}
-              />
-            ) : (
-              <HeroMapFallback
-                reason={
-                  locationStatus === "denied" ? "denied" : "loading"
-                }
               />
             )}
           </div>
@@ -590,30 +584,7 @@ export default function ExplorePreview() {
             </div>
           )}
 
-          {/* Hero copy (left column only). */}
-          {sheetState !== "fullMap" && (
-            <div className="relative z-10 px-5 pt-5 md:pt-7 pointer-events-none">
-              <div className="max-w-[58%] md:max-w-[52%]">
-                <p className="text-[11px] tracking-[0.32em] text-white/85 uppercase font-semibold mb-4">
-                  MealScout
-                </p>
-                <h1
-                  className="text-white font-extrabold leading-[1.0] tracking-tight"
-                  style={{
-                    fontFamily:
-                      "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
-                    fontSize: "clamp(40px, 11vw, 60px)",
-                    textShadow: "0 2px 28px rgba(0,0,0,0.85)",
-                  }}
-                >
-                  {greetingFirstLine}
-                  <br />
-                  {greetingSecondLine}
-                </h1>
 
-              </div>
-            </div>
-          )}
 
           {/* Floating "Expand map" button (top-right) — visible in default state. */}
           {sheetState === "default" && (
