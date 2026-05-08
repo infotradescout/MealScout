@@ -113,8 +113,17 @@ test.describe("welcome and Scout routing law", () => {
     await dismissBetaDialog(page);
 
     await expect(page.getByTestId("welcome-landing")).toBeVisible();
-    await expect(page.getByRole("link", { name: /sign up free/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /^log in$/i }).first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /welcome to mealscout/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: /create your free mealscout account/i,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /log in to your mealscout account/i }),
+    ).toBeVisible();
     await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
   });
 
