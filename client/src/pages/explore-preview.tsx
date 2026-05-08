@@ -517,7 +517,10 @@ export default function ExplorePreview() {
                 />
               )
             ) : (
-              <CSSMapHero markers={truckMarkers} hasLocation={!!coords} />
+              <CSSMapHero
+                markers={truckMarkers}
+                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
+              />
             )}
           </div>
 
@@ -841,26 +844,48 @@ function SectionHeader({
 }
 
 /* ============================================================
-   CSS MAP HERO — dark satellite photo + amber pins (no SDK needed)
-   Matches the welcome screen reference design.
+   CSS MAP HERO
+   The animated neon layer IS the map. Real user coords + real truck
+   lat/lng are projected onto the canvas so pins represent actual
+   locations. No tile SDK needed — Google Maps handles the real
+   interactive map when the user pulls down to fullscreen.
    ============================================================ */
 
-// Fixed pin positions that look like a real neighborhood scatter.
-// These are visual only — they don't correspond to real coordinates.
-const STATIC_PINS = [
-  { left: "62%", top: "28%", delay: "0s",   size: "lg" },
-  { left: "74%", top: "52%", delay: "0.4s", size: "sm" },
-  { left: "55%", top: "60%", delay: "0.8s", size: "sm" },
-  { left: "80%", top: "35%", delay: "1.2s", size: "sm" },
-  { left: "68%", top: "72%", delay: "1.6s", size: "sm" },
-] as const;
+/**
+ * Convert a lat/lng offset from the user's center into a canvas
+ * percentage position. We treat the hero canvas as a ~7km viewport
+ * (roughly zoom-14 scale) centered on the user, with the user pin
+ * anchored at 72% left / 50% top (right-quadrant anchor).
+ *
+ * Mercator scale at the equator: 1 degree lat ≈ 111km.
+ * At zoom 14, ~7km fits in the viewport width.
+ */
+const VIEWPORT_KM = 7; // km represented by 100% canvas width
+const KM_PER_DEG_LAT = 111.0;
+const USER_ANCHOR_X = 0.72; // user pin sits at 72% from left
+const USER_ANCHOR_Y = 0.50; // user pin sits at 50% from top
+
+function latlngToCanvasPct(
+  lat: number,
+  lng: number,
+  userLat: number,
+  userLng: number,
+): { x: number; y: number } {
+  const kmPerDegLng = KM_PER_DEG_LAT * Math.cos((userLat * Math.PI) / 180);
+  const dxKm = (lng - userLng) * kmPerDegLng;
+  const dyKm = (lat - userLat) * KM_PER_DEG_LAT;
+  // x increases left→right, y increases top→bottom
+  const x = USER_ANCHOR_X + dxKm / VIEWPORT_KM;
+  const y = USER_ANCHOR_Y - dyKm / VIEWPORT_KM; // lat increases upward
+  return { x, y };
+}
 
 function CSSMapHero({
   markers,
-  hasLocation,
+  userLocation,
 }: {
   markers: MapAdapterMarker[];
-  hasLocation: boolean;
+  userLocation: { lat: number; lng: number };
 }) {
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -898,50 +923,65 @@ function CSSMapHero({
         }
       `}</style>
 
-      {/* Truck pins — static positions that look like a real scatter */}
+      {/* Real truck pins — projected from actual lat/lng onto the canvas */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        {STATIC_PINS.map((pin, i) => (
-          <div
-            key={i}
-            className="absolute"
-            style={{ left: pin.left, top: pin.top, transform: "translate(-50%, -50%)" }}
-          >
-            <div className="relative" style={{ width: pin.size === "lg" ? 20 : 14, height: pin.size === "lg" ? 20 : 14 }}>
-              {/* Pulse ring */}
-              <span
-                className="absolute inset-0 rounded-full"
+        {markers
+          .filter((m) => m.lat != null && m.lng != null)
+          .map((marker, i) => {
+            const { x, y } = latlngToCanvasPct(
+              marker.lat,
+              marker.lng,
+              userLocation.lat,
+              userLocation.lng,
+            );
+            // Skip pins that fall outside the visible canvas
+            if (x < -0.05 || x > 1.05 || y < -0.05 || y > 1.05) return null;
+            const delay = `${(i * 0.35) % 2.4}s`;
+            return (
+              <div
+                key={marker.id}
+                className="absolute"
                 style={{
-                  background: "rgba(245,158,11,0.35)",
-                  animation: `cssmap-pin-pulse 2.8s ease-out ${pin.delay} infinite`,
+                  left: `${x * 100}%`,
+                  top: `${y * 100}%`,
+                  transform: "translate(-50%, -50%)",
                 }}
-              />
-              {/* Core dot */}
-              <span
-                className="absolute rounded-full bg-amber-400"
-                style={{
-                  inset: pin.size === "lg" ? 4 : 3,
-                  boxShadow: "0 0 10px 2px rgba(245,158,11,0.65)",
-                }}
-              />
-            </div>
-          </div>
-        ))}
+              >
+                <div className="relative" style={{ width: 16, height: 16 }}>
+                  <span
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: "rgba(245,158,11,0.35)",
+                      animation: `cssmap-pin-pulse 2.8s ease-out ${delay} infinite`,
+                    }}
+                  />
+                  <span
+                    className="absolute rounded-full bg-amber-400"
+                    style={{
+                      inset: 3,
+                      boxShadow: "0 0 10px 2px rgba(245,158,11,0.65)",
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
 
-        {/* User location pin — center-right, amber with navigation icon */}
+        {/* User location pin — anchored at right-quadrant center */}
         <div
           className="absolute"
-          style={{ left: "72%", top: "50%", transform: "translate(-50%, -50%)" }}
+          style={{ left: `${USER_ANCHOR_X * 100}%`, top: `${USER_ANCHOR_Y * 100}%`, transform: "translate(-50%, -50%)" }}
         >
           <div className="relative">
             <span
-              className="absolute inset-0 rounded-full"
+              className="absolute rounded-full"
               style={{
                 background: "rgba(245,158,11,0.25)",
                 animation: "cssmap-user-pulse 2.4s ease-out infinite",
-                width: 32,
-                height: 32,
-                top: -6,
-                left: -6,
+                width: 36,
+                height: 36,
+                top: -8,
+                left: -8,
               }}
             />
             <div
