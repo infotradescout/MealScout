@@ -82,13 +82,20 @@ export function registerDealDiscoveryRoutes(
       const filteredDeals = await filterDealsByBusinessAccess(
         featuredDeals as any[],
       );
+      const payloadDeals =
+        filteredDeals.length > 0 || featuredDeals.length === 0
+          ? filteredDeals
+          : featuredDeals;
+      if (filteredDeals.length === 0 && featuredDeals.length > 0) {
+        res.setHeader("X-MealScout-Fallback", "unfiltered-featured-deals");
+      }
 
       res.set({
         "Cache-Control": "public, max-age=300",
         ETag: `"deals-${filter || "all"}-${Date.now()}"`,
       });
 
-      res.json(filteredDeals);
+      res.json(payloadDeals);
     } catch (error) {
       console.error("Error fetching featured deals:", error);
       res.status(500).json({ message: "Failed to fetch featured deals" });
@@ -246,7 +253,14 @@ export function registerDealDiscoveryRoutes(
       const filteredDeals = await filterDealsByBusinessAccess(
         nearbyDeals as any[],
       );
-      res.json(filteredDeals);
+      const payloadDeals =
+        filteredDeals.length > 0 || nearbyDeals.length === 0
+          ? filteredDeals
+          : nearbyDeals;
+      if (filteredDeals.length === 0 && nearbyDeals.length > 0) {
+        res.setHeader("X-MealScout-Fallback", "unfiltered-nearby-deals");
+      }
+      res.json(payloadDeals);
     } catch (error) {
       console.error("Error fetching nearby deals:", error);
       res.status(500).json({ message: "Failed to fetch nearby deals" });

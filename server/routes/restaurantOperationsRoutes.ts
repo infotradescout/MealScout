@@ -716,7 +716,13 @@ export function registerRestaurantOperationsRoutes(
         )
       ).filter(Boolean);
 
-      res.json({ trucks: visibleTrucks });
+      const payloadTrucks =
+        visibleTrucks.length > 0 || trucks.length === 0 ? visibleTrucks : trucks;
+      if (visibleTrucks.length === 0 && trucks.length > 0) {
+        res.setHeader("X-MealScout-Fallback", "unfiltered-live-trucks");
+      }
+
+      res.json({ trucks: payloadTrucks });
     } catch (error) {
       console.error("Error fetching live trucks:", error);
       res.status(500).json({ message: "Failed to fetch live trucks" });

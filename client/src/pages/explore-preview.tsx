@@ -140,6 +140,47 @@ interface RestaurantSummary {
   lng?: number | null;
 }
 
+interface ParkingPassListing {
+  id: string;
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  hostId?: string | null;
+  hostName?: string | null;
+  businessName?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  imageUrl?: string | null;
+  heroImageUrl?: string | null;
+  spotImageUrl?: string | null;
+  spotCount?: number | null;
+  maxTrucks?: number | null;
+  bookedSpots?: number | null;
+  availableSpotNumbers?: number[] | null;
+  availableSpots?: number | null;
+  hostPriceCents?: number | null;
+  breakfastPriceCents?: number | null;
+  lunchPriceCents?: number | null;
+  dinnerPriceCents?: number | null;
+  dailyPriceCents?: number | null;
+  weeklyPriceCents?: number | null;
+  monthlyPriceCents?: number | null;
+  paymentsEnabled?: boolean | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  host?: {
+    businessName?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    imageUrl?: string | null;
+    spotImageUrl?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+  } | null;
+}
+
 type CravingCategory = {
   id: string;
   label: string;
@@ -404,31 +445,6 @@ export default function ExplorePreview() {
 
   /* --------- parking pass hosts --------- */
 
-  interface ParkingPassListing {
-    id: string;
-    hostId?: string | null;
-    hostName?: string | null;
-    businessName?: string | null;
-    address?: string | null;
-    city?: string | null;
-    state?: string | null;
-    imageUrl?: string | null;
-    heroImageUrl?: string | null;
-    spotCount?: number | null;
-    availableSpots?: number | null;
-    paymentsEnabled?: boolean | null;
-    latitude?: number | null;
-    longitude?: number | null;
-    host?: {
-      businessName?: string | null;
-      city?: string | null;
-      state?: string | null;
-      imageUrl?: string | null;
-      latitude?: number | null;
-      longitude?: number | null;
-    } | null;
-  }
-
   const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
     queryKey: ["/api/parking-pass"],
     queryFn: async () => {
@@ -530,11 +546,24 @@ export default function ExplorePreview() {
   const parkingMarkers = useMemo<MapAdapterMarker[]>(() => {
     return parkingPassHosts
       .map((p) => {
-        // Coordinates may be on the listing directly or nested under host
-        const lat = p.latitude ?? p.host?.latitude;
-        const lng = p.longitude ?? p.host?.longitude;
-        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const parseCoord = (value: number | string | null | undefined) => {
+          if (value === null || value === undefined) return null;
+          const parsed = typeof value === "string" ? Number(value) : value;
+          return Number.isFinite(parsed) ? parsed : null;
+        };
+        // Coordinates may be on the listing directly or nested under host.
+        const lat = parseCoord(p.latitude ?? p.host?.latitude);
+        const lng = parseCoord(p.longitude ?? p.host?.longitude);
+        if (lat === null || lng === null) return null;
         const name = p.businessName ?? p.hostName ?? p.host?.businessName ?? undefined;
+        const capacity = p.spotCount ?? p.maxTrucks ?? null;
+        const openSpots = Array.isArray(p.availableSpotNumbers)
+          ? p.availableSpotNumbers.length
+          : typeof p.availableSpots === "number"
+            ? p.availableSpots
+            : typeof capacity === "number" && typeof p.bookedSpots === "number"
+              ? Math.max(0, capacity - p.bookedSpots)
+              : null;
         return {
           id: `parking-${p.id}`,
           sourceId: String(p.id),
@@ -542,7 +571,10 @@ export default function ExplorePreview() {
           lat,
           lng,
           title: name,
-          subtitle: p.availableSpots != null ? `${p.availableSpots} spots` : undefined,
+          subtitle:
+            typeof openSpots === "number" && openSpots >= 0
+              ? `${openSpots} spot${openSpots === 1 ? "" : "s"} open`
+              : undefined,
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
@@ -581,6 +613,22 @@ export default function ExplorePreview() {
     null,
   );
   const userPushedMapRef = useRef(false);
+
+  const openScoutMap = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set("src", "scout");
+    if (
+      coords &&
+      Number.isFinite(coords.lat) &&
+      Number.isFinite(coords.lng)
+    ) {
+      params.set("lat", String(coords.lat));
+      params.set("lng", String(coords.lng));
+      params.set("z", String(Math.max(12, Math.round(mapZoom || HERO_ZOOM))));
+    }
+    const q = params.toString();
+    navigate(q ? `/map?${q}` : "/map");
+  }, [coords, mapZoom, navigate]);
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
@@ -636,13 +684,21 @@ export default function ExplorePreview() {
 
   const dragStartY = useRef<number | null>(null);
   const dragLastY = useRef<number | null>(null);
+  const mouseDragStartY = useRef<number | null>(null);
+  const mouseDragLastY = useRef<number | null>(null);
+  const topPullStartY = useRef<number | null>(null);
 
   const handleSheetTouchStart = useCallback((e: React.TouchEvent) => {
     dragStartY.current = e.touches[0].clientY;
     dragLastY.current = e.touches[0].clientY;
   }, []);
   const handleSheetTouchMove = useCallback((e: React.TouchEvent) => {
-    dragLastY.current = e.touches[0].clientY;
+    const y = e.touches[0].clientY;
+    dragLastY.current = y;
+    const start = dragStartY.current;
+    if (start !== null && window.scrollY <= 0 && y - start > 10) {
+      e.preventDefault();
+    }
   }, []);
   const handleSheetTouchEnd = useCallback(() => {
     const start = dragStartY.current;
@@ -655,12 +711,89 @@ export default function ExplorePreview() {
     // On the DRAG HANDLE: swipe UP (delta < 0) also expands to fullMap.
     // Either direction works — we just check both thresholds.
     if (Math.abs(delta) > 40 && sheetState === "default") {
-      setSheetState("fullMap");
+      openScoutMap();
+      return;
     }
     if (delta < -40 && sheetState === "fullMap") {
       setSheetState("default");
     }
-  }, [sheetState]);
+  }, [openScoutMap, sheetState]);
+
+  const handleSheetMouseDown = useCallback((e: React.MouseEvent) => {
+    mouseDragStartY.current = e.clientY;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseMove = useCallback((e: React.MouseEvent) => {
+    if (mouseDragStartY.current === null) return;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseUp = useCallback(() => {
+    const start = mouseDragStartY.current;
+    const last = mouseDragLastY.current;
+    mouseDragStartY.current = null;
+    mouseDragLastY.current = null;
+    if (start === null || last === null) return;
+    const delta = last - start;
+    if (Math.abs(delta) > 24 && sheetState === "default") {
+      openScoutMap();
+      return;
+    }
+    if (delta < -24 && sheetState === "fullMap") {
+      setSheetState("default");
+    }
+  }, [openScoutMap, sheetState]);
+
+  useEffect(() => {
+    if (sheetState !== "default") return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverscroll = html.style.overscrollBehaviorY;
+    const previousBodyOverscroll = body.style.overscrollBehaviorY;
+
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
+
+    const handleTopPullStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || window.scrollY > 0) {
+        topPullStartY.current = null;
+        return;
+      }
+      topPullStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTopPullMove = (e: TouchEvent) => {
+      const start = topPullStartY.current;
+      if (start === null || e.touches.length !== 1 || window.scrollY > 0) return;
+      const delta = e.touches[0].clientY - start;
+      if (delta > 10) e.preventDefault();
+    };
+
+    const handleTopPullEnd = (e: TouchEvent) => {
+      const start = topPullStartY.current;
+      topPullStartY.current = null;
+      if (start === null || window.scrollY > 0 || e.changedTouches.length === 0) return;
+      const delta = e.changedTouches[0].clientY - start;
+      if (delta > 40) openScoutMap();
+    };
+
+    document.addEventListener("touchstart", handleTopPullStart, { passive: true });
+    document.addEventListener("touchmove", handleTopPullMove, { passive: false });
+    document.addEventListener("touchend", handleTopPullEnd, { passive: true });
+    document.addEventListener("touchcancel", handleTopPullEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTopPullStart);
+      document.removeEventListener("touchmove", handleTopPullMove);
+      document.removeEventListener("touchend", handleTopPullEnd);
+      document.removeEventListener("touchcancel", handleTopPullEnd);
+      html.style.overscrollBehaviorY = previousHtmlOverscroll;
+      body.style.overscrollBehaviorY = previousBodyOverscroll;
+      topPullStartY.current = null;
+    };
+  }, [openScoutMap, sheetState]);
 
   /* --------- greeting --------- */
 
@@ -677,6 +810,13 @@ export default function ExplorePreview() {
   const goToCraving = (cat: CravingCategory) => {
     navigate(`/find-food?cuisine=${encodeURIComponent(cat.query)}`);
   };
+
+  const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
+  const showRestaurantsSection =
+    nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
+  const showParkingHostsSection = parkingPassLoading || parkingPassHosts.length > 0;
+  const showDealsSection = allDeals.length > 0;
+  const showEventsSection = events.length > 0;
 
   return (
     <>
@@ -695,6 +835,7 @@ export default function ExplorePreview() {
         className={`relative z-10 ${
           sheetState === "fullMap" ? "" : "pb-36"
         }`}
+        style={{ overscrollBehaviorY: "none" }}
       >
         {/* ============================================================
              HERO MAP — live Google Map. When sheetState === "fullMap"
@@ -711,6 +852,10 @@ export default function ExplorePreview() {
           onTouchStart={sheetState !== "fullMap" ? handleSheetTouchStart : undefined}
           onTouchMove={sheetState !== "fullMap" ? handleSheetTouchMove : undefined}
           onTouchEnd={sheetState !== "fullMap" ? handleSheetTouchEnd : undefined}
+          onMouseDown={sheetState !== "fullMap" ? handleSheetMouseDown : undefined}
+          onMouseMove={sheetState !== "fullMap" ? handleSheetMouseMove : undefined}
+          onMouseUp={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
+          onMouseLeave={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
         >
           {/* Map
               ----
@@ -844,7 +989,7 @@ export default function ExplorePreview() {
 
               <button
                 type="button"
-                onClick={() => setSheetState("fullMap")}
+                onClick={openScoutMap}
                 aria-label="Expand map to fullscreen"
                 className="flex items-center justify-center h-12 w-12 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-amber-300/40 shrink-0"
                 style={{ boxShadow: "0 0 14px rgba(245,158,11,0.3)" }}
@@ -902,7 +1047,11 @@ export default function ExplorePreview() {
               onTouchStart={handleSheetTouchStart}
               onTouchMove={handleSheetTouchMove}
               onTouchEnd={handleSheetTouchEnd}
-              onClick={() => setSheetState("fullMap")}
+              onMouseDown={handleSheetMouseDown}
+              onMouseMove={handleSheetMouseMove}
+              onMouseUp={handleSheetMouseUp}
+              onMouseLeave={handleSheetMouseUp}
+              onClick={openScoutMap}
               className="w-full h-10 flex items-center justify-center cursor-pointer"
             >
               <span
@@ -917,7 +1066,7 @@ export default function ExplorePreview() {
               liveTrucksLoading={liveTrucksLoading}
               liveTrucksError={!!liveTrucksError}
               locationStatus={locationStatus}
-              onExpandMap={() => setSheetState("fullMap")}
+              onExpandMap={openScoutMap}
             />
 
             {/* ── EXPLORE BY CRAVING ── */}
@@ -946,83 +1095,81 @@ export default function ExplorePreview() {
             </section>
 
             {/* ── FOOD TRUCKS NEAR YOU ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Food Trucks Near You" linkHref="/trucks" />
-              {liveTrucksLoading && liveTrucks.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : liveTrucks.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                    {liveTrucks.slice(0, 12).map((t) => (
-                      <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <TruckCard truck={t} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<Flame className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No trucks broadcasting right now."
-                  body="Trucks pop up throughout the day — check back later or scout the map."
+            {showFoodTrucksSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title="Food Trucks Near You"
+                  linkHref="/truck-discovery"
+                  subtitle="Live trucks currently broadcasting nearby."
                 />
-              )}
-            </section>
+                {liveTrucksLoading && liveTrucks.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
+                      {liveTrucks.slice(0, 12).map((t) => (
+                        <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <TruckCard truck={t} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── NEARBY RESTAURANTS ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
-              {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : nearbyRestaurants.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
-                    {nearbyRestaurants.slice(0, 10).map((r) => (
-                      <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <NearbyRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No restaurants in your area yet."
-                  body="As more restaurants join MealScout, they'll show up here."
-                />
-              )}
-            </section>
+            {showRestaurantsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
+                {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
+                      {nearbyRestaurants.slice(0, 10).map((r) => (
+                        <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <NearbyRestaurantCard restaurant={r} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── PARKING PASS HOSTS ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Parking Pass Hosts" linkHref="/parking-pass" />
-              {parkingPassLoading && parkingPassHosts.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : parkingPassHosts.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
-                    {parkingPassHosts.slice(0, 8).map((h) => (
-                      <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <ParkingPassCard listing={h} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No parking pass hosts near you yet."
-                  body="Hosts offering truck parking spots will appear here as they go live."
-                  onCta={() => navigate("/parking-pass")}
-                  ctaLabel="Browse all hosts"
+            {showParkingHostsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title="Parking Pass Hosts"
+                  linkHref="/parking-pass"
+                  subtitle="Places where food trucks can park and serve."
                 />
-              )}
-            </section>
+                {parkingPassLoading && parkingPassHosts.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
+                      {parkingPassHosts.slice(0, 8).map((h) => (
+                        <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <ParkingPassCard listing={h} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── DEALS NEAR YOU ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Deals Near You" linkHref="/deals" />
-              {allDeals.length > 0 ? (
+            {showDealsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title="Deals Near You"
+                  linkHref="/deals"
+                  subtitle="Active food and drink offers in your area."
+                />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {allDeals.slice(0, 10).map((d) => (
@@ -1032,21 +1179,17 @@ export default function ExplorePreview() {
                     ))}
                   </ul>
                 </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<Tag className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No deals near you right now."
-                  body="When local restaurants and trucks publish deals, they'll show up here."
-                  onCta={() => navigate("/deals")}
-                  ctaLabel="Browse all deals"
-                />
-              )}
-            </section>
+              </section>
+            )}
 
             {/* ── HAPPENING TONIGHT ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Happening Tonight" linkHref="/events" />
-              {events.length > 0 ? (
+            {showEventsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title="Happening Tonight"
+                  linkHref="/events"
+                  subtitle="Upcoming events, pop-ups, and food nights near you."
+                />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {events.slice(0, 8).map((e) => (
@@ -1056,16 +1199,8 @@ export default function ExplorePreview() {
                     ))}
                   </ul>
                 </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<CalendarDays className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No public events on deck."
-                  body="Pop-ups, food truck nights, and tastings show up here as they go live."
-                  onCta={() => navigate("/events")}
-                  ctaLabel="See all events"
-                />
-              )}
-            </section>
+              </section>
+            )}
 
             {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
@@ -1102,19 +1237,26 @@ export default function ExplorePreview() {
 function SectionHeader({
   title,
   linkHref,
+  subtitle,
 }: {
   title: string;
   linkHref: string;
+  subtitle?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between pr-5 mb-5">
-      <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
-      <Link
-        href={linkHref}
-        className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
-      >
-        See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
-      </Link>
+    <div className="pr-5 mb-5">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
+        <Link
+          href={linkHref}
+          className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
+        >
+          See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+      {subtitle ? (
+        <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
+      ) : null}
     </div>
   );
 }
@@ -1949,43 +2091,103 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
    Shows a parking pass host in the Parking Pass Hosts section.
    ============================================================ */
 
-function ParkingPassCard({ listing }: { listing: {
-  id: string;
-  hostId?: string | null;
-  businessName?: string | null;
-  hostName?: string | null;
-  city?: string | null;
-  state?: string | null;
-  imageUrl?: string | null;
-  heroImageUrl?: string | null;
-  spotCount?: number | null;
-  availableSpots?: number | null;
-  host?: {
-    businessName?: string | null;
-    city?: string | null;
-    state?: string | null;
-    imageUrl?: string | null;
-  } | null;
-} }) {
+function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
   const name =
     listing.host?.businessName ??
     listing.businessName ??
     listing.hostName ??
     "Parking Host";
+  const address = listing.host?.address ?? listing.address ?? null;
   const city = listing.host?.city ?? listing.city ?? null;
   const state = listing.host?.state ?? listing.state ?? null;
-  const locationLabel = [city, state].filter(Boolean).join(", ") || null;
+  const cityState = [city, state].filter(Boolean).join(", ");
+  const locationLabel = address
+    ? [address, cityState].filter(Boolean).join(", ")
+    : cityState || null;
   const img =
+    listing.spotImageUrl ??
+    listing.host?.spotImageUrl ??
     listing.heroImageUrl ??
     listing.imageUrl ??
     listing.host?.imageUrl ??
     null;
-  const spots = listing.spotCount ?? null;
-  const available = listing.availableSpots ?? null;
+  const spots = listing.spotCount ?? listing.maxTrucks ?? null;
+  const available = Array.isArray(listing.availableSpotNumbers)
+    ? listing.availableSpotNumbers.length
+    : typeof listing.availableSpots === "number"
+      ? listing.availableSpots
+      : typeof spots === "number" && typeof listing.bookedSpots === "number"
+        ? Math.max(0, spots - listing.bookedSpots)
+        : null;
+  const isFull = typeof available === "number" && available <= 0;
+
+  const toCents = (value: unknown): number | null => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.floor(parsed);
+  };
+
+  const startingCents = [
+    listing.hostPriceCents,
+    listing.breakfastPriceCents,
+    listing.lunchPriceCents,
+    listing.dinnerPriceCents,
+    listing.dailyPriceCents,
+    listing.weeklyPriceCents,
+    listing.monthlyPriceCents,
+  ]
+    .map(toCents)
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => a - b)[0] ?? null;
+  const startingPrice =
+    startingCents !== null ? `$${(startingCents / 100).toFixed(2)}` : null;
+
+  const formatClock = (value?: string | null) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (match) {
+      const hour24 = Number(match[1]);
+      const minute = match[2];
+      if (!Number.isFinite(hour24) || hour24 < 0 || hour24 > 23) return raw;
+      const suffix = hour24 >= 12 ? "PM" : "AM";
+      const hour12 = hour24 % 12 || 12;
+      return `${hour12}:${minute} ${suffix}`;
+    }
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+    return raw;
+  };
+
+  const dateLabel = (() => {
+    const raw = String(listing.date || "").trim();
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  })();
+  const startLabel = formatClock(listing.startTime);
+  const endLabel = formatClock(listing.endTime);
+  const timeLabel =
+    startLabel && endLabel
+      ? `${startLabel} - ${endLabel}`
+      : startLabel || endLabel || null;
+  const scheduleLabel =
+    dateLabel && timeLabel
+      ? `${dateLabel} · ${timeLabel}`
+      : dateLabel || timeLabel || null;
 
   return (
     <Link
-      href={`/parking-pass`}
+      href={listing.id ? `/parking-pass?pass=${encodeURIComponent(String(listing.id))}` : "/parking-pass"}
       className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
     >
       {/* Hero image */}
@@ -1998,8 +2200,18 @@ function ParkingPassCard({ listing }: { listing: {
             loading="lazy"
           />
         ) : (
-          <div className="h-full w-full flex items-center justify-center">
-            <MapPin className="h-8 w-8 text-amber-400/40" aria-hidden="true" />
+          <div className="h-full w-full relative">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "linear-gradient(150deg, rgba(245,158,11,0.24), rgba(2,6,23,0.92))",
+              }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <MapPin className="h-8 w-8 text-amber-300/70" aria-hidden="true" />
+            </div>
           </div>
         )}
         <div
@@ -2007,9 +2219,16 @@ function ParkingPassCard({ listing }: { listing: {
           style={{ backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%)" }}
           aria-hidden="true"
         />
-        {available !== null && available > 0 && (
+        {available !== null && (
           <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-emerald-600/90 shadow">
-            {available} spot{available !== 1 ? "s" : ""} open
+            {isFull
+              ? "Full"
+              : `${available} spot${available !== 1 ? "s" : ""} open`}
+          </span>
+        )}
+        {startingPrice && (
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-black bg-amber-300 shadow">
+            From {startingPrice}
           </span>
         )}
       </div>
@@ -2027,6 +2246,9 @@ function ParkingPassCard({ listing }: { listing: {
             <span className="text-amber-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
           )}
         </div>
+        {scheduleLabel && (
+          <p className="mt-1 text-white/55 text-[11px] truncate">{scheduleLabel}</p>
+        )}
       </div>
     </Link>
   );

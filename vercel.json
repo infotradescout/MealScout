@@ -16,8 +16,24 @@
       "destination": "https://mealscout.onrender.com/sitemap.xml"
     },
     {
+      "source": "/sitemap-:name.xml",
+      "destination": "https://mealscout.onrender.com/sitemap-:name.xml"
+    },
+    {
       "source": "/robots.txt",
       "destination": "https://mealscout.onrender.com/robots.txt"
+    },
+    {
+      "source": "/llms.txt",
+      "destination": "https://mealscout.onrender.com/llms.txt"
+    },
+    {
+      "source": "/ai.txt",
+      "destination": "https://mealscout.onrender.com/ai.txt"
+    },
+    {
+      "source": "/:indexNowKey([a-fA-F0-9]{32}).txt",
+      "destination": "https://mealscout.onrender.com/:indexNowKey.txt"
     },
     {
       "source": "/api/(.*)",
