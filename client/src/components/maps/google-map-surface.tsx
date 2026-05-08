@@ -358,6 +358,7 @@ export function GoogleMapSurface({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const hasReportedFatalErrorRef = useRef(false);
+  const onWindowResizeRef = useRef<(() => void) | null>(null);
 
   const markerIndex = useMemo(
     () => new Map(markers.map((m) => [m.id, m])),
@@ -441,6 +442,16 @@ export function GoogleMapSurface({
             }
           });
           if (mapContainerRef.current) ro.observe(mapContainerRef.current);
+
+          // Also listen to window resize so the post-transition dispatch
+          // from explore-preview (fired 340ms after pull-down) triggers a
+          // full re-tile at the correct 100dvh dimensions.
+          onWindowResizeRef.current = () => {
+            if (mapRef.current) {
+              googleMaps.event.trigger(mapRef.current, "resize");
+            }
+          };
+          window.addEventListener("resize", onWindowResizeRef.current);
 
           setMapReadyVersion((v) => v + 1);
         } else {
@@ -594,6 +605,10 @@ export function GoogleMapSurface({
       Array.from(trafficCircleRefs.current.values()).forEach((i) => i.setMap(null));
       trafficCircleRefs.current.clear();
       if (roadTrafficLayerRef.current) { roadTrafficLayerRef.current.setMap(null); roadTrafficLayerRef.current = null; }
+      if (onWindowResizeRef.current) {
+        window.removeEventListener("resize", onWindowResizeRef.current);
+        onWindowResizeRef.current = null;
+      }
     };
   }, []);
 

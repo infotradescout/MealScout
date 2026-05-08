@@ -612,6 +612,27 @@ export default function ExplorePreview() {
   /* --------- pull-down-to-fullscreen sheet --------- */
 
   const [sheetState, setSheetState] = useState<"default" | "fullMap">("default");
+  // Once the full map has been opened once, keep GoogleMapSurface mounted
+  // (just hidden) so it doesn't re-initialize on every collapse/expand.
+  // Using state (not ref) so React re-renders when the map should first mount.
+  const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
+  const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // When sheetState transitions to fullMap:
+  // 1. Set hasOpenedFullMap so GoogleMapSurface mounts for the first time.
+  // 2. After the 320ms CSS height transition completes, fire a resize event
+  //    so Google Maps re-tiles to the full 100dvh container dimensions.
+  useEffect(() => {
+    if (sheetState === "fullMap") {
+      setHasOpenedFullMap(true);
+      const timer = setTimeout(() => {
+        // Dispatch a native resize event on the window — Google Maps listens
+        // for this and re-tiles automatically.
+        window.dispatchEvent(new Event("resize"));
+      }, 340); // slightly after the 320ms CSS transition
+      return () => clearTimeout(timer);
+    }
+  }, [sheetState]);
 
   const dragStartY = useRef<number | null>(null);
   const dragLastY = useRef<number | null>(null);
@@ -703,10 +724,13 @@ export default function ExplorePreview() {
                 (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {/* CSSMapHero: atmospheric SVG hero — visible in default state */}
+            {/* CSSMapHero: atmospheric SVG hero — always mounted, hidden in fullMap */}
             <div
               className="absolute inset-0"
-              style={{ visibility: sheetState === "fullMap" ? "hidden" : "visible", pointerEvents: sheetState === "fullMap" ? "none" : "auto" }}
+              style={{
+                visibility: sheetState === "fullMap" ? "hidden" : "visible",
+                pointerEvents: sheetState === "fullMap" ? "none" : "auto",
+              }}
             >
               <CSSMapHero
                 markers={truckMarkers}
@@ -714,12 +738,18 @@ export default function ExplorePreview() {
               />
             </div>
 
-            {/* GoogleMapSurface: always mounted once coords are ready so it
-                pre-initializes before the user pulls to fullMap. Hidden
-                (visibility:hidden + pointer-events:none) in default state
-                so it doesn't intercept touch events on the hero. */}
-            {hasMapKey && coords && mapCenter ? (
+            {/* GoogleMapSurface:
+                - Only mounts the FIRST TIME sheetState becomes "fullMap"
+                  (hasOpenedFullMapRef). This guarantees the map initializes
+                  at full 100dvh height, not at the collapsed 38vh height.
+                - Once mounted, stays mounted (keep-alive) so subsequent
+                  collapse/expand cycles don't re-initialize.
+                - Hidden (visibility:hidden, pointer-events:none) when
+                  collapsed so it doesn't intercept hero touch events.
+            */}
+            {hasMapKey && coords && mapCenter && hasOpenedFullMap ? (
               <div
+                ref={googleMapContainerRef}
                 className="absolute inset-0"
                 style={{
                   visibility: sheetState === "fullMap" ? "visible" : "hidden",
@@ -743,7 +773,7 @@ export default function ExplorePreview() {
                   />
                 </MapErrorBoundary>
               </div>
-            ) : sheetState === "fullMap" ? (
+            ) : sheetState === "fullMap" && (!hasMapKey || !coords || !mapCenter) ? (
               <div className="absolute inset-0" style={{ zIndex: 1 }}>
                 <HeroMapFallback
                   reason={
