@@ -8,7 +8,7 @@
  * - CSSMapHero as full-screen background (real Carto tiles, amber neon style)
  * - Tagline: "Follow The Flavor." — no alternates
  * - No delivery, no ordering, no takeout language
- * - Logged-in users are redirected to /explore-preview by App.tsx before this renders
+ * - Logged-in users are redirected to /scout by App.tsx before this renders
  */
 
 import { useEffect, useMemo } from "react";
@@ -42,8 +42,7 @@ function tileToLat(y: number, z: number) {
 /* ─── Static fallback coords (Pensacola, FL) ────────────────────────────── */
 const FALLBACK = { lat: 30.4213, lng: -87.2169 };
 
-/* ─── CSSMapHero (inline — same logic as explore-preview) ───────────────── */
-
+/* ─── WelcomeMapBackground (atmospheric tile map for the welcome screen) ────── */
 function WelcomeMapBackground() {
   const coords = FALLBACK; // static for welcome screen — no location needed
 

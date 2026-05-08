@@ -16,7 +16,6 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
-  Navigation as NavigationIcon,
   Search,
   Tag,
   User as UserIcon,
@@ -29,14 +28,15 @@ import { GoogleMapSurface } from "@/components/maps/google-map-surface";
 import { ThemedScoutMap } from "@/components/maps/themed-scout-map";
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
+import { SVGStreetMap } from "@/components/maps/svg-street-map";
 import type {
   MapAdapterMarker,
   MapBoundsLike,
 } from "@/components/maps/map-adapter.types";
 
 /**
- * /explore-preview — TEMPORARY testing route for the next-generation
- * MealScout discovery experience. Hidden from global nav.
+ * /scout — The canonical MealScout food discovery page.
+ * Also accessible at /explore-preview (backward-compat alias).
  *
  * Goals (from Thomas):
  *  1. Live interactive Google Map REPLACES the food-park hero photo.
@@ -582,8 +582,8 @@ export default function ExplorePreview() {
   return (
     <>
       <SEOHead
-        title="Explore Preview | MealScout"
-        description="Live local food scene with an interactive map."
+        title="Scout | MealScout — Follow The Flavor."
+        description="Discover live food trucks, restaurants, and deals near you. MealScout puts the local food scene right in your hands."
       />
 
       {/* True-black page base */}
@@ -1000,42 +1000,6 @@ function SectionHeader({
    Amber overlay + real projected pins sit on top.
    ============================================================ */
 
-const HERO_TILE_ZOOM = 15;
-
-/** Convert lat/lng to tile x/y at a given zoom level (Mercator). */
-function latlngToTile(lat: number, lng: number, zoom: number) {
-  const n = Math.pow(2, zoom);
-  const x = Math.floor(((lng + 180) / 360) * n);
-  const latRad = (lat * Math.PI) / 180;
-  const y = Math.floor(
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
-  );
-  return { x, y };
-}
-
-/**
- * Convert a lat/lng to a pixel offset within the 3×3 tile grid (768×768px).
- * The center tile's top-left is at pixel (256, 256).
- * Returns percentage of the 768px grid width/height.
- */
-function latlngToGridPct(
-  lat: number,
-  lng: number,
-  centerTileX: number,
-  centerTileY: number,
-  zoom: number,
-): { x: number; y: number } {
-  const n = Math.pow(2, zoom);
-  const tileX = ((lng + 180) / 360) * n;
-  const latRad = (lat * Math.PI) / 180;
-  const tileY =
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
-  // Offset from top-left of center tile in pixels (each tile = 256px)
-  const pxX = (tileX - centerTileX + 1) * 256; // +1 because grid starts at centerTile-1
-  const pxY = (tileY - centerTileY + 1) * 256;
-  return { x: pxX / 768, y: pxY / 768 };
-}
-
 function CSSMapHero({
   markers,
   userLocation,
@@ -1043,49 +1007,14 @@ function CSSMapHero({
   markers: MapAdapterMarker[];
   userLocation: { lat: number; lng: number };
 }) {
-  // Recompute whenever userLocation changes — map tracks user movement
-  const { centerTileX, centerTileY, tiles, userPct } = useMemo(() => {
-    const { x: ctx, y: cty } = latlngToTile(
-      userLocation.lat,
-      userLocation.lng,
-      HERO_TILE_ZOOM,
-    );
-    const t: { tx: number; ty: number }[] = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        t.push({ tx: ctx + dx, ty: cty + dy });
-      }
-    }
-    // User is always at the exact center of the 768×768 grid (50%, 50%)
-    // because the tile grid is centered on their tile.
-    // Sub-tile offset: how far within the center tile the user sits.
-    const n = Math.pow(2, HERO_TILE_ZOOM);
-    const exactTileX = ((userLocation.lng + 180) / 360) * n;
-    const latRad = (userLocation.lat * Math.PI) / 180;
-    const exactTileY =
-      ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
-    // Sub-pixel offset within the center tile (0–1 within 256px tile)
-    const subX = exactTileX - Math.floor(exactTileX);
-    const subY = exactTileY - Math.floor(exactTileY);
-    // In the 768px grid, center tile starts at px 256
-    const pxX = 256 + subX * 256;
-    const pxY = 256 + subY * 256;
-    return {
-      centerTileX: ctx,
-      centerTileY: cty,
-      tiles: t,
-      userPct: { x: pxX / 768, y: pxY / 768 },
-    };
-  }, [userLocation.lat, userLocation.lng]);
 
   return (
     <div className="absolute inset-0 overflow-hidden">
       <style>{`
-        @keyframes hero-tile-drift {
-          /* Pure X-axis breathing only — no Z rotation, no lateral drift */
-          0%   { transform: rotateX(48deg) rotateZ(-6deg); }
-          50%  { transform: rotateX(49.5deg) rotateZ(-6deg); }
-          100% { transform: rotateX(48deg) rotateZ(-6deg); }
+        @keyframes hero-svg-drift {
+          0%   { transform: perspective(700px) rotateX(48deg) rotateZ(-6deg); }
+          50%  { transform: perspective(700px) rotateX(49.5deg) rotateZ(-6deg); }
+          100% { transform: perspective(700px) rotateX(48deg) rotateZ(-6deg); }
         }
         @keyframes hero-pin-pulse {
           0%   { transform: scale(0.7); opacity: 0.8; }
@@ -1097,89 +1026,22 @@ function CSSMapHero({
           70%  { transform: scale(2.8); opacity: 0; }
           100% { transform: scale(2.8); opacity: 0; }
         }
-        /* Hide Leaflet attribution in hero — it's a non-interactive preview */
-        .hero-tile-grid .leaflet-control { display: none !important; }
       `}</style>
 
-      {/* Dark base */}
-      <div aria-hidden="true" className="absolute inset-0" style={{ background: "#05070d" }} />
-
-      {/* 3D perspective wrapper */}
+      {/* SVG street map — real OSM geometry with amber neon glow, perspective tilted */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
-        style={{ perspective: "700px", perspectiveOrigin: "50% 25%", overflow: "hidden" }}
+        style={{
+          transformOrigin: "50% 60%",
+          animation: "hero-svg-drift 20s ease-in-out infinite",
+        }}
       >
-        {/* Tilted tile plane — oversized so edges don't show after tilt */}
-        <div
-          style={{
-            position: "absolute",
-            // Center the 768×768 grid and scale up slightly to fill after tilt
-            left: "50%",
-            top: "50%",
-            width: 768,
-            height: 768,
-            marginLeft: -384,
-            marginTop: -384,
-            transform: "rotateX(48deg) rotateZ(-6deg)",
-            transformOrigin: "50% 60%",
-            animation: "hero-tile-drift 20s ease-in-out infinite",
-          }}
-        >
-          {/* 3×3 tile grid — dark_all tiles with high brightness so roads are clearly visible */}
-          <div
-            className="hero-tile-grid"
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "grid",
-              gridTemplateColumns: "256px 256px 256px",
-              gridTemplateRows: "256px 256px 256px",
-              filter: "brightness(3.5) contrast(1.5)",
-            }}
-          >
-            {tiles.map(({ tx, ty }) => (
-              <img
-                key={`${tx}-${ty}`}
-                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
-                width={256}
-                height={256}
-                alt=""
-                style={{ display: "block", imageRendering: "crisp-edges" }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.background = "#080b12";
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Orange neon glow layer: dark_all tiles brightened to extreme, sepia+hue-rotate
-              to orange, blurred heavy, screen-blended so only bright road pixels glow */}
-          <div
-            style={{
-              position: "absolute",
-              inset: -20,
-              display: "grid",
-              gridTemplateColumns: "256px 256px 256px",
-              gridTemplateRows: "256px 256px 256px",
-              filter: "brightness(8) contrast(12) sepia(1) hue-rotate(-20deg) saturate(3) blur(10px)",
-              mixBlendMode: "screen",
-              opacity: 0.95,
-              pointerEvents: "none",
-            }}
-          >
-            {tiles.map(({ tx, ty }) => (
-              <img
-                key={`glow-${tx}-${ty}`}
-                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
-                width={256}
-                height={256}
-                alt=""
-                style={{ display: "block" }}
-              />
-            ))}
-          </div>
-        </div>
+        <SVGStreetMap
+          lat={userLocation.lat}
+          lng={userLocation.lng}
+          className="absolute inset-0"
+        />
       </div>
 
       {/* Edge fade so the tilted grid blends into the dark background */}
@@ -1194,27 +1056,29 @@ function CSSMapHero({
         }}
       />
 
-      {/* Pins layer — flat on top of the perspective view */}
+      {/* Truck marker pins — Mercator projection centered on userLocation.
+          BOX_DEG matches the viewport span used inside SVGStreetMap (0.011 lat, 0.0154 lng).
+          SVGStreetMap renders the user pin internally, so no user pin here. */}
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
         {markers
           .filter((m) => m.lat != null && m.lng != null)
           .map((marker, i) => {
-            const pct = latlngToGridPct(
-              marker.lat,
-              marker.lng,
-              centerTileX,
-              centerTileY,
-              HERO_TILE_ZOOM,
-            );
-            if (pct.x < -0.05 || pct.x > 1.05 || pct.y < -0.05 || pct.y > 1.05) return null;
+            const LAT_SPAN = 0.011;
+            const LNG_SPAN = 0.011 * 1.4;
+            const dx = (marker.lng - userLocation.lng) / LNG_SPAN;
+            const dy = (marker.lat - userLocation.lat) / LAT_SPAN;
+            // Center is 50%,50%; dx/dy are fractions of half-span
+            const px = 0.5 + dx;
+            const py = 0.5 - dy; // lat increases upward, y increases downward
+            if (px < -0.05 || px > 1.05 || py < -0.05 || py > 1.05) return null;
             const delay = `${(i * 0.4) % 2.4}s`;
             return (
               <div
                 key={marker.id}
                 className="absolute"
                 style={{
-                  left: `${pct.x * 100}%`,
-                  top: `${pct.y * 100}%`,
+                  left: `${px * 100}%`,
+                  top: `${py * 100}%`,
                   transform: "translate(-50%, -50%)",
                 }}
               >
@@ -1241,44 +1105,6 @@ function CSSMapHero({
               </div>
             );
           })}
-
-        {/* User location pin */}
-        <div
-          className="absolute"
-          style={{
-            left: `${userPct.x * 100}%`,
-            top: `${userPct.y * 100}%`,
-            transform: "translate(-50%, -50%)",
-          }}
-        >
-          <span
-            style={{
-              position: "absolute",
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "rgba(245,158,11,0.22)",
-              animation: "hero-user-pulse 2.4s ease-out infinite",
-              top: -8,
-              left: -8,
-            }}
-          />
-          <div
-            style={{
-              position: "relative",
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              background: "#f59e0b",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 0 20px 5px rgba(245,158,11,0.7), 0 0 0 3px rgba(245,158,11,0.3)",
-            }}
-          >
-            <NavigationIcon style={{ width: 12, height: 12, color: "#000", fill: "currentColor", transform: "rotate(45deg)" }} />
-          </div>
-        </div>
       </div>
     </div>
   );

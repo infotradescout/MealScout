@@ -154,7 +154,7 @@ const KitchenDisplayPage = lazy(() => import("@/pages/kitchen-display"));
 const OnlineMenuPage = lazy(() => import("@/pages/online-menu"));
 const PickupCheckoutPage = lazy(() => import("@/pages/pickup-checkout"));
 const OrderConfirmationPage = lazy(() => import("@/pages/order-confirmation"));
-const ExplorePreview = lazy(() => import("@/pages/explore-preview"));
+const ScoutPage = lazy(() => import("@/pages/explore-preview"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -293,7 +293,8 @@ function Router() {
           <>
             <Route path="/" component={Welcome} />
             <Route path="/home" component={Home} />
-            <Route path="/explore-preview" component={ExplorePreview} />
+            <Route path="/scout" component={ScoutPage} />
+            <Route path="/explore-preview" component={ScoutPage} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />
@@ -419,8 +420,9 @@ function Router() {
           </>
         ) : (
           <>
-            <Route path="/" component={() => { window.location.replace("/explore-preview"); return null; }} />
-            <Route path="/explore-preview" component={ExplorePreview} />
+            <Route path="/" component={() => { window.location.replace("/scout"); return null; }} />
+            <Route path="/scout" component={ScoutPage} />
+            <Route path="/explore-preview" component={ScoutPage} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
             <Route path="/restaurant-signup" component={RestaurantSignup} />

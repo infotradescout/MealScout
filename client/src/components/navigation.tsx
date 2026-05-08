@@ -202,7 +202,8 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     ? "/host/dashboard"
     : "/user-dashboard";
 
-  // ── USER-SPECIFIC slot (4th item) ────────────────────────────────────────
+  // ── USER-SPECIFIC slot (3rd item in desktop bar) ─────────────────────────
+  // This must be a DIFFERENT destination from dashboardPath to avoid duplicates.
   const userSpecificItem: NavItem = !user
     ? { path: "/customer-signup", icon: UserPlus, label: "Join" }
     : isAdmin || isStaff
@@ -210,7 +211,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     : isEventCoordinator
     ? { path: "/events", icon: Calendar, label: "Events" }
     : isSupplier
-    ? { path: "/supplier/dashboard", icon: Package, label: "Supply" }
+    ? { path: "/supply/orders", icon: Package, label: "Orders" }
     : isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess
     ? canManageDeals
       ? { path: "/deal-creation", icon: Plus, label: "Deals" }
@@ -233,7 +234,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (isAdmin || isStaff) {
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
@@ -249,25 +250,25 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (isEventCoordinator) {
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
-        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/event-coordinator/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isSupplier) {
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
-        { path: "/supply/orders", icon: Package, label: "Orders" },
+        { path: "/supplier/dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     } else if (isFoodTruck || isRestaurantOwner || hasBusinessTeamAccess) {
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
@@ -282,7 +283,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       );
     } else if (isHost) {
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
@@ -293,12 +294,12 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     } else {
       // Regular customer
       items.push(
-        { path: "/", icon: UtensilsCrossed, label: "Scout" },
+        { path: "/scout", icon: Compass, label: "Scout" },
         { path: "/map", icon: MapPin, label: "Map" },
         { path: "/video", icon: Clapperboard, label: "Video" },
         { path: "/favorites", icon: Heart, label: "Saved" },
         { path: "/alerts", icon: Bell, label: "Alerts" },
-        { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/user-dashboard", icon: LayoutDashboard, label: "Dashboard" },
         { path: "/profile", icon: User, label: "Profile" },
       );
     }
@@ -318,10 +319,14 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     location === path || location.startsWith(`${path}/`);
 
   // ── DESKTOP quick-action bar ─────────────────────────────────────────────
+  // Deduplicate: if userSpecificItem points to the same path as dashboardPath,
+  // omit it to avoid two nav items going to the same destination.
+  const userSpecificIsUnique =
+    !userSpecificItem.path || userSpecificItem.path !== dashboardPath;
   const desktopItems: NavItem[] = [
-    { path: "/explore-preview", icon: Compass, label: "Scout" },
+    { path: "/scout", icon: Compass, label: "Scout" },
     { path: dashboardPath, icon: LayoutDashboard, label: "Dashboard" },
-    userSpecificItem,
+    ...(userSpecificIsUnique ? [userSpecificItem] : []),
     { path: "/share-hub", icon: Share2, label: "Share" },
     { path: "/profile", icon: User, label: "Profile" },
   ];
@@ -370,9 +375,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
           >
             {/* 1 — Scout (center raised) */}
             <Link
-              href="/explore-preview"
+              href="/scout"
               aria-label="Scout"
-              aria-current={isActive("/explore-preview") ? "page" : undefined}
+              aria-current={isActive("/scout") || isActive("/explore-preview") ? "page" : undefined}
               className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
             >
               <span
@@ -399,7 +404,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
             </Link>
 
             {/* 3 — User-specific */}
-            {userSpecificItem.path ? (
+            {userSpecificIsUnique && userSpecificItem.path ? (
               <Link
                 href={userSpecificItem.path}
                 aria-label={userSpecificItem.label}
