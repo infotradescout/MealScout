@@ -1096,7 +1096,11 @@ export default function ExplorePreview() {
             {/* ── FOOD TRUCKS NEAR YOU ── */}
             {showFoodTrucksSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader title="Food Trucks Near You" linkHref="/truck-discovery" />
+                <SectionHeader
+                  title="Food Trucks Near You"
+                  linkHref="/truck-discovery"
+                  subtitle="Live trucks currently broadcasting nearby."
+                />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
@@ -1160,7 +1164,11 @@ export default function ExplorePreview() {
             {/* ── DEALS NEAR YOU ── */}
             {showDealsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader title="Deals Near You" linkHref="/deals" />
+                <SectionHeader
+                  title="Deals Near You"
+                  linkHref="/deals"
+                  subtitle="Active food and drink offers in your area."
+                />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {allDeals.slice(0, 10).map((d) => (
@@ -1176,7 +1184,11 @@ export default function ExplorePreview() {
             {/* ── HAPPENING TONIGHT ── */}
             {showEventsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader title="Happening Tonight" linkHref="/events" />
+                <SectionHeader
+                  title="Happening Tonight"
+                  linkHref="/events"
+                  subtitle="Upcoming events, pop-ups, and food nights near you."
+                />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {events.slice(0, 8).map((e) => (
