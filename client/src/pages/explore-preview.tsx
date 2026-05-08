@@ -858,12 +858,42 @@ function HeroMapFallback({
     <div
       className="absolute inset-0 flex items-center justify-center"
       style={{
-        backgroundImage:
-          "linear-gradient(135deg, rgba(8,10,15,0.72) 0%, rgba(8,10,15,0.55) 50%, rgba(8,10,15,0.72) 100%), url('/atmospheric/foodpark-night-hero.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        background:
+          "linear-gradient(135deg, #080a0f 0%, #0f1117 40%, #080a0f 100%)",
+        animation: "heroAtmosphere 8s ease-in-out infinite",
       }}
     >
+      {/* CSS animation keyframes injected inline */}
+      <style>{`
+        @keyframes heroAtmosphere {
+          0%   { background: radial-gradient(ellipse at 20% 60%, rgba(245,158,11,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          25%  { background: radial-gradient(ellipse at 55% 70%, rgba(245,158,11,0.14) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 20% 25%, rgba(180,83,9,0.16) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          50%  { background: radial-gradient(ellipse at 70% 50%, rgba(245,158,11,0.20) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 30% 70%, rgba(180,83,9,0.10) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          75%  { background: radial-gradient(ellipse at 35% 35%, rgba(245,158,11,0.15) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 65% 65%, rgba(180,83,9,0.18) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          100% { background: radial-gradient(ellipse at 20% 60%, rgba(245,158,11,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+        }
+        @keyframes heroAtmosphereGrain {
+          0%   { opacity: 0.04; transform: translate(0,0); }
+          20%  { opacity: 0.06; transform: translate(-1px, 1px); }
+          40%  { opacity: 0.03; transform: translate(1px, -1px); }
+          60%  { opacity: 0.05; transform: translate(-1px, -1px); }
+          80%  { opacity: 0.04; transform: translate(1px, 1px); }
+          100% { opacity: 0.04; transform: translate(0,0); }
+        }
+      `}</style>
+      {/* Subtle noise grain overlay */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          backgroundSize: "180px 180px",
+          mixBlendMode: "overlay",
+          animation: "heroAtmosphereGrain 3s steps(1) infinite",
+          pointerEvents: "none",
+        }}
+      />
       <div className="max-w-[280px] text-center px-6">
         <span
           className="inline-flex h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 items-center justify-center mb-3"
