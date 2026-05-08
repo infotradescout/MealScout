@@ -810,6 +810,13 @@ export default function ExplorePreview() {
     navigate(`/find-food?cuisine=${encodeURIComponent(cat.query)}`);
   };
 
+  const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
+  const showRestaurantsSection =
+    nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
+  const showParkingHostsSection = parkingPassLoading || parkingPassHosts.length > 0;
+  const showDealsSection = allDeals.length > 0;
+  const showEventsSection = events.length > 0;
+
   return (
     <>
       <SEOHead
@@ -1087,83 +1094,69 @@ export default function ExplorePreview() {
             </section>
 
             {/* ── FOOD TRUCKS NEAR YOU ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Food Trucks Near You" linkHref="/truck-discovery" />
-              {liveTrucksLoading && liveTrucks.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : liveTrucks.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
-                    {liveTrucks.slice(0, 12).map((t) => (
-                      <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <TruckCard truck={t} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<Flame className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No trucks broadcasting right now."
-                  body="Trucks pop up throughout the day — check back later or scout the map."
-                />
-              )}
-            </section>
+            {showFoodTrucksSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Food Trucks Near You" linkHref="/truck-discovery" />
+                {liveTrucksLoading && liveTrucks.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
+                      {liveTrucks.slice(0, 12).map((t) => (
+                        <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <TruckCard truck={t} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── NEARBY RESTAURANTS ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
-              {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : nearbyRestaurants.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
-                    {nearbyRestaurants.slice(0, 10).map((r) => (
-                      <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <NearbyRestaurantCard restaurant={r} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No restaurants in your area yet."
-                  body="As more restaurants join MealScout, they'll show up here."
-                />
-              )}
-            </section>
+            {showRestaurantsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Restaurants Near You" linkHref="/restaurants" />
+                {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
+                      {nearbyRestaurants.slice(0, 10).map((r) => (
+                        <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <NearbyRestaurantCard restaurant={r} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── PARKING PASS HOSTS ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Parking Pass Hosts" linkHref="/parking-pass" />
-              {parkingPassLoading && parkingPassHosts.length === 0 ? (
-                <HorizontalSkeletonRow count={3} width={200} />
-              ) : parkingPassHosts.length > 0 ? (
-                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                  <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
-                    {parkingPassHosts.slice(0, 8).map((h) => (
-                      <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                        <ParkingPassCard listing={h} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<MapPin className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No parking pass hosts near you yet."
-                  body="Hosts offering truck parking spots will appear here as they go live."
-                  onCta={() => navigate("/parking-pass")}
-                  ctaLabel="Browse all hosts"
-                />
-              )}
-            </section>
+            {showParkingHostsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Parking Pass Hosts" linkHref="/parking-pass" />
+                {parkingPassLoading && parkingPassHosts.length === 0 ? (
+                  <HorizontalSkeletonRow count={3} width={200} />
+                ) : (
+                  <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                    <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
+                      {parkingPassHosts.slice(0, 8).map((h) => (
+                        <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
+                          <ParkingPassCard listing={h} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* ── DEALS NEAR YOU ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Deals Near You" linkHref="/deals" />
-              {allDeals.length > 0 ? (
+            {showDealsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Deals Near You" linkHref="/deals" />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {allDeals.slice(0, 10).map((d) => (
@@ -1173,21 +1166,13 @@ export default function ExplorePreview() {
                     ))}
                   </ul>
                 </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<Tag className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No deals near you right now."
-                  body="When local restaurants and trucks publish deals, they'll show up here."
-                  onCta={() => navigate("/deals")}
-                  ctaLabel="Browse all deals"
-                />
-              )}
-            </section>
+              </section>
+            )}
 
             {/* ── HAPPENING TONIGHT ── */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Happening Tonight" linkHref="/events" />
-              {events.length > 0 ? (
+            {showEventsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader title="Happening Tonight" linkHref="/events" />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
                     {events.slice(0, 8).map((e) => (
@@ -1197,16 +1182,8 @@ export default function ExplorePreview() {
                     ))}
                   </ul>
                 </div>
-              ) : (
-                <DiscoveryEmptyRow
-                  icon={<CalendarDays className="h-5 w-5 text-amber-300" aria-hidden="true" />}
-                  title="No public events on deck."
-                  body="Pop-ups, food truck nights, and tastings show up here as they go live."
-                  onCta={() => navigate("/events")}
-                  ctaLabel="See all events"
-                />
-              )}
-            </section>
+              </section>
+            )}
 
             {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
