@@ -114,16 +114,11 @@ test.describe("welcome and Scout routing law", () => {
 
     await expect(page.getByTestId("welcome-landing")).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: /welcome to mealscout/i }),
+      page.getByRole("img", { name: /^mealscout$/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", {
-        name: /create your free mealscout account/i,
-      }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /log in to your mealscout account/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^sign up$/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^log in$/i })).toBeVisible();
+    await expect(page.getByText("Follow The Flavor.")).toBeVisible();
     await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
   });
 
