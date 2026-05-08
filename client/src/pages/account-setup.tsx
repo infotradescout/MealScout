@@ -126,11 +126,28 @@ export default function AccountSetup() {
       setSetupComplete(true);
       toast({
         title: "Account Setup Complete!",
-        description: "Your account is ready. You can now log in.",
+        description: "Your profile is ready. Check your email to verify and continue.",
       });
-      // Redirect to login after 2 seconds
+      const redirectPath = "/dashboard";
+      try {
+        if (tokenValidation?.userEmail) {
+          window.sessionStorage.setItem(
+            "mealscout:lastSignupEmail",
+            tokenValidation.userEmail,
+          );
+        }
+        window.sessionStorage.setItem(
+          "mealscout:post-verification-redirect",
+          redirectPath,
+        );
+      } catch {}
+      // Redirect to the unified post-verification handoff after 2 seconds
       setTimeout(() => {
-        setLocation("/login");
+        setLocation(
+          `/post-verification?status=check-email&setup=complete&redirect=${encodeURIComponent(
+            redirectPath,
+          )}`,
+        );
       }, 2000);
     },
     onError: (error: any) => {
@@ -265,7 +282,7 @@ export default function AccountSetup() {
                 Account Setup Complete!
               </CardTitle>
               <CardDescription className="text-center">
-                Redirecting you to login...
+                Redirecting you to the email verification step...
               </CardDescription>
             </CardHeader>
           </Card>

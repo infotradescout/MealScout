@@ -96,6 +96,19 @@ export default function CustomerSignup() {
     "restaurant" | "food_truck"
   >(initialAccountType === "business" ? initialBusinessSubType : "restaurant");
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
+  const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
+
+  const goToVerificationHandoff = (redirectPath: string) => {
+    try {
+      window.sessionStorage.setItem(
+        POST_VERIFICATION_REDIRECT_KEY,
+        redirectPath,
+      );
+    } catch {}
+    window.location.href = `/post-verification?status=check-email&redirect=${encodeURIComponent(
+      redirectPath,
+    )}`;
+  };
 
   useEffect(() => {
     trackFunnelEventOncePerSession(FUNNEL_EVENTS.signupStarted, "customer_signup_view", {
@@ -176,8 +189,8 @@ export default function CustomerSignup() {
           : accountType === "event_organizer"
             ? "/event-signup"
           : accountType === "business"
-            ? "/restaurant-signup"
-            : "/";
+          ? "/restaurant-signup"
+            : "/scout";
       try {
         window.sessionStorage.setItem(
           "mealscout:lastSignupEmail",
@@ -197,12 +210,10 @@ export default function CustomerSignup() {
       });
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
-        stage: "redirect_to_login",
+        stage: "redirect_to_email_handoff",
         redirectPath: redirectAfterLogin,
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        redirectAfterLogin,
-      )}&signup=1`;
+      goToVerificationHandoff(redirectAfterLogin);
     },
     onError: (error) => {
       toast({
@@ -251,14 +262,12 @@ export default function CustomerSignup() {
           : "/restaurant-signup";
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
-        stage: "redirect_to_login",
+        stage: "redirect_to_email_handoff",
         redirectPath: businessRedirect,
         accountType: "business",
         businessSubType,
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        businessRedirect,
-      )}&signup=1`;
+      goToVerificationHandoff(businessRedirect);
     },
     onError: (error) => {
       toast({
@@ -302,13 +311,11 @@ export default function CustomerSignup() {
       });
       trackFunnelEvent(FUNNEL_EVENTS.activationStarted, {
         page: "customer-signup",
-        stage: "redirect_to_login",
+        stage: "redirect_to_email_handoff",
         redirectPath: "/supplier/dashboard",
         accountType: "supplier",
       });
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        "/supplier/dashboard",
-      )}&signup=1`;
+      goToVerificationHandoff("/supplier/dashboard");
     },
     onError: (error) => {
       toast({

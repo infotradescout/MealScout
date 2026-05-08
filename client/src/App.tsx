@@ -108,6 +108,7 @@ const InstallApp = lazy(() => import("@/pages/install"));
 const ForgotPassword = lazy(() => import("@/pages/forgot-password"));
 const ResetPassword = lazy(() => import("@/pages/reset-password"));
 const AccountSetup = lazy(() => import("@/pages/account-setup"));
+const PostVerification = lazy(() => import("@/pages/post-verification"));
 const OAuthSetupGuide = lazy(() => import("@/pages/oauth-setup-guide"));
 const GoldenPlateWinners = lazy(() => import("@/pages/golden-plate-winners"));
 const ParkingPassPage = lazy(() => import("@/pages/parking-pass"));
@@ -210,6 +211,7 @@ const publicRoutePrefixes = [
   "/reset-password",
   "/change-password",
   "/account-setup",
+  "/post-verification",
   "/admin",
   "/business-team/accept",
   "/menu/",
@@ -406,6 +408,7 @@ function Router() {
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
+            <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin" component={AdminLogin} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/menu/:restaurantId" component={OnlineMenuPage} />
@@ -586,6 +589,7 @@ function Router() {
             <Route path="/reset-password" component={ResetPassword} />
             <Route path="/change-password" component={ChangePassword} />
             <Route path="/account-setup" component={AccountSetup} />
+            <Route path="/post-verification" component={PostVerification} />
             <Route path="/admin/login" component={AdminLogin} />
             <Route path="/admin/oauth-setup" component={OAuthSetupGuide} />
             <Route
