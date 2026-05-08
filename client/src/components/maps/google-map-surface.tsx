@@ -399,6 +399,11 @@ export function GoogleMapSurface({
             typeof window.matchMedia === "function" &&
             window.matchMedia("(pointer: fine)").matches;
 
+          // NOTE: Google Maps ignores `styles` when a `mapId` is present.
+          // For the Scout neon theme we intentionally omit mapId so the
+          // custom style JSON takes full effect. Advanced Markers are not
+          // needed on this surface — glowing SVG dots via classic Markers
+          // are used instead.
           mapRef.current = new googleMaps.Map(mapContainerRef.current, {
             center,
             zoom,
@@ -407,10 +412,8 @@ export function GoogleMapSurface({
             clickableIcons: false,
             tilt: 0,
             heading: 0,
-            ...(GOOGLE_MAP_ID ? { mapId: GOOGLE_MAP_ID } : {}),
             gestureHandling: prefersFinePointer ? "greedy" : "cooperative",
-            // Always apply neon style — isNightTheme is always true on Scout
-            styles: isNightTheme ? mapStyleNeon : null,
+            styles: mapStyleNeon,
           });
 
           mapRef.current.addListener("idle", () => {
@@ -428,9 +431,20 @@ export function GoogleMapSurface({
             if (c && onCenterChanged) onCenterChanged({ lat: Number(c.lat()), lng: Number(c.lng()) });
           });
 
+          // Trigger resize whenever the container changes size (e.g. on
+          // first pull-down expand). Without this the map renders blank
+          // until the user interacts because it was initialized in a
+          // zero-height or hidden container.
+          const ro = new ResizeObserver(() => {
+            if (mapRef.current) {
+              googleMaps.event.trigger(mapRef.current, "resize");
+            }
+          });
+          if (mapContainerRef.current) ro.observe(mapContainerRef.current);
+
           setMapReadyVersion((v) => v + 1);
         } else {
-          mapRef.current.setOptions({ styles: isNightTheme ? mapStyleNeon : null });
+          mapRef.current.setOptions({ styles: mapStyleNeon });
         }
 
         setLoadError(null);
@@ -464,8 +478,9 @@ export function GoogleMapSurface({
     const googleMaps = (window as GoogleMapsWindow).google?.maps;
     if (!googleMaps || !mapRef.current || mapReadyVersion === 0) return;
 
-    const AdvancedMarkerElement = googleMaps?.marker?.AdvancedMarkerElement;
-    const useAdvanced = Boolean(AdvancedMarkerElement && GOOGLE_MAP_ID);
+    // AdvancedMarkerElement requires a mapId — since we strip mapId for
+    // neon style support, we always use classic Markers on this surface.
+    const useAdvanced = false;
     const usedIds = new Set<string>();
 
     markers.forEach((marker) => {

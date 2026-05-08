@@ -107,6 +107,12 @@ interface EventSummary {
   locationName?: string | null;
   imageUrl?: string | null;
   heroImageUrl?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+  venueLat?: number | null;
+  venueLng?: number | null;
 }
 
 type EventsResponse = { events?: EventSummary[] } | EventSummary[] | null;
@@ -521,10 +527,50 @@ export default function ExplorePreview() {
       .filter((m): m is MapAdapterMarker => m !== null);
   }, [nearbyRestaurants]);
 
+  const parkingMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return parkingPassHosts
+      .map((p) => {
+        // Coordinates may be on the listing directly or nested under host
+        const lat = p.latitude ?? p.host?.latitude;
+        const lng = p.longitude ?? p.host?.longitude;
+        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        const name = p.businessName ?? p.hostName ?? p.host?.businessName ?? undefined;
+        return {
+          id: `parking-${p.id}`,
+          sourceId: String(p.id),
+          kind: "parking" as const,
+          lat,
+          lng,
+          title: name,
+          subtitle: p.availableSpots != null ? `${p.availableSpots} spots` : undefined,
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [parkingPassHosts]);
+
+  const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
+    return events
+      .map((e) => {
+        const lat = e.latitude ?? e.lat ?? e.venueLat;
+        const lng = e.longitude ?? e.lng ?? e.venueLng;
+        if (typeof lat !== "number" || typeof lng !== "number") return null;
+        return {
+          id: `event-${e.id}`,
+          sourceId: String(e.id),
+          kind: "event" as const,
+          lat,
+          lng,
+          title: e.title ?? e.name ?? undefined,
+          subtitle: e.venueName ?? e.locationName ?? undefined,
+        } as MapAdapterMarker;
+      })
+      .filter((m): m is MapAdapterMarker => m !== null);
+  }, [events]);
+
   // Combined markers for the full Google Map view
   const allMapMarkers = useMemo<MapAdapterMarker[]>(
-    () => [...truckMarkers, ...restaurantMarkers],
-    [truckMarkers, restaurantMarkers],
+    () => [...truckMarkers, ...restaurantMarkers, ...parkingMarkers, ...eventMarkers],
+    [truckMarkers, restaurantMarkers, parkingMarkers, eventMarkers],
   );
 
   /* --------- map state --------- */
@@ -557,6 +603,8 @@ export default function ExplorePreview() {
     (marker: MapAdapterMarker) => {
       if (marker.kind === "truck") navigate(`/truck/${marker.sourceId}`);
       else if (marker.kind === "restaurant") navigate(`/restaurant/${marker.sourceId}`);
+      else if (marker.kind === "parking") navigate(`/parking-pass`);
+      else if (marker.kind === "event") navigate(`/events`);
     },
     [navigate],
   );
@@ -655,8 +703,30 @@ export default function ExplorePreview() {
                 (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {sheetState === "fullMap" ? (
-              hasMapKey && coords && mapCenter ? (
+            {/* CSSMapHero: atmospheric SVG hero — visible in default state */}
+            <div
+              className="absolute inset-0"
+              style={{ visibility: sheetState === "fullMap" ? "hidden" : "visible", pointerEvents: sheetState === "fullMap" ? "none" : "auto" }}
+            >
+              <CSSMapHero
+                markers={truckMarkers}
+                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
+              />
+            </div>
+
+            {/* GoogleMapSurface: always mounted once coords are ready so it
+                pre-initializes before the user pulls to fullMap. Hidden
+                (visibility:hidden + pointer-events:none) in default state
+                so it doesn't intercept touch events on the hero. */}
+            {hasMapKey && coords && mapCenter ? (
+              <div
+                className="absolute inset-0"
+                style={{
+                  visibility: sheetState === "fullMap" ? "visible" : "hidden",
+                  pointerEvents: sheetState === "fullMap" ? "auto" : "none",
+                  zIndex: sheetState === "fullMap" ? 1 : 0,
+                }}
+              >
                 <MapErrorBoundary>
                   <GoogleMapSurface
                     apiKey={GOOGLE_MAPS_WEB_API_KEY}
@@ -672,7 +742,9 @@ export default function ExplorePreview() {
                     onMarkerTap={handleMarkerTap}
                   />
                 </MapErrorBoundary>
-              ) : (
+              </div>
+            ) : sheetState === "fullMap" ? (
+              <div className="absolute inset-0" style={{ zIndex: 1 }}>
                 <HeroMapFallback
                   reason={
                     !hasMapKey
@@ -682,13 +754,8 @@ export default function ExplorePreview() {
                         : "loading"
                   }
                 />
-              )
-            ) : (
-              <CSSMapHero
-                markers={truckMarkers}
-                userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
-              />
-            )}
+              </div>
+            ) : null}
           </div>
 
           {/* Left-side gradient so headline reads cleanly. We KEEP the
