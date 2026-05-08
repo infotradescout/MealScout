@@ -52,20 +52,41 @@ const createBoundsLike = (
   },
 });
 
+// Neon amber dark map style — matches the CSSMapHero aesthetic.
+// Roads are warm amber/orange, land is near-black, water is deep navy.
 const mapStyleDark = [
-  { elementType: "geometry", stylers: [{ color: "#1f2937" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#e5e7eb" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#111827" }] },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [{ color: "#374151" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#0f172a" }],
-  },
+  // Base geometry — near-black land
+  { elementType: "geometry", stylers: [{ color: "#080b12" }] },
+  // Labels
+  { elementType: "labels.text.fill", stylers: [{ color: "#d4a843" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#080b12" }] },
+  // Roads — amber neon
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2a1f00" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 0.5 }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#3d2d00" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#f59e0b" }, { weight: 1.5 }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#1e1600" }] },
+  { featureType: "road.arterial", elementType: "geometry.stroke", stylers: [{ color: "#d97706" }, { weight: 0.8 }] },
+  { featureType: "road.local", elementType: "geometry.stroke", stylers: [{ color: "#92400e" }, { weight: 0.4 }] },
+  // Road labels
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#f59e0b" }] },
+  { featureType: "road", elementType: "labels.text.stroke", stylers: [{ color: "#080b12" }] },
+  // Water — deep navy
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0a0f1e" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#1e3a5f" }] },
+  // Parks / natural — very dark green
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#0a0f0a" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#0d1a0d" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#2d5a2d" }] },
+  // POI — muted so roads dominate
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#0d1117" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#6b5a2a" }] },
+  // Transit
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#1a1200" }] },
+  { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d97706" }] },
+  // Administrative borders
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#3d2d00" }, { weight: 0.5 }] },
+  { featureType: "administrative", elementType: "labels.text.fill", stylers: [{ color: "#a37820" }] },
 ];
 
 const markerColor = (marker: MapAdapterMarker) => {
@@ -298,6 +319,8 @@ export function GoogleMapSurface({
             disableDefaultUI: true,
             zoomControl: false,
             clickableIcons: false,
+            tilt: 0,          // Always straight-on — no 45° building tilt
+            heading: 0,       // North-up
             ...(GOOGLE_MAP_ID ? { mapId: GOOGLE_MAP_ID } : {}),
             // Desktop: capture wheel/pan when hovered (no Ctrl prompt).
             // Touch devices: keep native cooperative behavior.
@@ -499,6 +522,40 @@ export function GoogleMapSurface({
   return (
     <div className="h-full w-full relative">
       <div ref={mapContainerRef} className="h-full w-full rounded-lg overflow-hidden" />
+      {/* Neon amber glow overlay — screen blend makes road lines glow amber.
+          pointer-events:none so all Google Maps interactions pass through. */}
+      {isNightTheme && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            borderRadius: "0.5rem",
+            overflow: "hidden",
+          }}
+        >
+          {/* Blurred amber screen layer — spreads glow along bright road pixels */}
+          <div
+            style={{
+              position: "absolute",
+              inset: -6,
+              background: "rgba(245,158,11,0.12)",
+              mixBlendMode: "screen",
+              filter: "blur(4px)",
+            }}
+          />
+          {/* Subtle color tint to warm up the whole map */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(245,158,11,0.06)",
+              mixBlendMode: "color",
+            }}
+          />
+        </div>
+      )}
       <div className="absolute top-5 right-5 flex flex-col space-y-2 z-[1000]">
         <Button
           variant="secondary"
