@@ -403,6 +403,21 @@ export function registerEventRoutes(
     }
   });
 
+  // Public alias used by the Scout page (/explore-preview)
+  app.get("/api/events/public", async (req: any, res) => {
+    try {
+      const upcomingEvents = await storage.getAllUpcomingEvents();
+      res.json(
+        (Array.isArray(upcomingEvents) ? upcomingEvents : []).filter(
+          (event: any) => !Boolean(event?.requiresPayment),
+        ),
+      );
+    } catch (error: any) {
+      console.error("Error fetching public events:", error);
+      res.json([]);
+    }
+  });
+
   app.get("/api/events/upcoming", async (req: any, res) => {
     try {
       const upcomingEvents = await storage.getAllUpcomingEvents();

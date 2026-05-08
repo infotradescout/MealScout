@@ -449,7 +449,7 @@ export default function ExplorePreview() {
     <>
       <SEOHead
         title="Explore Preview | MealScout"
-        description="Live local food scene with an interactive map. Follow The Flavor."
+        description="Live local food scene with an interactive map."
       />
 
       {/* True-black page base */}
@@ -610,12 +610,7 @@ export default function ExplorePreview() {
                   <br />
                   {greetingSecondLine}
                 </h1>
-                <p
-                  className="mt-3 text-white/95 text-base sm:text-lg"
-                  style={{ textShadow: "0 1px 14px rgba(0,0,0,0.75)" }}
-                >
-                  Follow The Flavor.
-                </p>
+
               </div>
             </div>
           )}
@@ -893,7 +888,9 @@ function HeroMapFallback({
       className="absolute inset-0 flex items-center justify-center"
       style={{
         backgroundImage:
-          "linear-gradient(135deg, #0a0c10 0%, #14181f 50%, #0a0c10 100%)",
+          "linear-gradient(135deg, rgba(8,10,15,0.72) 0%, rgba(8,10,15,0.55) 50%, rgba(8,10,15,0.72) 100%), url('/atmospheric/foodpark-night-hero.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}
     >
       <div className="max-w-[280px] text-center px-6">
