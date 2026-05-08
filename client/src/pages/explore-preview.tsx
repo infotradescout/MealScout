@@ -668,13 +668,21 @@ export default function ExplorePreview() {
 
   const dragStartY = useRef<number | null>(null);
   const dragLastY = useRef<number | null>(null);
+  const mouseDragStartY = useRef<number | null>(null);
+  const mouseDragLastY = useRef<number | null>(null);
+  const topPullStartY = useRef<number | null>(null);
 
   const handleSheetTouchStart = useCallback((e: React.TouchEvent) => {
     dragStartY.current = e.touches[0].clientY;
     dragLastY.current = e.touches[0].clientY;
   }, []);
   const handleSheetTouchMove = useCallback((e: React.TouchEvent) => {
-    dragLastY.current = e.touches[0].clientY;
+    const y = e.touches[0].clientY;
+    dragLastY.current = y;
+    const start = dragStartY.current;
+    if (start !== null && window.scrollY <= 0 && y - start > 10) {
+      e.preventDefault();
+    }
   }, []);
   const handleSheetTouchEnd = useCallback(() => {
     const start = dragStartY.current;
@@ -692,6 +700,81 @@ export default function ExplorePreview() {
     if (delta < -40 && sheetState === "fullMap") {
       setSheetState("default");
     }
+  }, [sheetState]);
+
+  const handleSheetMouseDown = useCallback((e: React.MouseEvent) => {
+    mouseDragStartY.current = e.clientY;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseMove = useCallback((e: React.MouseEvent) => {
+    if (mouseDragStartY.current === null) return;
+    mouseDragLastY.current = e.clientY;
+  }, []);
+
+  const handleSheetMouseUp = useCallback(() => {
+    const start = mouseDragStartY.current;
+    const last = mouseDragLastY.current;
+    mouseDragStartY.current = null;
+    mouseDragLastY.current = null;
+    if (start === null || last === null) return;
+    const delta = last - start;
+    if (Math.abs(delta) > 24 && sheetState === "default") {
+      setSheetState("fullMap");
+    }
+    if (delta < -24 && sheetState === "fullMap") {
+      setSheetState("default");
+    }
+  }, [sheetState]);
+
+  useEffect(() => {
+    if (sheetState !== "default") return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const previousHtmlOverscroll = html.style.overscrollBehaviorY;
+    const previousBodyOverscroll = body.style.overscrollBehaviorY;
+
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
+
+    const handleTopPullStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || window.scrollY > 0) {
+        topPullStartY.current = null;
+        return;
+      }
+      topPullStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTopPullMove = (e: TouchEvent) => {
+      const start = topPullStartY.current;
+      if (start === null || e.touches.length !== 1 || window.scrollY > 0) return;
+      const delta = e.touches[0].clientY - start;
+      if (delta > 10) e.preventDefault();
+    };
+
+    const handleTopPullEnd = (e: TouchEvent) => {
+      const start = topPullStartY.current;
+      topPullStartY.current = null;
+      if (start === null || window.scrollY > 0 || e.changedTouches.length === 0) return;
+      const delta = e.changedTouches[0].clientY - start;
+      if (delta > 40) setSheetState("fullMap");
+    };
+
+    document.addEventListener("touchstart", handleTopPullStart, { passive: true });
+    document.addEventListener("touchmove", handleTopPullMove, { passive: false });
+    document.addEventListener("touchend", handleTopPullEnd, { passive: true });
+    document.addEventListener("touchcancel", handleTopPullEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTopPullStart);
+      document.removeEventListener("touchmove", handleTopPullMove);
+      document.removeEventListener("touchend", handleTopPullEnd);
+      document.removeEventListener("touchcancel", handleTopPullEnd);
+      html.style.overscrollBehaviorY = previousHtmlOverscroll;
+      body.style.overscrollBehaviorY = previousBodyOverscroll;
+      topPullStartY.current = null;
+    };
   }, [sheetState]);
 
   /* --------- greeting --------- */
@@ -727,6 +810,7 @@ export default function ExplorePreview() {
         className={`relative z-10 ${
           sheetState === "fullMap" ? "" : "pb-36"
         }`}
+        style={{ overscrollBehaviorY: "none" }}
       >
         {/* ============================================================
              HERO MAP — live Google Map. When sheetState === "fullMap"
@@ -743,6 +827,10 @@ export default function ExplorePreview() {
           onTouchStart={sheetState !== "fullMap" ? handleSheetTouchStart : undefined}
           onTouchMove={sheetState !== "fullMap" ? handleSheetTouchMove : undefined}
           onTouchEnd={sheetState !== "fullMap" ? handleSheetTouchEnd : undefined}
+          onMouseDown={sheetState !== "fullMap" ? handleSheetMouseDown : undefined}
+          onMouseMove={sheetState !== "fullMap" ? handleSheetMouseMove : undefined}
+          onMouseUp={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
+          onMouseLeave={sheetState !== "fullMap" ? handleSheetMouseUp : undefined}
         >
           {/* Map
               ----
@@ -934,6 +1022,10 @@ export default function ExplorePreview() {
               onTouchStart={handleSheetTouchStart}
               onTouchMove={handleSheetTouchMove}
               onTouchEnd={handleSheetTouchEnd}
+              onMouseDown={handleSheetMouseDown}
+              onMouseMove={handleSheetMouseMove}
+              onMouseUp={handleSheetMouseUp}
+              onMouseLeave={handleSheetMouseUp}
               onClick={() => setSheetState("fullMap")}
               className="w-full h-10 flex items-center justify-center cursor-pointer"
             >
