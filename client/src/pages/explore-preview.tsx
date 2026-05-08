@@ -1136,7 +1136,11 @@ export default function ExplorePreview() {
             {/* ── PARKING PASS HOSTS ── */}
             {showParkingHostsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
-                <SectionHeader title="Parking Pass Hosts" linkHref="/parking-pass" />
+                <SectionHeader
+                  title="Parking Pass Hosts"
+                  linkHref="/parking-pass"
+                  subtitle="Places where food trucks can park and serve."
+                />
                 {parkingPassLoading && parkingPassHosts.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
@@ -1220,19 +1224,26 @@ export default function ExplorePreview() {
 function SectionHeader({
   title,
   linkHref,
+  subtitle,
 }: {
   title: string;
   linkHref: string;
+  subtitle?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between pr-5 mb-5">
-      <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
-      <Link
-        href={linkHref}
-        className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
-      >
-        See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
-      </Link>
+    <div className="pr-5 mb-5">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
+        <Link
+          href={linkHref}
+          className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
+        >
+          See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+      {subtitle ? (
+        <p className="mt-1 text-xs sm:text-sm text-white/60">{subtitle}</p>
+      ) : null}
     </div>
   );
 }
