@@ -1126,7 +1126,7 @@ function CSSMapHero({
             animation: "hero-tile-drift 20s ease-in-out infinite",
           }}
         >
-          {/* 3×3 tile grid — Voyager tiles inverted to dark, roads become bright lines */}
+          {/* 3×3 tile grid — dark_all tiles with high brightness so roads are clearly visible */}
           <div
             className="hero-tile-grid"
             style={{
@@ -1135,15 +1135,13 @@ function CSSMapHero({
               display: "grid",
               gridTemplateColumns: "256px 256px 256px",
               gridTemplateRows: "256px 256px 256px",
-              // invert flips light map to dark; hue-rotate(180deg) corrects hue shift;
-              // brightness+contrast tune the dark result so roads are visible
-              filter: "invert(1) hue-rotate(180deg) brightness(0.55) contrast(1.4) saturate(0.3)",
+              filter: "brightness(3.5) contrast(1.5)",
             }}
           >
             {tiles.map(({ tx, ty }) => (
               <img
                 key={`${tx}-${ty}`}
-                src={`https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
+                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
                 width={256}
                 height={256}
                 alt=""
@@ -1155,27 +1153,25 @@ function CSSMapHero({
             ))}
           </div>
 
-          {/* Neon orange glow: same Voyager tiles, inverted, then sepia+hue-rotate
-              to orange, blurred and screen-blended. Roads (bright after invert)
-              become glowing orange lines. Dark land stays dark. */}
+          {/* Orange neon glow layer: dark_all tiles brightened to extreme, sepia+hue-rotate
+              to orange, blurred heavy, screen-blended so only bright road pixels glow */}
           <div
             style={{
               position: "absolute",
-              inset: -16,
+              inset: -20,
               display: "grid",
               gridTemplateColumns: "256px 256px 256px",
               gridTemplateRows: "256px 256px 256px",
-              // invert → bright roads; contrast pops them; sepia+hue-rotate → orange; blur → glow spread
-              filter: "invert(1) brightness(3) contrast(8) sepia(1) hue-rotate(-20deg) blur(8px)",
+              filter: "brightness(8) contrast(12) sepia(1) hue-rotate(-20deg) saturate(3) blur(10px)",
               mixBlendMode: "screen",
-              opacity: 0.9,
+              opacity: 0.95,
               pointerEvents: "none",
             }}
           >
             {tiles.map(({ tx, ty }) => (
               <img
                 key={`glow-${tx}-${ty}`}
-                src={`https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
+                src={`https://a.basemaps.cartocdn.com/dark_all/${HERO_TILE_ZOOM}/${tx}/${ty}@2x.png`}
                 width={256}
                 height={256}
                 alt=""
