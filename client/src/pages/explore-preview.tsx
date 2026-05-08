@@ -616,6 +616,7 @@ export default function ExplorePreview() {
 
   const openScoutMap = useCallback(() => {
     const params = new URLSearchParams();
+    params.set("src", "scout");
     if (
       coords &&
       Number.isFinite(coords.lat) &&

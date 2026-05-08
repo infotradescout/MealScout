@@ -1224,6 +1224,16 @@ export default function MapPage() {
   const enableClientGeocode = false;
   const [legendOpen, setLegendOpen] = useState(false);
   const urlStateHydratedRef = useRef(false);
+  const isScoutFastEntry = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return new URLSearchParams(window.location.search).get("src") === "scout";
+    } catch {
+      return false;
+    }
+  }, []);
+  const [deferSecondaryQueries, setDeferSecondaryQueries] =
+    useState(isScoutFastEntry);
   const [hoverPreview, setHoverPreview] = useState<{
     marker: MapAdapterMarker;
     x: number;
@@ -1241,6 +1251,14 @@ export default function MapPage() {
     east: number;
     west: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (!isScoutFastEntry) return;
+    const timer = window.setTimeout(() => {
+      setDeferSecondaryQueries(false);
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [isScoutFastEntry]);
 
   const handleTruckSightingPhotoChange = useCallback(
     async (file: File | null) => {
@@ -1549,6 +1567,7 @@ export default function MapPage() {
       if (!response.ok) throw new Error("Failed to fetch map deals");
       return response.json();
     },
+    enabled: !deferSecondaryQueries,
   });
 
   const deals: Deal[] = Array.isArray(dealsData) ? (dealsData as Deal[]) : [];
@@ -1587,7 +1606,7 @@ export default function MapPage() {
       if (!response.ok) throw new Error("Failed to fetch truck sightings");
       return response.json();
     },
-    enabled: !!userLocation,
+    enabled: !!userLocation && !deferSecondaryQueries,
     staleTime: 10 * 1000,
     refetchInterval: 30 * 1000,
     refetchOnWindowFocus: true,
@@ -1600,7 +1619,7 @@ export default function MapPage() {
   const adLocation = userLocation || mapCenter;
   const { data: geoAds = [] } = useQuery<GeoAd[]>({
     queryKey: ["/api/geo-ads", "map", adLocation?.lat, adLocation?.lng],
-    enabled: !!adLocation,
+    enabled: !!adLocation && !deferSecondaryQueries,
     queryFn: async () => {
       if (!adLocation) return [];
       const res = await fetch(
@@ -1696,7 +1715,7 @@ export default function MapPage() {
         "/api/map/business-popularity",
         popularityRestaurantIds.join(","),
       ],
-      enabled: popularityRestaurantIds.length > 0,
+      enabled: popularityRestaurantIds.length > 0 && !deferSecondaryQueries,
       queryFn: async () => {
         const params = new URLSearchParams({
           restaurantIds: popularityRestaurantIds.join(","),
@@ -1826,6 +1845,7 @@ export default function MapPage() {
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    enabled: !deferSecondaryQueries,
   });
 
   const hasMapLocationsSeed = !!mapLocationsData || !!cachedMapLocations;
@@ -1910,7 +1930,10 @@ export default function MapPage() {
         : null,
       zoomLevel,
     ],
-    enabled: Boolean(debouncedMapBounds) && hasMapLocationsSeed,
+    enabled:
+      Boolean(debouncedMapBounds) &&
+      hasMapLocationsSeed &&
+      !deferSecondaryQueries,
     queryFn: async () => {
       const bounds = debouncedMapBounds;
       if (!bounds) {
@@ -2008,6 +2031,7 @@ export default function MapPage() {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
+    enabled: !deferSecondaryQueries,
   });
 
   useEffect(() => {
@@ -2100,6 +2124,7 @@ export default function MapPage() {
     staleTime: 3 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
+    enabled: !deferSecondaryQueries,
   });
 
   useEffect(() => {
@@ -3404,6 +3429,7 @@ export default function MapPage() {
       return res.json();
     },
     staleTime: 30_000,
+    enabled: !deferSecondaryQueries,
   });
   const mapExploreLinks = [
     {
