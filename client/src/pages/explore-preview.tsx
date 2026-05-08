@@ -979,7 +979,7 @@ export default function ExplorePreview() {
 
             {/* ── FOOD TRUCKS NEAR YOU ── */}
             <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Food Trucks Near You" linkHref="/trucks" />
+              <SectionHeader title="Food Trucks Near You" linkHref="/truck-discovery" />
               {liveTrucksLoading && liveTrucks.length === 0 ? (
                 <HorizontalSkeletonRow count={3} width={200} />
               ) : liveTrucks.length > 0 ? (

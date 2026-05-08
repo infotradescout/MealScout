@@ -448,6 +448,7 @@ function Router() {
               path="/event-coordinator/dashboard"
               component={EventCoordinatorDashboard}
             />
+            <Route path="/trucks" component={TruckDiscovery} />
             <Route path="/truck-discovery" component={TruckDiscovery} />
             <Route path="/for-restaurants" component={ForRestaurants} />
             <Route path="/for-bars" component={ForBars} />
