@@ -933,10 +933,10 @@ function CSSMapHero({
     <div className="absolute inset-0 overflow-hidden">
       <style>{`
         @keyframes hero-tile-drift {
-          0%   { transform: rotateX(48deg) rotateZ(-6deg) translateX(0px) translateY(0px); }
-          33%  { transform: rotateX(50deg) rotateZ(-5deg) translateX(-6px) translateY(-4px); }
-          66%  { transform: rotateX(47deg) rotateZ(-7deg) translateX(-10px) translateY(-6px); }
-          100% { transform: rotateX(48deg) rotateZ(-6deg) translateX(0px) translateY(0px); }
+          /* Subtle breathing — no translation, just a tiny tilt shift */
+          0%   { transform: rotateX(48deg) rotateZ(-6deg); }
+          50%  { transform: rotateX(49deg) rotateZ(-5.5deg); }
+          100% { transform: rotateX(48deg) rotateZ(-6deg); }
         }
         @keyframes hero-pin-pulse {
           0%   { transform: scale(0.7); opacity: 0.8; }
@@ -977,7 +977,7 @@ function CSSMapHero({
             animation: "hero-tile-drift 20s ease-in-out infinite",
           }}
         >
-          {/* 3×3 tile grid */}
+          {/* 3×3 tile grid — brightness boosted so streets read clearly */}
           <div
             className="hero-tile-grid"
             style={{
@@ -986,6 +986,7 @@ function CSSMapHero({
               display: "grid",
               gridTemplateColumns: "256px 256px 256px",
               gridTemplateRows: "256px 256px 256px",
+              filter: "brightness(1.6) contrast(1.1)",
             }}
           >
             {tiles.map(({ tx, ty }) => (
@@ -1003,15 +1004,34 @@ function CSSMapHero({
             ))}
           </div>
 
-          {/* Amber neon overlay on the real tiles */}
+          {/* Neon street glow — amber screen blend + heavy blur creates the
+              glowing road effect. The blur spreads the amber light outward
+              along bright pixels (street lines), giving the neon look. */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: `
-                radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(245,158,11,0.22) 0%, rgba(245,158,11,0.06) 20%, transparent 45%),
-                linear-gradient(180deg, rgba(5,7,13,0.3) 0%, transparent 30%, transparent 70%, rgba(5,7,13,0.5) 100%)
-              `,
+              background: "rgba(245,158,11,0.28)",
+              mixBlendMode: "color",
+              filter: "blur(0px)",
+            }}
+          />
+          {/* Second pass: blurred amber screen layer creates the glow spread on streets */}
+          <div
+            style={{
+              position: "absolute",
+              inset: -8,
+              background: "rgba(245,158,11,0.18)",
+              mixBlendMode: "screen",
+              filter: "blur(6px)",
+            }}
+          />
+          {/* Radial warmth from user pin position */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: `radial-gradient(ellipse at ${userPct.x * 100}% ${userPct.y * 100}%, rgba(245,158,11,0.30) 0%, rgba(245,158,11,0.08) 18%, transparent 40%)`,
               mixBlendMode: "screen",
             }}
           />
