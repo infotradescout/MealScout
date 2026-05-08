@@ -70,9 +70,9 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  // In production, server code is in dist/ and public assets are in dist/public
-  // server module resolves from dist/, so we look for public/ relative to it
-  const distPath = path.resolve(moduleDir, "public");
+  // Production server code is bundled into dist/server, while client assets are
+  // emitted to dist/public. Keep this aligned with the startup check in index.ts.
+  const distPath = path.resolve(process.cwd(), "dist", "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
