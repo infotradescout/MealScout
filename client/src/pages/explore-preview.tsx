@@ -254,32 +254,32 @@ export default function ExplorePreview() {
     "idle" | "requesting" | "ready" | "denied"
   >("idle");
 
-  useEffect(() => {
+  const requestLocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setLocationStatus("denied");
       return;
     }
     setLocationStatus("requesting");
-    let cancelled = false;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        if (cancelled) return;
         const { latitude, longitude } = position.coords;
         setCoords({ lat: latitude, lng: longitude });
         setLocationStatus("ready");
         getReverseGeocodedLocationName(latitude, longitude, (name) => {
-          if (!cancelled && name) setLocationName(name);
+          if (name) setLocationName(name);
         }).catch(() => {});
       },
       () => {
-        if (!cancelled) setLocationStatus("denied");
+        setLocationStatus("denied");
       },
-      { timeout: 10000, maximumAge: 60_000 },
+      { timeout: 10000, maximumAge: 0 },
     );
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  // Auto-request on mount
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
 
   const shortLocation = useMemo(() => {
     if (!locationName) return "Your area";
@@ -607,11 +607,18 @@ export default function ExplorePreview() {
 
               <button
                 type="button"
-                onClick={() => navigate("/find-food")}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-full text-white text-sm font-medium px-4 bg-black/55 backdrop-blur-md ring-1 ring-white/15"
-                aria-label={`Change location. Currently ${shortLocation}.`}
+                onClick={requestLocation}
+                className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-full text-white text-sm font-medium px-4 bg-black/55 backdrop-blur-md ring-1 ring-white/15 active:scale-95 transition-transform"
+                aria-label={`Refresh location. Currently ${shortLocation}.`}
               >
-                <MapPin className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                {locationStatus === "requesting" ? (
+                  <svg className="h-4 w-4 text-amber-300 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                ) : (
+                  <MapPin className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                )}
                 <span className="truncate max-w-[180px]">{shortLocation}</span>
               </button>
 
