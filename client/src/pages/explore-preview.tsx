@@ -655,13 +655,13 @@ export default function ExplorePreview() {
             </button>
           )}
 
-          {/* Pull-down hint pill (default state) */}
+          {/* Pull bar indicator (default state) */}
           {sheetState === "default" && (
             <div
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-white/10 text-[11px] text-white/80 pointer-events-none"
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20"
               aria-hidden="true"
             >
-              Pull down to expand the map
+              <span className="block h-1 w-8 rounded-full bg-white/25" />
             </div>
           )}
         </section>
@@ -691,54 +691,14 @@ export default function ExplorePreview() {
               />
             </div>
 
-            {/* LIVE NOW (first per Thomas) */}
-            <section className="pl-5 pr-0 pt-2 pb-10">
-              <SectionHeader title="Live Now" linkHref="/find-food" />
-
-              <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
-                <ul
-                  className="flex gap-4 pr-5"
-                  role="list"
-                  aria-label="Live food trucks near you"
-                >
-                  {liveTrucks.length > 0 ? (
-                    liveTrucks.slice(0, 12).map((truck) => (
-                      <li key={truck.id} className="shrink-0 w-[230px] sm:w-[260px]">
-                        <LiveTruckCard truck={truck} />
-                      </li>
-                    ))
-                  ) : locationStatus !== "denied" && liveTrucksLoading ? (
-                    <>
-                      {[0, 1, 2].map((i) => (
-                        <li key={i} className="shrink-0 w-[230px] sm:w-[260px]">
-                          <LiveTruckSkeletonCard />
-                        </li>
-                      ))}
-                    </>
-                  ) : (
-                    <li className="shrink-0 w-[230px] sm:w-[260px]">
-                      <LiveNowEmptyCard
-                        title={
-                          locationStatus === "denied"
-                            ? "Turn on location to see what's live near you."
-                            : liveTrucksError
-                              ? "We couldn't reach the live feed."
-                              : "Nothing live right here, right now."
-                        }
-                        body={
-                          locationStatus === "denied"
-                            ? "MealScout uses your location only to show food trucks, deals, and events around you in real time."
-                            : liveTrucksError
-                              ? "Pull down to refresh, or try again in a moment."
-                              : "Trucks pop up throughout the day. Open the map to scout what's planned tonight."
-                        }
-                        onCta={() => setSheetState("fullMap")}
-                      />
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </section>
+            {/* LIVE NOW — collapsed when empty, expanded when trucks are live */}
+            <LiveNowSection
+              liveTrucks={liveTrucks}
+              liveTrucksLoading={liveTrucksLoading}
+              liveTrucksError={!!liveTrucksError}
+              locationStatus={locationStatus}
+              onExpandMap={() => setSheetState("fullMap")}
+            />
 
             {/* EXPLORE BY CRAVING (second per Thomas) */}
             <section className="px-5 pt-2 pb-10">
@@ -1316,7 +1276,7 @@ function LiveNowEmptyCard({
       onClick={onCta}
       className="block w-full text-left rounded-2xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
-      aria-label={`${title} Open the map.`}
+      aria-label={title}
     >
       <div className="p-4">
         <div className="flex items-start gap-3 mb-3">
@@ -1331,10 +1291,7 @@ function LiveNowEmptyCard({
             <p className="mt-1 text-xs text-white/60 leading-relaxed">{body}</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-amber-300 text-xs font-semibold">
-          <NavigationIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          Open the map
-        </span>
+
       </div>
     </button>
   );
@@ -1653,5 +1610,127 @@ function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary })
         </div>
       </div>
     </Link>
+  );
+}
+
+/* ============================================================
+   LIVE NOW SECTION
+   Collapsed when empty (just the header + quiet status chip).
+   Expanded automatically when trucks are live.
+   No "open the map" CTA — the map is already on the page.
+   ============================================================ */
+
+function LiveNowSection({
+  liveTrucks,
+  liveTrucksLoading,
+  liveTrucksError,
+  locationStatus,
+  onExpandMap: _onExpandMap,
+}: {
+  liveTrucks: LiveTruckSummary[];
+  liveTrucksLoading: boolean;
+  liveTrucksError: boolean;
+  locationStatus: "idle" | "requesting" | "ready" | "denied";
+  onExpandMap: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const isEmpty =
+    !liveTrucksLoading &&
+    liveTrucks.length === 0;
+
+  // Auto-expand when trucks go live
+  const hadTrucks = useRef(false);
+  useEffect(() => {
+    if (liveTrucks.length > 0) hadTrucks.current = true;
+  }, [liveTrucks.length]);
+
+  // While loading, show skeletons (no collapse needed)
+  if (liveTrucksLoading && liveTrucks.length === 0) {
+    return (
+      <section className="pl-5 pr-0 pt-2 pb-10">
+        <SectionHeader title="Live Now" linkHref="/find-food" />
+        <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+          <ul className="flex gap-4 pr-5" role="list">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="shrink-0 w-[230px] sm:w-[260px]">
+                <LiveTruckSkeletonCard />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    );
+  }
+
+  // Trucks are live — show them fully expanded
+  if (liveTrucks.length > 0) {
+    return (
+      <section className="pl-5 pr-0 pt-2 pb-10">
+        <SectionHeader title="Live Now" linkHref="/find-food" />
+        <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+          <ul className="flex gap-4 pr-5" role="list" aria-label="Live food trucks near you">
+            {liveTrucks.slice(0, 12).map((truck) => (
+              <li key={truck.id} className="shrink-0 w-[230px] sm:w-[260px]">
+                <LiveTruckCard truck={truck} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    );
+  }
+
+  // Empty state — collapsed by default, expand on tap to show context
+  const statusChip =
+    locationStatus === "denied"
+      ? "Location off"
+      : liveTrucksError
+        ? "Feed unavailable"
+        : "Nothing live right now";
+
+  return (
+    <section className="px-5 pt-2 pb-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-white text-xl sm:text-2xl font-bold">Live Now</h2>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/8 ring-1 ring-white/10 text-white/50 text-[11px] font-medium">
+            <span className="h-1.5 w-1.5 rounded-full bg-white/30" aria-hidden="true" />
+            {statusChip}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isEmpty && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-xs text-white/40 hover:text-white/70 transition-colors"
+              aria-expanded={expanded}
+            >
+              {expanded ? "Less" : "Why?"}
+            </button>
+          )}
+          <Link
+            href="/find-food"
+            className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
+          >
+            See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Expandable context — only shown when user taps "Why?" */}
+      {expanded && (
+        <div className="mt-3 rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3">
+          <p className="text-white/70 text-sm leading-relaxed">
+            {locationStatus === "denied"
+              ? "Turn on location so MealScout can show food trucks, deals, and events near you in real time."
+              : liveTrucksError
+                ? "We couldn't reach the live feed. Pull down to refresh."
+                : "Trucks pop up throughout the day. Check back later or scroll down to discover restaurants and events near you."}
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
