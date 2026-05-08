@@ -67,6 +67,7 @@
     "smoke:critical": "node scripts/smokeCriticalRoutes.mjs",
     "gate:prelaunch": "node scripts/preLaunchGate.mjs",
     "smoke:parking-pass-stripe": "tsx scripts/smokeParkingPassStripeFlow.ts",
+    "smoke:parking-pass-public-feed": "tsx scripts/smokeParkingPassPublicFeed.ts",
     "test:parking-pass-concurrency": "tsx scripts/testParkingPassBookingConcurrency.ts",
     "audit:parking-pass-webhooks": "tsx scripts/auditParkingPassWebhookReconciliation.ts",
     "test:parking-pass-datekeys": "tsx scripts/testParkingPassDateKeys.ts",

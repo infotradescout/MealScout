@@ -88,6 +88,39 @@ export type ParkingPassOccurrence = Event & {
   host: typeof hosts.$inferSelect;
   seriesStatus?: string | null;
   seriesPublishedAt?: Date | string | null;
+  seriesStartDate?: Date | string | null;
+  seriesEndDate?: Date | string | null;
+};
+
+const PUBLIC_SERIES_STATUSES = new Set(["published"]);
+const DRAFT_SERIES_STATUSES = new Set(["draft"]);
+const UNAVAILABLE_OCCURRENCE_STATUSES = new Set([
+  "archived",
+  "cancelled",
+  "canceled",
+  "closed",
+  "completed",
+  "deleted",
+  "disabled",
+  "draft",
+  "expired",
+  "inactive",
+  "unavailable",
+]);
+
+const normalizeStatus = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+const dateKeyFromMaybeDate = (
+  value: unknown,
+  timezone: string,
+): string | null => {
+  if (!value) return null;
+  const parsed = new Date(value as any);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return dateKeyInZone(parsed, timezone);
 };
 
 export async function listParkingPassOccurrences(options?: {
@@ -142,7 +175,7 @@ export async function listParkingPassOccurrences(options?: {
       const hostId = String(row.hostId || "").trim();
       if (!hostId) return false;
       if (allowHostIds && !allowHostIds.has(hostId)) return false;
-      const status = row.status == null ? "" : String(row.status);
+      const status = normalizeStatus(row.status);
       if (status && !allowStatuses.has(status)) return false;
       if (!status && !includeDraft) return false;
       return true;
@@ -157,8 +190,8 @@ export async function listParkingPassOccurrences(options?: {
         description: row.description ?? null,
         timezone: "America/Chicago",
         recurrenceRule: null,
-        startDate: start as any,
-        endDate: end as any,
+        startDate: row.startDate ? (new Date(row.startDate) as any) : (start as any),
+        endDate: row.endDate ? (new Date(row.endDate) as any) : (end as any),
         defaultStartTime:
           row.defaultStartTime ?? PARKING_PASS_MEAL_WINDOWS.breakfast.start,
         defaultEndTime:
@@ -183,6 +216,18 @@ export async function listParkingPassOccurrences(options?: {
       } as any,
     }));
   }
+
+  if (seriesRows.length === 0) {
+    return { occurrences: [] as ParkingPassOccurrence[], start, end };
+  }
+
+  seriesRows = seriesRows.filter((row) => {
+    const status = normalizeStatus((row.series as any).status);
+    if (includeDraft) {
+      return PUBLIC_SERIES_STATUSES.has(status) || DRAFT_SERIES_STATUSES.has(status);
+    }
+    return PUBLIC_SERIES_STATUSES.has(status);
+  });
 
   if (seriesRows.length === 0) {
     return { occurrences: [] as ParkingPassOccurrence[], start, end };
@@ -285,6 +330,9 @@ export async function listParkingPassOccurrences(options?: {
     const series = row.series;
     const hostId = String(series.hostId || "").trim();
     const host = hostById.get(hostId) ?? stubHost(hostId);
+    if (!hostId || !hostById.has(hostId)) {
+      continue;
+    }
 
     const daysOfWeek = normalizeDaysOfWeek(
       series.parkingPassDaysOfWeek as unknown,
@@ -299,8 +347,22 @@ export async function listParkingPassOccurrences(options?: {
 
     const seriesTimeZone = String(series.timezone || "America/Chicago").trim();
     const startDateKey = dateKeyInZone(start, seriesTimeZone);
+    const seriesStartDateKey = dateKeyFromMaybeDate(
+      (series as any).startDate,
+      seriesTimeZone,
+    );
+    const seriesEndDateKey = dateKeyFromMaybeDate(
+      (series as any).endDate,
+      seriesTimeZone,
+    );
     for (let offset = 0; offset < horizonDays; offset += 1) {
       const dateKey = addDaysToDateKey(startDateKey, offset);
+      if (seriesStartDateKey && dateKey < seriesStartDateKey) {
+        continue;
+      }
+      if (seriesEndDateKey && dateKey > seriesEndDateKey) {
+        continue;
+      }
       const dow = weekdayInZoneForDateKey(dateKey, seriesTimeZone);
       if (!includeAllDays && !daysOfWeek.includes(dow)) {
         continue;
@@ -326,6 +388,9 @@ export async function listParkingPassOccurrences(options?: {
       const hardCapEnabled =
         override?.hardCapEnabled ?? series.defaultHardCapEnabled ?? false;
       const status = override?.status ?? "open";
+      if (!includeDraft && UNAVAILABLE_OCCURRENCE_STATUSES.has(normalizeStatus(status))) {
+        continue;
+      }
 
       const breakfastPriceCents =
         firstFiniteNumber(
@@ -376,6 +441,8 @@ export async function listParkingPassOccurrences(options?: {
         seriesId: series.id,
         seriesStatus: (series as any).status ?? null,
         seriesPublishedAt: (series as any).publishedAt ?? null,
+        seriesStartDate: (series as any).startDate ?? null,
+        seriesEndDate: (series as any).endDate ?? null,
         name: override?.name ?? series.name,
         description: override?.description ?? series.description,
         eventType: "parking_pass",

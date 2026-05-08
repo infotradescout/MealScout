@@ -52,14 +52,73 @@ import { isSlotPublic, type PublicSlot } from "../services/publicSlotGate";
 import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { dateKeyFromUnknown, dateKeyInZone } from "../services/dateKeys";
 
+const normalizeParkingStatus = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+const unavailableParkingStatuses = new Set([
+  "archived",
+  "cancelled",
+  "canceled",
+  "closed",
+  "completed",
+  "deleted",
+  "disabled",
+  "draft",
+  "expired",
+  "inactive",
+  "unavailable",
+]);
+
+export const isParkingPassFeedCandidate = (event: any) => {
+  const eventStatus = normalizeParkingStatus(event?.status || "open");
+  const seriesStatus = normalizeParkingStatus(event?.seriesStatus || "published");
+  if (unavailableParkingStatuses.has(eventStatus)) return false;
+  if (seriesStatus && seriesStatus !== "published") return false;
+
+  const eventDate = event?.date ? new Date(event.date) : null;
+  if (!eventDate || !Number.isFinite(eventDate.getTime())) return false;
+  const endTime = String(event?.endTime || "").trim();
+  if (/^\d{1,2}:\d{2}/.test(endTime)) {
+    const [hour, minute] = endTime.split(":").map((part) => Number(part));
+    if (Number.isFinite(hour) && Number.isFinite(minute)) {
+      eventDate.setHours(hour, minute, 0, 0);
+    }
+  }
+  if (eventDate.getTime() < Date.now() - 30 * 60 * 1000) return false;
+  return true;
+};
+
+export const hasParkingPassAvailability = (event: any) => {
+  if (Array.isArray(event?.availableSpotNumbers)) {
+    return event.availableSpotNumbers.length > 0;
+  }
+  if (typeof event?.availableSpots === "number") {
+    return event.availableSpots > 0;
+  }
+  const maxSpots = Number(event?.spotCount ?? event?.maxTrucks ?? 0);
+  const booked = Number(event?.bookedSpots ?? 0);
+  if (!Number.isFinite(maxSpots) || maxSpots <= 0) return false;
+  if (!Number.isFinite(booked)) return true;
+  return maxSpots - booked > 0;
+};
+
+export const sanitizeParkingPassPublicFeedRows = (events: any[]) =>
+  (Array.isArray(events) ? events : []).filter(
+    (event) => isParkingPassFeedCandidate(event) && hasParkingPassAvailability(event),
+  );
+
 type EventRouteDependencies = {
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
+  parkingPassFeedBuilder?: () => Promise<any[]>;
 };
 
 export function registerEventRoutes(
   app: Express,
-  { hasBusinessDistributionAccess }: EventRouteDependencies,
+  dependencies: EventRouteDependencies,
 ) {
+  const { hasBusinessDistributionAccess } = dependencies;
   const parkingPassFeedLimiter = distributedRateLimit({
     scope: "parking-pass-feed",
     limit: 120,
@@ -159,11 +218,10 @@ export function registerEventRoutes(
   };
 
   const buildParkingPassPublicFeed = async (): Promise<any[]> => {
-    // Include draft series here; the public-ready filter below controls visibility.
-    // This prevents "priced but still draft" series from disappearing from booking feeds.
+    // Public feed only returns published, current, available Parking Pass inventory.
     const { occurrences } = await listParkingPassOccurrences({
       horizonDays: 30,
-      includeDraft: true,
+      includeDraft: false,
     });
 
     const payoutsEnabled = (event: any) =>
@@ -185,6 +243,7 @@ export function registerEventRoutes(
     const virtualEvents = occurrences
       .filter(
         (event: any) =>
+          isParkingPassFeedCandidate(event) &&
           isParkingPassPublicReady(event) &&
           isPublicHostProfile(event?.host, event),
       )
@@ -199,6 +258,7 @@ export function registerEventRoutes(
       .filter(
         (event: any) =>
           event?.eventType === "parking_pass" &&
+          isParkingPassFeedCandidate(event) &&
           isParkingPassPublicReady(event) &&
           isPublicHostProfile(event?.host, event),
       )
@@ -371,7 +431,7 @@ export function registerEventRoutes(
           bookingConfirmedAt: row.bookingConfirmedAt,
         })),
       };
-    });
+    }).filter(hasParkingPassAvailability);
 
     parkingPassPublicFeedCache = {
       payload: enhancedEvents,
@@ -474,12 +534,18 @@ export function registerEventRoutes(
           parkingPassPublicFeedCache &&
           parkingPassPublicFeedCache.expiresAt > Date.now()
         ) {
-          const payload = parkingPassPublicFeedCache.payload;
+          const payload = sanitizeParkingPassPublicFeedRows(
+            parkingPassPublicFeedCache.payload,
+          );
           return res.json(
             isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
           );
         }
-        const enhancedEvents = await buildParkingPassPublicFeed();
+        const feedBuilder =
+          dependencies.parkingPassFeedBuilder ?? buildParkingPassPublicFeed;
+        const enhancedEvents = sanitizeParkingPassPublicFeedRows(
+          await feedBuilder(),
+        );
         res.json(
           isAuthed
             ? enhancedEvents
@@ -490,7 +556,9 @@ export function registerEventRoutes(
         if (parkingPassPublicFeedLastGood?.payload) {
           res.setHeader("X-MealScout-Stale", "1");
           const isAuthed = Boolean(req.isAuthenticated?.() && req.user?.id);
-          const payload = parkingPassPublicFeedLastGood.payload;
+          const payload = sanitizeParkingPassPublicFeedRows(
+            parkingPassPublicFeedLastGood.payload,
+          );
           return res.json(
             isAuthed ? payload : payload.map(redactParkingPassEventForGuest),
           );
