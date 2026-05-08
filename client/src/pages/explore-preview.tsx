@@ -459,12 +459,13 @@ export default function ExplorePreview() {
     dragLastY.current = null;
     if (start === null || last === null) return;
     const delta = last - start;
-    // Pull DOWN ≥ 60px → collapse to full map view.
-    if (delta > 60 && sheetState === "default") {
+    // On the MAP hero: swipe DOWN (delta > 0) expands to fullMap.
+    // On the DRAG HANDLE: swipe UP (delta < 0) also expands to fullMap.
+    // Either direction works — we just check both thresholds.
+    if (Math.abs(delta) > 40 && sheetState === "default") {
       setSheetState("fullMap");
     }
-    // Pull UP ≥ 60px → return to default.
-    if (delta < -60 && sheetState === "fullMap") {
+    if (delta < -40 && sheetState === "fullMap") {
       setSheetState("default");
     }
   }, [sheetState]);
@@ -515,6 +516,9 @@ export default function ExplorePreview() {
               sheetState === "fullMap" ? "100dvh" : "min(38vh, 320px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
           }}
+          onTouchStart={sheetState !== "fullMap" ? handleSheetTouchStart : undefined}
+          onTouchMove={sheetState !== "fullMap" ? handleSheetTouchMove : undefined}
+          onTouchEnd={sheetState !== "fullMap" ? handleSheetTouchEnd : undefined}
         >
           {/* Map
               ----
@@ -613,31 +617,19 @@ export default function ExplorePreview() {
 
               <button
                 type="button"
-                onClick={() => navigate("/find-food")}
-                aria-label="Search the local food scene"
-                className="flex items-center justify-center h-12 w-12 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-white/15 shrink-0"
+                onClick={() => setSheetState("fullMap")}
+                aria-label="Expand map to fullscreen"
+                className="flex items-center justify-center h-12 w-12 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-amber-300/40 shrink-0"
+                style={{ boxShadow: "0 0 14px rgba(245,158,11,0.3)" }}
               >
-                <Search className="h-5 w-5 text-white" aria-hidden="true" />
+                <Maximize2 className="h-5 w-5 text-amber-300" aria-hidden="true" />
               </button>
             </div>
           )}
 
 
 
-          {/* Floating "Expand map" button (top-right) — visible in default state. */}
-          {sheetState === "default" && (
-            <button
-              type="button"
-              onClick={() => setSheetState("fullMap")}
-              aria-label="Expand the map to fullscreen"
-              className="absolute z-20 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] h-12 w-12 rounded-full bg-black/65 backdrop-blur-md ring-1 ring-amber-300/60 flex items-center justify-center"
-              style={{
-                boxShadow: "0 0 22px rgba(245,158,11,0.45)",
-              }}
-            >
-              <Maximize2 className="h-5 w-5 text-amber-200" aria-hidden="true" />
-            </button>
-          )}
+
 
           {/* Floating "Collapse" button (top-right) — visible in fullMap state. */}
           {sheetState === "fullMap" && (
@@ -675,15 +667,16 @@ export default function ExplorePreview() {
             className="relative z-10 -mt-4 rounded-t-3xl bg-[#0a0c10]"
             style={{ boxShadow: "0 -24px 48px rgba(0,0,0,0.55)" }}
           >
-            {/* Drag handle (touch-only target) */}
+            {/* Drag handle — pull UP on this to expand map, pull DOWN to stay */}
             <div
               role="button"
-              aria-label="Drag to expand or collapse the map"
+              aria-label="Pull up to expand map"
               tabIndex={0}
               onTouchStart={handleSheetTouchStart}
               onTouchMove={handleSheetTouchMove}
               onTouchEnd={handleSheetTouchEnd}
-              className="w-full h-7 flex items-center justify-center"
+              onClick={() => setSheetState("fullMap")}
+              className="w-full h-10 flex items-center justify-center cursor-pointer"
             >
               <span
                 aria-hidden="true"
