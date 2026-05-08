@@ -237,6 +237,57 @@ function getGreetingTime(): "morning" | "afternoon" | "evening" {
   return "evening";
 }
 
+const SCOUT_TRUCK_RADIUS_KM = 8; // about 5 miles
+const SCOUT_LOCAL_RADIUS_KM = 12; // about 7.5 miles
+const SCOUT_EVENT_RADIUS_KM = 24; // events can justify a slightly wider local lane
+
+type ScoutCoords = { lat: number; lng: number };
+
+function toScoutNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function distanceKmBetween(
+  aLat: number,
+  aLng: number,
+  bLat: number,
+  bLng: number,
+): number {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const h =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function isWithinScoutRadius(
+  origin: ScoutCoords | null,
+  latValue: unknown,
+  lngValue: unknown,
+  radiusKm: number,
+  fallbackDistanceKm?: number | null,
+): boolean {
+  if (!origin) return false;
+  const lat = toScoutNumber(latValue);
+  const lng = toScoutNumber(lngValue);
+  if (lat !== null && lng !== null) {
+    return distanceKmBetween(origin.lat, origin.lng, lat, lng) <= radiusKm;
+  }
+  if (typeof fallbackDistanceKm === "number" && Number.isFinite(fallbackDistanceKm)) {
+    return fallbackDistanceKm <= radiusKm;
+  }
+  return false;
+}
+
 /* ============================================================
    MAP CENTER OFFSET
    ----
@@ -359,7 +410,7 @@ export default function ExplorePreview() {
     queryFn: async () => {
       if (!coords) return { trucks: [] };
       const response = await fetch(
-        `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=7`,
+        `/api/trucks/live?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${SCOUT_TRUCK_RADIUS_KM}`,
         { credentials: "include" },
       );
       if (!response.ok) throw new Error("Failed to load live trucks");
@@ -371,10 +422,27 @@ export default function ExplorePreview() {
 
   const liveTrucks = useMemo<LiveTruckSummary[]>(() => {
     if (!liveTrucksData) return [];
-    if (Array.isArray(liveTrucksData)) return liveTrucksData;
-    if (Array.isArray(liveTrucksData.trucks)) return liveTrucksData.trucks;
-    return [];
-  }, [liveTrucksData]);
+    const raw = Array.isArray(liveTrucksData)
+      ? liveTrucksData
+      : Array.isArray(liveTrucksData.trucks)
+        ? liveTrucksData.trucks
+        : [];
+    return raw.filter((truck) => {
+      const fallbackKm =
+        typeof truck.distanceMiles === "number"
+          ? truck.distanceMiles * 1.609344
+          : typeof truck.distance === "number"
+            ? truck.distance
+            : null;
+      return isWithinScoutRadius(
+        coords,
+        truck.latitude ?? truck.lat,
+        truck.longitude ?? truck.lng,
+        SCOUT_TRUCK_RADIUS_KM,
+        fallbackKm,
+      );
+    });
+  }, [coords, liveTrucksData]);
 
   /* --------- featured deals --------- */
 
@@ -401,6 +469,7 @@ export default function ExplorePreview() {
 
   const { data: eventsData } = useQuery<EventsResponse>({
     queryKey: ["/api/events/public"],
+    enabled: !!coords,
     queryFn: async () => {
       const response = await fetch(`/api/events/public`, {
         credentials: "include",
@@ -418,6 +487,17 @@ export default function ExplorePreview() {
     return [];
   }, [eventsData]);
 
+  const visibleEvents = useMemo<EventSummary[]>(() => {
+    return events.filter((event) =>
+      isWithinScoutRadius(
+        coords,
+        event.latitude ?? event.lat ?? event.venueLat,
+        event.longitude ?? event.lng ?? event.venueLng,
+        SCOUT_EVENT_RADIUS_KM,
+      ),
+    );
+  }, [coords, events]);
+
   /* --------- nearby restaurants --------- */
 
   const { data: nearbyRestaurantsData, isLoading: nearbyRestaurantsLoading } = useQuery<RestaurantSummary[]>({
@@ -428,7 +508,7 @@ export default function ExplorePreview() {
     queryFn: async () => {
       if (!coords) return [];
       const response = await fetch(
-        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=25`,
+        `/api/restaurants/subscribed/${coords.lat}/${coords.lng}?radius=${SCOUT_LOCAL_RADIUS_KM}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -439,14 +519,29 @@ export default function ExplorePreview() {
 
   const nearbyRestaurants = useMemo<RestaurantSummary[]>(() => {
     if (!nearbyRestaurantsData) return [];
-    if (Array.isArray(nearbyRestaurantsData)) return nearbyRestaurantsData;
-    return [];
-  }, [nearbyRestaurantsData]);
+    if (!Array.isArray(nearbyRestaurantsData)) return [];
+    return nearbyRestaurantsData.filter((restaurant) => {
+      const fallbackKm =
+        typeof restaurant.distanceMiles === "number"
+          ? restaurant.distanceMiles * 1.609344
+          : typeof restaurant.distance === "number"
+            ? restaurant.distance
+            : null;
+      return isWithinScoutRadius(
+        coords,
+        restaurant.latitude ?? restaurant.lat,
+        restaurant.longitude ?? restaurant.lng,
+        SCOUT_LOCAL_RADIUS_KM,
+        fallbackKm,
+      );
+    });
+  }, [coords, nearbyRestaurantsData]);
 
   /* --------- parking pass hosts --------- */
 
   const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
     queryKey: ["/api/parking-pass"],
+    enabled: !!coords,
     queryFn: async () => {
       const response = await fetch("/api/parking-pass", { credentials: "include" });
       if (!response.ok) return [];
@@ -465,6 +560,17 @@ export default function ExplorePreview() {
     return [];
   }, [parkingPassData]);
 
+  const localParkingPassHosts = useMemo<ParkingPassListing[]>(() => {
+    return parkingPassHosts.filter((listing) =>
+      isWithinScoutRadius(
+        coords,
+        listing.latitude ?? listing.host?.latitude,
+        listing.longitude ?? listing.host?.longitude,
+        SCOUT_LOCAL_RADIUS_KM,
+      ),
+    );
+  }, [coords, parkingPassHosts]);
+
   /* --------- nearby deals (location-aware) --------- */
 
   const { data: nearbyDealsData } = useQuery<DealSummary[]>({
@@ -475,7 +581,7 @@ export default function ExplorePreview() {
     queryFn: async () => {
       if (!coords) return [];
       const response = await fetch(
-        `/api/deals/nearby/${coords.lat}/${coords.lng}`,
+        `/api/deals/nearby/${coords.lat}/${coords.lng}?radius=${SCOUT_LOCAL_RADIUS_KM}`,
         { credentials: "include" },
       );
       if (!response.ok) return [];
@@ -493,15 +599,15 @@ export default function ExplorePreview() {
     return [];
   }, [nearbyDealsData]);
 
-  // Merge nearby + featured deals, deduplicate by id, prefer nearby
+  // Scout is a local dashboard. Do not leak global featured deals into this lane.
   const allDeals = useMemo<DealSummary[]>(() => {
     const seen = new Set<string>();
     const merged: DealSummary[] = [];
-    for (const d of [...nearbyDeals, ...deals]) {
+    for (const d of nearbyDeals) {
       if (!seen.has(d.id)) { seen.add(d.id); merged.push(d); }
     }
     return merged;
-  }, [nearbyDeals, deals]);
+  }, [nearbyDeals]);
 
   /* --------- markers for the hero map --------- */
 
@@ -544,7 +650,7 @@ export default function ExplorePreview() {
   }, [nearbyRestaurants]);
 
   const parkingMarkers = useMemo<MapAdapterMarker[]>(() => {
-    return parkingPassHosts
+    return localParkingPassHosts
       .map((p) => {
         const parseCoord = (value: number | string | null | undefined) => {
           if (value === null || value === undefined) return null;
@@ -578,10 +684,10 @@ export default function ExplorePreview() {
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
-  }, [parkingPassHosts]);
+  }, [localParkingPassHosts]);
 
   const eventMarkers = useMemo<MapAdapterMarker[]>(() => {
-    return events
+    return visibleEvents
       .map((e) => {
         const lat = e.latitude ?? e.lat ?? e.venueLat;
         const lng = e.longitude ?? e.lng ?? e.venueLng;
@@ -597,7 +703,7 @@ export default function ExplorePreview() {
         } as MapAdapterMarker;
       })
       .filter((m): m is MapAdapterMarker => m !== null);
-  }, [events]);
+  }, [visibleEvents]);
 
   // Combined markers for the full Google Map view
   const allMapMarkers = useMemo<MapAdapterMarker[]>(
@@ -814,15 +920,15 @@ export default function ExplorePreview() {
   const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
-  const showParkingHostsSection = parkingPassLoading || parkingPassHosts.length > 0;
+  const showParkingHostsSection = parkingPassLoading || localParkingPassHosts.length > 0;
   const showDealsSection = allDeals.length > 0;
-  const showEventsSection = events.length > 0;
+  const showEventsSection = visibleEvents.length > 0;
   const localSignalCount =
     liveTrucks.length +
     nearbyRestaurants.length +
-    parkingPassHosts.length +
+    localParkingPassHosts.length +
     allDeals.length +
-    events.length;
+    visibleEvents.length;
 
   return (
     <>
@@ -1080,9 +1186,9 @@ export default function ExplorePreview() {
               locationStatus={locationStatus}
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
-              parkingHostCount={parkingPassHosts.length}
+              parkingHostCount={localParkingPassHosts.length}
               dealCount={allDeals.length}
-              eventCount={events.length}
+              eventCount={visibleEvents.length}
               localSignalCount={localSignalCount}
               onRefreshLocation={requestLocation}
               onOpenMap={openScoutMap}
@@ -1173,12 +1279,12 @@ export default function ExplorePreview() {
                   linkHref="/parking-pass"
                   subtitle="Host locations are places that let food trucks park, serve, and build a route."
                 />
-                {parkingPassLoading && parkingPassHosts.length === 0 ? (
+                {parkingPassLoading && localParkingPassHosts.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
                 ) : (
                   <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Parking pass hosts">
-                      {parkingPassHosts.slice(0, 8).map((h) => (
+                      {localParkingPassHosts.slice(0, 8).map((h) => (
                         <li key={h.id} className="shrink-0 w-[200px] sm:w-[220px]">
                           <ParkingPassCard listing={h} />
                         </li>
@@ -1219,7 +1325,7 @@ export default function ExplorePreview() {
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
-                    {events.slice(0, 8).map((e) => (
+                    {visibleEvents.slice(0, 8).map((e) => (
                       <li key={e.id} className="shrink-0 w-[230px] sm:w-[260px]">
                         <EventCard event={e} />
                       </li>
