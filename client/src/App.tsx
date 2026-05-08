@@ -417,7 +417,7 @@ function Router() {
           </>
         ) : (
           <>
-            <Route path="/" component={Home} />
+            <Route path="/" component={() => { window.location.replace("/explore-preview"); return null; }} />
             <Route path="/explore-preview" component={ExplorePreview} />
             <Route path="/login" component={Login} />
             <Route path="/customer-signup" component={CustomerSignup} />
