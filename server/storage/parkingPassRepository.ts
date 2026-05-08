@@ -91,6 +91,8 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
       `${has("series_type") ? `${q("series_type")} as "seriesType"` : `null as "seriesType"`}`,
       `${has("name") ? `${q("name")} as "name"` : `null as "name"`}`,
       `${has("description") ? `${q("description")} as "description"` : `null as "description"`}`,
+      `${has("start_date") ? `${q("start_date")} as "startDate"` : `null as "startDate"`}`,
+      `${has("end_date") ? `${q("end_date")} as "endDate"` : `null as "endDate"`}`,
       `${has("status") ? `${q("status")} as "status"` : `null as "status"`}`,
       `${has("published_at") ? `${q("published_at")} as "publishedAt"` : `null as "publishedAt"`}`,
       `${has("default_start_time") ? `${q("default_start_time")} as "defaultStartTime"` : `null as "defaultStartTime"`}`,
@@ -208,6 +210,8 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         hostId: string;
         name: string | null;
         description: string | null;
+        startDate: string | null;
+        endDate: string | null;
         status: string | null;
         publishedAt: string | null;
         updatedAt: string | null;
@@ -235,6 +239,8 @@ export function createParkingPassRepository(deps: ParkingPassRepoDeps) {
         hostId: String(row.hostId),
         name: row.name == null ? null : String(row.name),
         description: row.description == null ? null : String(row.description),
+        startDate: row.startDate ? new Date(row.startDate).toISOString() : null,
+        endDate: row.endDate ? new Date(row.endDate).toISOString() : null,
         status: row.status == null ? null : String(row.status),
         publishedAt: row.publishedAt
           ? new Date(row.publishedAt).toISOString()

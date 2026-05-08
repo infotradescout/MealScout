@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { Link, useLocation as useWouterLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Bookmark,
   CalendarDays,
@@ -18,6 +18,7 @@ import {
   Minimize2,
   Search,
   Tag,
+  Utensils,
   User as UserIcon,
 } from "lucide-react";
 
@@ -140,6 +141,14 @@ interface RestaurantSummary {
   lng?: number | null;
 }
 
+interface MenuPreviewItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  imageUrl?: string | null;
+  priceCents?: number | null;
+}
+
 interface ParkingPassListing {
   id: string;
   date?: string | null;
@@ -167,6 +176,22 @@ interface ParkingPassListing {
   weeklyPriceCents?: number | null;
   monthlyPriceCents?: number | null;
   paymentsEnabled?: boolean | null;
+  status?: string | null;
+  seriesStatus?: string | null;
+  seriesPublishedAt?: string | null;
+  publishedAt?: string | null;
+  deletedAt?: string | null;
+  archivedAt?: string | null;
+  cancelledAt?: string | null;
+  canceledAt?: string | null;
+  expiresAt?: string | null;
+  endDate?: string | null;
+  isActive?: boolean | null;
+  isArchived?: boolean | null;
+  isDeleted?: boolean | null;
+  isCancelled?: boolean | null;
+  isCanceled?: boolean | null;
+  isAvailable?: boolean | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   host?: {
@@ -178,6 +203,11 @@ interface ParkingPassListing {
     spotImageUrl?: string | null;
     latitude?: number | string | null;
     longitude?: number | string | null;
+    deletedAt?: string | null;
+    archivedAt?: string | null;
+    isActive?: boolean | null;
+    isArchived?: boolean | null;
+    isDeleted?: boolean | null;
   } | null;
 }
 
@@ -286,6 +316,111 @@ function isWithinScoutRadius(
     return fallbackDistanceKm <= radiusKm;
   }
   return false;
+}
+
+const BLOCKED_PARKING_PASS_STATUSES = new Set([
+  "archived",
+  "cancelled",
+  "canceled",
+  "closed",
+  "completed",
+  "deleted",
+  "disabled",
+  "draft",
+  "expired",
+  "inactive",
+  "unavailable",
+]);
+
+function normalizeScoutStatus(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function parkingPassHasAvailability(listing: ParkingPassListing): boolean {
+  if (Array.isArray(listing.availableSpotNumbers)) {
+    return listing.availableSpotNumbers.length > 0;
+  }
+  if (typeof listing.availableSpots === "number") {
+    return listing.availableSpots > 0;
+  }
+  const capacity = Number(listing.spotCount ?? listing.maxTrucks ?? 0);
+  const booked = Number(listing.bookedSpots ?? 0);
+  if (!Number.isFinite(capacity) || capacity <= 0) return false;
+  if (!Number.isFinite(booked)) return true;
+  return capacity - booked > 0;
+}
+
+function parkingPassIsCurrent(listing: ParkingPassListing): boolean {
+  const rawDate = listing.date ?? listing.endDate ?? listing.expiresAt;
+  if (!rawDate) return true;
+  const parsed = new Date(rawDate);
+  if (!Number.isFinite(parsed.getTime())) return true;
+  const endTime = String(listing.endTime || "").trim();
+  const match = endTime.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    parsed.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  }
+  return parsed.getTime() >= Date.now() - 30 * 60 * 1000;
+}
+
+function isParkingPassListingRenderable(listing: ParkingPassListing): boolean {
+  const status = normalizeScoutStatus(listing.status || "open");
+  const seriesStatus = normalizeScoutStatus(listing.seriesStatus || "published");
+  if (BLOCKED_PARKING_PASS_STATUSES.has(status)) return false;
+  if (seriesStatus && seriesStatus !== "published") return false;
+  if (listing.isActive === false || listing.host?.isActive === false) return false;
+  if (listing.isAvailable === false) return false;
+  if (listing.isArchived || listing.host?.isArchived) return false;
+  if (listing.isDeleted || listing.host?.isDeleted) return false;
+  if (listing.isCancelled || listing.isCanceled) return false;
+  if (
+    listing.deletedAt ||
+    listing.archivedAt ||
+    listing.cancelledAt ||
+    listing.canceledAt ||
+    listing.host?.deletedAt ||
+    listing.host?.archivedAt
+  ) {
+    return false;
+  }
+  if (!parkingPassIsCurrent(listing)) return false;
+  return parkingPassHasAvailability(listing);
+}
+
+function extractMenuPreviewItems(data: any): MenuPreviewItem[] {
+  const menus = Array.isArray(data?.menus) ? data.menus : [];
+  const items: MenuPreviewItem[] = [];
+  const seen = new Set<string>();
+  for (const menu of menus) {
+    const categoryItems = Array.isArray(menu?.categories)
+      ? menu.categories.flatMap((category: any) =>
+          Array.isArray(category?.items) ? category.items : [],
+        )
+      : [];
+    const uncategorized = Array.isArray(menu?.uncategorizedItems)
+      ? menu.uncategorizedItems
+      : [];
+    for (const item of [...categoryItems, ...uncategorized]) {
+      const id = String(item?.id || "").trim();
+      const name = String(item?.name || "").trim();
+      if (!id || !name || seen.has(id) || item?.isAvailable === false) continue;
+      seen.add(id);
+      items.push({
+        id,
+        name,
+        description: item?.description ?? null,
+        imageUrl: item?.imageUrl ?? null,
+        priceCents:
+          typeof item?.priceCents === "number" && Number.isFinite(item.priceCents)
+            ? item.priceCents
+            : null,
+      });
+      if (items.length >= 3) return items;
+    }
+  }
+  return items;
 }
 
 /* ============================================================
@@ -537,6 +672,35 @@ export default function ExplorePreview() {
     });
   }, [coords, nearbyRestaurantsData]);
 
+  const restaurantMenuPreviewQueries = useQueries({
+    queries: nearbyRestaurants.slice(0, 8).map((restaurant) => ({
+      queryKey: ["/api/menus", restaurant.id, "scout-preview"],
+      queryFn: async () => {
+        const response = await fetch(
+          `/api/menus/${encodeURIComponent(String(restaurant.id))}`,
+          { credentials: "include" },
+        );
+        if (!response.ok) return [];
+        const data = await response.json();
+        return extractMenuPreviewItems(data);
+      },
+      staleTime: 120_000,
+      retry: false,
+    })),
+  });
+
+  const menuPreviewByRestaurantId = useMemo(() => {
+    const map = new Map<string, MenuPreviewItem[]>();
+    nearbyRestaurants.slice(0, 8).forEach((restaurant, index) => {
+      const result = restaurantMenuPreviewQueries[index];
+      map.set(
+        String(restaurant.id),
+        Array.isArray(result?.data) ? result.data : [],
+      );
+    });
+    return map;
+  }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
+
   /* --------- parking pass hosts --------- */
 
   const { data: parkingPassData, isLoading: parkingPassLoading } = useQuery<ParkingPassListing[]>({
@@ -561,14 +725,15 @@ export default function ExplorePreview() {
   }, [parkingPassData]);
 
   const localParkingPassHosts = useMemo<ParkingPassListing[]>(() => {
-    return parkingPassHosts.filter((listing) =>
-      isWithinScoutRadius(
+    return parkingPassHosts.filter((listing) => {
+      if (!isParkingPassListingRenderable(listing)) return false;
+      return isWithinScoutRadius(
         coords,
         listing.latitude ?? listing.host?.latitude,
         listing.longitude ?? listing.host?.longitude,
         SCOUT_LOCAL_RADIUS_KM,
-      ),
-    );
+      );
+    });
   }, [coords, parkingPassHosts]);
 
   /* --------- nearby deals (location-aware) --------- */
@@ -719,22 +884,19 @@ export default function ExplorePreview() {
     null,
   );
   const userPushedMapRef = useRef(false);
+  const [sheetState, setSheetState] = useState<"default" | "fullMap">("default");
+  // Once the full map has been opened once, keep GoogleMapSurface mounted
+  // (just hidden) so it doesn't re-initialize on every collapse/expand.
+  // Using state (not ref) so React re-renders when the map should first mount.
+  const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
+  const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [googleMapFailed, setGoogleMapFailed] = useState(false);
 
   const openScoutMap = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set("src", "scout");
-    if (
-      coords &&
-      Number.isFinite(coords.lat) &&
-      Number.isFinite(coords.lng)
-    ) {
-      params.set("lat", String(coords.lat));
-      params.set("lng", String(coords.lng));
-      params.set("z", String(Math.max(12, Math.round(mapZoom || HERO_ZOOM))));
-    }
-    const q = params.toString();
-    navigate(q ? `/map?${q}` : "/map");
-  }, [coords, mapZoom, navigate]);
+    setHasOpenedFullMap(true);
+    setGoogleMapFailed(false);
+    setSheetState("fullMap");
+  }, []);
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
@@ -764,13 +926,6 @@ export default function ExplorePreview() {
   );
 
   /* --------- pull-down-to-fullscreen sheet --------- */
-
-  const [sheetState, setSheetState] = useState<"default" | "fullMap">("default");
-  // Once the full map has been opened once, keep GoogleMapSurface mounted
-  // (just hidden) so it doesn't re-initialize on every collapse/expand.
-  // Using state (not ref) so React re-renders when the map should first mount.
-  const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
-  const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
 
   // When sheetState transitions to fullMap:
   // 1. Set hasOpenedFullMap so GoogleMapSurface mounts for the first time.
@@ -955,6 +1110,7 @@ export default function ExplorePreview() {
              behind the hero text + sits above the lower content sheet.
            ============================================================ */}
         <section
+          data-testid="scout-map-container"
           className="relative w-full overflow-hidden"
           style={{
             height:
@@ -990,7 +1146,7 @@ export default function ExplorePreview() {
               }}
             >
               <CSSMapHero
-                markers={truckMarkers}
+                markers={allMapMarkers}
                 userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
               />
             </div>
@@ -1004,7 +1160,7 @@ export default function ExplorePreview() {
                 - Hidden (visibility:hidden, pointer-events:none) when
                   collapsed so it doesn't intercept hero touch events.
             */}
-            {hasMapKey && coords && mapCenter && hasOpenedFullMap ? (
+            {hasMapKey && !googleMapFailed && coords && mapCenter && hasOpenedFullMap ? (
               <div
                 ref={googleMapContainerRef}
                 className="absolute inset-0"
@@ -1027,14 +1183,15 @@ export default function ExplorePreview() {
                     onZoomChanged={handleMapZoomChanged}
                     onCenterChanged={handleMapCenterChanged}
                     onMarkerTap={handleMarkerTap}
+                    onFatalError={() => setGoogleMapFailed(true)}
                   />
                 </MapErrorBoundary>
               </div>
-            ) : sheetState === "fullMap" && (!hasMapKey || !coords || !mapCenter) ? (
+            ) : sheetState === "fullMap" && (googleMapFailed || !hasMapKey || !coords || !mapCenter) ? (
               <div className="absolute inset-0" style={{ zIndex: 1 }}>
                 <HeroMapFallback
                   reason={
-                    !hasMapKey
+                    !hasMapKey || googleMapFailed
                       ? "no-key"
                       : locationStatus === "denied"
                         ? "denied"
@@ -1262,7 +1419,12 @@ export default function ExplorePreview() {
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Restaurants near you">
                       {nearbyRestaurants.slice(0, 10).map((r) => (
                         <li key={r.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <NearbyRestaurantCard restaurant={r} />
+                          <NearbyRestaurantCard
+                            restaurant={r}
+                            menuPreview={
+                              menuPreviewByRestaurantId.get(String(r.id)) ?? []
+                            }
+                          />
                         </li>
                       ))}
                     </ul>
@@ -2128,7 +2290,13 @@ function DiscoveryEmptyRow({
   );
 }
 
-function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) {
+function NearbyRestaurantCard({
+  restaurant,
+  menuPreview = [],
+}: {
+  restaurant: RestaurantSummary;
+  menuPreview?: MenuPreviewItem[];
+}) {
   const name = restaurant.businessName || restaurant.name || "Restaurant";
   const img = restaurant.coverImageUrl || restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
   const cuisine = restaurant.cuisineType;
@@ -2138,6 +2306,10 @@ function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary })
   const distLabel = typeof dist === "number" && Number.isFinite(dist)
     ? `${dist.toFixed(dist < 10 ? 1 : 0)} mi`
     : null;
+  const formatPrice = (cents?: number | null) =>
+    typeof cents === "number" && Number.isFinite(cents) && cents > 0
+      ? `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`
+      : null;
 
   return (
     <Link
@@ -2145,6 +2317,7 @@ function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary })
       className="block rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 bg-black/40 ring-1 ring-white/10"
       aria-label={`Open ${name}`}
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
+      data-testid="scout-restaurant-card"
     >
       {/* Image */}
       <div className="relative aspect-[4/3] w-full bg-black/60">
@@ -2194,6 +2367,50 @@ function NearbyRestaurantCard({ restaurant }: { restaurant: RestaurantSummary })
               <span className="text-white/30 text-[11px]">·</span>
               <span className="text-white/50 text-[11px]">{distLabel}</span>
             </>
+          )}
+        </div>
+        {menuPreview.length > 0 && (
+          <div
+            className="mt-2 rounded-xl bg-amber-300/10 ring-1 ring-amber-300/20 px-2.5 py-2"
+            data-testid="scout-menu-preview"
+          >
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+              <Utensils className="h-3 w-3" aria-hidden="true" />
+              Menu preview
+            </div>
+            <div className="mt-1.5 space-y-1">
+              {menuPreview.slice(0, 2).map((item) => {
+                const price = formatPrice(item.priceCents);
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-baseline justify-between gap-2 text-[11px]"
+                  >
+                    <span className="min-w-0 truncate text-white/82">
+                      {item.name}
+                    </span>
+                    {price && (
+                      <span className="shrink-0 text-amber-200/85">
+                        {price}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold uppercase tracking-wide">
+          <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
+            Menu
+          </span>
+          <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
+            Save
+          </span>
+          {dealCount > 0 && (
+            <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-200">
+              Deals
+            </span>
           )}
         </div>
       </div>

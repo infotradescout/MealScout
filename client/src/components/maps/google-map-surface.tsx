@@ -491,6 +491,7 @@ export function GoogleMapSurface({
 
     // AdvancedMarkerElement requires a mapId — since we strip mapId for
     // neon style support, we always use classic Markers on this surface.
+    const AdvancedMarkerElement = googleMaps.marker?.AdvancedMarkerElement;
     const useAdvanced = false;
     const usedIds = new Set<string>();
 
