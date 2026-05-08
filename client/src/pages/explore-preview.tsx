@@ -614,6 +614,21 @@ export default function ExplorePreview() {
   );
   const userPushedMapRef = useRef(false);
 
+  const openScoutMap = useCallback(() => {
+    const params = new URLSearchParams();
+    if (
+      coords &&
+      Number.isFinite(coords.lat) &&
+      Number.isFinite(coords.lng)
+    ) {
+      params.set("lat", String(coords.lat));
+      params.set("lng", String(coords.lng));
+      params.set("z", String(Math.max(12, Math.round(mapZoom || HERO_ZOOM))));
+    }
+    const q = params.toString();
+    navigate(q ? `/map?${q}` : "/map");
+  }, [coords, mapZoom, navigate]);
+
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
     if (!coords || userPushedMapRef.current) return;
@@ -695,12 +710,13 @@ export default function ExplorePreview() {
     // On the DRAG HANDLE: swipe UP (delta < 0) also expands to fullMap.
     // Either direction works — we just check both thresholds.
     if (Math.abs(delta) > 40 && sheetState === "default") {
-      setSheetState("fullMap");
+      openScoutMap();
+      return;
     }
     if (delta < -40 && sheetState === "fullMap") {
       setSheetState("default");
     }
-  }, [sheetState]);
+  }, [openScoutMap, sheetState]);
 
   const handleSheetMouseDown = useCallback((e: React.MouseEvent) => {
     mouseDragStartY.current = e.clientY;
@@ -720,12 +736,13 @@ export default function ExplorePreview() {
     if (start === null || last === null) return;
     const delta = last - start;
     if (Math.abs(delta) > 24 && sheetState === "default") {
-      setSheetState("fullMap");
+      openScoutMap();
+      return;
     }
     if (delta < -24 && sheetState === "fullMap") {
       setSheetState("default");
     }
-  }, [sheetState]);
+  }, [openScoutMap, sheetState]);
 
   useEffect(() => {
     if (sheetState !== "default") return;
@@ -758,7 +775,7 @@ export default function ExplorePreview() {
       topPullStartY.current = null;
       if (start === null || window.scrollY > 0 || e.changedTouches.length === 0) return;
       const delta = e.changedTouches[0].clientY - start;
-      if (delta > 40) setSheetState("fullMap");
+      if (delta > 40) openScoutMap();
     };
 
     document.addEventListener("touchstart", handleTopPullStart, { passive: true });
@@ -775,7 +792,7 @@ export default function ExplorePreview() {
       body.style.overscrollBehaviorY = previousBodyOverscroll;
       topPullStartY.current = null;
     };
-  }, [sheetState]);
+  }, [openScoutMap, sheetState]);
 
   /* --------- greeting --------- */
 
@@ -964,7 +981,7 @@ export default function ExplorePreview() {
 
               <button
                 type="button"
-                onClick={() => setSheetState("fullMap")}
+                onClick={openScoutMap}
                 aria-label="Expand map to fullscreen"
                 className="flex items-center justify-center h-12 w-12 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-amber-300/40 shrink-0"
                 style={{ boxShadow: "0 0 14px rgba(245,158,11,0.3)" }}
@@ -1026,7 +1043,7 @@ export default function ExplorePreview() {
               onMouseMove={handleSheetMouseMove}
               onMouseUp={handleSheetMouseUp}
               onMouseLeave={handleSheetMouseUp}
-              onClick={() => setSheetState("fullMap")}
+              onClick={openScoutMap}
               className="w-full h-10 flex items-center justify-center cursor-pointer"
             >
               <span
@@ -1041,7 +1058,7 @@ export default function ExplorePreview() {
               liveTrucksLoading={liveTrucksLoading}
               liveTrucksError={!!liveTrucksError}
               locationStatus={locationStatus}
-              onExpandMap={() => setSheetState("fullMap")}
+              onExpandMap={openScoutMap}
             />
 
             {/* ── EXPLORE BY CRAVING ── */}
