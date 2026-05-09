@@ -1325,7 +1325,7 @@ export default function ExplorePreview() {
               <Link
                 href="/profile"
                 aria-label="Open profile"
-                className="flex items-center justify-center h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/30 bg-black/60 backdrop-blur-md shrink-0"
+                className="flex items-center justify-center h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/30 bg-[#120805]/60 backdrop-blur-md shrink-0"
               >
                 {user?.profileImageUrl ? (
                   <img
@@ -1334,23 +1334,23 @@ export default function ExplorePreview() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <UserIcon className="h-5 w-5 text-amber-300" aria-hidden="true" />
+                  <UserIcon className="h-5 w-5 text-orange-300" aria-hidden="true" />
                 )}
               </Link>
 
               <button
                 type="button"
                 onClick={requestLocation}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-full text-white text-sm font-medium px-4 bg-black/55 backdrop-blur-md ring-1 ring-white/15 active:scale-95 transition-transform"
+                className="flex-1 inline-flex items-center justify-center gap-2 h-12 rounded-full text-white text-sm font-medium px-4 bg-[#120805]/55 backdrop-blur-md ring-1 ring-white/15 active:scale-95 transition-transform"
                 aria-label={`Refresh location. Currently ${shortLocation}.`}
               >
                 {locationStatus === "requesting" ? (
-                  <svg className="h-4 w-4 text-amber-300 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <svg className="h-4 w-4 text-orange-300 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                   </svg>
                 ) : (
-                  <MapPin className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                  <MapPin className="h-4 w-4 text-orange-300" aria-hidden="true" />
                 )}
                 <span className="truncate max-w-[180px]">{shortLocation}</span>
               </button>
@@ -1359,10 +1359,10 @@ export default function ExplorePreview() {
                 type="button"
                 onClick={openScoutMap}
                 aria-label="Expand map to fullscreen"
-                className="flex items-center justify-center h-12 w-12 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-amber-300/40 shrink-0"
-                style={{ boxShadow: "0 0 14px rgba(245,158,11,0.3)" }}
+                className="flex items-center justify-center h-12 w-12 rounded-full bg-[#120805]/55 backdrop-blur-md ring-1 ring-orange-300/40 shrink-0"
+                style={{ boxShadow: "0 0 14px rgba(255,90,47,0.3)" }}
               >
-                <Maximize2 className="h-5 w-5 text-amber-300" aria-hidden="true" />
+                <Maximize2 className="h-5 w-5 text-orange-300" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1377,9 +1377,9 @@ export default function ExplorePreview() {
               type="button"
               onClick={() => setSheetState("default")}
               aria-label="Collapse map and return to discover"
-              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex items-center gap-2 h-12 px-4 rounded-full bg-black/75 backdrop-blur-md ring-1 ring-amber-300/60 text-amber-100 font-semibold"
+              className="absolute z-30 right-4 top-[calc(env(safe-area-inset-top)+0.75rem)] inline-flex items-center gap-2 h-12 px-4 rounded-full bg-[#120805]/75 backdrop-blur-md ring-1 ring-orange-300/60 text-orange-100 font-semibold"
               style={{
-                boxShadow: "0 0 22px rgba(245,158,11,0.45)",
+                boxShadow: "0 0 22px rgba(255,90,47,0.45)",
               }}
             >
               <Minimize2 className="h-4 w-4" aria-hidden="true" />
@@ -1465,11 +1465,11 @@ export default function ExplorePreview() {
                       type="button"
                       onClick={() => goToCraving(cat)}
                       aria-label={`Explore ${cat.label}`}
-                      className="group flex flex-col items-center gap-2 w-[52px] sm:w-[64px] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 rounded-2xl active:scale-[0.97] transition-transform"
+                      className="group flex flex-col items-center gap-2 w-[52px] sm:w-[64px] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 rounded-2xl active:scale-[0.97] transition-transform"
                     >
                       <span
-                        className="h-[52px] w-[52px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden ring-2 ring-amber-400/70 bg-black/60 group-hover:ring-amber-300 transition-all"
-                        style={{ boxShadow: "0 0 0 3px rgba(245,158,11,0.14), 0 0 18px rgba(245,158,11,0.45)" }}
+                        className="h-[52px] w-[52px] sm:h-[64px] sm:w-[64px] rounded-full overflow-hidden ring-2 ring-orange-500/70 bg-[#120805]/60 group-hover:ring-orange-300 transition-all"
+                        style={{ boxShadow: "0 0 0 3px rgba(255,90,47,0.14), 0 0 18px rgba(255,90,47,0.45)" }}
                       >
                         <img src={cat.image} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </span>
@@ -1620,7 +1620,7 @@ export default function ExplorePreview() {
                         onClick={() => navigate("/favorites")}
                         className="h-full min-h-[132px] w-full rounded-3xl bg-white/5 ring-1 ring-white/10 px-4 py-5 text-left hover:bg-white/8 transition-colors"
                       >
-                        <Bookmark className="mb-4 h-5 w-5 text-amber-300" />
+                        <Bookmark className="mb-4 h-5 w-5 text-orange-300" />
                         <p className="text-sm font-semibold text-white">View all saved</p>
                         <p className="mt-1 text-xs text-white/50">Restaurants and deals</p>
                       </button>
@@ -1634,8 +1634,8 @@ export default function ExplorePreview() {
                   className="w-full text-left rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5 hover:bg-white/8 transition-colors active:scale-[0.99]"
                 >
                   <div className="flex items-center gap-4">
-                    <span className="h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
-                      <Bookmark className="h-5 w-5 text-amber-300" />
+                    <span className="h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0" aria-hidden="true">
+                      <Bookmark className="h-5 w-5 text-orange-300" />
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-semibold">
@@ -1679,7 +1679,7 @@ function SectionHeader({
         <h2 className="text-white text-xl sm:text-2xl font-bold">{title}</h2>
         <Link
           href={linkHref}
-          className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
+          className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
         >
           See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </Link>
@@ -1782,12 +1782,12 @@ function LocalFoodDashboard({
           className="px-5 pt-5 pb-4"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 16% 0%, rgba(245,158,11,0.22), transparent 34%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.10), transparent 30%)",
+              "radial-gradient(circle at 16% 0%, rgba(255,90,47,0.22), transparent 34%), radial-gradient(circle at 84% 8%, rgba(34,197,94,0.10), transparent 30%)",
           }}
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-amber-200/75 font-bold">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-orange-200/75 font-bold">
                 Today's Food Board
               </p>
               <h2 className="mt-1 text-white text-2xl font-bold leading-tight">
@@ -1799,7 +1799,7 @@ function LocalFoodDashboard({
                 local food discovery, not generic fast-food noise.
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-black/35 ring-1 ring-amber-300/25 px-3 py-1 text-[11px] font-semibold text-amber-100">
+            <span className="shrink-0 rounded-full bg-[#120805]/35 ring-1 ring-orange-300/25 px-3 py-1 text-[11px] font-semibold text-orange-100">
               {signalLabel}
             </span>
           </div>
@@ -1808,7 +1808,7 @@ function LocalFoodDashboard({
             <button
               type="button"
               onClick={onOpenMap}
-              className="inline-flex items-center gap-2 rounded-full bg-amber-300 text-black px-3.5 py-2 text-sm font-bold active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full bg-orange-300 text-[#1a0d08] px-3.5 py-2 text-sm font-bold active:scale-[0.98]"
             >
               <MapPin className="h-4 w-4" aria-hidden="true" />
               Open map
@@ -1816,9 +1816,9 @@ function LocalFoodDashboard({
             <button
               type="button"
               onClick={onRefreshLocation}
-              className="inline-flex items-center gap-2 rounded-full bg-black/35 ring-1 ring-white/12 text-white px-3.5 py-2 text-sm font-semibold active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#120805]/35 ring-1 ring-white/12 text-white px-3.5 py-2 text-sm font-semibold active:scale-[0.98]"
             >
-              <Search className="h-4 w-4 text-amber-200" aria-hidden="true" />
+              <Search className="h-4 w-4 text-orange-200" aria-hidden="true" />
               Refresh local signal
             </button>
           </div>
@@ -1830,9 +1830,9 @@ function LocalFoodDashboard({
               <Link
                 key={item.label}
                 href={item.href}
-                className="rounded-2xl bg-black/30 ring-1 ring-white/8 px-3 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+                className="rounded-2xl bg-[#120805]/30 ring-1 ring-white/8 px-3 py-3 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-300/12 text-amber-200 ring-1 ring-amber-300/20">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-orange-300/12 text-orange-200 ring-1 ring-orange-300/20">
                   {item.icon}
                 </span>
                 <p className="mt-2 text-white text-lg font-bold leading-none">
@@ -1857,7 +1857,7 @@ function LocalFoodDashboard({
                   className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 px-3 py-2 text-sm font-semibold text-white/82 active:scale-[0.98]"
                 >
                   {lane.label}
-                  <ChevronRight className="h-4 w-4 text-amber-200" aria-hidden="true" />
+                  <ChevronRight className="h-4 w-4 text-orange-200" aria-hidden="true" />
                 </Link>
               ))}
             </div>
@@ -1885,7 +1885,7 @@ function TearDropPin({ delay = "0s", hasTruck = true }: { delay?: string; hasTru
         position: "relative",
         width: 52,
         height: 68,
-        filter: "drop-shadow(0 0 14px rgba(251,146,60,0.95)) drop-shadow(0 0 28px rgba(245,158,11,0.6)) drop-shadow(0 0 48px rgba(245,158,11,0.35))",
+        filter: "drop-shadow(0 0 14px rgba(251,146,60,0.95)) drop-shadow(0 0 28px rgba(255,90,47,0.6)) drop-shadow(0 0 48px rgba(255,90,47,0.35))",
       }}
     >
       {/* Outer pulse ring */}
@@ -1899,7 +1899,7 @@ function TearDropPin({ delay = "0s", hasTruck = true }: { delay?: string; hasTru
           marginTop: -32,
           marginLeft: -32,
           borderRadius: "50%",
-          background: "rgba(245,158,11,0.18)",
+          background: "rgba(255,90,47,0.18)",
           animation: `hero-pin-pulse 3s ease-out ${delay} infinite`,
           pointerEvents: "none",
         }}
@@ -2005,7 +2005,7 @@ function ScoutMapPreview({
         aria-hidden="true"
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 70% 55% at 52% 48%, rgba(245,158,11,0.13) 0%, rgba(249,115,22,0.07) 40%, transparent 72%)",
+          background: "radial-gradient(ellipse 70% 55% at 52% 48%, rgba(255,90,47,0.13) 0%, rgba(249,115,22,0.07) 40%, transparent 72%)",
           mixBlendMode: "screen",
         }}
       />
@@ -2082,11 +2082,11 @@ function HeroMapFallback({
       {/* CSS animation keyframes injected inline */}
       <style>{`
         @keyframes heroAtmosphere {
-          0%   { background: radial-gradient(ellipse at 20% 60%, rgba(245,158,11,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
-          25%  { background: radial-gradient(ellipse at 55% 70%, rgba(245,158,11,0.14) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 20% 25%, rgba(180,83,9,0.16) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
-          50%  { background: radial-gradient(ellipse at 70% 50%, rgba(245,158,11,0.20) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 30% 70%, rgba(180,83,9,0.10) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
-          75%  { background: radial-gradient(ellipse at 35% 35%, rgba(245,158,11,0.15) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 65% 65%, rgba(180,83,9,0.18) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
-          100% { background: radial-gradient(ellipse at 20% 60%, rgba(245,158,11,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          0%   { background: radial-gradient(ellipse at 20% 60%, rgba(255,90,47,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          25%  { background: radial-gradient(ellipse at 55% 70%, rgba(255,90,47,0.14) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 20% 25%, rgba(180,83,9,0.16) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          50%  { background: radial-gradient(ellipse at 70% 50%, rgba(255,90,47,0.20) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 30% 70%, rgba(180,83,9,0.10) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          75%  { background: radial-gradient(ellipse at 35% 35%, rgba(255,90,47,0.15) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 65% 65%, rgba(180,83,9,0.18) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
+          100% { background: radial-gradient(ellipse at 20% 60%, rgba(255,90,47,0.18) 0%, rgba(8,10,15,0) 55%), radial-gradient(ellipse at 75% 30%, rgba(180,83,9,0.12) 0%, rgba(8,10,15,0) 50%), linear-gradient(160deg, #080a0f 0%, #0f1117 50%, #080a0f 100%); }
         }
         @keyframes heroAtmosphereGrain {
           0%   { opacity: 0.04; transform: translate(0,0); }
@@ -2112,10 +2112,10 @@ function HeroMapFallback({
       />
       <div className="max-w-[280px] text-center px-6">
         <span
-          className="inline-flex h-12 w-12 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 items-center justify-center mb-3"
+          className="inline-flex h-12 w-12 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 items-center justify-center mb-3"
           aria-hidden="true"
         >
-          <MapPin className="h-5 w-5 text-amber-300" />
+          <MapPin className="h-5 w-5 text-orange-300" />
         </span>
         <p className="text-white font-semibold">
           {reason === "no-key"
@@ -2155,17 +2155,17 @@ function LiveNowEmptyCard({
     <button
       type="button"
       onClick={onCta}
-      className="block w-full text-left rounded-2xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block w-full text-left rounded-2xl overflow-hidden bg-white/5 backdrop-blur-md ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
       aria-label={title}
     >
       <div className="p-4">
         <div className="flex items-start gap-3 mb-3">
           <span
-            className="h-9 w-9 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0 mt-0.5"
+            className="h-9 w-9 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0 mt-0.5"
             aria-hidden="true"
           >
-            <MapPin className="h-4 w-4 text-amber-300" />
+            <MapPin className="h-4 w-4 text-orange-300" />
           </span>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-white text-sm leading-snug">{title}</p>
@@ -2198,11 +2198,11 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
   return (
     <Link
       href={`/truck/${truck.id}`}
-      className="block rounded-3xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 bg-black/40 ring-1 ring-white/10"
+      className="block rounded-3xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 bg-[#120805]/40 ring-1 ring-white/10"
       aria-label={`Open ${truck.name}`}
       style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
     >
-      <div className="relative aspect-[4/5] w-full bg-black/60">
+      <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
         {heroImage ? (
           <img
             src={heroImage}
@@ -2215,7 +2215,7 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
             className="absolute inset-0"
             style={{
               backgroundImage:
-                "linear-gradient(160deg, rgba(245,158,11,0.18), rgba(0,0,0,0.6))",
+                "linear-gradient(160deg, rgba(255,90,47,0.18), rgba(0,0,0,0.6))",
             }}
             aria-hidden="true"
           />
@@ -2229,7 +2229,7 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           aria-hidden="true"
         />
 
-        <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow-md">
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow-md">
           <span
             className="h-1.5 w-1.5 rounded-full bg-white atmo-pulse-amber"
             aria-hidden="true"
@@ -2243,7 +2243,7 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           onClick={(e) => {
             e.preventDefault();
           }}
-          className="absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm hover:bg-black/50 transition-colors"
+          className="absolute top-2.5 right-2.5 h-9 w-9 rounded-full flex items-center justify-center bg-[#120805]/30 backdrop-blur-sm hover:bg-[#120805]/50 transition-colors"
         >
           <Heart className="h-5 w-5 text-white" aria-hidden="true" />
         </button>
@@ -2252,7 +2252,7 @@ function LiveTruckCard({ truck }: { truck: LiveTruckSummary }) {
           <p className="text-white font-bold text-lg leading-tight truncate">
             {truck.name}
           </p>
-          <p className="mt-1 inline-flex items-center gap-1.5 text-amber-200 text-sm font-semibold">
+          <p className="mt-1 inline-flex items-center gap-1.5 text-orange-200 text-sm font-semibold">
             <Flame className="h-4 w-4" aria-hidden="true" />
             <span>{vibe.label}</span>
           </p>
@@ -2269,11 +2269,11 @@ function DealCard({ deal }: { deal: DealSummary }) {
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="block rounded-3xl overflow-hidden bg-black/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block rounded-3xl overflow-hidden bg-[#120805]/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
       aria-label={`Open deal ${deal.title || ""}`}
     >
-      <div className="relative aspect-[4/5] w-full bg-black/60">
+      <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
         {deal.imageUrl ? (
           <img
             src={deal.imageUrl}
@@ -2300,7 +2300,7 @@ function DealCard({ deal }: { deal: DealSummary }) {
           aria-hidden="true"
         />
         {deal.discountText && (
-          <span className="absolute top-3 left-3 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-black bg-amber-300 shadow-md">
+          <span className="absolute top-3 left-3 inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide text-[#1a0d08] bg-orange-300 shadow-md">
             {deal.discountText}
           </span>
         )}
@@ -2334,11 +2334,11 @@ function EventCard({ event }: { event: EventSummary }) {
   return (
     <Link
       href={`/event/${event.id}`}
-      className="block rounded-3xl overflow-hidden bg-black/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block rounded-3xl overflow-hidden bg-[#120805]/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
       aria-label={`Open event ${title}`}
     >
-      <div className="relative aspect-[4/5] w-full bg-black/60">
+      <div className="relative aspect-[4/5] w-full bg-[#120805]/60">
         {img ? (
           <img
             src={img}
@@ -2372,7 +2372,7 @@ function EventCard({ event }: { event: EventSummary }) {
             <p className="mt-1 text-white/80 text-xs truncate">{venue}</p>
           )}
           {startLabel && (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-amber-200 text-xs font-semibold">
+            <p className="mt-1 inline-flex items-center gap-1.5 text-orange-200 text-xs font-semibold">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               {startLabel}
             </p>
@@ -2400,7 +2400,7 @@ function DiscoveryEmptyRow({
     <div className="mr-5 rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-md p-5">
       <div className="flex items-start gap-4">
         <span
-          className="h-10 w-10 rounded-full bg-amber-400/15 ring-1 ring-amber-300/40 flex items-center justify-center shrink-0"
+          className="h-10 w-10 rounded-full bg-orange-500/15 ring-1 ring-orange-300/40 flex items-center justify-center shrink-0"
           aria-hidden="true"
         >
           {icon}
@@ -2411,7 +2411,7 @@ function DiscoveryEmptyRow({
           <button
             type="button"
             onClick={onCta}
-            className="mt-3 inline-flex items-center gap-1.5 text-amber-200 text-sm font-semibold"
+            className="mt-3 inline-flex items-center gap-1.5 text-orange-200 text-sm font-semibold"
           >
             {ctaLabel} <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -2556,13 +2556,13 @@ function NearbyRestaurantCard({
   return (
     <Link
       href={`/restaurant/${restaurant.id}`}
-      className="block rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 bg-black/40 ring-1 ring-white/10"
+      className="block rounded-2xl overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70 bg-[#120805]/40 ring-1 ring-white/10"
       aria-label={`Open ${name}`}
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.45)" }}
       data-testid="scout-restaurant-card"
     >
       {/* Image */}
-      <div className="relative aspect-[4/3] w-full bg-black/60">
+      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
         {img ? (
           <img
             src={img}
@@ -2574,7 +2574,7 @@ function NearbyRestaurantCard({
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: "linear-gradient(160deg, rgba(245,158,11,0.18), rgba(0,0,0,0.6))",
+              backgroundImage: "linear-gradient(160deg, rgba(255,90,47,0.18), rgba(0,0,0,0.6))",
             }}
             aria-hidden="true"
           />
@@ -2585,7 +2585,7 @@ function NearbyRestaurantCard({
           aria-hidden="true"
         />
         {dealCount > 0 && (
-          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow">
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
             <Tag className="h-2.5 w-2.5" aria-hidden="true" />
             {dealCount} deal{dealCount > 1 ? "s" : ""}
           </span>
@@ -2596,7 +2596,7 @@ function NearbyRestaurantCard({
         <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
           {cuisine && (
-            <span className="text-amber-300/80 text-[11px]">{cuisine}</span>
+            <span className="text-orange-300/80 text-[11px]">{cuisine}</span>
           )}
           {cuisine && (location || distLabel) && (
             <span className="text-white/30 text-[11px]">·</span>
@@ -2613,10 +2613,10 @@ function NearbyRestaurantCard({
         </div>
         {menuPreview.length > 0 && (
           <div
-            className="mt-2 rounded-xl bg-amber-300/10 ring-1 ring-amber-300/20 px-2.5 py-2"
+            className="mt-2 rounded-xl bg-orange-300/10 ring-1 ring-orange-300/20 px-2.5 py-2"
             data-testid="scout-menu-preview"
           >
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-orange-200">
               <Utensils className="h-3 w-3" aria-hidden="true" />
               Menu preview
             </div>
@@ -2632,7 +2632,7 @@ function NearbyRestaurantCard({
                       {item.name}
                     </span>
                     {price && (
-                      <span className="shrink-0 text-amber-200/85">
+                      <span className="shrink-0 text-orange-200/85">
                         {price}
                       </span>
                     )}
@@ -2655,7 +2655,7 @@ function NearbyRestaurantCard({
             Menu
           </span>
           {dealCount > 0 && (
-            <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-200">
+            <span className="rounded-full bg-orange-300/15 px-2 py-1 text-orange-200">
               Deals
             </span>
           )}
@@ -2673,7 +2673,7 @@ function NearbyRestaurantCard({
             disabled={pendingAction === "favorite"}
             className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
               isFavorite
-                ? "bg-amber-300 text-black"
+                ? "bg-orange-300 text-[#1a0d08]"
                 : "bg-white/8 text-white/70 hover:bg-white/12"
             }`}
             aria-pressed={isFavorite}
@@ -2687,7 +2687,7 @@ function NearbyRestaurantCard({
             disabled={pendingAction === "follow"}
             className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
               isFollowed
-                ? "bg-white text-black"
+                ? "bg-white text-[#1a0d08]"
                 : "bg-white/8 text-white/70 hover:bg-white/12"
             }`}
             aria-pressed={isFollowed}
@@ -2701,7 +2701,7 @@ function NearbyRestaurantCard({
             disabled={pendingAction === "recommend" || isRecommended}
             className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
               isRecommended
-                ? "bg-emerald-300 text-black"
+                ? "bg-emerald-300 text-[#1a0d08]"
                 : "bg-white/8 text-white/70 hover:bg-white/12"
             }`}
             aria-pressed={isRecommended}
@@ -2728,10 +2728,10 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
   return (
     <Link
       href={`/restaurant/${restaurant.id}`}
-      className="block overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 transition hover:bg-white/8 hover:ring-amber-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 transition hover:bg-white/8 hover:ring-orange-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       aria-label={`Open saved restaurant ${name}`}
     >
-      <div className="relative h-24 bg-black/50">
+      <div className="relative h-24 bg-[#120805]/50">
         {img ? (
           <img
             src={img}
@@ -2744,7 +2744,7 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
             className="absolute inset-0"
             style={{
               backgroundImage:
-                "linear-gradient(145deg, rgba(245,158,11,0.22), rgba(2,6,23,0.92))",
+                "linear-gradient(145deg, rgba(255,90,47,0.22), rgba(2,6,23,0.92))",
             }}
             aria-hidden="true"
           />
@@ -2757,7 +2757,7 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
           }}
           aria-hidden="true"
         />
-        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-amber-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black">
+        <span className="absolute left-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-orange-300 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1a0d08]">
           <Bookmark className="h-3 w-3" aria-hidden="true" />
           Saved
         </span>
@@ -2765,7 +2765,7 @@ function SavedRestaurantCard({ restaurant }: { restaurant: RestaurantSummary }) 
       <div className="px-3 py-3">
         <p className="truncate text-sm font-semibold text-white">{name}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-          {cuisine && <span className="text-amber-200/80">{cuisine}</span>}
+          {cuisine && <span className="text-orange-200/80">{cuisine}</span>}
           {cuisine && location && <span className="text-white/25">·</span>}
           {location && <span className="truncate text-white/55">{location}</span>}
         </div>
@@ -2881,7 +2881,7 @@ function LiveNowSection({
           )}
           <Link
             href="/truck-discovery"
-            className="text-sm text-amber-300 inline-flex items-center gap-1 font-medium"
+            className="text-sm text-orange-300 inline-flex items-center gap-1 font-medium"
           >
             See All <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -2933,10 +2933,10 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
   return (
     <Link
       href={`/truck/${truck.id}`}
-      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-orange-500/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     >
       {/* Hero image */}
-      <div className="relative aspect-[4/3] w-full bg-black/40 overflow-hidden">
+      <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
         {img ? (
           <img
             src={img}
@@ -2946,7 +2946,7 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
-            <Flame className="h-8 w-8 text-amber-400/40" aria-hidden="true" />
+            <Flame className="h-8 w-8 text-orange-500/40" aria-hidden="true" />
           </div>
         )}
         <div
@@ -2960,7 +2960,7 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
           Live
         </span>
         {truck.activeDealCount && truck.activeDealCount > 0 ? (
-          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-amber-500 shadow">
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-white bg-orange-600 shadow">
             <Tag className="h-2.5 w-2.5" aria-hidden="true" />
             Deal
           </span>
@@ -2970,7 +2970,7 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
       <div className="px-3 py-2.5">
         <p className="text-white font-semibold text-sm leading-snug truncate">{name}</p>
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-          {cuisine && <span className="text-amber-300/80 text-[11px]">{cuisine}</span>}
+          {cuisine && <span className="text-orange-300/80 text-[11px]">{cuisine}</span>}
           {cuisine && (distLabel || waitLabel) && <span className="text-white/30 text-[11px]">·</span>}
           {distLabel && <span className="text-white/60 text-[11px]">{distLabel}</span>}
           {distLabel && waitLabel && <span className="text-white/30 text-[11px]">·</span>}
@@ -3083,10 +3083,10 @@ function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
   return (
     <Link
       href={listing.id ? `/parking-pass?pass=${encodeURIComponent(String(listing.id))}` : "/parking-pass"}
-      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-amber-400/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+      className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-orange-500/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     >
       {/* Hero image */}
-      <div className="relative aspect-[4/3] w-full bg-black/40 overflow-hidden">
+      <div className="relative aspect-[4/3] w-full bg-[#120805]/40 overflow-hidden">
         {img ? (
           <img
             src={img}
@@ -3100,12 +3100,12 @@ function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
               className="absolute inset-0"
               style={{
                 backgroundImage:
-                  "linear-gradient(150deg, rgba(245,158,11,0.24), rgba(2,6,23,0.92))",
+                  "linear-gradient(150deg, rgba(255,90,47,0.24), rgba(2,6,23,0.92))",
               }}
               aria-hidden="true"
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <MapPin className="h-8 w-8 text-amber-300/70" aria-hidden="true" />
+              <MapPin className="h-8 w-8 text-orange-300/70" aria-hidden="true" />
             </div>
           </div>
         )}
@@ -3122,7 +3122,7 @@ function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
           </span>
         )}
         {startingPrice && (
-          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-black bg-amber-300 shadow">
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide text-[#1a0d08] bg-orange-300 shadow">
             From {startingPrice}
           </span>
         )}
@@ -3138,7 +3138,7 @@ function ParkingPassCard({ listing }: { listing: ParkingPassListing }) {
             <span className="text-white/30 text-[11px]">·</span>
           )}
           {spots !== null && (
-            <span className="text-amber-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
+            <span className="text-orange-300/70 text-[11px]">{spots} spot{spots !== 1 ? "s" : ""}</span>
           )}
         </div>
         {scheduleLabel && (

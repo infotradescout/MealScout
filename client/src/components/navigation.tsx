@@ -352,7 +352,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
     <>
       {/* Desktop top-right pill */}
       <div data-nav-root={scope} className="hidden lg:block fixed top-6 right-6 z-50">
-        <div className="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
+        <div className="rounded-2xl border border-white/5 bg-[#120805]/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-2">
           <div className="flex items-center gap-1">
             {desktopItems.map((item) =>
               item.path ? (
@@ -361,7 +361,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                   href={item.path}
                   className={`inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-all ${
                     isActive(item.path)
-                      ? "bg-primary text-black shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+                      ? "bg-primary text-[#1a0d08] shadow-[0_0_20px_rgba(255,90,47,0.4)]"
                       : "text-white/60 hover:text-white hover:bg-white/5"
                   }`}
                   aria-label={item.label}
@@ -385,9 +385,9 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
       >
         <div className="mx-auto max-w-md px-4">
           <div
-            className="relative flex items-end justify-between gap-1 h-[68px] px-3 rounded-full bg-black/65 backdrop-blur-xl ring-1 ring-white/10"
+            className="relative flex items-end justify-between gap-1 h-[68px] px-3 rounded-full bg-[#120805]/65 backdrop-blur-xl ring-1 ring-white/10"
             style={{
-              boxShadow: "0 0 0 1px rgba(245,158,11,0.10), 0 18px 48px rgba(0,0,0,0.65)",
+              boxShadow: "0 0 0 1px rgba(255,90,47,0.10), 0 18px 48px rgba(0,0,0,0.65)",
             }}
           >
             {/* 1 — Scout (center raised) */}
@@ -398,13 +398,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               className="flex flex-col items-center justify-end gap-1 flex-1 min-w-0 h-full pb-1 transition-transform active:scale-95"
             >
               <span
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-black/70 ring-2 ring-amber-400 -mt-6"
-                style={{ boxShadow: "0 0 0 4px rgba(245,158,11,0.15), 0 0 24px rgba(245,158,11,0.35)" }}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#120805]/70 ring-2 ring-orange-500 -mt-6"
+                style={{ boxShadow: "0 0 0 4px rgba(255,90,47,0.15), 0 0 24px rgba(255,90,47,0.35)" }}
                 aria-hidden="true"
               >
-                <Search className="h-5 w-5 text-amber-300" />
+                <Search className="h-5 w-5 text-orange-300" />
               </span>
-              <span className="text-[11px] font-medium text-amber-300">Scout</span>
+              <span className="text-[11px] font-medium text-orange-300">Scout</span>
             </Link>
 
             {/* 2 — Scout-local secondary action, otherwise Dashboard */}
@@ -418,7 +418,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               }
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
                 mobileSecondItem.path && isActive(mobileSecondItem.path)
-                  ? "text-amber-300"
+                  ? "text-orange-300"
                   : "text-white/70 hover:text-white"
               }`}
             >
@@ -433,7 +433,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                 aria-label={mobileThirdItem.label}
                 aria-current={isActive(mobileThirdItem.path) ? "page" : undefined}
                 className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                  isActive(mobileThirdItem.path) ? "text-amber-300" : "text-white/70 hover:text-white"
+                  isActive(mobileThirdItem.path) ? "text-orange-300" : "text-white/70 hover:text-white"
                 }`}
               >
                 <mobileThirdItem.icon className="h-5 w-5" aria-hidden="true" />
@@ -447,7 +447,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               aria-label="Share"
               aria-current={isActive("/share-hub") ? "page" : undefined}
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                isActive("/share-hub") ? "text-amber-300" : "text-white/70 hover:text-white"
+                isActive("/share-hub") ? "text-orange-300" : "text-white/70 hover:text-white"
               }`}
             >
               <Share2 className="h-5 w-5" aria-hidden="true" />
@@ -461,7 +461,7 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen((v) => !v)}
               className={`flex flex-col items-center justify-end gap-0.5 flex-1 min-w-0 h-full pb-2 transition-colors ${
-                moreOpen ? "text-amber-300" : "text-white/70 hover:text-white"
+                moreOpen ? "text-orange-300" : "text-white/70 hover:text-white"
               }`}
             >
               <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
@@ -481,13 +481,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
         >
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-[#120805]/60 backdrop-blur-sm"
             onClick={() => setMoreOpen(false)}
           />
           {/* Sheet */}
           <div
             ref={sheetRef}
-            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
+            className="absolute left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] mx-4 rounded-3xl bg-[#120805]/80 backdrop-blur-2xl border border-white/10 shadow-[0_-16px_48px_rgba(0,0,0,0.7)] overflow-hidden"
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40">
@@ -519,13 +519,13 @@ export default function Navigation({ scope = "local" }: NavigationProps) {
                     >
                       <item.icon
                         className={`h-5 w-5 ${
-                          active ? "text-amber-300" : item.isBug ? "text-primary animate-pulse" : "text-white/70"
+                          active ? "text-orange-300" : item.isBug ? "text-primary animate-pulse" : "text-white/70"
                         }`}
                       />
                     </span>
                     <span
                       className={`text-[10px] font-medium text-center leading-tight ${
-                        active ? "text-amber-300" : "text-white/60"
+                        active ? "text-orange-300" : "text-white/60"
                       }`}
                     >
                       {item.label}
