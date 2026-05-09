@@ -8,7 +8,9 @@ export default function ParkingPassManage() {
 
   useEffect(() => {
     if (!user) {
-      setLocation("/login?redirect=/parking-pass");
+      setLocation(
+        `/login?redirect=${encodeURIComponent("/parking-pass?setup=host")}`,
+      );
       return;
     }
 
@@ -17,14 +19,14 @@ export default function ParkingPassManage() {
       .then((res) => {
         if (cancelled) return;
         if (res.ok) {
-          setLocation("/parking-pass#parking-pass-settings");
+          setLocation("/parking-pass?setup=host");
         } else {
-          setLocation("/parking-pass");
+          setLocation("/parking-pass?setup=host");
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setLocation("/parking-pass");
+        setLocation("/parking-pass?setup=host");
       });
 
     return () => {

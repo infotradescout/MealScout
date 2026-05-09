@@ -89,7 +89,7 @@ function htmlFor(params: {
   address: string;
   minInterestedTrucks: number;
 }): string {
-  const cta = `${baseUrl()}/parking-pass#parking-pass-settings`;
+  const cta = `${baseUrl()}/parking-pass?setup=host`;
   const name = params.firstName || "there";
   const urgency =
     params.step === 1
@@ -110,7 +110,7 @@ function htmlFor(params: {
 }
 
 function smsFor(params: { step: number; businessName: string }): string {
-  const cta = `${baseUrl()}/parking-pass`;
+  const cta = `${baseUrl()}/parking-pass?setup=host`;
   if (params.step === 2) {
     return `MealScout: ${params.businessName} has trucks waiting. Publish slots now: ${cta}`;
   }
