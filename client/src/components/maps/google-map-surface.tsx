@@ -290,7 +290,7 @@ const removeMarkerFromMap = (instance: any) => {
 };
 
 /* ─── Script loader ─────────────────────────────────────────────────────── */
-const loadGoogleMaps = async (apiKey: string) => {
+export const loadGoogleMaps = async (apiKey: string) => {
   if (!apiKey) throw new Error("Missing Google Maps API key");
   const w = window as GoogleMapsWindow;
   if (w.google?.maps) return;
@@ -334,6 +334,14 @@ const loadGoogleMaps = async (apiKey: string) => {
   }
 };
 
+export const preloadGoogleMapsScript = (apiKey: string) => {
+  if (!apiKey) return;
+  void loadGoogleMaps(apiKey).catch(() => {
+    // Prefetch is opportunistic. The mounted interactive map will surface
+    // any real load/auth failures through its normal fallback path.
+  });
+};
+
 /* ─── Component ─────────────────────────────────────────────────────────── */
 export function GoogleMapSurface({
   apiKey,
@@ -353,6 +361,7 @@ export function GoogleMapSurface({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<Map<string, any>>(new Map());
+  const markerSignatureRefs = useRef<Map<string, string>>(new Map());
   const trafficCircleRefs = useRef<Map<string, any>>(new Map());
   const roadTrafficLayerRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -498,8 +507,19 @@ export function GoogleMapSurface({
     markers.forEach((marker) => {
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
+      const signature = [
+        marker.kind,
+        marker.lat.toFixed(6),
+        marker.lng.toFixed(6),
+        marker.color || "",
+        marker.title || "",
+        marker.subtitle || "",
+      ].join("|");
 
       if (existing) {
+        if (markerSignatureRefs.current.get(marker.id) === signature) {
+          return;
+        }
         // Update position
         if (typeof existing.setPosition === "function") {
           existing.setPosition({ lat: marker.lat, lng: marker.lng });
@@ -512,6 +532,7 @@ export function GoogleMapSurface({
         } else if (typeof existing.setIcon === "function") {
           existing.setIcon(buildLegacyIcon(googleMaps, marker));
         }
+        markerSignatureRefs.current.set(marker.id, signature);
         return;
       }
 
@@ -541,12 +562,14 @@ export function GoogleMapSurface({
         });
       }
       markerRefs.current.set(marker.id, instance);
+      markerSignatureRefs.current.set(marker.id, signature);
     });
 
     Array.from(markerRefs.current.entries()).forEach(([id, instance]) => {
       if (usedIds.has(id)) return;
       removeMarkerFromMap(instance);
       markerRefs.current.delete(id);
+      markerSignatureRefs.current.delete(id);
     });
   }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
 
@@ -605,6 +628,7 @@ export function GoogleMapSurface({
     return () => {
       Array.from(trafficCircleRefs.current.values()).forEach((i) => i.setMap(null));
       trafficCircleRefs.current.clear();
+      markerSignatureRefs.current.clear();
       if (roadTrafficLayerRef.current) { roadTrafficLayerRef.current.setMap(null); roadTrafficLayerRef.current = null; }
       if (onWindowResizeRef.current) {
         window.removeEventListener("resize", onWindowResizeRef.current);

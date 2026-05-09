@@ -25,8 +25,10 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { getReverseGeocodedLocationName } from "@/utils/locationUtils";
 import { SEOHead } from "@/components/seo-head";
-import { GoogleMapSurface } from "@/components/maps/google-map-surface";
-import { ThemedScoutMap } from "@/components/maps/themed-scout-map";
+import {
+  GoogleMapSurface,
+  preloadGoogleMapsScript,
+} from "@/components/maps/google-map-surface";
 import { MapErrorBoundary } from "@/components/maps/map-error-boundary";
 import { GOOGLE_MAPS_WEB_API_KEY } from "@/lib/mapProvider";
 import { SVGStreetMap } from "@/components/maps/svg-street-map";
@@ -859,12 +861,49 @@ export default function ExplorePreview() {
   const [hasOpenedFullMap, setHasOpenedFullMap] = useState(false);
   const googleMapContainerRef = useRef<HTMLDivElement | null>(null);
   const [googleMapFailed, setGoogleMapFailed] = useState(false);
+  const hasMapKey = GOOGLE_MAPS_WEB_API_KEY.length > 0;
 
   const openScoutMap = useCallback(() => {
     setHasOpenedFullMap(true);
     setGoogleMapFailed(false);
     setSheetState("fullMap");
   }, []);
+
+  useEffect(() => {
+    if (!hasMapKey) return;
+    if (sheetState !== "default") return;
+    if (typeof window === "undefined") return;
+    const connection = (navigator as any).connection;
+    if (connection?.saveData) return;
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+
+    const startPrefetch = () => {
+      if (cancelled) return;
+      if (window.location.pathname !== "/scout") return;
+      preloadGoogleMapsScript(GOOGLE_MAPS_WEB_API_KEY);
+    };
+
+    timeoutId = window.setTimeout(() => {
+      if ("requestIdleCallback" in window) {
+        idleId = (window as any).requestIdleCallback(startPrefetch, {
+          timeout: 2500,
+        });
+        return;
+      }
+      startPrefetch();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (idleId !== null && "cancelIdleCallback" in window) {
+        (window as any).cancelIdleCallback(idleId);
+      }
+    };
+  }, [hasMapKey, sheetState]);
 
   // When we first get coords, set the map center to the right-quadrant offset.
   useEffect(() => {
@@ -1030,10 +1069,6 @@ export default function ExplorePreview() {
   const greetingFirstLine = `Good ${greetingTime},`;
   const greetingSecondLine = firstName ? `${firstName}.` : "Welcome.";
 
-  /* --------- map availability flag --------- */
-
-  const hasMapKey = GOOGLE_MAPS_WEB_API_KEY.length > 0;
-
   /* --------- render --------- */
 
   const goToCraving = (cat: CravingCategory) => {
@@ -1095,7 +1130,7 @@ export default function ExplorePreview() {
         >
           {/* Map
               ----
-              DEFAULT state: a custom themed atmospheric overlay (ThemedScoutMap)
+              DEFAULT state: a lightweight ScoutMapPreview
                 that uses real map data but renders in MealScout's brand
                 aesthetic — dark, glowing amber pins, user pin anchored to
                 the right third, slow drift animation. NO Google Maps SDK
@@ -1105,15 +1140,20 @@ export default function ExplorePreview() {
                 (GoogleMapSurface) for full pan/zoom/tap-pin exploration.
           */}
           <div className="absolute inset-0">
-            {/* CSSMapHero: atmospheric SVG hero — always mounted, hidden in fullMap */}
+            {/* ScoutMapPreview: atmospheric SVG hero — always mounted and
+                Google-free. In full map mode it remains behind the Google
+                canvas so expansion has an instant visual while the script
+                finishes loading. */}
             <div
+              data-testid="scout-map-preview"
               className="absolute inset-0"
               style={{
-                visibility: sheetState === "fullMap" ? "hidden" : "visible",
+                visibility: "visible",
                 pointerEvents: sheetState === "fullMap" ? "none" : "auto",
+                zIndex: 0,
               }}
             >
-              <CSSMapHero
+              <ScoutMapPreview
                 markers={allMapMarkers}
                 userLocation={coords ?? { lat: 30.4213, lng: -87.2169 }}
               />
@@ -1131,6 +1171,7 @@ export default function ExplorePreview() {
             {hasMapKey && !googleMapFailed && coords && mapCenter && hasOpenedFullMap ? (
               <div
                 ref={googleMapContainerRef}
+                data-testid="scout-interactive-map"
                 className="absolute inset-0"
                 style={{
                   visibility: sheetState === "fullMap" ? "visible" : "hidden",
@@ -1156,7 +1197,11 @@ export default function ExplorePreview() {
                 </MapErrorBoundary>
               </div>
             ) : sheetState === "fullMap" && (googleMapFailed || !hasMapKey || !coords || !mapCenter) ? (
-              <div className="absolute inset-0" style={{ zIndex: 1 }}>
+              <div
+                data-testid="scout-interactive-map"
+                className="absolute inset-0"
+                style={{ zIndex: 1 }}
+              >
                 <HeroMapFallback
                   reason={
                     !hasMapKey || googleMapFailed
@@ -1793,7 +1838,7 @@ function TearDropPin({ delay = "0s", hasTruck = true }: { delay?: string; hasTru
   );
 }
 
-function CSSMapHero({
+function ScoutMapPreview({
   markers,
   userLocation,
 }: {
