@@ -963,10 +963,6 @@ export default function ExplorePreview() {
   const handleSheetTouchMove = useCallback((e: React.TouchEvent) => {
     const y = e.touches[0].clientY;
     dragLastY.current = y;
-    const start = dragStartY.current;
-    if (start !== null && window.scrollY <= 0 && y - start > 10) {
-      e.preventDefault();
-    }
   }, []);
   const handleSheetTouchEnd = useCallback(() => {
     const start = dragStartY.current;
@@ -1036,7 +1032,7 @@ export default function ExplorePreview() {
       const start = topPullStartY.current;
       if (start === null || e.touches.length !== 1 || window.scrollY > 0) return;
       const delta = e.touches[0].clientY - start;
-      if (delta > 10) e.preventDefault();
+      if (delta > 10 && e.cancelable) e.preventDefault();
     };
 
     const handleTopPullEnd = (e: TouchEvent) => {
@@ -1119,6 +1115,8 @@ export default function ExplorePreview() {
             height:
               sheetState === "fullMap" ? "100dvh" : "min(38vh, 320px)",
             transition: "height 320ms cubic-bezier(0.22,0.61,0.36,1)",
+            touchAction: sheetState === "fullMap" ? "auto" : "none",
+            overscrollBehaviorY: "none",
           }}
           onTouchStart={sheetState !== "fullMap" ? handleSheetTouchStart : undefined}
           onTouchMove={sheetState !== "fullMap" ? handleSheetTouchMove : undefined}
@@ -1335,6 +1333,7 @@ export default function ExplorePreview() {
               onMouseLeave={handleSheetMouseUp}
               onClick={openScoutMap}
               className="w-full h-10 flex items-center justify-center cursor-pointer"
+              style={{ touchAction: "none" }}
             >
               <span
                 aria-hidden="true"
