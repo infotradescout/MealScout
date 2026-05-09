@@ -1596,9 +1596,9 @@ export default function ExplorePreview() {
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
-                    {localMenuItems.slice(0, 12).map((item) => (
+                    {localMenuItems.slice(0, 12).map((item, index) => (
                       <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
-                        <LocalMenuItemCard item={item} />
+                        <LocalMenuItemCard item={item} position={index} />
                       </li>
                     ))}
                   </ul>
@@ -2455,7 +2455,31 @@ function DealCard({ deal }: { deal: DealSummary }) {
   );
 }
 
-function LocalMenuItemCard({ item }: { item: LocalMenuItemFeedItem }) {
+function trackLocalMenuItemEngagement(payload: {
+  eventName: "menu_item_impression" | "menu_item_click";
+  itemId: string;
+  restaurantId?: string | null;
+  layerId?: string;
+  surface?: string;
+  position?: number;
+  discoveryScore?: number | null;
+  discoveryReasons?: string[] | null;
+}) {
+  void fetch("/api/menus/local-items/engagement", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
+function LocalMenuItemCard({
+  item,
+  position,
+}: {
+  item: LocalMenuItemFeedItem;
+  position: number;
+}) {
   const price =
     typeof item.priceCents === "number" && Number.isFinite(item.priceCents)
       ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
@@ -2468,9 +2492,34 @@ function LocalMenuItemCard({ item }: { item: LocalMenuItemFeedItem }) {
     ? item.dietaryTags.filter(Boolean).slice(0, 2)
     : [];
 
+  useEffect(() => {
+    trackLocalMenuItemEngagement({
+      eventName: "menu_item_impression",
+      itemId: item.id,
+      restaurantId: item.restaurantId,
+      layerId: DISCOVERY_LAYERS.menuItems.id,
+      surface: "scout",
+      position,
+      discoveryScore: item.discoveryScore,
+      discoveryReasons: item.discoveryReasons,
+    });
+  }, [item.id, item.restaurantId, item.discoveryScore, item.discoveryReasons, position]);
+
   return (
     <Link
       href={`/restaurant/${item.restaurantId}`}
+      onClick={() =>
+        trackLocalMenuItemEngagement({
+          eventName: "menu_item_click",
+          itemId: item.id,
+          restaurantId: item.restaurantId,
+          layerId: DISCOVERY_LAYERS.menuItems.id,
+          surface: "scout",
+          position,
+          discoveryScore: item.discoveryScore,
+          discoveryReasons: item.discoveryReasons,
+        })
+      }
       className="block rounded-3xl overflow-hidden bg-[#120805]/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
       style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
       aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}

@@ -34,6 +34,27 @@ type CategoryMenuItem = {
   discoveryScore?: number | null;
 };
 
+function trackCategoryMenuItemEngagement(payload: {
+  eventName: "menu_item_click";
+  itemId: string;
+  restaurantId?: string | null;
+  query?: string;
+  position?: number;
+  discoveryScore?: number | null;
+  discoveryReasons?: string[] | null;
+}) {
+  void fetch("/api/menus/local-items/engagement", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      ...payload,
+      surface: "category",
+      layerId: "menuItems",
+    }),
+  }).catch(() => {});
+}
+
 const categoryConfig = {
   pizza: {
     title: "Pizza & Italian",
@@ -368,13 +389,27 @@ export default function CategoryPage() {
                 local businesses.
               </p>
             </div>
-            {categoryMenuItems.map((item) => {
+            {categoryMenuItems.map((item, index) => {
               const price =
                 typeof item.priceCents === "number"
                   ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
                   : null;
               return (
-                <Link key={item.id} href={`/restaurant/${item.restaurantId}`}>
+                <Link
+                  key={item.id}
+                  href={`/restaurant/${item.restaurantId}`}
+                  onClick={() =>
+                    trackCategoryMenuItemEngagement({
+                      eventName: "menu_item_click",
+                      itemId: item.id,
+                      restaurantId: item.restaurantId,
+                      query: category,
+                      position: index,
+                      discoveryScore: item.discoveryScore,
+                      discoveryReasons: item.discoveryReasons,
+                    })
+                  }
+                >
                   <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden">
                     {item.imageUrl ? (
                       <img

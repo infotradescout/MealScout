@@ -22,7 +22,11 @@ import {
   menuItemModifiers,
   menuImportLogs,
   restaurants,
+  restaurantFavorites,
+  restaurantFollows,
   restaurantSubscriptions,
+  restaurantUserRecommendations,
+  telemetryEvents,
   users,
   insertMenuSchema,
   insertMenuCategorySchema,
@@ -101,6 +105,48 @@ export function registerMenuRoutes(app: Express) {
   // PUBLIC: customer-facing menu view
   // ── ─────────────────────────────────────────────────────────────────────────
 
+  const localMenuEngagementSchema = z.object({
+    eventName: z.enum(["menu_item_impression", "menu_item_click"]),
+    itemId: z.string().min(1).max(128),
+    restaurantId: z.string().min(1).max(128).optional().nullable(),
+    layerId: z.string().max(80).optional().nullable(),
+    surface: z.string().max(80).optional().nullable(),
+    query: z.string().max(160).optional().nullable(),
+    position: z.number().int().min(0).max(500).optional().nullable(),
+    discoveryScore: z.number().optional().nullable(),
+    discoveryReasons: z.array(z.string().max(80)).max(8).optional().nullable(),
+  });
+
+  app.post(
+    "/api/menus/local-items/engagement",
+    wrap(async (req, res) => {
+      const body = localMenuEngagementSchema.parse(req.body || {});
+      const userId = req.user?.id ? String(req.user.id) : null;
+
+      await db.insert(telemetryEvents).values({
+        eventName: body.eventName,
+        userId,
+        properties: {
+          itemId: body.itemId,
+          restaurantId: body.restaurantId || null,
+          layerId: body.layerId || null,
+          surface: body.surface || "unknown",
+          query: body.query || null,
+          position: typeof body.position === "number" ? body.position : null,
+          discoveryScore:
+            typeof body.discoveryScore === "number"
+              ? Math.round(body.discoveryScore)
+              : null,
+          discoveryReasons: Array.isArray(body.discoveryReasons)
+            ? body.discoveryReasons.slice(0, 8)
+            : [],
+        },
+      });
+
+      res.json({ ok: true });
+    }),
+  );
+
   /**
    * GET /api/menus/local-items
    * Local discovery feed of active menu items for Scout discovery layers.
@@ -160,6 +206,37 @@ export function registerMenuRoutes(app: Express) {
         .split(",")
         .map((term) => term.trim())
         .filter(Boolean);
+      const viewerId = req.user?.id ? String(req.user.id) : "";
+      const viewerFavoriteRestaurantIds = new Set<string>();
+      const viewerFollowRestaurantIds = new Set<string>();
+      const viewerRecommendationRestaurantIds = new Set<string>();
+
+      if (viewerId) {
+        const [favoriteRows, followRows, recommendationRows] = await Promise.all([
+          db
+            .select({ restaurantId: restaurantFavorites.restaurantId })
+            .from(restaurantFavorites)
+            .where(eq(restaurantFavorites.userId, viewerId)),
+          db
+            .select({ restaurantId: restaurantFollows.restaurantId })
+            .from(restaurantFollows)
+            .where(eq(restaurantFollows.userId, viewerId)),
+          db
+            .select({ restaurantId: restaurantUserRecommendations.restaurantId })
+            .from(restaurantUserRecommendations)
+            .where(eq(restaurantUserRecommendations.userId, viewerId)),
+        ]);
+
+        favoriteRows.forEach((row) =>
+          viewerFavoriteRestaurantIds.add(String(row.restaurantId)),
+        );
+        followRows.forEach((row) =>
+          viewerFollowRestaurantIds.add(String(row.restaurantId)),
+        );
+        recommendationRows.forEach((row) =>
+          viewerRecommendationRestaurantIds.add(String(row.restaurantId)),
+        );
+      }
 
       const rows = await db
         .select({
@@ -262,6 +339,17 @@ export function registerMenuRoutes(app: Express) {
           }
 
           const reasons: string[] = [];
+          const signals = {
+            foodMatch: 0,
+            location: 0,
+            preference: 0,
+            favorite: 0,
+            follow: 0,
+            recommendation: 0,
+            freshness: 0,
+            businessTrust: 0,
+            businessType: 0,
+          };
           let score = 0;
           if (queryTerms.length > 0) {
             const name = String(row.name || "").toLowerCase();
@@ -276,14 +364,17 @@ export function registerMenuRoutes(app: Express) {
             );
             if (matchedName) {
               score += 80;
+              signals.foodMatch += 80;
               reasons.push("name match");
             }
             if (matchedDescription) {
               score += 24;
+              signals.foodMatch += 24;
               reasons.push("menu description match");
             }
             if (matchedCuisine) {
               score += 18;
+              signals.foodMatch += 18;
               reasons.push("food type match");
             }
           }
@@ -294,11 +385,13 @@ export function registerMenuRoutes(app: Express) {
               Math.round((1 - Math.min(distanceKm, radiusKm) / radiusKm) * 35),
             );
             score += locationScore;
+            signals.location = locationScore;
             if (locationScore > 0) reasons.push("near you");
           }
 
           if (row.isFoodTruck) {
             score += 6;
+            signals.businessType += 6;
             reasons.push("food truck");
           }
 
@@ -307,13 +400,46 @@ export function registerMenuRoutes(app: Express) {
             tags.some((tag: string) => String(tag).toLowerCase().includes(term)),
           );
           if (preferenceMatches.length > 0) {
-            score += preferenceMatches.length * 20;
+            const preferenceScore = preferenceMatches.length * 20;
+            score += preferenceScore;
+            signals.preference = preferenceScore;
             reasons.push("matches preferences");
+          }
+
+          const restaurantId = String(row.restaurantId || "");
+          if (viewerFavoriteRestaurantIds.has(restaurantId)) {
+            score += 70;
+            signals.favorite = 70;
+            reasons.push("your favorite");
+          }
+          if (viewerRecommendationRestaurantIds.has(restaurantId)) {
+            score += 55;
+            signals.recommendation = 55;
+            reasons.push("you recommended it");
+          }
+          if (viewerFollowRestaurantIds.has(restaurantId)) {
+            score += 40;
+            signals.follow = 40;
+            reasons.push("you follow this place");
+          }
+
+          const updatedAtMs = row.updatedAt
+            ? new Date(row.updatedAt).getTime()
+            : 0;
+          if (Number.isFinite(updatedAtMs) && updatedAtMs > 0) {
+            const ageDays = (Date.now() - updatedAtMs) / (1000 * 60 * 60 * 24);
+            if (ageDays <= 14) {
+              score += 8;
+              signals.freshness = 8;
+              reasons.push("recent menu update");
+            }
           }
 
           const businessScore = Number(row.rankingScore || 0);
           if (businessScore > 0) {
-            score += Math.min(20, Math.round(businessScore / 10));
+            const trustScore = Math.min(20, Math.round(businessScore / 10));
+            score += trustScore;
+            signals.businessTrust = trustScore;
             reasons.push("trusted local signal");
           }
 
@@ -322,6 +448,7 @@ export function registerMenuRoutes(app: Express) {
             distanceMiles:
               typeof distanceKm === "number" ? distanceKm * 0.621371 : null,
             discoveryScore: score,
+            discoverySignals: signals,
             discoveryReasons: reasons.slice(0, 4),
           };
         })

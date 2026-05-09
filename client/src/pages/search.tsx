@@ -68,6 +68,27 @@ type MenuItemSearchResult = {
   discoveryScore?: number | null;
 };
 
+function trackMenuItemSearchEngagement(payload: {
+  eventName: "menu_item_click";
+  itemId: string;
+  restaurantId?: string | null;
+  query?: string;
+  position?: number;
+  discoveryScore?: number | null;
+  discoveryReasons?: string[] | null;
+}) {
+  void fetch("/api/menus/local-items/engagement", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      ...payload,
+      surface: "search",
+      layerId: "menuItems",
+    }),
+  }).catch(() => {});
+}
+
 const titleCaseSlug = (value: string) =>
   value
     .split("-")
@@ -988,7 +1009,7 @@ export default function SearchPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {menuItemSearchResults.map((item) => {
+              {menuItemSearchResults.map((item, index) => {
                 const price =
                   typeof item.priceCents === "number"
                     ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
@@ -1001,6 +1022,17 @@ export default function SearchPage() {
                   <Link
                     key={item.id}
                     href={`/restaurant/${item.restaurantId}`}
+                    onClick={() =>
+                      trackMenuItemSearchEngagement({
+                        eventName: "menu_item_click",
+                        itemId: item.id,
+                        restaurantId: item.restaurantId,
+                        query: searchQuery,
+                        position: index,
+                        discoveryScore: item.discoveryScore,
+                        discoveryReasons: item.discoveryReasons,
+                      })
+                    }
                     data-testid={`card-menu-item-${item.id}`}
                   >
                     <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer overflow-hidden">
