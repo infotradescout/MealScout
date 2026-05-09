@@ -62,6 +62,12 @@ const signupSchema = z
       .min(1, PASSWORD_REQUIREMENTS)
       .regex(PASSWORD_REGEX, PASSWORD_REQUIREMENTS),
     confirmPassword: z.string().min(1, "Please confirm your password"),
+    businessName: z.string().optional(),
+    businessCity: z.string().optional(),
+    businessState: z.string().optional(),
+    eventName: z.string().optional(),
+    hostLocationName: z.string().optional(),
+    supplierBusinessName: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -97,7 +103,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "event_organizer",
     label: "Event Organizer",
     description: "Coordinate vendors, events, and truck demand.",
-    href: "/event-signup",
+    href: "/customer-signup?role=event_coordinator",
     icon: CalendarDays,
   },
   {
@@ -106,7 +112,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "food_truck",
     label: "Food Truck",
     description: "Claim your truck and get discovered around town.",
-    href: "/restaurant-signup?businessType=food_truck&claim=1",
+    href: "/customer-signup?role=business&businessType=food_truck",
     icon: Truck,
   },
   {
@@ -115,7 +121,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "restaurant",
     label: "Restaurant",
     description: "Create your profile, menu, and local deal surfaces.",
-    href: "/restaurant-signup?businessType=restaurant",
+    href: "/customer-signup?role=business&businessType=restaurant",
     icon: Building2,
   },
   {
@@ -124,7 +130,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "bar",
     label: "Bar",
     description: "Promote food, drinks, specials, and events.",
-    href: "/restaurant-signup?businessType=bar",
+    href: "/customer-signup?role=business&businessType=bar",
     icon: Beer,
   },
   {
@@ -133,7 +139,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "caterer",
     label: "Caterer",
     description: "Build a catering profile for local bookings.",
-    href: "/restaurant-signup?businessType=caterer",
+    href: "/customer-signup?role=business&businessType=caterer",
     icon: UtensilsCrossed,
   },
   {
@@ -142,7 +148,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     businessSubType: "private_chef",
     label: "Private Chef",
     description: "Get discovered for private meals and events.",
-    href: "/restaurant-signup?businessType=private_chef",
+    href: "/customer-signup?role=business&businessType=private_chef",
     icon: ChefHat,
   },
   {
@@ -150,7 +156,7 @@ const signupFlowOptions: SignupFlowOption[] = [
     accountType: "host",
     label: "Host",
     description: "Offer parking or event space to food trucks.",
-    href: "/host-signup",
+    href: "/customer-signup?role=host",
     icon: MapPinned,
   },
   {
@@ -202,6 +208,10 @@ export default function CustomerSignup() {
   );
   const SIGNUP_DRAFT_KEY = "mealscout:customer-signup-draft";
   const POST_VERIFICATION_REDIRECT_KEY = "mealscout:post-verification-redirect";
+  const RESTAURANT_DRAFT_KEY = "mealscout:restaurant-signup-draft";
+  const HOST_SIGNUP_DRAFT_KEY = "mealscout:host-signup-draft";
+  const EVENT_SIGNUP_DRAFT_KEY = "mealscout:event-signup-draft";
+  const SUPPLIER_SIGNUP_DRAFT_KEY = "mealscout:supplier-signup-draft";
 
   const getCustomerRedirectPath = () =>
     accountType === "host"
@@ -225,6 +235,8 @@ export default function CustomerSignup() {
   };
 
   const selectSignupFlow = (option: SignupFlowOption) => {
+    setAccountType(option.accountType);
+    setBusinessSubType(option.businessSubType || "restaurant");
     setLocation(option.href);
   };
 
@@ -258,6 +270,12 @@ export default function CustomerSignup() {
       otpCode: "",
       password: "",
       confirmPassword: "",
+      businessName: "",
+      businessCity: "",
+      businessState: "",
+      eventName: "",
+      hostLocationName: "",
+      supplierBusinessName: "",
     };
 
     if (typeof window === "undefined") return base;
@@ -279,6 +297,73 @@ export default function CustomerSignup() {
     resolver: zodResolver(signupSchema),
     defaultValues,
   });
+
+  const writeRoleSetupDraft = (data: SignupFormData) => {
+    if (typeof window === "undefined") return;
+
+    try {
+      if (accountType === "business") {
+        const existing = JSON.parse(
+          window.localStorage.getItem(RESTAURANT_DRAFT_KEY) || "{}",
+        );
+        window.localStorage.setItem(
+          RESTAURANT_DRAFT_KEY,
+          JSON.stringify({
+            ...existing,
+            name: data.businessName || existing.name || "",
+            city: data.businessCity || existing.city || "",
+            state: data.businessState || existing.state || "",
+            phone: data.phone || existing.phone || "",
+            businessType: businessSubType,
+          }),
+        );
+      } else if (accountType === "host") {
+        const existing = JSON.parse(
+          window.localStorage.getItem(HOST_SIGNUP_DRAFT_KEY) || "{}",
+        );
+        window.localStorage.setItem(
+          HOST_SIGNUP_DRAFT_KEY,
+          JSON.stringify({
+            ...existing,
+            businessName: data.hostLocationName || existing.businessName || "",
+            city: data.businessCity || existing.city || "",
+            state: data.businessState || existing.state || "",
+            contactName:
+              `${data.firstName || ""} ${data.lastName || ""}`.trim() ||
+              existing.contactName ||
+              "",
+            contactEmail: data.email || existing.contactEmail || "",
+            contactPhone: data.phone || existing.contactPhone || "",
+          }),
+        );
+      } else if (accountType === "event_organizer") {
+        const existing = JSON.parse(
+          window.localStorage.getItem(EVENT_SIGNUP_DRAFT_KEY) || "{}",
+        );
+        window.localStorage.setItem(
+          EVENT_SIGNUP_DRAFT_KEY,
+          JSON.stringify({
+            ...existing,
+            eventName: data.eventName || existing.eventName || "",
+            city: data.businessCity || existing.city || "",
+            contactEmail: data.email || existing.contactEmail || "",
+            contactPhone: data.phone || existing.contactPhone || "",
+          }),
+        );
+      } else if (accountType === "supplier") {
+        window.localStorage.setItem(
+          SUPPLIER_SIGNUP_DRAFT_KEY,
+          JSON.stringify({
+            businessName: data.supplierBusinessName || "",
+            contactEmail: data.email || "",
+            contactPhone: data.phone || "",
+          }),
+        );
+      }
+    } catch {
+      // Drafts are a convenience only; never block account creation on storage.
+    }
+  };
 
   // Persist non-sensitive draft so interrupted users can resume later
   useEffect(() => {
@@ -520,6 +605,13 @@ export default function CustomerSignup() {
     });
 
     if (accountType === "business") {
+      if (!String(data.businessName || "").trim()) {
+        form.setError("businessName", {
+          type: "manual",
+          message: "Business name is required",
+        });
+        return;
+      }
       const digitsOnly = (data.phone || "").replace(/\D/g, "");
       if (!digitsOnly || digitsOnly.length < 10) {
         form.setError("phone", {
@@ -535,9 +627,16 @@ export default function CustomerSignup() {
         });
         return;
       }
+      writeRoleSetupDraft(data);
       businessSignupMutation.mutate(data);
     } else if (accountType === "host") {
-      // Hosts signup as customers but we can add host-specific flow later
+      if (!String(data.hostLocationName || "").trim()) {
+        form.setError("hostLocationName", {
+          type: "manual",
+          message: "Host location name is required",
+        });
+        return;
+      }
       if (requirePhoneVerification && !data.otpCode) {
         form.setError("otpCode", {
           type: "manual",
@@ -545,8 +644,33 @@ export default function CustomerSignup() {
         });
         return;
       }
+      writeRoleSetupDraft(data);
+      customerSignupMutation.mutate(data);
+    } else if (accountType === "event_organizer") {
+      if (!String(data.eventName || "").trim()) {
+        form.setError("eventName", {
+          type: "manual",
+          message: "Event or organization name is required",
+        });
+        return;
+      }
+      if (requirePhoneVerification && !data.otpCode) {
+        form.setError("otpCode", {
+          type: "manual",
+          message: "Verification code is required",
+        });
+        return;
+      }
+      writeRoleSetupDraft(data);
       customerSignupMutation.mutate(data);
     } else if (accountType === "supplier") {
+      if (!String(data.supplierBusinessName || "").trim()) {
+        form.setError("supplierBusinessName", {
+          type: "manual",
+          message: "Supplier business name is required",
+        });
+        return;
+      }
       if (requirePhoneVerification && !data.otpCode) {
         form.setError("otpCode", {
           type: "manual",
@@ -554,6 +678,7 @@ export default function CustomerSignup() {
         });
         return;
       }
+      writeRoleSetupDraft(data);
       supplierSignupMutation.mutate(data);
     } else {
       if (requirePhoneVerification && !data.otpCode) {
@@ -909,11 +1034,11 @@ export default function CustomerSignup() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
                   Business Type
                 </div>
-                <div className="mt-2 inline-flex w-full overflow-hidden rounded-full border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-clean">
+                <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface)] text-[11px] font-semibold text-[color:var(--text-secondary)] shadow-clean">
                   <button
                     type="button"
                     onClick={() => setBusinessSubType("restaurant")}
-                    className={`flex-1 px-3 py-2 transition-colors ${
+                    className={`px-3 py-2 transition-colors ${
                       businessSubType === "restaurant"
                         ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                         : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
@@ -925,7 +1050,7 @@ export default function CustomerSignup() {
                   <button
                     type="button"
                     onClick={() => setBusinessSubType("food_truck")}
-                    className={`flex-1 border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                    className={`border-l border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
                       businessSubType === "food_truck"
                         ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
                         : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
@@ -933,6 +1058,42 @@ export default function CustomerSignup() {
                     data-testid="button-business-type-food-truck"
                   >
                     Food Truck (Claim)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBusinessSubType("bar")}
+                    className={`border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                      businessSubType === "bar"
+                        ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                        : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                    }`}
+                    data-testid="button-business-type-bar"
+                  >
+                    Bar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBusinessSubType("caterer")}
+                    className={`border-l border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                      businessSubType === "caterer"
+                        ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                        : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                    }`}
+                    data-testid="button-business-type-caterer"
+                  >
+                    Caterer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBusinessSubType("private_chef")}
+                    className={`col-span-2 border-t border-[color:var(--border-subtle)] px-3 py-2 transition-colors ${
+                      businessSubType === "private_chef"
+                        ? "bg-[color:var(--action-primary)] text-[color:var(--action-primary-text)]"
+                        : "bg-transparent hover:bg-[var(--bg-surface-muted)]"
+                    }`}
+                    data-testid="button-business-type-private-chef"
+                  >
+                    Private Chef
                   </button>
                 </div>
                 {businessSubType === "food_truck" && (
@@ -966,6 +1127,198 @@ export default function CustomerSignup() {
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-3"
               >
+                {accountType === "business" && (
+                  <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 space-y-3">
+                    <div>
+                      <div className="text-sm font-black text-[color:var(--text-primary)]">
+                        Business basics
+                      </div>
+                      <p className="text-xs text-[color:var(--text-secondary)]">
+                        We will carry this into your profile setup after email verification.
+                      </p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="businessName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {businessSubType === "food_truck"
+                              ? "Truck Name"
+                              : businessSubType === "private_chef"
+                                ? "Chef / Brand Name"
+                                : "Business Name"}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              data-testid="input-business-name"
+                              placeholder={
+                                businessSubType === "food_truck"
+                                  ? "Your food truck"
+                                  : businessSubType === "private_chef"
+                                    ? "Chef or brand name"
+                                    : "Your business"
+                              }
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-[1fr_5rem] gap-3">
+                      <FormField
+                        control={form.control}
+                        name="businessCity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl>
+                              <Input
+                                data-testid="input-business-city"
+                                placeholder="Pensacola"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="businessState"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State</FormLabel>
+                            <FormControl>
+                              <Input
+                                data-testid="input-business-state"
+                                placeholder="FL"
+                                maxLength={2}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {accountType === "host" && (
+                  <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 space-y-3">
+                    <div>
+                      <div className="text-sm font-black text-[color:var(--text-primary)]">
+                        Host location basics
+                      </div>
+                      <p className="text-xs text-[color:var(--text-secondary)]">
+                        Hosts are places where food trucks can park or serve.
+                      </p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="hostLocationName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Location Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              data-testid="input-host-location-name"
+                              placeholder="Venue, lot, church, brewery, office park"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="grid grid-cols-[1fr_5rem] gap-3">
+                      <FormField control={form.control} name="businessCity" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>City</FormLabel>
+                          <FormControl><Input placeholder="Pensacola" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="businessState" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl><Input placeholder="FL" maxLength={2} {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                  </div>
+                )}
+
+                {accountType === "event_organizer" && (
+                  <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 space-y-3">
+                    <div>
+                      <div className="text-sm font-black text-[color:var(--text-primary)]">
+                        Event basics
+                      </div>
+                      <p className="text-xs text-[color:var(--text-secondary)]">
+                        Start the account now, then finish event details after verification.
+                      </p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="eventName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Event or Organization Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              data-testid="input-event-name"
+                              placeholder="Market, festival, venue, or organization"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField control={form.control} name="businessCity" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary City</FormLabel>
+                        <FormControl><Input placeholder="Pensacola" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                )}
+
+                {accountType === "supplier" && (
+                  <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-surface-muted)] p-3 space-y-3">
+                    <div>
+                      <div className="text-sm font-black text-[color:var(--text-primary)]">
+                        Supplier basics
+                      </div>
+                      <p className="text-xs text-[color:var(--text-secondary)]">
+                        Tell restaurants and trucks who they will buy from.
+                      </p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="supplierBusinessName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Supplier Business Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              data-testid="input-supplier-business-name"
+                              placeholder="Your supplier company"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
