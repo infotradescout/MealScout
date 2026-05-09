@@ -1,8 +1,8 @@
 export const HOME_RANKING_WEIGHTS = {
-  manualRecommendation: 4,
+  manualRecommendation: 6,
   videoRecommendation: 12,
   follows: 4,
-  favorites: 3,
+  favorites: 18,
   activeDeals: 5,
   location: 4,
   liveTruckBoost: 1.5,
@@ -12,7 +12,7 @@ export const HOME_RANKING_WEIGHTS = {
 export const AWARD_RANKING_WEIGHTS = {
   manualRecommendation: 50,
   videoRecommendation: 150,
-  favorites: 35,
+  favorites: 180,
   follows: 20,
   avgRating: 20,
   totalDealClaims: 10,
@@ -53,11 +53,11 @@ export function getHomeRankingReasons(args: {
   hasLocationBoost: boolean;
 }): string {
   const reasons: string[] = [];
-  if (args.videoRecommendationCount > 0) reasons.push("video recommendations");
   if (args.favoriteCount > 0) reasons.push("favorites");
+  if (args.videoRecommendationCount > 0) reasons.push("video recommendations");
+  if (args.recommendationCount > 0) reasons.push("community recommendations");
   if (args.followCount > 0) reasons.push("follows");
   if (args.activeDealCount > 0) reasons.push("active deals");
-  if (args.recommendationCount > 0) reasons.push("community recommendations");
   if (args.hasLocationBoost) reasons.push("distance");
   return reasons.length > 0 ? `Ranked by ${reasons.join(", ")}` : "Ranked by local relevance";
 }
