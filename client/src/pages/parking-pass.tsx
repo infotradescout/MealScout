@@ -835,6 +835,26 @@ export default function ParkingPassPage() {
     "listings" | "location" | "payments"
   >("listings");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const setup = String(params.get("setup") || params.get("tab") || "")
+      .trim()
+      .toLowerCase();
+    if (setup === "schedule" || setup === "truck") {
+      setTopTab("schedule");
+      return;
+    }
+    if (setup === "host" || setup === "location") {
+      setTopTab("host");
+      setHostToolsTab(setup === "location" ? "location" : "listings");
+      return;
+    }
+    if (setup === "payments") {
+      setTopTab("host");
+      setHostToolsTab("payments");
+    }
+  }, []);
+
   const reloadHostPassListings = async (hostId: string) => {
     if (!hostId) return;
     try {
@@ -3393,6 +3413,109 @@ export default function ParkingPassPage() {
             )}
           </TabsList>
         </Tabs>
+
+        {(isTruckViewUser || canHostTab) && (
+          <div className="grid gap-3 md:grid-cols-2">
+            {isTruckViewUser && (
+              <Card className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                        Truck side
+                      </p>
+                      <p className="text-xs text-[color:var(--text-muted)]">
+                        Book paid host spots, keep your schedule current, go
+                        live, and file day reports after stops.
+                      </p>
+                    </div>
+                    <Truck className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
+                      {bookedSchedule.length} booked stop{bookedSchedule.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
+                      {manualSchedules.length} manual stop{manualSchedules.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
+                      {parkingReports.length} day report{parkingReports.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="rounded-lg border border-[var(--border-subtle)] px-2 py-1">
+                      {truck?.isVerified === false ? "Verification pending" : "Booking ready"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => setTopTab("book")}>
+                      Find spots
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setTopTab("schedule")}
+                    >
+                      Schedule/live tools
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {canHostTab && (
+              <Card className="rounded-2xl border border-orange-200 bg-orange-50/70">
+                <CardContent className="p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-orange-950">
+                      Host side
+                    </p>
+                    <p className="text-xs text-orange-800">
+                      Publish where trucks can park, set pricing and
+                      availability, block blackout dates, and manage payout
+                      readiness.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-orange-950">
+                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                      {hosts.length} host location{hosts.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                      {hostPassListings.length} pass listing{hostPassListings.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                      {hasActiveParkingPass ? "Availability live" : "No active pass"}
+                    </span>
+                    <span className="rounded-lg border border-orange-200 bg-white/60 px-2 py-1">
+                      {host?.stripeConnectAccountId && host?.stripePayoutsEnabled
+                        ? "Payouts enabled"
+                        : "Payouts optional"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setTopTab("host");
+                        setHostToolsTab("listings");
+                      }}
+                    >
+                      Publish availability
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setTopTab("host");
+                        setHostToolsTab("location");
+                      }}
+                    >
+                      Location/settings
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-6">
           {topTab === "host" && showHostParkingPass && !host && (
