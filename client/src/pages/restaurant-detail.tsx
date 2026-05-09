@@ -78,6 +78,8 @@ export default function RestaurantDetailPage() {
   const [isSendingBusinessMessage, setIsSendingBusinessMessage] =
     useState(false);
   const [businessMessage, setBusinessMessage] = useState({
+    name: "",
+    email: "",
     topic: "Question",
     message: "",
   });
@@ -282,12 +284,6 @@ export default function RestaurantDetailPage() {
 
   const handleSendBusinessMessage = async () => {
     if (!restaurantId) return;
-    if (!user) {
-      window.location.href = `/login?redirect=${encodeURIComponent(
-        window.location.pathname,
-      )}`;
-      return;
-    }
     setIsSendingBusinessMessage(true);
     try {
       const res = await fetch(`/api/restaurants/${restaurantId}/message`, {
@@ -304,9 +300,14 @@ export default function RestaurantDetailPage() {
 
       toast({
         title: "Message sent",
-        description: `${restaurantName} can reply directly to your account email.`,
+        description: `${restaurantName} can reply directly to your email.`,
       });
-      setBusinessMessage({ topic: "Question", message: "" });
+      setBusinessMessage((prev) => ({
+        name: user ? "" : prev.name,
+        email: user ? "" : prev.email,
+        topic: "Question",
+        message: "",
+      }));
     } catch (error: any) {
       toast({
         title: "Message failed",
@@ -815,13 +816,52 @@ export default function RestaurantDetailPage() {
                   <p className="text-sm text-muted-foreground">
                     Ask about hours, menu details, dietary needs, catering, or
                     booking. MealScout sends this to the business owner and
-                    shares your account email so they can reply. We do not
-                    include your live location.
+                    shares your reply email so they can respond. No account is
+                    required, and we do not include your live location.
                   </p>
                   <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                     Do not send payment details, passwords, or sensitive medical
                     information here.
                   </p>
+                  <div className="grid gap-2">
+                    {!user && (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="business-message-name">
+                            Your name
+                          </Label>
+                          <Input
+                            id="business-message-name"
+                            value={businessMessage.name}
+                            onChange={(e) =>
+                              setBusinessMessage((prev) => ({
+                                ...prev,
+                                name: e.target.value,
+                              }))
+                            }
+                            placeholder="Name"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="business-message-email">
+                            Reply email
+                          </Label>
+                          <Input
+                            id="business-message-email"
+                            type="email"
+                            value={businessMessage.email}
+                            onChange={(e) =>
+                              setBusinessMessage((prev) => ({
+                                ...prev,
+                                email: e.target.value,
+                              }))
+                            }
+                            placeholder="you@example.com"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="business-message-topic">Topic</Label>
                     <Input
@@ -880,7 +920,10 @@ export default function RestaurantDetailPage() {
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
-                        Reply goes to {user?.email || "your account email"}.
+                        Reply goes to{" "}
+                        {user?.email ||
+                          businessMessage.email ||
+                          "the email you enter"}.
                       </span>
                       <span>{businessMessage.message.length}/2000</span>
                     </div>
@@ -891,7 +934,10 @@ export default function RestaurantDetailPage() {
                     onClick={handleSendBusinessMessage}
                     disabled={
                       isSendingBusinessMessage ||
-                      businessMessage.message.trim().length < 10
+                      businessMessage.message.trim().length < 10 ||
+                      (!user &&
+                        (!businessMessage.name.trim() ||
+                          !businessMessage.email.trim()))
                     }
                   >
                     {isSendingBusinessMessage ? "Sending..." : "Send Message"}

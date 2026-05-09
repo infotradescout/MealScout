@@ -620,13 +620,15 @@ export function registerRestaurantCoreRoutes(
 
   app.post(
     "/api/restaurants/:restaurantId/message",
-    isAuthenticated,
     async (req: any, res) => {
       try {
         const { restaurantId } = req.params;
-        const userId = req.user.id;
+        const userId = req.user?.id || null;
+        const rawGuestEmail = String(req.body?.email || "").trim();
+        const rawGuestName = String(req.body?.name || "").trim();
+        const senderKey = userId || rawGuestEmail || req.ip || "anonymous";
         const actionGate = consumeEngagementWindow(
-          `${userId}:${restaurantId}:business-message`,
+          `${senderKey}:${restaurantId}:business-message`,
         );
         if (!actionGate.allowed) {
           return res.status(429).json({
@@ -647,11 +649,18 @@ export function registerRestaurantCoreRoutes(
             .json({ message: "This business is not accepting messages yet" });
         }
 
-        const sender = await storage.getUser(userId);
+        const sender = userId ? await storage.getUser(userId) : null;
         const senderEmail = String(sender?.email || req.user?.email || "").trim();
-        if (!senderEmail) {
+        const replyEmail = senderEmail || rawGuestEmail;
+        const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail);
+        if (!replyEmail || !emailLooksValid) {
           return res.status(400).json({
-            message: "Add an email to your account before messaging a business",
+            message: "Enter a valid reply email before messaging this business",
+          });
+        }
+        if (!sender && rawGuestName.length < 2) {
+          return res.status(400).json({
+            message: "Enter your name before messaging this business",
           });
         }
 
@@ -668,6 +677,7 @@ export function registerRestaurantCoreRoutes(
         const senderName =
           [sender?.firstName, sender?.lastName].filter(Boolean).join(" ") ||
           req.user?.name ||
+          rawGuestName ||
           "A MealScout user";
         const businessName = restaurant.name || "your business";
         const baseUrl = String(
@@ -676,7 +686,7 @@ export function registerRestaurantCoreRoutes(
         const dashboardUrl = `${baseUrl}/restaurant-owner-dashboard`;
         const safeBusinessName = escapeHtml(businessName);
         const safeSenderName = escapeHtml(senderName);
-        const safeSenderEmail = escapeHtml(senderEmail);
+        const safeSenderEmail = escapeHtml(replyEmail);
         const safeTopic = escapeHtml(topic || "General question");
         const subjectTopic = topic || "Question";
         const html = `
@@ -689,7 +699,7 @@ export function registerRestaurantCoreRoutes(
           <p style="color:#6b7280;font-size:13px;">MealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.</p>
           <p><a href="${dashboardUrl}">Open your MealScout dashboard</a></p>
         `;
-        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\nReply directly to: ${senderEmail}\n\nMealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
+        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\nReply directly to: ${replyEmail}\n\nMealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
 
         const ok = await emailService.sendBasicEmail(
           owner.email,
@@ -699,10 +709,12 @@ export function registerRestaurantCoreRoutes(
           "general",
         );
 
-        await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
-          topic,
-          delivered: ok,
-        });
+        if (userId) {
+          await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
+            topic,
+            delivered: ok,
+          });
+        }
 
         res.json({ success: ok });
       } catch (error: any) {
