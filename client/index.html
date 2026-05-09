@@ -113,6 +113,81 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        var key = "mealscout_boot_asset_recovery:" + location.pathname;
+        function isChunkMessage(message) {
+          return (
+            typeof message === "string" &&
+            (message.indexOf("Failed to fetch dynamically imported module") >= 0 ||
+              message.indexOf("module script") >= 0 ||
+              message.indexOf("MIME type") >= 0 ||
+              message.indexOf("Loading chunk") >= 0)
+          );
+        }
+        function cleanup() {
+          var tasks = [];
+          if ("serviceWorker" in navigator) {
+            tasks.push(
+              navigator.serviceWorker
+                .getRegistrations()
+                .then(function (registrations) {
+                  return Promise.all(
+                    registrations.map(function (registration) {
+                      return registration.unregister();
+                    }),
+                  );
+                })
+                .catch(function () {}),
+            );
+          }
+          if ("caches" in window) {
+            tasks.push(
+              caches
+                .keys()
+                .then(function (keys) {
+                  return Promise.all(
+                    keys
+                      .filter(function (cacheKey) {
+                        return cacheKey.indexOf("mealscout-sw-") === 0;
+                      })
+                      .map(function (cacheKey) {
+                        return caches.delete(cacheKey);
+                      }),
+                  );
+                })
+                .catch(function () {}),
+            );
+          }
+          return Promise.all(tasks);
+        }
+        function recover() {
+          try {
+            var attempts = Number(sessionStorage.getItem(key) || "0");
+            if (attempts >= 3) return;
+            sessionStorage.setItem(key, String(attempts + 1));
+          } catch (error) {}
+          cleanup().finally(function () {
+            var url = new URL(location.href);
+            url.searchParams.set("reload", Date.now().toString());
+            location.replace(url.toString());
+          });
+        }
+        window.addEventListener(
+          "error",
+          function (event) {
+            if (isChunkMessage(event.message)) recover();
+          },
+          true,
+        );
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          var message =
+            typeof reason === "string" ? reason : reason && reason.message;
+          if (isChunkMessage(message)) recover();
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
