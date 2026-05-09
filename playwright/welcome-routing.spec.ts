@@ -136,7 +136,21 @@ test.describe("welcome and Scout routing law", () => {
     await expect(page.getByTestId("button-signup-flow-food_truck")).toBeVisible();
     await expect(page.getByTestId("button-signup-flow-private_chef")).toBeVisible();
     await page.getByTestId("button-signup-flow-private_chef").click();
-    await expect(page).toHaveURL(/\/restaurant-signup\?businessType=private_chef/);
+    await expect(page).toHaveURL(/\/customer-signup\?role=business&businessType=private_chef/);
+    await expect(page.getByTestId("input-business-name")).toBeVisible();
+    await expect(page.getByTestId("button-business-type-private-chef")).toBeVisible();
+  });
+
+  test("event organizer choice creates an account before event setup", async ({ page }) => {
+    await mockGuest(page);
+
+    await page.goto(`${FRONTEND}/signup`, { waitUntil: "domcontentloaded" });
+    await dismissBetaDialog(page);
+    await page.getByTestId("button-signup-flow-event_organizer").click();
+
+    await expect(page).toHaveURL(/\/customer-signup\?role=event_coordinator/);
+    await expect(page.getByTestId("input-event-name")).toBeVisible();
+    await expect(page.getByTestId("button-login-submit")).toHaveCount(0);
   });
 
   test("logged-in root redirects to Scout", async ({ page }) => {

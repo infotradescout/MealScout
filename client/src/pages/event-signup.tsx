@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,23 @@ export default function EventSignup() {
     contactPhone: "",
     notes: "",
   });
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("mealscout:event-signup-draft");
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as Partial<typeof formData>;
+      setFormData((prev) => ({
+        ...prev,
+        eventName: parsed.eventName || prev.eventName,
+        city: parsed.city || prev.city,
+        contactEmail: parsed.contactEmail || prev.contactEmail,
+        contactPhone: parsed.contactPhone || prev.contactPhone,
+      }));
+    } catch {
+      // Draft restore is best effort only.
+    }
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
