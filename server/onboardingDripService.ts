@@ -229,7 +229,7 @@ export class OnboardingDripService {
       <div style="text-align:center;margin:30px 0;">
         <a href="${searchUrl}" style="background:linear-gradient(135deg,#ff6b35 0%,#f7931e 100%);color:white;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;">Find Deals Near Me</a>
       </div>
-      <p>You can also <a href="https://www.mealscout.us/map" style="color:#ff6b35;">open the live map</a> to see active food trucks pinned near your location in real time.</p>
+      <p>You can also <a href="https://www.mealscout.us/scout" style="color:#ff6b35;">open Scout</a> to see active food trucks, menus, deals, and local food activity near you.</p>
       <p style="font-size:13px;color:#999;">To unsubscribe, update your <a href="https://www.mealscout.us/profile" style="color:#ff6b35;">notification settings</a>.</p>
     </div>
     <div style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e9ecef;font-size:13px;color:#666;">
@@ -238,7 +238,7 @@ export class OnboardingDripService {
   </div>
 </body>
 </html>`;
-    const text = `Hey ${name}! New deals in ${cityLabel} this week. Find them: ${searchUrl} — or open the live map: https://www.mealscout.us/map`;
+    const text = `Hey ${name}! New deals in ${cityLabel} this week. Find them: ${searchUrl} — or open Scout: https://www.mealscout.us/scout`;
     return emailService.sendBasicEmail(
       to,
       `🔥 New deals in ${cityLabel} this week`,

@@ -106,7 +106,7 @@ export function registerAcquisitionPrerenderRoutes(
       ctaLinks: [
         { label: "Owner Signup", href: "/restaurant-signup" },
         { label: "Claim Food Truck", href: "/claim-truck" },
-        { label: "Live Food Map", href: "/map" },
+        { label: "Scout Local Dashboard", href: "/scout" },
         { label: "Sitemap", href: "/sitemap" },
       ],
       schemaType: "ProfessionalService",
