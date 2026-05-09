@@ -42,6 +42,55 @@ function getLoginHref(redirectPath: string) {
   return `/login?verified=1&redirect=${encodeURIComponent(redirectPath)}`;
 }
 
+function getSetupBrief(redirectPath: string) {
+  if (redirectPath.startsWith("/truck-onboarding")) {
+    return {
+      label: "Food truck setup",
+      description:
+        "Claim or create the truck, confirm service area, then add or import the menu before going live.",
+      steps: ["Personal login", "Truck profile", "Menu import", "Live status"],
+    };
+  }
+  if (redirectPath.startsWith("/restaurant-signup")) {
+    return {
+      label: "Business setup",
+      description:
+        "Finish the business profile, add location and hours, then build or import the menu customers will see on Scout.",
+      steps: ["Personal login", "Business profile", "Menu setup", "Publish"],
+    };
+  }
+  if (redirectPath.startsWith("/host-signup")) {
+    return {
+      label: "Parking host setup",
+      description:
+        "Create the host location where food trucks can park, set availability, and publish only when the listing is ready.",
+      steps: ["Personal login", "Host location", "Availability", "Publish"],
+    };
+  }
+  if (redirectPath.startsWith("/event-signup")) {
+    return {
+      label: "Event organizer setup",
+      description:
+        "Create the organizer profile, add the first event, and invite or request food vendors without skipping account ownership.",
+      steps: ["Personal login", "Organizer profile", "First event", "Vendor needs"],
+    };
+  }
+  if (redirectPath.startsWith("/supplier")) {
+    return {
+      label: "Supplier setup",
+      description:
+        "Finish the supplier profile, add product/service areas, and connect with local restaurants and trucks.",
+      steps: ["Personal login", "Supplier profile", "Products", "Service area"],
+    };
+  }
+  return {
+    label: "Scout dashboard",
+    description:
+      "Scout is your local food dashboard for live trucks, restaurants, menus, deals, hosts, and saved spots.",
+    steps: ["Personal login", "Location", "Preferences", "Scout"],
+  };
+}
+
 export default function PostVerification() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
@@ -55,6 +104,7 @@ export default function PostVerification() {
   const isVerified = params.get("verified") === "1";
   const needsEmailCheck = mode === "check-email" || isSetupComplete;
   const loginHref = getLoginHref(redirectPath);
+  const setupBrief = useMemo(() => getSetupBrief(redirectPath), [redirectPath]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -166,13 +216,24 @@ export default function PostVerification() {
           <div className="mb-8 rounded-2xl border border-white/10 bg-black/30 p-4">
             <div className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
               <MapPin className="h-4 w-4 text-amber-300" />
-              Next stop
+              {setupBrief.label}
             </div>
             <p className="text-sm text-white/60">
-              {redirectPath === "/scout"
-                ? "Your local Scout dashboard for food trucks, restaurants, hosts, and deals."
-                : "The setup or dashboard area that matches this account."}
+              {setupBrief.description}
             </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {setupBrief.steps.map((step, index) => (
+                <div
+                  key={step}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2"
+                >
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-200/60">
+                    Step {index + 1}
+                  </div>
+                  <div className="text-xs font-bold text-white/85">{step}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {isLoading ? (

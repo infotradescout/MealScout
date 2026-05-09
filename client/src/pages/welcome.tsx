@@ -29,7 +29,7 @@ export default function Welcome() {
         <section className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 text-center">
           <div className="flex w-full max-w-[18rem] flex-col gap-3">
             <Link
-              href="/customer-signup"
+              href="/signup"
               className="inline-flex h-12 items-center justify-center rounded-full bg-amber-400 px-6 text-[15px] font-black text-black shadow-[0_0_26px_rgba(245,158,11,0.36)] transition hover:bg-amber-300 active:scale-[0.98]"
             >
               Sign up
