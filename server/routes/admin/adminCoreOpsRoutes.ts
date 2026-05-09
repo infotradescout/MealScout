@@ -5,6 +5,8 @@ import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
 import { getPaymentHealthSnapshot } from "../../services/paymentHealth";
+import { emailService } from "../../emailService";
+import { isAdminUserType } from "../../roleAccess";
 import { db } from "../../db";
 import {
   eventBookings,
@@ -13,11 +15,44 @@ import {
   foodTruckLocations,
   foodTruckSessions,
   restaurants,
+  userAddresses,
 } from "@shared/schema";
 
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+
+const normalizeSearch = (value: unknown) =>
+  String(value || "").trim().toLowerCase();
+
+const isGeneralEmailAllowed = (accountSettings: unknown) => {
+  const settings =
+    accountSettings && typeof accountSettings === "object"
+      ? (accountSettings as Record<string, any>)
+      : null;
+  const channels =
+    settings?.notifications?.channels &&
+    typeof settings.notifications.channels === "object"
+      ? (settings.notifications.channels as Record<string, any>)
+      : null;
+  return typeof channels?.email === "boolean" ? channels.email : true;
+};
+
+const htmlEscape = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const bodyToHtml = (body: string) =>
+  body
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${htmlEscape(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
 
 export function registerAdminCoreOpsRoutes(app: Express) {
   app.get(
@@ -442,29 +477,275 @@ export function registerAdminCoreOpsRoutes(app: Express) {
     isStaffOrAdmin,
     async (_req: any, res) => {
       try {
-        const users = await storage.getAllUsers();
-        const sanitized = sanitizeUsers(users, { includeStripe: true });
+        const allUsers = await storage.getAllUsers();
+        const sanitized = sanitizeUsers(allUsers, { includeStripe: true });
 
         // Attach business name from restaurants table (left join by owner_id)
         const restaurantRows = await db
-          .select({ ownerId: restaurants.ownerId, name: restaurants.name })
+          .select({
+            ownerId: restaurants.ownerId,
+            name: restaurants.name,
+            city: restaurants.city,
+            state: restaurants.state,
+            businessType: restaurants.businessType,
+            isFoodTruck: restaurants.isFoodTruck,
+            isActive: restaurants.isActive,
+            isVerified: restaurants.isVerified,
+          })
           .from(restaurants);
-        const restaurantByOwner = new Map<string, string>();
+        const restaurantByOwner = new Map<string, any>();
         for (const r of restaurantRows) {
           if (r.ownerId && !restaurantByOwner.has(r.ownerId)) {
-            restaurantByOwner.set(r.ownerId, r.name);
+            restaurantByOwner.set(r.ownerId, r);
+          }
+        }
+
+        const addressRows = await db
+          .select({
+            userId: userAddresses.userId,
+            city: userAddresses.city,
+            state: userAddresses.state,
+            postalCode: userAddresses.postalCode,
+            isDefault: userAddresses.isDefault,
+          })
+          .from(userAddresses);
+        const defaultAddressByUser = new Map<string, any>();
+        for (const address of addressRows) {
+          if (!address.userId) continue;
+          if (address.isDefault || !defaultAddressByUser.has(address.userId)) {
+            defaultAddressByUser.set(address.userId, address);
           }
         }
 
         const withBusiness = sanitized.map((u: any) => ({
           ...u,
-          businessName: u.businessName || restaurantByOwner.get(u.id) || null,
+          businessName:
+            u.businessName || restaurantByOwner.get(u.id)?.name || null,
+          businessCity: restaurantByOwner.get(u.id)?.city || null,
+          businessState: restaurantByOwner.get(u.id)?.state || null,
+          businessType: restaurantByOwner.get(u.id)?.businessType || null,
+          businessIsFoodTruck:
+            restaurantByOwner.get(u.id)?.isFoodTruck ?? null,
+          businessIsActive: restaurantByOwner.get(u.id)?.isActive ?? null,
+          businessIsVerified: restaurantByOwner.get(u.id)?.isVerified ?? null,
+          hasRestaurant: restaurantByOwner.has(u.id),
+          defaultCity: defaultAddressByUser.get(u.id)?.city || null,
+          defaultState: defaultAddressByUser.get(u.id)?.state || null,
+          defaultPostalCode:
+            defaultAddressByUser.get(u.id)?.postalCode || u.postalCode || null,
         }));
 
         res.json(withBusiness);
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ message: "Failed to fetch users" });
+      }
+    },
+  );
+
+  const buildAdminMessageRecipients = async (filters: Record<string, any>) => {
+    const allUsers = await storage.getAllUsers();
+    const restaurantRows = await db
+      .select({
+        ownerId: restaurants.ownerId,
+        name: restaurants.name,
+        city: restaurants.city,
+        state: restaurants.state,
+        businessType: restaurants.businessType,
+        isFoodTruck: restaurants.isFoodTruck,
+      })
+      .from(restaurants);
+    const restaurantsByOwner = new Map<string, any[]>();
+    for (const row of restaurantRows) {
+      if (!row.ownerId) continue;
+      const list = restaurantsByOwner.get(row.ownerId) || [];
+      list.push(row);
+      restaurantsByOwner.set(row.ownerId, list);
+    }
+
+    const addressRows = await db
+      .select({
+        userId: userAddresses.userId,
+        city: userAddresses.city,
+        state: userAddresses.state,
+        postalCode: userAddresses.postalCode,
+        isDefault: userAddresses.isDefault,
+      })
+      .from(userAddresses);
+    const defaultAddressByUser = new Map<string, any>();
+    for (const address of addressRows) {
+      if (!address.userId) continue;
+      if (address.isDefault || !defaultAddressByUser.has(address.userId)) {
+        defaultAddressByUser.set(address.userId, address);
+      }
+    }
+
+    const q = normalizeSearch(filters.q);
+    const userType = String(filters.userType || "all");
+    const emailVerified = String(filters.emailVerified || "all");
+    const status = String(filters.status || "active");
+    const city = normalizeSearch(filters.city);
+    const state = normalizeSearch(filters.state);
+    const businessOnly = Boolean(filters.businessOnly);
+    const hasEmailOnly = filters.hasEmail !== false;
+    const excludeInternal = filters.excludeInternal !== false;
+    const optInOnly = filters.optInOnly !== false;
+
+    let skippedOptOut = 0;
+    const recipients = allUsers
+      .map((user: any) => {
+        const businesses = restaurantsByOwner.get(user.id) || [];
+        const defaultAddress = defaultAddressByUser.get(user.id);
+        return { user, businesses, defaultAddress };
+      })
+      .filter(({ user, businesses, defaultAddress }) => {
+        if (excludeInternal && isAdminUserType(user.userType)) return false;
+        if (excludeInternal && user.userType === "staff") return false;
+        if (hasEmailOnly && !user.email) return false;
+        if (status === "active" && user.isDisabled === true) return false;
+        if (status === "disabled" && user.isDisabled !== true) return false;
+        if (userType !== "all" && user.userType !== userType) return false;
+        if (emailVerified === "verified" && user.emailVerified !== true) return false;
+        if (emailVerified === "unverified" && user.emailVerified === true) return false;
+        if (businessOnly && businesses.length === 0) return false;
+        if (city) {
+          const values = [
+            user.city,
+            user.postalCode,
+            defaultAddress?.city,
+            ...businesses.map((b) => b.city),
+          ].map(normalizeSearch);
+          if (!values.some((value) => value.includes(city))) return false;
+        }
+        if (state) {
+          const values = [
+            user.state,
+            defaultAddress?.state,
+            ...businesses.map((b) => b.state),
+          ].map(normalizeSearch);
+          if (!values.some((value) => value.includes(state))) return false;
+        }
+        if (q) {
+          const values = [
+            user.firstName,
+            user.lastName,
+            user.email,
+            user.phone,
+            user.postalCode,
+            defaultAddress?.city,
+            defaultAddress?.state,
+            defaultAddress?.postalCode,
+            ...businesses.flatMap((b) => [
+              b.name,
+              b.city,
+              b.state,
+              b.businessType,
+              b.isFoodTruck ? "food truck" : "",
+            ]),
+          ].map(normalizeSearch);
+          if (!values.some((value) => value.includes(q))) return false;
+        }
+        if (optInOnly && !isGeneralEmailAllowed(user.accountSettings)) {
+          skippedOptOut += 1;
+          return false;
+        }
+        return true;
+      })
+      .map(({ user, businesses, defaultAddress }) => ({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userType: user.userType,
+        businessName: businesses[0]?.name || null,
+        city: defaultAddress?.city || businesses[0]?.city || null,
+        state: defaultAddress?.state || businesses[0]?.state || null,
+      }));
+
+    return { recipients, skippedOptOut };
+  };
+
+  app.post(
+    "/api/admin/users/message-preview",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        if (!isAdminUserType(req.user?.userType)) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+        const { recipients, skippedOptOut } = await buildAdminMessageRecipients(
+          req.body?.filters || {},
+        );
+        res.json({
+          count: recipients.length,
+          skippedOptOut,
+          sample: recipients.slice(0, 10),
+        });
+      } catch (error) {
+        console.error("Error previewing admin message recipients:", error);
+        res.status(500).json({ message: "Failed to preview recipients" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/users/message",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        if (!isAdminUserType(req.user?.userType)) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+        const subject = String(req.body?.subject || "").trim();
+        const body = String(req.body?.body || "").trim();
+        if (subject.length < 4 || subject.length > 140) {
+          return res.status(400).json({
+            message: "Subject must be between 4 and 140 characters",
+          });
+        }
+        if (body.length < 10 || body.length > 5000) {
+          return res.status(400).json({
+            message: "Message must be between 10 and 5000 characters",
+          });
+        }
+
+        const { recipients, skippedOptOut } = await buildAdminMessageRecipients(
+          req.body?.filters || {},
+        );
+        const cappedRecipients = recipients.slice(0, 1000);
+        const settingsUrl = `${String(
+          process.env.PUBLIC_BASE_URL || "http://localhost:5000",
+        ).replace(/\/+$/, "")}/profile/notifications`;
+        const html = `${bodyToHtml(body)}<p style="color:#6b7280;font-size:13px;">You received this because you have a MealScout account. You can manage email preferences in <a href="${settingsUrl}">notification settings</a>.</p>`;
+        const text = `${body}\n\nYou received this because you have a MealScout account. Manage email preferences: ${settingsUrl}`;
+
+        let sent = 0;
+        let failed = 0;
+        for (const recipient of cappedRecipients) {
+          const ok = await emailService.sendBasicEmail(
+            recipient.email,
+            subject,
+            html,
+            text,
+            "general",
+          );
+          if (ok) sent += 1;
+          else failed += 1;
+        }
+
+        res.json({
+          count: recipients.length,
+          attempted: cappedRecipients.length,
+          sent,
+          failed,
+          skippedOptOut,
+          capped: recipients.length > cappedRecipients.length,
+        });
+      } catch (error) {
+        console.error("Error sending admin message:", error);
+        res.status(500).json({ message: "Failed to send message" });
       }
     },
   );

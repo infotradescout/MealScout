@@ -2088,6 +2088,14 @@ export default function AdminDashboard() {
   const [userSortDir, setUserSortDir] = useState<"asc" | "desc">("asc");
   const [userSearch, setUserSearch] = useState("");
   const [userTypeFilter, setUserTypeFilter] = useState("all");
+  const [userEmailFilter, setUserEmailFilter] = useState("all");
+  const [userStatusFilter, setUserStatusFilter] = useState("active");
+  const [userBusinessOnly, setUserBusinessOnly] = useState(false);
+  const [userCityFilter, setUserCityFilter] = useState("");
+  const [userStateFilter, setUserStateFilter] = useState("");
+  const [messageSubject, setMessageSubject] = useState("");
+  const [messageBody, setMessageBody] = useState("");
+  const [messagePreview, setMessagePreview] = useState<any>(null);
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
   const [dealDetailsOpen, setDealDetailsOpen] = useState(false);
   const [payoutStatusFilter, setPayoutStatusFilter] = useState<
@@ -3358,9 +3366,44 @@ export default function AdminDashboard() {
   }, [users]);
   const filteredUsers = useMemo(() => {
     const search = userSearch.trim().toLowerCase();
+    const city = userCityFilter.trim().toLowerCase();
+    const state = userStateFilter.trim().toLowerCase();
     return sortedUsers.filter((user: any) => {
       if (userTypeFilter !== "all" && user.userType !== userTypeFilter) {
         return false;
+      }
+      if (userEmailFilter === "verified" && user.emailVerified !== true) {
+        return false;
+      }
+      if (userEmailFilter === "unverified" && user.emailVerified === true) {
+        return false;
+      }
+      if (userStatusFilter === "active" && user.isDisabled === true) {
+        return false;
+      }
+      if (userStatusFilter === "disabled" && user.isDisabled !== true) {
+        return false;
+      }
+      if (userBusinessOnly && !user.hasRestaurant && !user.businessName) {
+        return false;
+      }
+      if (city) {
+        const cityValues = [
+          user.city,
+          user.defaultCity,
+          user.businessCity,
+          user.postalCode,
+          user.defaultPostalCode,
+        ]
+          .map((value) => `${value || ""}`.toLowerCase())
+          .join(" ");
+        if (!cityValues.includes(city)) return false;
+      }
+      if (state) {
+        const stateValues = [user.state, user.defaultState, user.businessState]
+          .map((value) => `${value || ""}`.toLowerCase())
+          .join(" ");
+        if (!stateValues.includes(state)) return false;
       }
       if (!search) return true;
       const name = `${user.firstName || ""} ${user.lastName || ""}`
@@ -3368,13 +3411,53 @@ export default function AdminDashboard() {
         .toLowerCase();
       const email = `${user.email || ""}`.toLowerCase();
       const phone = `${user.phone || ""}`.toLowerCase();
+      const business = `${user.businessName || ""} ${user.businessType || ""}`
+        .toLowerCase();
+      const location = `${user.defaultCity || ""} ${user.defaultState || ""} ${
+        user.businessCity || ""
+      } ${user.businessState || ""} ${user.defaultPostalCode || ""}`.toLowerCase();
       return (
         name.includes(search) ||
         email.includes(search) ||
-        phone.includes(search)
+        phone.includes(search) ||
+        business.includes(search) ||
+        location.includes(search)
       );
     });
-  }, [sortedUsers, userSearch, userTypeFilter]);
+  }, [
+    sortedUsers,
+    userBusinessOnly,
+    userCityFilter,
+    userEmailFilter,
+    userSearch,
+    userStateFilter,
+    userStatusFilter,
+    userTypeFilter,
+  ]);
+
+  const adminMessageFilters = useMemo(
+    () => ({
+      q: userSearch,
+      userType: userTypeFilter,
+      emailVerified: userEmailFilter,
+      status: userStatusFilter,
+      businessOnly: userBusinessOnly,
+      city: userCityFilter,
+      state: userStateFilter,
+      hasEmail: true,
+      optInOnly: true,
+      excludeInternal: true,
+    }),
+    [
+      userBusinessOnly,
+      userCityFilter,
+      userEmailFilter,
+      userSearch,
+      userStateFilter,
+      userStatusFilter,
+      userTypeFilter,
+    ],
+  );
 
   const renderHostLocationsEditor = () => {
     if (!selectedUser) return null;
@@ -4791,6 +4874,70 @@ export default function AdminDashboard() {
       toast({
         title: "User Status Updated",
         description: "User account status has been updated.",
+      });
+    },
+  });
+
+  const previewAdminMessage = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/users/message-preview", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: adminMessageFilters }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to preview recipients");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setMessagePreview(data);
+      toast({
+        title: "Recipient preview ready",
+        description: `${data.count} opted-in recipients match these filters.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Preview failed",
+        description: error.message || "Unable to preview recipients.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const sendAdminMessage = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/users/message", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filters: adminMessageFilters,
+          subject: messageSubject,
+          body: messageBody,
+        }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to send message");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setMessagePreview(data);
+      toast({
+        title: "Message sent",
+        description: `Sent ${data.sent} emails. ${data.failed} failed.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Send failed",
+        description: error.message || "Unable to send message.",
+        variant: "destructive",
       });
     },
   });
@@ -7704,9 +7851,47 @@ export default function AdminDashboard() {
                     <input
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
-                      placeholder="Search name, email, phone"
+                      placeholder="Search name, email, phone, business, city"
                       className="text-xs px-2 py-1 border rounded-md bg-background"
                     />
+                    <input
+                      value={userCityFilter}
+                      onChange={(e) => setUserCityFilter(e.target.value)}
+                      placeholder="City / ZIP"
+                      className="text-xs px-2 py-1 border rounded-md bg-background w-24"
+                    />
+                    <input
+                      value={userStateFilter}
+                      onChange={(e) => setUserStateFilter(e.target.value)}
+                      placeholder="State"
+                      className="text-xs px-2 py-1 border rounded-md bg-background w-20"
+                    />
+                    <select
+                      value={userEmailFilter}
+                      onChange={(e) => setUserEmailFilter(e.target.value)}
+                      className="text-xs px-2 py-1 border rounded-md bg-background"
+                    >
+                      <option value="all">Any email status</option>
+                      <option value="verified">Verified email</option>
+                      <option value="unverified">Unverified email</option>
+                    </select>
+                    <select
+                      value={userStatusFilter}
+                      onChange={(e) => setUserStatusFilter(e.target.value)}
+                      className="text-xs px-2 py-1 border rounded-md bg-background"
+                    >
+                      <option value="active">Active users</option>
+                      <option value="disabled">Disabled users</option>
+                      <option value="all">Any account status</option>
+                    </select>
+                    <label className="inline-flex items-center gap-2 text-xs px-2 py-1 border rounded-md bg-background">
+                      <input
+                        type="checkbox"
+                        checked={userBusinessOnly}
+                        onChange={(e) => setUserBusinessOnly(e.target.checked)}
+                      />
+                      Has business
+                    </label>
                     <select
                       value={userSortKey}
                       onChange={(e) =>
@@ -7753,6 +7938,91 @@ export default function AdminDashboard() {
                     })}
                   </TabsList>
                 </Tabs>
+                {isAdminOrSuper && (
+                  <div className="mt-4 rounded-xl border bg-muted/20 p-4 space-y-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold flex items-center gap-2">
+                          <Mail className="w-4 h-4" />
+                          Message filtered users
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uses the filters above. Excludes staff/admins and
+                          users who turned email off. Keep language clear and
+                          avoid sensitive personal data.
+                        </p>
+                      </div>
+                      <Badge variant="outline">
+                        {filteredUsers.length} visible matches
+                      </Badge>
+                    </div>
+                    <input
+                      value={messageSubject}
+                      onChange={(e) => setMessageSubject(e.target.value)}
+                      placeholder="Subject"
+                      maxLength={140}
+                      className="w-full text-sm px-3 py-2 border rounded-md bg-background"
+                    />
+                    <textarea
+                      value={messageBody}
+                      onChange={(e) => setMessageBody(e.target.value)}
+                      placeholder="Message body. Tell users why they are receiving it and what action to take."
+                      rows={5}
+                      maxLength={5000}
+                      className="w-full text-sm px-3 py-2 border rounded-md bg-background"
+                    />
+                    {messagePreview && (
+                      <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
+                        Recipients:{" "}
+                        <span className="font-semibold text-foreground">
+                          {messagePreview.count}
+                        </span>
+                        {typeof messagePreview.skippedOptOut === "number" && (
+                          <>
+                            {" "}
+                            · opted out skipped:{" "}
+                            <span className="font-semibold text-foreground">
+                              {messagePreview.skippedOptOut}
+                            </span>
+                          </>
+                        )}
+                        {messagePreview.capped && (
+                          <> · capped at 1,000 sends for safety</>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => previewAdminMessage.mutate()}
+                        disabled={previewAdminMessage.isPending}
+                      >
+                        Preview recipients
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (
+                            !confirm(
+                              `Send this email to the currently filtered opted-in recipients?`,
+                            )
+                          ) {
+                            return;
+                          }
+                          sendAdminMessage.mutate();
+                        }}
+                        disabled={
+                          sendAdminMessage.isPending ||
+                          messageSubject.trim().length < 4 ||
+                          messageBody.trim().length < 10
+                        }
+                      >
+                        Send message
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3 mt-3">
                   {filteredUsers.map((user: any) => (
                     <div
