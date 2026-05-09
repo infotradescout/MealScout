@@ -363,6 +363,11 @@ export default function MenuBuilderPage() {
                   </Button>
                 </Link>
               ) : null}
+              <Link href="/restaurant-owner-dashboard?src=menu-builder&setup=schedule">
+                <Button type="button" variant="outline">
+                  Schedule and hours
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
