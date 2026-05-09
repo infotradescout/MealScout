@@ -63,7 +63,7 @@ const restaurantSchema = z
     city: z.string().min(1, "City is required"),
     state: z.string().min(2, "State is required"),
     phone: z.string().min(10, COPY.validation.restaurant.phoneInvalid),
-    businessType: z.enum(["restaurant", "bar", "food_truck"], {
+    businessType: z.enum(["restaurant", "bar", "food_truck", "caterer", "private_chef"], {
       required_error: COPY.validation.restaurant.businessTypeRequired,
     }),
     confirmNotFoodTruck: z.boolean().default(false),
@@ -285,7 +285,13 @@ export default function RestaurantSignup() {
     try {
       const params = new URLSearchParams(window.location.search);
       const businessType = params.get("businessType");
-      if (businessType === "food_truck" || businessType === "restaurant") {
+      if (
+        businessType === "food_truck" ||
+        businessType === "restaurant" ||
+        businessType === "bar" ||
+        businessType === "caterer" ||
+        businessType === "private_chef"
+      ) {
         form.setValue("businessType", businessType as any);
       }
 
@@ -1068,6 +1074,8 @@ export default function RestaurantSignup() {
                             <SelectItem value="food_truck">Food Truck</SelectItem>
                             <SelectItem value="restaurant">Restaurant</SelectItem>
                             <SelectItem value="bar">Bar</SelectItem>
+                            <SelectItem value="caterer">Caterer</SelectItem>
+                            <SelectItem value="private_chef">Private Chef</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-[color:var(--text-secondary)]">

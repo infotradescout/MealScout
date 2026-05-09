@@ -125,7 +125,7 @@ test.describe("welcome and Scout routing law", () => {
     await expect(page.getByTestId("scout-map-container")).toHaveCount(0);
   });
 
-  test("welcome signup opens the account type chooser", async ({ page }) => {
+  test("welcome signup opens role-aware signup paths", async ({ page }) => {
     await mockGuest(page);
 
     await page.goto(`${FRONTEND}/`, { waitUntil: "domcontentloaded" });
@@ -133,9 +133,10 @@ test.describe("welcome and Scout routing law", () => {
     await page.getByRole("link", { name: /^sign up$/i }).click();
 
     await expect(page).toHaveURL(/\/signup(?:[?#].*)?$/);
-    await expect(page.getByRole("dialog", { name: /choose account type/i })).toBeVisible();
     await expect(page.getByTestId("button-signup-flow-food_truck")).toBeVisible();
     await expect(page.getByTestId("button-signup-flow-private_chef")).toBeVisible();
+    await page.getByTestId("button-signup-flow-private_chef").click();
+    await expect(page).toHaveURL(/\/restaurant-signup\?businessType=private_chef/);
   });
 
   test("logged-in root redirects to Scout", async ({ page }) => {
