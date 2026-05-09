@@ -894,7 +894,7 @@ function HostDashboard() {
                       <Button
                         size="sm"
                         onClick={() =>
-                          setLocation("/parking-pass#parking-pass-settings")
+                          setLocation("/parking-pass?setup=location")
                         }
                       >
                         Publish Slots

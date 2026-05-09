@@ -568,7 +568,7 @@ export default function SettingsPage() {
                 Scout discovery
               </Button>
             </Link>
-            <Link href="/parking-pass-manage">
+            <Link href="/parking-pass?setup=host">
               <Button variant="outline" className="w-full justify-start">
                 Parking Pass hosts
               </Button>

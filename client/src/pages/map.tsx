@@ -4009,7 +4009,7 @@ export default function MapPage() {
                   <Button
                     size="sm"
                     onClick={() => {
-                      window.location.href = "/parking-pass?tab=host";
+                      window.location.href = "/parking-pass?setup=host";
                     }}
                   >
                     Add host location
