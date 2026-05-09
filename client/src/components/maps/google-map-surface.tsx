@@ -64,9 +64,9 @@ const createBoundsLike = (
    ────────────────────────────────────────────────────────────────────────── */
 const mapStyleNeon = [
   // ── Base ──────────────────────────────────────────────────────────────────
-  { elementType: "geometry",            stylers: [{ color: "#080b12" }] },
-  { elementType: "labels.text.fill",    stylers: [{ color: "#d4a843" }] },
-  { elementType: "labels.text.stroke",  stylers: [{ color: "#080b12" }] },
+  { elementType: "geometry",            stylers: [{ color: "#17110b" }] },
+  { elementType: "labels.text.fill",    stylers: [{ color: "#f3b35b" }] },
+  { elementType: "labels.text.stroke",  stylers: [{ color: "#17110b" }] },
   { elementType: "labels.icon",         stylers: [{ visibility: "off" }] },
 
   // ── Roads ─────────────────────────────────────────────────────────────────
@@ -74,12 +74,12 @@ const mapStyleNeon = [
   {
     featureType: "road.highway",
     elementType: "geometry.fill",
-    stylers: [{ color: "#4a2000" }],
+    stylers: [{ color: "#5c2c08" }],
   },
   {
     featureType: "road.highway",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#fb923c" }, { weight: 2.5 }],
+    stylers: [{ color: "#ff7a1a" }, { weight: 2.25 }],
   },
   {
     featureType: "road.highway",
@@ -95,12 +95,12 @@ const mapStyleNeon = [
   {
     featureType: "road.arterial",
     elementType: "geometry.fill",
-    stylers: [{ color: "#2a1200" }],
+    stylers: [{ color: "#3b1d08" }],
   },
   {
     featureType: "road.arterial",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#f97316" }, { weight: 1.5 }],
+    stylers: [{ color: "#ef6c16" }, { weight: 1.25 }],
   },
   {
     featureType: "road.arterial",
@@ -116,12 +116,12 @@ const mapStyleNeon = [
   {
     featureType: "road.local",
     elementType: "geometry.fill",
-    stylers: [{ color: "#180a00" }],
+    stylers: [{ color: "#211107" }],
   },
   {
     featureType: "road.local",
     elementType: "geometry.stroke",
-    stylers: [{ color: "#c2410c" }, { weight: 0.8 }],
+    stylers: [{ color: "#a84612" }, { weight: 0.65 }],
   },
   {
     featureType: "road.local",
@@ -135,13 +135,13 @@ const mapStyleNeon = [
   },
 
   // ── Water ─────────────────────────────────────────────────────────────────
-  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#060d1e" }] },
-  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#1e3a5f" }] },
+  { featureType: "water", elementType: "geometry",          stylers: [{ color: "#0e1728" }] },
+  { featureType: "water", elementType: "labels.text.fill",  stylers: [{ color: "#385477" }] },
 
   // ── Landscape ─────────────────────────────────────────────────────────────
-  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#080b12" }] },
-  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#080f08" }] },
-  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#0a0d14" }] },
+  { featureType: "landscape",         elementType: "geometry", stylers: [{ color: "#17110b" }] },
+  { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#11190d" }] },
+  { featureType: "landscape.man_made",elementType: "geometry", stylers: [{ color: "#1b140d" }] },
 
   // ── Parks ─────────────────────────────────────────────────────────────────
   { featureType: "poi.park",  elementType: "geometry",          stylers: [{ color: "#0a120a" }] },

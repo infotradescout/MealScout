@@ -1553,6 +1553,23 @@ export default function ExplorePreview() {
             </button>
           )}
 
+          {sheetState === "fullMap" && (
+            <ScoutMapHud
+              locationLabel={shortLocation}
+              liveTruckCount={liveTrucks.length}
+              restaurantCount={nearbyRestaurants.length}
+              parkingHostCount={localParkingPassHosts.length}
+              eventCount={visibleEvents.length}
+              localSignalCount={localSignalCount}
+              onRecenter={() => {
+                if (coords) {
+                  setMapCenter(coords);
+                  setMapZoom(14);
+                }
+              }}
+            />
+          )}
+
           {sheetState === "fullMap" && selectedLiveTruck && (
             <LiveTruckMapCard
               truck={selectedLiveTruck}
@@ -3284,7 +3301,7 @@ function LiveTruckMapCard({
 
   return (
     <div
-      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+7.25rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
       style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -3336,6 +3353,77 @@ function LiveTruckMapCard({
           Message
         </Link>
       </div>
+    </div>
+  );
+}
+
+function ScoutMapHud({
+  locationLabel,
+  liveTruckCount,
+  restaurantCount,
+  parkingHostCount,
+  eventCount,
+  localSignalCount,
+  onRecenter,
+}: {
+  locationLabel: string;
+  liveTruckCount: number;
+  restaurantCount: number;
+  parkingHostCount: number;
+  eventCount: number;
+  localSignalCount: number;
+  onRecenter: () => void;
+}) {
+  return (
+    <div className="pointer-events-none absolute left-4 right-4 top-[calc(env(safe-area-inset-top)+4.5rem)] z-20">
+      <div
+        className="pointer-events-auto rounded-3xl bg-[#1b0d05]/82 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+        style={{ boxShadow: "0 18px 54px rgba(0,0,0,0.48), 0 0 22px rgba(255,90,47,0.18)" }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300/80">
+              Scout map
+            </p>
+            <h2 className="mt-1 truncate text-lg font-black">
+              {locationLabel}
+            </h2>
+            <p className="mt-1 text-xs text-white/62">
+              Blue dot is you. Orange pins are live food, hosts, and local action.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRecenter}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[#160904] ring-1 ring-orange-200/40"
+            aria-label="Recenter map on your location"
+          >
+            <Navigation2 className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+          <MapHudCount label="Trucks" value={liveTruckCount} />
+          <MapHudCount label="Food" value={restaurantCount} />
+          <MapHudCount label="Hosts" value={parkingHostCount} />
+          <MapHudCount label="Events" value={eventCount} />
+        </div>
+
+        {localSignalCount === 0 ? (
+          <div className="mt-3 rounded-2xl bg-white/7 px-3 py-2 text-xs text-white/72 ring-1 ring-white/10">
+            No live local pins right here yet. Move the map or widen discovery from the feed below.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MapHudCount({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl bg-white/7 px-2 py-2 ring-1 ring-white/10">
+      <p className="text-base font-black text-orange-200">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-white/48">{label}</p>
     </div>
   );
 }
