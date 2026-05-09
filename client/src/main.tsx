@@ -59,28 +59,52 @@ function ensureManifestLink() {
 }
 
 if (import.meta.env.PROD) {
-  const reloadOnceKey = "mealscout_chunk_reload";
-  const shouldReload = () => {
+  const reloadKey = `mealscout_chunk_recovery:${window.location.pathname}`;
+  const maxRecoveryAttempts = 3;
+  const nextRecoveryAttempt = () => {
     try {
-      return sessionStorage.getItem(reloadOnceKey) !== "1";
+      const current = Number(sessionStorage.getItem(reloadKey) || "0");
+      if (!Number.isFinite(current) || current < 0) return 1;
+      if (current >= maxRecoveryAttempts) return null;
+      const next = current + 1;
+      sessionStorage.setItem(reloadKey, String(next));
+      return next;
     } catch {
-      return true;
+      return 1;
     }
   };
 
-  const markReloaded = () => {
+  const clearRuntimeCaches = async () => {
     try {
-      sessionStorage.setItem(reloadOnceKey, "1");
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          registrations.map((registration) => registration.unregister()),
+        );
+      }
     } catch {
-      // ignore
+      // Ignore cleanup failures. The reload is still the important recovery.
+    }
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith("mealscout-sw-"))
+            .map((key) => caches.delete(key)),
+        );
+      }
+    } catch {
+      // Ignore cleanup failures.
     }
   };
 
-  const reloadWithBust = () => {
-    if (!shouldReload()) return;
-    markReloaded();
+  const reloadWithBust = async () => {
+    const attempt = nextRecoveryAttempt();
+    if (attempt === null) return;
+    await clearRuntimeCaches();
     const url = new URL(window.location.href);
-    url.searchParams.set("reload", Date.now().toString());
+    url.searchParams.set("reload", `${Date.now()}-${attempt}`);
     window.location.replace(url.toString());
   };
 
@@ -93,10 +117,12 @@ if (import.meta.env.PROD) {
           message.includes("MIME type")),
     );
 
-  window.addEventListener("vite:preloadError", reloadWithBust);
+  window.addEventListener("vite:preloadError", () => {
+    void reloadWithBust();
+  });
   window.addEventListener("error", (event) => {
     if (isChunkError(event.message)) {
-      reloadWithBust();
+      void reloadWithBust();
     }
   });
   window.addEventListener("unhandledrejection", (event) => {
@@ -104,7 +130,7 @@ if (import.meta.env.PROD) {
     const message =
       typeof reason === "string" ? reason : reason?.message || "";
     if (isChunkError(message)) {
-      reloadWithBust();
+      void reloadWithBust();
     }
   });
 }
