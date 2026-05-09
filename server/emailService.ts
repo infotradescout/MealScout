@@ -146,6 +146,24 @@ interface PremiumWeeklySummaryEmailData {
 
 // Email templates
 class EmailTemplates {
+  public static getUserTypeDisplay(userType?: string | null): string {
+    const labels: Record<string, string> = {
+      customer: "Diner",
+      restaurant_owner: "Restaurant Owner",
+      food_truck: "Food Truck",
+      caterer: "Caterer",
+      private_chef: "Private Chef",
+      host: "Parking Pass Host",
+      event_coordinator: "Event Organizer",
+      supplier: "Supplier",
+      staff: "Staff",
+      admin: "Admin",
+      duper_admin: "Duperrr Admin",
+      super_admin: "Super Admin",
+    };
+    return labels[String(userType || "").trim()] || "Customer";
+  }
+
   public static getBaseTemplate(title: string, content: string): string {
     return `
 <!DOCTYPE html>
@@ -662,12 +680,7 @@ The MealScout Team
     user: User,
     restaurant?: Restaurant,
   ): { html: string; text: string } {
-    const userTypeDisplay =
-      user.userType === "customer"
-        ? "Customer"
-        : user.userType === "restaurant_owner"
-          ? "Restaurant Owner"
-          : "Admin";
+    const userTypeDisplay = EmailTemplates.getUserTypeDisplay(user.userType);
 
     let locationInfo = "";
     if (restaurant) {
@@ -735,12 +748,7 @@ This notification was generated automatically by the MealScout system.
     user: User,
     context?: { signupMethod?: string; restaurant?: Restaurant },
   ): { html: string; text: string } {
-    const userTypeDisplay =
-      user.userType === "customer"
-        ? "Customer"
-        : user.userType === "restaurant_owner"
-          ? "Restaurant Owner"
-          : "Admin";
+    const userTypeDisplay = EmailTemplates.getUserTypeDisplay(user.userType);
     const signupMethod = context?.signupMethod || "Email";
 
     let restaurantInfo = "";
@@ -1503,7 +1511,7 @@ export class EmailService {
 
     return await this.sendEmail({
       to: EMAIL_CONFIG.adminEmail,
-      subject: `New ${user.userType === "customer" ? "Customer" : user.userType === "restaurant_owner" ? "Restaurant Owner" : "Admin"} Registration - ${user.firstName || ""} ${user.lastName || ""}`,
+      subject: `New ${EmailTemplates.getUserTypeDisplay(user.userType)} Registration - ${user.firstName || ""} ${user.lastName || ""}`,
       html: template.html,
       text: template.text,
     });
@@ -1521,7 +1529,7 @@ export class EmailService {
 
     return await this.sendEmail({
       to: EMAIL_CONFIG.adminEmail,
-      subject: `New MealScout Signup - ${user.firstName || ""} ${user.lastName || ""} (${user.userType})`,
+      subject: `New MealScout Signup - ${user.firstName || ""} ${user.lastName || ""} (${EmailTemplates.getUserTypeDisplay(user.userType)})`,
       html: template.html,
       text: template.text,
     });

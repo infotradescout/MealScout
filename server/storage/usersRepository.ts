@@ -118,6 +118,21 @@ function shouldAssignAffiliateTag(userType?: string | null): boolean {
   return shouldAssignAffiliateTagForUserType(userType);
 }
 
+function getSafePublicSignupUserType(userType: User["userType"]): User["userType"] {
+  if (isAdminUserType(userType) || userType === "staff") return "customer";
+  const allowed = new Set<string>([
+    "customer",
+    "restaurant_owner",
+    "food_truck",
+    "host",
+    "event_coordinator",
+    "supplier",
+    "caterer",
+    "private_chef",
+  ]);
+  return allowed.has(String(userType)) ? userType : "customer";
+}
+
 // ── Repository factory ────────────────────────────────────────────────────────
 
 export function createUsersRepository() {
@@ -319,6 +334,10 @@ export function createUsersRepository() {
       appContext: "mealscout" | "tradescout" = "mealscout",
     ): Promise<User> {
       try {
+        const insertUserType =
+          authType === "tradescout"
+            ? userType
+            : getSafePublicSignupUserType(userType);
         if (authType === "tradescout") {
           const tsData = userData as TradeScoutUserData;
           let existingUser = await db
@@ -381,7 +400,7 @@ export function createUsersRepository() {
           const [user] = await db
             .insert(users)
             .values({
-              userType,
+              userType: insertUserType,
               tradescoutId: tsData.tradescoutId,
               email: tsData.email ?? undefined,
               emailVerified: Boolean(tsData.email),
@@ -460,7 +479,7 @@ export function createUsersRepository() {
           const [user] = await db
             .insert(users)
             .values({
-              userType,
+              userType: insertUserType,
               googleId: googleData.googleId,
               email: googleData.email,
               emailVerified: true,
@@ -542,7 +561,7 @@ export function createUsersRepository() {
           const [user] = await db
             .insert(users)
             .values({
-              userType,
+              userType: insertUserType,
               facebookId: facebookData.facebookId,
               email: facebookData.email,
               emailVerified: true,
@@ -560,7 +579,7 @@ export function createUsersRepository() {
           const [user] = await db
             .insert(users)
             .values({
-              userType,
+              userType: insertUserType,
               email: emailData.email,
               firstName: emailData.firstName,
               lastName: emailData.lastName,
