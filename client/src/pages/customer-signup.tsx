@@ -234,6 +234,13 @@ export default function CustomerSignup() {
     return `/restaurant-signup?${params.toString()}`;
   };
 
+  const getRegistrationUserType = () =>
+    accountType === "host"
+      ? "host"
+      : accountType === "event_organizer"
+        ? "event_coordinator"
+        : "customer";
+
   const selectSignupFlow = (option: SignupFlowOption) => {
     setAccountType(option.accountType);
     setBusinessSubType(option.businessSubType || "restaurant");
@@ -390,7 +397,11 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/customer/register",
-        { ...signupData, intendedNextPath: getCustomerRedirectPath() }
+        {
+          ...signupData,
+          accountType: getRegistrationUserType(),
+          intendedNextPath: getCustomerRedirectPath(),
+        }
       );
       return await res.json();
     },
@@ -438,7 +449,11 @@ export default function CustomerSignup() {
       const res = await apiRequest(
         "POST",
         "/api/auth/restaurant/register",
-        { ...signupData, intendedNextPath: getBusinessRedirectPath() }
+        {
+          ...signupData,
+          businessType: businessSubType,
+          intendedNextPath: getBusinessRedirectPath(),
+        }
       );
       return await res.json();
     },
