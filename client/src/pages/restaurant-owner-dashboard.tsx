@@ -292,6 +292,16 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/favorites`,
         analyticsDateRange,
       ],
+      queryFn: async () => {
+        const response = await fetch(
+          `/api/restaurants/${selectedRestaurant}/analytics/favorites?start=${encodeURIComponent(
+            analyticsDateRange.start,
+          )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+          { credentials: "include" },
+        );
+        if (!response.ok) throw new Error("Failed to load favorites analytics");
+        return response.json();
+      },
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
     });
 
@@ -302,6 +312,18 @@ export default function RestaurantOwnerDashboard() {
         `/api/restaurants/${selectedRestaurant}/analytics/recommendations`,
         analyticsDateRange,
       ],
+      queryFn: async () => {
+        const response = await fetch(
+          `/api/restaurants/${selectedRestaurant}/analytics/recommendations?start=${encodeURIComponent(
+            analyticsDateRange.start,
+          )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+          { credentials: "include" },
+        );
+        if (!response.ok) {
+          throw new Error("Failed to load recommendations analytics");
+        }
+        return response.json();
+      },
       enabled: !!selectedRestaurant && hasAnalyticsAccess,
     });
 
@@ -331,6 +353,16 @@ export default function RestaurantOwnerDashboard() {
       "analytics/summary",
       analyticsDateRange,
     ],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurant}/analytics/summary?start=${encodeURIComponent(
+          analyticsDateRange.start,
+        )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Failed to load analytics summary");
+      return response.json();
+    },
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
@@ -341,6 +373,16 @@ export default function RestaurantOwnerDashboard() {
       "analytics/timeseries",
       analyticsDateRange,
     ],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurant}/analytics/timeseries?start=${encodeURIComponent(
+          analyticsDateRange.start,
+        )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Failed to load analytics timeseries");
+      return response.json();
+    },
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 
@@ -351,6 +393,16 @@ export default function RestaurantOwnerDashboard() {
       "analytics/customers",
       analyticsDateRange,
     ],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/restaurants/${selectedRestaurant}/analytics/customers?start=${encodeURIComponent(
+          analyticsDateRange.start,
+        )}&end=${encodeURIComponent(analyticsDateRange.end)}`,
+        { credentials: "include" },
+      );
+      if (!response.ok) throw new Error("Failed to load customer insights");
+      return response.json();
+    },
     enabled: !!selectedRestaurant && hasAnalyticsAccess,
   });
 

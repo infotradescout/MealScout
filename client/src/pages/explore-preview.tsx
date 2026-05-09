@@ -15,7 +15,9 @@ import {
   Heart,
   MapPin,
   Maximize2,
+  MessageCircle,
   Minimize2,
+  Navigation2,
   Search,
   Sparkles,
   Tag,
@@ -362,6 +364,29 @@ function getCrowdVibe(truck: LiveTruckSummary): { label: string } {
   if (raw.includes("busy")) return { label: "Busy Right Now" };
   if (raw.includes("lively")) return { label: "Lively Crowd" };
   return { label: "Open & Serving" };
+}
+
+function getTruckCoords(truck: LiveTruckSummary): { lat: number; lng: number } | null {
+  const lat = truck.latitude ?? truck.lat;
+  const lng = truck.longitude ?? truck.lng;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  return { lat, lng };
+}
+
+function formatTruckPlace(truck: LiveTruckSummary): string {
+  return [truck.address, truck.city, truck.state].filter(Boolean).join(", ") || "Live location";
+}
+
+function buildTruckDirectionsUrl(
+  truck: LiveTruckSummary,
+  origin?: { lat: number; lng: number } | null,
+): string {
+  const truckCoords = getTruckCoords(truck);
+  const destination = truckCoords
+    ? `${truckCoords.lat},${truckCoords.lng}`
+    : encodeURIComponent(formatTruckPlace(truck));
+  const originParam = origin ? `&origin=${origin.lat},${origin.lng}` : "";
+  return `https://www.google.com/maps/dir/?api=1${originParam}&destination=${destination}&travelmode=driving`;
 }
 
 function getGreetingTime(): "morning" | "afternoon" | "evening" {
@@ -959,6 +984,11 @@ export default function ExplorePreview() {
       })
       .filter((m): m is MapAdapterMarker => m !== null);
   }, [liveTrucks]);
+  const liveTruckById = useMemo(() => {
+    const map = new Map<string, LiveTruckSummary>();
+    for (const truck of liveTrucks) map.set(String(truck.id), truck);
+    return map;
+  }, [liveTrucks]);
 
   const restaurantMarkers = useMemo<MapAdapterMarker[]>(() => {
     return nearbyRestaurants
@@ -1050,6 +1080,7 @@ export default function ExplorePreview() {
   );
   const userPushedMapRef = useRef(false);
   const [sheetState, setSheetState] = useState<"default" | "fullMap">("default");
+  const [selectedLiveTruck, setSelectedLiveTruck] = useState<LiveTruckSummary | null>(null);
   // Once the full map has been opened once, keep GoogleMapSurface mounted
   // (just hidden) so it doesn't re-initialize on every collapse/expand.
   // Using state (not ref) so React re-renders when the map should first mount.
@@ -1120,14 +1151,37 @@ export default function ExplorePreview() {
     setMapCenter(c);
     userPushedMapRef.current = true;
   }, []);
+  const selectLiveTruck = useCallback(
+    (truck: LiveTruckSummary) => {
+      const truckCoords = getTruckCoords(truck);
+      setSelectedLiveTruck(truck);
+      if (truckCoords) {
+        setMapCenter(truckCoords);
+        setMapZoom(16);
+      } else if (coords) {
+        setMapCenter(coords);
+      }
+      setHasOpenedFullMap(true);
+      setGoogleMapFailed(false);
+      setSheetState("fullMap");
+    },
+    [coords],
+  );
   const handleMarkerTap = useCallback(
     (marker: MapAdapterMarker) => {
-      if (marker.kind === "truck") navigate(`/truck/${marker.sourceId}`);
+      if (marker.kind === "truck") {
+        const truck = liveTruckById.get(String(marker.sourceId));
+        if (truck) {
+          selectLiveTruck(truck);
+          return;
+        }
+        navigate(`/truck/${marker.sourceId}`);
+      }
       else if (marker.kind === "restaurant") navigate(`/restaurant/${marker.sourceId}`);
       else if (marker.kind === "parking") navigate(`/parking-pass`);
       else if (marker.kind === "event") navigate(`/events`);
     },
-    [navigate],
+    [liveTruckById, navigate, selectLiveTruck],
   );
 
   /* --------- pull-down-to-fullscreen sheet --------- */
@@ -1499,6 +1553,14 @@ export default function ExplorePreview() {
             </button>
           )}
 
+          {sheetState === "fullMap" && selectedLiveTruck && (
+            <LiveTruckMapCard
+              truck={selectedLiveTruck}
+              userLocation={coords}
+              onClose={() => setSelectedLiveTruck(null)}
+            />
+          )}
+
           {/* Pull bar indicator (default state) */}
           {sheetState === "default" && (
             <div
@@ -1628,7 +1690,7 @@ export default function ExplorePreview() {
                     <ul className="flex gap-4 pr-5" role="list" aria-label="Food trucks near you">
                       {liveTrucks.slice(0, 12).map((t) => (
                         <li key={t.id} className="shrink-0 w-[200px] sm:w-[220px]">
-                          <TruckCard truck={t} />
+                          <TruckCard truck={t} onSelect={selectLiveTruck} />
                         </li>
                       ))}
                     </ul>
@@ -3206,7 +3268,85 @@ function LiveNowSection({
    Shows a live food truck in the Food Trucks Near You section.
    ============================================================ */
 
-function TruckCard({ truck }: { truck: LiveTruckSummary }) {
+function LiveTruckMapCard({
+  truck,
+  userLocation,
+  onClose,
+}: {
+  truck: LiveTruckSummary;
+  userLocation?: { lat: number; lng: number } | null;
+  onClose: () => void;
+}) {
+  const distance = formatDistance(truck);
+  const wait = formatWait(truck);
+  const place = formatTruckPlace(truck);
+  const directionsUrl = buildTruckDirectionsUrl(truck, userLocation);
+
+  return (
+    <div
+      className="absolute left-4 right-4 bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] z-30 rounded-3xl bg-[#120805]/88 p-4 text-white ring-1 ring-orange-300/35 backdrop-blur-xl"
+      style={{ boxShadow: "0 22px 70px rgba(0,0,0,0.62), 0 0 24px rgba(255,90,47,0.18)" }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/18 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-orange-200 ring-1 ring-orange-300/25">
+            <span className="h-1.5 w-1.5 rounded-full bg-orange-300 animate-pulse" />
+            Live truck
+          </div>
+          <h3 className="mt-2 truncate text-lg font-black">{truck.name || "Food Truck"}</h3>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-orange-100/80">
+            <MapPin className="h-4 w-4 shrink-0 text-orange-300" aria-hidden="true" />
+            <span className="truncate">{place}</span>
+          </p>
+          <p className="mt-1 text-xs text-white/60">
+            {[distance, wait].filter(Boolean).join(" · ") || "Center map to compare it with your location."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full px-3 py-1 text-xs font-bold text-white/60 ring-1 ring-white/10"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <a
+          href={directionsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-orange-500 px-2 py-3 text-center text-xs font-black text-[#160904]"
+        >
+          <Navigation2 className="h-4 w-4" aria-hidden="true" />
+          Directions
+        </a>
+        <Link
+          href={`/truck/${truck.id}`}
+          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/8 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+        >
+          <Flame className="h-4 w-4 text-orange-300" aria-hidden="true" />
+          Profile
+        </Link>
+        <Link
+          href={`/truck/${truck.id}?message=1`}
+          className="inline-flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/8 px-2 py-3 text-center text-xs font-black text-white ring-1 ring-white/10"
+        >
+          <MessageCircle className="h-4 w-4 text-orange-300" aria-hidden="true" />
+          Message
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function TruckCard({
+  truck,
+  onSelect,
+}: {
+  truck: LiveTruckSummary;
+  onSelect?: (truck: LiveTruckSummary) => void;
+}) {
   const name = truck.name || "Food Truck";
   const cuisine = truck.cuisineType ?? null;
   const img = truck.coverImageUrl ?? truck.heroImageUrl ?? truck.imageUrl ?? truck.logoUrl ?? null;
@@ -3230,6 +3370,11 @@ function TruckCard({ truck }: { truck: LiveTruckSummary }) {
   return (
     <Link
       href={`/truck/${truck.id}`}
+      onClick={(event) => {
+        if (!onSelect) return;
+        event.preventDefault();
+        onSelect(truck);
+      }}
       className="block rounded-2xl overflow-hidden bg-white/5 ring-1 ring-white/10 hover:ring-orange-500/40 transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
     >
       {/* Hero image */}

@@ -1219,10 +1219,16 @@ export class DatabaseStorage implements IStorage {
       `${has("updated_at") ? `${q("updated_at")} as "updatedAt"` : `null as "updatedAt"`}`,
     ];
 
+    const rawWhereSql = String(whereSql || "");
+    const limitMatch = rawWhereSql.match(/\s+limit\s+\d+\s*$/i);
+    const limitSql = limitMatch ? limitMatch[0] : "";
+    const whereWithoutLimit = limitMatch
+      ? rawWhereSql.slice(0, limitMatch.index).trimEnd()
+      : rawWhereSql;
     const orderBy = has("created_at")
       ? ` order by ${q("created_at")} desc`
       : "";
-    const sqlText = `select ${select.join(", ")} from ${q(schema)}.${q("hosts")} ${whereSql}${orderBy}`;
+    const sqlText = `select ${select.join(", ")} from ${q(schema)}.${q("hosts")} ${whereWithoutLimit}${orderBy}${limitSql}`;
     const result = await pool.query(sqlText, params);
     return result.rows || [];
   }
