@@ -369,9 +369,25 @@ export function GoogleMapSurface({
   const hasReportedFatalErrorRef = useRef(false);
   const onWindowResizeRef = useRef<(() => void) | null>(null);
 
+  const renderedMarkers = useMemo<MapAdapterMarker[]>(() => {
+    if (!userLocation) return markers;
+    return [
+      {
+        id: "__user-location",
+        sourceId: "__user-location",
+        kind: "user",
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        title: "You are here",
+        subtitle: "Your current location",
+      },
+      ...markers.filter((marker) => marker.id !== "__user-location"),
+    ];
+  }, [markers, userLocation?.lat, userLocation?.lng]);
+
   const markerIndex = useMemo(
-    () => new Map(markers.map((m) => [m.id, m])),
-    [markers],
+    () => new Map(renderedMarkers.map((m) => [m.id, m])),
+    [renderedMarkers],
   );
 
   useEffect(() => { hasReportedFatalErrorRef.current = false; }, [apiKey]);
@@ -448,6 +464,7 @@ export function GoogleMapSurface({
           const ro = new ResizeObserver(() => {
             if (mapRef.current) {
               googleMaps.event.trigger(mapRef.current, "resize");
+              mapRef.current.setCenter(center);
             }
           });
           if (mapContainerRef.current) ro.observe(mapContainerRef.current);
@@ -458,6 +475,7 @@ export function GoogleMapSurface({
           onWindowResizeRef.current = () => {
             if (mapRef.current) {
               googleMaps.event.trigger(mapRef.current, "resize");
+              mapRef.current.setCenter(center);
             }
           };
           window.addEventListener("resize", onWindowResizeRef.current);
@@ -504,7 +522,7 @@ export function GoogleMapSurface({
     const useAdvanced = false;
     const usedIds = new Set<string>();
 
-    markers.forEach((marker) => {
+    renderedMarkers.forEach((marker) => {
       usedIds.add(marker.id);
       const existing = markerRefs.current.get(marker.id);
       const signature = [
@@ -552,11 +570,13 @@ export function GoogleMapSurface({
 
       if (typeof instance.addEventListener === "function") {
         instance.addEventListener("gmp-click", () => {
+          if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
           if (tapped) onMarkerTap(tapped);
         });
       } else {
         instance.addListener("click", () => {
+          if (marker.id === "__user-location") return;
           const tapped = markerIndex.get(marker.id);
           if (tapped) onMarkerTap(tapped);
         });
@@ -571,7 +591,7 @@ export function GoogleMapSurface({
       markerRefs.current.delete(id);
       markerSignatureRefs.current.delete(id);
     });
-  }, [markers, markerIndex, onMarkerTap, mapReadyVersion]);
+  }, [renderedMarkers, markerIndex, onMarkerTap, mapReadyVersion]);
 
   // Traffic cells
   useEffect(() => {
