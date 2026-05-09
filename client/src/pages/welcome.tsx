@@ -49,7 +49,7 @@ export default function Welcome() {
           </div>
 
           <p className="mt-7 text-base font-semibold italic text-white/88 drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
-            Follow The Flavor.
+            Follow The Flavor
           </p>
         </section>
       </main>
