@@ -196,6 +196,27 @@ test.describe("Scout local dashboard", () => {
     await expect(page.getByTestId("scout-map-container")).toBeVisible();
   });
 
+  test("Scout renders map preview without Google script", async ({ page }) => {
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByTestId("scout-map-preview")).toBeVisible();
+    await expect(
+      page.locator('script[src*="maps.googleapis.com/maps/api/js"]'),
+    ).toHaveCount(0);
+  });
+
+  test("Google script is not required for initial Scout render", async ({ page }) => {
+    await page.route("https://maps.googleapis.com/**", async (route) => {
+      await route.abort();
+    });
+
+    await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByTestId("scout-map-container")).toBeVisible();
+    await expect(page.getByTestId("scout-map-preview")).toBeVisible();
+    await expect(page.getByText(/explore by craving/i)).toBeVisible();
+  });
+
   test("restaurant with menu items shows menu preview and micro-actions", async ({ page }) => {
     await page.goto(`${FRONTEND}/scout`, { waitUntil: "domcontentloaded" });
 
@@ -225,6 +246,7 @@ test.describe("Scout local dashboard", () => {
 
     await expect(page).toHaveURL(/\/scout(?:[?#].*)?$/);
     await expect(page.getByRole("button", { name: /collapse/i })).toBeVisible();
+    await expect(page.getByTestId("scout-interactive-map")).toBeVisible();
   });
 
   test("Parking Pass route owns the parking map experience", async ({ page }) => {
