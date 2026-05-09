@@ -160,6 +160,16 @@ interface MenuPreviewItem {
   priceCents?: number | null;
 }
 
+interface LocalMenuItemFeedItem extends MenuPreviewItem {
+  restaurantId: string;
+  restaurantName?: string | null;
+  restaurantCity?: string | null;
+  restaurantState?: string | null;
+  cuisineType?: string | null;
+  distanceMiles?: number | null;
+  dietaryTags?: string[] | null;
+}
+
 interface RestaurantRelationshipSnapshot {
   favoriteIds: Set<string>;
   followIds: Set<string>;
@@ -243,6 +253,74 @@ const CRAVING_CATEGORIES: CravingCategory[] = [
   { id: "drinks",  label: "Drinks",  image: "/atmospheric/craving-drinks.jpg",  query: "drinks"  },
   { id: "dessert", label: "Dessert", image: "/atmospheric/craving-dessert.jpg", query: "dessert" },
 ];
+
+type DiscoveryLayerId =
+  | "liveNow"
+  | "localBoard"
+  | "cravings"
+  | "menuItems"
+  | "foodTrucks"
+  | "restaurants"
+  | "parkingHosts"
+  | "deals"
+  | "events"
+  | "saved";
+
+const DISCOVERY_LAYERS: Record<
+  DiscoveryLayerId,
+  { title: string; href: string; subtitle?: string }
+> = {
+  liveNow: {
+    title: "Live Now",
+    href: "/truck-discovery",
+    subtitle: "Trucks broadcasting service nearby right now.",
+  },
+  localBoard: {
+    title: "Today's Food Board",
+    href: "/scout",
+    subtitle: "Your local dashboard for independent food discovery.",
+  },
+  cravings: {
+    title: "Explore by Craving",
+    href: "/find-food",
+    subtitle: "Jump into local food by mood, not by chain category.",
+  },
+  menuItems: {
+    title: "New Local Menu Items",
+    href: "/find-food",
+    subtitle: "Freshly available dishes from nearby restaurants and trucks.",
+  },
+  foodTrucks: {
+    title: "Food Trucks Near You",
+    href: "/truck-discovery",
+    subtitle: "All nearby trucks that are broadcasting or ready to be discovered.",
+  },
+  restaurants: {
+    title: "Restaurants Near You",
+    href: "/find-food",
+    subtitle: "Local restaurants and bars worth knowing about - not a fast-food feed.",
+  },
+  parkingHosts: {
+    title: "Parking Pass Hosts",
+    href: "/parking-pass",
+    subtitle: "Host locations are places that let food trucks park, serve, and build a route.",
+  },
+  deals: {
+    title: "Deals Near You",
+    href: "/deals",
+    subtitle: "Active offers from nearby restaurants, bars, and food trucks.",
+  },
+  events: {
+    title: "Happening Tonight",
+    href: "/events",
+    subtitle: "Upcoming events, pop-ups, and food nights near you.",
+  },
+  saved: {
+    title: "Your Saved",
+    href: "/favorites",
+    subtitle: "Your personal shortlist for trucks, restaurants, deals, and places to revisit.",
+  },
+};
 
 /* ============================================================
    FORMATTERS
@@ -685,6 +763,29 @@ export default function ExplorePreview() {
     });
     return map;
   }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
+
+  const { data: localMenuItemsData = [] } = useQuery<LocalMenuItemFeedItem[]>({
+    queryKey: coords
+      ? ["/api/menus/local-items", coords.lat, coords.lng]
+      : ["/api/menus/local-items", "no-location"],
+    enabled: !!coords,
+    queryFn: async () => {
+      if (!coords) return [];
+      const response = await fetch(
+        `/api/menus/local-items?lat=${coords.lat}&lng=${coords.lng}&radiusKm=${SCOUT_LOCAL_RADIUS_KM}&limit=24`,
+        { credentials: "include" },
+      );
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data?.items) ? data.items : [];
+    },
+    staleTime: 120_000,
+    retry: false,
+  });
+
+  const localMenuItems = useMemo<LocalMenuItemFeedItem[]>(() => {
+    return Array.isArray(localMenuItemsData) ? localMenuItemsData : [];
+  }, [localMenuItemsData]);
 
   const { data: favoriteRestaurantsData = [] } = useQuery<any[]>({
     queryKey: ["/api/favorites/restaurants", "scout"],
@@ -1160,6 +1261,7 @@ export default function ExplorePreview() {
   };
 
   const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;
+  const showMenuItemsSection = localMenuItems.length > 0;
   const showRestaurantsSection =
     nearbyRestaurantsLoading || nearbyRestaurants.length > 0;
   const showParkingHostsSection = parkingPassLoading || localParkingPassHosts.length > 0;
@@ -1167,6 +1269,7 @@ export default function ExplorePreview() {
   const showEventsSection = visibleEvents.length > 0;
   const localSignalCount =
     liveTrucks.length +
+    localMenuItems.length +
     nearbyRestaurants.length +
     localParkingPassHosts.length +
     allDeals.length +
@@ -1443,6 +1546,7 @@ export default function ExplorePreview() {
               locationStatus={locationStatus}
               liveTruckCount={liveTrucks.length}
               restaurantCount={nearbyRestaurants.length}
+              menuItemCount={localMenuItems.length}
               parkingHostCount={localParkingPassHosts.length}
               dealCount={allDeals.length}
               eventCount={visibleEvents.length}
@@ -1454,9 +1558,9 @@ export default function ExplorePreview() {
             {/* ── EXPLORE BY CRAVING ── */}
             <section className="px-5 pt-2 pb-10">
               <SectionHeader
-                title="Explore by Craving"
-                linkHref="/find-food"
-                subtitle="Jump into local food by mood, not by chain category."
+                title={DISCOVERY_LAYERS.cravings.title}
+                linkHref={DISCOVERY_LAYERS.cravings.href}
+                subtitle={DISCOVERY_LAYERS.cravings.subtitle}
               />
               <ul className="flex items-start justify-between gap-2 pb-2" role="list">
                 {CRAVING_CATEGORIES.map((cat) => (
@@ -1480,13 +1584,33 @@ export default function ExplorePreview() {
               </ul>
             </section>
 
+            {/* ── NEW LOCAL MENU ITEMS ── */}
+            {showMenuItemsSection && (
+              <section className="pl-5 pr-0 pt-2 pb-10">
+                <SectionHeader
+                  title={DISCOVERY_LAYERS.menuItems.title}
+                  linkHref={DISCOVERY_LAYERS.menuItems.href}
+                  subtitle={DISCOVERY_LAYERS.menuItems.subtitle}
+                />
+                <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
+                  <ul className="flex gap-4 pr-5" role="list" aria-label="New local menu items">
+                    {localMenuItems.slice(0, 12).map((item) => (
+                      <li key={item.id} className="shrink-0 w-[210px] sm:w-[230px]">
+                        <LocalMenuItemCard item={item} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
             {/* ── FOOD TRUCKS NEAR YOU ── */}
             {showFoodTrucksSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title="Food Trucks Near You"
-                  linkHref="/truck-discovery"
-                  subtitle="All nearby trucks that are broadcasting or ready to be discovered."
+                  title={DISCOVERY_LAYERS.foodTrucks.title}
+                  linkHref={DISCOVERY_LAYERS.foodTrucks.href}
+                  subtitle={DISCOVERY_LAYERS.foodTrucks.subtitle}
                 />
                 {liveTrucksLoading && liveTrucks.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
@@ -1508,9 +1632,9 @@ export default function ExplorePreview() {
             {showRestaurantsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title="Restaurants Near You"
-                  linkHref="/find-food"
-                  subtitle="Local restaurants and bars worth knowing about - not a fast-food feed."
+                  title={DISCOVERY_LAYERS.restaurants.title}
+                  linkHref={DISCOVERY_LAYERS.restaurants.href}
+                  subtitle={DISCOVERY_LAYERS.restaurants.subtitle}
                 />
                 {nearbyRestaurantsLoading && nearbyRestaurants.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
@@ -1539,9 +1663,9 @@ export default function ExplorePreview() {
             {showParkingHostsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title="Parking Pass Hosts"
-                  linkHref="/parking-pass"
-                  subtitle="Host locations are places that let food trucks park, serve, and build a route."
+                  title={DISCOVERY_LAYERS.parkingHosts.title}
+                  linkHref={DISCOVERY_LAYERS.parkingHosts.href}
+                  subtitle={DISCOVERY_LAYERS.parkingHosts.subtitle}
                 />
                 {parkingPassLoading && localParkingPassHosts.length === 0 ? (
                   <HorizontalSkeletonRow count={3} width={200} />
@@ -1563,9 +1687,9 @@ export default function ExplorePreview() {
             {showDealsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title="Deals Near You"
-                  linkHref="/deals"
-                  subtitle="Active offers from nearby restaurants, bars, and food trucks."
+                  title={DISCOVERY_LAYERS.deals.title}
+                  linkHref={DISCOVERY_LAYERS.deals.href}
+                  subtitle={DISCOVERY_LAYERS.deals.subtitle}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
@@ -1583,9 +1707,9 @@ export default function ExplorePreview() {
             {showEventsSection && (
               <section className="pl-5 pr-0 pt-2 pb-10">
                 <SectionHeader
-                  title="Happening Tonight"
-                  linkHref="/events"
-                  subtitle="Upcoming events, pop-ups, and food nights near you."
+                  title={DISCOVERY_LAYERS.events.title}
+                  linkHref={DISCOVERY_LAYERS.events.href}
+                  subtitle={DISCOVERY_LAYERS.events.subtitle}
                 />
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-1">
                   <ul className="flex gap-4 pr-5" role="list">
@@ -1602,9 +1726,9 @@ export default function ExplorePreview() {
             {/* ── YOUR SAVED ── */}
             <section className="px-5 pt-2 pb-12">
               <SectionHeader
-                title="Your Saved"
-                linkHref="/favorites"
-                subtitle="Your personal shortlist for trucks, restaurants, deals, and places to revisit."
+                title={DISCOVERY_LAYERS.saved.title}
+                linkHref={DISCOVERY_LAYERS.saved.href}
+                subtitle={DISCOVERY_LAYERS.saved.subtitle}
               />
               {user && savedRestaurants.length > 0 ? (
                 <div className="overflow-x-auto atmo-hide-scrollbar -mr-5">
@@ -1702,6 +1826,7 @@ function LocalFoodDashboard({
   locationStatus,
   liveTruckCount,
   restaurantCount,
+  menuItemCount,
   parkingHostCount,
   dealCount,
   eventCount,
@@ -1713,6 +1838,7 @@ function LocalFoodDashboard({
   locationStatus: "idle" | "requesting" | "ready" | "denied";
   liveTruckCount: number;
   restaurantCount: number;
+  menuItemCount: number;
   parkingHostCount: number;
   dealCount: number;
   eventCount: number;
@@ -1744,6 +1870,13 @@ function LocalFoodDashboard({
       icon: <MapPin className="h-4 w-4" aria-hidden="true" />,
     },
     {
+      label: "Menu items",
+      value: menuItemCount,
+      detail: menuItemCount > 0 ? "available" : "scanning",
+      href: DISCOVERY_LAYERS.menuItems.href,
+      icon: <Utensils className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
       label: "Deals",
       value: dealCount,
       detail: dealCount > 0 ? "active" : "none posted",
@@ -1769,6 +1902,7 @@ function LocalFoodDashboard({
   const lanes = [
     { label: "All trucks", href: "/truck-discovery" },
     { label: "Find dinner", href: "/find-food" },
+    { label: "Menus", href: DISCOVERY_LAYERS.menuItems.href },
     { label: "Deals", href: "/deals" },
     { label: "Events", href: "/events" },
     { label: "Host spots", href: "/parking-pass" },
@@ -2314,6 +2448,97 @@ function DealCard({ deal }: { deal: DealSummary }) {
             </p>
           )}
         </div>
+      </div>
+    </Link>
+  );
+}
+
+function LocalMenuItemCard({ item }: { item: LocalMenuItemFeedItem }) {
+  const price =
+    typeof item.priceCents === "number" && Number.isFinite(item.priceCents)
+      ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
+      : null;
+  const distLabel =
+    typeof item.distanceMiles === "number" && Number.isFinite(item.distanceMiles)
+      ? `${item.distanceMiles.toFixed(item.distanceMiles < 10 ? 1 : 0)} mi`
+      : null;
+  const tags = Array.isArray(item.dietaryTags)
+    ? item.dietaryTags.filter(Boolean).slice(0, 2)
+    : [];
+
+  return (
+    <Link
+      href={`/restaurant/${item.restaurantId}`}
+      className="block rounded-3xl overflow-hidden bg-[#120805]/40 ring-1 ring-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300/70"
+      style={{ boxShadow: "0 16px 48px rgba(0,0,0,0.55)" }}
+      aria-label={`Open ${item.name} from ${item.restaurantName || "local menu"}`}
+      data-testid="scout-local-menu-item-card"
+    >
+      <div className="relative aspect-[4/3] w-full bg-[#120805]/60">
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 28% 20%, rgba(255,120,55,0.36), transparent 34%), linear-gradient(160deg, rgba(255,90,47,0.16), rgba(0,0,0,0.66))",
+            }}
+            aria-hidden="true"
+          />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(180deg, rgba(0,0,0,0) 34%, rgba(0,0,0,0.9) 100%)",
+          }}
+          aria-hidden="true"
+        />
+        <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-orange-300 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#1a0d08]">
+          <Utensils className="h-3 w-3" aria-hidden="true" />
+          Menu
+        </span>
+        {price && (
+          <span className="absolute top-3 right-3 rounded-full bg-[#120805]/75 px-2.5 py-1 text-[11px] font-bold text-orange-100 ring-1 ring-orange-300/30">
+            {price}
+          </span>
+        )}
+      </div>
+      <div className="px-3 py-3">
+        <p className="line-clamp-2 text-sm font-bold leading-snug text-white">
+          {item.name}
+        </p>
+        <p className="mt-1 truncate text-xs font-semibold text-orange-200/85">
+          {item.restaurantName || "Local spot"}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-white/55">
+          {item.cuisineType && <span>{item.cuisineType}</span>}
+          {item.restaurantCity && <span>{item.restaurantCity}</span>}
+          {distLabel && <span>{distLabel}</span>}
+        </div>
+        {item.description && (
+          <p className="mt-2 line-clamp-2 text-xs leading-snug text-white/58">
+            {item.description}
+          </p>
+        )}
+        {tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-white/8 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white/65"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </Link>
   );

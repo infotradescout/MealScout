@@ -102,6 +102,110 @@ export function registerMenuRoutes(app: Express) {
   // ── ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * GET /api/menus/local-items
+   * Local discovery feed of active menu items for Scout discovery layers.
+   * Returns real available menu items only; no sample data.
+   */
+  app.get(
+    "/api/menus/local-items",
+    wrap(async (req, res) => {
+      const lat = Number.parseFloat(String(req.query.lat || ""));
+      const lng = Number.parseFloat(String(req.query.lng || ""));
+      const radiusKm = Math.max(
+        1,
+        Math.min(50, Number.parseFloat(String(req.query.radiusKm || "12")) || 12),
+      );
+      const limit = Math.max(
+        1,
+        Math.min(60, Number.parseInt(String(req.query.limit || "24"), 10) || 24),
+      );
+      const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+
+      const rows = await db
+        .select({
+          id: menuItems.id,
+          name: menuItems.name,
+          description: menuItems.description,
+          priceCents: menuItems.priceCents,
+          imageUrl: menuItems.imageUrl,
+          dietaryTags: menuItems.dietaryTags,
+          updatedAt: menuItems.updatedAt,
+          restaurantId: menuItems.restaurantId,
+          restaurantName: restaurants.name,
+          restaurantCity: restaurants.city,
+          restaurantState: restaurants.state,
+          cuisineType: restaurants.cuisineType,
+          restaurantLatitude: restaurants.latitude,
+          restaurantLongitude: restaurants.longitude,
+          isFoodTruck: restaurants.isFoodTruck,
+          businessType: restaurants.businessType,
+        })
+        .from(menuItems)
+        .innerJoin(menus, eq(menus.id, menuItems.menuId))
+        .innerJoin(restaurants, eq(restaurants.id, menuItems.restaurantId))
+        .where(
+          and(
+            eq(menuItems.isAvailable, true),
+            eq(menus.isActive, true),
+            eq(restaurants.isActive, true),
+          ),
+        );
+
+      const withDistance = rows
+        .map((row: any) => {
+          const targetLat = Number(row.restaurantLatitude);
+          const targetLng = Number(row.restaurantLongitude);
+          let distanceKm: number | null = null;
+          if (hasLocation) {
+            if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
+              return null;
+            }
+            const toRad = (value: number) => (value * Math.PI) / 180;
+            const earthRadiusKm = 6371;
+            const dLat = toRad(targetLat - lat);
+            const dLng = toRad(targetLng - lng);
+            const a =
+              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRad(lat)) *
+                Math.cos(toRad(targetLat)) *
+                Math.sin(dLng / 2) *
+                Math.sin(dLng / 2);
+            distanceKm =
+              earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) {
+              return null;
+            }
+          }
+
+          return {
+            ...row,
+            distanceMiles:
+              typeof distanceKm === "number" ? distanceKm * 0.621371 : null,
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => {
+          const aDistance =
+            typeof a.distanceMiles === "number"
+              ? a.distanceMiles
+              : Number.POSITIVE_INFINITY;
+          const bDistance =
+            typeof b.distanceMiles === "number"
+              ? b.distanceMiles
+              : Number.POSITIVE_INFINITY;
+          if (aDistance !== bDistance) return aDistance - bDistance;
+          return (
+            new Date(b.updatedAt || 0).getTime() -
+            new Date(a.updatedAt || 0).getTime()
+          );
+        })
+        .slice(0, limit);
+
+      res.json({ items: withDistance });
+    }),
+  );
+
+  /**
    * GET /api/menus/:restaurantId
    * Returns all active menus with categories, items, variants and modifiers.
    * Used by the customer-facing ordering UI.
