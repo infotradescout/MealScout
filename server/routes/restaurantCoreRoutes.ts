@@ -667,6 +667,16 @@ export function registerRestaurantCoreRoutes(
         const topic = String(req.body?.topic || "Question")
           .trim()
           .slice(0, 60);
+        const preferredReply =
+          String(req.body?.preferredReply || "email") === "phone"
+            ? "phone"
+            : "email";
+        const phone = String(req.body?.phone || "").trim().slice(0, 40);
+        if (preferredReply === "phone" && phone.length < 7) {
+          return res.status(400).json({
+            message: "Enter a callback number or choose email reply",
+          });
+        }
         const message = String(req.body?.message || "").trim();
         if (message.length < 10 || message.length > 2000) {
           return res.status(400).json({
@@ -687,7 +697,16 @@ export function registerRestaurantCoreRoutes(
         const safeBusinessName = escapeHtml(businessName);
         const safeSenderName = escapeHtml(senderName);
         const safeSenderEmail = escapeHtml(replyEmail);
+        const safePhone = escapeHtml(phone);
         const safeTopic = escapeHtml(topic || "General question");
+        const replyLine =
+          preferredReply === "phone" && phone
+            ? `<p><strong>Preferred reply:</strong> Call/text ${safePhone}</p><p><strong>Backup email:</strong> ${safeSenderEmail}</p>`
+            : `<p><strong>Reply directly to:</strong> ${safeSenderEmail}</p>`;
+        const textReplyLine =
+          preferredReply === "phone" && phone
+            ? `Preferred reply: Call/text ${phone}\nBackup email: ${replyEmail}`
+            : `Reply directly to: ${replyEmail}`;
         const subjectTopic = topic || "Question";
         const html = `
           <p><strong>${safeSenderName}</strong> contacted <strong>${safeBusinessName}</strong> from MealScout.</p>
@@ -695,11 +714,11 @@ export function registerRestaurantCoreRoutes(
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
           ${messageBodyToHtml(message)}
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
-          <p><strong>Reply directly to:</strong> ${safeSenderEmail}</p>
+          ${replyLine}
           <p style="color:#6b7280;font-size:13px;">MealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.</p>
           <p><a href="${dashboardUrl}">Open your MealScout dashboard</a></p>
         `;
-        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\nReply directly to: ${replyEmail}\n\nMealScout shared this email address because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
+        const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${dashboardUrl}`;
 
         const ok = await emailService.sendBasicEmail(
           owner.email,
@@ -712,6 +731,7 @@ export function registerRestaurantCoreRoutes(
         if (userId) {
           await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
             topic,
+            preferredReply,
             delivered: ok,
           });
         }

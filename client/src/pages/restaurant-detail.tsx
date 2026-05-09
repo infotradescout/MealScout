@@ -81,6 +81,8 @@ export default function RestaurantDetailPage() {
     name: "",
     email: "",
     topic: "Question",
+    phone: "",
+    preferredReply: "email",
     message: "",
   });
   const [bookingForm, setBookingForm] = useState({
@@ -305,6 +307,8 @@ export default function RestaurantDetailPage() {
       setBusinessMessage((prev) => ({
         name: user ? "" : prev.name,
         email: user ? "" : prev.email,
+        phone: "",
+        preferredReply: "email",
         topic: "Question",
         message: "",
       }));
@@ -814,10 +818,10 @@ export default function RestaurantDetailPage() {
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                   <p className="text-sm text-muted-foreground">
-                    Ask about hours, menu details, dietary needs, catering, or
-                    booking. MealScout sends this to the business owner and
-                    shares your reply email so they can respond. No account is
-                    required, and we do not include your live location.
+                    Pick a topic and we will help shape a useful message. No
+                    account is required. MealScout sends this to the business
+                    owner and shares your chosen reply info so they can respond.
+                    We do not include your live location.
                   </p>
                   <p className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
                     Do not send payment details, passwords, or sensitive medical
@@ -863,6 +867,45 @@ export default function RestaurantDetailPage() {
                     )}
                   </div>
                   <div className="grid gap-2">
+                    <Label>Best way to reply</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        ["email", "Email"],
+                        ["phone", "Phone"],
+                      ].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                            businessMessage.preferredReply === value
+                              ? "border-amber-300 bg-amber-300 text-black"
+                              : "border-white/10 bg-white/5 text-white/70"
+                          }`}
+                          onClick={() =>
+                            setBusinessMessage((prev) => ({
+                              ...prev,
+                              preferredReply: value,
+                            }))
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {businessMessage.preferredReply === "phone" && (
+                      <Input
+                        value={businessMessage.phone}
+                        onChange={(e) =>
+                          setBusinessMessage((prev) => ({
+                            ...prev,
+                            phone: e.target.value,
+                          }))
+                        }
+                        placeholder="Best callback number"
+                      />
+                    )}
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="business-message-topic">Topic</Label>
                     <Input
                       id="business-message-topic"
@@ -895,6 +938,18 @@ export default function RestaurantDetailPage() {
                             setBusinessMessage((prev) => ({
                               ...prev,
                               topic,
+                              message:
+                                prev.message.trim().length > 0
+                                  ? prev.message
+                                  : topic === "Menu"
+                                    ? "Hi, I had a menu question. Could you tell me what you recommend today?"
+                                    : topic === "Catering"
+                                      ? "Hi, I am interested in catering. Could you share availability, minimums, and the best next step?"
+                                      : topic === "Booking"
+                                        ? "Hi, I would like to ask about booking you for a date. Could you tell me what information you need?"
+                                        : topic === "Dietary need"
+                                          ? "Hi, I have a dietary question. Could you let me know what options are available?"
+                                          : prev.message,
                             }))
                           }
                         >
@@ -920,10 +975,13 @@ export default function RestaurantDetailPage() {
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>
-                        Reply goes to{" "}
-                        {user?.email ||
-                          businessMessage.email ||
-                          "the email you enter"}.
+                        Reply by {businessMessage.preferredReply}:{" "}
+                        {businessMessage.preferredReply === "phone"
+                          ? businessMessage.phone || "enter a callback number"
+                          : user?.email ||
+                            businessMessage.email ||
+                            "the email you enter"}
+                        .
                       </span>
                       <span>{businessMessage.message.length}/2000</span>
                     </div>
@@ -937,7 +995,9 @@ export default function RestaurantDetailPage() {
                       businessMessage.message.trim().length < 10 ||
                       (!user &&
                         (!businessMessage.name.trim() ||
-                          !businessMessage.email.trim()))
+                          !businessMessage.email.trim())) ||
+                      (businessMessage.preferredReply === "phone" &&
+                        businessMessage.phone.trim().length < 7)
                     }
                   >
                     {isSendingBusinessMessage ? "Sending..." : "Send Message"}
