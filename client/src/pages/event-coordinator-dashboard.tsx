@@ -9,7 +9,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { format, isPast, isToday } from "date-fns";
+import { format } from "date-fns";
 import {
   Calendar,
   Clock,
@@ -404,6 +404,25 @@ function InterestsPanel({
 // EventCard — with expandable interests panel
 // ---------------------------------------------------------------------------
 
+function hasEventEnded(event: Pick<EventItem, "date" | "endTime">) {
+  const eventDate = new Date(event.date);
+  if (!Number.isFinite(eventDate.getTime())) return false;
+
+  const endTime = String(event.endTime || "").trim();
+  const match = endTime.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (Number.isFinite(hour) && Number.isFinite(minute)) {
+      eventDate.setHours(hour, minute, 0, 0);
+    }
+  } else {
+    eventDate.setHours(23, 59, 59, 999);
+  }
+
+  return eventDate.getTime() < Date.now();
+}
+
 function EventCard({
   event,
   onSummaryChange,
@@ -413,7 +432,7 @@ function EventCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const summary = event.interestSummary;
-  const past = isPast(new Date(event.date)) && !isToday(new Date(event.date));
+  const past = hasEventEnded(event);
 
   return (
     <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden">
@@ -674,9 +693,8 @@ export default function EventCoordinatorDashboard() {
     }
   };
 
-  const today = new Date(new Date().setHours(0, 0, 0, 0));
-  const upcoming = events.filter((e) => new Date(e.date) >= today);
-  const past = events.filter((e) => new Date(e.date) < today);
+  const upcoming = events.filter((e) => !hasEventEnded(e));
+  const past = events.filter((e) => hasEventEnded(e));
 
   if (isLoading || isLoadingPage) {
     return (
