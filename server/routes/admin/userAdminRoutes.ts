@@ -29,6 +29,7 @@ import {
   hosts,
   insertHostSchema,
   restaurants,
+  telemetryEvents,
   truckClaimRequests,
   truckImportListings,
   users,
@@ -1241,6 +1242,68 @@ export function registerUserAdminRoutes(
       } catch (error) {
         console.error("Error fetching user restaurants:", error);
         res.status(500).json({ message: "Failed to fetch restaurants" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/users/:id/activity",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const userId = String(req.params.id || "");
+        const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const [recentEvents, eventCounts, summaryRows] = await Promise.all([
+          db
+            .select({
+              id: telemetryEvents.id,
+              eventName: telemetryEvents.eventName,
+              properties: telemetryEvents.properties,
+              createdAt: telemetryEvents.createdAt,
+            })
+            .from(telemetryEvents)
+            .where(eq(telemetryEvents.userId, userId))
+            .orderBy(desc(telemetryEvents.createdAt))
+            .limit(80),
+          db
+            .select({
+              eventName: telemetryEvents.eventName,
+              count: sql<number>`count(*)`.mapWith(Number),
+              lastSeenAt: sql<Date>`max(${telemetryEvents.createdAt})`,
+            })
+            .from(telemetryEvents)
+            .where(eq(telemetryEvents.userId, userId))
+            .groupBy(telemetryEvents.eventName)
+            .orderBy(sql`count(*) desc`),
+          db
+            .select({
+              totalEvents: sql<number>`count(*)`.mapWith(Number),
+              eventsLast7d:
+                sql<number>`count(*) filter (where ${telemetryEvents.createdAt} >= ${since7d})`.mapWith(
+                  Number,
+                ),
+              lastActiveAt: sql<Date>`max(${telemetryEvents.createdAt})`,
+              firstActiveAt: sql<Date>`min(${telemetryEvents.createdAt})`,
+            })
+            .from(telemetryEvents)
+            .where(eq(telemetryEvents.userId, userId)),
+        ]);
+
+        res.json({
+          summary: summaryRows[0] || {
+            totalEvents: 0,
+            eventsLast7d: 0,
+            lastActiveAt: null,
+            firstActiveAt: null,
+          },
+          eventCounts,
+          recentEvents,
+        });
+      } catch (error) {
+        console.error("Error fetching user activity:", error);
+        res.status(500).json({ message: "Failed to fetch user activity" });
       }
     },
   );

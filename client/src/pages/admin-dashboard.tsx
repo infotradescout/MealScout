@@ -3291,6 +3291,10 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/users", selectedUser?.id, "addresses"],
     enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
   });
+  const { data: userActivity } = useQuery<any>({
+    queryKey: ["/api/admin/users", selectedUser?.id, "activity"],
+    enabled: !!adminUser && !!selectedUser?.id && userDetailsOpen,
+  });
 
   const sortedUsers = useMemo(() => {
     const typeOrder = [
@@ -8054,6 +8058,18 @@ export default function AdminDashboard() {
                             {user.postalCode}
                           </div>
                         )}
+                        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+                          <span className="flex items-center gap-1">
+                            <Activity className="w-3 h-3" />
+                            Last active:{" "}
+                            {user.lastActiveAt
+                              ? new Date(user.lastActiveAt).toLocaleString()
+                              : "No tracked activity"}
+                          </span>
+                          <span>
+                            {Number(user.activityEventCount || 0)} tracked events
+                          </span>
+                        </div>
                       </div>
                       <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
                         <div className="flex flex-col gap-2">
@@ -9047,7 +9063,103 @@ export default function AdminDashboard() {
                       </p>
                     </div>
                   )}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      Last Active
+                    </p>
+                    <p className="text-sm">
+                      {userActivity?.summary?.lastActiveAt
+                        ? new Date(
+                            userActivity.summary.lastActiveAt,
+                          ).toLocaleString()
+                        : selectedUser.lastActiveAt
+                          ? new Date(selectedUser.lastActiveAt).toLocaleString()
+                          : "No tracked activity yet"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      Activity Volume
+                    </p>
+                    <p className="text-sm">
+                      {Number(
+                        userActivity?.summary?.totalEvents ??
+                          selectedUser.activityEventCount ??
+                          0,
+                      )}{" "}
+                      total /{" "}
+                      {Number(userActivity?.summary?.eventsLast7d ?? 0)} last 7d
+                    </p>
+                  </div>
                 </div>
+                {Array.isArray(userActivity?.eventCounts) &&
+                  userActivity.eventCounts.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Top activity types
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {userActivity.eventCounts
+                          .slice(0, 8)
+                          .map((event: any) => (
+                            <Badge key={event.eventName} variant="outline">
+                              {event.eventName}: {event.count}
+                            </Badge>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                {Array.isArray(userActivity?.recentEvents) &&
+                  userActivity.recentEvents.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Recent activity history
+                      </p>
+                      <div className="max-h-72 overflow-y-auto rounded-lg border">
+                        {userActivity.recentEvents
+                          .slice(0, 30)
+                          .map((event: any) => {
+                            const props =
+                              event.properties &&
+                              typeof event.properties === "object"
+                                ? event.properties
+                                : {};
+                            const detail = [
+                              props.surface,
+                              props.layerId,
+                              props.restaurantId,
+                              props.itemId,
+                              props.action,
+                            ]
+                              .filter(Boolean)
+                              .slice(0, 3)
+                              .join(" · ");
+                            return (
+                              <div
+                                key={event.id}
+                                className="flex items-start justify-between gap-3 border-b px-3 py-2 last:border-b-0"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">
+                                    {event.eventName}
+                                  </p>
+                                  {detail && (
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {detail}
+                                    </p>
+                                  )}
+                                </div>
+                                <p className="shrink-0 text-xs text-muted-foreground">
+                                  {event.createdAt
+                                    ? new Date(event.createdAt).toLocaleString()
+                                    : ""}
+                                </p>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
               </div>
 
               {/* Saved Addresses */}

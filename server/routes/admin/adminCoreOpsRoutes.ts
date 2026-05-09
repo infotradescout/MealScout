@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import Stripe from "stripe";
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { isAuthenticated, isStaffOrAdmin } from "../../unifiedAuth";
 import { storage } from "../../storage";
 import { sanitizeUsers } from "../../utils/sanitize";
@@ -15,6 +15,7 @@ import {
   foodTruckLocations,
   foodTruckSessions,
   restaurants,
+  telemetryEvents,
   userAddresses,
 } from "@shared/schema";
 
@@ -517,6 +518,22 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           }
         }
 
+        const activityRows = await db
+          .select({
+            userId: telemetryEvents.userId,
+            lastActiveAt: sql<Date>`max(${telemetryEvents.createdAt})`,
+            activityCount: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(telemetryEvents)
+          .where(isNotNull(telemetryEvents.userId))
+          .groupBy(telemetryEvents.userId);
+        const activityByUser = new Map<string, any>();
+        for (const activity of activityRows) {
+          if (activity.userId) {
+            activityByUser.set(activity.userId, activity);
+          }
+        }
+
         const withBusiness = sanitized.map((u: any) => ({
           ...u,
           businessName:
@@ -533,6 +550,8 @@ export function registerAdminCoreOpsRoutes(app: Express) {
           defaultState: defaultAddressByUser.get(u.id)?.state || null,
           defaultPostalCode:
             defaultAddressByUser.get(u.id)?.postalCode || u.postalCode || null,
+          lastActiveAt: activityByUser.get(u.id)?.lastActiveAt || null,
+          activityEventCount: activityByUser.get(u.id)?.activityCount || 0,
         }));
 
         res.json(withBusiness);
