@@ -14,6 +14,7 @@ import {
 import { BackHeader } from "@/components/back-header";
 import {
   MapPin,
+  Mail,
   Phone,
   Star,
   Clock,
@@ -74,6 +75,12 @@ export default function RestaurantDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [isSendingBusinessMessage, setIsSendingBusinessMessage] =
+    useState(false);
+  const [businessMessage, setBusinessMessage] = useState({
+    topic: "General question",
+    message: "",
+  });
   const [bookingForm, setBookingForm] = useState({
     name: "",
     email: user?.email || "",
@@ -270,6 +277,44 @@ export default function RestaurantDetailPage() {
       });
     } finally {
       setIsSubmittingBooking(false);
+    }
+  };
+
+  const handleSendBusinessMessage = async () => {
+    if (!restaurantId) return;
+    if (!user) {
+      window.location.href = `/login?redirect=${encodeURIComponent(
+        window.location.pathname,
+      )}`;
+      return;
+    }
+    setIsSendingBusinessMessage(true);
+    try {
+      const res = await fetch(`/api/restaurants/${restaurantId}/message`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(businessMessage),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to send message");
+      }
+
+      toast({
+        title: "Message sent",
+        description: `${restaurantName} can reply to your account email.`,
+      });
+      setBusinessMessage({ topic: "General question", message: "" });
+    } catch (error: any) {
+      toast({
+        title: "Message failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingBusinessMessage(false);
     }
   };
 
@@ -751,6 +796,71 @@ export default function RestaurantDetailPage() {
               <Phone className="w-4 h-4 mr-2" />
               Call
             </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full sm:flex-1"
+                  data-testid="button-message-business"
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  Message
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Message {restaurantName}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-2">
+                  <p className="text-sm text-muted-foreground">
+                    We will send your message through MealScout and share your
+                    account email so the business can reply. We do not include
+                    your live location.
+                  </p>
+                  <div className="grid gap-2">
+                    <Label htmlFor="business-message-topic">Topic</Label>
+                    <Input
+                      id="business-message-topic"
+                      value={businessMessage.topic}
+                      onChange={(e) =>
+                        setBusinessMessage((prev) => ({
+                          ...prev,
+                          topic: e.target.value,
+                        }))
+                      }
+                      placeholder="Question, catering, hours, menu..."
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="business-message-body">Message</Label>
+                    <Textarea
+                      id="business-message-body"
+                      value={businessMessage.message}
+                      onChange={(e) =>
+                        setBusinessMessage((prev) => ({
+                          ...prev,
+                          message: e.target.value,
+                        }))
+                      }
+                      placeholder="Ask a clear question or tell them what you need."
+                      rows={5}
+                      maxLength={2000}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={handleSendBusinessMessage}
+                    disabled={
+                      isSendingBusinessMessage ||
+                      businessMessage.message.trim().length < 10
+                    }
+                  >
+                    {isSendingBusinessMessage ? "Sending..." : "Send Message"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {isFoodTruck && (
               <Dialog>
                 <DialogTrigger asChild>

@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { storage } from "../storage";
+import { emailService } from "../emailService";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
@@ -30,6 +31,22 @@ import {
 } from "@shared/rankingPolicy";
 
 const ensureTrialForUser = ensurePremiumTrialForUser;
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const messageBodyToHtml = (value: string) =>
+  value
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
 
 type AnalyticsAccessResult = {
   hasAccess: boolean;
@@ -600,6 +617,99 @@ export function registerRestaurantCoreRoutes(
       res.status(500).json({ message: "Failed to fetch restaurant" });
     }
   });
+
+  app.post(
+    "/api/restaurants/:restaurantId/message",
+    isAuthenticated,
+    async (req: any, res) => {
+      try {
+        const { restaurantId } = req.params;
+        const userId = req.user.id;
+        const actionGate = consumeEngagementWindow(
+          `${userId}:${restaurantId}:business-message`,
+        );
+        if (!actionGate.allowed) {
+          return res.status(429).json({
+            message: "Please wait a moment before sending another message.",
+            retryAfterSeconds: actionGate.retryAfterSeconds,
+          });
+        }
+
+        const restaurant = await storage.getRestaurant(restaurantId);
+        if (!restaurant || !isPublicBusinessVisible(restaurant)) {
+          return res.status(404).json({ message: "Business not found" });
+        }
+
+        const owner = await storage.getUser(restaurant.ownerId);
+        if (!owner?.email) {
+          return res
+            .status(400)
+            .json({ message: "This business is not accepting messages yet" });
+        }
+
+        const sender = await storage.getUser(userId);
+        const senderEmail = String(sender?.email || req.user?.email || "").trim();
+        if (!senderEmail) {
+          return res.status(400).json({
+            message: "Add an email to your account before messaging a business",
+          });
+        }
+
+        const topic = String(req.body?.topic || "general")
+          .trim()
+          .slice(0, 60);
+        const message = String(req.body?.message || "").trim();
+        if (message.length < 10 || message.length > 2000) {
+          return res.status(400).json({
+            message: "Message must be between 10 and 2000 characters",
+          });
+        }
+
+        const senderName =
+          [sender?.firstName, sender?.lastName].filter(Boolean).join(" ") ||
+          req.user?.name ||
+          "A MealScout user";
+        const businessName = restaurant.name || "your business";
+        const baseUrl = String(
+          process.env.PUBLIC_BASE_URL || "http://localhost:5000",
+        ).replace(/\/+$/, "");
+        const dashboardUrl = `${baseUrl}/restaurant-owner-dashboard`;
+        const safeBusinessName = escapeHtml(businessName);
+        const safeSenderName = escapeHtml(senderName);
+        const safeSenderEmail = escapeHtml(senderEmail);
+        const safeTopic = escapeHtml(topic || "General question");
+        const html = `
+          <p><strong>${safeSenderName}</strong> sent a message to <strong>${safeBusinessName}</strong> from MealScout.</p>
+          <p><strong>Topic:</strong> ${safeTopic}</p>
+          ${messageBodyToHtml(message)}
+          <p><strong>Reply email:</strong> ${safeSenderEmail}</p>
+          <p style="color:#6b7280;font-size:13px;">We only shared the sender's account email because they chose to message your business. No live location data was included.</p>
+          <p><a href="${dashboardUrl}">Open your MealScout dashboard</a></p>
+        `;
+        const text = `${senderName} sent ${businessName} a MealScout message.\n\nTopic: ${topic || "General question"}\n\n${message}\n\nReply email: ${senderEmail}\n\nNo live location data was included. Dashboard: ${dashboardUrl}`;
+
+        const ok = await emailService.sendBasicEmail(
+          owner.email,
+          `New MealScout message for ${businessName}`,
+          html,
+          text,
+          "general",
+        );
+
+        await trackEngagement("restaurant_user_message_sent", userId, restaurantId, {
+          topic,
+          delivered: ok,
+        });
+
+        res.json({ success: ok });
+      } catch (error: any) {
+        console.error("Error sending business message:", error);
+        res.status(500).json({
+          message: error?.message || "Failed to send message",
+        });
+      }
+    },
+  );
 
   app.get("/api/restaurants/nearby/:lat/:lng", async (req, res) => {
     try {
