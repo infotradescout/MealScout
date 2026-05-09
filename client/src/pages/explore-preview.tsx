@@ -17,6 +17,7 @@ import {
   Maximize2,
   Minimize2,
   Search,
+  Sparkles,
   Tag,
   Utensils,
   User as UserIcon,
@@ -149,6 +150,12 @@ interface MenuPreviewItem {
   description?: string | null;
   imageUrl?: string | null;
   priceCents?: number | null;
+}
+
+interface RestaurantRelationshipSnapshot {
+  favoriteIds: Set<string>;
+  followIds: Set<string>;
+  recommendationIds: Set<string>;
 }
 
 interface ParkingPassListing {
@@ -670,6 +677,68 @@ export default function ExplorePreview() {
     });
     return map;
   }, [nearbyRestaurants, restaurantMenuPreviewQueries]);
+
+  const { data: favoriteRestaurantsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/favorites/restaurants", "scout"],
+    enabled: !!user,
+    queryFn: async () => {
+      const response = await fetch("/api/favorites/restaurants", {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const { data: followedRestaurantsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/following/restaurants", "scout"],
+    enabled: !!user,
+    queryFn: async () => {
+      const response = await fetch("/api/following/restaurants", {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const { data: recommendedRestaurantsData = [] } = useQuery<any[]>({
+    queryKey: ["/api/recommendations/restaurants", "scout"],
+    enabled: !!user,
+    queryFn: async () => {
+      const response = await fetch("/api/recommendations/restaurants", {
+        credentials: "include",
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const restaurantRelationships = useMemo<RestaurantRelationshipSnapshot>(() => {
+    const pickId = (row: any) =>
+      String(row?.restaurantId || row?.restaurant?.id || "").trim();
+    return {
+      favoriteIds: new Set(
+        favoriteRestaurantsData.map(pickId).filter((id) => id.length > 0),
+      ),
+      followIds: new Set(
+        followedRestaurantsData.map(pickId).filter((id) => id.length > 0),
+      ),
+      recommendationIds: new Set(
+        recommendedRestaurantsData.map(pickId).filter((id) => id.length > 0),
+      ),
+    };
+  }, [
+    favoriteRestaurantsData,
+    followedRestaurantsData,
+    recommendedRestaurantsData,
+  ]);
 
   /* --------- parking pass hosts --------- */
 
@@ -1439,6 +1508,8 @@ export default function ExplorePreview() {
                             menuPreview={
                               menuPreviewByRestaurantId.get(String(r.id)) ?? []
                             }
+                            isSignedIn={!!user}
+                            relationshipSnapshot={restaurantRelationships}
                           />
                         </li>
                       ))}
@@ -2308,9 +2379,13 @@ function DiscoveryEmptyRow({
 function NearbyRestaurantCard({
   restaurant,
   menuPreview = [],
+  isSignedIn,
+  relationshipSnapshot,
 }: {
   restaurant: RestaurantSummary;
   menuPreview?: MenuPreviewItem[];
+  isSignedIn: boolean;
+  relationshipSnapshot: RestaurantRelationshipSnapshot;
 }) {
   const name = restaurant.businessName || restaurant.name || "Restaurant";
   const img = restaurant.coverImageUrl || restaurant.heroImageUrl || restaurant.imageUrl || restaurant.logoUrl;
@@ -2321,10 +2396,86 @@ function NearbyRestaurantCard({
   const distLabel = typeof dist === "number" && Number.isFinite(dist)
     ? `${dist.toFixed(dist < 10 ? 1 : 0)} mi`
     : null;
+  const restaurantId = String(restaurant.id);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false);
+  const [isRecommended, setIsRecommended] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsFavorite(relationshipSnapshot.favoriteIds.has(restaurantId));
+    setIsFollowed(relationshipSnapshot.followIds.has(restaurantId));
+    setIsRecommended(relationshipSnapshot.recommendationIds.has(restaurantId));
+  }, [relationshipSnapshot, restaurantId]);
+
   const formatPrice = (cents?: number | null) =>
     typeof cents === "number" && Number.isFinite(cents) && cents > 0
       ? `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`
       : null;
+
+  const sendRestaurantAction = async (
+    action: "favorite" | "follow" | "recommend",
+    nextState: boolean,
+  ) => {
+    if (!isSignedIn) {
+      window.location.href = `/login?redirect=${encodeURIComponent("/scout")}`;
+      return;
+    }
+
+    const method = nextState ? "POST" : "DELETE";
+    if (action === "recommend" && !nextState) return;
+    setPendingAction(action);
+    try {
+      const response = await fetch(
+        `/api/restaurants/${encodeURIComponent(restaurantId)}/${action}`,
+        {
+          method,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: method === "POST" ? "{}" : undefined,
+        },
+      );
+      if (!response.ok) throw new Error("Restaurant action failed");
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const toggleFavorite = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+    try {
+      await sendRestaurantAction("favorite", nextState);
+    } catch {
+      setIsFavorite(!nextState);
+    }
+  };
+
+  const toggleFollow = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextState = !isFollowed;
+    setIsFollowed(nextState);
+    try {
+      await sendRestaurantAction("follow", nextState);
+    } catch {
+      setIsFollowed(!nextState);
+    }
+  };
+
+  const recommend = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isRecommended) return;
+    setIsRecommended(true);
+    try {
+      await sendRestaurantAction("recommend", true);
+    } catch {
+      setIsRecommended(false);
+    }
+  };
 
   return (
     <Link
@@ -2419,14 +2570,58 @@ function NearbyRestaurantCard({
           <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
             Menu
           </span>
-          <span className="rounded-full bg-white/8 px-2 py-1 text-white/65">
-            Save
-          </span>
           {dealCount > 0 && (
             <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-200">
               Deals
             </span>
           )}
+        </div>
+        <div
+          className="mt-2 grid grid-cols-3 gap-1.5 text-[10px] font-bold"
+          aria-label={`${name} quick actions`}
+        >
+          <button
+            type="button"
+            onClick={toggleFavorite}
+            disabled={pendingAction === "favorite"}
+            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
+              isFavorite
+                ? "bg-amber-300 text-black"
+                : "bg-white/8 text-white/70 hover:bg-white/12"
+            }`}
+            aria-pressed={isFavorite}
+          >
+            <Bookmark className="h-3 w-3" aria-hidden="true" />
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={toggleFollow}
+            disabled={pendingAction === "follow"}
+            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
+              isFollowed
+                ? "bg-white text-black"
+                : "bg-white/8 text-white/70 hover:bg-white/12"
+            }`}
+            aria-pressed={isFollowed}
+          >
+            <Heart className="h-3 w-3" aria-hidden="true" />
+            Follow
+          </button>
+          <button
+            type="button"
+            onClick={recommend}
+            disabled={pendingAction === "recommend" || isRecommended}
+            className={`inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 transition ${
+              isRecommended
+                ? "bg-emerald-300 text-black"
+                : "bg-white/8 text-white/70 hover:bg-white/12"
+            }`}
+            aria-pressed={isRecommended}
+          >
+            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            {isRecommended ? "Rec'd" : "Rec"}
+          </button>
         </div>
       </div>
     </Link>
