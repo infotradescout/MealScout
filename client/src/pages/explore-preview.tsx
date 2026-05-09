@@ -1257,7 +1257,7 @@ export default function ExplorePreview() {
   /* --------- render --------- */
 
   const goToCraving = (cat: CravingCategory) => {
-    navigate(`/find-food?cuisine=${encodeURIComponent(cat.query)}`);
+    navigate(`/search?q=${encodeURIComponent(cat.query)}`);
   };
 
   const showFoodTrucksSection = liveTrucksLoading || liveTrucks.length > 0;

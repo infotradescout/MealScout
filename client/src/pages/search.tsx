@@ -51,6 +51,21 @@ type DiscoveryCity = {
   cuisines: Array<{ slug: string; count: number }>;
 };
 
+type MenuItemSearchResult = {
+  id: string;
+  name: string;
+  description?: string | null;
+  priceCents?: number | null;
+  imageUrl?: string | null;
+  restaurantId: string;
+  restaurantName?: string | null;
+  restaurantCity?: string | null;
+  restaurantState?: string | null;
+  cuisineType?: string | null;
+  distanceMiles?: number | null;
+  dietaryTags?: string[] | null;
+};
+
 const titleCaseSlug = (value: string) =>
   value
     .split("-")
@@ -331,8 +346,39 @@ export default function SearchPage() {
     staleTime: 30_000,
   });
 
+  const { data: menuItemSearchResults = [], isLoading: menuItemsLoading } =
+    useQuery<MenuItemSearchResult[]>({
+      queryKey: [
+        "/api/menus/local-items",
+        debouncedSearchQuery,
+        userLocation?.lat ?? null,
+        userLocation?.lng ?? null,
+      ],
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          q: debouncedSearchQuery,
+          limit: "48",
+          radiusKm: "30",
+        });
+        if (userLocation) {
+          params.set("lat", String(userLocation.lat));
+          params.set("lng", String(userLocation.lng));
+        }
+        const res = await fetch(`/api/menus/local-items?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to search menu items");
+        const data = await res.json();
+        return Array.isArray(data?.items) ? data.items : [];
+      },
+      enabled: debouncedSearchQuery.length >= 2,
+      staleTime: 30_000,
+    });
+
   const isLoading =
-    nearbyLoading || featuredLoading || unifiedLoading || isLocating;
+    nearbyLoading ||
+    featuredLoading ||
+    unifiedLoading ||
+    menuItemsLoading ||
+    isLocating;
 
   // Function to map cuisine types and titles to category IDs
   const mapDealToCategory = (deal: any): string[] => {
@@ -450,6 +496,7 @@ export default function SearchPage() {
     ? (unifiedResults as any).events
     : [];
   const totalStructuredMatches =
+    menuItemSearchResults.length +
     mergedRestaurants.length +
     searchedParkingPassHosts.length +
     searchedVideos.length +
@@ -922,6 +969,82 @@ export default function SearchPage() {
 
       {/* Results */}
       <div className="px-4 sm:px-6 py-6">
+        {/* Menu Items Section (primary food-intent result) */}
+        {searchQuery && menuItemSearchResults.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">
+                  Menu items matching "{searchQuery}"
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Compare the actual dishes first, then pick the place.
+                </p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {menuItemSearchResults.length} found
+              </span>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {menuItemSearchResults.map((item) => {
+                const price =
+                  typeof item.priceCents === "number"
+                    ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
+                    : null;
+                const distance =
+                  typeof item.distanceMiles === "number"
+                    ? `${item.distanceMiles.toFixed(item.distanceMiles < 10 ? 1 : 0)} mi`
+                    : null;
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/restaurant/${item.restaurantId}`}
+                    data-testid={`card-menu-item-${item.id}`}
+                  >
+                    <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean hover:shadow-clean-lg transition-shadow cursor-pointer overflow-hidden">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          className="h-36 w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-foreground truncate">
+                              {item.name}
+                            </h3>
+                            <p className="text-sm text-primary font-medium truncate">
+                              {item.restaurantName || "Local spot"}
+                            </p>
+                          </div>
+                          {price && (
+                            <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+                              {price}
+                            </span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="line-clamp-2 text-sm text-muted-foreground">
+                            {item.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                          {item.cuisineType && <span>{item.cuisineType}</span>}
+                          {item.restaurantCity && <span>{item.restaurantCity}</span>}
+                          {distance && <span>{distance}</span>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Restaurants Section (when searching) */}
         {searchQuery && mergedRestaurants.length > 0 && (
           <div className="mb-8">

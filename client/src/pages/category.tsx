@@ -20,6 +20,18 @@ import {
   Flame,
 } from "lucide-react";
 
+type CategoryMenuItem = {
+  id: string;
+  name: string;
+  description?: string | null;
+  priceCents?: number | null;
+  imageUrl?: string | null;
+  restaurantId: string;
+  restaurantName?: string | null;
+  restaurantCity?: string | null;
+  cuisineType?: string | null;
+};
+
 const categoryConfig = {
   pizza: {
     title: "Pizza & Italian",
@@ -108,6 +120,23 @@ export default function CategoryPage() {
     enabled: true,
   });
 
+  const { data: categoryMenuItemsData = [], isLoading: menuItemsLoading } =
+    useQuery<CategoryMenuItem[]>({
+      queryKey: ["/api/menus/local-items", category],
+      enabled: !!category,
+      queryFn: async () => {
+        const params = new URLSearchParams({
+          category,
+          limit: "60",
+        });
+        const res = await fetch(`/api/menus/local-items?${params.toString()}`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data?.items) ? data.items : [];
+      },
+      staleTime: 120_000,
+    });
+
   if (!config) {
     return (
       <div className="max-w-md mx-auto bg-[var(--bg-layered)] min-h-screen relative pb-20">
@@ -123,6 +152,9 @@ export default function CategoryPage() {
   }
 
   const allDeals = Array.isArray(featuredDeals) ? featuredDeals : [];
+  const categoryMenuItems = Array.isArray(categoryMenuItemsData)
+    ? categoryMenuItemsData
+    : [];
   const categoryDeals = allDeals.filter((deal: any) => {
     const cuisineType = lower(deal.restaurant?.cuisineType);
     const title = lower(deal.title);
@@ -291,8 +323,8 @@ export default function CategoryPage() {
 
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            {categoryDeals.length} deal{categoryDeals.length !== 1 ? "s" : ""}{" "}
-            found
+            {categoryMenuItems.length} menu item
+            {categoryMenuItems.length !== 1 ? "s" : ""} found
           </div>
           <div className="flex space-x-2">
             <Button variant="outline" size="sm" data-testid="button-sort">
@@ -308,7 +340,7 @@ export default function CategoryPage() {
       </header>
 
       <div className="px-4 sm:px-6 py-6">
-        {isLoading ? (
+        {isLoading || menuItemsLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div
@@ -323,8 +355,75 @@ export default function CategoryPage() {
               </div>
             ))}
           </div>
+        ) : categoryMenuItems.length > 0 ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+              <h2 className="font-semibold text-foreground">
+                Compare {config.title.toLowerCase()} menu items
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                These are the actual menu items matching this craving across
+                local businesses.
+              </p>
+            </div>
+            {categoryMenuItems.map((item) => {
+              const price =
+                typeof item.priceCents === "number"
+                  ? `$${(item.priceCents / 100).toFixed(item.priceCents % 100 === 0 ? 0 : 2)}`
+                  : null;
+              return (
+                <Link key={item.id} href={`/restaurant/${item.restaurantId}`}>
+                  <Card className="bg-[var(--bg-card)] border-[color:var(--border-subtle)] shadow-clean overflow-hidden">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="h-44 w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-foreground">
+                            {item.name}
+                          </h3>
+                          <p className="mt-1 text-sm text-primary font-medium">
+                            {item.restaurantName || "Local spot"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {[item.cuisineType, item.restaurantCity]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        {price && (
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                            {price}
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">
+                          {item.description}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
         ) : categoryDeals.length > 0 ? (
           <div className="space-y-4">
+            <div className="rounded-2xl border border-[color:var(--border-subtle)] bg-[var(--bg-card)] p-4 shadow-clean">
+              <h2 className="font-semibold text-foreground">
+                Deals matching {config.title.toLowerCase()}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                No matching menu items yet, so we are showing relevant deals.
+              </p>
+            </div>
             {categoryDeals.map((deal: any) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
@@ -342,7 +441,7 @@ export default function CategoryPage() {
               No {config.title} deals yet
             </h3>
             <p className="text-muted-foreground mb-6">
-              Check back soon for amazing {config.title.toLowerCase()} deals!
+              Check back soon for {config.title.toLowerCase()} menu items and deals.
             </p>
             <Link href="/search">
               <Button data-testid="button-browse-all">Browse All Deals</Button>

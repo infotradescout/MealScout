@@ -120,6 +120,35 @@ export function registerMenuRoutes(app: Express) {
         Math.min(60, Number.parseInt(String(req.query.limit || "24"), 10) || 24),
       );
       const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
+      const q = String(req.query.q || req.query.category || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ");
+      const queryTerms = q
+        ? Array.from(
+            new Set(
+              q
+                .split(" ")
+                .filter((term) => term.length > 1)
+                .flatMap((term) => {
+                  const terms = [term];
+                  if (term.endsWith("s") && term.length > 3) {
+                    terms.push(term.slice(0, -1));
+                  } else if (term.length > 3) {
+                    terms.push(`${term}s`);
+                  }
+                  if (term === "burger" || term === "burgers") {
+                    terms.push("cheeseburger", "slider", "sandwich");
+                  }
+                  if (term === "taco" || term === "tacos") {
+                    terms.push("burrito", "quesadilla", "mexican");
+                  }
+                  return terms;
+                }),
+            ),
+          )
+        : [];
 
       const rows = await db
         .select({
@@ -151,7 +180,25 @@ export function registerMenuRoutes(app: Express) {
           ),
         );
 
-      const withDistance = rows
+      const matchedRows = queryTerms.length
+        ? rows.filter((row: any) => {
+            const haystack = [
+              row.name,
+              row.description,
+              row.restaurantName,
+              row.restaurantCity,
+              row.restaurantState,
+              row.cuisineType,
+              row.businessType,
+              ...(Array.isArray(row.dietaryTags) ? row.dietaryTags : []),
+            ]
+              .join(" ")
+              .toLowerCase();
+            return queryTerms.some((term) => haystack.includes(term));
+          })
+        : rows;
+
+      const withDistance = matchedRows
         .map((row: any) => {
           const targetLat = Number(row.restaurantLatitude);
           const targetLng = Number(row.restaurantLongitude);
