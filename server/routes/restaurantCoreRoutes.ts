@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { emailService } from "../emailService";
+import { notifyUser } from "../productNotifications";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { sanitizeUser } from "../utils/sanitize";
 import { validateDocuments, checkRateLimit } from "../documentValidation";
@@ -739,13 +740,38 @@ export function registerRestaurantCoreRoutes(
         `;
         const text = `${senderName} contacted ${businessName} from MealScout.\n\nTopic: ${subjectTopic}\n\n${message}\n\n${textReplyLine}\n\nMealScout shared this reply info because the user chose to contact your business. No live location data, payment details, or private preference data was included.\n\nDashboard: ${trackedDashboardUrl}`;
 
-        const ok = await emailService.sendBasicEmail(
-          owner.email,
-          `MealScout ${subjectTopic}: ${businessName}`,
-          html,
-          text,
-          "general",
-        );
+        const notificationResult = await notifyUser({
+          user: owner,
+          topic: "businessMessages",
+          title: `MealScout ${subjectTopic}: ${businessName}`,
+          body: `${senderName} sent ${businessName} a MealScout message.`,
+          actionUrl: `/api/restaurants/messages/${conversationId}/open?restaurantId=${encodeURIComponent(restaurantId)}`,
+          priority: "high",
+          sourceType: "business_message",
+          sourceId: conversationId,
+          actorUserId: userId,
+          channels: ["in_app", "email", "sms"],
+          emailHtml: html,
+          emailText: text,
+          smsText: `MealScout: ${senderName} sent ${businessName} a message. Open your dashboard to respond.`,
+          metadata: {
+            conversationId,
+            restaurantId,
+            restaurantOwnerId: restaurant.ownerId,
+            topic,
+            preferredReply,
+            senderKind: userId ? "registered_user" : "guest",
+            hasReplyEmail: Boolean(replyEmail),
+            hasPhone: Boolean(phone),
+            messageLength: message.length,
+            source: "restaurant_profile",
+          },
+        });
+        const notificationChannels = notificationResult.channels || {};
+        const ok =
+          notificationChannels.email === "sent" ||
+          notificationChannels.in_app === "created" ||
+          notificationChannels.sms === "sent";
 
         await trackBusinessConversationEvent(
           "business_contact_intent_sent",
@@ -760,6 +786,8 @@ export function registerRestaurantCoreRoutes(
             hasPhone: Boolean(phone),
             messageLength: message.length,
             delivered: ok,
+            notificationId: notificationResult.notificationId,
+            notificationChannels,
             source: "restaurant_profile",
           },
           userId,
@@ -794,11 +822,15 @@ export function registerRestaurantCoreRoutes(
       ).replace(/\/+$/, "");
 
       if (conversationId) {
+        const restaurant = restaurantId
+          ? await storage.getRestaurant(restaurantId).catch(() => null)
+          : null;
         await trackBusinessConversationEvent(
           "business_contact_owner_return_opened",
           {
             conversationId,
             restaurantId: restaurantId || null,
+            restaurantOwnerId: restaurant?.ownerId || null,
             source: "business_contact_email",
             userAgent: String(req.headers["user-agent"] || "").slice(0, 240),
           },

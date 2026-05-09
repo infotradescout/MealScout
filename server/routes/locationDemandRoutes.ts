@@ -9,6 +9,7 @@ import { distributedRateLimit } from "../middleware/distributedRateLimit";
 import { isAuthenticated, isRestaurantOwner } from "../unifiedAuth";
 import { forwardGeocode } from "../utils/geocoding";
 import { sendTruckInterestNotification } from "../emailNotifications";
+import { notifyUser } from "../productNotifications";
 import { handleHostPartnerLeadRequest } from "../services/hostPartnerLeadMagnet";
 import {
   insertHostLocationClaimSchema,
@@ -317,10 +318,35 @@ export function registerLocationDemandRoutes(app: Express) {
           restaurantId,
           message,
         );
+        const locationHostUser = await storage.getUser(
+          result.locationRequest.postedByUserId,
+        );
+        const interestedTruck = await storage.getRestaurant(restaurantId);
+        if (locationHostUser && interestedTruck) {
+          await notifyUser({
+            user: locationHostUser,
+            topic: "businessMessages",
+            title: `${interestedTruck.name} responded to your location request`,
+            body: `${interestedTruck.name} is interested in serving at ${result.locationRequest.businessName}.`,
+            actionUrl: "/parking-pass",
+            priority: "high",
+            sourceType: "truck_location_interest",
+            sourceId: result.locationRequest.id,
+            actorUserId: req.user.id,
+            channels: ["in_app", "sms"],
+            smsText: `MealScout: ${interestedTruck.name} responded to your location request. Open Parking Pass to follow up.`,
+            metadata: {
+              locationRequestId: result.locationRequest.id,
+              restaurantId,
+              truckOwnerId: req.user.id,
+              messageLength: String(message || "").trim().length,
+              source: "parking_pass_location_request",
+            },
+          });
+        }
 
         if (result.thresholdReached) {
-          const hostUser = await storage.getUser(result.locationRequest.postedByUserId);
-          if (hostUser?.email) {
+          if (locationHostUser?.email) {
             const thresholdSubject = `${result.locationRequest.businessName} is now demand-qualified`;
             const thresholdHtml = `
               <p>Your requested location reached its demand threshold.</p>
@@ -331,7 +357,7 @@ export function registerLocationDemandRoutes(app: Express) {
               <p><a href="${(process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "")}/customer-signup?role=host">Claim this demand and publish your first paid slot</a></p>
             `;
             await emailService
-              .sendBasicEmail(hostUser.email, thresholdSubject, thresholdHtml)
+              .sendBasicEmail(locationHostUser.email, thresholdSubject, thresholdHtml)
               .catch(() => undefined);
           }
 

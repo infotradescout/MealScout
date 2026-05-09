@@ -1196,6 +1196,353 @@ export function registerAdminManagementRoutes(app: Express) {
     },
   );
 
+  app.get(
+    "/api/admin/users/duplicate-emails",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const rawLimit =
+          typeof req.query?.limit === "string" ? req.query.limit : "";
+        const limit = Math.max(1, Math.min(100, Number(rawLimit || 50)));
+        const rows = await db.execute(sql`
+          with duplicate_keys as (
+            select lower(trim(email)) as normalized_email
+            from users
+            where email is not null
+              and trim(email) <> ''
+            group by lower(trim(email))
+            having count(*) > 1
+            order by max(created_at) desc
+            limit ${limit}
+          ),
+          user_rows as (
+            select
+              u.id,
+              lower(trim(u.email)) as normalized_email,
+              u.email,
+              u.first_name,
+              u.last_name,
+              u.user_type,
+              u.email_verified,
+              u.google_id,
+              u.facebook_id,
+              u.tradescout_id,
+              u.password_hash is not null as has_password,
+              u.created_at,
+              u.updated_at,
+              (
+                select count(*)::int
+                from restaurants r
+                where r.owner_id = u.id
+              ) as restaurant_count,
+              (
+                select count(*)::int
+                from hosts h
+                where h.user_id = u.id
+              ) as host_count,
+              (
+                select count(*)::int
+                from user_addresses ua
+                where ua.user_id = u.id
+              ) as address_count,
+              (
+                select count(*)::int
+                from telemetry_events te
+                where te.user_id = u.id
+              ) as telemetry_count
+            from users u
+            inner join duplicate_keys dk
+              on dk.normalized_email = lower(trim(u.email))
+          )
+          select
+            normalized_email as "normalizedEmail",
+            json_agg(
+              json_build_object(
+                'id', id,
+                'email', email,
+                'firstName', first_name,
+                'lastName', last_name,
+                'userType', user_type,
+                'emailVerified', email_verified,
+                'hasGoogle', google_id is not null,
+                'hasFacebook', facebook_id is not null,
+                'hasTradeScout', tradescout_id is not null,
+                'hasPassword', has_password,
+                'restaurantCount', restaurant_count,
+                'hostCount', host_count,
+                'addressCount', address_count,
+                'telemetryCount', telemetry_count,
+                'createdAt', created_at,
+                'updatedAt', updated_at
+              )
+              order by
+                email_verified desc,
+                (restaurant_count + host_count + address_count + telemetry_count) desc,
+                created_at asc
+            ) as users
+          from user_rows
+          group by normalized_email
+          order by max(updated_at) desc nulls last
+        `);
+
+        const groups = (Array.isArray((rows as any).rows)
+          ? (rows as any).rows
+          : []
+        ).map((group: any) => {
+          const candidates = Array.isArray(group.users) ? group.users : [];
+          const scored = candidates
+            .map((candidate: any) => {
+              const linkedDataScore =
+                Number(candidate.restaurantCount || 0) * 8 +
+                Number(candidate.hostCount || 0) * 8 +
+                Number(candidate.addressCount || 0) * 3 +
+                Math.min(Number(candidate.telemetryCount || 0), 100);
+              const providerScore =
+                (candidate.hasGoogle ? 8 : 0) +
+                (candidate.hasFacebook ? 8 : 0) +
+                (candidate.hasTradeScout ? 8 : 0) +
+                (candidate.hasPassword ? 5 : 0);
+              const verifiedScore = candidate.emailVerified ? 20 : 0;
+              const ageScore = candidate.createdAt
+                ? Math.max(
+                    0,
+                    10 -
+                      Math.floor(
+                        (Date.now() -
+                          new Date(candidate.createdAt).getTime()) /
+                          (1000 * 60 * 60 * 24 * 365),
+                      ),
+                  )
+                : 0;
+              return {
+                ...candidate,
+                auditScore:
+                  linkedDataScore + providerScore + verifiedScore + ageScore,
+              };
+            })
+            .sort((a: any, b: any) => {
+              if (Number(a.auditScore) !== Number(b.auditScore)) {
+                return Number(b.auditScore) - Number(a.auditScore);
+              }
+              return (
+                new Date(a.createdAt || 0).getTime() -
+                new Date(b.createdAt || 0).getTime()
+              );
+            });
+
+          const businessLinkedCount = scored.filter(
+            (candidate: any) =>
+              Number(candidate.restaurantCount || 0) > 0 ||
+              Number(candidate.hostCount || 0) > 0,
+          ).length;
+          const verifiedCount = scored.filter(
+            (candidate: any) => candidate.emailVerified,
+          ).length;
+          const providerLinkedCount = scored.filter(
+            (candidate: any) =>
+              candidate.hasGoogle ||
+              candidate.hasFacebook ||
+              candidate.hasTradeScout ||
+              candidate.hasPassword,
+          ).length;
+          const reasons: string[] = [];
+          if (businessLinkedCount > 1) {
+            reasons.push("multiple accounts have linked business/host data");
+          }
+          if (verifiedCount > 1) {
+            reasons.push("multiple accounts have verified email");
+          }
+          if (providerLinkedCount > 1) {
+            reasons.push("multiple accounts have auth providers");
+          }
+          if (scored.length > 2) {
+            reasons.push("more than two accounts share this email");
+          }
+          const riskLevel =
+            businessLinkedCount > 1 || verifiedCount > 1
+              ? "high"
+              : providerLinkedCount > 1 || scored.length > 2
+                ? "medium"
+                : "low";
+
+          return {
+            ...group,
+            users: scored,
+            recommendedPrimaryId: scored[0]?.id || null,
+            riskLevel,
+            reasons,
+          };
+        });
+
+        res.json({ groups });
+      } catch (error) {
+        console.error("Error loading duplicate email users:", error);
+        res.status(500).json({
+          message: "Failed to load duplicate email users",
+        });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/users/duplicate-emails/:normalizedEmail/merge-plan",
+    isAuthenticated,
+    isStaffOrAdmin,
+    async (req: any, res) => {
+      try {
+        const normalizedEmail = String(req.params.normalizedEmail || "")
+          .trim()
+          .toLowerCase();
+        if (!normalizedEmail || normalizedEmail.includes("@") === false) {
+          return res.status(400).json({ message: "Valid email required" });
+        }
+
+        const rows = await db.execute(sql`
+          select
+            u.id,
+            u.email,
+            u.first_name as "firstName",
+            u.last_name as "lastName",
+            u.user_type as "userType",
+            u.email_verified as "emailVerified",
+            u.google_id is not null as "hasGoogle",
+            u.facebook_id is not null as "hasFacebook",
+            u.tradescout_id is not null as "hasTradeScout",
+            u.password_hash is not null as "hasPassword",
+            u.created_at as "createdAt",
+            (
+              select count(*)::int from restaurants r where r.owner_id = u.id
+            ) as "restaurantCount",
+            (
+              select count(*)::int from hosts h where h.user_id = u.id
+            ) as "hostCount",
+            (
+              select count(*)::int from user_addresses ua where ua.user_id = u.id
+            ) as "addressCount",
+            (
+              select count(*)::int from restaurant_favorites rf where rf.user_id = u.id
+            ) as "favoriteCount",
+            (
+              select count(*)::int from restaurant_follows rfo where rfo.user_id = u.id
+            ) as "followCount",
+            (
+              select count(*)::int from restaurant_user_recommendations rur where rur.user_id = u.id
+            ) as "recommendationCount",
+            (
+              select count(*)::int from telemetry_events te where te.user_id = u.id
+            ) as "telemetryCount"
+          from users u
+          where lower(trim(u.email)) = ${normalizedEmail}
+          order by
+            u.email_verified desc,
+            u.created_at asc
+        `);
+        const candidates = Array.isArray((rows as any).rows)
+          ? (rows as any).rows
+          : [];
+        if (candidates.length < 2) {
+          return res.status(404).json({
+            message: "No duplicate group found for that email",
+          });
+        }
+
+        const scored = candidates
+          .map((candidate: any) => ({
+            ...candidate,
+            auditScore:
+              (candidate.emailVerified ? 20 : 0) +
+              (candidate.hasGoogle ? 8 : 0) +
+              (candidate.hasFacebook ? 8 : 0) +
+              (candidate.hasTradeScout ? 8 : 0) +
+              (candidate.hasPassword ? 5 : 0) +
+              Number(candidate.restaurantCount || 0) * 8 +
+              Number(candidate.hostCount || 0) * 8 +
+              Number(candidate.addressCount || 0) * 3 +
+              Number(candidate.favoriteCount || 0) * 2 +
+              Number(candidate.followCount || 0) * 2 +
+              Number(candidate.recommendationCount || 0) * 4 +
+              Math.min(Number(candidate.telemetryCount || 0), 100),
+          }))
+          .sort((a: any, b: any) => {
+            if (Number(a.auditScore) !== Number(b.auditScore)) {
+              return Number(b.auditScore) - Number(a.auditScore);
+            }
+            return (
+              new Date(a.createdAt || 0).getTime() -
+              new Date(b.createdAt || 0).getTime()
+            );
+          });
+
+        const primary = scored[0];
+        const secondaries = scored.slice(1);
+        res.json({
+          normalizedEmail,
+          primaryUserId: primary.id,
+          candidates: scored,
+          dryRun: true,
+          operations: secondaries.flatMap((candidate: any) => [
+            {
+              table: "restaurants",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.restaurantCount || 0),
+              action: "reassign owner_id",
+            },
+            {
+              table: "hosts",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.hostCount || 0),
+              action: "reassign user_id",
+            },
+            {
+              table: "user_addresses",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.addressCount || 0),
+              action: "reassign user_id",
+            },
+            {
+              table: "restaurant_favorites",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.favoriteCount || 0),
+              action: "dedupe then reassign user_id",
+            },
+            {
+              table: "restaurant_follows",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.followCount || 0),
+              action: "dedupe then reassign user_id",
+            },
+            {
+              table: "restaurant_user_recommendations",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.recommendationCount || 0),
+              action: "reassign user_id",
+            },
+            {
+              table: "telemetry_events",
+              fromUserId: candidate.id,
+              toUserId: primary.id,
+              count: Number(candidate.telemetryCount || 0),
+              action: "reassign user_id",
+            },
+          ]),
+          warnings: [
+            "Dry-run only. Do not merge automatically until auth providers, business ownership, payment history, and user consent/admin evidence are reviewed.",
+          ],
+        });
+      } catch (error) {
+        console.error("Error building duplicate merge plan:", error);
+        res.status(500).json({ message: "Failed to build merge plan" });
+      }
+    },
+  );
+
   // Manual User/Host Creation
   app.post(
     "/api/admin/users/create",

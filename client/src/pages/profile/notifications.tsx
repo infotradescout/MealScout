@@ -170,6 +170,9 @@ export default function NotificationsPage() {
   const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_PREFS);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [connectionResponses, setConnectionResponses] = useState<
+    Record<string, boolean>
+  >({});
 
   const { data, isLoading, refetch } = useQuery<SettingsResponse>({
     queryKey: ["/api/settings/me", "notifications"],
@@ -298,6 +301,41 @@ export default function NotificationsPage() {
     }
   };
 
+  const respondToConnectionRequest = async (
+    requestId: string,
+    decision: "accepted" | "denied",
+  ) => {
+    setConnectionResponses((prev) => ({ ...prev, [requestId]: true }));
+    try {
+      const res = await fetch(`/api/connections/${requestId}/respond`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.message || "Failed to respond");
+      }
+      await refetchNotifications();
+      toast({
+        title: decision === "accepted" ? "Connection accepted" : "Request declined",
+        description:
+          decision === "accepted"
+            ? "We let them know you accepted."
+            : "We let them know this request was declined.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Could not update request",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setConnectionResponses((prev) => ({ ...prev, [requestId]: false }));
+    }
+  };
+
   const maybeEnablePush = async (enabled: boolean) => {
     setChannels({ push: enabled });
     if (!enabled) {
@@ -382,15 +420,27 @@ export default function NotificationsPage() {
                 here.
               </div>
             ) : (
-              notifications.map((item) => (
-                <div
-                  key={item.id}
-                  className={`rounded-2xl border p-3 ${
-                    item.isRead
-                      ? "border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
-                      : "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)]"
-                  }`}
-                >
+              notifications.map((item) => {
+                const connectionRequestId =
+                  item.sourceType === "connection_request"
+                    ? String(item.metadata?.requestId || item.sourceId || "")
+                    : "";
+                const isConnectionRequest = Boolean(connectionRequestId);
+                const isSupportConnection =
+                  item.sourceType === "platform_support_connection" ||
+                  item.metadata?.supportAccount === true;
+                const connectionBusy =
+                  connectionRequestId &&
+                  connectionResponses[connectionRequestId] === true;
+                return (
+                  <div
+                    key={item.id}
+                    className={`rounded-2xl border p-3 ${
+                      item.isRead
+                        ? "border-[color:var(--border-subtle)] bg-[var(--bg-surface)]"
+                        : "border-[color:var(--action-primary)] bg-[var(--bg-surface-muted)]"
+                    }`}
+                  >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-black text-[color:var(--text-primary)]">
@@ -401,6 +451,11 @@ export default function NotificationsPage() {
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
                         <span>{item.topic}</span>
+                        {isSupportConnection ? (
+                          <span className="rounded-full border border-[color:var(--action-primary)] px-2 py-0.5 text-[color:var(--action-primary)]">
+                            Real MealScout support
+                          </span>
+                        ) : null}
                         {item.createdAt ? (
                           <span>
                             {new Date(item.createdAt).toLocaleDateString()}
@@ -419,6 +474,37 @@ export default function NotificationsPage() {
                       </Button>
                     ) : null}
                   </div>
+                  {isConnectionRequest && !item.isRead ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() =>
+                          respondToConnectionRequest(
+                            connectionRequestId,
+                            "accepted",
+                          )
+                        }
+                        disabled={Boolean(connectionBusy)}
+                      >
+                        Accept connection
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          respondToConnectionRequest(
+                            connectionRequestId,
+                            "denied",
+                          )
+                        }
+                        disabled={Boolean(connectionBusy)}
+                      >
+                        Deny
+                      </Button>
+                    </div>
+                  ) : null}
                   {item.actionUrl ? (
                     <Button
                       type="button"
@@ -432,7 +518,8 @@ export default function NotificationsPage() {
                     </Button>
                   ) : null}
                 </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>

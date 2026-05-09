@@ -1255,7 +1255,13 @@ export function registerUserAdminRoutes(
         const userId = String(req.params.id || "");
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-        const [recentEvents, eventCounts, summaryRows] = await Promise.all([
+        const [
+          recentEvents,
+          eventCounts,
+          summaryRows,
+          journeyRows,
+          signalRows,
+        ] = await Promise.all([
           db
             .select({
               id: telemetryEvents.id,
@@ -1289,7 +1295,58 @@ export function registerUserAdminRoutes(
             })
             .from(telemetryEvents)
             .where(eq(telemetryEvents.userId, userId)),
+          db.execute(sql`
+            select
+              case
+                when event_name ilike '%auth%' or event_name ilike '%login%' or event_name ilike '%verification%' then 'account'
+                when event_name ilike '%message%' or event_name ilike '%contact%' then 'conversations'
+                when event_name ilike '%notification%' then 'notifications'
+                when event_name ilike '%favorite%' or event_name ilike '%follow%' or event_name ilike '%recommend%' or event_name ilike '%like%' then 'preference signals'
+                when event_name ilike '%search%' or event_name ilike '%discovery%' or event_name ilike '%scout%' then 'discovery'
+                when event_name ilike '%deal%' or event_name ilike '%claim%' or event_name ilike '%redemption%' then 'deals'
+                when event_name ilike '%booking%' or event_name ilike '%event%' or event_name ilike '%parking%' then 'marketplace'
+                else 'other'
+              end as category,
+              count(*)::int as count,
+              max(created_at) as "lastSeenAt"
+            from telemetry_events
+            where user_id = ${userId}
+            group by 1
+            order by count(*) desc, max(created_at) desc
+          `),
+          db.execute(sql`
+            select
+              key,
+              count(*)::int as count,
+              max(created_at) as "lastSeenAt"
+            from (
+              select
+                case
+                  when event_name ilike '%favorite%' then 'favorites'
+                  when event_name ilike '%follow%' then 'follows'
+                  when event_name ilike '%video%' and event_name ilike '%recommend%' then 'video recommendations'
+                  when event_name ilike '%recommend%' then 'recommendations'
+                  when event_name ilike '%like%' then 'likes'
+                  when event_name ilike '%message%' or event_name ilike '%contact%' then 'messages'
+                  when event_name = 'product_notification' then 'notifications received'
+                  when event_name = 'product_notification_read' then 'notifications read'
+                  else null
+                end as key,
+                created_at
+              from telemetry_events
+              where user_id = ${userId}
+            ) signals
+            where key is not null
+            group by key
+            order by count(*) desc, max(created_at) desc
+          `),
         ]);
+        const journeySummary = Array.isArray((journeyRows as any).rows)
+          ? (journeyRows as any).rows
+          : [];
+        const signalSummary = Array.isArray((signalRows as any).rows)
+          ? (signalRows as any).rows
+          : [];
 
         res.json({
           summary: summaryRows[0] || {
@@ -1299,6 +1356,8 @@ export function registerUserAdminRoutes(
             firstActiveAt: null,
           },
           eventCounts,
+          journeySummary,
+          signalSummary,
           recentEvents,
         });
       } catch (error) {

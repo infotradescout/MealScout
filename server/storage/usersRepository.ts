@@ -1,4 +1,5 @@
 import {
+  telemetryEvents,
   users,
   type User,
   type UpsertUser,
@@ -136,6 +137,27 @@ function getSafePublicSignupUserType(userType: User["userType"]): User["userType
     "private_chef",
   ]);
   return allowed.has(String(userType)) ? userType : "customer";
+}
+
+async function recordAuthLinkEvent(params: {
+  userId: string;
+  provider: string;
+  matchedBy: "provider_id" | "normalized_email" | "duplicate_key";
+  email?: string | null;
+}) {
+  try {
+    await db.insert(telemetryEvents).values({
+      eventName: "auth_account_linked",
+      userId: params.userId,
+      properties: {
+        provider: params.provider,
+        matchedBy: params.matchedBy,
+        normalizedEmail: normalizeEmail(params.email),
+      },
+    });
+  } catch {
+    // Telemetry must never block login.
+  }
 }
 
 // ── Repository factory ────────────────────────────────────────────────────────
@@ -399,6 +421,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "tradescout",
+                matchedBy: "normalized_email",
+                email: normalizedEmail,
+              });
               return user;
             }
           }
@@ -479,6 +507,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, existingUser[0].id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "google",
+                matchedBy: "normalized_email",
+                email: normalizedEmail,
+              });
               return user;
             }
           }
@@ -562,6 +596,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, existingUser[0].id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "facebook",
+                matchedBy: "normalized_email",
+                email: normalizedEmail,
+              });
               return user;
             }
           }
@@ -633,6 +673,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, current.id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "tradescout",
+                matchedBy: "duplicate_key",
+                email: normalizedEmail,
+              });
               return user;
             }
           } else if (authType === "google") {
@@ -666,6 +712,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, existingUser[0].id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "google",
+                matchedBy: "duplicate_key",
+                email: normalizedEmail,
+              });
               return user;
             }
           } else if (authType === "facebook") {
@@ -699,6 +751,12 @@ export function createUsersRepository() {
                 .where(eq(users.id, existingUser[0].id))
                 .returning();
               void syncUserToBrevo(user).catch(() => {});
+              void recordAuthLinkEvent({
+                userId: user.id,
+                provider: "facebook",
+                matchedBy: "duplicate_key",
+                email: normalizedEmail,
+              });
               return user;
             }
           }

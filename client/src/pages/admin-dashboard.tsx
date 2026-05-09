@@ -2625,6 +2625,11 @@ export default function AdminDashboard() {
     enabled: !!adminUser && selectedTab === "overview",
     staleTime: 30 * 1000,
   });
+  const { data: duplicateEmailAudit } = useQuery<any>({
+    queryKey: ["/api/admin/users/duplicate-emails?limit=50"],
+    enabled: !!adminUser && selectedTab === "users",
+    staleTime: 30 * 1000,
+  });
 
   const { data: parkingPassOnboardingQueue, isLoading: queueLoading } =
     useQuery<ParkingPassOnboardingQueueResponse>({
@@ -7843,13 +7848,19 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>User Management</CardTitle>
                 <CardDescription>
-                  View and manage all registered users
+                  Search users, filter audiences, send admin messages, and audit
+                  activity history.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    Sorting affects the full user list.
+                  <div className="rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+                    Use the filters to build an audience, then use{" "}
+                    <span className="font-semibold text-foreground">
+                      Message filtered users
+                    </span>{" "}
+                    below before the user list. Staff/admin accounts and opted-out
+                    users are protected by default.
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <input
@@ -7942,6 +7953,158 @@ export default function AdminDashboard() {
                     })}
                   </TabsList>
                 </Tabs>
+                {Array.isArray(duplicateEmailAudit?.groups) &&
+                  duplicateEmailAudit.groups.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="font-semibold flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                            Possible duplicate accounts
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Read-only audit grouped by normalized email. Review
+                            before any manual merge. Do not merge accounts
+                            automatically without checking ownership and linked
+                            business data.
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {duplicateEmailAudit.groups.length} email group
+                          {duplicateEmailAudit.groups.length === 1 ? "" : "s"}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        {duplicateEmailAudit.groups
+                          .slice(0, 5)
+                          .map((group: any) => (
+                            <div
+                              key={group.normalizedEmail}
+                              className="rounded-lg border bg-background/80 p-3"
+                            >
+                              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-sm font-semibold">
+                                  {group.normalizedEmail}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Badge
+                                    variant={
+                                      group.riskLevel === "high"
+                                        ? "destructive"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {group.riskLevel || "review"} risk
+                                  </Badge>
+                                  <Badge variant="secondary">
+                                    {Array.isArray(group.users)
+                                      ? group.users.length
+                                      : 0}{" "}
+                                    accounts
+                                  </Badge>
+                                </div>
+                              </div>
+                              {Array.isArray(group.reasons) &&
+                                group.reasons.length > 0 && (
+                                  <div className="mb-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                                    {group.reasons.join(" · ")}
+                                  </div>
+                                )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mb-2"
+                                onClick={() => {
+                                  window.open(
+                                    `/api/admin/users/duplicate-emails/${encodeURIComponent(
+                                      group.normalizedEmail,
+                                    )}/merge-plan`,
+                                    "_blank",
+                                  );
+                                }}
+                              >
+                                Open dry-run merge plan
+                              </Button>
+                              <div className="space-y-2">
+                                {(Array.isArray(group.users)
+                                  ? group.users
+                                  : []
+                                ).map((candidate: any) => (
+                                  <div
+                                    key={candidate.id}
+                                    className="rounded-md border px-3 py-2 text-xs"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-semibold">
+                                          {candidate.email || "No email"}
+                                        </span>
+                                        {candidate.id ===
+                                          group.recommendedPrimaryId && (
+                                          <Badge variant="default">
+                                            likely primary
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <span className="text-muted-foreground">
+                                        {candidate.userType || "unknown"}
+                                      </span>
+                                    </div>
+                                    <div className="mt-1 text-muted-foreground">
+                                      {candidate.firstName || ""}{" "}
+                                      {candidate.lastName || ""} · ID{" "}
+                                      {candidate.id}
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      <Badge variant="outline">
+                                        {candidate.emailVerified
+                                          ? "verified"
+                                          : "unverified"}
+                                      </Badge>
+                                      {candidate.hasPassword && (
+                                        <Badge variant="outline">password</Badge>
+                                      )}
+                                      {candidate.hasGoogle && (
+                                        <Badge variant="outline">google</Badge>
+                                      )}
+                                      {candidate.hasFacebook && (
+                                        <Badge variant="outline">facebook</Badge>
+                                      )}
+                                      {candidate.hasTradeScout && (
+                                        <Badge variant="outline">
+                                          tradescout
+                                        </Badge>
+                                      )}
+                                      <Badge variant="outline">
+                                        restaurants{" "}
+                                        {Number(
+                                          candidate.restaurantCount || 0,
+                                        )}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        hosts{" "}
+                                        {Number(candidate.hostCount || 0)}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        activity{" "}
+                                        {Number(
+                                          candidate.telemetryCount || 0,
+                                        )}
+                                      </Badge>
+                                      <Badge variant="outline">
+                                        score{" "}
+                                        {Number(candidate.auditScore || 0)}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 {isAdminOrSuper && (
                   <div className="mt-4 rounded-xl border bg-muted/20 p-4 space-y-3">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -7953,7 +8116,9 @@ export default function AdminDashboard() {
                         <p className="text-xs text-muted-foreground">
                           Uses the filters above. Excludes staff/admins and
                           users who turned email off. Keep language clear and
-                          avoid sensitive personal data.
+                          avoid sensitive personal data. Platform admin support
+                          accounts are trusted contacts; user/business
+                          connection requests still require accept or deny.
                         </p>
                       </div>
                       <Badge variant="outline">
@@ -9092,6 +9257,53 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                 </div>
+                {Array.isArray(userActivity?.signalSummary) &&
+                  userActivity.signalSummary.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Preference and conversation signals
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {userActivity.signalSummary
+                          .slice(0, 9)
+                          .map((signal: any) => (
+                            <div
+                              key={signal.key}
+                              className="rounded-lg border bg-muted/20 p-3"
+                            >
+                              <p className="text-sm font-semibold capitalize">
+                                {signal.key}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {Number(signal.count || 0)} tracked
+                                {signal.lastSeenAt
+                                  ? ` · last ${new Date(
+                                      signal.lastSeenAt,
+                                    ).toLocaleString()}`
+                                  : ""}
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                {Array.isArray(userActivity?.journeySummary) &&
+                  userActivity.journeySummary.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Journey summary
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {userActivity.journeySummary
+                          .slice(0, 10)
+                          .map((journey: any) => (
+                            <Badge key={journey.category} variant="secondary">
+                              {journey.category}: {journey.count}
+                            </Badge>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 {Array.isArray(userActivity?.eventCounts) &&
                   userActivity.eventCounts.length > 0 && (
                     <div className="mt-4">
