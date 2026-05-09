@@ -36,6 +36,13 @@ type DealManagementRouteDependencies = {
     lat: number;
     lng: number;
   }) => Promise<void>;
+  notifyRestaurantFollowersOfDeal: (params: {
+    creatorUserId: string;
+    restaurantId: string;
+    dealId: string;
+    dealTitle: string;
+    restaurantName: string;
+  }) => Promise<void>;
   toNumeric: (value: unknown) => number | null;
   hasBusinessDistributionAccess: (userId: string) => Promise<boolean>;
   queueSocialPost: (payload: {
@@ -52,6 +59,7 @@ export function registerDealManagementRoutes(
     logAudit,
     validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
+    notifyRestaurantFollowersOfDeal,
     toNumeric,
     hasBusinessDistributionAccess,
     queueSocialPost,
@@ -301,6 +309,16 @@ export function registerDealManagementRoutes(
           console.error("Failed to send nearby deal notifications:", error);
         });
       }
+
+      void notifyRestaurantFollowersOfDeal({
+        creatorUserId: userId,
+        restaurantId: deal.restaurantId,
+        dealId: deal.id,
+        dealTitle: deal.title,
+        restaurantName: restaurant.name,
+      }).catch((error) => {
+        console.error("Failed to send follower deal notifications:", error);
+      });
 
       // Hands-off auto-sharing: queue social posts when deal trigger is enabled
       // and the owner has disabled prompt-before-post in social settings.

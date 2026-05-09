@@ -61,6 +61,7 @@ import { registerMenuRoutes } from "./routes/menuRoutes";
 import { registerPickupOrderRoutes } from "./routes/pickupOrderRoutes";
 import {
   notifyNearbyDealSubscribers,
+  notifyRestaurantFollowersOfDeal,
   notifyHostCapacityWarning,
   queueSocialPost,
   toNumeric,
@@ -104,6 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     logAudit,
     validateSubscriptionLimits,
     notifyNearbyDealSubscribers,
+    notifyRestaurantFollowersOfDeal,
     toNumeric,
     hasBusinessDistributionAccess,
     queueSocialPost,

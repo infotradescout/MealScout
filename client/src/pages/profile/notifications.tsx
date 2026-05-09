@@ -34,6 +34,7 @@ type NotificationPrefs = {
   };
   topics: {
     dealAlerts: boolean;
+    followedActivity: boolean;
     orderUpdates: boolean;
     newRestaurants: boolean;
     weeklyDigest: boolean;
@@ -64,6 +65,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
   },
   topics: {
     dealAlerts: true,
+    followedActivity: true,
     orderUpdates: true,
     newRestaurants: false,
     weeklyDigest: true,
@@ -102,6 +104,8 @@ function buildPrefs(
     },
     topics: {
       dealAlerts: topics.dealAlerts ?? DEFAULT_PREFS.topics.dealAlerts,
+      followedActivity:
+        topics.followedActivity ?? DEFAULT_PREFS.topics.followedActivity,
       orderUpdates: topics.orderUpdates ?? DEFAULT_PREFS.topics.orderUpdates,
       newRestaurants:
         topics.newRestaurants ?? DEFAULT_PREFS.topics.newRestaurants,
@@ -365,6 +369,11 @@ export default function NotificationsPage() {
               <Bell className="w-5 h-5 mr-2" />
               What to notify me about
             </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              We use your follows, saves, and broad notification preferences to
+              decide what is worth sending. Emails never include your exact live
+              location.
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -378,6 +387,22 @@ export default function NotificationsPage() {
                 checked={prefs.topics.dealAlerts}
                 onCheckedChange={(next) => setTopics({ dealAlerts: next })}
                 data-testid="switch-deals"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Places I follow</p>
+                <p className="text-sm text-muted-foreground">
+                  Deals, menus, and schedule updates from restaurants and trucks
+                  you follow
+                </p>
+              </div>
+              <Switch
+                checked={prefs.topics.followedActivity}
+                onCheckedChange={(next) =>
+                  setTopics({ followedActivity: next })
+                }
+                data-testid="switch-followed-activity"
               />
             </div>
             <div className="flex items-center justify-between">

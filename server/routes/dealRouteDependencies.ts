@@ -1,6 +1,7 @@
 import { emailService, isEmailConfigured } from "../emailService";
 import { db } from "../db";
 import {
+  restaurantFollows,
   users,
   userAddresses,
   hosts,
@@ -59,6 +60,21 @@ const isDealAlertsEnabled = (accountSettings: unknown) => {
   return typeof topics?.dealAlerts === "boolean" ? topics.dealAlerts : true;
 };
 
+const isFollowedActivityEnabled = (accountSettings: unknown) => {
+  const settings =
+    accountSettings && typeof accountSettings === "object"
+      ? (accountSettings as Record<string, any>)
+      : null;
+  const topics =
+    settings?.notifications?.topics &&
+    typeof settings.notifications.topics === "object"
+      ? (settings.notifications.topics as Record<string, any>)
+      : null;
+  return typeof topics?.followedActivity === "boolean"
+    ? topics.followedActivity
+    : true;
+};
+
 const isNearbyEventsEnabled = (accountSettings: unknown) => {
   const settings =
     accountSettings && typeof accountSettings === "object"
@@ -93,6 +109,14 @@ const getNearbyDealRadiusKm = (accountSettings: unknown) => {
   }
   return 8; // ~5 miles default
 };
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 const postToFacebookPage = async (message: string, link?: string | null) => {
   const pageId = process.env.MEALSCOUT_FB_PAGE_ID;
@@ -176,6 +200,53 @@ export async function notifyNearbyDealSubscribers(params: {
       `New deal near you: ${params.restaurantName}`,
       `<p>A new deal was just posted near your location.</p><p><strong>${params.dealTitle}</strong> at <strong>${params.restaurantName}</strong>.</p><p><a href="${dealUrl}">View deal</a></p>`,
       `New deal near you: ${params.dealTitle} at ${params.restaurantName}. View: ${dealUrl}`,
+      "general",
+    );
+  }
+}
+
+export async function notifyRestaurantFollowersOfDeal(params: {
+  creatorUserId: string;
+  restaurantId: string;
+  dealId: string;
+  dealTitle: string;
+  restaurantName: string;
+}) {
+  if (!isEmailConfigured()) return;
+
+  const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:5000";
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
+  const dealUrl = `${cleanBaseUrl}/deals/${params.dealId}`;
+  const settingsUrl = `${cleanBaseUrl}/profile/notifications`;
+  const safeRestaurantName = escapeHtml(params.restaurantName);
+  const safeDealTitle = escapeHtml(params.dealTitle);
+
+  const followers = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      accountSettings: users.accountSettings,
+    })
+    .from(restaurantFollows)
+    .innerJoin(users, eq(users.id, restaurantFollows.userId))
+    .where(
+      and(
+        eq(restaurantFollows.restaurantId, params.restaurantId),
+        or(eq(users.isDisabled, false), isNull(users.isDisabled)),
+        isNotNull(users.email),
+      ),
+    );
+
+  for (const follower of followers) {
+    if (!follower.email || follower.userId === params.creatorUserId) continue;
+    if (!isEmailChannelEnabled(follower.accountSettings)) continue;
+    if (!isFollowedActivityEnabled(follower.accountSettings)) continue;
+
+    await emailService.sendBasicEmail(
+      follower.email,
+      `${params.restaurantName} posted a new deal on MealScout`,
+      `<p><strong>${safeRestaurantName}</strong> posted something new for people who follow them on MealScout.</p><p><strong>${safeDealTitle}</strong></p><p><a href="${dealUrl}">View it on MealScout</a></p><p style="color:#6b7280;font-size:13px;">You received this because you follow ${safeRestaurantName}. You can change these emails in <a href="${settingsUrl}">notification settings</a>.</p>`,
+      `${params.restaurantName} posted a new deal on MealScout: ${params.dealTitle}. View: ${dealUrl}\n\nYou received this because you follow ${params.restaurantName}. Change email settings: ${settingsUrl}`,
       "general",
     );
   }
