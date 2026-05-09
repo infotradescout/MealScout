@@ -864,10 +864,13 @@ export default function ExplorePreview() {
   const hasMapKey = GOOGLE_MAPS_WEB_API_KEY.length > 0;
 
   const openScoutMap = useCallback(() => {
+    if (coords) {
+      setMapCenter(coords);
+    }
     setHasOpenedFullMap(true);
     setGoogleMapFailed(false);
     setSheetState("fullMap");
-  }, []);
+  }, [coords]);
 
   useEffect(() => {
     if (!hasMapKey) return;
